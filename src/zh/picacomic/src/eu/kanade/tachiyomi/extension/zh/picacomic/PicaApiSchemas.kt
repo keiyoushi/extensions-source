@@ -12,19 +12,13 @@ data class PicaLoginPayload(
 @Serializable
 data class PicaSearchPayload(
     val keyword: String,
-    val categories: List<String>,
     val sort: String,
+    val categories: List<String>? = null,
 )
 
 @Serializable
 data class PicaResponse(
     val data: PicaData,
-)
-
-@Serializable
-data class PicaJWTPayload(
-    val exp: Long? = null,
-    val iat: Long? = null,
 )
 
 @Serializable

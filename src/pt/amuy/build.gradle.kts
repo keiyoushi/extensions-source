@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,9 +7,9 @@ plugins {
 keiyoushi {
     name = "Amuy"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
-    theme = "madara"
+    theme = "madaralegacy"
 
     source {
         lang = "pt-BR"

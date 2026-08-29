@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -6,7 +8,7 @@ keiyoushi {
     name = "NhatTruyen"
     versionCode = 21
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "wpcomics"
 
     source {

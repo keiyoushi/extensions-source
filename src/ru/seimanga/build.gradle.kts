@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,13 +7,13 @@ plugins {
 keiyoushi {
     name = "SeiManga"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
     theme = "grouple"
 
     source {
-        baseUrl("https://1.seimanga.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://1.seimanga.me")
         }
         lang = "ru"
     }

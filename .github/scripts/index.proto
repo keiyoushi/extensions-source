@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+// Upstream source: https://github.com/mihonapp/tachiyomix/blob/e4d546c/index/index.proto
+//
+// divergence: Resources.jarUrl (field 501)
+//
+// Regenerate the Python bindings after editing:
+//   protoc --python_out=. --pyi_out=. index.proto
+
+message Index {
+  string name = 1;
+  string badgeLabel = 2;
+  string signingKey = 3;
+  Contact contact = 4;
+  oneof extensions {
+    ExtensionList extensionList = 101;
+    string extensionListUrl = 102;
+  }
+}
+
+message Contact {
+  string website = 1;
+  optional string discord = 2;
+}
+
+message ExtensionList {
+  repeated Extension extensions = 1;
+}
+
+message Extension {
+  string name = 1;
+  string packageName = 2;
+  Resources resources = 3;
+  string extensionLib = 4;
+  int64 versionCode = 5;
+  string versionName = 6;
+  ContentWarning contentWarning = 7;
+  repeated Source sources = 8;
+}
+
+message Resources {
+  string apkUrl = 1;
+  string iconUrl = 2;
+  string jarUrl = 501;
+}
+
+message Source {
+  int64 id = 1;
+  string name = 2;
+  string language = 3;
+  string homeUrl = 4;
+  repeated string mirrorUrls = 5;
+  optional string message = 7;
+}
+
+enum ContentWarning {
+  CONTENT_WARNING_UNSPECIFIED = 0;
+  CONTENT_WARNING_SAFE = 1;
+  CONTENT_WARNING_MIXED = 2;
+  CONTENT_WARNING_NSFW = 3;
+}

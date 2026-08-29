@@ -1,21 +1,30 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Comix"
-    versionCode = 33
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    versionCode = 37
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://comix.to"
+        baseUrl {
+            mirrors(
+                "https://comix.to",
+                "https://comix.ws",
+            )
+        }
     }
 
     deeplink {
         host("comix.to")
         host("www.comix.to")
+        host("comix.ws")
+        host("www.comix.ws")
         path("/title/..*")
     }
 }

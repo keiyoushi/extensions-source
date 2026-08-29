@@ -7,42 +7,44 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val response = chain.proceed(request)
         val fragment = request.url.fragment
-        if (fragment.isNullOrEmpty()) {
-            return chain.proceed(request)
-        }
+
+        if (fragment.isNullOrEmpty() || !response.isSuccessful) return response
 
         val (seed, version) = when {
-            fragment.startsWith("scramble_seed_v2=") -> {
-                Pair(fragment.substringAfter("scramble_seed_v2=").toLong(), 2)
-            }
-
-            fragment.startsWith("scramble_seed=") -> {
-                Pair(fragment.substringAfter("scramble_seed=").toLong(), 1)
-            }
-
-            else -> return chain.proceed(request)
+            fragment.startsWith("scramble_seed_v2=") ->
+                fragment.substringAfter("scramble_seed_v2=").toLong() to 2
+            fragment.startsWith("scramble_seed=") ->
+                fragment.substringAfter("scramble_seed=").toLong() to 1
+            else -> return response
         }
 
-        val response = chain.proceed(request)
-        val descrambledBody = descrambleImage(response.body, seed, version)
+        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
+        val result = descramble(bitmap, seed, version)
+        bitmap.recycle()
 
-        return response.newBuilder().body(descrambledBody).build()
+        val buffer = Buffer()
+        result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+        result.recycle()
+
+        return response.newBuilder()
+            .body(buffer.asResponseBody(MEDIA_TYPE, buffer.size))
+            .build()
     }
 
     private class Coord(val x: Int, val y: Int)
 
     private class CoordPair(val source: Coord, val dest: Coord)
 
-    private fun xorshift32(seed: UInt): UInt {
-        var n = seed
+    private fun UInt.xorshift32(): UInt {
+        var n = this
         n = n xor (n shl 13)
         n = n xor (n shr 17)
         n = n xor (n shl 5)
@@ -54,77 +56,68 @@ class ImageInterceptor : Interceptor {
         val pairs = mutableListOf<Pair<UInt, Int>>()
 
         for (i in 0 until 16) {
-            seed32 = xorshift32(seed32)
+            seed32 = seed32.xorshift32()
             pairs.add(seed32 to i)
         }
 
         pairs.sortBy { it.first }
-        val sortedVal = pairs.map { it.second }
 
-        return sortedVal.mapIndexed { i, e ->
+        return pairs.mapIndexed { destIndex, (_, sourceIndex) ->
             CoordPair(
-                source = Coord(x = e % 4, y = e / 4),
-                dest = Coord(x = i % 4, y = i / 4),
+                source = Coord(x = sourceIndex % GRID_SIZE, y = sourceIndex / GRID_SIZE),
+                dest = Coord(x = destIndex % GRID_SIZE, y = destIndex / GRID_SIZE),
             )
         }
     }
 
-    private fun descrambleImage(responseBody: ResponseBody, seed: Long, version: Int): ResponseBody {
-        val unscrambledCoords = getUnscrambledCoords(seed)
-        val originalBitmap = BitmapFactory.decodeStream(responseBody.byteStream())
-            ?: throw Exception("Failed to decode image stream")
+    private fun Int.tileSizeV1() = (this / 8 * 8) / 4
 
-        val originalWidth = originalBitmap.width
-        val originalHeight = originalBitmap.height
+    private fun Int.tileSizeV2() = (this / 32) * 8
 
-        val descrambledBitmap = Bitmap.createBitmap(originalWidth, originalHeight, originalBitmap.config)
-        val canvas = Canvas(descrambledBitmap)
+    private fun descramble(image: Bitmap, seed: Long, version: Int): Bitmap {
+        val width = image.width
+        val height = image.height
 
-        val (tileWidth, tileHeight) = when (version) {
-            2 -> {
-                val getTile = { size: Int -> (size / 32) * 8 }
-                Pair(getTile(originalWidth), getTile(originalHeight))
-            }
-
-            else -> {
-                val getTile = { size: Int -> (size / 8 * 8) / 4 }
-                Pair(getTile(originalWidth), getTile(originalHeight))
-            }
+        val (tileWidth, tileHeight) = if (version == 2) {
+            width.tileSizeV2() to height.tileSizeV2()
+        } else {
+            width.tileSizeV1() to height.tileSizeV1()
         }
 
-        unscrambledCoords.forEach { coord ->
-            val sx = coord.source.x * tileWidth
-            val sy = coord.source.y * tileHeight
-            val dx = coord.dest.x * tileWidth
-            val dy = coord.dest.y * tileHeight
+        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        val srcRect = Rect()
+        val dstRect = Rect()
 
-            val srcRect = Rect(sx, sy, sx + tileWidth, sy + tileHeight)
-            val destRect = Rect(dx, dy, dx + tileWidth, dy + tileHeight)
+        for (coord in getUnscrambledCoords(seed)) {
+            val srcX = coord.source.x * tileWidth
+            val srcY = coord.source.y * tileHeight
+            val dstX = coord.dest.x * tileWidth
+            val dstY = coord.dest.y * tileHeight
 
-            canvas.drawBitmap(originalBitmap, srcRect, destRect, null)
+            srcRect.set(srcX, srcY, srcX + tileWidth, srcY + tileHeight)
+            dstRect.set(dstX, dstY, dstX + tileWidth, dstY + tileHeight)
+
+            canvas.drawBitmap(image, srcRect, dstRect, null)
         }
 
-        if (version == 2) {
-            val processedWidth = tileWidth * 4
-            val processedHeight = tileHeight * 4
-            if (originalWidth > processedWidth) {
-                val srcRect = Rect(processedWidth, 0, originalWidth, originalHeight)
-                val destRect = Rect(processedWidth, 0, originalWidth, originalHeight)
-                canvas.drawBitmap(originalBitmap, srcRect, destRect, null)
-            }
-            if (originalHeight > processedHeight) {
-                val srcRect = Rect(0, processedHeight, processedWidth, originalHeight)
-                val destRect = Rect(0, processedHeight, processedWidth, originalHeight)
-                canvas.drawBitmap(originalBitmap, srcRect, destRect, null)
-            }
+        val tileAreaWidth = tileWidth * GRID_SIZE
+        val tileAreaHeight = tileHeight * GRID_SIZE
+
+        if (tileAreaWidth < width) {
+            srcRect.set(tileAreaWidth, 0, width, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+        if (tileAreaHeight < height) {
+            srcRect.set(0, tileAreaHeight, tileAreaWidth, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
         }
 
-        originalBitmap.recycle()
+        return result
+    }
 
-        val outputStream = ByteArrayOutputStream()
-        descrambledBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
-        descrambledBitmap.recycle()
-
-        return outputStream.toByteArray().toResponseBody("image/jpeg".toMediaType())
+    companion object {
+        private val MEDIA_TYPE = "image/jpeg".toMediaType()
+        private const val GRID_SIZE = 4
     }
 }

@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -12,8 +14,11 @@ keiyoushi {
         source {
             lang = it
             if (it == "pt-BR") id = 5826725746643311801L
-            baseUrl("https://www.luscious.net") {
-                mirrors = listOf("https://members.luscious.net")
+            baseUrl {
+                mirrors(
+                    "https://www.luscious.net",
+                    "https://members.luscious.net",
+                )
             }
         }
     }

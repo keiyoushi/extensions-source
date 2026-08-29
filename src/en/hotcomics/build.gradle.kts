@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "HotComics"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
@@ -12,8 +14,4 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://hotcomics.me"
     }
-}
-
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
 }

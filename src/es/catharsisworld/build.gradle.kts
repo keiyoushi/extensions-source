@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,14 +7,14 @@ plugins {
 keiyoushi {
     name = "Catharsis World"
     versionCode = 14
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
-    theme = "madara"
+    theme = "madaralegacy"
 
     source {
         lang = "es"
-        baseUrl("https://catharsisworld.dig-it.info") {
-            withCustom = true
+        baseUrl {
+            custom("https://catharsisworld.dig-it.info")
         }
         versionId = 2
     }

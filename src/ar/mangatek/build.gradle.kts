@@ -1,15 +1,22 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaTek"
-    versionCode = 3
+    versionCode = 5
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "ar"
         baseUrl = "https://mangatek.com"
+    }
+
+    deeplink {
+        path("/manga/..*")
+        path("/reader/..*")
     }
 }

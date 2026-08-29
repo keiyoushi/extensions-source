@@ -1,6 +1,7 @@
 package keiyoushi.zip
 
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.network.get
 import keiyoushi.utils.readLongLittleEndian
 import keiyoushi.utils.readUIntLittleEndian
 import keiyoushi.utils.readUShortLittleEndian
@@ -314,6 +315,17 @@ fun Request.Builder.range(range: LongRange): Request.Builder = header("Range", "
  */
 fun OkHttpClient.zipDirectory(url: String, headers: Headers): ZipDirectory {
     val response = newCall(GET(url, headers).newBuilder().header("Range", "bytes=-$MAX_EOCD_SEARCH").build()).execute()
+    val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
+    return readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
+}
+
+/**
+ * Fetches and parses a remote ZIP's central directory over HTTP range requests.
+ * (Suspend equivalent)
+ */
+suspend fun OkHttpClient.zipDirectoryAsync(url: String, headers: Headers): ZipDirectory {
+    val rangeHeaders = headers.newBuilder().set("Range", "bytes=-$MAX_EOCD_SEARCH").build()
+    val response = this.get(url, rangeHeaders)
     val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
     return readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
 }

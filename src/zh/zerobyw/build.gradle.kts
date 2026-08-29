@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,14 +7,14 @@ plugins {
 keiyoushi {
     name = "Zerobyw"
     versionCode = 21
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {
         name = "zero搬运网"
         lang = "zh"
-        baseUrl("http://www.zerobyw33.com") {
-            withCustom = true
+        baseUrl {
+            custom("http://www.zerobyw33.com")
         }
     }
 }

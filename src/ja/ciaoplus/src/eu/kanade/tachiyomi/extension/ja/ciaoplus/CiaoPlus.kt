@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ja.ciaoplus
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -18,21 +17,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import okio.ByteString.Companion.encodeUtf8
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.GregorianCalendar
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class CiaoPlus : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "https://api.ciao.shogakukan.co.jp"
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.JAPAN)
-    private val latestRequestDateFormat = SimpleDateFormat("yyyyMMdd", Locale.JAPAN)
-    private val latestResponseDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.JAPAN)
     private val pageLimit = 25
 
     override fun headersBuilder() = super.headersBuilder()
@@ -43,21 +33,9 @@ abstract class CiaoPlus : HttpSource() {
         .build()
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        val offset = (page - 1) * pageLimit
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("ranking/all")
-            .addQueryParameter("platform", "3")
-            .addQueryParameter("ranking_id", "1")
-            .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("limit", "51")
-            .addQueryParameter("is_top", "0")
-            .build()
-        return hashedGet(url)
-    }
+    override fun popularMangaRequest(page: Int): Request = rankingRequest("1", page)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val requestUrl = response.request.url.toString()
         val rankingResult = response.parseAs<RankingApiResponse>()
         val titleIds = rankingResult.rankingTitleList.map { it.id.toString().padStart(5, '0') }
         if (titleIds.isEmpty()) {
@@ -66,62 +44,36 @@ abstract class CiaoPlus : HttpSource() {
 
         val hasNextPage = titleIds.size > pageLimit
         val mangaIdsToFetch = if (hasNextPage) titleIds.dropLast(1) else titleIds
-        val detailsUrl = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("title/list")
+        val detailsUrl = "$apiUrl/title/list".toHttpUrl().newBuilder()
             .addQueryParameter("platform", "3")
             .addQueryParameter("title_id_list", mangaIdsToFetch.joinToString(","))
             .build()
 
-        val detailsRequest = hashedGet(detailsUrl)
-        val detailsResponse = client.newCall(detailsRequest).execute()
-        if (!detailsResponse.isSuccessful) {
-            throw Exception("Failed to fetch title details: ${detailsResponse.code} - ${detailsResponse.body.string()}")
-        }
-
-        val detailsResult = detailsResponse.parseAs<TitleListResponse>()
-        val mangas = detailsResult.titleList.map { it.toSManga() }
-
-        if (requestUrl.contains("/genre/")) {
-            return MangasPage(mangas.reversed(), hasNextPage)
-        }
+        val detailsResponse = client.newCall(hashedGet(detailsUrl)).execute()
+        val mangas = detailsResponse.parseAs<TitleListResponse>().titleList.map { it.toSManga() }
         return MangasPage(mangas, hasNextPage)
     }
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
-        val calendar = GregorianCalendar(TimeZone.getTimeZone("Asia/Tokyo")).apply {
-            time = Date()
-            add(Calendar.DAY_OF_MONTH, -(page - 1))
-        }
-        val dateString = latestRequestDateFormat.format(calendar.time)
-
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("web/title/ids")
-            .addQueryParameter("updated_at", dateString)
+        val url = "$apiUrl/title/weekly".toHttpUrl().newBuilder()
             .addQueryParameter("platform", "3")
             .build()
         return hashedGet(url)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<LatestTitleListResponse>()
-        val today = GregorianCalendar(TimeZone.getTimeZone("Asia/Tokyo")).time
-        val mangas = result.updateEpisodeTitles
-            .filterKeys {
-                if (it.startsWith("2099")) return@filterKeys false
-                val entryDate = latestResponseDateFormat.parse(it)
-                !entryDate!!.after(today)
-            }
-            .flatMap { it.value }
-            .distinctBy { it.titleId }
-            .map { it.toSManga() }
+        val result = response.parseAs<LatestResponse>()
+        val todayIdList = result.weeklyList.first { it.weekdayIndex == result.todayWeekdayIndex }.titleIdList
+        val titleById = result.titleList.associateBy { it.titleId }
+        val mangas = todayIdList.mapNotNull { titleById[it]?.toSManga() }
         return MangasPage(mangas, false)
     }
 
+    // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            val url = apiUrl.toHttpUrl().newBuilder()
-                .addPathSegments("search/title")
+            val url = "$apiUrl/search/title".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
                 .addQueryParameter("limit", "99999")
                 .addQueryParameter("platform", "3")
@@ -129,39 +81,38 @@ abstract class CiaoPlus : HttpSource() {
             return hashedGet(url)
         }
 
-        val genreFilter = filters.firstInstance<GenreFilter>()
-        val uriPart = genreFilter.toUriPart()
-        val url = if (uriPart.startsWith("/genre/")) {
-            val genreId = uriPart.substringAfter("/genre/")
-            apiUrl.toHttpUrl().newBuilder()
-                .addPathSegments("search/title")
-                .addQueryParameter("platform", "3")
-                .addQueryParameter("genre_id", genreId)
-                .addQueryParameter("limit", "99999")
-                .build()
-        } else {
-            val rankingId = uriPart.substringAfter("/ranking/")
-            val offset = (page - 1) * pageLimit
-            apiUrl.toHttpUrl().newBuilder()
-                .addPathSegments("ranking/all")
-                .addQueryParameter("platform", "3")
-                .addQueryParameter("ranking_id", rankingId)
-                .addQueryParameter("offset", offset.toString())
-                .addQueryParameter("limit", "51")
-                .addQueryParameter("is_top", "0")
-                .build()
+        val filter = filters.firstInstance<CategoryFilter>()
+        return when (filter.type) {
+            FilterType.GENRE -> {
+                val url = "$apiUrl/search/title".toHttpUrl().newBuilder()
+                    .addQueryParameter("platform", "3")
+                    .addQueryParameter("genre_id", filter.id)
+                    .addQueryParameter("limit", "99999")
+                    .build()
+                hashedGet(url)
+            }
+            FilterType.RANKING -> rankingRequest(filter.id, page)
         }
-        return hashedGet(url)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val requestUrl = response.request.url.toString()
-        if (requestUrl.contains("/search/title")) {
-            val result = response.parseAs<TitleListResponse>()
-            val mangas = result.titleList.map { it.toSManga() }
+        if (response.request.url.pathSegments.first() == "search") {
+            val mangas = response.parseAs<TitleListResponse>().titleList.map { it.toSManga() }
             return MangasPage(mangas, false)
         }
         return popularMangaParse(response)
+    }
+
+    private fun rankingRequest(rankingId: String, page: Int): Request {
+        val offset = (page - 1) * pageLimit
+        val url = "$apiUrl/ranking/all".toHttpUrl().newBuilder()
+            .addQueryParameter("platform", "3")
+            .addQueryParameter("ranking_id", rankingId)
+            .addQueryParameter("offset", offset.toString())
+            .addQueryParameter("limit", "51")
+            .addQueryParameter("is_top", "0")
+            .build()
+        return hashedGet(url)
     }
 
     // Details
@@ -169,8 +120,7 @@ abstract class CiaoPlus : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val titleId = manga.url.substringAfter("/title/")
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments("title/list")
+        val url = "$apiUrl/title/list".toHttpUrl().newBuilder()
             .addQueryParameter("platform", "3")
             .addQueryParameter("title_id_list", titleId)
             .build()
@@ -178,36 +128,26 @@ abstract class CiaoPlus : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val details = response.parseAs<DetailResponse>()
-        val result = details.webTitle.first()
-        return SManga.create().apply {
-            title = result.titleName
-            author = result.authorText
-            description = result.introductionText
-            if (result.genreIdList.isNotEmpty()) {
-                val genreApiUrl = apiUrl.toHttpUrl().newBuilder()
-                    .addPathSegments("genre/list")
-                    .addQueryParameter("platform", "3")
-                    .addQueryParameter("genre_id_list", result.genreIdList.joinToString(","))
-                    .build()
+        val result = response.parseAs<DetailResponse>().webTitle.first()
+        val genre = result.genreIdList?.takeIf { it.isNotEmpty() }?.let { fetchGenreNames(it) }
+        return result.toSManga(genre)
+    }
 
-                val genreRequest = hashedGet(genreApiUrl)
-                val genreResponse = client.newCall(genreRequest).execute()
+    private fun fetchGenreNames(genreIds: List<Int>): String? {
+        val url = "$apiUrl/genre/list".toHttpUrl().newBuilder()
+            .addQueryParameter("platform", "3")
+            .addQueryParameter("genre_id_list", genreIds.joinToString(","))
+            .build()
 
-                if (genreResponse.isSuccessful) {
-                    val genreResult = genreResponse.parseAs<GenreListResponse>()
-                    genre = genreResult.genreList.joinToString { it.genreName }
-                }
-            }
-        }
+        val genreResponse = client.newCall(hashedGet(url)).execute()
+        return genreResponse.parseAs<GenreListResponse>().genreList?.joinToString { it.genreName }
     }
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val details = response.parseAs<DetailResponse>()
-        val resultIds = details.webTitle.first()
+        val resultIds = response.parseAs<DetailResponse>().webTitle.first()
         val episodeIds = resultIds.episodeIdList.map { it.toString() }
         if (episodeIds.isEmpty()) {
             return emptyList()
@@ -222,45 +162,22 @@ abstract class CiaoPlus : HttpSource() {
         val hash = generateHash(params)
 
         val postHeaders = headersBuilder()
-            .add("Origin", baseUrl)
-            .add("x-bambi-is-crawler", "false")
-            .add("x-bambi-hash", hash)
+            .add("X-Bambi-Hash", hash)
             .build()
 
         val apiRequest = POST("$apiUrl/episode/list", postHeaders, formBody)
         val apiResponse = client.newCall(apiRequest).execute()
-
-        if (!apiResponse.isSuccessful) {
-            throw Exception("API request failed with code ${apiResponse.code}: ${apiResponse.body.string()}")
-        }
-
         val result = apiResponse.parseAs<EpisodeListResponse>()
-
-        return result.episodeList.map { it.toSChapter(resultIds.titleName, dateFormat) }.reversed()
+        return result.episodeList.map { it.toSChapter(resultIds.titleName) }.reversed()
     }
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     // Pages
-    /*
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservable()
-            .map { response ->
-                if (!response.isSuccessful) {
-                    if (response.code == 400) {
-                        throw Exception("This chapter is locked. Log in via WebView and rent or purchase this chapter to read.")
-                    }
-                    throw Exception("HTTP error ${response.code}")
-                }
-                pageListParse(response)
-            }
-    }
-     */
-
     override fun pageListParse(response: Response): List<Page> {
         val apiResponse = response.parseAs<ViewerApiResponse>()
         val seed = apiResponse.scrambleSeed
-        val ver = apiResponse.scrambleVer
-        val fragment = if (ver == 2) "scramble_seed_v2" else "scramble_seed"
+        val fragment = if (apiResponse.scrambleVer == 2) "scramble_seed_v2" else "scramble_seed"
         return apiResponse.pageList.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = "$imageUrl#$fragment=$seed")
         }
@@ -294,37 +211,13 @@ abstract class CiaoPlus : HttpSource() {
         val queryParams = url.queryParameterNames.associateWith { url.queryParameter(it)!! }
         val hash = generateHash(queryParams)
         val newHeaders = headersBuilder()
-            .add("x-bambi-hash", hash)
+            .add("X-Bambi-Hash", hash)
             .build()
         return GET(url, newHeaders)
     }
 
     override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Search query will ignore genre filter"),
-        GenreFilter(getGenreList()),
-    )
-
-    private class GenreFilter(private val genres: Array<Pair<String, String>>) : Filter.Select<String>("Filter by", genres.map { it.first }.toTypedArray()) {
-        fun toUriPart() = genres[state].second
-    }
-
-    private fun getGenreList() = arrayOf(
-        Pair("(ランキング) まんが総合", "/ranking/1"),
-        Pair("(ランキング) 急上昇", "/ranking/2"),
-        Pair("(ランキング) 読切", "/ranking/3"),
-        Pair("(ランキング) ラブ", "/ranking/4"),
-        Pair("(ランキング) ホラー・ミステリー", "/ranking/5"),
-        Pair("(ランキング) ファンタジー", "/ranking/6"),
-        Pair("(ランキング) ギャグ・エッセイ", "/ranking/7"),
-        Pair("ギャグ・エッセイ", "/genre/1"),
-        Pair("ラブ", "/genre/2"),
-        Pair("ホラー・ミステリー", "/genre/3"),
-        Pair("家族", "/genre/4"),
-        Pair("青春・学園", "/genre/5"),
-        Pair("友情", "/genre/6"),
-        Pair("ファンタジー", "/genre/7"),
-        Pair("ドリーム・サクセス", "/genre/8"),
-        Pair("異世界", "/genre/9"),
+        CategoryFilter(),
     )
 
     // Unsupported

@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Comick (Unoriginal)"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     listOf(
@@ -14,14 +16,12 @@ keiyoushi {
     ).forEach {
         source {
             lang = it
-            baseUrl("https://comick.live") {
-                mirrors = listOf("https://comick.art")
+            baseUrl {
+                mirrors(
+                    "https://comick.live",
+                    "https://comick.art",
+                )
             }
         }
     }
-}
-
-dependencies {
-
-    compileOnly("com.squareup.okhttp3:okhttp-brotli:5.0.0-alpha.11")
 }

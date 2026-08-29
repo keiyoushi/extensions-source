@@ -1,11 +1,13 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "NihonKuni"
-    versionCode = 8
-    contentWarning = ContentWarning.NSFW
+    versionCode = 9
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "fmreader"
 
@@ -15,9 +17,4 @@ keiyoushi {
         // Formerly "MangaGun(漫画軍)"
         id = 3811800324362294701L
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

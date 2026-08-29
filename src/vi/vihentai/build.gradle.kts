@@ -1,15 +1,26 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "ViHentai"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://vi-hentai.moe"
+        baseUrl {
+            mirrors(
+                "https://vi-hentai.moe",
+                "https://vi-hentai.pro",
+            )
+        }
+    }
+
+    deeplink {
+        path("/truyen/.*")
     }
 }

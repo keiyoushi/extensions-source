@@ -2,10 +2,11 @@ package eu.kanade.tachiyomi.extension.en.kmanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 private val chapterNameRegex = Regex("""(?i)(?:chapter|ch|episode|ep|第).?\s*(\d+(?:\.\d+)?)(?:\s*[(（](\d+)[)）])?""")
 private val splitChapterRegex = Regex("""(\d+(?:\.\d+)?)\s*[(（](\d+)[)）]""")
@@ -23,6 +24,19 @@ class RankingTitleId(
     val id: Int,
 )
 
+@Serializable
+class LatestResponse(
+    @SerialName("today_weekday_index") val todayWeekdayIndex: Int,
+    @SerialName("weekly_list") val weeklyList: List<Weekly>,
+    @SerialName("title_list") val titleList: List<TitleDetail>,
+)
+
+@Serializable
+class Weekly(
+    @SerialName("title_id_list") val titleIdList: List<Int>,
+    @SerialName("weekday_index") val weekdayIndex: Int,
+)
+
 // Mangas
 @Serializable
 class TitleListResponse(
@@ -31,7 +45,7 @@ class TitleListResponse(
 
 @Serializable
 class TitleDetail(
-    @SerialName("title_id") private val titleId: Int,
+    @SerialName("title_id") val titleId: Int,
     @SerialName("title_name") private val titleName: String,
     @SerialName("thumbnail_image_url") private val thumbnailImageUrl: String? = null,
     @SerialName("banner_image_url") private val bannerImageUrl: String? = null,
@@ -52,17 +66,30 @@ class DetailResponse(
 
 @Serializable
 class WebTitle(
-    @SerialName("title_name") val titleName: String,
-    @SerialName("author_text") val authorText: String?,
-    @SerialName("introduction_text") val introductionText: String?,
-    @SerialName("next_updated_text") val nextUpdatedText: String?,
-    @SerialName("title_in_japanese") val titleInJapanese: String?,
+    @SerialName("title_name") private val titleName: String,
+    @SerialName("author_text") private val authorText: String?,
+    @SerialName("introduction_text") private val introductionText: String?,
+    @SerialName("next_updated_text") private val nextUpdatedText: String?,
+    @SerialName("title_in_japanese") private val titleInJapanese: String?,
     @SerialName("genre_id_list") val genreIdList: List<Int>?,
     @SerialName("episode_id_list") val episodeIdList: List<Int>,
-    @SerialName("thumbnail_image_url") val thumbnailImageUrl: String? = null,
-    @SerialName("thumbnail_rect_image_url") val thumbnailRectImageUrl: String? = null,
-    @SerialName("banner_image_url") val bannerImageUrl: String? = null,
-)
+    @SerialName("thumbnail_image_url") private val thumbnailImageUrl: String? = null,
+    @SerialName("thumbnail_rect_image_url") private val thumbnailRectImageUrl: String? = null,
+    @SerialName("banner_image_url") private val bannerImageUrl: String? = null,
+) {
+    fun toSManga(titleId: String, genre: String?): SManga = SManga.create().apply {
+        url = "/title/$titleId"
+        title = titleName
+        author = authorText
+        description = buildString {
+            introductionText?.let { append(it) }
+            nextUpdatedText?.takeIf { it.isNotEmpty() }?.let { append("\n\n$it") }
+            titleInJapanese?.takeIf { it.isNotEmpty() }?.let { append("\n\nJapanese Title: $it") }
+        }
+        thumbnail_url = thumbnailImageUrl ?: bannerImageUrl ?: thumbnailRectImageUrl
+        this.genre = genre
+    }
+}
 
 @Serializable
 class GenreListResponse(
@@ -94,7 +121,7 @@ class Episode(
     val isLocked: Boolean
         get() = point > 0 && badge != 3 && rentalFinishTime == null
 
-    fun toSChapter(dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
+    fun toSChapter(): SChapter = SChapter.create().apply {
         url = "/title/$titleId/episode/$episodeId"
         val lock = if (isLocked) "🔒 " else ""
         var parsedName = episodeName
@@ -123,16 +150,36 @@ class Episode(
         }
 
         name = lock + parsedName
-        date_upload = dateFormat.tryParse(startTime)
+        date_upload = dateFormat.tryParseDateTime(startTime)
     }
 }
+
+private val dateFormat = DateTimeFormatter
+    .ofPattern("yyyy-MM-dd HH:mm:ss")
+    .withZone(ZoneId.of("America/Chicago"))
 
 // Viewer
 @Serializable
 class ViewerApiResponse(
     @SerialName("page_list") val pageList: List<String>,
-    @SerialName("scramble_seed") val scrambleSeed: Long,
+    @SerialName("scramble_seed") val scrambleSeed: String,
+    @SerialName("title_id") val titleId: Int,
+    @SerialName("episode_id") val episodeId: Int,
 )
 
 @Serializable
-class BirthdayCookie(val value: String, val expires: Long)
+class BirthdayCookie(
+    val value: String,
+    val expires: Long,
+)
+
+@Serializable
+class LocalStorageAccount(
+    val isLoggedIn: Boolean?,
+    val checkedTicketExpiredList: List<CheckedTicketExpired>?,
+)
+
+@Serializable
+class CheckedTicketExpired(
+    val userId: Int,
+)

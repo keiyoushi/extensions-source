@@ -11,7 +11,6 @@ import android.os.Build
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.extension.all.manhuarm.Dialog
 import eu.kanade.tachiyomi.extension.all.manhuarm.Language
 import eu.kanade.tachiyomi.extension.all.manhuarm.Manhuarm.Companion.PAGE_REGEX
@@ -27,7 +26,6 @@ import java.io.FileOutputStream
 import java.io.InputStream
 
 // The Interceptor joins the dialogues and pages of the manga.
-@RequiresApi(Build.VERSION_CODES.O)
 class ComposedImageInterceptor(
     val language: Language,
 ) : Interceptor {

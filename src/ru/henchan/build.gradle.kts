@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -10,8 +12,8 @@ keiyoushi {
     theme = "multichan"
 
     source {
-        baseUrl("https://xxl.hentaichan.live") {
-            withCustom = true
+        baseUrl {
+            custom("https://xxl.hentaichan.live")
         }
         lang = "ru"
         id = 5504588601186153612L

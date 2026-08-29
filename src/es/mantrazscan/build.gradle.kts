@@ -1,16 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
-    name = "Manhwa Scan"
-    versionCode = 56
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    name = "Mantraz Scan"
+    versionCode = 57
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "es"
-        baseUrl = "https://manhwascanx.lat"
-        id = 7172992930543738693L
+        baseUrl = "https://mantrazscan.co"
     }
 }

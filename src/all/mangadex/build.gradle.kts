@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaDex"
-    versionCode = 210
+    versionCode = 212
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 

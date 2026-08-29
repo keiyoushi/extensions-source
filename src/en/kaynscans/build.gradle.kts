@@ -1,16 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Kayn Scans"
-    versionCode = 4
+    versionCode = 31
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "iken"
+    libVersion = "1.6"
+    theme = "vinetheme"
 
     source {
-        baseUrl = "https://kaynscan.org"
+        baseUrl = "https://kaynscans.com"
         lang = "en"
+        versionId = 2
     }
 }

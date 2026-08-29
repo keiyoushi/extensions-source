@@ -60,6 +60,8 @@ abstract class MyHentaiGallery : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        genreSearchRequest(query, page)?.let { return it }
+
         if (query.isNotBlank()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addPathSegment(page.toString())
@@ -136,7 +138,11 @@ abstract class MyHentaiGallery : HttpSource() {
 
         return SManga.create().apply {
             title = info.selectFirst("h1")!!.text()
-            genre = (categories + artists + parodies).joinToString()
+            genre = (
+                categories +
+                    artists.map { "$ARTIST_GENRE_PREFIX$it" } +
+                    parodies.map { "$PARODY_GENRE_PREFIX$it" }
+                ).joinToString()
             artist = artists.joinToString()
             thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.absUrl("src")?.encodeSpaces()
             status = SManga.COMPLETED
@@ -182,6 +188,18 @@ abstract class MyHentaiGallery : HttpSource() {
 
     private fun String.encodeSpaces(): String = replace(" ", "%20")
 
+    // Routes a clicked artist/parody genre chip to its tag listing instead of a title search.
+    private fun genreSearchRequest(query: String, page: Int): Request? {
+        val (uriPart, name) = when {
+            query.startsWith(ARTIST_GENRE_PREFIX) -> "artist" to query.removePrefix(ARTIST_GENRE_PREFIX)
+            query.startsWith(PARODY_GENRE_PREFIX) -> "parody" to query.removePrefix(PARODY_GENRE_PREFIX)
+            else -> return null
+        }
+        val id = lookupTagId(uriPart, name)
+            ?: throw Exception("No $uriPart \"$name\" was found.")
+        return GET("$baseUrl/a/$uriPart/$id/$page", headers)
+    }
+
     private fun TagLookupFilter.resolveTagId(): String {
         val value = state.trim()
         value.toLongOrNull()?.let { return it.toString() }
@@ -224,6 +242,8 @@ abstract class MyHentaiGallery : HttpSource() {
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
+        private const val ARTIST_GENRE_PREFIX = "Artist: "
+        private const val PARODY_GENRE_PREFIX = "Parody: "
         private val TAG_URL_REGEX = Regex("""/(artist|parody)/(\d+)(?:[/?#]|$)""", RegexOption.IGNORE_CASE)
         private val WHITESPACE_REGEX = Regex("""\s+""")
         private val TAG_COUNT_SUFFIX = Regex("""\s*\(\d+\)\s*$""")

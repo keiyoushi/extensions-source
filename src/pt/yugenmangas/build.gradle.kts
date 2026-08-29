@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -11,8 +13,8 @@ keiyoushi {
     source {
         lang = "pt-BR"
         versionId = 2
-        baseUrl("https://yugenmangasbr.dxtg.online") {
-            withCustom = true
+        baseUrl {
+            custom("https://yugenmangasbr.dxtg.online")
         }
     }
 }

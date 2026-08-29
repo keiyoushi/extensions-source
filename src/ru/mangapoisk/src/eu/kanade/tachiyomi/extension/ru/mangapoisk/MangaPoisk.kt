@@ -1,151 +1,181 @@
 package eu.kanade.tachiyomi.extension.ru.mangapoisk
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.tryParse
-import okhttp3.Headers
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val chapterRegex = Regex("""Глава\s(\d+)""", RegexOption.IGNORE_CASE)
-private val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("ru"))
-
 @Source
-abstract class MangaPoisk : HttpSource() {
+abstract class MangaPoisk : KeiSource() {
 
-    override val supportsLatest = true
+    // ============================== Popular ===============================
+    override suspend fun getPopularManga(page: Int): MangasPage = makeCatalogRequest(page, "popular")
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", baseUrl)
+    // ============================== Latest ===============================
+    override suspend fun getLatestUpdates(page: Int): MangasPage = makeCatalogRequest(page, "-last_chapter_at")
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga?sortBy=popular&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga?sortBy=-last_chapter_at&page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    // ============================== Search ===============================
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
+            if (query.length < 3) {
+                throw Exception("Запрос должен содержать не менее 3 символов. / The query must contain at least 3 characters")
+            }
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .addQueryParameter("page", page.toString())
                 .build()
-            return GET(url, headers)
+
+            client.get(url).use {
+                return mangaParse(it)
+            }
         }
 
-        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-
-        val filterList = filters.ifEmpty { getFilterList() }
-
-        filterList.firstInstanceOrNull<OrderBy>()?.let { orderBy ->
-            val ord = arrayOf("-year", "popular", "name", "-published_at", "-last_chapter_at")[orderBy.state!!.index]
-            val ordRev = arrayOf("year", "-popular", "-name", "published_at", "last_chapter_at")[orderBy.state!!.index]
-            url.addQueryParameter("sortBy", if (orderBy.state!!.ascending) ordRev else ord)
-        }
-
-        filterList.firstInstanceOrNull<StatusList>()?.state?.filter { it.state }?.forEach { status ->
-            url.addQueryParameter("translated[]", status.id)
-        }
-
-        filterList.firstInstanceOrNull<GenreList>()?.state?.filter { it.state }?.forEach { genre ->
-            url.addQueryParameter("genres[]", genre.id)
-        }
-
-        return GET(url.build(), headers)
+        return makeCatalogRequest(page, "likes", filters)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    // ============================== Search Utilities ===============================
+    private suspend fun makeCatalogRequest(page: Int, sortBy: String, filters: FilterList? = null): MangasPage {
+        val url = "$baseUrl/manga".toHttpUrl().newBuilder().apply {
+            filters?.forEach { filter ->
+                when (filter) {
+                    is OrderBy -> addQueryParameter("sortBy", "${filter.order}${filter.selected}")
+                    is StatusList -> filter.checked?.let { addQueryParameter("translated", "[${it.joinToString(",")}]") }
+                    is GenresFilter -> {
+                        filter.included?.let { addQueryParameter("genres", "[${it.joinToString(",")}]") }
+                        filter.excluded?.let { addQueryParameter("genres-exclude", "[${it.joinToString(",")}]") }
+                    }
+                    else -> {}
+                }
+            }
+
+            if (filters == null) {
+                addQueryParameter("sortBy", sortBy)
+            }
+            addQueryParameter("page", page.toString())
+        }.build()
+
+        client.get(url).use {
+            return mangaParse(it)
+        }
+    }
+
+    private fun mangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val isSearch = response.request.url.queryParameter("q") != null
         val selector = if (isSearch) "article.card" else ".manga-card"
+        val hasNextPage = if (isSearch) {
+            document.selectFirst("ul.pagination li a[aria-label*=Вперёд]:not([aria-disabled=true])") != null
+        } else {
+            document.selectFirst("ul li:contains(Вперёд) a") != null
+        }
 
         val mangas = document.select(selector).mapNotNull { element ->
             val urlElement = if (isSearch) element.selectFirst("a.card-about") else element.selectFirst("a")
             if (urlElement == null) return@mapNotNull null
+            val titleParsed = if (isSearch) {
+                element.selectFirst("div.post-description p.card-title")?.text()?.takeIf { it.isNotBlank() }
+                    ?: element.selectFirst("a > h2.entry-title")?.text()?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+            } else {
+                urlElement.attr("title").takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+            }.substringBefore("/")
 
             SManga.create().apply {
-                thumbnail_url = element.selectFirst("a > img")?.let { getImage(it) } ?: ""
+                thumbnail_url = element.selectFirst("a > img")?.imgAttr() ?: ""
                 setUrlWithoutDomain(urlElement.attr("href"))
-
-                title = if (isSearch) {
-                    element.selectFirst("a > h2.entry-title")?.text()?.substringBefore("/") ?: ""
-                } else {
-                    urlElement.attr("title").substringBefore("/")
-                }
+                title = titleParsed
             }
         }
 
-        return MangasPage(mangas, mangas.isNotEmpty())
+        return MangasPage(mangas, hasNextPage)
     }
 
-    private fun getImage(element: Element): String {
-        val image = element.attr("abs:data-src")
-        if (image.isNotEmpty()) return image
-        return element.attr("abs:src")
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val infoElement = document.selectFirst("div.card:has(header)") ?: return SManga.create()
-
-        return SManga.create().apply {
-            title = infoElement.selectFirst(".text-base span")?.text() ?: ""
-            genre = infoElement.select("span:contains(Жанр:) a").joinToString { it.text() }
-            description = infoElement.select(".manga-description").text()
-            status = parseStatus(infoElement.selectFirst("span:contains(Статус:)")?.text() ?: "")
-            thumbnail_url = infoElement.selectFirst("img.w-full")?.attr("abs:src")
+    // =========================== Deeplink ============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga") {
+            val tmpManga = SManga.create().apply {
+                this.url = url.encodedPath
+            }
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
         }
+        return null
     }
 
-    private fun parseStatus(status: String): Int = when {
-        status.contains("Завершена") -> SManga.COMPLETED
-        status.contains("Выпускается") -> SManga.ONGOING
-        else -> SManga.UNKNOWN
-    }
+    // =========================== Manga Details ============================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaSlug = manga.url
+        val mangaAsync = async {
+            if (fetchDetails) {
+                val requestUrl = "$baseUrl${manga.url}"
+                val document = client.get(requestUrl).use { it.asJsoup() }
+                val infoElement = document.selectFirst("div.card:has(header)") ?: throw Exception("Не получилось найти информацию о манге")
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        val document = client.newCall(GET("$baseUrl${manga.url}?tab=chapters", headers)).execute().asJsoup()
-        if (document.selectFirst(".text-md:contains(Главы удалены по требованию правообладателя)") != null) {
-            throw Exception("Лицензировано - Нет глав")
+                SManga.create().apply {
+                    url = mangaSlug
+                    title = infoElement.selectFirst(".text-base span")?.text() ?: ""
+                    genre = infoElement.select("span:contains(Жанр:) a").joinToString { it.text() }
+                    description = infoElement.select(".manga-description").text()
+                    status = parseStatus(infoElement.selectFirst("span:contains(Статус:)")?.text() ?: "")
+                    thumbnail_url = infoElement.selectFirst("img.w-full")?.attr("abs:src")
+                }
+            } else {
+                manga
+            }
         }
 
-        val firstPageResponse = client.newCall(chapterListRequest(manga)).execute()
-        val firstPageDocument = firstPageResponse.asJsoup()
-        val chapters = mutableListOf<SChapter>()
+        val chaptersAsync = async {
+            if (fetchChapters) {
+                val document = client.get("${baseUrl}$mangaSlug?tab=chapters").use { it.asJsoup() }
+                if (document.selectFirst(".text-md:contains(Главы удалены по требованию правообладателя)") != null) {
+                    throw Exception("Лицензировано - Нет глав")
+                }
 
-        chapters.addAll(firstPageDocument.select(".chapter-item").mapNotNull { chapterFromElement(it) })
+                val firstPageDocument = client.get("${baseUrl}$mangaSlug/chaptersList").use { it.asJsoup() }
+                val chaptersList = mutableListOf<SChapter>()
 
-        val lastPage = firstPageDocument.select("li.page-item")
-            .mapNotNull { it.text().toIntOrNull() }
-            .maxOrNull() ?: 1
+                chaptersList.addAll(firstPageDocument.select(".chapter-item").mapNotNull { chapterFromElement(it) })
 
-        for (page in 2..lastPage) {
-            val response = client.newCall(chapterPageListRequest(manga, page)).execute()
-            chapters.addAll(response.asJsoup().select(".chapter-item").mapNotNull { chapterFromElement(it) })
+                val lastPage = firstPageDocument.select("li.page-item")
+                    .mapNotNull { it.text().toIntOrNull() }
+                    .maxOrNull() ?: 1
+
+                for (page in 2..lastPage) {
+                    val response = client.get("${baseUrl}$mangaSlug/chaptersList?page=$page").use { it.asJsoup() }
+                    chaptersList.addAll(response.select(".chapter-item").mapNotNull { chapterFromElement(it) })
+                }
+                chaptersList
+            } else {
+                chapters
+            }
         }
-        chapters
+
+        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}/chaptersList", headers)
-
-    private fun chapterPageListRequest(manga: SManga, page: Int): Request = GET("$baseUrl${manga.url}/chaptersList?page=$page", headers)
-
+    // =========================== Chapters ============================
     private fun chapterFromElement(element: Element): SChapter? {
         val title = element.selectFirst("span.chapter-title")?.text() ?: return null
         val urlElement = element.selectFirst("a") ?: return null
@@ -158,32 +188,50 @@ abstract class MangaPoisk : HttpSource() {
         }
     }
 
+    // =========================== Pages ============================
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get("$baseUrl${chapter.url}").use { it.asJsoup() }
+        if (document.html().contains("text-error-500-400-token")) {
+            throw Exception("Лицензировано - Глава удалена по требованию правообладателя.")
+        }
+        return document.select("img.page-image").mapIndexed { idx, element ->
+            Page(idx, imageUrl = element.imgAttr())
+        }
+    }
+
+    // =========================== Filters ============================
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        OrderBy(),
+        GenresFilter(),
+        StatusList(),
+    )
+
+    // =========================== Utilities ============================
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-src") && absUrl("data-src").isNotBlank() -> absUrl("data-src")
+        else -> absUrl("src")
+    }
+
+    private fun parseStatus(status: String): Int = when {
+        status.contains("Завершена") -> SManga.COMPLETED
+        status.contains("Выпускается") -> SManga.ONGOING
+        else -> SManga.UNKNOWN
+    }
+
     private fun parseDate(dateStr: String): Long {
         val amount = dateStr.substringBefore(" ").toLongOrNull()
         return when {
             amount != null && dateStr.contains("минут") -> System.currentTimeMillis() - amount * 60 * 1000
             amount != null && dateStr.contains("час") -> System.currentTimeMillis() - amount * 60 * 60 * 1000
             amount != null && (dateStr.contains("дня") || dateStr.contains("дней")) -> System.currentTimeMillis() - amount * 24 * 60 * 60 * 1000
-            else -> dateFormat.tryParse(dateStr)
+            else -> runCatching {
+                LocalDate.parse(dateStr, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+            }.getOrDefault(0L)
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        if (document.html().contains("text-error-500-400-token")) {
-            throw Exception("Лицензировано - Глава удалена по требованию правообладателя.")
-        }
-        return document.select(".page-image").mapIndexed { index, element ->
-            Page(index, imageUrl = getImage(element))
-        }
+    companion object {
+        private val chapterRegex = Regex("""Глава\s(\d+)""", RegexOption.IGNORE_CASE)
+        private val dateFormat = DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.forLanguageTag("ru"))
     }
-
-    override fun getFilterList() = FilterList(
-        OrderBy(),
-        StatusList(getStatusList()),
-        GenreList(getGenreList()),
-    )
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

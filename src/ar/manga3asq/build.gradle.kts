@@ -1,17 +1,21 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "3asq"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {
         name = "مانجا العاشق"
         lang = "ar"
-        baseUrl = "https://3asq.pro"
+        baseUrl {
+            custom("https://3asq.online")
+        }
     }
 }

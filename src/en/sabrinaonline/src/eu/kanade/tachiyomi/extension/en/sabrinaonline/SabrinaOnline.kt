@@ -108,7 +108,7 @@ abstract class SabrinaOnline : HttpSource() {
                 Page(index, imageUrl = href)
             } else {
                 val src = img.absUrl("src").ifEmpty { img.attr("src") }
-                Page(index, src)
+                Page(index, imageUrl = src)
             }
         }
     }

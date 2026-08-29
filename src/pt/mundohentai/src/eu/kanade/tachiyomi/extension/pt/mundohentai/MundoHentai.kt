@@ -25,8 +25,6 @@ abstract class MundoHentai : HttpSource() {
 
     override val supportsLatest = false
 
-    override val versionId: Int = 2
-
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 2.seconds)
         .build()

@@ -1,15 +1,21 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "TuSachXinhXinh"
-    versionCode = 3
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    versionCode = 4
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl = "https://tusachxinhxinh12.online"
+    }
+
+    deeplink {
+        path("/.*")
     }
 }

@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,14 +7,15 @@ plugins {
 keiyoushi {
     name = "KaliScan"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madtheme"
 
     source {
         lang = "en"
-        baseUrl("https://kaliscan.com") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://kaliscan.com",
                 "https://kaliscan.me",
                 "https://kaliscan.io",
                 "https://mgjinx.com",

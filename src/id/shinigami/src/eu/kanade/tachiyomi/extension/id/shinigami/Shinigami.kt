@@ -22,8 +22,6 @@ import java.util.Locale
 abstract class Shinigami : HttpSource() {
     private val apiUrl = "https://api.shngm.io"
 
-    private val cdnUrl = "https://storage.shngm.id"
-
     override val supportsLatest = true
 
     private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
@@ -231,7 +229,7 @@ abstract class Shinigami : HttpSource() {
         val result = response.parseAs<ShinigamiPageListDto>()
 
         return result.pageList.chapterPage.pages.mapIndexed { index, imageName ->
-            Page(index = index, imageUrl = "$cdnUrl${result.pageList.chapterPage.path}$imageName")
+            Page(index = index, imageUrl = "${result.pageList.baseUrl}${result.pageList.chapterPage.path}$imageName")
         }
     }
 

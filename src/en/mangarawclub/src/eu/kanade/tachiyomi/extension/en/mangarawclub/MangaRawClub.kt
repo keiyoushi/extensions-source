@@ -165,11 +165,11 @@ abstract class MangaRawClub :
             document.selectFirst(".description")?.text()?.substringAfter("Summary is")?.let {
                 append(it)
             }
-            document.selectFirst(".alternative-title")?.ownText()?.takeIf { it.isNotEmpty() }?.let {
-                append("\n\n$ALT_NAME")
-                it.split(",").filter { t -> t.isNotEmpty() && t.trim().lowercase() != "updating" }.forEach { name ->
-                    append("\n- ${name.trim()}")
-                }
+
+            parseAltNames(document.selectFirst(".alternative-title")?.ownText())?.let { altNames ->
+                if (isNotEmpty()) append("\n\n")
+                append(ALT_NAME)
+                altNames.forEach { name -> append("\n- $name") }
             }
         }
 
@@ -188,6 +188,21 @@ abstract class MangaRawClub :
         thumbnail_url = document.selectFirst(".cover img")?.let {
             it.absUrl("data-src").ifEmpty { it.absUrl("src") }
         }
+    }
+
+    private fun parseAltNames(raw: String?): List<String>? {
+        if (raw.isNullOrEmpty()) return null
+
+        val separator = if (ALT_NAME_BULLET_SEMICOLON_REGEX.containsMatchIn(raw)) {
+            ALT_NAME_BULLET_SEMICOLON_REGEX
+        } else {
+            ALT_NAME_COMMA_REGEX
+        }
+
+        return raw.split(separator)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it.lowercase() != "updating" }
+            .takeIf { it.isNotEmpty() }
     }
 
     // ============================= Chapters ==============================
@@ -216,9 +231,11 @@ abstract class MangaRawClub :
     // =============================== Pages ===============================
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("#chapter-reader img").mapIndexed { i, img ->
-            Page(i, imageUrl = img.absUrl("src"))
-        }
+        return document.select("#chapter-reader img")
+            .filterNot { it.absUrl("src").contains("credits-mgeko.png") }
+            .mapIndexed { i, img ->
+                Page(i, imageUrl = img.absUrl("src"))
+            }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
@@ -234,7 +251,9 @@ abstract class MangaRawClub :
     }
 
     companion object {
-        private const val ALT_NAME = "Alternative Name:"
+        private const val ALT_NAME = "Alternative Names:"
         private const val PREF_HIDE_NSFW = "pref_hide_nsfw"
+        private val ALT_NAME_BULLET_SEMICOLON_REGEX = Regex("[•;]")
+        private val ALT_NAME_COMMA_REGEX = Regex(",")
     }
 }

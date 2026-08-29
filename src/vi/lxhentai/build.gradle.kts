@@ -1,23 +1,24 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "LXManga"
-    versionCode = 32
+    versionCode = 38
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         id = 6495630445796108150L
         lang = "vi"
-        baseUrl("https://lxmanga.space") {
-            withCustom = true
+        baseUrl {
+            custom("https://lxmanga.space")
         }
     }
 
     deeplink {
-        host("lxmanga.space")
         path("/truyen/..*")
     }
 }

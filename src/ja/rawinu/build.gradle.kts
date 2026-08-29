@@ -1,11 +1,13 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "RawINU"
-    versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    versionCode = 6
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "fmreader"
 
@@ -13,9 +15,4 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://rawinu.com"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

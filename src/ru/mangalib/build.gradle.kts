@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,13 +7,13 @@ plugins {
 keiyoushi {
     name = "MangaLib"
     versionCode = 75
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "libgroup"
 
     source {
-        baseUrl("https://mangalib.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://mangalib.me")
         }
         lang = "ru"
     }

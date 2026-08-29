@@ -19,7 +19,7 @@ object ImageDecryptor {
     private const val PBKDF2_ITERATIONS = 999
     private const val KEY_SIZE_BITS = 256
 
-    private val ENCRYPTED_CONTENT_REGEX = Regex(
+    private val encryptedContentRegex = Regex(
         """var\s+htmlContent\s*=\s*"(.*?)"\s*;""",
         RegexOption.DOT_MATCHES_ALL,
     )
@@ -32,7 +32,7 @@ object ImageDecryptor {
     )
 
     fun extractImageUrls(html: String): List<String> {
-        val match = ENCRYPTED_CONTENT_REGEX.find(html) ?: return extractFallbackImages(html)
+        val match = encryptedContentRegex.find(html) ?: return extractFallbackImages(html)
         val encryptedJsonString = match.groupValues[1]
             .replace("\\\"", "\"")
             .replace("\\/", "/")

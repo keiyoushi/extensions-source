@@ -9,163 +9,224 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.array
+import keiyoushi.utils.getObject
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getStringOrNull
+import keiyoushi.utils.int
+import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.FormBody
-import okhttp3.Request
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
+import java.io.IOException
 
 @Source
 abstract class NoyAcg :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
+    private val pref by getPreferencesLazy()
+    private val imgBaseUrl get() = baseUrl.replace("api", "img")
+    private val loginLock = Any()
+
+    @Volatile
+    private var sessionGeneration = 0
+
+    override fun getHomeUrl() = WEB_BASE_URL
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        getPreferencesInternal(screen.context).forEach(screen::addPreference)
+        getPreferencesInternal(screen.context, pref).forEach(screen::addPreference)
     }
 
-    private val pref by getPreferencesLazy()
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("User-Agent", "NoyAcg/3.0")
+        add("allow-adult", pref.getString(ADULT_PREF, "both")!!)
+    }
 
-    override fun headersBuilder() = super.headersBuilder().add("referer", "$baseUrl/")
-        .add("allow-adult", pref.getString(ADULT_PREF, "both")!!)
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        cookieJar(SessionCookieJar(getHomeUrl().toHttpUrl(), network.client.cookieJar))
+        addInterceptor { chain ->
+            val requestGeneration = sessionGeneration
+            val response = chain.proceed(chain.request())
+            if (!response.isLoginRequired()) return@addInterceptor response
 
-    private fun Response.parseMangaDetail(): MangaDetailDto {
-        val jsonObject = parseAs<JsonObject>()
-        val status = jsonObject["status"]?.jsonPrimitive?.contentOrNull ?: "error"
-        val book = jsonObject["book"]?.jsonObject?.get("info")?.parseAs<MangaDto>()
-        val categories = jsonObject["chapters"]?.jsonObject?.get("categories")?.jsonArray?.map { it.parseAs<CategoryDto>() } ?: emptyList()
-        val chaptersMap = mutableMapOf<Int, List<ChapterDto>>()
-        jsonObject["chapters"]?.jsonObject?.get("data")?.jsonObject?.forEach { (key, value) ->
-            key.toIntOrNull()?.let { categoryId ->
-                chaptersMap[categoryId] = value.jsonArray.map { it.parseAs<ChapterDto>() }
+            response.close()
+            synchronized(loginLock) {
+                if (requestGeneration == sessionGeneration) {
+                    login()
+                    sessionGeneration++
+                }
+            }
+            chain.proceed(chain.request()).also {
+                if (it.isLoginRequired()) {
+                    it.close()
+                    throw IOException("登入失敗，請檢查帳號與密碼")
+                }
             }
         }
-        val chapters = categories.map { category ->
-            category.name to (chaptersMap[category.id] ?: emptyList())
+    }
+
+    private fun Response.isLoginRequired(): Boolean = header("Content-Type")?.contains("application/json") == true &&
+        runCatching {
+            peekBody(LOGIN_RESPONSE_SIZE).string().parseAs<LoginResponseDto>().status == "login"
+        }.getOrDefault(false)
+
+    private fun login() {
+        val username = pref.getString(USERNAME_PREF, "").orEmpty()
+        val password = pref.getString(PASSWORD_PREF, "").orEmpty()
+        if (username.isEmpty() || password.isEmpty()) {
+            throw IOException("請在擴充套件設定中輸入帳號與密碼，或在 WebView 中登入")
         }
-        return MangaDetailDto(status, book, chapters)
+
+        val body = FormBody.Builder()
+            .add("user", username)
+            .add("pass", password)
+            .build()
+        val loginHeaders = headers.newBuilder()
+            .set("Origin", WEB_BASE_URL)
+            .set("Referer", "$WEB_BASE_URL/")
+            .build()
+        val request = POST("$WEB_BASE_URL/api/login", loginHeaders, body)
+        network.client.newCall(request).execute().use { response ->
+            val status = response.parseAs<LoginResponseDto>().status
+            when (status) {
+                "error" -> throw IOException("帳號或密碼錯誤")
+                "danger" -> throw IOException("帳號或密碼包含不允許的字元")
+                else -> Unit
+            }
+        }
+    }
+
+    private fun Response.parseManga(): MangaDetailDto {
+        val jsonObject = parseAs<JsonObject>()
+        val status = jsonObject.getStringOrNull("status") ?: "error"
+        val book = jsonObject.getObject("book")
+        val info = book["info"]!!.parseAs<MangaDto>()
+        val recommend = book["recommend"]!!.parseAs<List<RecommendMangaDto>>()
+        val categories = jsonObject["chapters"]?.obj?.get("categories")?.array?.map { it.parseAs<CategoryDto>() } ?: emptyList()
+        val chaptersMap = mutableMapOf<Int, List<ChapterDto>>()
+        jsonObject["chapters"]?.obj?.get("data")?.obj?.forEach { (key, value) ->
+            key.toIntOrNull()?.let { categoryId -> chaptersMap[categoryId] = value.array.map { it.parseAs<ChapterDto>() } }
+        }
+        val chapters = categories.associate { category -> category.name to (chaptersMap[category.id] ?: emptyList()) }
+        return MangaDetailDto(status, info, recommend, chapters)
+    }
+
+    private fun mangaPageParse(response: Response, page: Int): MangasPage {
+        val result = response.parseAs<ListingPageDto>()
+        val mangas = result.data.map { it.toSManga(imgBaseUrl) }
+        return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.count)
     }
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val type = pref.getString(POPULAR_MANGAS_PREF, "day")!!
         val body = FormBody.Builder().addEncoded("type", type).addEncoded("page", page.toString())
-        return POST("$baseUrl/api/readLeaderboard#$page", headers, body.build())
+        val response = client.post("$baseUrl/api/readLeaderboard", body.build())
+        return mangaPageParse(response, page)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<ListingPageDto>()
-        check(result.status == "ok") { throw Exception("請在 WebView 中登入") }
-        val page = response.request.url.fragment!!.toInt()
-        val mangas = result.info!!.map(MangaDto::toSManga)
-        return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.len!!)
-    }
+    // Updates
 
-    // Latest Updates
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val body = FormBody.Builder().addEncoded("page", page.toString()).addEncoded("sort", "new")
-        return POST("$baseUrl/api/b1/booklist#$page", headers, body.build())
+        val response = client.post("$baseUrl/api/b1/booklist", body.build())
+        return mangaPageParse(response, page)
     }
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search
 
-    override fun getFilterList() = getFilterListInternal()
+    override fun getFilterList(data: JsonElement?) = buildFilterList()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val body = FormBody.Builder().addEncoded("value", query)
-            .addEncoded("page", page.toString())
-            .addEncoded("type", "book")
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val body = FormBody.Builder().addEncoded("value", query).addEncoded("page", page.toString()).addEncoded("type", "book")
         filters.filterIsInstance<SearchFilter>().forEach { it.addTo(body) }
-        return POST("$baseUrl/api/v4/search/fetch#$page", headers, body.build())
+        val response = client.post("$baseUrl/api/v4/search/fetch", body.build())
+        return mangaPageParse(response, page)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SearchPageDto>()
-        check(result.status == "ok") { throw Exception("請在 WebView 中登入") }
-        val page = response.request.url.fragment!!.toInt()
-        val mangas = result.data!!.map(SearchMangaDto::toSManga)
-        return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.count!!)
+    // Manga & Chapters
+
+    override fun getMangaUrl(manga: SManga) = "${getHomeUrl()}/manga/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter) = "${getHomeUrl()}/reader/${chapter.url}"
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = url.pathSegments.last().toIntOrNull()?.let {
+        val comic = client.get("$baseUrl/api/v4/book/$it?comment=false").parseManga()
+        comic.book.toSManga(imgBaseUrl)
     }
 
-    // Manga
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false")
+        val comic = response.parseManga()
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
+        val sManga = comic.book.toSManga(imgBaseUrl)
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/v4/book/${manga.url}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.parseMangaDetail()
-        check(manga.status == "ok") { throw Exception("請在 WebView 中登入") }
-        return SManga.create().apply {
-            url = manga.book!!.id.toString()
-            title = manga.book.name
-            author = manga.book.author
-            description = manga.book.formatDescription()
-            genre = manga.book.tags.replace(" ", ", ")
-            status = if (manga.book.mode == 0 || manga.book.status == 1) SManga.COMPLETED else SManga.ONGOING
-        }
-    }
-
-    // Chapter
-
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/reader/${chapter.url}"
-
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val manga = response.parseMangaDetail()
-        check(manga.status == "ok") { throw Exception("請在 WebView 中登入") }
         val mangaId = response.request.url.pathSegments.last()
-        return if (manga.chapters!!.isEmpty()) {
+        val sChapters = if (comic.chapters.isEmpty()) {
             listOf(
                 SChapter.create().apply {
                     url = mangaId
-                    name = "單章節（${manga.book!!.len}P）"
-                    date_upload = manga.book.time * 1000
+                    name = "單章節（${comic.book.len}P）"
+                    date_upload = comic.book.time * 1000
                     chapter_number = 0F
+                    memo = buildJsonObject { put("size", comic.book.len) }
                 },
             )
         } else {
-            manga.chapters.reversed().flatMap { category ->
-                category.second.map {
+            comic.chapters.flatMap { category ->
+                category.value.map {
                     SChapter.create().apply {
                         url = "$mangaId/${it.id}"
                         name = "${it.name}（${it.count}P）"
                         date_upload = it.createdAt * 1000
                         // chapter_number = it.sort.toFloat()
-                        scanlator = category.first
+                        scanlator = category.key
+                        memo = buildJsonObject { put("size", it.count) }
                     }
                 }.reversed()
             }
         }
+
+        return SMangaUpdate(sManga, sChapters)
+    }
+
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val comic = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false").parseManga()
+        return comic.recommend.map { it.toSManga(imgBaseUrl) }
     }
 
     // Pages
 
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val size = chapter.name.substringAfterLast('（').substringBefore('P').toInt()
-        return Observable.just(
-            List(size) { Page(it, imageUrl = "https://img.noymanga.com/${chapter.url}/${it + 1}.webp") },
-        )
+    override suspend fun getPageList(chapter: SChapter) = List(chapter.memo["size"]!!.int) {
+        Page(it, imageUrl = "/${chapter.url}/${it + 1}.webp")
     }
 
-    // Image
+    override fun imageRequest(page: Page) = GET(imgBaseUrl + page.imageUrl, headers)
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    companion object {
+        const val WEB_BASE_URL = "https://noymanga.com"
+        const val LOGIN_RESPONSE_SIZE = 64L
+    }
 }

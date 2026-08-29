@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -6,14 +8,14 @@ keiyoushi {
     name = "Mangalink"
     versionCode = 5
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {
         name = "مانجا لينك"
         lang = "ar"
-        baseUrl("https://link-manga.net") {
-            withCustom = true
+        baseUrl {
+            custom("https://link-manga.net")
         }
     }
 }

@@ -1,16 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Desu"
-    versionCode = 33
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    versionCode = 34
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
-        baseUrl("https://desu.uno") {
-            withCustom = true
+        baseUrl {
+            custom("https://desu.uno")
         }
         lang = "ru"
         id = 6684416167758830305L

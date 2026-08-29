@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -12,6 +14,5 @@ keiyoushi {
         name = "紳士漫畫"
         lang = "zh"
         baseUrl = "https://www.wn07.cfd"
-        skipCodeGen = true
     }
 }

@@ -159,7 +159,7 @@ abstract class Doujindesu : HttpSource() {
             hasNextPage = taxonomyDto.pagination.page < taxonomyDto.pagination.totalPages
             taxonomyDto.mangaList
         }
-        return MangasPage(mangas.map { it.toSManga() }, hasNextPage)
+        return MangasPage(mangas.map { it.toSManga(baseUrl) }, hasNextPage)
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}"
@@ -169,7 +169,7 @@ abstract class Doujindesu : HttpSource() {
         return GET("$apiUrl/manga/$slug", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>().toSManga(baseUrl)
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url}"
 

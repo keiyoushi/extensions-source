@@ -1,11 +1,13 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangahere"
-    versionCode = 23
-    contentWarning = ContentWarning.NSFW
+    versionCode = 24
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {
@@ -13,9 +15,4 @@ keiyoushi {
         baseUrl = "https://www.mangahere.cc"
         id = 2L
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

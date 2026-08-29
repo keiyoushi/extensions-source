@@ -44,8 +44,12 @@ import rx.Observable
 import java.util.Date
 
 @Source
-abstract class MangaDex :
-    HttpSource(),
+class MangaDex(
+    override val name: String,
+    override val lang: String,
+    override val baseUrl: String,
+    override val id: Long,
+) : HttpSource(),
     ConfigurableSource {
 
     private val dexLang: String

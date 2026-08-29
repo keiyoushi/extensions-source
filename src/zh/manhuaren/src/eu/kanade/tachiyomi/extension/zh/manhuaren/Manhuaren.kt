@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.zh.manhuaren
 
 import android.content.SharedPreferences
 import android.os.Build
-import android.text.format.DateFormat
 import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -246,7 +245,7 @@ abstract class Manhuaren :
     }
 
     private fun myRequest(url: HttpUrl, method: String, body: RequestBody?): Request {
-        val now = DateFormat.format("yyyy-MM-dd+HH:mm:ss", Date()).toString()
+        val now = SimpleDateFormat("yyyy-MM-dd+HH:mm:ss", Locale.US).format(Date())
         val userId = preferences.getString(USER_ID_PREF, "-1")!!
         val newUrl = url.newBuilder()
             .setQueryParameter("gsm", "md5")

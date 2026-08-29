@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -10,8 +12,8 @@ keiyoushi {
     theme = "libgroup"
 
     source {
-        baseUrl("https://hentailib.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://hentailib.me")
         }
         lang = "ru"
     }

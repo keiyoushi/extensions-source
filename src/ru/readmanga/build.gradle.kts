@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -6,12 +8,12 @@ keiyoushi {
     name = "ReadManga"
     versionCode = 48
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "grouple"
 
     source {
-        baseUrl("https://a.zazaza.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://a.zazaza.me")
         }
         lang = "ru"
         id = 5L

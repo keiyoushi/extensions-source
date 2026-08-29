@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,18 +7,13 @@ plugins {
 keiyoushi {
     name = "Rawkuma"
     versionCode = 35
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
     theme = "natsuid"
 
     source {
         lang = "ja"
         baseUrl = "https://rawkuma.net"
         versionId = 2
-    }
-
-    deeplink {
-        host("rawkuma.net")
-        path("/manga/..*")
     }
 }

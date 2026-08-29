@@ -1,12 +1,15 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaK"
-    versionCode = 30
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    versionCode = 31
+    contentWarning = ContentWarning.MIXED
+    theme = "mangak"
+    libVersion = "1.6"
 
     source {
         lang = "en"

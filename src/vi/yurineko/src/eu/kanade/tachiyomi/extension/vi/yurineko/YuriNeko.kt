@@ -6,53 +6,51 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.Instant
 import java.util.Base64
+import kotlin.time.Instant
 
 @Source
-abstract class YuriNeko : HttpSource() {
-    override val supportsLatest = true
+abstract class YuriNeko : KeiSource() {
 
-    override val id: Long = 4413681066613655890
+    private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}"
+    private val cdnUrl get() = "https://cdn.${baseUrl.toHttpUrl().host}"
+    private val webApiUrl get() = "$baseUrl/api/v1"
 
-    private val apiUrl = "https://api.${baseUrl.toHttpUrl().host}"
-    private val cdnUrl = "https://cdn.${baseUrl.toHttpUrl().host}"
-    private val webApiUrl = "$baseUrl/api/v1"
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageDecryptor::interceptor)
-        .rateLimit(3)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
-            .addQueryParameter("limit", POPULAR_LIMIT.toString())
-            .addQueryParameter("sort", "views")
-            .build()
-
-        return GET(url, headers)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(ImageDecryptor::interceptor)
+        rateLimit(3)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val payload = response.parseAs<MangaListDto>()
+    // ============================== Popular ===============================
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", popularLimit.toString())
+            .addQueryParameter("sort", "views")
+            .build()
+        val payload = client.get(url).parseAs<MangaListDto>()
         return MangasPage(
             mangas = payload.data.map(::mangaFromDto),
             hasNextPage = false,
@@ -60,18 +58,13 @@ abstract class YuriNeko : HttpSource() {
     }
 
     // ============================== Latest ================================
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("limit", LATEST_LIMIT.toString())
+            .addQueryParameter("limit", latestLimit.toString())
             .addQueryParameter("sort", "latest")
             .build()
-
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val payload = response.parseAs<MangaListDto>()
+        val payload = client.get(url).parseAs<MangaListDto>()
         return MangasPage(
             mangas = payload.data.map(::mangaFromDto),
             hasNextPage = payload.page < payload.lastPage,
@@ -79,26 +72,31 @@ abstract class YuriNeko : HttpSource() {
     }
 
     // ============================== Search ================================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val appliedFilters = filters.ifEmpty { getFilterList() }
-        val tag = appliedFilters.firstInstanceOrNull<TagFilter>()?.selected
-        val groupId = appliedFilters.firstInstanceOrNull<GroupFilter>()?.selected
-        val sort = appliedFilters.firstInstanceOrNull<SortFilter>()?.selected ?: "latest"
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val tag = filters.firstInstanceOrNull<TagFilter>()?.selected
+        val groupId = filters.firstInstanceOrNull<GroupFilter>()?.selected
+        val doujinId = filters.firstInstanceOrNull<DoujinFilter>()?.selected
+        val authorSlug = filters.firstInstanceOrNull<AuthorFilter>()?.selected
+        val artistSlug = filters.firstInstanceOrNull<ArtistFilter>()?.selected
+        val coupleSlug = filters.firstInstanceOrNull<CoupleFilter>()?.selected
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.selected ?: "latest"
 
         val url = "$apiUrl/mangas".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
-            addQueryParameter("limit", SEARCH_LIMIT.toString())
+            addQueryParameter("limit", searchLimit.toString())
             addQueryParameter("sort", sort)
             query.takeIf(String::isNotBlank)?.let { addQueryParameter("search", it) }
             tag?.let { addQueryParameter("tags", it) }
             groupId?.let { addQueryParameter("groupId", it) }
+            authorSlug?.let { addQueryParameter("authorSlugs", it) }
+            artistSlug?.let { addQueryParameter("artistSlugs", it) }
+            coupleSlug?.let { addQueryParameter("coupleSlugs", it) }
+            doujinId?.let {
+                addQueryParameter("isDoujin", "true")
+                addQueryParameter("originalStoryId", it)
+            }
         }.build()
-
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val payload = response.parseAs<MangaListDto>()
+        val payload = client.get(url).parseAs<MangaListDto>()
         return MangasPage(
             mangas = payload.data.map(::mangaFromDto),
             hasNextPage = payload.page < payload.lastPage,
@@ -106,20 +104,114 @@ abstract class YuriNeko : HttpSource() {
     }
 
     // ============================== Filters ===============================
-    override fun getFilterList(): FilterList = getFilters()
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val doujins = async { fetchDoujinOptions() }
+        val authors = async { fetchCategoryOptions("authors") }
+        val artists = async { fetchCategoryOptions("artists") }
+        val tags = async { fetchCategoryOptions("tags") }
+        val groups = async { fetchGroupOptions() }
+        val couples = async { fetchCategoryOptions("couples") }
+
+        FilterData(
+            doujins = doujins.await(),
+            authors = authors.await(),
+            artists = artists.await(),
+            tags = tags.await(),
+            groups = groups.await(),
+            couples = couples.await(),
+        ).toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<FilterData>())
+
+    private suspend fun fetchCategoryOptions(endpoint: String): List<FilterOption> = coroutineScope {
+        val items = linkedMapOf<String, FilterOption>()
+        val firstPage = fetchCategoryPage(endpoint, 1)
+        val pages = listOf(firstPage) + (2..firstPage.pageCount.coerceAtLeast(1)).map { page ->
+            async { fetchCategoryPage(endpoint, page) }
+        }.awaitAll()
+
+        pages.forEach { payload ->
+            payload.data.forEach { item ->
+                items.putIfAbsent(item.id, FilterOption(item.name, item.slug))
+            }
+        }
+
+        items.values.sortedBy { it.name.lowercase() }
+    }
+
+    private suspend fun fetchCategoryPage(endpoint: String, page: Int): SlugCategoryListDto {
+        val url = "$apiUrl/$endpoint".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", filterLimit.toString())
+            .build()
+        return client.get(url).parseAs()
+    }
+
+    private suspend fun fetchDoujinOptions(): List<FilterOption> = coroutineScope {
+        val doujins = linkedMapOf<String, FilterOption>()
+        val firstPage = fetchDoujinPage(1)
+        val pages = listOf(firstPage) + (2..firstPage.pageCount.coerceAtLeast(1)).map { page ->
+            async { fetchDoujinPage(page) }
+        }.awaitAll()
+
+        pages.forEach { payload ->
+            payload.data.forEach { doujin ->
+                doujins.putIfAbsent(doujin.id, FilterOption(doujin.displayName, doujin.id))
+            }
+        }
+
+        doujins.values.sortedBy { it.name.lowercase() }
+    }
+
+    private suspend fun fetchDoujinPage(page: Int): DoujinListDto {
+        val url = "$apiUrl/doujins".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", filterLimit.toString())
+            .build()
+        return client.get(url).parseAs()
+    }
+
+    private suspend fun fetchGroupOptions(): List<FilterOption> = coroutineScope {
+        val groups = linkedMapOf<String, FilterOption>()
+        val firstPage = fetchGroupPage(1)
+        val pages = listOf(firstPage) + (2..firstPage.meta.totalPages.coerceAtLeast(1)).map { page ->
+            async { fetchGroupPage(page) }
+        }.awaitAll()
+
+        pages.forEach { payload ->
+            payload.items.forEach { group ->
+                groups.putIfAbsent(group.id, FilterOption(group.name, group.id))
+            }
+        }
+
+        groups.values.sortedBy { it.name.lowercase() }
+    }
+
+    private suspend fun fetchGroupPage(page: Int): GroupListDto {
+        val url = "$apiUrl/groups".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", filterLimit.toString())
+            .build()
+        return client.get(url).parseAs()
+    }
 
     // ============================== Details ===============================
-    override fun mangaDetailsParse(response: Response): SManga {
-        val mangaId = resolveMangaId(response)
-        val details = client.newCall(GET("$apiUrl/mangas/$mangaId", headers)).execute().use { detailResponse ->
-            detailResponse.parseAs<MangaDetailsDto>()
-        }
+    private suspend fun fetchMangaDetails(
+        mangaId: String,
+        mangaUrl: String,
+        existingMemo: JsonObject = JsonObject(emptyMap()),
+    ): SManga {
+        val details = client.get("$apiUrl/mangas/$mangaId").parseAs<MangaDetailsDto>()
 
         val authors = details.linkedAuthors.map(LinkedPersonDto::name).joinToString()
         val artists = details.linkedArtists.map(LinkedPersonDto::name).joinToString()
         val genres = details.tags.map(TagDto::name).joinToString()
 
         return SManga.create().apply {
+            setUrlWithoutDomain(mangaUrl)
             title = details.title
             author = authors.takeIf(String::isNotEmpty)
             artist = artists.takeIf(String::isNotEmpty)
@@ -127,6 +219,40 @@ abstract class YuriNeko : HttpSource() {
             status = parseStatus(details.status)
             description = details.description?.let(::htmlToText)
             thumbnail_url = cdnImageUrl(details.thumbnailUrl)
+            memo = existingMemo.withMangaId(mangaId)
+        }
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
+
+        val mangaId = url.mangaIdOrNull() ?: extractMangaIdFromDocument(client.get(url).asJsoup()) ?: return null
+        return fetchMangaDetails(mangaId, "/manga/$mangaId")
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val cachedMangaId = manga.memo["mangaId"]?.stringOrNull
+        val mangaId = cachedMangaId
+            ?: "$baseUrl${manga.url}".toHttpUrl().mangaIdOrNull()
+            ?: extractMangaIdFromDocument(client.get("$baseUrl${manga.url}").asJsoup())
+            ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${manga.url}")
+        return coroutineScope {
+            val updatedManga = async {
+                when {
+                    fetchDetails -> fetchMangaDetails(mangaId, "/manga/$mangaId", manga.memo)
+                    cachedMangaId == null -> manga.apply { memo = memo.withMangaId(mangaId) }
+                    else -> manga
+                }
+            }
+            val updatedChapters = async {
+                if (fetchChapters) fetchAllChapters(mangaId) else chapters
+            }
+            SMangaUpdate(updatedManga.await(), updatedChapters.await())
         }
     }
 
@@ -134,6 +260,7 @@ abstract class YuriNeko : HttpSource() {
         setUrlWithoutDomain("/manga/${manga.id}")
         title = manga.title
         thumbnail_url = cdnImageUrl(manga.thumbnailUrl)
+        memo = memo.withMangaId(manga.id)
     }
 
     private fun parseStatus(status: String?): Int = when (status) {
@@ -142,53 +269,45 @@ abstract class YuriNeko : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    private fun htmlToText(html: String): String = Jsoup.parseBodyFragment(html).text()
+    private fun htmlToText(html: String): String = Jsoup.parseBodyFragment(html, baseUrl).text()
 
     // ============================== Chapters ==============================
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaId = resolveMangaId(response)
-
-        return fetchAllChapters(mangaId).map { chapter ->
-            SChapter.create().apply {
-                setUrlWithoutDomain("/manga/$mangaId/${chapter.id}")
-                name = chapterName(chapter)
-                date_upload = parseChapterDate(chapter.publishedAt ?: chapter.createdAt)
-            }
+    private suspend fun fetchAllChapters(mangaId: String): List<SChapter> = fetchChaptersFromChapterApi(mangaId).map { chapter ->
+        SChapter.create().apply {
+            setUrlWithoutDomain("/manga/$mangaId/${chapter.id}")
+            name = chapterName(chapter)
+            date_upload = parseChapterDate(chapter.publishedAt ?: chapter.createdAt)
         }
     }
 
-    private fun fetchAllChapters(mangaId: String): List<ChapterDto> = fetchChaptersFromChapterApi(mangaId)
-
-    private fun fetchChaptersFromChapterApi(mangaId: String): List<ChapterDto> {
+    private suspend fun fetchChaptersFromChapterApi(mangaId: String): List<ChapterDto> = coroutineScope {
         val chapters = linkedMapOf<String, ChapterDto>()
-        var currentPage = 1
-        var totalPages = 1
+        val firstPage = fetchChapterPage(mangaId, 1)
+        val pages = listOf(firstPage) + (2..firstPage.pageCount.coerceAtLeast(1)).map { page ->
+            async { fetchChapterPage(mangaId, page) }
+        }.awaitAll()
 
-        while (currentPage <= totalPages) {
-            val url = "$webApiUrl/chapters/$mangaId".toHttpUrl().newBuilder()
-                .addQueryParameter("page", currentPage.toString())
-                .addQueryParameter("limit", CHAPTER_LIST_LIMIT.toString())
-                .addQueryParameter("sort", "desc")
-                .build()
-            val payload = client.newCall(GET(url, headers)).execute().use { response ->
-                response.parseAs<ChapterListDto>()
-            }
-
+        pages.forEach { payload ->
             payload.data.forEach { chapter ->
                 chapters.putIfAbsent(chapter.id, chapter)
             }
-
-            if (payload.data.isEmpty()) break
-            totalPages = payload.pageCount.coerceAtLeast(1)
-            currentPage++
         }
 
-        return chapters.values.sortedByDescending(::chapterSortValue)
+        chapters.values.sortedByDescending(::chapterSortValue)
+    }
+
+    private suspend fun fetchChapterPage(mangaId: String, page: Int): ChapterListDto {
+        val url = "$webApiUrl/chapters/$mangaId".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", chapterListLimit.toString())
+            .addQueryParameter("sort", "desc")
+            .build()
+        return client.get(url).parseAs()
     }
 
     private fun chapterSortValue(chapter: ChapterDto): Double {
         chapter.order?.let { return it }
-        return CHAPTER_NUMBER_REGEX.find(chapter.chapterNumber)?.value?.toDoubleOrNull()
+        return chapterNumberRegex.find(chapter.chapterNumber)?.value?.toDoubleOrNull()
             ?: Double.NEGATIVE_INFINITY
     }
 
@@ -209,13 +328,14 @@ abstract class YuriNeko : HttpSource() {
         return chapterTitle?.let { "$baseName: $it" } ?: baseName
     }
 
-    private fun parseChapterDate(dateText: String?): Long = dateText?.let {
-        runCatching { Instant.parse(it).toEpochMilli() }.getOrDefault(0L)
-    } ?: 0L
+    private fun parseChapterDate(dateText: String?): Long = dateText
+        ?.let(Instant::parseOrNull)
+        ?.toEpochMilliseconds()
+        ?: 0L
 
     // ============================== Pages =================================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get("$baseUrl${chapter.url}").asJsoup()
         val imageUrls = parsePageUrls(document)
 
         return imageUrls.mapIndexed { index, imageUrl ->
@@ -229,7 +349,7 @@ abstract class YuriNeko : HttpSource() {
     private fun parsePageUrlsFromChapterData(document: Document): List<String> {
         val scriptText = document.select("script").joinToString("\n") { it.data() }
 
-        return CHAPTER_PAGE_URL_REGEX.findAll(scriptText)
+        return chapterPageUrlRegex.findAll(scriptText)
             .map { it.value }
             .mapNotNull(::normalizeChapterImageUrl)
             .distinct()
@@ -275,8 +395,6 @@ abstract class YuriNeko : HttpSource() {
         return GET(imageUrl, imageHeaders)
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     private fun cdnImageUrl(path: String?): String? {
         val value = path?.takeIf(String::isNotBlank) ?: return null
         return if (value.startsWith("http://") || value.startsWith("https://")) {
@@ -296,7 +414,7 @@ abstract class YuriNeko : HttpSource() {
 
         return when {
             resolved.startsWith("http://") || resolved.startsWith("https://") -> {
-                resolved.takeIf { CHAPTER_IMAGE_PATH_REGEX.containsMatchIn(it) }
+                resolved.takeIf { chapterImagePathRegex.containsMatchIn(it) }
             }
             resolved.startsWith("/chapters/") || resolved.startsWith("chapters/") -> {
                 cdnImageUrl(resolved)
@@ -324,13 +442,9 @@ abstract class YuriNeko : HttpSource() {
             .takeIf { it.startsWith("http") || it.startsWith("/chapters/") || it.startsWith("chapters/") }
     }
 
-    private fun resolveMangaId(response: Response): String = response.request.url.mangaIdOrNull()
-        ?: extractMangaIdFromDocument(response.asJsoup())
-        ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${response.request.url}")
-
     private fun extractMangaIdFromDocument(document: Document): String? = document.select("a[href*=/manga/]")
         .asSequence()
-        .mapNotNull { MANGA_PATH_ID_REGEX.find(it.attr("href"))?.groupValues?.getOrNull(1) }
+        .mapNotNull { it.absUrl("href").toHttpUrlOrNull()?.mangaIdOrNull() }
         .firstOrNull()
 
     private fun HttpUrl.mangaIdOrNull(): String? {
@@ -338,36 +452,35 @@ abstract class YuriNeko : HttpSource() {
         val mangaId = if (mangaIndex != -1) pathSegments.getOrNull(mangaIndex + 1) else null
 
         return mangaId
-            ?.takeIf(UUID_REGEX::matches)
-            ?: pathSegments.firstOrNull(UUID_REGEX::matches)
+            ?.takeIf(uuidRegex::matches)
+            ?: pathSegments.firstOrNull(uuidRegex::matches)
     }
+
+    private fun JsonObject.withMangaId(mangaId: String): JsonObject = JsonObject(this + ("mangaId" to mangaId.toJsonElement()))
 
     // =============================== Related ================================
 
-    override fun relatedMangaListRequest(manga: SManga): Request {
-        val mangaId = "$baseUrl${manga.url}"
-            .toHttpUrl()
-            .mangaIdOrNull()
-            ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${manga.url}")
-        return GET("$apiUrl/mangas/$mangaId/related", headers)
-    }
+    override val supportsRelatedMangas get() = true
 
-    override fun relatedMangaListParse(response: Response): List<SManga> {
-        val related = response.parseAs<List<MangaDto>>()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val mangaId = manga.memo["mangaId"]?.stringOrNull
+            ?: "$baseUrl${manga.url}".toHttpUrl().mangaIdOrNull()
+            ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${manga.url}")
+        val related = client.get("$apiUrl/mangas/$mangaId/related").parseAs<List<MangaDto>>()
         return related.map(::mangaFromDto)
     }
 
-    companion object {
-        private const val POPULAR_LIMIT = 10
-        private const val LATEST_LIMIT = 16
-        private const val SEARCH_LIMIT = 20
-        private const val CHAPTER_LIST_LIMIT = 50
+    private val popularLimit = 10
+    private val latestLimit = 16
+    private val searchLimit = 20
+    private val chapterListLimit = 50
+    private val filterLimit = 100
 
-        private const val UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-        private val UUID_REGEX = Regex(UUID_PATTERN, RegexOption.IGNORE_CASE)
-        private val MANGA_PATH_ID_REGEX = Regex("/manga/($UUID_PATTERN)", RegexOption.IGNORE_CASE)
-        private val CHAPTER_NUMBER_REGEX = Regex("""\d+(?:\.\d+)?""")
-        private val CHAPTER_PAGE_URL_REGEX = Regex("""(?:/api/img\?[^"'\s]+|/?chapters/[^"'\\\s]+)""")
-        private val CHAPTER_IMAGE_PATH_REGEX = Regex("""(?:^|/)chapters/""")
-    }
+    private val uuidRegex = Regex(
+        "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        RegexOption.IGNORE_CASE,
+    )
+    private val chapterNumberRegex = Regex("""\d+(?:\.\d+)?""")
+    private val chapterPageUrlRegex = Regex("""(?:/api/img\?[^"'\s]+|/?chapters/[^"'\\\s]+)""")
+    private val chapterImagePathRegex = Regex("""(?:^|/)chapters/""")
 }

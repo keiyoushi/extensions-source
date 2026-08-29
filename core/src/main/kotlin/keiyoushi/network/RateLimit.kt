@@ -1,6 +1,7 @@
 package keiyoushi.network
 
 import android.os.SystemClock
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.Call
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
@@ -15,40 +16,11 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class RateLimitBuilder internal constructor(
-    private val base: OkHttpClient.Builder,
-    private val rules: List<RateLimitRule> = emptyList(),
-) {
-    /**
-     * Adds a rate limit rule. Rules are evaluated in order, first match wins —
-     * define more specific rules before broader ones. Call [build] to finalize.
-     *
-     * @param permits     Requests allowed per [period].
-     * @param period      Sliding-window duration.
-     * @param interval    Minimum gap between consecutive dispatches. Smooths bursts —
-     *                    `permits=10, interval=100.ms` allows 10/s but spaced ≥100ms apart.
-     * @param shouldLimit Whether this rule applies to a given URL.
-     */
-    fun rateLimit(
-        permits: Int,
-        period: Duration = 1.seconds,
-        interval: Duration = Duration.ZERO,
-        shouldLimit: (HttpUrl) -> Boolean = { true },
-    ) = RateLimitBuilder(base, rules + RateLimitRule(permits, period, interval, shouldLimit))
-
-    fun build(): OkHttpClient = base
-        .addInterceptor(RateLimitInterceptor.TaggingInterceptor)
-        .addNetworkInterceptor(RateLimitInterceptor(rules))
-        .build()
-}
-
 /**
- * Begins a rate-limited client configuration. Chain further [RateLimitBuilder.rateLimit] calls
- * for additional rules, then call [RateLimitBuilder.build] to finalize — all other client
- * configuration should be done on the [OkHttpClient.Builder] before calling this.
- *
- * The first rule whose [shouldLimit] matches the request URL is applied;
- * remaining rules are skipped. Define more specific rules before broader ones:
+ * Adds a rate limit rule to the builder's [RateLimitInterceptor], creating it if this is the
+ * first [rateLimit] call. Chain further calls for additional rules — the first rule whose
+ * [shouldLimit] matches the request URL is applied, remaining rules are skipped, so define more
+ * specific rules before broader ones:
  * ```
  * OkHttpClient.Builder()
  *     .rateLimit(5)  { it.host == "api.manga.example" }
@@ -67,7 +39,20 @@ fun OkHttpClient.Builder.rateLimit(
     period: Duration = 1.seconds,
     interval: Duration = Duration.ZERO,
     shouldLimit: (HttpUrl) -> Boolean = { true },
-): RateLimitBuilder = RateLimitBuilder(this, listOf(RateLimitRule(permits, period, interval, shouldLimit)))
+): OkHttpClient.Builder = apply {
+    val rule = RateLimitRule(permits, period, interval, shouldLimit)
+
+    val existing = networkInterceptors().firstInstanceOrNull<RateLimitInterceptor>()
+    if (existing != null) {
+        existing.addRule(rule)
+        return@apply
+    }
+
+    if (RateLimitInterceptor.TaggingInterceptor !in interceptors()) {
+        addInterceptor(RateLimitInterceptor.TaggingInterceptor)
+    }
+    addNetworkInterceptor(RateLimitInterceptor(rule))
+}
 
 internal class RateLimitRule(
     val permits: Int,
@@ -76,8 +61,8 @@ internal class RateLimitRule(
     val shouldLimit: (HttpUrl) -> Boolean,
 )
 
-private class RateLimitInterceptor(
-    rules: List<RateLimitRule>,
+internal class RateLimitInterceptor(
+    rule: RateLimitRule,
 ) : Interceptor {
 
     private class RateLimitTag(
@@ -106,7 +91,11 @@ private class RateLimitInterceptor(
         var lastDispatchTime: Duration? = null
     }
 
-    private val rateLimits = rules.map { RateLimit(it.permits, it.period, it.interval, it.shouldLimit) }
+    private val rateLimits = mutableListOf(RateLimit(rule.permits, rule.period, rule.interval, rule.shouldLimit))
+
+    fun addRule(rule: RateLimitRule) {
+        rateLimits += RateLimit(rule.permits, rule.period, rule.interval, rule.shouldLimit)
+    }
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val call = chain.call()

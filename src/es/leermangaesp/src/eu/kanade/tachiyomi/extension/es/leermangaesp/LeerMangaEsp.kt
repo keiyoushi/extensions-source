@@ -39,7 +39,7 @@ abstract class LeerMangaEsp : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val allMangas = response.parseAs<List<HomeGridMangaDto>> { body: String ->
             val document = Jsoup.parse(body)
-            val popularScript = document.selectFirst("script#populares-ssr")
+            val popularScript = document.selectFirst("script#ssr-trends-data")
             popularScript?.data().orEmpty()
         }
 
@@ -203,7 +203,7 @@ abstract class LeerMangaEsp : HttpSource() {
         .build()
 
     private fun mangaUrlFromSlug(slug: String): HttpUrl {
-        val normalizedSlug = slug.trim().removePrefix("/manga/").trim('/').substringBefore('/')
+        val normalizedSlug = slug.trim().removePrefix("/info/").trim('/').substringBefore('/')
 
         return baseUrl.toHttpUrl().newBuilder()
             .encodedPath("$MANGA_PATH_PREFIX$normalizedSlug/")
@@ -211,11 +211,11 @@ abstract class LeerMangaEsp : HttpSource() {
     }
 
     private fun isSupportedDeeplink(url: HttpUrl): Boolean {
-        if (!url.host.contains("leermangaesp")) return false
+        if (!url.host.contains("mangalect")) return false
 
         val pathSegments = url.pathSegments
         return when (pathSegments.getOrNull(0)?.lowercase(Locale.ROOT)) {
-            "manga", "leer-m" -> !pathSegments.getOrNull(1).isNullOrBlank()
+            "info", "manga", "leer-m" -> !pathSegments.getOrNull(1).isNullOrBlank()
             else -> false
         }
     }
@@ -297,6 +297,6 @@ abstract class LeerMangaEsp : HttpSource() {
 
     companion object {
         const val PAGE_SIZE = 20
-        const val MANGA_PATH_PREFIX = "/manga/"
+        const val MANGA_PATH_PREFIX = "/info/"
     }
 }

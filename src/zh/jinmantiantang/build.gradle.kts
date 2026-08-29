@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Jinman Tiantang"
-    versionCode = 57
+    versionCode = 58
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
@@ -12,7 +14,6 @@ keiyoushi {
         name = "禁漫天堂"
         lang = "zh"
         baseUrl = "https://18comic.vip"
-        skipCodeGen = true
     }
 
     deeplink {

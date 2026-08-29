@@ -1,15 +1,23 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "KamiComic"
-    versionCode = 4
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    versionCode = 5
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://kamicomi.com"
+        baseUrl {
+            custom("https://kamicomi.com")
+        }
+    }
+
+    deeplink {
+        path("/truyen/..*")
     }
 }

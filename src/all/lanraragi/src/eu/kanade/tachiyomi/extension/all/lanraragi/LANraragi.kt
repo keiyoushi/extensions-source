@@ -4,10 +4,12 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.text.InputType
 import android.util.Base64
+import android.util.Log
 import android.widget.Toast
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -17,12 +19,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.CacheControl
 import okhttp3.Dns
 import okhttp3.Headers
@@ -30,24 +32,28 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import rx.Single
-import rx.schedulers.Schedulers
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.net.URL
-import java.security.MessageDigest
 import kotlin.math.max
 
-open class LANraragi(private val suffix: String = "") :
-    HttpSource(),
+@Source
+class LANraragi(
+    override val lang: String,
+    override val id: Long,
+) : HttpSource(),
     ConfigurableSource,
     UnmeteredSource {
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override val lang = "all"
+    override val name by lazy {
+        val label = getPrefCustomLabel().ifBlank { instanceNumber.toString() }
+        "LANraragi ($label)"
+    }
 
-    override val name by lazy { "LANraragi (${getPrefCustomLabel()})" }
+    // Distinguish the fixed factory instances (LANraragi (1), LANraragi (2), ...) by position,
+    // inferred from the source id, when the user hasn't set a custom label.
+    private val instanceNumber: Int
+        get() = (INSTANCE_IDS.indexOf(id) + 1).coerceAtLeast(1)
 
     override val supportsLatest = true
 
@@ -55,13 +61,15 @@ open class LANraragi(private val suffix: String = "") :
 
     private val latestNamespacePref by lazy { getPrefLatestNS() }
 
-    private val json by lazy { Injekt.get<Json>() }
+    private val latestSortOrderPref by lazy { getPrefLatestSortOrder() }
+
+    private val randomPageSizePref by lazy { getPrefRandomPageSize() }
 
     private var randomArchiveID: String = ""
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getReaderId(manga.url)
-        val uri = getApiUriBuilder("/api/archives/$id/metadata").build()
+        val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getIDFromURL(manga.url)
+        val uri = apiTypeByID(id)
 
         if (manga.url.startsWith("/api/search/random")) {
             val randQuery = Uri.parse(manga.url).encodedQuery.toString()
@@ -75,13 +83,30 @@ open class LANraragi(private val suffix: String = "") :
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         // Catch-all that includes random's ID via thumbnail
-        val id = getThumbnailId(manga.thumbnail_url!!)
+        val id = getIDFromURL(manga.thumbnail_url!!)
 
         return GET("$baseUrl/reader?id=$id", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val archive = json.decodeFromString<Archive>(response.body.string())
+        val archive = if (!response.isTank()) {
+            response.parseAs<Archive>()
+        } else {
+            val tank = response.parseAs<Tankoubon>()
+
+            // The separators are not the default ", " to merge properly when combining across multiple archives: ",tag:x" vs ", tag:x"
+            val tags = tank.result?.full_data?.joinToString(",") { it.tags!! }?.split(",")?.sorted()?.joinToString(",")
+
+            Archive(
+                arcid = tank.result!!.id,
+                isnew = false,
+                tags = tags,
+                summary = tank.result.summary,
+                title = tank.result.name!!,
+                toc = emptyList(),
+                pagecount = 0,
+            )
+        }
 
         return archiveToSManga(archive)
     }
@@ -93,25 +118,30 @@ open class LANraragi(private val suffix: String = "") :
             return super.getMangaUrl(manga)
         }
 
-        val tag = manga.genre?.split(", ")?.find { it.startsWith("$namespace") }
-        return tag?.substringAfter("$namespace") ?: super.getMangaUrl(manga)
+        val tag = manga.genre?.split(", ")?.find { it.startsWith(namespace) }
+        return tag?.substringAfter(namespace) ?: super.getMangaUrl(manga)
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getReaderId(manga.url)
-        val uri = getApiUriBuilder("/api/archives/$id/metadata").build()
+        val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getIDFromURL(manga.url)
+        val uri = apiTypeByID(id)
 
         return GET(uri.toString(), headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val archive = json.decodeFromString<Archive>(response.body.string())
-        val uri = getApiUriBuilder("/api/archives/${archive.arcid}/files")
-        val prefClearNew = preferences.getBoolean(NEW_ONLY_KEY, NEW_ONLY_DEFAULT)
+        val chapters = mutableListOf<SChapter>()
+        val archives = if (!response.isTank()) {
+            listOf(response.parseAs<Archive>())
+        } else {
+            response.parseAs<Tankoubon>().result?.full_data
+        }
 
-        if (archive.isnew == "true" && prefClearNew) {
+        // Legacy extension-exclusive behavior to remove isnew on single archives when viewing
+        val prefClearNew = preferences.getBoolean(CLEAR_NEW_KEY, CLEAR_NEW_DEFAULT)
+        if (prefClearNew && archives?.size == 1 && archives[0].isnew) {
             val clearNew = Request.Builder()
-                .url("$baseUrl/api/archives/${archive.arcid}/isnew")
+                .url("$baseUrl/api/archives/${archives[0].arcid}/isnew")
                 .headers(headers)
                 .delete()
                 .build()
@@ -119,27 +149,60 @@ open class LANraragi(private val suffix: String = "") :
             client.newCall(clearNew).execute()
         }
 
-        return listOf(
-            SChapter.create().apply {
-                val uriBuild = uri.build()
+        var baseChapter = 0F
 
-                url = uriBuild.toString()
-                chapter_number = 1F
-                name = "Chapter"
+        // Supports single, single+ToC, tank, tank+ToC...
+        archives?.forEach { arc ->
+            baseChapter += 1F
 
-                getDateAdded(archive.tags).toLongOrNull()?.let {
-                    date_upload = it
+            val baseFiles = getApiUriBuilder("/api/archives/${arc.arcid}/files").build().toString()
+            val date = 1000 * (getNSTag(arc.tags, "date_added")?.first()?.toLong() ?: 0)
+
+            if (arc.toc?.isEmpty() == false) {
+                var lastStart = 0
+
+                val toc = buildList {
+                    if (arc.toc.first().page > 1) add(ArchiveTOCEntry(arc.title, 1)) // Starting gap filler
+                    addAll(arc.toc)
                 }
-            },
-        )
+
+                toc.forEachIndexed { i, entry ->
+                    val nextPage = if (i + 1 < toc.size) toc[i + 1].page - 1 else arc.pagecount
+
+                    chapters.add(
+                        SChapter.create().apply {
+                            url = "$baseFiles#$lastStart-$nextPage"
+                            chapter_number = baseChapter + "0.${i + 1}".toFloat()
+                            name = "$chapter_number - ${entry.name}"
+                            date_upload = date
+                        },
+                    )
+
+                    lastStart = nextPage
+                }
+            } else {
+                chapters.add(
+                    SChapter.create().apply {
+                        url = baseFiles
+                        chapter_number = baseChapter
+                        name = if (archives.size == 1) "Chapter" else "${chapter_number.toInt()} - ${arc.title}"
+                        date_upload = date
+                    },
+                )
+            }
+        }
+        chapters.reverse() // For tanks orders them in "latest first"
+
+        return chapters
     }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val archivePage = json.decodeFromString<ArchivePage>(response.body.string())
+        val archivePage = response.parseAs<ArchivePage>()
+        val range = response.request.url.fragment?.split("-")?.map { it.toInt() } ?: listOf(0, archivePage.pages.size)
 
-        return archivePage.pages.mapIndexed { index, url ->
+        return archivePage.pages.subList(range.first(), range.last()).mapIndexed { index, url ->
             var newUrl = url
             val subPath = URL(baseUrl).path
             if (!subPath.isNullOrEmpty()) {
@@ -164,15 +227,16 @@ open class LANraragi(private val suffix: String = "") :
 
         if (latestNamespacePref.isNotBlank()) {
             filters.add(SortByNamespace(latestNamespacePref))
-            filters.add(DescendingOrder(true))
         }
+
+        filters.add(SortSelect(sortOrders.filter { it.first == latestSortOrderPref }.toTypedArray()))
 
         return searchMangaRequest(page, "", FilterList(filters))
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    private var lastResultCount: Int = 100
+    private var lastResultCount: Int = 0
     private var lastRecordsFiltered: Int = 0
     private var maxResultCount: Int = 0
     private var totalRecords: Int = 0
@@ -180,6 +244,10 @@ open class LANraragi(private val suffix: String = "") :
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val uri = getApiUriBuilder("/api/search")
         var startPageOffset = 0
+
+        if (page == 1) {
+            lastResultCount = 0
+        }
 
         filters.forEach { filter ->
             when (filter) {
@@ -196,17 +264,28 @@ open class LANraragi(private val suffix: String = "") :
 
                 is UntaggedArchivesOnly -> if (filter.state) uri.appendQueryParameter("untaggedonly", "true")
 
-                is DescendingOrder -> if (filter.state) uri.appendQueryParameter("order", "desc")
+                is HideCompleted -> if (filter.state) uri.appendQueryParameter("hidecompleted", "true")
+
+                is GroupByTanks -> uri.appendQueryParameter("groupby_tanks", filter.state.toString())
 
                 is SortByNamespace -> if (filter.state.isNotEmpty()) uri.appendQueryParameter("sortby", filter.state.trim())
 
                 is CategorySelect -> if (filter.state > 0) uri.appendQueryParameter("category", filter.toUriPart())
 
+                is SortSelect -> {
+                    if (filter.toUriPart() == "random") {
+                        uri.appendPath("random")
+                        uri.appendQueryParameter("count", randomPageSizePref)
+                    } else {
+                        uri.appendQueryParameter("order", filter.toUriPart())
+                    }
+                }
+
                 else -> {}
             }
         }
 
-        uri.appendQueryParameter("start", ((page - 1 + startPageOffset) * maxResultCount).toString())
+        uri.appendQueryParameter("start", ((page - 1 + startPageOffset) * lastResultCount).toString())
 
         if (query.isNotEmpty()) {
             uri.appendQueryParameter("filter", query)
@@ -216,14 +295,17 @@ open class LANraragi(private val suffix: String = "") :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val jsonResult = json.decodeFromString<ArchiveSearchResult>(response.body.string())
+        val jsonResult = response.parseAs<ArchiveSearchResult>()
         val currentStart = getStart(response)
         val archives = arrayListOf<SManga>()
 
         lastResultCount = jsonResult.data.size
         maxResultCount = max(lastResultCount, maxResultCount)
-        lastRecordsFiltered = jsonResult.recordsFiltered
+        lastRecordsFiltered = jsonResult.recordsFiltered ?: -2
         totalRecords = jsonResult.recordsTotal
+
+        val isRandom = lastResultCount > lastRecordsFiltered
+        val hasNext = currentStart + lastResultCount < lastRecordsFiltered || isRandom
 
         if (lastResultCount > 1 && currentStart == 0) {
             val randQuery = response.request.url.encodedQuery.toString()
@@ -234,26 +316,27 @@ open class LANraragi(private val suffix: String = "") :
                     url = "/api/search/random?count=1&$randQuery"
                     title = "Random"
                     description = "Refresh for a random archive."
-                    thumbnail_url = getThumbnailUri("tachiyomi") // noThumb
+                    thumbnail_url = getThumbnailUri("0".repeat(40))
                 },
             )
         }
 
-        jsonResult.data.map {
-            archives.add(archiveToSManga(it))
+        jsonResult.data.forEach {
+            archives.add(archiveToSManga(it, isRandom))
         }
 
-        return MangasPage(archives, currentStart + lastResultCount < lastRecordsFiltered)
+        return MangasPage(archives, hasNext)
     }
 
-    private fun archiveToSManga(archive: Archive) = SManga.create().apply {
+    private fun archiveToSManga(archive: Archive, isRandom: Boolean = false) = SManga.create().apply {
         url = "/reader?id=${archive.arcid}"
+        if (isRandom && preferences.getBoolean(REDUPE_KEY, REDUPE_DEFAULT)) url += "&ts" + System.currentTimeMillis()
         title = archive.title
         description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
         thumbnail_url = getThumbnailUri(archive.arcid)
         genre = archive.tags?.replace(",", ", ")
-        artist = getArtist(archive.tags)
-        author = artist
+        artist = getNSTag(archive.tags, "artist")?.joinToString()
+        author = getNSTag(archive.tags, "group")?.joinToString() ?: artist
         status = SManga.COMPLETED
     }
 
@@ -264,68 +347,77 @@ open class LANraragi(private val suffix: String = "") :
         }
     }
 
-    private class DescendingOrder(overrideState: Boolean = false) : Filter.CheckBox("Descending Order", overrideState)
-    private class NewArchivesOnly(overrideState: Boolean = false) : Filter.CheckBox("New Archives Only", overrideState)
-    private class UntaggedArchivesOnly : Filter.CheckBox("Untagged Archives Only", false)
-    private class StartingPage(stats: String) : Filter.Text("Starting Page$stats", "")
+    private class CategorySelect(categories: Array<Pair<String, String>>) : UriPartFilter("Category", categories)
+    private class SortSelect(sortOrders: Array<Pair<String, String>>) : UriPartFilter("Sort order", sortOrders)
+    private class NewArchivesOnly(overrideState: Boolean = false) : Filter.CheckBox("New Archives only", overrideState)
+    private class UntaggedArchivesOnly : Filter.CheckBox("Untagged Archives only", false)
+    private class HideCompleted : Filter.CheckBox("Hide Completed", false)
+    private class GroupByTanks : Filter.CheckBox("Group by Tankoubon", true)
+    private class StartingPage(stats: String) : Filter.Text("Starting page$stats", "")
     private class SortByNamespace(defaultText: String = "") : Filter.Text("Sort by (namespace)", defaultText)
-    private class CategorySelect(categories: Array<Pair<String?, String>>) : UriPartFilter("Category", categories)
 
     override fun getFilterList() = FilterList(
         CategorySelect(getCategoryPairs(categories)),
-        Filter.Separator(),
-        DescendingOrder(),
+        SortSelect(sortOrders),
         NewArchivesOnly(),
         UntaggedArchivesOnly(),
+        HideCompleted(),
+        GroupByTanks(),
         StartingPage(startingPageStats()),
         SortByNamespace(),
     )
 
     private var categories = emptyList<Category>()
+    private val sortOrders = arrayOf(Pair("asc", "Ascending"), Pair("desc", "Descending"), Pair("random", "Random"))
 
     // Preferences
-    override val id by lazy {
-        // Retain previous ID for first entry
-        val key = "lanraragi" + (if (suffix == "1") "" else "_$suffix") + "/all/$versionId"
-        val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
-        (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
-    }
-
     internal val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun getPrefBaseUrl(): String = preferences.getString(HOSTNAME_KEY, HOSTNAME_DEFAULT)!!
     private fun getPrefAPIKey(): String = preferences.getString(APIKEY_KEY, "")!!
     private fun getPrefLatestNS(): String = preferences.getString(SORT_BY_NS_KEY, SORT_BY_NS_DEFAULT)!!
-    private fun getPrefCustomLabel(): String = preferences.getString(CUSTOM_LABEL_KEY, suffix)!!.ifBlank { suffix }
+    private fun getPrefLatestSortOrder(): String = preferences.getString(SORT_ORDER_KEY, SORT_ORDER_DEFAULT)!!
+    private fun getPrefRandomPageSize(): String = preferences.getString(RANDOM_SIZE_KEY, RANDOM_SIZE_DEFAULT)!!
+    private fun getPrefCustomLabel(): String = preferences.getString(CUSTOM_LABEL_KEY, "")!!
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        if (suffix == "1") {
-            ListPreference(screen.context).apply {
-                key = EXTRA_SOURCES_COUNT_KEY
-                title = "Number of extra sources"
-                summary = "Number of additional sources to create. There will always be at least one LANraragi source."
-                entries = EXTRA_SOURCES_ENTRIES
-                entryValues = EXTRA_SOURCES_ENTRIES
+        val randomPageSize = ListPreference(screen.context).apply {
+            key = RANDOM_SIZE_KEY
+            title = "Random Sort - Pagination amount"
+            entries = arrayOf("25", "50", "100", "250", "1000")
+            entryValues = entries
+            setDefaultValue(RANDOM_SIZE_DEFAULT)
+            summary = "Request %s entries at a time in Random sort order. Lower may be more responsive while higher may be less disruptive."
 
-                setDefaultValue(EXTRA_SOURCES_COUNT_DEFAULT)
-                setOnPreferenceChangeListener { _, newValue ->
-                    try {
-                        val setting = preferences.edit().putString(EXTRA_SOURCES_COUNT_KEY, newValue as String).commit()
-                        Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                        setting
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        false
-                    }
-                }
-            }.also(screen::addPreference)
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Restart app to apply new setting.", Toast.LENGTH_LONG).show()
+                true
+            }
         }
+
+        val latestSortOrder = ListPreference(screen.context).apply {
+            key = SORT_ORDER_KEY
+            title = "Latest - Default Sort Order"
+            entries = sortOrders.map { it.second }.toTypedArray()
+            entryValues = sortOrders.map { it.first }.toTypedArray()
+            setDefaultValue(SORT_ORDER_DEFAULT)
+            summary = "%s"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Restart app to apply new setting.", Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+
         screen.addPreference(screen.editTextPreference(HOSTNAME_KEY, "Hostname", HOSTNAME_DEFAULT, baseUrl, refreshSummary = true))
         screen.addPreference(screen.editTextPreference(APIKEY_KEY, "API Key", "", "Required if No-Fun Mode is enabled.", true))
         screen.addPreference(screen.editTextPreference(CUSTOM_LABEL_KEY, "Custom Label", "", "Show the given label for the source instead of the default."))
         screen.addPreference(screen.checkBoxPreference(CLEAR_NEW_KEY, "Clear New status", CLEAR_NEW_DEFAULT, "Clear an entry's New status when its details are viewed."))
         screen.addPreference(screen.checkBoxPreference(NEW_ONLY_KEY, "Latest - New Only", NEW_ONLY_DEFAULT))
-        screen.addPreference(screen.editTextPreference(SORT_BY_NS_KEY, "Latest - Sort by Namespace", SORT_BY_NS_DEFAULT, "Sort by the given namespace for Latest, such as date_added."))
+        screen.addPreference(screen.editTextPreference(SORT_BY_NS_KEY, "Latest - Sort by Namespace", SORT_BY_NS_DEFAULT, "Sort by the given namespace for Latest, such as date_added or lastread."))
+        screen.addPreference(latestSortOrder)
+        screen.addPreference(randomPageSize)
+        screen.addPreference(screen.checkBoxPreference(REDUPE_KEY, "Random Sort - Ignore dedupe", REDUPE_DEFAULT, "If enabled, ignores app's enforced deduping at the cost of spamming its database. If disabled, Random will eventually run out and the app will infinitely spam the server."))
         screen.addPreference(screen.editTextPreference(URL_TAG_PREFIX_KEY, "Set tag prefix to get WebView URL", URL_TAG_PREFIX_DEFAULT, "Example: 'source:' will try to get the URL from the first tag starting with 'source:' and it will open it in the WebView. Leave empty for the default behavior."))
     }
 
@@ -345,6 +437,7 @@ open class LANraragi(private val suffix: String = "") :
         this.title = title
         this.summary = summary
         this.setDefaultValue(default)
+        setOnBindEditTextListener { it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI }
 
         if (isPassword) {
             setOnBindEditTextListener {
@@ -363,7 +456,7 @@ open class LANraragi(private val suffix: String = "") :
                     }
                 }
 
-                Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Restart app to apply new setting.", Toast.LENGTH_LONG).show()
                 res
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -373,38 +466,37 @@ open class LANraragi(private val suffix: String = "") :
     }
 
     // Helper
+    private fun apiTypeByID(id: String): Uri = getApiUriBuilder(
+        if (id.startsWith("TANK_")) {
+            "/api/tankoubons/$id/full"
+        } else {
+            "/api/archives/$id/metadata"
+        },
+    ).build()
+
     private fun getRandomID(query: String): String {
         val searchRandom = client.newCall(GET("$baseUrl/api/search/random?count=1&$query", headers)).execute()
-        val data = json.parseToJsonElement(searchRandom.body.string()).jsonObject["data"]
-        val archive = data!!.jsonArray.firstOrNull()?.jsonObject
-
-        // 0.8.2~0.8.7 = id, 0.8.8+ = arcid
-        return (archive?.get("arcid") ?: archive?.get("id"))?.jsonPrimitive?.content ?: ""
+        val result = searchRandom.parseAs<ArchiveSearchResult>() // Intermittent empty data[] on parse, but not from manual API testing
+        return result.data.firstOrNull()?.arcid ?: randomArchiveID
     }
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String?, String>>) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
         fun toUriPart() = vals[state].first
     }
 
+    private val scope = CoroutineScope(Dispatchers.IO)
+
     private fun getCategories() {
-        Single.fromCallable {
-            client.newCall(GET("$baseUrl/api/categories", headers)).execute()
+        scope.launch {
+            try {
+                categories = client.newCall(GET("$baseUrl/api/categories", headers)).await().parseAs()
+            } catch (e: Exception) {
+                Log.e("LANraragi", "Failed to fetch categories", e)
+            }
         }
-            .subscribeOn(Schedulers.io())
-            .observeOn(Schedulers.io())
-            .subscribe(
-                {
-                    categories = try {
-                        json.decodeFromString(it.body.string())
-                    } catch (e: Exception) {
-                        emptyList()
-                    }
-                },
-                {},
-            )
     }
 
-    private fun getCategoryPairs(categories: List<Category>): Array<Pair<String?, String>> {
+    private fun getCategoryPairs(categories: List<Category>): Array<Pair<String, String>> {
         // Empty pair to disable. Sort by pinned status then name for convenience.
 
         val pin = "\uD83D\uDCCC "
@@ -412,12 +504,12 @@ open class LANraragi(private val suffix: String = "") :
         // Maintain categories sync for next FilterList reset.
         getCategories()
 
-        return listOf(Pair("", ""))
+        return listOf(Pair("", if (categories.isNotEmpty()) "" else "Reset to populate"))
             .plus(
                 categories
                     .sortedWith(compareByDescending<Category> { it.pinned }.thenBy { it.name })
                     .map {
-                        val pinned = if (it.pinned == "1") pin else ""
+                        val pinned = if (it.pinned == 1) pin else ""
                         Pair(it.id, "$pinned${it.name}")
                     },
             )
@@ -429,36 +521,25 @@ open class LANraragi(private val suffix: String = "") :
     private fun getApiUriBuilder(path: String): Uri.Builder = Uri.parse("$baseUrl$path").buildUpon()
 
     private fun getThumbnailUri(id: String): String {
-        val uri = getApiUriBuilder("/api/archives/$id/thumbnail")
+        val type = if (id.startsWith("TANK_")) "tankoubons" else "archives"
+        val uri = getApiUriBuilder("/api/$type/$id/thumbnail")
 
         return uri.toString()
     }
 
     private tailrec fun getTopResponse(response: Response): Response = if (response.priorResponse == null) response else getTopResponse(response.priorResponse!!)
 
-    private fun getStart(response: Response): Int = getTopResponse(response).request.url.queryParameter("start")!!.toInt()
+    private fun getStart(response: Response): Int = getTopResponse(response).request.url.queryParameter("start")!!.toIntOrNull() ?: 0
 
-    private fun getReaderId(url: String): String = Regex("""/reader\?id=(\w{40})""").find(url)?.groupValues?.get(1) ?: ""
+    private fun getIDFromURL(url: String): String = REGEX_ID_FROM_URL.find(url)?.groupValues?.get(1) ?: ""
 
-    private fun getThumbnailId(url: String): String = Regex("""/(\w{40})/thumbnail""").find(url)?.groupValues?.get(1) ?: ""
+    private fun getNSTag(tags: String?, tag: String): List<String>? = tags?.split(',')
+        ?.filter { it.startsWith("$tag:") }
+        ?.map { it.split(":", limit = 2).last() }
+        ?.distinct()
+        ?.takeIf { it.isNotEmpty() }
 
-    private fun getNSTag(tags: String?, tag: String): List<String>? {
-        tags?.split(',')?.forEach {
-            if (it.contains(':')) {
-                val temp = it.trim().split(":", limit = 2)
-                if (temp[0].equals(tag, true)) return temp
-            }
-        }
-
-        return null
-    }
-
-    private fun getArtist(tags: String?): String = getNSTag(tags, "artist")?.get(1) ?: "N/A"
-
-    private fun getDateAdded(tags: String?): String {
-        // Pad Date Added NS to milliseconds
-        return getNSTag(tags, "date_added")?.get(1)?.padEnd(13, '0') ?: ""
-    }
+    fun Response.isTank() = request.url.toString().contains("/TANK_")
 
     // Headers (currently auth) are done in headersBuilder
     override val client: OkHttpClient = network.client.newBuilder()
@@ -470,26 +551,28 @@ open class LANraragi(private val suffix: String = "") :
         }
         .build()
 
-    init {
-        if (baseUrl.isNotBlank()) {
-            // Save a FilterList reset
-            getCategories()
-        }
-    }
-
     companion object {
-        internal const val EXTRA_SOURCES_COUNT_KEY = "extraSourcesCount"
-        internal const val EXTRA_SOURCES_COUNT_DEFAULT = "2"
-        private val EXTRA_SOURCES_ENTRIES = (0..10).map { it.toString() }.toTypedArray()
+
+        private val REGEX_ID_FROM_URL = Regex("""(?:/reader\?id=)?(TANK_[0-9]{10}|\w{40})(?:/thumbnail)?""")
 
         private const val HOSTNAME_DEFAULT = "http://127.0.0.1:3000"
         private const val HOSTNAME_KEY = "hostname"
         private const val APIKEY_KEY = "apiKey"
         private const val CUSTOM_LABEL_KEY = "customLabel"
+
+        // Order must match the source { } blocks in build.gradle.kts (used to label factory instances).
+        private val INSTANCE_IDS = listOf(4482480338677079857L, 6188058704030343819L)
+
+        private const val REDUPE_KEY = "redupePref"
+        private const val REDUPE_DEFAULT = false
         private const val NEW_ONLY_DEFAULT = true
         private const val NEW_ONLY_KEY = "latestNewOnly"
         private const val SORT_BY_NS_DEFAULT = "date_added"
         private const val SORT_BY_NS_KEY = "latestNamespacePref"
+        private const val SORT_ORDER_DEFAULT = "desc"
+        private const val SORT_ORDER_KEY = "latestSortOrder"
+        private const val RANDOM_SIZE_DEFAULT = "100"
+        private const val RANDOM_SIZE_KEY = "randomPageSize"
         private const val CLEAR_NEW_KEY = "clearNew"
         private const val CLEAR_NEW_DEFAULT = true
         private const val URL_TAG_PREFIX_KEY = "urlTagPrefix"

@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -11,8 +13,8 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("https://monochromecms.netlify.app") {
-            withCustom = true
+        baseUrl {
+            custom("https://monochromecms.netlify.app")
         }
     }
 }

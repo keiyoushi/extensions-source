@@ -7,42 +7,35 @@ import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.multisrc.hiper.Hiper
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferences
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
+import okhttp3.Headers
+import okhttp3.OkHttpClient
+import okhttp3.Response
 
 @Source
-abstract class Hiperdex :
-    Madara(),
-    ConfigurableSource {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+abstract class Hiperdex : Hiper() {
 
-    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = this
+        .set("x-cfg-auth", "yceqt7qgu004")
 
-    private val preferences = getPreferences()
-
-    override val client = super.client.newBuilder()
-        .addNetworkInterceptor(ClearanceInterceptor())
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addHiperAuthInterceptor()
         .rateLimit(3)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .setRandomUserAgent()
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-
-    override val pageListParseSelector = "div.page-break:not([style*='display:none'])"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super.setupPreferenceScreen(screen)
+
+        val noRemoveTitleBrowsingPref = CheckBoxPreference(screen.context).apply {
+            key = NO_REMOVE_TITLE_BROWSING_PREF
+            title = "Don't apply title cleaning in browsing/search results"
+            summary = "Don't apply the 2 options above when browsing or searching for manga, but still apply them in manga details."
+            setVisible(isRemoveTitleVersion() || customRemoveTitle().isNotEmpty())
+            setDefaultValue(false)
+        }
+
         CheckBoxPreference(screen.context).apply {
             key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
             title = "Remove version information from entry titles"
@@ -51,6 +44,11 @@ abstract class Hiperdex :
                 "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
+            setOnPreferenceChangeListener { _, newValue ->
+                val enabled = newValue as Boolean
+                noRemoveTitleBrowsingPref.setVisible(enabled || customRemoveTitle().isNotEmpty())
+                true
+            }
         }.also { screen.addPreference(it) }
 
         EditTextPreference(screen.context).apply {
@@ -86,6 +84,7 @@ abstract class Hiperdex :
                 val (isValid, message) = validate(newValue as String)
                 if (isValid) {
                     summary = newValue
+                    noRemoveTitleBrowsingPref.setVisible(isRemoveTitleVersion() || newValue.isNotEmpty())
                 } else {
                     Toast.makeText(screen.context, message, Toast.LENGTH_LONG).show()
                 }
@@ -93,26 +92,26 @@ abstract class Hiperdex :
             }
         }.also { screen.addPreference(it) }
 
-        screen.addRandomUAPreference()
+        screen.addPreference(noRemoveTitleBrowsingPref)
     }
 
-    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
-        title = title.cleanTitleIfNeeded()
+    override fun parseSearchMangaList(response: Response): MangasPage {
+        val mangaUpdate = super.parseSearchMangaList(response)
+        return MangasPage(
+            mangaUpdate.mangas.map {
+                if (!noCleanTitlesWhileBrowsing()) {
+                    it.title = it.title.cleanTitleIfNeeded()
+                } else if (isRemoveTitleVersion() || customRemoveTitle().isNotEmpty()) {
+                    // Allow it to refresh the cleaning title when manga is opened
+                    it.initialized = false
+                }
+                it
+            },
+            mangaUpdate.hasNextPage,
+        )
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga = super.latestUpdatesFromElement(element).apply {
-        title = title.cleanTitleIfNeeded()
-    }
-
-    override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
-        title = title.cleanTitleIfNeeded()
-    }
-
-    override fun searchMangaSelector() = "#loop-content div.page-listing-item"
-
-    override val chapterUrlSuffix = ""
-
-    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+    override fun parseMangaDetails(response: Response): SManga = super.parseMangaDetails(response).apply {
         val cleanedTitle = title.cleanTitleIfNeeded()
         if (cleanedTitle != title.trim()) {
             description = listOfNotNull(title, description)
@@ -120,8 +119,6 @@ abstract class Hiperdex :
             title = cleanedTitle
         }
     }
-
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     private fun String.cleanTitleIfNeeded(): String {
         var tempTitle = this
@@ -139,9 +136,12 @@ abstract class Hiperdex :
     private fun isRemoveTitleVersion(): Boolean = preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
     private fun customRemoveTitle(): String = preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
 
+    private fun noCleanTitlesWhileBrowsing(): Boolean = preferences.getBoolean(NO_REMOVE_TITLE_BROWSING_PREF, false)
+
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
+        private const val NO_REMOVE_TITLE_BROWSING_PREF = "NO_REMOVE_TITLE_BROWSING"
 
         private val titleRegex: Regex by lazy {
             Regex(
@@ -150,4 +150,125 @@ abstract class Hiperdex :
             )
         }
     }
+
+    override val genresList = listOf(
+        "4-Koma",
+        "Action",
+        "Adaptation",
+        "Adult",
+        "Adventure",
+        "Age Gap",
+        "Aliens",
+        "Ancient Korea",
+        "Anthology",
+        "Campus",
+        "Childhood Friends",
+        "Comedy",
+        "Cooking",
+        "Crime",
+        "Crossdressing",
+        "Dance",
+        "Delinquents",
+        "Demons",
+        "Doujinshi",
+        "Drama",
+        "Ecchi",
+        "Escolar",
+        "Fantasy",
+        "Fellatio/Blowjob",
+        "Fetish",
+        "Full Color",
+        "Furry",
+        "Gender Bender",
+        "Genderswap",
+        "Ghosts",
+        "Girls' Love",
+        "Gore",
+        "Guideverse",
+        "Gyaru",
+        "Hair Color Change",
+        "Harem",
+        "Hentai",
+        "Heroes",
+        "Historical",
+        "Horror",
+        "Human-Nonhuman Relationship",
+        "Isekai",
+        "Josei",
+        "Korea",
+        "Korean Ambience",
+        "Korean BL",
+        "Long Strip",
+        "Long-Haired Male Character/s",
+        "Long-Haired Male Lead",
+        "Love Triangle/s",
+        "Low Fantasy",
+        "Maduro",
+        "Mafia",
+        "Magic",
+        "Male Protagonist",
+        "Manga",
+        "Martial Arts",
+        "Masculine Uke",
+        "Mature",
+        "Mecha",
+        "Medical",
+        "Military",
+        "Monster Girls",
+        "Monsters",
+        "Monsters Invade Earth",
+        "Murim",
+        "Muscular Male Lead",
+        "Muscular Uke",
+        "Music",
+        "Mystery",
+        "Nameverse",
+        "Ninja",
+        "Office Workers",
+        "Older Uke Younger Seme",
+        "Oneshot",
+        "Orphan Female Lead",
+        "Police",
+        "Post-Apocalyptic",
+        "Psychological",
+        "Red-Haired Male Lead",
+        "Red-Haired Seme",
+        "Regression",
+        "Reincarnation",
+        "Revenge",
+        "Romance",
+        "Samurai",
+        "School Life",
+        "Sci-fi",
+        "Secret Relationship",
+        "Seinen",
+        "Sexual Violence",
+        "Shota",
+        "Shoujo",
+        "Shoujo Ai",
+        "Shounen",
+        "Size Difference",
+        "Slice of Life",
+        "Smut",
+        "Sobrenatural",
+        "Sports",
+        "Superhero",
+        "Supernatural",
+        "Survival",
+        "Suspense",
+        "Thriller",
+        "Time Travel",
+        "Tower",
+        "Tragedy",
+        "Uncensored",
+        "Video Games",
+        "Villainess",
+        "Violence",
+        "Virtual Reality",
+        "Web Comic",
+        "Webtoon",
+        "Wuxia",
+        "Yaoi",
+        "Yuri",
+    )
 }

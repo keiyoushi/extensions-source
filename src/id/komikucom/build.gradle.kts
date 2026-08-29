@@ -1,13 +1,14 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Komiku.com"
-    versionCode = 2
+    versionCode = 35
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "mangathemesia"
+    libVersion = "1.6"
 
     source {
         lang = "id"

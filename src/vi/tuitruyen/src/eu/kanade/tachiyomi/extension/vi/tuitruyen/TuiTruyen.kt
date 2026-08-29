@@ -1,58 +1,57 @@
 package eu.kanade.tachiyomi.extension.vi.tuitruyen
 
 import android.util.Base64
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.net.URLDecoder
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.Calendar
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.Locale
-import java.util.TimeZone
-import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class TuiTruyen : HttpSource() {
-    override val supportsLatest = true
-
-    private val imgxGrants = ConcurrentHashMap<String, PageAccessEntry>()
-
-    private val secureRandom = SecureRandom()
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(imgxInterceptor())
-        .rateLimit(3)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+abstract class TuiTruyen : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(imgxInterceptor())
+        rateLimit(3)
+    }
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mangas = client.get(baseUrl).asJsoup()
             .select("ol.homepage-ranking-list[data-ranking-period=total] a.homepage-ranking-item__link")
             .map(::popularMangaFromElement)
 
@@ -69,15 +68,13 @@ abstract class TuiTruyen : HttpSource() {
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url).asJsoup())
     }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
 
     private fun latestMangaFromElement(element: Element): SManga = SManga.create().apply {
         val linkElement = element.selectFirst("a[href^=/manga/]")!!
@@ -89,27 +86,21 @@ abstract class TuiTruyen : HttpSource() {
     private fun getFullListTitle(element: Element): String {
         val titleElement = element.selectFirst("h3")!!
         val titleAttr = titleElement.attr("title")
-        if (titleAttr.isNotEmpty()) {
-            return titleAttr
-        }
+        if (titleAttr.isNotEmpty()) return titleAttr
 
         val titleText = titleElement.text()
-        if (!titleText.endsWith("...")) {
-            return titleText
-        }
+        if (!titleText.endsWith("...")) return titleText
 
-        val imageAlt = element.selectFirst("img")?.attr("alt")
+        return element.selectFirst("img")?.attr("alt")
             ?.removePrefix("Bìa ")
             ?.trim()
             ?.ifEmpty { null }
-
-        return imageAlt ?: titleText
+            ?: titleText
     }
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("article.manga-card--list")
             .map(::latestMangaFromElement)
-
         val hasNextPage = document
             .selectFirst("nav[aria-label='Phân trang truyện'] a[aria-label='Trang sau']:not(.is-disabled)")
             ?.attr("href")
@@ -121,7 +112,7 @@ abstract class TuiTruyen : HttpSource() {
 
     // ============================== Search ================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart()
         val includedGenres = filters.firstInstanceOrNull<GenreFilter>()
             ?.state
@@ -129,63 +120,70 @@ abstract class TuiTruyen : HttpSource() {
             .orEmpty()
         val hasFilter = status != null || includedGenres.isNotEmpty()
 
-        if (query.isBlank() && !hasFilter) {
-            return latestUpdatesRequest(page)
-        }
+        if (query.isBlank() && !hasFilter) return getLatestUpdates(page)
 
         val url = "$baseUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .apply {
-                if (query.isNotBlank()) {
-                    addQueryParameter("q", query)
-                }
-
+                if (query.isNotBlank()) addQueryParameter("q", query)
                 status?.let { addQueryParameter("status", it) }
                 includedGenres.forEach { addQueryParameter("include", it.id) }
             }
             .build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url).asJsoup())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
 
-    // ============================== Filters ===============================
-
-    override fun getFilterList(): FilterList = getFilters()
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        val manga = SManga.create().apply { setUrlWithoutDomain("/manga/$slug") }
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga
+    }
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-
-        return SManga.create().apply {
-            title = document.selectFirst("h1.manga-detail-title")!!.text()
-            author = document.select("p.manga-detail-meta-line")
-                .firstOrNull { line ->
-                    line.selectFirst(".manga-detail-meta-label")
-                        ?.text()
-                        ?.contains("Tác giả")
-                        ?: false
-                }
-                ?.select("a.inline-link")
-                ?.joinToString { it.text() }
-                ?.ifEmpty { null }
-            genre = document.select(".manga-detail-genre-chips a.chip")
-                .joinToString { it.text() }
-                .ifEmpty { null }
-            description = document.selectFirst("[data-description-content]")
+    private fun parseMangaDetails(document: Document, manga: SManga): SManga = SManga.create().apply {
+        setUrlWithoutDomain(manga.url)
+        title = document.selectFirst("h1.manga-detail-title")!!.text()
+        author = document.select("p.manga-detail-meta-line")
+            .firstOrNull { line ->
+                line.selectFirst(".manga-detail-meta-label")
+                    ?.text()
+                    ?.contains("Tác giả")
+                    ?: false
+            }
+            ?.select("a.inline-link")
+            ?.joinToString { it.text() }
+            ?.ifEmpty { null }
+        genre = document.select(".manga-detail-genre-chips a.chip")
+            .joinToString { it.text() }
+            .ifEmpty { null }
+        description = document.selectFirst("[data-description-content]")
+            ?.text()
+            ?.ifEmpty { null }
+            ?: document.selectFirst(".manga-description__text")
                 ?.text()
                 ?.ifEmpty { null }
-                ?: document.selectFirst(".manga-description__text")
-                    ?.text()
-                    ?.ifEmpty { null }
-            status = parseStatus(document.selectFirst(".manga-status-pill")?.text())
-            thumbnail_url = document.selectFirst(".detail-cover img")?.absUrl("src")
-        }
+        status = parseStatus(document.selectFirst(".manga-status-pill")?.text())
+        thumbnail_url = document.selectFirst(".detail-cover img")?.absUrl("src")
     }
 
-    private fun parseStatus(status: String?): Int = when (status?.trim()) {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        return SMangaUpdate(
+            manga = parseMangaDetails(document, manga),
+            chapters = if (fetchChapters) fetchChapterList(document) else chapters,
+        )
+    }
+
+    private fun parseStatus(status: String?): Int = when (status) {
         "Còn tiếp" -> SManga.ONGOING
         "Hoàn thành" -> SManga.COMPLETED
         "Tạm dừng" -> SManga.ON_HIATUS
@@ -194,44 +192,25 @@ abstract class TuiTruyen : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun fetchChapterList(manga: SManga): rx.Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
-        .asObservableSuccess()
-        .map { response ->
-            chapterListParsePaginated(response)
-        }
-
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> = parseChapterList(response.asJsoup())
-
-    private fun chapterListParsePaginated(response: Response): List<SChapter> {
+    private suspend fun fetchChapterList(firstDocument: Document): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
         val visitedPages = mutableSetOf<String>()
-        var currentPageUrl = response.request.url.toString()
-        var currentDocument = response.asJsoup()
+        var currentPageUrl = firstDocument.location()
+        var currentDocument = firstDocument
 
         while (visitedPages.add(currentPageUrl)) {
             chapters += parseChapterList(currentDocument)
 
-            val nextChapterLinkElement: Element? = currentDocument.selectFirst(
+            val nextChapterPageUrl = currentDocument.selectFirst(
                 "nav[aria-label*='Phân trang chương'] a[aria-label='Trang chương sau']:not(.is-disabled)",
-            )
-            val nextChapterPageUrl: String? = nextChapterLinkElement?.let { link ->
-                if (link.attr("href") == "#") {
-                    null
-                } else {
-                    link.absUrl("href").ifEmpty { null }
-                }
+            )?.let { link ->
+                if (link.attr("href") == "#") null else link.absUrl("href").ifEmpty { null }
             }
 
-            if (nextChapterPageUrl == null || visitedPages.contains(nextChapterPageUrl)) {
-                break
-            }
+            if (nextChapterPageUrl == null || nextChapterPageUrl in visitedPages) break
 
             currentPageUrl = nextChapterPageUrl
-            client.newCall(GET(currentPageUrl, headers)).execute().use {
-                currentDocument = it.asJsoup()
-            }
+            currentDocument = client.get(currentPageUrl).asJsoup()
         }
 
         return chapters
@@ -250,130 +229,113 @@ abstract class TuiTruyen : HttpSource() {
                 ?.ifEmpty { null }
 
             date_upload = parseRelativeDate(relativeDate).takeIf { it != 0L }
-                ?: dateFormat.tryParse(absoluteDate)
+                ?: parseAbsoluteDate(absoluteDate)
         }
     }
 
     private fun parseRelativeDate(dateStr: String?): Long {
         if (dateStr.isNullOrBlank()) return 0L
 
-        val calendar = Calendar.getInstance()
-        val number = NUMBER_REGEX.find(dateStr)?.value?.toIntOrNull() ?: return 0L
-
-        when {
-            dateStr.contains("giây") -> calendar.add(Calendar.SECOND, -number)
-            dateStr.contains("phút") -> calendar.add(Calendar.MINUTE, -number)
-            dateStr.contains("giờ") -> calendar.add(Calendar.HOUR_OF_DAY, -number)
-            dateStr.contains("ngày") -> calendar.add(Calendar.DAY_OF_MONTH, -number)
-            dateStr.contains("tuần") -> calendar.add(Calendar.WEEK_OF_YEAR, -number)
-            dateStr.contains("tháng") -> calendar.add(Calendar.MONTH, -number)
-            dateStr.contains("năm") -> calendar.add(Calendar.YEAR, -number)
+        val number = numberRegex.find(dateStr)?.value?.toIntOrNull() ?: return 0L
+        val duration = when {
+            dateStr.contains("giây") -> number.seconds
+            dateStr.contains("phút") -> number.minutes
+            dateStr.contains("giờ") -> number.hours
+            dateStr.contains("ngày") -> number.days
+            dateStr.contains("tuần") -> (number * 7).days
+            dateStr.contains("tháng") -> (number * 30).days
+            dateStr.contains("năm") -> (number * 365).days
             else -> return 0L
         }
 
-        return calendar.timeInMillis
+        return (Clock.System.now() - duration).toEpochMilliseconds()
+    }
+
+    private fun parseAbsoluteDate(date: String?): Long {
+        if (date == null) return 0L
+        return runCatching {
+            LocalDate.parse(date, dateFormat)
+                .atStartOfDay(dateZone)
+                .toInstant()
+                .toEpochMilli()
+        }.getOrDefault(0L)
     }
 
     // ============================== Pages =================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-
-        val readerEl = document.selectFirst("[data-reader-imgx-initial-pages]")
-
-        val accessUrl = readerEl?.attr("data-reader-imgx-access-url")?.ifBlank { null }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val readerElement = document.selectFirst("[data-reader-imgx-initial-pages]")
+        val accessUrl = readerElement?.attr("data-reader-imgx-access-url")?.ifBlank { null }
 
         if (accessUrl != null) {
             val fullAccessUrl = if (accessUrl.startsWith("http")) accessUrl else "$baseUrl$accessUrl"
-            val proofToken = readerEl.attr("data-reader-imgx-proof-token").ifBlank { null }
-            val totalPages = readerEl.attr("data-reader-total-pages").toIntOrNull()
-                ?: document.select("img.page-media").count { el ->
-                    !el.parents().any { it.tagName().equals("noscript", ignoreCase = true) }
+            val proofToken = readerElement.attr("data-reader-imgx-proof-token").ifBlank { null }
+            val totalPages = readerElement.attr("data-reader-total-pages").toIntOrNull()
+                ?: document.select("img.page-media").count { element ->
+                    !element.parents().any { it.tagName().equals("noscript", ignoreCase = true) }
                 }
 
-            return fetchPagesWithGrants(fullAccessUrl, totalPages, proofToken, document)
+            return fetchPagesWithGrants(fullAccessUrl, totalPages, proofToken, readerElement)
         }
 
-        // Fallback no IMGx protection
-        val imageUrls = document.select("img.page-media")
+        return document.select("img.page-media")
             .asSequence()
             .filterNot { element ->
                 element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
             }
-            .map { element ->
-                element.absUrl("data-src").ifEmpty { element.absUrl("src") }
-            }
-            .filter { imageUrl ->
-                imageUrl.isNotBlank() && !imageUrl.startsWith("data:")
-            }
+            .map { element -> element.absUrl("data-src").ifEmpty { element.absUrl("src") } }
+            .filter { imageUrl -> imageUrl.isNotBlank() && !imageUrl.startsWith("data:") }
             .distinct()
             .toList()
-
-        return imageUrls.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
-        }
+            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    private fun fetchPagesWithGrants(
+    private suspend fun fetchPagesWithGrants(
         accessUrl: String,
         totalPages: Int,
         proofToken: String?,
-        document: Document,
+        readerElement: Element,
     ): List<Page> {
-        val readerEl = document.selectFirst("[data-reader-imgx-initial-pages]")
-        val initialPagesJson = readerEl?.attr("data-reader-imgx-initial-pages")?.ifBlank { null }
+        val initialPagesJson = readerElement.attr("data-reader-imgx-initial-pages").ifBlank { null }
+        val initialEntries = initialPagesJson?.let { encoded ->
+            runCatching {
+                URLDecoder.decode(encoded, Charsets.UTF_8.name()).parseAs<List<PageAccessEntry>>()
+            }.getOrDefault(emptyList())
+        }.orEmpty()
 
-        val initialEntries = if (initialPagesJson != null) {
-            try {
-                val decoded = java.net.URLDecoder.decode(initialPagesJson, "UTF-8")
-                decoded.parseAs<List<PageAccessEntry>>()
-            } catch (_: Exception) {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-
-        for (entry in initialEntries) {
+        initialEntries.forEach { entry ->
             if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
                 imgxGrants[entry.downloadUrl] = entry
             }
         }
 
-        val initialIndices = initialEntries.map { it.pageIndex }.toSet()
-        val remainingIndices = (0 until totalPages).filter { it !in initialIndices }
-
         val pages = initialEntries.map { entry ->
             Page(entry.pageIndex, imageUrl = entry.downloadUrl)
         }.toMutableList()
-
+        val initialIndices = initialEntries.mapTo(mutableSetOf()) { it.pageIndex }
+        val remainingIndices = (0 until totalPages).filterNot { it in initialIndices }
         val batchSize = 5
+
         for (start in remainingIndices.indices step batchSize) {
-            val end = minOf(start + batchSize, remainingIndices.size)
-            val indices = remainingIndices.subList(start, end)
+            val indices = remainingIndices.subList(start, minOf(start + batchSize, remainingIndices.size))
             val proof = proofToken?.let { createPageAccessProof(accessUrl, indices, it) }
             val body = PageAccessRequest(pageIndexes = indices, pageAccessProof = proof).toJsonRequestBody()
-
-            val request = Request.Builder()
-                .url(accessUrl)
-                .post(body)
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
+            val accessHeaders = headers.newBuilder()
+                .set("Accept", "application/json")
                 .apply {
-                    if (proof != null) {
-                        header("X-IMGX-Reader-Proof", proof.proof)
-                        header("X-IMGX-Reader-Proof-Version", proof.version)
+                    proof?.let {
+                        set("X-IMGX-Reader-Proof", it.proof)
+                        set("X-IMGX-Reader-Proof-Version", it.version)
                     }
                 }
                 .build()
+            val pageAccess = client.post(accessUrl, accessHeaders, body).parseAs<PageAccessResponse>()
 
-            val response = client.newCall(request).execute()
-            val pageAccess = response.use { it.parseAs<PageAccessResponse>() }
-
-            for (entry in pageAccess.pages) {
+            pageAccess.pages.forEach { entry ->
                 if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
                     imgxGrants[entry.downloadUrl] = entry
-                    pages.add(Page(entry.pageIndex, imageUrl = entry.downloadUrl))
+                    pages += Page(entry.pageIndex, imageUrl = entry.downloadUrl)
                 }
             }
         }
@@ -381,11 +343,7 @@ abstract class TuiTruyen : HttpSource() {
         return pages.sortedBy { it.index }
     }
 
-    private fun createPageAccessProof(
-        accessUrl: String,
-        pageIndexes: List<Int>,
-        token: String,
-    ): PageAccessProof {
+    private fun createPageAccessProof(accessUrl: String, pageIndexes: List<Int>, token: String): PageAccessProof {
         val version = "imgx-page-access-proof-v1"
         val issuedAt = System.currentTimeMillis()
         val nonce = randomHex(16)
@@ -400,23 +358,16 @@ abstract class TuiTruyen : HttpSource() {
             issuedAt.toString(),
             nonce.lowercase(Locale.ROOT),
         ).joinToString("\n")
-
         val proof = MessageDigest.getInstance("SHA-256")
             .digest(proofInput.toByteArray(Charsets.UTF_8))
             .base64UrlNoPadding()
 
-        return PageAccessProof(
-            version = version,
-            token = token,
-            issuedAt = issuedAt,
-            nonce = nonce,
-            proof = proof,
-        )
+        return PageAccessProof(version, token, issuedAt, nonce, proof)
     }
 
     private fun randomHex(size: Int): String {
         val bytes = ByteArray(size)
-        secureRandom.nextBytes(bytes)
+        SecureRandom().nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
     }
 
@@ -424,38 +375,79 @@ abstract class TuiTruyen : HttpSource() {
 
     private fun imgxInterceptor() = Interceptor { chain ->
         val request = chain.request()
-        val url = request.url.toString()
-        val entry = imgxGrants.remove(url)
-
-        if (entry?.grant == null) {
-            return@Interceptor chain.proceed(request)
-        }
-
+        val entry = imgxGrants.remove(request.url.toString())
+            ?: return@Interceptor chain.proceed(request)
+        val grant = entry.grant ?: return@Interceptor chain.proceed(request)
         val response = chain.proceed(request)
-        val imgxData = response.body.bytes()
+        val source = response.body.source()
 
-        if (imgxData.size <= 13 ||
-            imgxData[0] != 0x49.toByte() || imgxData[1] != 0x4D.toByte() ||
-            imgxData[2] != 0x47.toByte() || imgxData[3] != 0x58.toByte()
+        if (!source.request(14) ||
+            source.buffer[0] != 0x49.toByte() || source.buffer[1] != 0x4D.toByte() ||
+            source.buffer[2] != 0x47.toByte() || source.buffer[3] != 0x58.toByte()
         ) {
-            return@Interceptor response.newBuilder()
-                .body(imgxData.toResponseBody(response.body.contentType()))
-                .build()
+            return@Interceptor response
         }
 
-        val webp = ImageDecryptor.decrypt(imgxData, entry.grant, entry.storageKey)
-
+        val webp = response.body.use {
+            source.request(Long.MAX_VALUE)
+            ImageDecryptor.decrypt(source.buffer.readByteArray(), grant, entry.storageKey)
+        }
         response.newBuilder()
             .body(webp.toResponseBody("image/webp".toMediaType()))
             .build()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private val imgxGrantCacheSize = 500
+    private val imgxGrants = Collections.synchronizedMap(
+        object : LinkedHashMap<String, PageAccessEntry>(imgxGrantCacheSize, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PageAccessEntry>?): Boolean = size > imgxGrantCacheSize
+        },
+    )
 
-    companion object {
-        private val NUMBER_REGEX = Regex("""\d+""")
-        private val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    // ============================== Filters ===============================
+
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/manga").asJsoup()
+        .select(".filter-option[data-genre]")
+        .mapNotNull { element ->
+            val id = element.attr("data-genre").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val name = element.selectFirst(".filter-name")?.text()?.takeIf { it.isNotEmpty() }
+                ?: return@mapNotNull null
+            GenreOption(name, id)
+        }
+        .distinctBy { it.id }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<List<GenreOption>>())
+
+    // =============================== Related ==============================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        return listOf("manga-related-author-title", "manga-related-similar-title")
+            .flatMap { sectionId ->
+                document.selectFirst("section[aria-labelledby=$sectionId]")
+                    ?.select("article.manga-related-card")
+                    ?.mapNotNull { card -> relatedMangaFromElement(card) }
+                    .orEmpty()
+            }
+            .distinctBy { it.url }
+    }
+
+    private fun relatedMangaFromElement(card: Element): SManga? {
+        val link = card.selectFirst("a.manga-related-card__link[href^=/manga/]") ?: return null
+        val title = card.selectFirst("h3")?.text()?.takeIf { it.isNotEmpty() } ?: return null
+        return SManga.create().apply {
+            setUrlWithoutDomain(link.absUrl("href"))
+            this.title = title
+            thumbnail_url = card.selectFirst("img")?.absUrl("src")
         }
     }
+
+    private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
+    private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
+    private val numberRegex = Regex("""\d+""")
 }

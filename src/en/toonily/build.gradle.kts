@@ -1,21 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Toonily"
-    versionCode = 14
-    contentWarning = ContentWarning.NSFW
+    versionCode = 16
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
-    theme = "madara"
+    theme = "madaralegacy"
 
     source {
         lang = "en"
         baseUrl = "https://toonily.com"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

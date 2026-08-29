@@ -69,12 +69,14 @@ class Extension(_message.Message):
     def __init__(self, name: _Optional[str] = ..., packageName: _Optional[str] = ..., resources: _Optional[_Union[Resources, _Mapping]] = ..., extensionLib: _Optional[str] = ..., versionCode: _Optional[int] = ..., versionName: _Optional[str] = ..., contentWarning: _Optional[_Union[ContentWarning, str]] = ..., sources: _Optional[_Iterable[_Union[Source, _Mapping]]] = ...) -> None: ...
 
 class Resources(_message.Message):
-    __slots__ = ("apkUrl", "iconUrl")
+    __slots__ = ("apkUrl", "iconUrl", "jarUrl")
     APKURL_FIELD_NUMBER: _ClassVar[int]
     ICONURL_FIELD_NUMBER: _ClassVar[int]
+    JARURL_FIELD_NUMBER: _ClassVar[int]
     apkUrl: str
     iconUrl: str
-    def __init__(self, apkUrl: _Optional[str] = ..., iconUrl: _Optional[str] = ...) -> None: ...
+    jarUrl: str
+    def __init__(self, apkUrl: _Optional[str] = ..., iconUrl: _Optional[str] = ..., jarUrl: _Optional[str] = ...) -> None: ...
 
 class Source(_message.Message):
     __slots__ = ("id", "name", "language", "homeUrl", "mirrorUrls", "message")

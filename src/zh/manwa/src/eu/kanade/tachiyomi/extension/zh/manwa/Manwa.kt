@@ -32,11 +32,9 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 @Source
-open class Manwa :
+abstract class Manwa :
     HttpSource(),
     ConfigurableSource {
-    override val name: String = "漫蛙"
-    override val lang: String = "zh"
     override val supportsLatest: Boolean = true
     private val preferences: SharedPreferences = getPreferences()
     override val baseUrl: String = getTargetUrl()

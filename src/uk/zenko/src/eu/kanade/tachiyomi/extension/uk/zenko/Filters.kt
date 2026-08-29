@@ -24,8 +24,20 @@ internal abstract class MultiValueFilter(
     name = name,
     state = values.map { MultiValueOption(it.first, it.second) },
 ) {
-    val selectedValues: List<String> get() = state.filter { it.state && it.value.isNotEmpty() }.map { it.value }
-    val checked get() = selectedValues.takeIf { it.isNotEmpty() }
+    val checked: List<String>? get() = state.filter { it.state && it.value.isNotEmpty() }.map { it.value }.takeIf { it.isNotEmpty() }
+}
+
+class TriStateFilter(name: String, val id: String) : Filter.TriState(name)
+
+abstract class TriStateGroup(
+    name: String,
+    options: List<Pair<String, String>>,
+) : Filter.Group<TriStateFilter>(
+    name,
+    options.map { TriStateFilter(it.first, it.second) },
+) {
+    val included get() = state.filter { it.isIncluded() }.map { it.id }.takeUnless { it.isEmpty() }
+    val excluded get() = state.filter { it.isExcluded() }.map { it.id }.takeUnless { it.isEmpty() }
 }
 
 internal class MinFilter : Filter.Text("Від")
@@ -88,6 +100,17 @@ internal class TranslationStatusFilter : MultiValueFilter("Статус пере
     }
 }
 
+internal class StatusFilter : MultiValueFilter("Статус тайтлу", statuses) {
+    companion object {
+        val statuses = listOf(
+            "Скоро" to "COMING_SOON",
+            "Видається" to "ONGOING",
+            "Призупинено" to "PAUSED",
+            "Завершено" to "FINISHED",
+        )
+    }
+}
+
 internal class AgeFilter(blockedAge: Set<String>) : MultiValueFilter("Вікові обмеження", age) {
     init {
         if (blockedAge.isNotEmpty()) {
@@ -107,7 +130,16 @@ internal class AgeFilter(blockedAge: Set<String>) : MultiValueFilter("Віков
     }
 }
 
-internal class GenresFilter : MultiValueFilter("Жанри", genres) {
+internal class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жанри", genres) {
+    init {
+        if (blockedGenres.isNotEmpty()) {
+            state.forEach { filter ->
+                if (blockedGenres.contains(filter.id)) {
+                    filter.state = 2
+                }
+            }
+        }
+    }
     companion object {
         val genres = listOf(
             "Апокаліпсис" to "Апокаліпсис",
@@ -162,7 +194,7 @@ internal class GenresFilter : MultiValueFilter("Жанри", genres) {
     }
 }
 
-internal class TagsFilter : MultiValueFilter("Теги", tags) {
+internal class TagsFilter : TriStateGroup("Теги", tags) {
     companion object {
         val tags = listOf(
             "Авторський роман" to "Авторський роман",

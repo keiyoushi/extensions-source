@@ -20,7 +20,9 @@ android {
 
 dependencies {
     compileOnly(libs.bundles.common)
+    compileOnly(libs.tachiyomi.lib.v16)
 
     testImplementation(libs.bundles.common)
+    testImplementation(libs.tachiyomi.lib.v16)
     testImplementation(libs.junit)
 }

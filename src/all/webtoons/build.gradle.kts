@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Webtoons.com"
-    versionCode = 55
+    versionCode = 57
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
@@ -32,7 +34,5 @@ keiyoushi {
 }
 
 dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
     implementation(project(":lib:textinterceptor"))
 }

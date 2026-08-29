@@ -2,21 +2,26 @@ package eu.kanade.tachiyomi.extension.vi.fastscan
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.serialization.Serializable
 
-fun getFilters(): FilterList = FilterList(
-    GenreFilter(),
-    MinChapterFilter(),
-    StatusFilter(),
-    SortFilter(),
-)
+fun getFilters(genres: List<GenreOption>? = null): FilterList {
+    val filters = mutableListOf<Filter<*>>()
+    if (!genres.isNullOrEmpty()) filters += GenreFilter(genres)
+    filters += MinChapterFilter()
+    filters += StatusFilter()
+    filters += SortFilter()
+    return FilterList(filters)
+}
 
-class GenreFilter :
+class GenreFilter(genres: List<GenreOption>) :
     Filter.Select<String>(
         "Thể loại truyện",
-        arrayOf("Tất cả") + GENRES.map { genre -> genre.name }.toTypedArray(),
+        arrayOf("Tất cả") + genres.map { genre -> genre.name }.toTypedArray(),
     ) {
+    private val genres = genres
+
     val selected: String?
-        get() = GENRES.getOrNull(state - 1)?.id
+        get() = genres.getOrNull(state - 1)?.id
 }
 
 class MinChapterFilter :
@@ -46,73 +51,10 @@ class SortFilter :
         get() = SORT_OPTIONS[state].value
 }
 
-private class GenreOption(val id: String, val name: String)
-private class SearchOption(val value: String, val name: String)
+@Serializable
+class GenreOption(val id: String, val name: String)
 
-private val GENRES = listOf(
-    GenreOption("1", "Action"),
-    GenreOption("2", "Comedy"),
-    GenreOption("3", "Manga"),
-    GenreOption("4", "School Life"),
-    GenreOption("5", "Shounen"),
-    GenreOption("6", "Manhwa"),
-    GenreOption("7", "Ngôn Tình"),
-    GenreOption("8", "Romance"),
-    GenreOption("9", "Truyện Màu"),
-    GenreOption("10", "Webtoon"),
-    GenreOption("11", "Xuyên Không"),
-    GenreOption("12", "Manhua"),
-    GenreOption("13", "Mystery"),
-    GenreOption("14", "Sci-fi"),
-    GenreOption("15", "Đam Mỹ"),
-    GenreOption("16", "Gender Bender"),
-    GenreOption("17", "Seinen"),
-    GenreOption("18", "Slice of Life"),
-    GenreOption("19", "Comic"),
-    GenreOption("20", "Fantasy"),
-    GenreOption("21", "Supernatural"),
-    GenreOption("22", "Chuyển Sinh"),
-    GenreOption("23", "Cổ Đại"),
-    GenreOption("24", "Adventure"),
-    GenreOption("25", "Martial Arts"),
-    GenreOption("26", "Ecchi"),
-    GenreOption("27", "Horror"),
-    GenreOption("28", "Psychological"),
-    GenreOption("29", "Smut"),
-    GenreOption("30", "Harem"),
-    GenreOption("31", "Mature"),
-    GenreOption("32", "Historical"),
-    GenreOption("33", "Drama"),
-    GenreOption("34", "Trọng Sinh"),
-    GenreOption("35", "Shoujo"),
-    GenreOption("36", "Josei"),
-    GenreOption("37", "Adult"),
-    GenreOption("38", "One Shot"),
-    GenreOption("39", "Tragedy"),
-    GenreOption("40", "Huyền Huyễn"),
-    GenreOption("41", "Anime"),
-    GenreOption("42", "Yuri"),
-    GenreOption("43", "Isekai"),
-    GenreOption("44", "Sports"),
-    GenreOption("45", "Doujinshi"),
-    GenreOption("46", "Yaoi"),
-    GenreOption("47", "Hệ Thống"),
-    GenreOption("48", "Soft Yaoi"),
-    GenreOption("49", "BoyLove"),
-    GenreOption("50", "Detective"),
-    GenreOption("51", "Magic"),
-    GenreOption("52", "Mafia"),
-    GenreOption("53", "Mecha"),
-    GenreOption("54", "Trinh Thám"),
-    GenreOption("55", "Shounen Ai"),
-    GenreOption("56", "Demons"),
-    GenreOption("57", "18+"),
-    GenreOption("58", "Soft Yuri"),
-    GenreOption("59", "Shoujo Ai"),
-    GenreOption("60", "16+"),
-    GenreOption("61", "Live action"),
-    GenreOption("62", "Military"),
-)
+private class SearchOption(val value: String, val name: String)
 
 private val MIN_CHAPTER_OPTIONS = listOf(
     SearchOption("0", "> 0"),

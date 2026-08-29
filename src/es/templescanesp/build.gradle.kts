@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -7,12 +9,12 @@ keiyoushi {
     versionCode = 12
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    theme = "madara"
+    theme = "madaralegacy"
 
     source {
         lang = "es"
-        baseUrl("https://aedexnox.akan01.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://aedexnox.akan01.com")
         }
         versionId = 4
     }

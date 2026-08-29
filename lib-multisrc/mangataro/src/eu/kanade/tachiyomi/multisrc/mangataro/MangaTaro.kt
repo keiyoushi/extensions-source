@@ -281,7 +281,7 @@ abstract class MangaTaro : HttpSource() {
             it.language.equals(lang, ignoreCase = true)
         }.map {
             SChapter.create().apply {
-                setUrlWithoutDomain(it.url)
+                setUrlWithoutDomain(it.url.removeSuffix("/"))
                 name = buildString {
                     append("Chapter ")
                     append(it.chapter)
@@ -310,7 +310,7 @@ abstract class MangaTaro : HttpSource() {
 
     // ========================== Pages ==========================
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = getChapterUrl(chapter).toHttpUrl()
+        val chapterId = getChapterUrl(chapter).removeSuffix("/").toHttpUrl()
             .pathSegments.last()
             .substringAfterLast("-")
 

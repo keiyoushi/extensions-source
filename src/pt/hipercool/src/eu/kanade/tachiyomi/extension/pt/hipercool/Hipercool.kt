@@ -1,260 +1,540 @@
 package eu.kanade.tachiyomi.extension.pt.hipercool
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.multisrc.hiper.Hiper
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.get
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import java.io.IOException
-import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class Hipercool : HttpSource() {
+abstract class Hipercool : Hiper() {
 
-    override val supportsLatest: Boolean = true
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = this
+        .set("x-flux-node", "G2ZsDdWhUwdU82Vw")
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addHiperAuthInterceptor()
+        .rateLimit(3)
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3, 1.seconds)
-        .build()
-
-    // ============================ Popular ====================================
-
-    private val popularFilter = FilterList(OrderByFilter("", arrayOf("" to "popular")))
-
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", popularFilter)
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    // ============================ Latest ====================================
-    private val latestFilter = FilterList(OrderByFilter("", arrayOf("" to "newest")))
-
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", latestFilter)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    // ============================ Search ====================================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val limit = 30
-        val input = buildJsonObject {
-            putJsonObject("0") {
-                putJsonObject("json") {
-                    put("q", query)
-                    filters.filterIsInstance<OrderByFilter>().forEach { filter ->
-                        put("sort", filter.selected())
-                    }
-                    putJsonObject("filters") {
-                        put("genres", null)
-                        put("type", null)
-                        put("status", null)
-                        put("contentRating", null)
-                        put("author", null)
-                        put("artist", null)
-                        put("year", null)
-                    }
-
-                    put("limit", limit)
-                    put("offset", (page - 1) * limit)
-                    put("maxRating", "pornographic")
-                }
-                putJsonObject("meta") {
-                    putJsonObject("values") {
-                        put("filters.genres", buildJsonArray { add("undefined") })
-                        put("filters.type", buildJsonArray { add("undefined") })
-                        put("filters.status", buildJsonArray { add("undefined") })
-                        put("filters.contentRating", buildJsonArray { add("undefined") })
-                        put("filters.author", buildJsonArray { add("undefined") })
-                        put("filters.artist", buildJsonArray { add("undefined") })
-                        put("filters.year", buildJsonArray { add("undefined") })
-                    }
-                }
-            }
-        }.toString()
-
-        val url = "$baseUrl/api/trpc/search.query".toHttpUrl().newBuilder()
-            .addQueryParameter("batch", "1")
-            .addQueryParameter("input", input)
-            .build()
-
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val element = response.parseAs<List<JsonElement>>().first()
-        val dto = element["result"]["data"]["json"]?.parseAs<WrapperContent>() ?: return MangasPage(emptyList(), false)
-        return MangasPage(dto.hits.map(MangaDto::toSManga), dto.hits.isNotEmpty())
-    }
-
-    // ============================ Details ===================================
-
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url
-            .substringAfterLast("$MANGA_SUBSTRING/")
-            .substringBefore("#")
-            .takeIf(String::isNotBlank)
-            ?: throw IOException("Migre para própria extensão")
-
-        val input = buildJsonObject {
-            putJsonObject("0") {
-                put("json", null)
-                putJsonObject("meta") {
-                    putJsonArray("values") {
-                        add("undefined")
-                    }
-                }
-            }
-            putJsonObject("1") {
-                putJsonObject("json") {
-                    put("slug", slug)
-                }
-            }
-        }
-
-        val url = "$baseUrl/api/trpc/auth.me,series.bySlugWithGenres".toHttpUrl().newBuilder()
-            .addQueryParameter("batch", "1")
-            .addQueryParameter("input", input.toString())
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val element = response.parseAs<List<JsonElement>>().last()
-        return element["result"]["data"]["json"]!!.parseAs<MangaDto>().toSManga()
-    }
-
-    // ============================ Chapters ==================================
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("#").toLongOrNull()
-            ?: throw IOException("Migre para própria extensão")
-        val input = buildJsonObject {
-            putJsonObject("0") {
-                putJsonObject("json") {
-                    putJsonArray("values") {
-                        add("undefined")
-                    }
-                }
-            }
-
-            putJsonObject("1") {
-                putJsonObject("json") {
-                    put("seriesId", mangaId)
-                    put("chapterId", null)
-                    put("sort", "best")
-                    put("page", 1)
-                    put("limit", 20)
-                }
-                putJsonObject("meta") {
-                    putJsonObject("values") {
-                        put("chapterId", buildJsonArray { add("undefined") })
-                    }
-                }
-            }
-
-            putJsonObject("2") {
-                putJsonObject("json") {
-                    put("seriesId", mangaId)
-                }
-            }
-        }
-
-        val url = "$baseUrl/api/trpc/auth.me,comments.list,series.chapters".toHttpUrl().newBuilder()
-            .addQueryParameter("batch", "1")
-            .addQueryParameter("input", input.toString())
-            .fragment(manga.url)
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaPath = response.request.url.fragment!!
-        val element = response.parseAs<List<JsonElement>>().last()
-        val chaptersDTO = element["result"]["data"]["json"]!!.parseAs<List<ChapterDto>>()
-        return chaptersDTO.map { it.toSChapter(mangaPath) }
-    }
-
-    // ============================ Pages =====================================
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val slug = chapter.url
-            .substringAfterLast("$MANGA_SUBSTRING/")
-            .substringBefore("#")
-            .takeIf(String::isNotBlank)
-            ?: throw IOException("Migre para própria extensão")
-
-        val input = buildJsonObject {
-            putJsonObject("0") {
-                put("json", null)
-                putJsonObject("meta") {
-                    putJsonArray("values") {
-                        add("undefined")
-                    }
-                }
-            }
-            putJsonObject("1") {
-                putJsonObject("json") {
-                    put("slug", slug)
-                }
-            }
-            putJsonObject("2") {
-                putJsonObject("json") {
-                    put("seriesSlug", slug)
-                    put("chapterNumber", chapter.chapter_number)
-                }
-            }
-            putJsonObject("3") {
-                putJsonObject("json") {
-                    put("position", "footer_bottom")
-                }
-            }
-        }
-
-        val url = "$baseUrl/api/trpc/auth.me,series.bySlug,reader.chapterPages".toHttpUrl().newBuilder()
-            .addQueryParameter("batch", "1")
-            .addQueryParameter("input", input.toString())
-            .build()
-
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val element = response.parseAs<List<JsonElement>>().last()
-        val pages = element["result"]["data"]["json"]?.parseAs<List<PageDto>>() ?: return emptyList()
-        return pages.map(PageDto::toPage)
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================ Filters ====================================
-
-    open class OrderByFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
-        fun selected() = vals[state].second
-    }
-
-    companion object {
-        const val MANGA_SUBSTRING = "manga"
-    }
+    override val genresList = listOf(
+        "Academia",
+        "Ação",
+        "Adult",
+        "Adulto",
+        "Adventure",
+        "Ahega",
+        "Ahegao",
+        "Akio takami",
+        "Amiga de infância",
+        "Amputado",
+        "Anal",
+        "Angelical",
+        "Animal",
+        "Anjo",
+        "Anjos",
+        "anorexic",
+        "Aprisionada",
+        "Ar livre",
+        "Aréola Grande",
+        "Arte Marcial",
+        "Artes Marciais",
+        "Artist CG",
+        "Ashikoki",
+        "Avental",
+        "Aventura",
+        "Bakuman",
+        "Bakunyuu",
+        "Bakuynuu",
+        "Banheiro",
+        "Banho",
+        "Banner",
+        "BBM",
+        "BBW",
+        "BDSM",
+        "Beatmania",
+        "Beauty Mark",
+        "Bêbada",
+        "Bêbado",
+        "Bêbado(a)",
+        "Bebida",
+        "Beijo grego",
+        "Bestial",
+        "bi",
+        "Big breasts",
+        "big penis",
+        "Bikini",
+        "Biquíni",
+        "bisexual",
+        "Bishoujo Senshi Sailor Moon",
+        "Bissexual",
+        "Bkaunyuu",
+        "Bleach",
+        "Bloomers",
+        "Blooomers",
+        "Blowjob",
+        "Bodysuit",
+        "Bonage",
+        "Bondage",
+        "Bongade",
+        "Brinquedos",
+        "Brinquedos Sexuais",
+        "Bronzeada",
+        "Bronzeado",
+        "Bronzeado(a)",
+        "Bronzeamento",
+        "Bruxa",
+        "BSDM",
+        "Bukakke",
+        "Bukkake",
+        "Bunda Grande",
+        "Bundão",
+        "Bunduda",
+        "BWC",
+        "Cabeluda",
+        "Calcinha",
+        "Camisinha",
+        "Camisola",
+        "Campione!",
+        "Campus",
+        "cannabis",
+        "Casada",
+        "Centauro",
+        "Centauro(a)",
+        "CEO",
+        "Chantagem",
+        "Chobits",
+        "Clannad",
+        "Clorofórmio",
+        "Clorofórmo",
+        "Club",
+        "Code Geass",
+        "Coelgial",
+        "Coelhinha",
+        "Coelhinho",
+        "Colã",
+        "Colegial",
+        "Colegual",
+        "Coleigal",
+        "Coleira",
+        "Colorida",
+        "Colorido",
+        "Comédia",
+        "Condage",
+        "Consolo",
+        "Controle da Mente",
+        "Controle Mental",
+        "Coprofilia",
+        "Corrupção",
+        "Cosplay",
+        "cosplaying",
+        "Creampie",
+        "Crosdressing",
+        "Cross-Dressing",
+        "Crossdresing",
+        "Crossdressing",
+        "Crossdressinh",
+        "Cunhada",
+        "Cuntboy",
+        "Dakr Skin",
+        "Dança",
+        "Dance In The Vampire Bund",
+        "Dark Skin",
+        "Darki Skin",
+        "Darkstalkers",
+        "Defloração",
+        "Demônio",
+        "Demônios",
+        "Dildo",
+        "DILF",
+        "Dokidoki! PreCure",
+        "Dormindo",
+        "Dragonaut",
+        "Drama",
+        "Dream C Club",
+        "Drogas",
+        "Drunk",
+        "Dupla Penetração",
+        "Ecchi",
+        "Elf",
+        "Elfa",
+        "Elfas",
+        "Elfo(a)",
+        "Elfos",
+        "Embriaguez",
+        "Empregada",
+        "Enema",
+        "Enfemeira",
+        "Enfermeira",
+        "Engravidando",
+        "Esapnhola",
+        "Escolar",
+        "Escrava",
+        "Escravidão",
+        "Escravo(a)",
+        "Espanhol",
+        "Espanhola",
+        "Esporte",
+        "Esportes",
+        "Esposa",
+        "Espsanhola",
+        "Esspanhola",
+        "Estrangeira",
+        "Exibicionismo",
+        "eye-covering bang",
+        "Facial",
+        "Familia",
+        "Fantasia",
+        "Fantasma",
+        "Fantasy",
+        "Fate/hollow ataraxia",
+        "Fate/stay night",
+        "Fecundação",
+        "Femdom",
+        "Femdom.Espanhola",
+        "feminization",
+        "Fetiche por Axila",
+        "Fetiches",
+        "Fezes",
+        "ffm threesome",
+        "Ficção",
+        "Ficcção",
+        "Filha",
+        "Filho",
+        "Filho(a)",
+        "Filho(a)Dupla Penetração",
+        "Filmagem",
+        "Filmando",
+        "Final Fantasy X-2",
+        "Final Fantasy XII",
+        "Final Fantasy XIII​",
+        "Fisting",
+        "Footjob",
+        "Freira",
+        "Fresh PreCure!",
+        "Full color",
+        "Furry",
+        "Futanari",
+        "Futanari com Futanari",
+        "Futanari on Futanari",
+        "Futanari on Futanarin",
+        "Futanari on Male",
+        "Gaping",
+        "Garçonete",
+        "Garganta Profunda",
+        "Gargantilha",
+        "Gargantilho",
+        "Garota Demônio",
+        "Garota Mágica",
+        "Garota Monstro",
+        "Garoto de sorte",
+        "Gêmeas",
+        "Gêmeos",
+        "Gêmeos(as)",
+        "Gender bender",
+        "Genderbend",
+        "Genshiken",
+        "Gigante",
+        "Gintama",
+        "Glasses",
+        "Goblin",
+        "Gordinha",
+        "Gordinho(a)",
+        "Gordinhoi(a)",
+        "Gozando Junto",
+        "Grávida",
+        "Gravidez",
+        "Gruapl",
+        "Grupal",
+        "Grupal.Incesto",
+        "GrupalIncesto",
+        "Grupla",
+        "Grupo",
+        "Gundam Build Fighters",
+        "Gundam Unicorn",
+        "Guri",
+        "Guro",
+        "Gyaru",
+        "H-Mangá",
+        "Happy Sex",
+        "Hardcore",
+        "Harém",
+        "Harry Potter",
+        "Hase Yuu",
+        "Hentai",
+        "Hikawa Yuuki",
+        "Hipnose",
+        "Historical",
+        "Histórico",
+        "Horror",
+        "Humilhação",
+        "Humor",
+        "Idols",
+        "Impregnação",
+        "Incesot",
+        "Incest",
+        "Incesto",
+        "Incesto.Crossdressing",
+        "inconsciente",
+        "Inseki",
+        "Inseto",
+        "Invisível",
+        "Irmã",
+        "Irmã mais velha",
+        "Irmã(ã)",
+        "Irmão",
+        "Irmão(ã)",
+        "Irmãos",
+        "Irmãs",
+        "Isekai",
+        "Jaleco",
+        "Jogos",
+        "Josei",
+        "Kemonomimi",
+        "Kimono",
+        "King of Fighters",
+        "kissing",
+        "Kogal",
+        "Kunoichi",
+        "Lactação",
+        "Lâmia",
+        "Latex",
+        "Lesbica",
+        "Líder de Torcida",
+        "Lingeire",
+        "Lingeri",
+        "Lingeria",
+        "Lingerie",
+        "Loja",
+        "Madrasta",
+        "Maduro",
+        "Mãe",
+        "Magia",
+        "Maid",
+        "Maiô",
+        "Maiô.Sumata",
+        "Mais",
+        "Mamilo Invertido",
+        "Marquinha",
+        "Masoquismo",
+        "Massagem",
+        "Masturabação",
+        "Masturbação",
+        "Mature",
+        "Meia",
+        "Meia Calça",
+        "Meia Creampie",
+        "Meia Longa",
+        "Meledom",
+        "Menage",
+        "Metrô",
+        "Miko",
+        "MILF",
+        "Militar",
+        "Mind Break",
+        "Mind Breka",
+        "Mind Creampie",
+        "Mistério",
+        "Mobile Suit Gundam Unicorn",
+        "Monstro",
+        "Monstros",
+        "Mordaça",
+        "Morena",
+        "Mosntro",
+        "Murim",
+        "Musculos",
+        "Mystery",
+        "Nakadashi",
+        "namorada",
+        "Necrofilia",
+        "Negras",
+        "Neko",
+        "Neotrare",
+        "Neto(a)",
+        "Netorare",
+        "Netorarea",
+        "Netori",
+        "Ninja",
+        "Noiva",
+        "Noivo(a)",
+        "NTR",
+        "Óculos",
+        "Onahole",
+        "Oni",
+        "Onsen",
+        "Oral",
+        "Orc",
+        "Orgasmo",
+        "Overlord",
+        "Oyakodon",
+        "Pai",
+        "Paizuri",
+        "Palmada",
+        "Paradise",
+        "Parto",
+        "Pau Grande",
+        "Peiõtes",
+        "Peitihnos",
+        "Peitinho",
+        "Peitinhos",
+        "PeitinhosTsundere",
+        "Peitõe",
+        "Peitões",
+        "Peitões.Primo(a)",
+        "Peitos Enormes",
+        "Peitos Grande",
+        "Peitos Grandes",
+        "Peittões",
+        "Pelos Pubianos",
+        "Penetração Dupla",
+        "Petiões",
+        "Piercing",
+        "Pintura Corporal",
+        "Po-ju",
+        "Policial",
+        "Ponytail",
+        "Possessão",
+        "Praia",
+        "Preservativo",
+        "Prima",
+        "Prima(o)",
+        "Primeira Vez",
+        "Primo",
+        "Primo(a)",
+        "Prisioneiro(a)",
+        "Profeesor(a)",
+        "Professor",
+        "Professor(a)",
+        "Professor(a)Oral",
+        "Prostitui;'ao",
+        "Prostituição",
+        "Prostituilção",
+        "prostitution",
+        "Psicológico",
+        "Raio-X",
+        "rape",
+        "Reencarnação",
+        "regressão de idade",
+        "Relacionamento secreto",
+        "Revenge",
+        "Robô Sexual",
+        "Romance",
+        "Ruiva",
+        "Sailor Suit",
+        "Scat",
+        "School girl",
+        "School Life",
+        "school uniform",
+        "Schoolboy uniform",
+        "Schoolgirl uniform",
+        "Sci-fi",
+        "Sedução",
+        "Seinen",
+        "Seios Grandes",
+        "Seios Pequenos",
+        "Sem Censura",
+        "Sensei",
+        "Sereia",
+        "sex stoy",
+        "Sex Toy",
+        "Sex Toys",
+        "Sexo em Público",
+        "Shimapan",
+        "Shota",
+        "Shoujo",
+        "Shoujo Ai",
+        "Shounen",
+        "Shounen Ai",
+        "Sinen",
+        "sissy",
+        "Slice of Life",
+        "Smut",
+        "Sobrenatural",
+        "Sobrevivência",
+        "Sobrinha",
+        "Sobrinho",
+        "Sobrinho(a)",
+        "Sobrinho(a)mFilha",
+        "sole female",
+        "sole male",
+        "Solo Female",
+        "Solo Male",
+        "sonho",
+        "Squirt",
+        "Squirting",
+        "Squrting",
+        "Stocking",
+        "Stockings",
+        "Strap-on",
+        "Strpa-on",
+        "Suamata",
+        "Succubus",
+        "Súcubo",
+        "Sumata",
+        "Supernatural",
+        "Swimsuit",
+        "Takese Yuu",
+        "Tamboy",
+        "tankoubon",
+        "Tapa-olho",
+        "Tatuagem na Virilha",
+        "Tentáculos",
+        "Terror",
+        "Tia",
+        "Tio",
+        "Tio(a)",
+        "Toddler",
+        "Toddlercon",
+        "tomboy",
+        "Tomgimrl",
+        "Tomgirl",
+        "Tomgirl (Gay)",
+        "Tomgirl Femdom",
+        "Tomrgirl",
+        "Tomrigl",
+        "Tortura",
+        "Tragédia",
+        "Traição",
+        "Transformação",
+        "Transformação de Sexo",
+        "Transsexual",
+        "Trap",
+        "Travesit",
+        "Travesti",
+        "Treinadora",
+        "Triação",
+        "Tribadism",
+        "Tribadismo",
+        "Troca de Corpos",
+        "Tsundere",
+        "Uniforme Escolar",
+        "Urina",
+        "Vampiro",
+        "Vanila",
+        "Vanilla",
+        "Velho",
+        "Velhote",
+        "Vellhote",
+        "Venda",
+        "Vida Cotidiana",
+        "Vida Escolar",
+        "Vingança",
+        "virgem",
+        "Viúva",
+        "Vore",
+        "Voyerismo",
+        "Voyeur",
+        "Voyeurismo",
+        "Voyeurismoão(ã)",
+        "Webtoon",
+        "Wolf Girl",
+        "Wuxia",
+        "X-Ray",
+        "Yamamoto Ryuusuke",
+        "Yandere",
+        "Yaoi",
+        "Yukata",
+        "Yuri",
+        "Zombie",
+        "Zoofilia",
+        "Zumbi",
+    )
 }

@@ -1,16 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MeHentai"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "manhwaz"
 
     source {
         lang = "vi"
-        baseUrl = "https://mehentai.blog"
+        baseUrl = "https://mehentai.live"
     }
 }

@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,14 +7,15 @@ plugins {
 keiyoushi {
     name = "ManHuaGui"
     versionCode = 28
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {
         name = "漫画柜"
         lang = "zh"
-        baseUrl("https://www.manhuagui.com") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://www.manhuagui.com",
                 "https://tw.manhuagui.com",
                 "https://www.mhgui.com",
                 "https://tw.mhgui.com",

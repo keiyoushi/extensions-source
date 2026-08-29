@@ -108,7 +108,7 @@ class Details(
     fun toSManga() = SManga.create().apply {
         title = name
         author = authors
-        description = infoText?.let { Jsoup.parse(it).text() }
+        description = infoText?.let { Jsoup.parseBodyFragment(it).text() }
         thumbnail_url = latestThumbnail?.thumbnail
     }
 }
@@ -166,7 +166,7 @@ class ViewerResponse(
 
 @Serializable
 class ViewerImages(
-    @ProtoNumber(1) val page: Images,
+    @ProtoNumber(1) val page: Images?,
 )
 
 @Serializable

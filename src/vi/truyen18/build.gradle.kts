@@ -1,15 +1,23 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Truyen18"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://truyen18.co"
+        baseUrl {
+            custom("https://truyen18.co")
+        }
+    }
+
+    deeplink {
+        path("/doc-truyen/..*")
     }
 }

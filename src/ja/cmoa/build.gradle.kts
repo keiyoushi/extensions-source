@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "C'moA"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
@@ -16,5 +18,4 @@ keiyoushi {
 
 dependencies {
     implementation(project(":lib:speedbinb"))
-    implementation(project(":lib:cookieinterceptor"))
 }

@@ -13,16 +13,21 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import kotlinx.coroutines.runBlocking
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okio.ByteString.Companion.decodeBase64
+import rx.Observable
 import java.io.IOException
+import java.util.Collections
+import java.util.LinkedHashSet
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -35,15 +40,8 @@ abstract class MangaLivre :
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(::clientHeaderInterceptor)
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
-
-    private val scrapeClient: OkHttpClient by lazy {
-        network.client.newBuilder()
-            .followRedirects(false)
-            .build()
-    }
 
     private val apiUrl: String = "$baseUrl/api"
 
@@ -61,8 +59,8 @@ abstract class MangaLivre :
 
     private val popularFilter = FilterList(
         listOf(
-            OrderByFilter(options = listOf("" to "popular")),
-            OrderDirectionFilter(options = listOf("" to "desc")),
+            OrderByFilter(options = listOf("" to SORT_POPULAR)),
+            OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
         ),
     )
 
@@ -74,8 +72,8 @@ abstract class MangaLivre :
 
     private val latestFilter = FilterList(
         listOf(
-            OrderByFilter(options = listOf("" to "updated")),
-            OrderDirectionFilter(options = listOf("" to "desc")),
+            OrderByFilter(options = listOf("" to SORT_UPDATED)),
+            OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
         ),
     )
 
@@ -130,14 +128,75 @@ abstract class MangaLivre :
 
     // ============================== Pages =======================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val dto = chapter.url.substringAfterLast("#").parseAs<ChapterReferenceDto>()
-        return GET("$apiUrl/mangas/${dto.mangaId}/chapters/${dto.chapterId}", headers)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        runBlocking {
+            getPageListWithWebView(chapter)
+        }
     }
 
-    override fun pageListParse(response: Response): List<Page> = response.parseJson<PageDto>().toPageList()
+    private suspend fun getPageListWithWebView(
+        chapter: SChapter,
+    ): List<Page> {
+        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
+        val ref = chapterUrl.fragment!!.parseAs<ChapterReferenceDto>()
+        val chapterNumber = chapterUrl.pathSegments.last { it.isNotEmpty() }
+        val readerUrl = chapterUrl.newBuilder().fragment(null).build().toString()
+        val imageUrls = Collections.synchronizedSet(LinkedHashSet<String>())
+        val bridgeName = (1..(10..20).random())
+            .map { (('a'..'z') + ('A'..'Z')).random() }
+            .joinToString("")
+        val collectImageUrlsScript = collectImageUrlsScript(bridgeName)
 
-    override fun imageUrlParse(response: Response): String = ""
+        fun collect(rawUrl: String) {
+            val imageUrl = rawUrl.toCdnImageUrl() ?: return
+            if (!imageUrl.isChapterImage(ref.mangaId, chapterNumber)) return
+            imageUrls.add(imageUrl)
+        }
+
+        try {
+            return runWebView(timeout = WEBVIEW_TIMEOUT) {
+                var previousCount = 0
+                var stablePolls = 0
+
+                javaScriptEnabled = true
+                domStorageEnabled = true
+
+                interceptRequest { request ->
+                    collect(request.url.toString())
+                    null
+                }
+                jsBridge(bridgeName) { payload ->
+                    payload.parseAs<List<String>>().forEach(::collect)
+                }
+                onPageFinished {
+                    evaluateJs(collectImageUrlsScript)
+                }
+                poll(1.seconds) {
+                    evaluateJs(collectImageUrlsScript)
+                    val currentCount = imageUrls.size
+                    if (currentCount > 0 && currentCount == previousCount) {
+                        stablePolls++
+                    } else {
+                        stablePolls = 0
+                    }
+                    previousCount = currentCount
+                    if (stablePolls >= STABLE_POLLS) {
+                        resolve(imageUrls.toPageList())
+                    }
+                }
+                loadUrl(readerUrl)
+            }
+        } catch (error: WebViewTimeoutException) {
+            if (imageUrls.isNotEmpty()) {
+                return imageUrls.toPageList()
+            }
+            throw error
+        }
+    }
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Filters =======================================
 
@@ -146,19 +205,19 @@ abstract class MangaLivre :
             OrderByFilter(
                 "Ordem",
                 listOf(
-                    "Mais Visualizados" to "popular",
-                    "Lançamentos" to "release",
-                    "Última Atualização" to "updated",
-                    "Melhor Avaliação" to "rating",
-                    "A-Z" to "title",
+                    "Mais Visualizados" to SORT_POPULAR,
+                    "Lançamentos" to SORT_RELEASE,
+                    "Última Atualização" to SORT_UPDATED,
+                    "Melhor Avaliação" to SORT_RATING,
+                    "A-Z" to SORT_TITLE,
                 ),
             ),
             Filter.Separator(),
             OrderDirectionFilter(
                 "Direção",
                 listOf(
-                    "↑ Decrescente" to "desc",
-                    "↓ Crescente" to "asc",
+                    "↑ Decrescente" to DIRECTION_DESC,
+                    "↓ Crescente" to DIRECTION_ASC,
                 ),
             ),
         ),
@@ -173,18 +232,14 @@ abstract class MangaLivre :
             title = "Titulo alternativo"
             summary = buildString {
                 append("Use titulos alternativos como principal quando disponivel.")
-                append(" Essa opção não tem efeito sobre obras já adicionadas na sua bibilioteca")
+                append(" Essa opção não tem efeito sobre obras já adicionadas na sua biblioteca")
             }
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
 
-    // ============================== Helper =======================================
+    // ============================== Utilities =======================================
 
-    /**
-     * Lê o corpo como JSON. Se vier HTML (página de despedida / redirecionamento do
-     * Cloudflare) ou vazio, falha com mensagem clara em vez de estourar no parser.
-     */
     private inline fun <reified T> Response.parseJson(): T {
         val peek = peekBody(MAX_PEEK).string().trimStart()
         if (peek.isEmpty() || peek.startsWith("<")) {
@@ -194,134 +249,71 @@ abstract class MangaLivre :
         return parseAs<T>()
     }
 
-    @Volatile
-    private var cachedToken: ClientToken? = null
-
-    @Volatile
-    private var cachedCandidates: List<ClientToken>? = null
-
-    private fun clientHeaderInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (request.url.host != baseUrlHost) {
-            return chain.proceed(request)
-        }
-
-        val token = currentToken()
-        val response = chain.proceed(request.withClientHeader(token))
-        if (response.code != 403 || !response.isOfficialAppError()) {
-            return response
-        }
-
-        // O header de cliente rotacionou. Redescobre os candidatos no bundle e testa
-        // cada um até a API parar de recusar, memorizando o que funcionar.
-        response.close()
-        for (candidate in refreshCandidates()) {
-            if (candidate == token) continue
-            val retry = chain.proceed(request.withClientHeader(candidate))
-            if (retry.code != 403 || !retry.isOfficialAppError()) {
-                cachedToken = candidate
-                return retry
-            }
-            retry.close()
-        }
-        return chain.proceed(request.withClientHeader(token))
-    }
-
-    private fun Request.withClientHeader(token: ClientToken): Request = newBuilder().header(token.header, token.value).build()
-
-    private fun currentToken(): ClientToken = cachedToken ?: synchronized(this) {
-        cachedToken ?: candidates().first().also { cachedToken = it }
-    }
-
-    private fun candidates(): List<ClientToken> = cachedCandidates ?: refreshCandidates()
-
-    private fun refreshCandidates(): List<ClientToken> = synchronized(this) {
-        scrapeCandidates().also { cachedCandidates = it }
-    }
-
-    /**
-     * O gate de "aplicativo oficial" (endpoints de leitura) exige um header de cliente que o
-     * front-end injeta no bundle, ofuscado e rotacionado todo dia (nome, valor, método e até
-     * base64/`atob`). Em vez de perseguir cada formato, coletamos TODO par de argumentos
-     * "literal"/`atob(...)` dos /assets, filtramos por forma de header e ranqueamos; o interceptor
-     * testa os candidatos contra o 403 "aplicativo oficial" até um funcionar e memoriza o vencedor.
-     */
-    private fun scrapeCandidates(): List<ClientToken> = try {
-        val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
-            .use { if (it.isSuccessful) it.body.string() else "" }
-        val assets = ASSET_REGEX.findAll(html).map { it.value }.distinct().toList()
-        val js = buildString {
-            assets.take(MAX_ASSETS).forEach { path ->
-                scrapeClient.newCall(GET("$baseUrl$path", headers)).execute()
-                    .use { if (it.isSuccessful) append(it.body.string()) }
-            }
-        }
-        extractCandidates(js)
-    } catch (_: Exception) {
-        listOf(DEFAULT_TOKEN)
-    }
-
-    private fun extractCandidates(js: String): List<ClientToken> {
-        val pairs = PAIR_REGEX.findAll(js)
-            .mapNotNull { m ->
-                val header = decodeArg(m.groupValues[1], m.groupValues[2]) ?: return@mapNotNull null
-                val value = decodeArg(m.groupValues[3], m.groupValues[4]) ?: return@mapNotNull null
-                val encoded = m.groupValues[2].isNotEmpty() || m.groupValues[4].isNotEmpty()
-                Triple(header, value, encoded)
-            }
-            .filter { isHeaderCandidate(it.first, it.second) }
-            .distinctBy { "${it.first}|${it.second}" }
-            .toList()
-        val ranked = pairs.sortedByDescending { score(it.second, it.third) }
-            .take(MAX_CANDIDATES)
-            .map { ClientToken(it.first, it.second) }
-        return (ranked + DEFAULT_TOKEN).distinct()
-    }
-
-    private fun decodeArg(literal: String, b64: String): String? = when {
-        literal.isNotEmpty() -> literal
-        b64.isNotEmpty() -> b64.decodeBase64()?.utf8()
-        else -> null
-    }
-
-    private fun isHeaderCandidate(header: String, value: String): Boolean {
-        if (!header.matches(HEADER_NAME_REGEX) || '-' !in header) return false
-        if (header.lowercase() in STANDARD_HEADERS) return false
-        return value.length <= MAX_VALUE_LEN && value.none { it.isWhitespace() }
-    }
-
-    private fun score(value: String, encoded: Boolean): Int {
-        var total = if (encoded) ENCODED_BONUS else 0
-        if (value.any { it.isDigit() }) total += 200
-        if ('-' in value) total += 100
-        return total + (MAX_VALUE_LEN - value.length).coerceAtLeast(0)
-    }
-
-    private fun Response.isOfficialAppError(): Boolean = try {
-        peekBody(MAX_PEEK).string().contains("aplicativo oficial", ignoreCase = true)
-    } catch (_: Exception) {
-        false
-    }
-
-    private data class ClientToken(val header: String, val value: String)
-
     companion object {
+        private const val STABLE_POLLS = 3
+        private val WEBVIEW_TIMEOUT = 90.seconds
+        private const val CDN_HOST = "cdn.toonlivre.net"
+        private const val PROXY_HOST = "slightly-free-mayfly.edgecompute.app"
+        private val PAGE_NUMBER_REGEX = Regex("""_(\d+)\.[^.]+$""")
+
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
         private const val MAX_PEEK = 1024L
-        private const val MAX_ASSETS = 8
-        private const val MAX_CANDIDATES = 16
-        private const val MAX_VALUE_LEN = 40
-        private const val ENCODED_BONUS = 1000
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("x-tly-quantum", "j55-zero-o")
-        private val STANDARD_HEADERS = setOf("content-type", "accept", "accept-language", "authorization", "x-csrf-token")
-        private val HEADER_NAME_REGEX = Regex("[A-Za-z][\\w.-]{1,40}")
-        private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
-        private const val ARG = "(?:\"([^\"]{1,60})\"|atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\))"
 
-        // O par header/valor pode vir como argumentos adjacentes (`("k","v")`) ou como
-        // propriedades de objeto (`{k:atob(..),v:atob(..)}`); tolera uma chave opcional entre eles.
-        private val PAIR_REGEX = Regex("$ARG\\s*,\\s*(?:\\w+\\s*:\\s*)?$ARG")
+        private const val SORT_POPULAR = "popular"
+        private const val SORT_RELEASE = "release"
+        private const val SORT_UPDATED = "updated"
+        private const val SORT_RATING = "rating"
+        private const val SORT_TITLE = "title"
+        private const val DIRECTION_DESC = "desc"
+        private const val DIRECTION_ASC = "asc"
     }
+
+    private fun collectImageUrlsScript(bridgeName: String) =
+        """
+        (() => {
+            const urls = new Set();
+            document.querySelectorAll('img').forEach((image) => {
+                [image.currentSrc, image.src, image.dataset.src].forEach((url) => {
+                    if (url) urls.add(url);
+                });
+            });
+            performance.getEntriesByType('resource').forEach((entry) => urls.add(entry.name));
+            $bridgeName.post(JSON.stringify(Array.from(urls)));
+        })();
+        """.trimIndent()
+
+    private fun String.toCdnImageUrl(): String? {
+        val url = toHttpUrlOrNull() ?: return null
+        val candidate = when (url.host) {
+            CDN_HOST -> url
+            PROXY_HOST -> url.queryParameter("url")?.toHttpUrlOrNull()
+            else -> null
+        } ?: return null
+
+        return candidate.takeIf { it.isHttps && it.host == CDN_HOST }?.toString()
+    }
+
+    private fun String.isChapterImage(mangaId: String, chapterNumber: String): Boolean {
+        val pathSegments = toHttpUrl().pathSegments
+        return pathSegments.size >= 4 &&
+            pathSegments[0] == "obras" &&
+            pathSegments[1] == mangaId &&
+            pathSegments[2] == chapterNumber &&
+            pathSegments[3].isNotEmpty()
+    }
+
+    private fun Set<String>.toPageList(): List<Page> = synchronized(this) {
+        val sortedUrls = sortedWith(
+            compareBy<String>({ it.pageNumber() ?: Int.MAX_VALUE }, { it }),
+        )
+        sortedUrls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+    }
+
+    private fun String.pageNumber(): Int? = toHttpUrl().pathSegments.lastOrNull()
+        ?.let(PAGE_NUMBER_REGEX::find)
+        ?.groupValues
+        ?.get(1)
+        ?.toIntOrNull()
 }

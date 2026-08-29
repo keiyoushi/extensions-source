@@ -25,18 +25,23 @@ jobs:
     timeout-minutes: 10
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
+      lint_modules: ${{ steps.generate-matrices.outputs.lint_modules }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
     steps:
       - name: Checkout PR
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Audit package names
+        run: |
+          python ./.github/scripts/audit-packages.py
+
       - id: generate-matrices
         name: Generate build matrices
         run: |
-          python ./.github/scripts/generate-build-matrices.py origin/main Release
+          python ./.github/scripts/generate-build-matrices.py origin/main
 
   build:
     name: Build extensions (${{ matrix.chunk.number }})
@@ -48,18 +53,18 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Checkout PR
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Java
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           java-version: 17
           distribution: temurin
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-read-only: true
 
@@ -67,39 +72,51 @@ jobs:
         env:
           MODULES: ${{ join(matrix.chunk.modules, ' ') }}
         run: |
-          ./gradlew $MODULES
+          TASKS=()
+          for module in $MODULES; do
+            TASKS+=("${module}:assembleRelease" "${module}:lintRelease")
+          done
+          ./gradlew "${TASKS[@]}"
 
       - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: "github.repository == 'keiyoushi/extensions-source'"
         with:
           name: "individual-apks-${{ matrix.chunk.number }}"
-          path: "**/*.apk"
+          path: |
+            **/build/outputs/apk/release/*.apk
+            **/build/outputs/jar/release/*.jar
           retention-days: 1
 
-  inspect:
-    name: Inspect extensions
-    needs: [prepare, build]
-    if: "github.repository == 'keiyoushi/extensions-source'"
+  lint-shared:
+    name: Lint shared modules
+    needs: prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    if: ${{ needs.prepare.outputs.lint_modules != '[]' }}
     steps:
-      - name: Download APK artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - name: Checkout PR
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          path: ~/apk-artifacts
+          persist-credentials: false
 
-      - name: Set up JDK
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           java-version: 17
           distribution: temurin
 
-      - name: Run inspector
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+
+      - name: Lint shared modules
+        env:
+          MODULES: ${{ join(fromJSON(needs.prepare.outputs.lint_modules), ' ') }}
         run: |
-          mkdir -p apk
-          find ~/apk-artifacts -name "*.apk" -type f -exec mv {} apk/ \;
-          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
-          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
-          java -jar ./Inspector.jar "apk" "output.json" "tmp"
-          jq . output.json
+          TASKS=()
+          for module in $MODULES; do
+            TASKS+=("${module}:lintRelease")
+          done
+          ./gradlew "${TASKS[@]}"

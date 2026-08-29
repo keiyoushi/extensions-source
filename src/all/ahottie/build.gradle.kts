@@ -1,13 +1,14 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "AHottie"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
-
+    libVersion = "1.6"
     source {
         lang = "all"
         baseUrl = "https://ahottie.top"

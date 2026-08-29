@@ -1,74 +1,100 @@
 package eu.kanade.tachiyomi.extension.ar.mangatek
 
-import kotlinx.serialization.KSerializer
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.descriptors.buildClassSerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
-
-class WrappedSerializer<T>(val dataSerializer: KSerializer<T>) : KSerializer<Wrapped<T>> {
-    override val descriptor: SerialDescriptor =
-        buildClassSerialDescriptor("Wrapped")
-
-    override fun deserialize(decoder: Decoder): Wrapped<T> {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("Expected Json Decoder")
-        val array = input.decodeJsonElement().jsonArray
-
-        // array[0] is the index, array[1] is the content
-        val index = array[0].jsonPrimitive.int
-        val value = input.json.decodeFromJsonElement(dataSerializer, array[1])
-
-        return Wrapped(index, value)
-    }
-
-    override fun serialize(encoder: Encoder, value: Wrapped<T>) = throw SerializationException("Serialization is not supported")
-}
-
-@Serializable(with = WrappedSerializer::class)
-class Wrapped<T>(
-    val index: Int,
-    val value: T,
-)
+import kotlin.time.Instant
 
 @Serializable
-class MangaWrapper(
-    val manga: Wrapped<MangaData>,
+class MangaDto(
+    val manga: MangaData,
 )
 
 @Serializable
 class MangaData(
+    private val title: String,
+    private val description: String,
+    @SerialName("cover_image")
+    private val cover: String,
+    private val status: String,
+    @SerialName("Tags")
+    private val tags: List<Tag>,
+    private val author: String,
     @SerialName("MangaChapters")
-    val mangaChapters: Wrapped<List<Wrapped<ChapterItem>>>,
-)
-
-@Serializable
-class ChapterItem(
-    @SerialName("chapter_number") val chapterNumber: Wrapped<String>,
-    val title: Wrapped<String?>,
-    @SerialName("created_at") val createdAt: Wrapped<String?>,
-)
-
-@Serializable
-class PageDTO(
-    val imageUrl: String,
-    val bubbles: List<Bubble> = emptyList(),
+    val chapters: List<Chapter>,
 ) {
-    fun hasSpeechBubbles() = bubbles.isNotEmpty()
+
+    fun toSManga(url: String) = SManga.create().apply {
+        this.url = url
+        title = this@MangaData.title
+        description = this@MangaData.description
+        genre = tags.map { it.name }.joinToString()
+        thumbnail_url = cover
+        status = when (this@MangaData.status) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "hiatus" -> SManga.ON_HIATUS
+            "cancelled", "dropped" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+        author = this@MangaData.author.takeUnless {
+            it.isEmpty() || it.equals("unknown", true)
+        }
+    }
 }
 
 @Serializable
+class Chapter(
+    private val title: String?,
+    @SerialName("chapter_number")
+    private val chapterNumber: String,
+    @SerialName("created_at")
+    private val createdAt: String,
+) {
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+        name = this@Chapter.title?.takeIf {
+            it.isNotBlank()
+        } ?: "Chapter $chapterNumber"
+        url = "/reader/$mangaSlug/$chapterNumber"
+        date_upload = Instant.tryParse(createdAt)
+    }
+}
+
+@Serializable
+class Tag(
+    val name: String,
+)
+
+@Serializable
+class OverlayData(
+    val pages: List<OverlayPage> = emptyList(),
+)
+
+@Serializable
+class OverlayPage(
+    @SerialName("page_number") val pageNumber: Int,
+    val overlays: List<Bubble> = emptyList(),
+)
+
+@Serializable
 class Bubble(
-    val text: String = "",
-    val left: Float = 0.0f,
-    val top: Float = 0.0f,
-    val width: Float = 0.0f,
-    val height: Float = 0.0f,
-    val angle: Float = 0.0f,
+    val text: String,
+    val x: Float,
+    val y: Float,
+    val w: Float,
+    val h: Float,
+    val angle: Float = 0f,
+    val color: String = "#000000",
+    @SerialName("stroke_color") val strokeColor: String = "#ffffff",
+    @SerialName("font_size_px") val fontSizePx: Float = 37.3f,
+    @SerialName("line_height") val lineHeight: Float = 1.1f,
+    @SerialName("stroke_width_px") val strokeWidthPx: Float = 3f,
+)
+
+@Serializable
+class ChapterProps(
+    val imageUrls: List<String>,
+    val overlayBlob: String?,
 )

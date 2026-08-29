@@ -1,15 +1,21 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "vgperson"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://vgperson.com/other/mangaviewer.php"
+        baseUrl = "https://vgperson.com"
+    }
+
+    deeplink {
+        path("/other/mangaviewer.php")
     }
 }

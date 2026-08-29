@@ -1,11 +1,13 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Celestial Moon"
-    versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    versionCode = 2
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
 
@@ -15,9 +17,4 @@ keiyoushi {
         // ZeistManga -> MangaThemesia
         versionId = 2
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

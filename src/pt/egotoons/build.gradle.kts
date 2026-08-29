@@ -1,16 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Ego Toons"
-    versionCode = 8
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    versionCode = 9
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://www.egotoons.com"
+        baseUrl = "https://egotoons.com"
         versionId = 3
     }
 }

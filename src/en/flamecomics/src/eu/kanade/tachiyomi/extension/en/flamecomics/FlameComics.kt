@@ -175,8 +175,22 @@ abstract class FlameComics : HttpSource() {
             json.decodeFromString<MangaDetailsResponseData>(response.body.string()).pageProps.series
         title = seriesData.title
         thumbnail_url = thumbnailUrl(seriesData)
-        description = seriesData.description
+
+        val synopsis = seriesData.description
             ?.let { Jsoup.parseBodyFragment(it).wholeText() }
+            .orEmpty()
+        val altNames = seriesData.altTitles.orEmpty()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+        description = buildString {
+            append(synopsis)
+            if (altNames.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                append(ALT_NAME)
+                altNames.forEach { name -> append("\n- $name") }
+            }
+        }.takeIf { it.isNotEmpty() }
 
         genre = seriesData.tags?.let { tags ->
             (listOf(seriesData.type) + tags).joinToString()
@@ -362,5 +376,6 @@ abstract class FlameComics : HttpSource() {
         private const val COMPOSED_SUFFIX = "?comp"
         private val MEDIA_TYPE = "image/png".toMediaType()
         private const val THUMBNAIL_FRAGMENT = "thumbnail"
+        private const val ALT_NAME = "Alternative Names:"
     }
 }

@@ -2,98 +2,91 @@ package eu.kanade.tachiyomi.extension.en.webdexscans
 
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.utils.extractNextJs
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.boolean
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonObject
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class WebdexScans :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
-
-    // Hardcode versionId to force users to migrate their old Madara entries.
 
     private val preferences by getPreferencesLazy()
 
     private val supabaseUrl = "https://nrqghtbdrdnoywxjkgkf.supabase.co/rest/v1"
     private val supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycWdodGJkcmRub3l3eGprZ2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4Njg4NDEsImV4cCI6MjA5MjQ0NDg0MX0.Gnrn33_LMxFA9m_OdCpybBZ-Cjcc5rdsJlD8Y9eOICg"
 
-    private val supabaseHeaders by lazy {
-        headersBuilder()
+    private val supabaseHeaders: Headers
+        get() = headersBuilder()
             .add("apikey", supabaseApiKey)
             .add("authorization", "Bearer $supabaseApiKey")
             .add("Accept", "application/json")
             .build()
-    }
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val offset = (page - 1) * 24
         val url = "$supabaseUrl/series".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "title,slug,cover_url")
+            .addQueryParameter("select", "id,title,slug,cover_url")
             .addQueryParameter("order", "view_count.desc")
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", "24")
             .build()
-        return GET(url, supabaseHeaders)
+
+        return mangaListParse(client.get(url, supabaseHeaders))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<List<SearchSeriesDto>>().map { it.toSManga(baseUrl) }
-        return MangasPage(mangas, mangas.size == 24)
+    private fun mangaListParse(response: Response): MangasPage {
+        val mangaList = response.parseAs<List<SearchSeriesDto>>().map { it.toSManga(baseUrl) }
+        return MangasPage(mangaList, mangaList.size == 24)
     }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val offset = (page - 1) * 24
         val url = "$supabaseUrl/series".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "title,slug,cover_url")
+            .addQueryParameter("select", "id,title,slug,cover_url")
             .addQueryParameter("order", "updated_at.desc")
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", "24")
             .build()
-        return GET(url, supabaseHeaders)
-    }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+        return mangaListParse(client.get(url, supabaseHeaders))
+    }
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val offset = (page - 1) * 24
         val url = "$supabaseUrl/series".toHttpUrl().newBuilder()
 
         val genreSlug = filters.firstInstanceOrNull<GenreFilter>()?.selected
         if (genreSlug != null) {
-            url.addQueryParameter("select", "title,slug,cover_url,genres!inner(slug)")
+            url.addQueryParameter("select", "id,title,slug,cover_url,genres!inner(slug)")
             url.addQueryParameter("genres.slug", "eq.$genreSlug")
         } else {
-            url.addQueryParameter("select", "title,slug,cover_url")
+            url.addQueryParameter("select", "id,title,slug,cover_url")
         }
 
         if (query.isNotEmpty()) {
@@ -118,59 +111,126 @@ abstract class WebdexScans :
         url.addQueryParameter("offset", offset.toString())
         url.addQueryParameter("limit", "24")
 
-        return GET(url.build(), supabaseHeaders)
+        return mangaListParse(client.get(url.build(), supabaseHeaders))
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.getOrNull(0) != "series") {
+            return null
+        }
+
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        val apiUrl = "$supabaseUrl/series".toHttpUrl().newBuilder()
+            .addQueryParameter("slug", "eq.$slug")
+            .addQueryParameter("select", "*,genres(name)")
+            .build()
+
+        val series = client.get(apiUrl, supabaseHeaders).parseAs<List<SeriesInfo>>().firstOrNull() ?: return null
+        return series.toSManga(baseUrl)
+    }
 
     // ============================= Utilities =============================
 
-    private fun Response.extractSeriesPayload(): SeriesPayload = extractNextJs<SeriesPayload> {
-        it is JsonObject && "initialSeries" in it && "initialChapters" in it
-    } ?: throw Exception("Failed to extract series payload")
-
-    // ============================== Details ==============================
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val payload = response.extractSeriesPayload()
-        return payload.initialSeries.toSManga(baseUrl, payload.initialGenres)
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = manga.memo["slug"]?.string
+            ?: throw Exception("Series slug missing (try refreshing)")
+        return "$baseUrl/series/$slug"
     }
 
-    // ============================= Chapters ==============================
+    override fun getChapterUrl(chapter: SChapter): String {
+        val seriesSlug = chapter.memo["seriesSlug"]?.string
+            ?: throw Exception("Chapter missing series slug (try refreshing)")
+        val chapterSlug = chapter.memo["slug"]?.string
+            ?: throw Exception("Chapter slug missing (try refreshing)")
+        return "$baseUrl/series/$seriesSlug/$chapterSlug"
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val payload = response.extractSeriesPayload()
+    // ============================== Updates ==============================
 
-        val seriesSlug = payload.initialSeries.slug
-        val showPremium = preferences.getBoolean(PREF_SHOW_PREMIUM, false)
-
-        val chapters = payload.initialChapters ?: emptyList()
-        val filteredChapters = if (showPremium) {
-            chapters
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val seriesDeferred = if (fetchDetails) {
+            async {
+                val url = "$supabaseUrl/series".toHttpUrl().newBuilder()
+                    .addQueryParameter("id", "eq.${manga.url}")
+                    .addQueryParameter("select", "*,genres(name)")
+                    .build()
+                client.get(url, supabaseHeaders).parseAs<List<SeriesInfo>>().firstOrNull()
+            }
         } else {
-            chapters.filterNot { it.isPremium }
+            null
         }
 
-        return filteredChapters.map { it.toSChapter(seriesSlug, dateFormat) }
+        val chaptersDeferred = if (fetchChapters) {
+            async {
+                val url = "$supabaseUrl/chapters".toHttpUrl().newBuilder()
+                    .addQueryParameter("series_id", "eq.${manga.url}")
+                    .addQueryParameter("select", "id,chapter_number,title,slug,created_at,is_premium,free_at,series(slug)")
+                    .addQueryParameter("order", "chapter_number.desc")
+                    .build()
+                client.get(url, supabaseHeaders).parseAs<List<ChapterInfo>>()
+            }
+        } else {
+            null
+        }
+
+        val series = seriesDeferred?.await()
+        val chapterInfos = chaptersDeferred?.await()
+
+        val seriesSlug = series?.slug
+            ?: chapterInfos?.firstOrNull()?.seriesSlug
+            ?: manga.memo["slug"]?.string
+            ?: throw Exception("Failed to resolve series slug (try refreshing)")
+
+        val newManga = (series?.toSManga(baseUrl) ?: manga).apply {
+            updateSeriesSlug(seriesSlug)
+        }
+
+        val updatedChapters = if (fetchChapters && chapterInfos != null) {
+            val showPremium = preferences.getBoolean(PREF_SHOW_PREMIUM, false)
+            val filtered = if (showPremium) {
+                chapterInfos
+            } else {
+                chapterInfos.filterNot { it.isPremium() }
+            }
+            filtered.map { it.toSChapter(seriesSlug) }
+        } else {
+            chapters
+        }
+
+        SMangaUpdate(
+            manga = newManga,
+            chapters = updatedChapters,
+        )
     }
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val payload = response.extractNextJs<PagesPayload> {
-            it is JsonObject && "initialPages" in it
-        } ?: throw Exception("Failed to extract pages payload")
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val isLocked = chapter.memo["isLocked"]?.boolean == true
+        if (isLocked) {
+            return emptyList()
+        }
 
-        return payload.initialPages.mapIndexed { i, page ->
+        val url = "$supabaseUrl/pages".toHttpUrl().newBuilder()
+            .addQueryParameter("chapter_id", "eq.${chapter.url}")
+            .addQueryParameter("select", "image_url,page_number")
+            .addQueryParameter("order", "page_number.asc")
+            .build()
+
+        val pages = client.get(url, supabaseHeaders).parseAs<List<PageInfo>>()
+        return pages.mapIndexed { i, page ->
             Page(i, imageUrl = page.imageUrl.toAbsoluteUrl(baseUrl))
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         GenreFilter(),
         TypeFilter(),
         StatusFilter(),

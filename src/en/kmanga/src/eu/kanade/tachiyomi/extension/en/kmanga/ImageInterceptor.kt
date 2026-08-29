@@ -17,19 +17,19 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val fragment = request.url.fragment
 
-        if (!response.isSuccessful || fragment.isNullOrEmpty() || !fragment.startsWith("scramble_seed=")) {
+        if (!response.isSuccessful || fragment.isNullOrEmpty() || !fragment.contains(":")) {
             return response
         }
 
-        val seed = fragment.substringAfter("scramble_seed=").toLong()
+        val (seed, titleId, episodeId) = fragment.split(":")
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
-        val result = unscramble(bitmap, seed)
+        val result = unscramble(bitmap, seed, titleId.toInt(), episodeId.toInt())
 
         bitmap.recycle()
         val buffer = Buffer()
         result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
         result.recycle()
-        val body = buffer.asResponseBody("image/jpeg".toMediaType(), buffer.size)
+        val body = buffer.asResponseBody(MEDIA_TYPE, buffer.size)
 
         return response.newBuilder()
             .body(body)
@@ -39,35 +39,53 @@ class ImageInterceptor : Interceptor {
     private class Coord(val x: Int, val y: Int)
     private class CoordPair(val source: Coord, val dest: Coord)
 
-    private fun xorshift32(seed: UInt): UInt {
-        var n = seed
+    private fun UInt.xorshift32(): UInt {
+        var n = this
         n = n xor (n shl 13)
         n = n xor (n shr 17)
         n = n xor (n shl 5)
         return n
     }
 
-    private fun getUnscrambledCoords(seed: Long): List<CoordPair> {
-        var seed32 = seed.toUInt()
+    private fun getUnscrambledCoords(seed: String, titleId: Int, episodeId: Int): List<CoordPair> {
+        // WASM decrypts two 10-byte arrays to use as substitution charsets.
+        // Selects the charset based on titleId % 2
+        val charset = if (titleId % 2 == 0) CHARSET_EVEN else CHARSET_ODD
+
+        var parsedInt = 0UL
+
+        // Maps the string into a base-10 number using the selected charset
+        for (char in seed) {
+            val index = charset.indexOf(char)
+            if (index != -1) {
+                parsedInt = parsedInt * 10UL + index.toULong()
+            } else {
+                break
+            }
+        }
+
+        // The final 32-bit seed is xor'd against the sum of titleId and episodeId
+        var seed32 = parsedInt.toUInt() xor (titleId.toUInt() + episodeId.toUInt())
+
         val pairs = mutableListOf<Pair<UInt, Int>>()
 
         for (i in 0 until 16) {
-            seed32 = xorshift32(seed32)
+            seed32 = seed32.xorshift32()
             pairs.add(seed32 to i)
         }
 
         pairs.sortBy { it.first }
-        val sortedVal = pairs.map { it.second }
 
-        return sortedVal.mapIndexed { i, e ->
+        return pairs.mapIndexed { destIndex, (_, sourceIndex) ->
             CoordPair(
-                source = Coord(x = e % 4, y = e / 4),
-                dest = Coord(x = i % 4, y = i / 4),
+                source = Coord(x = sourceIndex % GRID_SIZE, y = sourceIndex / GRID_SIZE),
+                dest = Coord(x = destIndex % GRID_SIZE, y = destIndex / GRID_SIZE),
             )
         }
     }
 
-    private fun unscramble(image: Bitmap, seed: Long): Bitmap {
+    private fun unscramble(image: Bitmap, seed: String, titleId: Int, episodeId: Int): Bitmap {
+        val unscrambledCoords = getUnscrambledCoords(seed, titleId, episodeId)
         val width = image.width
         val height = image.height
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -77,8 +95,6 @@ class ImageInterceptor : Interceptor {
         val blockHeight = (height / 8 * 8) / 4
         val srcRect = Rect()
         val dstRect = Rect()
-
-        val unscrambledCoords = getUnscrambledCoords(seed)
 
         unscrambledCoords.forEach {
             val srcX = it.source.x * blockWidth
@@ -91,6 +107,26 @@ class ImageInterceptor : Interceptor {
 
             canvas.drawBitmap(image, srcRect, dstRect, null)
         }
+
+        val processedWidth = blockWidth * GRID_SIZE
+        val processedHeight = blockHeight * GRID_SIZE
+
+        if (width > processedWidth) {
+            srcRect.set(processedWidth, 0, width, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+        if (height > processedHeight) {
+            srcRect.set(0, processedHeight, processedWidth, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+
         return result
+    }
+
+    companion object {
+        private val MEDIA_TYPE = "image/jpeg".toMediaType()
+        private const val GRID_SIZE = 4
+        private const val CHARSET_EVEN = "we7ru3ty8i"
+        private const val CHARSET_ODD = "h4xm9bqz1p"
     }
 }

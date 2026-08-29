@@ -1,12 +1,14 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Rawdevart.art"
-    versionCode = 4
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    versionCode = 5
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "ja"

@@ -17,7 +17,6 @@ import rx.Observable
 
 @Source
 abstract class MayoTune : HttpSource() {
-    override val versionId: Int = 1
 
     private val chapterEndpoint: String get() = if (lang == "ja") "raw" else ""
 

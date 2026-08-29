@@ -74,3 +74,11 @@ class ComikeyNameWrapper(
 class ComikeyAuthor(
     val name: String,
 )
+
+@Serializable
+class Payload(
+    val manifestUrl: String?,
+    val act: String?,
+    val manifest: ComikeyEpisodeManifest?,
+    val error: String?,
+)

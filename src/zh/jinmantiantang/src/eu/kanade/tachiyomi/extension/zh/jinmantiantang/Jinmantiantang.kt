@@ -31,12 +31,10 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-open class Jinmantiantang :
+abstract class Jinmantiantang :
     HttpSource(),
     ConfigurableSource {
 
-    override val lang: String = "zh"
-    override val name: String = "禁漫天堂"
     override val supportsLatest: Boolean = true
 
     private val preferences = getPreferences { preferenceMigration() }
@@ -85,7 +83,7 @@ open class Jinmantiantang :
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val children = element.children()
-        if (children.isNotEmpty() && children[0].tagName() == "a") children.removeFirst()
+        if (children.isNotEmpty() && children[0].tagName() == "a") children.removeAt(0)
         if (children.size >= 4) {
             title = children[1].text()
             children[0].selectFirst("a")?.attr("href")?.let { setUrlWithoutDomain(it) }

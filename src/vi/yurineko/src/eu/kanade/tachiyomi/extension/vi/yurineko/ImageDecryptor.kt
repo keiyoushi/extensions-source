@@ -4,7 +4,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
+import okio.Source
+import okio.Timeout
+import okio.buffer
 import java.util.Base64
 
 object ImageDecryptor {
@@ -20,12 +24,15 @@ object ImageDecryptor {
         if (!request.url.encodedPath.startsWith("/api/img")) return response
 
         val key = request.header(IMAGE_KEY_HEADER) ?: return response
-        val encrypted = response.body.bytes()
-        val decrypted = xorDecrypt(encrypted, key)
+        val keyBytes = key.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        if (keyBytes.isEmpty()) return response
+
+        val encrypted = response.body.source()
         val contentType = response.header(CONTENT_TYPE_HEADER) ?: DEFAULT_CONTENT_TYPE
+        val decrypted = xorSource(encrypted, keyBytes)
 
         return response.newBuilder()
-            .body(decrypted.toResponseBody(contentType.toMediaType()))
+            .body(decrypted.buffer().asResponseBody(contentType.toMediaType(), response.body.contentLength()))
             .build()
     }
 
@@ -41,10 +48,24 @@ object ImageDecryptor {
         return decoded.substringAfter('|', "").takeIf { it.isNotBlank() }
     }
 
-    private fun xorDecrypt(data: ByteArray, hexKey: String): ByteArray {
-        val keyBytes = hexKey.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        return ByteArray(data.size) { i ->
-            (data[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte()
+    private fun xorSource(source: Source, keyBytes: ByteArray): Source = object : Source {
+        private var offset = 0L
+
+        override fun read(sink: Buffer, byteCount: Long): Long {
+            val encrypted = Buffer()
+            val bytesRead = source.read(encrypted, byteCount)
+            if (bytesRead == -1L) return -1L
+
+            repeat(bytesRead.toInt()) { index ->
+                val keyIndex = ((offset + index) % keyBytes.size).toInt()
+                sink.writeByte(encrypted.readByte().toInt() xor keyBytes[keyIndex].toInt())
+            }
+            offset += bytesRead
+            return bytesRead
         }
+
+        override fun timeout(): Timeout = source.timeout()
+
+        override fun close() = source.close()
     }
 }

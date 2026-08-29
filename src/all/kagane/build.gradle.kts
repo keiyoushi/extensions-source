@@ -1,12 +1,14 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Kagane"
-    versionCode = 26
-    contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    versionCode = 31
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     listOf("en", "ja", "ko", "zh", "es", "es-419", "fr", "de", "pt", "pt-BR", "ru", "it", "id", "vi", "th", "pl", "hi", "ar").forEach {
         source {
@@ -14,9 +16,8 @@ keiyoushi {
             baseUrl = "https://kagane.to"
         }
     }
-}
 
-dependencies {
-
-    compileOnly("com.squareup.okhttp3:okhttp-brotli:5.0.0-alpha.11")
+    deeplink {
+        path("/series/..*")
+    }
 }

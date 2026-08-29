@@ -1,12 +1,13 @@
 package eu.kanade.tachiyomi.extension.fr.mangascantrad
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraBase.ChapterMode
 import keiyoushi.annotation.Source
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class MangaScantrad : Madara() {
-    override val dateFormat = SimpleDateFormat("d MMM yyyy", Locale.FRANCE)
-    override val useNewChapterEndpoint: Boolean = true
+    override val chapterMode = ChapterMode.MangaAjax
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRANCE)
 }

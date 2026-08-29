@@ -1,11 +1,13 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Honeytoon"
-    versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    versionCode = 3
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     listOf("de", "en", "es", "fr", "it", "pt-BR").forEach {
@@ -27,7 +29,5 @@ keiyoushi {
 }
 
 dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
     implementation(project(":lib:i18n"))
 }

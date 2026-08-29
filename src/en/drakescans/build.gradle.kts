@@ -1,18 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Drake Scans"
-    versionCode = 16
+    versionCode = 48
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "mangathemesia"
+    libVersion = "1.6"
+    theme = "vinetheme"
 
     source {
         lang = "en"
-        baseUrl = "https://drakecomic.org"
-        // madara -> mangathemesia
-        versionId = 2
+        baseUrl = "https://drakecomic.net"
+        versionId = 3
     }
 }

@@ -1,17 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "AllHentai"
-    versionCode = 25
+    versionCode = 26
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "grouple"
 
     source {
-        baseUrl("https://20.allhen.online") {
-            withCustom = true
+        baseUrl {
+            custom("https://20.allhen.online")
         }
         lang = "ru"
         id = 1809051393403180443L

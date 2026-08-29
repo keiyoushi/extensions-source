@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -10,8 +12,8 @@ keiyoushi {
 
     source {
         lang = "all"
-        baseUrl("http://localhost:9999") {
-            withCustom = true
+        baseUrl {
+            custom("http://localhost:9999")
         }
     }
 }
