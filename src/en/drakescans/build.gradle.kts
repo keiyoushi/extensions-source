@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Drake Scans"
-    versionCode = 16
+    versionCode = 48
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "vinetheme"
