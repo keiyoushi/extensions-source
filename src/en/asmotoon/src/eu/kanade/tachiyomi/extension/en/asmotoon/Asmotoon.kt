@@ -5,25 +5,22 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import org.jsoup.nodes.Document
+import okhttp3.OkHttpClient
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Asmotoon : Keyoapp() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val client = super
-        .client
-        .newBuilder()
-        .rateLimit(3, 5.seconds) { it.host == baseUrlHost }
-        .build()
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    // filtering novel entries
-    override fun popularMangaSelector() = "div:contains(Trending) + div .group:not([data-type=novel])"
-    override fun latestUpdatesSelector() = ".group:not([data-type=novel])"
-    override fun searchMangaSelector() = ".group:not([data-type=novel])"
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(3, 5.seconds) { it.host == baseUrlHost }
+    }
+
+    override fun popularMangaSelector() = "div:contains(Trending) + div .group"
+    override fun latestUpdatesSelector() = ".group"
+    override fun searchMangaSelector() = latestUpdatesSelector()
 
     override val genreSelector: String = ".gap-3 .gap-1 a"
 
@@ -39,27 +36,6 @@ abstract class Asmotoon : Keyoapp() {
     }
 
     override fun getMangaUrl(manga: SManga): String = super.getMangaUrl(manga.fix())
-
-    override fun chapterListRequest(manga: SManga): Request = super.chapterListRequest(manga.fix())
-
-    override fun mangaDetailsRequest(manga: SManga): Request = super.mangaDetailsRequest(manga.fix())
-
-    override fun relatedMangaListRequest(manga: SManga): Request = super.relatedMangaListRequest(manga.fix())
-
-    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
-        genre = buildList {
-            document.selectFirst(typeSelector)?.text()?.replaceFirstChar {
-                if (it.isLowerCase()) {
-                    it.titlecase(
-                        Locale.ENGLISH,
-                    )
-                } else {
-                    it.toString()
-                }
-            }?.let(::add)
-            document.select(genreSelector).forEach { add(it.text().removeSuffix(",")) }
-        }.joinToString()
-    }
 
     companion object {
         private val OLD_CHAPTER_SLUG_REGEX = "(?<=/series/)[0-9a-f]{11}(?=/)".toRegex()
