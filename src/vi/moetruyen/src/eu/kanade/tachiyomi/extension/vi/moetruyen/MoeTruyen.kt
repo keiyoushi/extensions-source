@@ -484,15 +484,15 @@ abstract class MoeTruyen : KeiSource() {
     private fun ByteArray.base64UrlNoPadding(): String = Base64.encodeToString(this, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
 
     private fun imgxInterceptor() = Interceptor { chain ->
-        val originalRequest = chain.request()
-        val url = originalRequest.url.toString()
+        val request = chain.request()
+        val url = request.url.toString()
         val entry = imgxGrants.remove(url)
 
         if (entry?.grant == null) {
-            return@Interceptor chain.proceed(originalRequest)
+            return@Interceptor chain.proceed(request)
         }
 
-        val response = chain.proceed(originalRequest)
+        val response = chain.proceed(request)
         val source = response.body.source()
 
         if (!source.request(14) ||
