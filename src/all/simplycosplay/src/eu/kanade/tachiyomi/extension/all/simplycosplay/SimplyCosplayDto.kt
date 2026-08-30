@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.all.simplycosplay
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.util.Locale
 
 typealias browseResponse = Data<List<BrowseItem>>
@@ -25,7 +27,11 @@ data class BrowseItem(
         title = this@BrowseItem.title ?: ""
         url = "/${type.lowercase().trim()}/new/$slug"
         thumbnail_url = preview.urls.thumb.url
-        description = preview.publish_date?.let { "Date: $it" }
+        preview.publish_date?.let {
+            memo = buildJsonObject {
+                put("date", it)
+            }
+        }
     }
 }
 
@@ -80,7 +86,11 @@ data class DetailsResponse(
         description = buildString {
             append("Type: $type\n")
             image_count?.let { append("Images: $it\n") }
-            preview.publish_date?.let { append("Date: $it\n") }
+        }
+        preview.publish_date?.let {
+            memo = buildJsonObject {
+                put("date", it)
+            }
         }
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         status = SManga.COMPLETED

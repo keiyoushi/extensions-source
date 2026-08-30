@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.simplycosplay
 
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -12,43 +11,39 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.getStringOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
 abstract class SimplyCosplay :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val apiUrl = "https://api.simply-porn.com/v2".toHttpUrl()
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(::tokenIntercept)
-        .rateLimit(2)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
-
-    private val json: Json by injectLazy()
-
     private val preference by getPreferencesLazy()
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(::tokenIntercept)
+        rateLimit(2)
+    }
 
     private fun tokenIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -110,62 +105,46 @@ abstract class SimplyCosplay :
         addQueryParameter("page", page.toString())
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = browseUrlBuilder(preference.getDefaultBrowse(), "hot", page)
-
-        return GET(url.build(), headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        runCatching { fetchTags() }
-
-        val result = response.parseAs<browseResponse>()
-
-        val entries = result.data.map(BrowseItem::toSManga)
-        val hasNextPage = result.data.size >= LIMIT
+    private fun browseResponse.toMangasPage(): MangasPage {
+        val entries = data.map(BrowseItem::toSManga)
+        val hasNextPage = data.size >= LIMIT
 
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = browseUrlBuilder(preference.getDefaultBrowse(), "hot", page)
+
+        return client.get(url.build()).parseAs<browseResponse>().toMangasPage()
+    }
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = browseUrlBuilder(preference.getDefaultBrowse(), "new", page)
 
-        return GET(url.build(), headers)
+        return client.get(url.build()).parseAs<browseResponse>().toMangasPage()
     }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host !in listOf("simply-cosplay.com", "www.simply-cosplay.com")) {
+            return null
+        }
+        if (url.pathSegments.size < 3) {
+            return null
+        }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host !in listOf("simply-cosplay.com", "www.simply-cosplay.com")) {
-                throw Exception("Unsupported url")
-            }
-            if (url.pathSegments.size < 3) {
-                throw Exception("Unsupported url")
-            }
-            val newQuery = "$SEARCH_PREFIX/${url.pathSegments[0]}/new/${url.pathSegments[2]}"
-            return fetchSearchManga(page, newQuery, filters)
-        }
-        return if (query.startsWith(SEARCH_PREFIX)) {
-            val url = query.substringAfter(SEARCH_PREFIX)
-            val manga = SManga.create().apply { this.url = url }
-            fetchMangaDetails(manga).map {
-                MangasPage(listOf(it), false)
-            }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+        val mangaUrl = "/${url.pathSegments[0]}/new/${url.pathSegments[2]}"
+
+        return fetchMangaDetails(mangaUrl)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sort = filters.filterIsInstance<SortFilter>().firstOrNull()?.getSort() ?: "new"
 
         val url = browseUrlBuilder("search", sort, page).apply {
             if (query.isNotEmpty()) {
                 addQueryParameter("query", query)
             }
-            filters.map { filter ->
+            filters.forEach { filter ->
                 when (filter) {
                     is TagFilter -> {
                         filter.getSelected().forEachIndexed { index, tag ->
@@ -189,45 +168,7 @@ abstract class SimplyCosplay :
             }
         }
 
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-
-    private var tagList: List<String> = emptyList()
-    private var tagsFetchAttempt = 0
-    private var tagsFetchFailed = false
-
-    private fun fetchTags() {
-        if (tagsFetchAttempt < 3 && (tagList.isEmpty() || tagsFetchFailed)) {
-            val tags = runCatching {
-                client.newCall(tagsRequest())
-                    .execute().use(::tagsParse)
-            }
-
-            tagsFetchFailed = tags.isFailure
-            tagList = tags.getOrElse {
-                Log.e("SimplyHentaiTags", it.stackTraceToString())
-                emptyList()
-            }
-            tagsFetchAttempt++
-        }
-    }
-
-    private fun tagsRequest(): Request {
-        val url = apiUrl.newBuilder()
-            .addPathSegment("search")
-            .build()
-
-        return GET(url, headers)
-    }
-
-    private fun tagsParse(response: Response): List<String> {
-        val result = response.parseAs<TagsResponse>()
-
-        return result.aggs.tag_names.buckets.map {
-            it.key.trim()
-        }
+        return client.get(url.build()).parseAs<browseResponse>().toMangasPage()
     }
 
     class Tag(name: String) : Filter.CheckBox(name)
@@ -247,19 +188,25 @@ abstract class SimplyCosplay :
         fun getSort() = sorts[state].lowercase()
     }
 
-    override fun getFilterList(): FilterList {
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val url = apiUrl.newBuilder().addPathSegment("search").build()
+        val result = client.get(url).parseAs<TagsResponse>()
+
+        return result.aggs.tag_names.buckets.map { it.key.trim() }.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filters: MutableList<Filter<*>> = mutableListOf(
             SortFilter("Sort", listOf("New", "Hot")),
             TypeFilter("Type", listOf("", "Image", "Gallery")),
         )
 
-        if (tagList.isNotEmpty()) {
+        val tagList = data?.let { runCatching { it.parseAs<List<String>>() }.getOrNull() }
+
+        if (!tagList.isNullOrEmpty()) {
             filters += TagFilter("Tags", tagList)
-        } else {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header("Press 'Reset' to attempt to show tags"),
-            )
         }
 
         return FilterList(filters)
@@ -276,57 +223,49 @@ abstract class SimplyCosplay :
         }
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = mangaUrlBuilder(manga.url)
+    private suspend fun fetchMangaDetails(mangaUrl: String): SManga {
+        val url = mangaUrlBuilder(mangaUrl)
 
-        return GET(url.build(), headers)
+        return client.get(url.build()).parseAs<detailsResponse>().data.toSManga()
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<detailsResponse>()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedManga = if (fetchDetails) fetchMangaDetails(manga.url) else manga
 
-        return result.data.toSManga()
-    }
-
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
-        listOf(
-            SChapter.create().apply {
-                url = manga.url
-                name = manga.url.split("/")[1].replaceFirstChar {
-                    if (it.isLowerCase()) {
-                        it.titlecase(
-                            Locale.ROOT,
-                        )
-                    } else {
-                        it.toString()
+        val updatedChapters = if (fetchChapters) {
+            listOf(
+                SChapter.create().apply {
+                    url = manga.url
+                    name = manga.url.split("/")[1].replaceFirstChar {
+                        if (it.isLowerCase()) {
+                            it.titlecase(Locale.ROOT)
+                        } else {
+                            it.toString()
+                        }
                     }
-                }
-                date_upload = manga.description?.substringAfterLast("Date: ").parseDate()
-            },
-        ),
-    )
+                    date_upload = updatedManga.memo.getStringOrNull("date").parseDate()
+                },
+            )
+        } else {
+            chapters
+        }
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = mangaUrlBuilder(chapter.url)
-
-        return GET(url.build(), headers)
+        return SMangaUpdate(manga = updatedManga, chapters = updatedChapters)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<pageResponse>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = mangaUrlBuilder(chapter.url)
+        val result = client.get(url.build()).parseAs<pageResponse>()
 
         return result.data.images?.mapIndexedNotNull { index, image ->
-            if (image.urls.url.isNullOrEmpty()) {
-                null
-            } else {
-                Page(index, "", image.urls.url)
-            }
+            image.urls.url?.takeIf { it.isNotEmpty() }?.let { Page(index, imageUrl = it) }
         }
-            ?: Page(1, "", result.data.preview.urls.url).let(::listOf)
+            ?: listOf(Page(0, imageUrl = result.data.preview.urls.url))
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -346,14 +285,11 @@ abstract class SimplyCosplay :
 
     private fun SharedPreferences.putToken(token: String) = edit().putString(DEFAULT_TOKEN_PREF, token).commit()
 
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
-
     private fun String?.parseDate(): Long = runCatching { dateFormat.parse(this!!)!!.time }
         .getOrDefault(0L)
 
     companion object {
         private const val LIMIT = 20
-        const val SEARCH_PREFIX = "url:"
 
         private const val DEFAULT_TOKEN_PREF = "default_token_pref"
         private const val DEFAULT_FALLBACK_TOKEN = "01730876"
@@ -365,8 +301,4 @@ abstract class SimplyCosplay :
         private const val BROWSE_TYPE_PREF_KEY = "default_browse_type_key"
         private const val BROWSE_TYPE_TITLE = "Default Browse List"
     }
-
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
