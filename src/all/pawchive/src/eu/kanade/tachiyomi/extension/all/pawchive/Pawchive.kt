@@ -47,25 +47,26 @@ abstract class Pawchive :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor { chain ->
             val request = chain.request()
-            val urlString = request.url.toString()
 
-            val requestBuilder = request.newBuilder()
-                .header("Referer", "$baseUrl/")
+            val modifiedRequest = when {
+                request.url.pathSegments.firstOrNull() == "api" -> {
+                    request.newBuilder()
+                        .header("Accept", "text/css")
+                        .build()
+                }
 
-            if (request.url.pathSegments.firstOrNull() == "api") {
-                requestBuilder.header("Accept", "text/css")
-            } else {
-                requestBuilder.header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                request.url.toString().startsWith(fileUrl) || request.url.toString().startsWith(imgUrl) -> {
+                    request.newBuilder()
+                        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                        .header("Sec-Fetch-Dest", "image")
+                        .header("Sec-Fetch-Mode", "no-cors")
+                        .header("Sec-Fetch-Site", "same-site")
+                        .build()
+                }
+
+                else -> request
             }
 
-            if (urlString.startsWith(fileUrl) || urlString.startsWith(imgUrl)) {
-                requestBuilder
-                    .header("Sec-Fetch-Dest", "image")
-                    .header("Sec-Fetch-Mode", "no-cors")
-                    .header("Sec-Fetch-Site", "same-site")
-            }
-
-            val modifiedRequest = requestBuilder.build()
             var response = chain.proceed(modifiedRequest)
 
             if (response.code == 404 && request.url.toString().startsWith(fileUrl)) {

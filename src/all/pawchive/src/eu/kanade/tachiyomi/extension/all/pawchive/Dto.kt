@@ -102,6 +102,6 @@ class PawchivePostDto(
 }
 
 @Serializable
-class PawchiveFileDto(val name: String? = null, val path: String? = null) {
+class PawchiveFileDto(val path: String? = null) {
     override fun toString() = path ?: ""
 }
