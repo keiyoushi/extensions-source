@@ -19,8 +19,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.array
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.intOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
@@ -391,9 +391,10 @@ abstract class AsuraScans :
     private fun JsonElement.unwrapAstro(): JsonElement = when (this) {
         is JsonArray -> when {
             isEmpty() -> JsonNull
-            size == 1 && this[0] is JsonArray && this[0].array.isNotEmpty() -> JsonArray(listOf(this[0].unwrapAstro()))
-            size == 1 -> JsonNull
-            size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
+            size == 1 && (this[0] as? JsonPrimitive)?.intOrNull != null ->
+                JsonNull
+            size == 2 && (this[0] as? JsonPrimitive)?.intOrNull != null ->
+                this[1].unwrapAstro()
             else -> JsonArray(map { it.unwrapAstro() })
         }
         is JsonObject -> JsonObject(mapValues { it.value.unwrapAstro() })
