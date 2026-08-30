@@ -8,6 +8,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.jsoup.Jsoup
+import org.jsoup.nodes.TextNode
 import kotlin.time.Instant
 
 @Serializable
@@ -95,7 +97,9 @@ class MangaDto(
             addAll(genres.map { it.displayName })
         }.distinct().joinToString()
         description = buildString {
-            this@MangaDto.description?.let(::append)
+            this@MangaDto.description?.also {
+                append(it.htmlToText(baseUrl))
+            }
             val info = buildList {
                 rating.takeIf { it > 0 }?.let { add("Rating: $it") }
                 type.takeIf { it.isNotBlank() }?.let { add("Type: $it") }
@@ -179,5 +183,17 @@ fun String.toSMangaStatus(): Int = when (this) {
 }
 
 fun String.stripEmoji(): String = replace(Regex("[^\\p{ASCII}\\p{L}0-9\\- ]+")) { "" }.trim()
+
+private fun String.htmlToText(baseUrl: String): String {
+    val document = Jsoup.parseBodyFragment(this, baseUrl)
+    document.select("a[href]").forEach { link ->
+        val url = link.absUrl("href")
+        val text = link.text()
+        link.replaceWith(TextNode(if (text.isBlank()) url else "[$text]($url)"))
+    }
+    document.select("p").forEach { it.after("\n\n") }
+    document.select("br").forEach { it.replaceWith(TextNode("\n")) }
+    return document.wholeText().trim()
+}
 
 fun String.toAbsoluteUrl(baseUrl: String): String = if (startsWith("http")) this else "$baseUrl$this"

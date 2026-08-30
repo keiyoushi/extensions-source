@@ -2,25 +2,11 @@ package eu.kanade.tachiyomi.extension.fr.ortegascans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-@Serializable
-class MangaUrl(
-    val slug: String,
-    val id: String,
-)
-
-@Serializable
-class ChapterUrl(
-    val mangaSlug: String,
-    val id: String,
-    val number: String,
-)
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
 
 @Serializable
 class SeriesResponse(
@@ -36,7 +22,8 @@ class SeriesDto(
     val coverImage: String,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
-        url = MangaUrl(slug, id).toJsonString()
+        url = slug
+        memo = buildJsonObject { put("id", id) }
         title = this@SeriesDto.title
         thumbnail_url = "$baseUrl/${coverImage.replace("storage/", "api/")}"
     }
@@ -59,9 +46,11 @@ class MangaDto(
     val artist: String? = null,
     val alternativeNames: String? = null,
     val categories: List<String> = emptyList(),
+    val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
-        url = MangaUrl(slug, id).toJsonString()
+        url = slug
+        memo = buildJsonObject { put("id", id) }
         title = this@MangaDto.title
         thumbnail_url = "$baseUrl/${coverImage.replace("storage/", "api/")}"
         description = listOfNotNull(
@@ -76,11 +65,6 @@ class MangaDto(
 }
 
 @Serializable
-class ChapterListDataDto(
-    val chapters: List<ChapterDto>,
-)
-
-@Serializable
 class ChapterDto(
     val id: String,
     val number: Float,
@@ -91,7 +75,11 @@ class ChapterDto(
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         val chapterNumber = number.toString().removeSuffix(".0")
 
-        url = ChapterUrl(mangaSlug, id, chapterNumber).toJsonString()
+        url = id
+        memo = buildJsonObject {
+            put("mangaSlug", mangaSlug)
+            put("number", chapterNumber)
+        }
         name = buildString {
             if (isPremium) append("🔒 ")
             append("Chapitre ")
@@ -102,7 +90,7 @@ class ChapterDto(
             }
         }
         chapter_number = number
-        date_upload = DATE_FORMAT.tryParse(createdAt.removePrefix($$"$D"))
+        date_upload = Instant.tryParse(createdAt.removePrefix($$"$D"))
     }
 }
 
@@ -123,8 +111,4 @@ private fun parseStatus(status: String?): Int = when (status?.lowercase()) {
     "en pause", "on hold" -> SManga.ON_HIATUS
     "annulé", "canceled" -> SManga.CANCELLED
     else -> SManga.UNKNOWN
-}
-
-private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
 }
