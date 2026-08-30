@@ -125,25 +125,11 @@ abstract class Mangadotnet :
 
     private val queryLang: String?
         get() = when (lang) {
-            "all" -> null
             "pt-BR" -> "pt-br"
             "es-419" -> "es-la"
             "zh-Hant" -> "zh-hk"
             else -> lang
         }
-
-    private fun getLanguageName(lang: String?): String {
-        if (lang == null) return "Unknown"
-        return runCatching {
-            val code = when (lang) {
-                "pt-br" -> "pt-BR"
-                "es-la" -> "es-419"
-                "zh-hk" -> "zh-Hant"
-                else -> lang
-            }
-            Locale.forLanguageTag(code).getDisplayName(Locale.ENGLISH)
-        }.getOrDefault(lang).replaceFirstChar { it.uppercase() }
-    }
 
     override val supportsRelatedMangas = true
 
@@ -546,22 +532,13 @@ abstract class Mangadotnet :
                 }.build()
                 client.get(volumesUrl).use { response ->
                     response.parseAs<List<Volume>>()
-                        .filter { it.language == null || lang == "all" || it.language.equals(lang, true) || it.language.equals(queryLang, true) }
+                        .filter { it.language == null || it.language.equals(lang, true) || it.language.equals(queryLang, true) }
                         .map { volume ->
                             SChapter.create().apply {
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
                                 name = "Volume ${(volume.volume ?: 0f).toString().removeSuffix(".0")}"
                                 chapter_number = 0f
-                                scanlator = buildString {
-                                    if (lang == "all") {
-                                        append(getLanguageName(volume.language))
-                                    }
-                                    val group = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
-                                    if (group != null) {
-                                        if (isNotEmpty()) append(" • ")
-                                        append(group)
-                                    }
-                                }.takeIf { it.isNotBlank() }
+                                scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
                                 date_upload = Instant.tryParse(volume.date?.replace(" ", "T"))
                             }
                         }
@@ -639,7 +616,7 @@ abstract class Mangadotnet :
         }.build()
         return client.get(chaptersUrl).use { response ->
             response.parseAs<List<Chapter>>()
-                .filter { it.language == null || lang == "all" || it.language.equals(lang, true) || it.language.equals(queryLang, true) }
+                .filter { it.language == null || it.language.equals(lang, true) || it.language.equals(queryLang, true) }
                 .map { chapter ->
                     SChapter.create().apply {
                         url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
@@ -650,16 +627,7 @@ abstract class Mangadotnet :
                             append(name.trim())
                         }
                         chapter_number = chapter.number ?: 0f
-                        scanlator = buildString {
-                            if (lang == "all") {
-                                append(getLanguageName(chapter.language))
-                            }
-                            val group = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
-                            if (group != null) {
-                                if (isNotEmpty()) append(" • ")
-                                append(group)
-                            }
-                        }.takeIf { it.isNotBlank() }
+                        scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
                         date_upload = Instant.tryParse(chapter.date?.replace(" ", "T"))
                     }
                 }
