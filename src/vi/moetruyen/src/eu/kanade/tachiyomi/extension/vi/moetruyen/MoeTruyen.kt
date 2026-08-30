@@ -485,22 +485,14 @@ abstract class MoeTruyen : KeiSource() {
 
     private fun imgxInterceptor() = Interceptor { chain ->
         val originalRequest = chain.request()
-        val request = if (originalRequest.url.host == "i.truyen.moe") {
-            originalRequest.newBuilder()
-                .header("Origin", baseUrl)
-                .header("Referer", "$baseUrl/")
-                .build()
-        } else {
-            originalRequest
-        }
-        val url = request.url.toString()
+        val url = originalRequest.url.toString()
         val entry = imgxGrants.remove(url)
 
         if (entry?.grant == null) {
-            return@Interceptor chain.proceed(request)
+            return@Interceptor chain.proceed(originalRequest)
         }
 
-        val response = chain.proceed(request)
+        val response = chain.proceed(originalRequest)
         val source = response.body.source()
 
         if (!source.request(14) ||
