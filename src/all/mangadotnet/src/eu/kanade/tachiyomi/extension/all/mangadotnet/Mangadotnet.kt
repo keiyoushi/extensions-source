@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.mangadotnet
+package eu.kanade.tachiyomi.extension.all.mangadotnet
 
 import android.content.SharedPreferences
 import android.util.Log
@@ -121,6 +121,26 @@ abstract class Mangadotnet :
             "both" -> addQueryParameter("adult", "both")
         }
         return this
+    }
+
+    private val queryLang: String?
+        get() = when (lang) {
+            "all" -> null
+            "pt-BR" -> "pt-br"
+            "es-419" -> "es-la"
+            else -> lang
+        }
+
+    private fun getLanguageName(lang: String?): String {
+        if (lang == null) return "Unknown"
+        return runCatching {
+            val code = when (lang) {
+                "pt-br" -> "pt-BR"
+                "es-la" -> "es-419"
+                else -> lang
+            }
+            Locale.forLanguageTag(code).getDisplayName(Locale.ENGLISH)
+        }.getOrDefault(lang).replaceFirstChar { it.uppercase() }
     }
 
     override val supportsRelatedMangas = true
@@ -377,7 +397,7 @@ abstract class Mangadotnet :
 
         filters.addAll(
             listOf(
-                ContentRatingFilter(includedContentRatingPref()),
+                ContentRatingFilter(excludedContentRatingPref()),
                 TypeFilter(),
                 DemographicFilter(excludedDemographicsPref()),
             ),
@@ -519,16 +539,27 @@ abstract class Mangadotnet :
         }
         val volumes = async {
             if (mode != "chapters") {
-                val volumesUrl = "$baseUrl/api/manga/${manga.url}/volumes?lang=en".toHttpUrl()
+                val volumesUrl = "$baseUrl/api/manga/${manga.url}/volumes".toHttpUrl().newBuilder().apply {
+                    queryLang?.let { addQueryParameter("lang", it) }
+                }.build()
                 client.get(volumesUrl).use { response ->
                     response.parseAs<List<Volume>>()
-                        .filter { it.language == null || it.language == "en" }
+                        .filter { it.language == null || lang == "all" || it.language.equals(lang, true) || it.language.equals(queryLang, true) }
                         .map { volume ->
                             SChapter.create().apply {
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
                                 name = "Volume ${(volume.volume ?: 0f).toString().removeSuffix(".0")}"
                                 chapter_number = 0f
-                                scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
+                                scanlator = buildString {
+                                    if (lang == "all") {
+                                        append(getLanguageName(volume.language))
+                                    }
+                                    val group = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
+                                    if (group != null) {
+                                        if (isNotEmpty()) append(" • ")
+                                        append(group)
+                                    }
+                                }.takeIf { it.isNotBlank() }
                                 date_upload = Instant.tryParse(volume.date?.replace(" ", "T"))
                             }
                         }
@@ -601,10 +632,12 @@ abstract class Mangadotnet :
     }
 
     private suspend fun fetchChaptersList(manga: SManga): List<SChapter> {
-        val chaptersUrl = "$baseUrl/api/manga/${manga.url}/chapters/list?lang=en".toHttpUrl()
+        val chaptersUrl = "$baseUrl/api/manga/${manga.url}/chapters/list".toHttpUrl().newBuilder().apply {
+            queryLang?.let { addQueryParameter("lang", it) }
+        }.build()
         return client.get(chaptersUrl).use { response ->
             response.parseAs<List<Chapter>>()
-                .filter { it.language == null || it.language == "en" }
+                .filter { it.language == null || lang == "all" || it.language.equals(lang, true) || it.language.equals(queryLang, true) }
                 .map { chapter ->
                     SChapter.create().apply {
                         url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
@@ -615,7 +648,16 @@ abstract class Mangadotnet :
                             append(name.trim())
                         }
                         chapter_number = chapter.number ?: 0f
-                        scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
+                        scanlator = buildString {
+                            if (lang == "all") {
+                                append(getLanguageName(chapter.language))
+                            }
+                            val group = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
+                            if (group != null) {
+                                if (isNotEmpty()) append(" • ")
+                                append(group)
+                            }
+                        }.takeIf { it.isNotBlank() }
                         date_upload = Instant.tryParse(chapter.date?.replace(" ", "T"))
                     }
                 }
@@ -693,10 +735,10 @@ abstract class Mangadotnet :
 
     private fun excludedDemographicsPref(): Set<String> = preferences.getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet())!!
 
-    private fun includedContentRatingPref(): Set<String> {
+    private fun excludedContentRatingPref(): Set<String> {
         val highest = preferences.getString(CONTENT_RATING_PREF, "suggestive")!!
         val index = contentRatings.indexOfFirst { it.second == highest }.coerceAtLeast(0)
-        return contentRatings.take(index + 1).map { it.second }.toSet()
+        return contentRatings.drop(index + 1).map { it.second }.toSet()
     }
 
     private fun excludedGenresPref(): Set<String> {

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.mangadotnet
+package eu.kanade.tachiyomi.extension.all.mangadotnet
 
 import eu.kanade.tachiyomi.source.model.Filter
 
@@ -134,11 +134,11 @@ private val types = listOf(
     "One Shot" to "ONESHOT",
 )
 
-class ContentRatingFilter(included: Set<String> = emptySet()) :
+class ContentRatingFilter(excluded: Set<String> = emptySet()) :
     Filter.Group<TriStateFilter>(
         "Content Rating",
         contentRatings.map { (name, value) ->
-            val state = if (value in included) TriState.STATE_INCLUDE else TriState.STATE_IGNORE
+            val state = if (value in excluded) TriState.STATE_EXCLUDE else TriState.STATE_IGNORE
             TriStateFilter(name, value, state)
         },
     ) {
