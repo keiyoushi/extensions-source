@@ -1,68 +1,35 @@
 package eu.kanade.tachiyomi.extension.en.ritharscans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.network.get
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 @Source
 abstract class RitharScans : Keyoapp() {
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = super.popularMangaParse(response).mangas
-            .distinctBy { it.url }
+    override suspend fun requestGeneres() = client.get("$baseUrl/search")
 
-        return MangasPage(mangas, false)
+    override fun parseGenres(document: Document) = document.select("[x-data*=genre] button").associate {
+        it.text() to it.attr("wire:key")
     }
 
-    override fun genresRequest() = GET("$baseUrl/search", headers)
-
-    override fun parseGenres(document: Document): List<Genre> = document.select("[x-data*=genre] button").map {
-        val name = it.text()
-        val id = it.attr("wire:key")
-
-        Genre(name, id)
+    override fun searchUrlBuilder(query: String, page: Int) = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        if (query.isNotBlank()) {
+            addQueryParameter("title", query)
+        }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("search")
-            if (query.isNotBlank()) {
-                addQueryParameter("title", query)
-            }
-            filters.firstInstanceOrNull<GenreList>()?.also { filter ->
-                filter.state
-                    .filter { it.state }
-                    .forEach { genre ->
-                        addQueryParameter("genre", genre.id)
-                    }
-            }
-        }.build()
-
-        return GET(url, headers)
-    }
+    // Server-side
+    override fun Element.matchesGenres(genres: List<String>) = true
+    override fun Element.matchesStatuses(statuses: List<String>) = true
 
     override fun searchMangaSelector() = "[wire:snapshot*=pages.search] button[tags]"
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        runCatching { fetchGenres() }
-
-        val mangas = response.asJsoup()
-            .select(searchMangaSelector())
-            .map(::searchMangaFromElement)
-
-        return MangasPage(mangas, false)
-    }
 
     override val altNameSelector: String = "div.font-medium:containsOwn(Alternative titles) ~ div span.select-all"
     override val statusSelector = "[alt=Status]"
@@ -81,6 +48,8 @@ abstract class RitharScans : Keyoapp() {
             )
         }
     }
+
+    override fun getTypeList() = emptyMap<String, String>()
 }
 
 @Serializable
