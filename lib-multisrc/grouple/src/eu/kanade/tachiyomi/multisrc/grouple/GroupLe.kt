@@ -613,7 +613,7 @@ abstract class GroupLe :
     // If user are authorized, site will have a JS code with `window.current_user_id`, `window.current_user_name`, `window.current_user_vip`
     // If it's missing - user are not authorized
     // Check should be universal. AllHentai uses same classes, but different JS code, so it requires its own override/check
-    fun authGuard(document: Document) {
+    protected open fun authGuard(document: Document) {
         // Check that auth are required
         val scripts = document.select("script:containsData(UI.View)").joinToString("") { it.data() }
         if (AUTH_JS_SETTINGS.containsMatchIn(scripts)) return
