@@ -128,7 +128,6 @@ abstract class Mangadotnet :
             "all" -> null
             "pt-BR" -> "pt-br"
             "es-419" -> "es-la"
-            "zh-Hans" -> "zh"
             "zh-Hant" -> "zh-hk"
             else -> lang
         }
@@ -139,6 +138,7 @@ abstract class Mangadotnet :
             val code = when (lang) {
                 "pt-br" -> "pt-BR"
                 "es-la" -> "es-419"
+                "zh-hk" -> "zh-Hant"
                 else -> lang
             }
             Locale.forLanguageTag(code).getDisplayName(Locale.ENGLISH)
