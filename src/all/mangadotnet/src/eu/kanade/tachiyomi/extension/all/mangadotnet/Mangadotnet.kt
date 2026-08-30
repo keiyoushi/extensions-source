@@ -128,6 +128,8 @@ abstract class Mangadotnet :
             "all" -> null
             "pt-BR" -> "pt-br"
             "es-419" -> "es-la"
+            "zh-Hans" -> "zh"
+            "zh-Hant" -> "zh-hk"
             else -> lang
         }
 
