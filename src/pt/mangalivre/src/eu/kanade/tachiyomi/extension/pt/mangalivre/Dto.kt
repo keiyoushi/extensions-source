@@ -37,24 +37,26 @@ class MangaDto(
     fun toSManga(useAlternativeTitle: Boolean) = SManga.create().apply {
         this.title = if (useAlternativeTitle && !alternativeTitle.isNullOrBlank()) alternativeTitle else this@MangaDto.title
         this.thumbnail_url = this@MangaDto.thumbnailUrl
-        this.description = buildString {
-            if (!this@MangaDto.description.isNullOrBlank()) {
-                append(this@MangaDto.description)
-            }
+        this.description =
+            buildString {
+                if (!this@MangaDto.description.isNullOrBlank()) {
+                    append(this@MangaDto.description)
+                }
 
-            if (!alternativeTitle.isNullOrBlank()) {
-                appendLine("${"\n".repeat(3)} Nome alternativo: $alternativeTitle")
+                if (!alternativeTitle.isNullOrBlank()) {
+                    appendLine("${"\n".repeat(3)} Nome alternativo: $alternativeTitle")
+                }
             }
-        }
         author = authors?.joinToString()
         artist = artists?.joinToString()
         genre = genres?.joinToString()
         this@MangaDto.status?.let {
-            status = when (it.lowercase()) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+            status =
+                when (it.lowercase()) {
+                    "ongoing" -> SManga.ONGOING
+                    "completed" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
         this.url = id
     }
@@ -62,9 +64,12 @@ class MangaDto(
     fun toSChapterList(): List<SChapter> = chapters?.map { it.toSChapter(getSlug(), id) } ?: emptyList()
 
     private fun getSlug(): String {
-        val noDiacritics = Normalizer.normalize(title, Normalizer.Form.NFD)
-            .replace(MARKS_REGEX, "")
-        return noDiacritics.lowercase()
+        val noDiacritics =
+            Normalizer
+                .normalize(title, Normalizer.Form.NFD)
+                .replace(MARKS_REGEX, "")
+        return noDiacritics
+            .lowercase()
             .replace(NON_ALPHA_REGEX, "-")
             .trim('-')
     }
@@ -82,12 +87,31 @@ class ChapterReferenceDto(
 )
 
 @Serializable
+class ReaderAccessResponseDto(
+    val chapter: ReaderChapterDto,
+)
+
+@Serializable
+class ReaderChapterDto(
+    val pages: List<String>,
+)
+
+@Serializable
+class ReaderAccessErrorDto(
+    val error: String,
+    val requiresFcaptcha: Boolean = false,
+)
+
+@Serializable
 class ChapterDto(
     val id: String,
     val number: String,
     val timestamp: Long,
 ) {
-    fun toSChapter(slug: String, mangaId: String) = SChapter.create().apply {
+    fun toSChapter(
+        slug: String,
+        mangaId: String,
+    ) = SChapter.create().apply {
         name = "Capítulo $number"
         date_upload = timestamp
         url = "/$slug/$number#${ChapterReferenceDto(mangaId, id).toJsonString()}"
