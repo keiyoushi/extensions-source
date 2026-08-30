@@ -19,15 +19,12 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class ArabHentai : KeiSource() {
-    // The site sorts by popularity for a time period via the "sort" parameter.
-    private val popularSort = "11"
-    private val latestSort = "13"
 
     // ============================== Popular ===============================
-    override suspend fun getPopularManga(page: Int): MangasPage = parseListing(client.get(listingUrl(popularSort, page).toHttpUrl()).asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseListing(client.get(listingUrl("11", page).toHttpUrl()).asJsoup())
 
     // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseListing(client.get(listingUrl(latestSort, page).toHttpUrl()).asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseListing(client.get(listingUrl("13", page).toHttpUrl()).asJsoup())
 
     // =============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
