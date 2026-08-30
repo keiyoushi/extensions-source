@@ -477,7 +477,7 @@ abstract class GroupLe :
         val document = client.get(url, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 404) {
-                    throw Exception("Для просмотра главы необходима авторизация через WebView\uD83C\uDF0E (Ошибка 404)  или включите автоматическую авторизацию в настройках расширения")
+                    throw Exception("Для просмотра главы необходима авторизация через WebView\uD83C\uDF0E (Ошибка 404). Авторизуйтесь в WebView и обновите мангу.")
                 } else {
                     throw HttpException(response.code)
                 }
@@ -606,18 +606,25 @@ abstract class GroupLe :
     }
 
     // ============================== Utilities ===============================
-    // Old authGuard() doesn't work properly now. Previously it checked only certain sites, but now any manga on any site can require authorization
-    // Example: https://a.zazaza.me/podniatie_urovnia_v_odinochku__A5ea4
-    // Now all HTML elements related to chapters have two classes: blockedForAnonymous, blockedNonB
-    // When needed site adds JavaScript to the HTML that applies hidden status to these classes in CSS. authGuard now checks that this JS code are present in the HTML body
+    // All HTML elements related to chapters have two classes: blockedForAnonymous, blockedNonB
+    // Source applies hidden status to them depending on user authorization
+    // If authorization are not required `viewSettings` will be empty: `viewSettings = []`
+    // Otherwise it will have rules, like: `viewSettings = [{"name":"blockedForAnonymous","rules":["hide"],"enabled":true,"onlyGuest":true}]`
+    // If user are authorized, site will have a JS code with `window.current_user_id`, `window.current_user_name`, `window.current_user_vip`
+    // If it's missing - user are not authorized
     // Check should be universal. AllHentai uses same classes, but different JS code, so it requires its own override/check
-    protected open fun authGuard(document: Document) {
-        document.select("script:containsData(UI.ViewHide)").joinToString().let {
-            if (it.contains("\"name\":\"blockedForAnonymous\"") && document.selectFirst(".user-avatar") == null) {
-                throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E или включите автоматическую авторизацию в настройках расширения")
-            }
-        }
+    fun authGuard(document: Document) {
+        // Check that auth are required
+        val scripts = document.select("script:containsData(UI.View)").joinToString("") { it.data() }
+        if (scripts.contains("viewSettings = []")) return
+
+        // Check that user are authorized
+        val userInfo = document.select("script:containsData(window.current_user_id)").joinToString("") { it.data() }
+        if (userInfo.contains("window.current_user_name")) return
+
+        throw Exception("Для просмотра контента необходима авторизация через WebView🌍 или включите автоматическую авторизацию в настройках расширения")
     }
+
     private fun checkMinRange(input: String?, min: Int, max: Int): String {
         val value = input?.trim()?.takeIf(String::isNotEmpty)?.toIntOrNull() ?: return min.toString()
         if (value !in min..max) return min.toString()
