@@ -616,7 +616,7 @@ abstract class GroupLe :
     fun authGuard(document: Document) {
         // Check that auth are required
         val scripts = document.select("script:containsData(UI.View)").joinToString("") { it.data() }
-        if (scripts.contains("viewSettings = []")) return
+        if (AUTH_JS_SETTINGS.containsMatchIn(scripts)) return
 
         // Check that user are authorized
         val userInfo = document.select("script:containsData(window.current_user_id)").joinToString("") { it.data() }
@@ -739,6 +739,7 @@ abstract class GroupLe :
         private val SINGLE_REGEX = Regex("""\s*Сингл\s*""")
         private val FILTERS_REGEX = """window\.__FILTERS\.(\w+)\s*=\s*([{].*?[}]);""".toRegex()
         private val PAGES_REGEX = """\[['"](.*?)['"],['"](.*?)['"],['"](.*?)['"].*?]""".toRegex()
+        private val AUTH_JS_SETTINGS = """viewSettings\s*=\s*\[\s*]""".toRegex()
         private val CHECK_JSON = """(\w+)\s*:""".toRegex()
         private val dateFormat = DateTimeFormatter.ofPattern("[dd.MM.yy][d.MM.yy]", Locale.ROOT)
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "avif", "svg")
