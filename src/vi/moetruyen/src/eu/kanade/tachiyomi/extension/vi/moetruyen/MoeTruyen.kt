@@ -291,10 +291,7 @@ abstract class MoeTruyen : KeiSource() {
         val chapterUrl = "$baseUrl${chapter.url}"
         val result = loadChapterWithAccess(chapterUrl)
         val document = Jsoup.parse(result.html, chapterUrl)
-        val images = document.select("img.page-media")
-            .filterNot { element ->
-                element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
-            }
+        val images = readerImages(document)
         val readerPages = document.selectFirst("[data-reader-lazy-pages]")
 
         val accessUrl = images.firstOrNull()?.attr("data-imgx-access-url")?.ifBlank { null }
@@ -302,14 +299,15 @@ abstract class MoeTruyen : KeiSource() {
 
         if (accessUrl != null) {
             val pageIndexes = images.mapNotNull { it.attr("data-imgx-page-index").toIntOrNull() }
-            return result.pages
+            val pages = result.pages
                 .filter { it.downloadUrl.isNotBlank() && it.grant != null }
                 .onEach { imgxGrants[it.downloadUrl] = it }
                 .map { Page(pageIndexes.indexOf(it.pageIndex), imageUrl = it.downloadUrl) }
                 .sortedBy { it.index }
+            return pages
         }
 
-        return images
+        val pages = images
             .asSequence()
             .map { element ->
                 element.absUrl("data-src").ifEmpty { element.absUrl("src") }
@@ -322,12 +320,19 @@ abstract class MoeTruyen : KeiSource() {
             .mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
             }
+        return pages
     }
 
     private data class ChapterWebResult(
         val html: String,
         val pages: List<PageAccessEntry>,
     )
+
+    private fun readerImages(document: Document): List<Element> = document.select("img.page-media")
+        .drop(1)
+        .filterNot { element ->
+            element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
+        }
 
     private suspend fun loadChapterWithAccess(chapterUrl: String): ChapterWebResult = runWebView(
         timeout = 30.seconds,
@@ -388,11 +393,11 @@ abstract class MoeTruyen : KeiSource() {
         }
 
         poll {
-            evaluateJs("document.documentElement.outerHTML") { html ->
+            evaluateJs("document.documentElement?.outerHTML || ''") { html ->
                 currentHtml = html.parseAs<String>()
                 if (!requestStarted && (currentHtml.contains("page-media") || currentHtml.contains("data-reader-lazy-pages"))) {
                     val document = Jsoup.parse(currentHtml, chapterUrl)
-                    val images = document.select("img.page-media")
+                    val images = readerImages(document)
                     val readerPages = document.selectFirst("[data-reader-lazy-pages]")
                     val rawAccessUrl = images.firstOrNull()?.attr("data-imgx-access-url")?.ifBlank { null }
                         ?: readerPages?.attr("data-reader-imgx-access-url")?.ifBlank { null }
@@ -412,10 +417,12 @@ abstract class MoeTruyen : KeiSource() {
                                 }.getOrDefault(emptyList())
                             }
                             .orEmpty()
-                        pages += initialEntries
-                        val initialIndices = initialEntries.mapTo(mutableSetOf()) { it.pageIndex }
                         pageIndexes = images.mapNotNull { it.attr("data-imgx-page-index").toIntOrNull() }
                             .distinct()
+                        val validInitialEntries = initialEntries.filter { it.pageIndex in pageIndexes }
+                        pages += validInitialEntries
+                        val initialIndices = validInitialEntries.mapTo(mutableSetOf()) { it.pageIndex }
+                        pageIndexes = pageIndexes
                             .filterNot { it in initialIndices }
                         evaluateJs("document.querySelector('[data-reader-imgx-proof-token]')?.getAttribute('data-reader-imgx-proof-token') || ''") { tokenJson ->
                             proofToken = tokenJson.parseAs<String>()
