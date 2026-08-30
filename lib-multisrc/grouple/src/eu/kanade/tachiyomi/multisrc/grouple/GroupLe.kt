@@ -616,8 +616,9 @@ abstract class GroupLe :
     // Check should be universal. AllHentai uses same classes, but different JS code, so it requires its own override/check
     protected open fun authGuard(document: Document) {
         // Check that auth is required
-        val scripts = document.select("script:containsData(UI.View)").joinToString("") { it.data() }
-        if (!BLOCKED_FOR_ANONYMOUS.containsMatchIn(scripts)) return
+        document.selectFirst("script:containsData(viewSettings)")?.data()?.let { authReq ->
+            if (!authReq.contains("blockedForAnonymous")) return
+        }
 
         // Check that user is authorized
         document.selectFirst("script:containsData(window.current_user_id)")?.data()?.let { userInfo ->
@@ -741,7 +742,6 @@ abstract class GroupLe :
         private val SINGLE_REGEX = Regex("""\s*Сингл\s*""")
         private val FILTERS_REGEX = """window\.__FILTERS\.(\w+)\s*=\s*([{].*?[}]);""".toRegex()
         private val PAGES_REGEX = """\[['"](.*?)['"],['"](.*?)['"],['"](.*?)['"].*?]""".toRegex()
-        private val BLOCKED_FOR_ANONYMOUS = """viewSettings\s*=\s*\[[^]]*"blockedForAnonymous""".toRegex()
         private val CHECK_JSON = """(\w+)\s*:""".toRegex()
         private val dateFormat = DateTimeFormatter.ofPattern("[dd.MM.yy][d.MM.yy]", Locale.ROOT)
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "avif", "svg")
