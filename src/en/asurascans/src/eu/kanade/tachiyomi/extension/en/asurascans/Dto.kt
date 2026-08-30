@@ -49,6 +49,8 @@ class MangaDetailsDto(
     private val artist: String? = null,
     private val description: String? = null,
     private val rating: Double? = null,
+    private val bookmarkCount: Int? = null,
+    private val type: String? = null,
     private val popularityRank: Int? = null,
     private val alternativeTitles: String? = null,
     private val genres: List<GenreDto>? = null,
@@ -60,23 +62,40 @@ class MangaDetailsDto(
         author = this@MangaDetailsDto.author
         artist = this@MangaDetailsDto.artist
         description = parseDescription()
-        genre = genres?.joinToString { it.name }
+        genre = buildList {
+            type?.replaceFirstChar { it.uppercase() }?.let { add(it) }
+            genres?.map { it.name }?.let { addAll(it) }
+        }.joinToString()
         status = parseStatus()
         initialized = true
     }
 
     fun parseDescription(): String = buildString {
-        val plainDescription = description?.let { Jsoup.parseBodyFragment(it).text() }
-        plainDescription?.let(::append)
-
         popularityRank?.let {
-            if (isNotEmpty()) append("\n\n")
             append("Rank: #$it")
         }
 
         rating?.let {
-            if (isNotEmpty()) append("\n\n")
+            if (isNotEmpty()) append(" ")
             append("Rating: %.2f".format(it))
+        }
+
+        bookmarkCount?.let {
+            if (isNotEmpty()) append(" ")
+            append("Bookmarks: ")
+            append(
+                when {
+                    it >= 1_000_000 -> "%.1fM".format(it / 1_000_000.0)
+                    it >= 1_000 -> "%.1fK".format(it / 1_000.0)
+                    else -> it.toString()
+                },
+            )
+        }
+
+        val plainDescription = description?.let { Jsoup.parseBodyFragment(it).text() }
+        plainDescription?.let {
+            if (isNotEmpty()) append("\n\n")
+            append(it)
         }
 
         val cleanAltTitles = alternativeTitles
