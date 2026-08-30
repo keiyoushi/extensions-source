@@ -395,10 +395,10 @@ abstract class MoeTruyen : KeiSource() {
         poll {
             evaluateJs("document.documentElement?.outerHTML || ''") { html ->
                 currentHtml = html.parseAs<String>()
-                if (!requestStarted && (currentHtml.contains("page-media") || currentHtml.contains("data-reader-lazy-pages"))) {
-                    val document = Jsoup.parse(currentHtml, chapterUrl)
-                    val images = readerImages(document)
-                    val readerPages = document.selectFirst("[data-reader-lazy-pages]")
+                val document = Jsoup.parse(currentHtml, chapterUrl)
+                val images = readerImages(document)
+                val readerPages = document.selectFirst("[data-reader-lazy-pages]")
+                if (!requestStarted && (images.isNotEmpty() || readerPages != null)) {
                     val rawAccessUrl = images.firstOrNull()?.attr("data-imgx-access-url")?.ifBlank { null }
                         ?: readerPages?.attr("data-reader-imgx-access-url")?.ifBlank { null }
                     if (rawAccessUrl == null) {
