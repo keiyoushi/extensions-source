@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "WitchScans"
-    versionCode = 0
+    versionCode = 32
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "vinetheme"
