@@ -10,16 +10,20 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
-import java.time.ZoneOffset
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Source
 abstract class HentaiLek : KeiSource() {
+    private val dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("ar"))
+
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get(listingUrl("popular", page).toHttpUrl()).asJsoup()
@@ -93,7 +97,7 @@ abstract class HentaiLek : KeiSource() {
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1")?.text() ?: ""
+        title = document.selectFirst("h1")!!.text()
         thumbnail_url = document.selectFirst("img[src*='cover']")?.attr("abs:src")
             ?: document.selectFirst("meta[property='og:image']")?.attr("content")
         status = infoValue(document, "الحالة").parseStatus()
@@ -129,7 +133,7 @@ abstract class HentaiLek : KeiSource() {
                 ?.trim()
                 ?.ifBlank { null }
                 ?: url.substringAfterLast("/")
-            date_upload = selectFirst("span.text-xs.text-muted")?.text().parseArabicDate()
+            date_upload = selectFirst("span.text-xs.text-muted")?.text().let { dateFormat.tryParseDate(it, ZoneId.of("Asia/Riyadh")) }
         }
     }
 
@@ -145,28 +149,4 @@ abstract class HentaiLek : KeiSource() {
 
     // =============================== Filters ==============================
     override fun getFilterList(data: JsonElement?): FilterList = FilterList()
-
-    // ========================= Date helpers ===============================
-    private val arabicMonths = mapOf(
-        "يناير" to 1, "فبراير" to 2, "مارس" to 3, "أبريل" to 4,
-        "مايو" to 5, "يونيو" to 6, "يوليو" to 7, "أغسطس" to 8,
-        "سبتمبر" to 9, "أكتوبر" to 10, "نوفمبر" to 11, "ديسمبر" to 12,
-    )
-
-    private fun String?.parseArabicDate(): Long {
-        if (this.isNullOrBlank()) return 0L
-        val parts = split(Regex("\\s+"))
-        if (parts.size < 3) return 0L
-        val day = parts[0].toIntOrNull() ?: return 0L
-        val month = arabicMonths[parts[1].trim()] ?: return 0L
-        val year = parts[2].toIntOrNull() ?: return 0L
-        return try {
-            LocalDate.of(year, month, day)
-                .atStartOfDay(ZoneOffset.UTC)
-                .toInstant()
-                .toEpochMilli()
-        } catch (_: Exception) {
-            0L
-        }
-    }
 }
