@@ -619,8 +619,9 @@ abstract class GroupLe :
         if (AUTH_JS_SETTINGS.containsMatchIn(scripts)) return
 
         // Check that user are authorized
-        val userInfo = document.select("script:containsData(window.current_user_id)").joinToString("") { it.data() }
-        if (userInfo.contains("window.current_user_name")) return
+        document.selectFirst("script:containsData(window.current_user_id)")?.data()?.let { userInfo ->
+            if (userInfo.contains("window.current_user_name")) return
+        }
 
         throw Exception("Для просмотра контента необходима авторизация через WebView🌍 или включите автоматическую авторизацию в настройках расширения")
     }
