@@ -607,18 +607,19 @@ abstract class GroupLe :
 
     // ============================== Utilities ===============================
     // All HTML elements related to chapters have two classes: blockedForAnonymous, blockedNonB
-    // Source applies hidden status to them depending on user authorization
-    // If authorization are not required `viewSettings` will be empty: `viewSettings = []`
-    // Otherwise it will have rules, like: `viewSettings = [{"name":"blockedForAnonymous","rules":["hide"],"enabled":true,"onlyGuest":true}]`
+    // blockedForAnonymous - hard blocked by source, blockedNonB - hidden but can be accessed by app
+    // Source applies hidden status to them via JavaScript: `var viewSettings = [] App.UI.ViewHide.init(viewSettings);`
+    // If source doesn't need to hide chapters `viewSettings` will be empty: `viewSettings = []`
+    // Otherwise it will have rules: `viewSettings = [{"name":"blockedForAnonymous","rules":["hide"],"enabled":true,"onlyGuest":true}]`
     // If user are authorized, site will have a JS code with `window.current_user_id`, `window.current_user_name`, `window.current_user_vip`
     // If it's missing - user are not authorized
     // Check should be universal. AllHentai uses same classes, but different JS code, so it requires its own override/check
     protected open fun authGuard(document: Document) {
-        // Check that auth are required
+        // Check that auth is required
         val scripts = document.select("script:containsData(UI.View)").joinToString("") { it.data() }
-        if (AUTH_JS_SETTINGS.containsMatchIn(scripts)) return
+        if (!BLOCKED_FOR_ANONYMOUS.containsMatchIn(scripts)) return
 
-        // Check that user are authorized
+        // Check that user is authorized
         document.selectFirst("script:containsData(window.current_user_id)")?.data()?.let { userInfo ->
             if (userInfo.contains("window.current_user_name")) return
         }
@@ -740,7 +741,7 @@ abstract class GroupLe :
         private val SINGLE_REGEX = Regex("""\s*Сингл\s*""")
         private val FILTERS_REGEX = """window\.__FILTERS\.(\w+)\s*=\s*([{].*?[}]);""".toRegex()
         private val PAGES_REGEX = """\[['"](.*?)['"],['"](.*?)['"],['"](.*?)['"].*?]""".toRegex()
-        private val AUTH_JS_SETTINGS = """viewSettings\s*=\s*\[\s*]""".toRegex()
+        private val BLOCKED_FOR_ANONYMOUS = """viewSettings\s*=\s*\[[^]]*"blockedForAnonymous""".toRegex()
         private val CHECK_JSON = """(\w+)\s*:""".toRegex()
         private val dateFormat = DateTimeFormatter.ofPattern("[dd.MM.yy][d.MM.yy]", Locale.ROOT)
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "avif", "svg")
