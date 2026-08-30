@@ -2,11 +2,11 @@ package eu.kanade.tachiyomi.extension.pt.plumacomics
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.time.format.DateTimeFormatter
+import kotlin.time.Instant
 
 @Serializable
 class Mangas(
@@ -57,14 +57,8 @@ class Chapter(
             append(title ?: "Capítulo ${number.toInt()}")
         }
         chapter_number = number
-        date_upload = dateFormat.tryParseDate(publishedAt)
+        date_upload = Instant.tryParse(publishedAt)
         url = id.toString()
-        memo = buildJsonObject {
-            put("id", id)
-        }
-    }
-    companion object {
-        val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX")
     }
 }
 

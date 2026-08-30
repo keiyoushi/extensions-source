@@ -13,7 +13,6 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
-import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import kotlinx.serialization.json.buildJsonObject
@@ -77,28 +76,20 @@ abstract class PlumaComics : KeiSource() {
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        val mangaUpdate = when {
-            fetchDetails -> manga.apply {
-                title = document.selectFirst("meta[property*=title]")!!.text().substringBeforeLast("|")
-                thumbnail_url = document.selectFirst("img.object-cover")?.absUrl("src")
-                description = document.selectFirst("div p.text-neutral-300.text-sm")?.text()
-                genre = document.select("a[href*='?genre=']").joinToString { it.text() }
-            }
-            else -> manga
+        manga.apply {
+            title = document.selectFirst("meta[property*=title]")!!.text().substringBeforeLast("|")
+            thumbnail_url = document.selectFirst("img.object-cover")?.absUrl("src")
+            description = document.selectFirst("div p.text-neutral-300.text-sm")?.text()
+            genre = document.select("a[href*='?genre=']").joinToString { it.text() }
         }
 
-        val chaptersUpdate = when {
-            fetchChapters -> {
-                document.extractNextJs<ChapterList>()!!.chapters.map { it.toSChapter() }
-            }
-            else -> chapters
-        }
+        val chapters = document.extractNextJs<ChapterList>()!!.chapters.map { it.toSChapter() }
 
-        return SMangaUpdate(mangaUpdate, chaptersUpdate)
+        return SMangaUpdate(manga, chapters)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/api/viewer/bootstrap?c=${chapter.memo["id"]!!.int}")
+        val response = client.get("$baseUrl/api/viewer/bootstrap?c=${chapter.url}")
         val pages = response.parseAs<PagesList>()
         return pages.pages.map { page ->
             Page(page.i, imageUrl = page.u.trim('/'))
