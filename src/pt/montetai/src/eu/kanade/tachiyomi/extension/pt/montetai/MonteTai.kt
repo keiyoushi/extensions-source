@@ -4,9 +4,9 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Request

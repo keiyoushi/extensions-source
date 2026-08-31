@@ -8,9 +8,9 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.post
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody

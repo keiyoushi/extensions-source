@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.id.inazumanga
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import okhttp3.Response
 
 @Source
@@ -29,7 +29,7 @@ abstract class ReYume : ZeistManga() {
         val document = response.asJsoup()
         val textArea = document.selectFirst("textarea#zeist-raw-data")?.text().orEmpty()
 
-        val images = response.asJsoup(textArea).select(pageListSelector)
+        val images = textArea.asJsoup(response.request.url.toString()).select(pageListSelector)
         return images.select("img[src]").mapIndexed { i, img ->
             Page(i, "", img.attr("abs:src"))
         }

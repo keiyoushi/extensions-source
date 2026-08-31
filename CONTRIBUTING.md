@@ -1333,7 +1333,7 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 
 ### Misc notes
 
-- **Use `asJsoup()`:** Instead of manually reading the response body and parsing it with Jsoup (`Jsoup.parse(response.body.string())`), use the app's built-in extension function: `response.asJsoup()` (requires `import eu.kanade.tachiyomi.util.asJsoup`).
+- **Use `asJsoup()`:** Instead of manually reading the response body and parsing it with Jsoup (`Jsoup.parse(response.body.string())`), use the built-in extension function: `response.asJsoup()` (`import keiyoushi.utils.asJsoup`), which streams the body and closes the response when done.
 - **Jsoup `.text()` is already trimmed:** Calling `element.text().trim()` is redundant because Jsoup automatically normalizes and trims whitespace. Just use `element.text()`.
 - **Omit default `joinToString` separator:** The default separator for `joinToString` is already `", "`. Do not pass it explicitly. Use `joinToString { it.text() }` instead of `joinToString(", ") { it.text() }`, and `joinToString()` instead of `joinToString(", ")`.
 - **Use named parameters for `Page`:** When instantiating `Page` objects, use the named parameter for the image URL: `Page(index, imageUrl = url)` instead of passing an empty string as the second argument (`Page(index, "", url)`).
