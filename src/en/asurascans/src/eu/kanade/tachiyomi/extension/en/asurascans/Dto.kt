@@ -71,32 +71,30 @@ class MangaDetailsDto(
     }
 
     fun parseDescription(): String = buildString {
-        popularityRank?.let {
-            append("Rank: #$it")
-        }
-
-        rating?.let {
-            if (isNotEmpty()) append(" ")
-            append("Rating: %.2f".format(it))
-        }
-
-        bookmarkCount?.let {
-            if (isNotEmpty()) append(" ")
-            append("Bookmarks: ")
-            append(
-                when {
+        val metadata = listOfNotNull(
+            popularityRank?.let { "Rank: #$it" },
+            rating?.let { "Rating: %.2f".format(it) },
+            bookmarkCount?.let {
+                val formatted = when {
                     it >= 1_000_000 -> "%.1fM".format(it / 1_000_000.0)
                     it >= 1_000 -> "%.1fK".format(it / 1_000.0)
                     else -> it.toString()
-                },
-            )
+                }
+                "Bookmarks: $formatted"
+            },
+        )
+
+        if (metadata.isNotEmpty()) {
+            append(metadata.joinToString(" • "))
         }
 
-        val plainDescription = description?.let { Jsoup.parseBodyFragment(it).text() }
-        plainDescription?.let {
-            if (isNotEmpty()) append("\n\n")
-            append(it)
-        }
+        description
+            ?.let { Jsoup.parseBodyFragment(it).text() }
+            ?.takeIf { it.isNotEmpty() }
+            ?.let {
+                if (isNotEmpty()) append("\n\n")
+                append(it)
+            }
 
         val cleanAltTitles = alternativeTitles
             ?.let { if (it.contains("•")) it.split("•") else it.split(",") }
