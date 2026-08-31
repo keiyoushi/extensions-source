@@ -4,7 +4,7 @@ plugins {
 
 dependencies {
     api(project(":lib:secretstream"))
-    implementation(project(":ext-lib-i18n"))
+    implementation(project(":lib:i18n"))
 }
 
 keiyoushi {
