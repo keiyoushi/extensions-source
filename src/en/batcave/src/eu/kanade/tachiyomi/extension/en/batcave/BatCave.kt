@@ -45,12 +45,7 @@ abstract class BatCave : KeiSource() {
     }
 
     // ============================== Popular ==============================
-    override suspend fun getPopularManga(page: Int) = searchCatalog(page, "rating")
-
-    // ============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int) = searchCatalog(page, "editdate")
-
-    private suspend fun searchCatalog(page: Int, sortBy: String): MangasPage {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("comix")
             if (page > 1) {
@@ -60,13 +55,40 @@ abstract class BatCave : KeiSource() {
         }.build()
 
         val body = FormBody.Builder()
-            .add("dlenewssortby", sortBy)
+            .add("dlenewssortby", "rating")
             .add("dledirection", "desc")
             .add("set_new_sort", "dle_sort_cat_1")
             .add("set_direction_sort", "dle_direction_cat_1")
             .build()
 
         return parseSearchMangas(client.post(url, body))
+    }
+
+    // ============================== Latest ===============================
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (page > 1) {
+                addPathSegments("page/$page")
+                addPathSegment("")
+            }
+        }.build()
+
+        val document = client.get(url).asJsoup()
+
+        val entries = document.select("#content-load > .latest.grid-item").mapNotNull { element ->
+            SManga.create().apply {
+                with(element.selectFirst(".latest__title > a")!!) {
+                    if (ownText().isEmpty()) return@mapNotNull null
+                    setUrlWithoutDomain(absUrl("href"))
+                    title = ownText()
+                }
+                thumbnail_url = element.selectFirst(".latest__img img")?.absUrl("src")
+            }
+        }
+
+        val hasNextPage = document.selectFirst("li.pagination a[href]") != null
+
+        return MangasPage(entries, hasNextPage)
     }
 
     // ============================== Search ===============================
@@ -97,7 +119,7 @@ abstract class BatCave : KeiSource() {
             if (filtersApplied) {
                 addPathSegments(filterPath)
             } else {
-                // Send something to use ComicList
+                // Send something to force ComicList
                 addPathSegment("y[from]=1926")
                 addPathSegment("y[to]=${Calendar.getInstance().get(Calendar.YEAR)}")
             }
