@@ -4,6 +4,10 @@ plugins {
     alias(kei.plugins.extension)
 }
 
+dependencies {
+    implementation(libs.kotlin.stdlib)
+}
+
 keiyoushi {
     name = "ToonLivre"
     versionCode = 89
