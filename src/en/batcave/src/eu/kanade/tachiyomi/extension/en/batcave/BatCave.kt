@@ -127,7 +127,7 @@ abstract class BatCave : KeiSource() {
                 addPathSegments("page/$page")
             }
             addPathSegment("")
-        }
+        }.build()
 
         val sort = filters.firstInstanceOrNull<SortFilter>() ?: SortFilter()
 
@@ -138,7 +138,7 @@ abstract class BatCave : KeiSource() {
             .add("set_direction_sort", "dle_direction_xfilter")
             .build()
 
-        return parseSearchMangas(client.post(url.build(), body))
+        return parseSearchMangas(client.post(url, body))
     }
 
     private fun parseSearchMangas(response: Response): MangasPage {
