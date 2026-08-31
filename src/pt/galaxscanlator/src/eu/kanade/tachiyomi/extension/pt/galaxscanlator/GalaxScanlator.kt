@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.pt.galaxscanlator
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import okhttp3.OkHttpClient
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import kotlin.time.Duration.Companion.seconds
 
@@ -23,7 +23,7 @@ abstract class GalaxScanlator : ZeistManga() {
     override val chapterCategory = "Chapter"
     override val pageListSelector = ".separator"
 
-    override fun pageListParse(document: Document) = super.pageListParse(Jsoup.parse(document.selectFirst("#zeist-raw-data")!!.text()))
+    override fun pageListParse(document: Document) = super.pageListParse(document.selectFirst("#zeist-raw-data")!!.text().asJsoup(baseUrl))
 
     override val hasFilters = true
     override val hasLanguageFilter = false

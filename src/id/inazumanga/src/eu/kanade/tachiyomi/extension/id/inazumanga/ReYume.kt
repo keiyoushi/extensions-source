@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.id.inazumanga
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
-import org.jsoup.Jsoup
+import keiyoushi.utils.asJsoup
 import org.jsoup.nodes.Document
 
 @Source
@@ -27,6 +27,6 @@ abstract class ReYume : ZeistManga() {
     override val pageListSelector = ".separator"
     override fun pageListParse(document: Document): List<Page> {
         val textArea = document.selectFirst("textarea#zeist-raw-data")?.text().orEmpty()
-        return super.pageListParse(Jsoup.parse(textArea))
+        return super.pageListParse(textArea.asJsoup(baseUrl))
     }
 }
