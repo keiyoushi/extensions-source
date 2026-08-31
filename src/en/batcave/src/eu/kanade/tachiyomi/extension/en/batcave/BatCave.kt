@@ -102,8 +102,8 @@ abstract class BatCave : KeiSource() {
                     addPathSegment(page.toString())
                     addPathSegment("")
                 }
-            }
-            return parseSearchMangas(client.get(url.build()))
+            }.build()
+            return parseSearchMangas(client.get(url))
         }
 
         var filtersApplied = false
