@@ -162,7 +162,7 @@ abstract class MangaLivre :
         val requestHeaders =
             headers
                 .newBuilder()
-                .add("Origin", baseUrl)
+                .set("Origin", baseUrl)
                 .build()
         client.post(
             "$apiUrl/reader/chapter/access",
