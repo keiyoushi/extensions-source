@@ -606,26 +606,12 @@ abstract class GroupLe :
     }
 
     // ============================== Utilities ===============================
-    // All HTML elements related to chapters have two classes: blockedForAnonymous, blockedNonB
-    // blockedForAnonymous - hard blocked by source, blockedNonB - hidden but can be accessed by app
-    // Source applies hidden status to them via JavaScript: `var viewSettings = [] App.UI.ViewHide.init(viewSettings);`
-    // If source doesn't need to hide chapters `viewSettings` will be empty: `viewSettings = []`
-    // Otherwise it will have rules: `viewSettings = [{"name":"blockedForAnonymous","rules":["hide"],"enabled":true,"onlyGuest":true}]`
-    // If user are authorized, site will have a JS code with `window.current_user_id`, `window.current_user_name`, `window.current_user_vip`
-    // If it's missing - user are not authorized
-    // Check should be universal. AllHentai uses same classes, but different JS code, so it requires its own override/check
     protected open fun authGuard(document: Document) {
-        // Check that auth is required
         document.selectFirst("script:containsData(viewSettings)")?.data()?.let { authReq ->
-            if (!authReq.contains("blockedForAnonymous")) return
+            if (authReq.contains("blockedForAnonymous") && document.selectFirst(".user-avatar") == null) {
+                throw Exception("Для просмотра контента необходима авторизация через WebView🌍 или включите автоматическую авторизацию в настройках расширения")
+            }
         }
-
-        // Check that user is authorized
-        document.selectFirst("script:containsData(window.current_user_id)")?.data()?.let { userInfo ->
-            if (userInfo.contains("window.current_user_name")) return
-        }
-
-        throw Exception("Для просмотра контента необходима авторизация через WebView🌍 или включите автоматическую авторизацию в настройках расширения")
     }
 
     private fun checkMinRange(input: String?, min: Int, max: Int): String {
