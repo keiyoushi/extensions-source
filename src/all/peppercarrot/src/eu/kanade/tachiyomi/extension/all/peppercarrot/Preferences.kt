@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import android.util.Base64
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.decodeProtoBase64
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.protoInstance
