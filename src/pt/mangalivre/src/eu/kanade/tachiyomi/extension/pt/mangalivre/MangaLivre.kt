@@ -47,20 +47,18 @@ abstract class MangaLivre :
 
     override val supportsLatest: Boolean = true
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder =
-        rateLimit(2, 1.seconds) { it.host == baseUrlHost }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2, 1.seconds) { it.host == baseUrlHost }
 
     private val apiUrl: String = "$baseUrl/api"
 
     private val preferences by getPreferencesLazy()
     private val verificationMutex = Mutex()
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder =
-        set("Accept", "*/*")
-            .set("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
-            .set("Sec-Fetch-Dest", "empty")
-            .set("Sec-Fetch-Mode", "cors")
-            .set("Sec-Fetch-Site", "same-origin")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept", "*/*")
+        .set("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
+        .set("Sec-Fetch-Dest", "empty")
+        .set("Sec-Fetch-Mode", "cors")
+        .set("Sec-Fetch-Site", "same-origin")
 
     // ============================== Popular =======================================
 
@@ -72,8 +70,7 @@ abstract class MangaLivre :
             ),
         )
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        getSearchMangaList(page, "", popularFilter)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", popularFilter)
 
     // ============================== Latest =======================================
 
@@ -85,8 +82,7 @@ abstract class MangaLivre :
             ),
         )
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        getSearchMangaList(page, "", latestFilter)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", latestFilter)
 
     // ============================== Search =======================================
 
