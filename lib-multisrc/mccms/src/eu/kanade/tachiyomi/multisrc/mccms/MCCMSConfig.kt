@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.mccms
 
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.asJsoup
 import okhttp3.Headers
 import okhttp3.Response
 import org.jsoup.select.Evaluator

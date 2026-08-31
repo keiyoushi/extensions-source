@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.mangadotnet
+package eu.kanade.tachiyomi.extension.all.mangadotnet
 
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs

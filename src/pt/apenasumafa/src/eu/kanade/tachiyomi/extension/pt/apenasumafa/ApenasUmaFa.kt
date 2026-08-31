@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.pt.apenasumafa
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import okhttp3.Response
 import org.jsoup.nodes.Document
 

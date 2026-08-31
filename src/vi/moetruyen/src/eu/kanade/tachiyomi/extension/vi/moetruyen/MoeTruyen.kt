@@ -7,16 +7,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -28,9 +28,11 @@ import okhttp3.ResponseBody
 import okio.BufferedSource
 import okio.buffer
 import okio.source
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.ByteArrayInputStream
+import java.net.URLDecoder
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.LocalDate
@@ -286,26 +288,26 @@ abstract class MoeTruyen : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
-        val images = document.select("img.page-media")
-            .filterNot { element ->
-                element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
-            }
+        val chapterUrl = "$baseUrl${chapter.url}"
+        val result = loadChapterWithAccess(chapterUrl)
+        val document = Jsoup.parse(result.html, chapterUrl)
+        val images = readerImages(document)
         val readerPages = document.selectFirst("[data-reader-lazy-pages]")
 
         val accessUrl = images.firstOrNull()?.attr("data-imgx-access-url")?.ifBlank { null }
             ?: readerPages?.attr("data-reader-imgx-access-url")?.ifBlank { null }
 
         if (accessUrl != null) {
-            val fullAccessUrl = if (accessUrl.startsWith("http")) accessUrl else "$baseUrl$accessUrl"
-            val proofToken = readerPages
-                ?.attr("data-reader-imgx-proof-token")
-                ?.ifBlank { null }
-
-            return fetchPagesWithGrants(fullAccessUrl, images.size, proofToken)
+            val pageIndexes = images.mapNotNull { it.attr("data-imgx-page-index").toIntOrNull() }
+            val pages = result.pages
+                .filter { it.downloadUrl.isNotBlank() && it.grant != null }
+                .onEach { imgxGrants[it.downloadUrl] = it }
+                .map { Page(pageIndexes.indexOf(it.pageIndex), imageUrl = it.downloadUrl) }
+                .sortedBy { it.index }
+            return pages
         }
 
-        return images
+        val pages = images
             .asSequence()
             .map { element ->
                 element.absUrl("data-src").ifEmpty { element.absUrl("src") }
@@ -318,38 +320,130 @@ abstract class MoeTruyen : KeiSource() {
             .mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
             }
+        return pages
     }
 
-    private suspend fun fetchPagesWithGrants(accessUrl: String, pageCount: Int, proofToken: String?): List<Page> {
-        val pages = mutableListOf<Page>()
-        val batchSize = 5
+    private data class ChapterWebResult(
+        val html: String,
+        val pages: List<PageAccessEntry>,
+    )
 
-        for (start in 0 until pageCount step batchSize) {
-            val end = minOf(start + batchSize, pageCount)
-            val indices = (start until end).toList()
-            val proof = proofToken?.let { createPageAccessProof(accessUrl, indices, it) }
-            val body = PageAccessRequest(pageIndexes = indices, pageAccessProof = proof).toJsonRequestBody()
-            val accessHeaders = headers.newBuilder()
-                .set("Accept", "application/json")
-                .apply {
-                    proof?.let {
-                        set("X-IMGX-Reader-Proof", it.proof)
-                        set("X-IMGX-Reader-Proof-Version", it.version)
-                    }
-                }
-                .build()
+    private fun readerImages(document: Document): List<Element> = document.select("img.page-media")
+        .drop(1)
+        .filterNot { element ->
+            element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
+        }
 
-            val pageAccess = client.post(accessUrl, accessHeaders, body).parseAs<PageAccessResponse>()
+    private suspend fun loadChapterWithAccess(chapterUrl: String): ChapterWebResult = runWebView(
+        timeout = 30.seconds,
+    ) {
+        var requestStarted = false
+        var nextBatch = 0
+        var accessUrl: String? = null
+        var pageIndexes = emptyList<Int>()
+        var proofToken = ""
+        var currentHtml = ""
+        val pages = mutableListOf<PageAccessEntry>()
 
-            for (entry in pageAccess.pages) {
-                if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
-                    imgxGrants[entry.downloadUrl] = entry
-                    pages.add(Page(entry.pageIndex, imageUrl = entry.downloadUrl))
-                }
+        val bridgeName = randomBridgeName()
+        lateinit var submitBatch: (Int) -> Unit
+        jsBridge(bridgeName) { message ->
+            val result = message.parseAs<PageAccessWebResponse>()
+            if (result.status != 200) {
+                reject(eu.kanade.tachiyomi.network.HttpException(result.status))
+                return@jsBridge
+            }
+            pages += result.body.parseAs<PageAccessResponse>().pages
+            submitBatch(nextBatch + 1)
+        }
+
+        submitBatch = { batch ->
+            val indices = pageIndexes.drop(batch * 10).take(10)
+            if (indices.isEmpty()) {
+                resolve(ChapterWebResult(currentHtml, pages))
+            } else {
+                nextBatch = batch
+                val url = accessUrl!!
+                val proof = createPageAccessProof(url, indices, proofToken)
+                val request = PageAccessRequest(pageIndexes = indices, pageAccessProof = proof)
+                val requestJson = request.toJsonString()
+                evaluateJs(
+                    """
+                    fetch(${url.toJsonString()}, {
+                        method: "POST",
+                        credentials: "include",
+                        referrer: location.href,
+                        referrerPolicy: "strict-origin-when-cross-origin",
+                        headers: {
+                            "Accept": "application/json",
+                            "Content-Type": "application/json",
+                            "X-IMGX-Reader-Proof": ${proof.proof.toJsonString()},
+                            "X-IMGX-Reader-Proof-Version": ${proof.version.toJsonString()}
+                        },
+                        body: ${requestJson.toJsonString()}
+                    }).then(async response => {
+                        const body = await response.text();
+                        window.$bridgeName.post(JSON.stringify({status: response.status, body: body}));
+                    }).catch(error => {
+                        window.$bridgeName.post(JSON.stringify({status: 0, body: String(error)}));
+                    });
+                    """.trimIndent(),
+                )
             }
         }
 
-        return pages.sortedBy { it.index }
+        poll {
+            evaluateJs("document.documentElement?.outerHTML || ''") { html ->
+                currentHtml = html.parseAs<String>()
+                val document = Jsoup.parse(currentHtml, chapterUrl)
+                val images = readerImages(document)
+                val readerPages = document.selectFirst("[data-reader-lazy-pages]")
+                if (!requestStarted && (images.isNotEmpty() || readerPages != null)) {
+                    val rawAccessUrl = images.firstOrNull()?.attr("data-imgx-access-url")?.ifBlank { null }
+                        ?: readerPages?.attr("data-reader-imgx-access-url")?.ifBlank { null }
+                    if (rawAccessUrl == null) {
+                        if (readerPages == null) {
+                            requestStarted = true
+                            resolve(ChapterWebResult(currentHtml, emptyList()))
+                        }
+                    } else {
+                        requestStarted = true
+                        accessUrl = if (rawAccessUrl.startsWith("http")) rawAccessUrl else "$baseUrl$rawAccessUrl"
+                        val initialEntries = readerPages?.attr("data-reader-imgx-initial-pages")
+                            ?.ifBlank { null }
+                            ?.let { encoded ->
+                                runCatching {
+                                    URLDecoder.decode(encoded, Charsets.UTF_8.name()).parseAs<List<PageAccessEntry>>()
+                                }.getOrDefault(emptyList())
+                            }
+                            .orEmpty()
+                        pageIndexes = images.mapNotNull { it.attr("data-imgx-page-index").toIntOrNull() }
+                            .distinct()
+                        val validInitialEntries = initialEntries.filter { it.pageIndex in pageIndexes }
+                        pages += validInitialEntries
+                        val initialIndices = validInitialEntries.mapTo(mutableSetOf()) { it.pageIndex }
+                        pageIndexes = pageIndexes
+                            .filterNot { it in initialIndices }
+                        evaluateJs("document.querySelector('[data-reader-imgx-proof-token]')?.getAttribute('data-reader-imgx-proof-token') || ''") { tokenJson ->
+                            proofToken = tokenJson.parseAs<String>()
+                            if (proofToken.isBlank()) {
+                                reject(IllegalStateException("MoeTruyen proof token missing"))
+                            } else {
+                                submitBatch(0)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        loadUrl(chapterUrl)
+    }
+
+    private fun randomBridgeName(): String {
+        val pool = ('a'..'z') + ('A'..'Z')
+        return (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
     }
 
     private fun createPageAccessProof(accessUrl: String, pageIndexes: List<Int>, token: String): PageAccessProof {
