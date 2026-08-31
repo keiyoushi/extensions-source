@@ -26,6 +26,7 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -46,6 +47,13 @@ abstract class ComX :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(DleGuardResolver.interceptor(baseUrl))
         rateLimit(3)
+    }
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        set("Sec-Fetch-Dest", "document")
+        set("Sec-Fetch-Mode", "navigate")
+        set("Sec-Fetch-Site", "none")
+        set("Sec-Fetch-User", "?1")
     }
 
     // ============================== Popular ==============================
