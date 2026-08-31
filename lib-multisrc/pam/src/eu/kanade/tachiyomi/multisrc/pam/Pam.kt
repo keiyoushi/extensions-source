@@ -193,7 +193,7 @@ abstract class Pam :
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.queryParameter("q") != null) {
-            val data = response.parseAs<List<BrowseManga>>()
+            val data = response.parseAs<SearchResponse>().data
 
             return MangasPage(
                 mangas = data.map { it.toSManga(::createThumbnailUrl) },
@@ -204,7 +204,7 @@ abstract class Pam :
 
             return MangasPage(
                 mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
-                hasNextPage = data.meta.current < data.meta.last,
+                hasNextPage = data.meta?.let { it.current < it.last } ?: false,
             )
         }
     }
