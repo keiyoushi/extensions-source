@@ -11,7 +11,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -36,10 +35,6 @@ abstract class BatCave : KeiSource() {
     // Use client to sync cookies with WebView and intercept the DLE Guard redirect.
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(DleGuardResolver.interceptor(baseUrl))
-    }
-
-    init {
-        applicationContext.cacheDir.resolve("source_$id").deleteRecursively()
     }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
@@ -102,7 +97,7 @@ abstract class BatCave : KeiSource() {
             if (filtersApplied) {
                 addPathSegments(filterPath)
             } else {
-                // Send this to always stay in ComicList
+                // Send something to use ComicList
                 addPathSegment("y[from]=1926")
                 addPathSegment("y[to]=${Calendar.getInstance().get(Calendar.YEAR)}")
             }
