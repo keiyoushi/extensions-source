@@ -608,7 +608,7 @@ abstract class GroupLe :
     // ============================== Utilities ===============================
     protected open fun authGuard(document: Document) {
         document.selectFirst("script:containsData(viewSettings)")?.data()?.let { authReq ->
-            if (authReq.contains("blockedForAnonymous") && document.selectFirst(".user-avatar") == null) {
+            if (authReq.contains("blockedForAnonymous") && document.selectFirst("script:containsData(window.current_user_id)") == null) {
                 throw Exception("Для просмотра контента необходима авторизация через WebView🌍 или включите автоматическую авторизацию в настройках расширения")
             }
         }
