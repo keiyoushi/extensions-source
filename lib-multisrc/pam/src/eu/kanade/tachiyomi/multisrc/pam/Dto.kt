@@ -31,7 +31,7 @@ class LibraryResponse(
 
 @Serializable
 class SearchResponse(
-    val data: List<BrowseManga>
+    val data: List<BrowseManga>,
 )
 
 @Serializable
