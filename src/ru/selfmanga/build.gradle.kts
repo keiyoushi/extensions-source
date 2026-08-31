@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "SelfManga"
-    versionCode = 24
+    versionCode = 23
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "grouple"
