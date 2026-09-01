@@ -58,31 +58,29 @@ abstract class MangaLivre :
 
     // ============================== Popular =======================================
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        getSearchMangaList(
-            page,
-            "",
-            FilterList(
-                listOf(
-                    OrderByFilter(options = listOf("" to SORT_POPULAR)),
-                    OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
-                ),
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(
+        page,
+        "",
+        FilterList(
+            listOf(
+                OrderByFilter(options = listOf("" to SORT_POPULAR)),
+                OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
             ),
-        )
+        ),
+    )
 
     // ============================== Latest =======================================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        getSearchMangaList(
-            page,
-            "",
-            FilterList(
-                listOf(
-                    OrderByFilter(options = listOf("" to SORT_UPDATED)),
-                    OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
-                ),
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(
+        page,
+        "",
+        FilterList(
+            listOf(
+                OrderByFilter(options = listOf("" to SORT_UPDATED)),
+                OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
             ),
-        )
+        ),
+    )
 
     // ============================== Search =======================================
 
