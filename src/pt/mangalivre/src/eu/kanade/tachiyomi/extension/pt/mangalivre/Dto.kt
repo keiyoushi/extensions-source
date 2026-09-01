@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.toJsonString
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
 import java.text.Normalizer
 
 @Serializable
@@ -114,6 +114,10 @@ class ChapterDto(
     ) = SChapter.create().apply {
         name = "Capítulo $number"
         date_upload = timestamp
-        url = "/$slug/$number#${ChapterReferenceDto(mangaId, id).toJsonString()}"
+        url = "/$slug/$number"
+        memo = buildJsonObject {
+            put("mangaId", mangaId)
+            put("chapterId", id)
+        }
     }
 }
