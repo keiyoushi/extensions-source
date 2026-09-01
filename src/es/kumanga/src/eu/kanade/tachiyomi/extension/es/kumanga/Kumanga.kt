@@ -175,13 +175,21 @@ class Kumanga :
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val chapterList = mutableListOf<SChapter>()
-        val mangaUrl = response.request.url.encodedPath
+        val currentPath = response.request.url.encodedPath
+        val mangaId = currentPath.substringAfter("/manga/").substringBefore("/")
 
         document.select("a[href*='/capitulo/'], a[href*='/manga/c/']").forEach { el ->
             val href = el.attr("href")
             val chNum = href.substringAfterLast("/").trim()
+            val normalizedUrl = if (href.startsWith("http")) {
+                href.removePrefix(baseUrl)
+            } else if (href.startsWith("/")) {
+                href
+            } else {
+                "/$href"
+            }
             val ch = SChapter.create().apply {
-                url = if (href.startsWith("http")) href.removePrefix(baseUrl) else href
+                url = normalizedUrl
                 name = "Capítulo $chNum"
                 chapter_number = chNum.toFloatOrNull() ?: -1f
             }
@@ -196,7 +204,7 @@ class Kumanga :
                 otherChapters.forEach { item ->
                     val num = item.NumCap ?: return@forEach
                     val ch = SChapter.create().apply {
-                        url = "$mangaUrl/capitulo/$num"
+                        url = "/manga/$mangaId/capitulo/$num"
                         name = "Capítulo $num"
                         chapter_number = num.toFloatOrNull() ?: -1f
                     }
@@ -221,48 +229,6 @@ class Kumanga :
                 ?.substringAfterLast("/")?.trim()
             ?: currentPath.substringAfterLast("/").trim()
 
-        val readerUrl = "$baseUrl/manga/leer/$chapterId"
-        val readerDoc = runCatching {
-            val res = client.newCall(GET(readerUrl, headers)).execute()
-            if (res.isSuccessful) res.asJsoup() else null
-        }.getOrNull()
-
-        if (readerDoc != null) {
-            val hexImages = readerDoc.select("img[data-src*='img.php?src='], img[src*='img.php?src=']")
-            if (hexImages.isNotEmpty()) {
-                val pages = mutableListOf<Page>()
-                hexImages.forEachIndexed { index, el ->
-                    val src = el.attr("data-src").ifEmpty { el.attr("src") }
-                    val hex = src.substringAfter("img.php?src=").substringBefore("&")
-                    val decodedUrl = decodeHex(hex)
-                    if (decodedUrl.isNotBlank()) {
-                        pages.add(Page(index, imageUrl = decodedUrl))
-                    }
-                }
-                if (pages.isNotEmpty()) return pages
-            }
-
-            val rawPUrl = readerDoc.selectFirst("script:containsData(pUrl=)")?.data()
-                ?.substringAfter("pUrl=")
-                ?.substringBefore(";")
-                ?.trim()
-                ?.removeSurrounding("'", "\"")
-
-            if (!rawPUrl.isNullOrEmpty()) {
-                val decoded = runCatching { decodeBase64(decodeBase64(rawPUrl).reversed().drop(10).dropLast(10)) }.getOrNull()
-                if (decoded != null) {
-                    val imageList = runCatching { json.decodeFromString<List<KumangaImageDto>>(decoded) }.getOrNull()
-                    if (imageList != null && imageList.isNotEmpty()) {
-                        return imageList.mapIndexedNotNull { index, dto ->
-                            val imgUrl = dto.imgURL ?: return@mapIndexedNotNull null
-                            val fullUrl = if (imgUrl.startsWith("http")) imgUrl else "$baseUrl/${imgUrl.removePrefix("/").replace("\\", "")}"
-                            Page(index, imageUrl = fullUrl)
-                        }
-                    }
-                }
-            }
-        }
-
         if (mangaId.isNotBlank() && chapterId.isNotBlank()) {
             val pages = mutableListOf<Page>()
             var pageNum = 1
@@ -281,6 +247,40 @@ class Kumanga :
                 pageNum++
             }
             if (pages.isNotEmpty()) return pages
+        }
+
+        val hexImages = document.select("img[data-src*='img.php?src='], img[src*='img.php?src=']")
+        if (hexImages.isNotEmpty()) {
+            val pages = mutableListOf<Page>()
+            hexImages.forEachIndexed { index, el ->
+                val src = el.attr("data-src").ifEmpty { el.attr("src") }
+                val hex = src.substringAfter("img.php?src=").substringBefore("&")
+                val decodedUrl = decodeHex(hex)
+                if (decodedUrl.isNotBlank()) {
+                    pages.add(Page(index, imageUrl = decodedUrl))
+                }
+            }
+            if (pages.isNotEmpty()) return pages
+        }
+
+        val rawPUrl = document.selectFirst("script:containsData(pUrl=)")?.data()
+            ?.substringAfter("pUrl=")
+            ?.substringBefore(";")
+            ?.trim()
+            ?.removeSurrounding("'", "\"")
+
+        if (!rawPUrl.isNullOrEmpty()) {
+            val decoded = runCatching { decodeBase64(decodeBase64(rawPUrl).reversed().drop(10).dropLast(10)) }.getOrNull()
+            if (decoded != null) {
+                val imageList = runCatching { json.decodeFromString<List<KumangaImageDto>>(decoded) }.getOrNull()
+                if (imageList != null && imageList.isNotEmpty()) {
+                    return imageList.mapIndexedNotNull { index, dto ->
+                        val imgUrl = dto.imgURL ?: return@mapIndexedNotNull null
+                        val fullUrl = if (imgUrl.startsWith("http")) imgUrl else "$baseUrl/${imgUrl.removePrefix("/").replace("\\", "")}"
+                        Page(index, imageUrl = fullUrl)
+                    }
+                }
+            }
         }
 
         return emptyList()
