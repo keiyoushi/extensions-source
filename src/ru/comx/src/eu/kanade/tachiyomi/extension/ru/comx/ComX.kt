@@ -26,6 +26,7 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -46,6 +47,13 @@ abstract class ComX :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(DleGuardResolver.interceptor(baseUrl))
         rateLimit(3)
+    }
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        set("Sec-Fetch-Dest", "document")
+        set("Sec-Fetch-Mode", "navigate")
+        set("Sec-Fetch-Site", "none")
+        set("Sec-Fetch-User", "?1")
     }
 
     // ============================== Popular ==============================
@@ -303,7 +311,9 @@ abstract class ComX :
                         if (matchNumber != null && (matchNumber - counter) in 0f..1f) {
                             matchNumber
                         } else {
-                            if (isExtraChapter(chap.title)) {
+                            // Extra have a certain word in title or contains exactly `# 1` in title.
+                            // Regex should exclude any #1.0, #12 but match `#1-`, `#1:` or `# 1 `.
+                            if (isExtraChapter(chap.title) || noInfoExtra.containsMatchIn(chap.title)) {
                                 counter + 0.1f
                             } else {
                                 if (anyNumber != null && (anyNumber - counter) in 0f..1f) {
@@ -486,6 +496,7 @@ abstract class ComX :
         private const val FORCE_IMG_DOMAIN_PREF = "FORCE_IMG_DOMAIN_PREF"
         private val chapterNumberRegex = """(?:\d+\s*-|.*?Глава)\s*([\d.]+)""".toRegex()
         private val chapterAnyNumberRegex = """([\d.]+)""".toRegex()
+        private val noInfoExtra = """#\s?1(?!\d|\.\d)""".toRegex()
         private val whitespacesRegex = """\s{2,}""".toRegex()
     }
 }
