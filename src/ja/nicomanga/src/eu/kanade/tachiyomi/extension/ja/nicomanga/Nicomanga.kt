@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi.extension.ja.nicomanga
+package eu.kanade.tachiyomi.extension.ja.nicomanga
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,16 +12,16 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class Nicomanga : KeiSource() {
@@ -79,44 +79,35 @@ abstract class Nicomanga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) return SMangaUpdate(manga, chapters)
-
         val payload = decodePayload(client.get(baseUrl + manga.url).body.string())
+        val mangaDto = payload.manga!!
 
-        val details = if (fetchDetails) {
-            SManga.create().apply {
-                title = payload.manga?.n.orEmpty()
-                thumbnail_url = payload.manga?.c
-                author = payload.manga?.authorsList?.joinToString { it.n }
-                artist = payload.manga?.artists?.ifEmpty { null } ?: payload.manga?.authorsList?.firstOrNull()?.n
-                genre = payload.manga?.genresList?.joinToString { it.n }
-                status = when (payload.manga?.statusText?.lowercase()) {
-                    "on going", "ongoing" -> SManga.ONGOING
-                    "completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-                description = buildString {
-                    payload.manga?.description?.takeIf { it.isNotBlank() }?.let { append(it.trim()) }
-                    payload.manga?.otherName?.takeIf { it.isNotBlank() }?.let {
-                        if (isNotEmpty()) append("\n\n")
-                        append("<i>").append(it.trim()).append("</i>")
-                    }
+        val details = SManga.create().apply {
+            title = mangaDto.n
+            thumbnail_url = mangaDto.c
+            author = mangaDto.authorsList.joinToString { it.n }
+            artist = mangaDto.artists?.ifEmpty { null } ?: mangaDto.authorsList.firstOrNull()?.n
+            genre = mangaDto.genresList.joinToString { it.n }
+            status = when (mangaDto.statusText?.lowercase()) {
+                "on going", "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+            description = buildString {
+                mangaDto.description?.takeIf { it.isNotBlank() }?.let { append(it.trim()) }
+                mangaDto.otherName?.takeIf { it.isNotBlank() }?.let {
+                    if (isNotEmpty()) append("\n\n")
+                    append(it.trim())
                 }
             }
-        } else {
-            manga
         }
 
-        val chapterList = if (fetchChapters) {
-            payload.chaptersList.orEmpty().map { element ->
-                SChapter.create().apply {
-                    setUrlWithoutDomain(element.ur.orEmpty())
-                    name = element.n?.takeIf { it.isNotBlank() } ?: "Chapter ${element.chapter.orEmpty()}"
-                    date_upload = parseDate(element.u)
-                }
+        val chapterList = payload.chaptersList.orEmpty().map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.ur.orEmpty())
+                name = element.n?.takeIf { it.isNotBlank() } ?: "Chapter ${element.chapter.orEmpty()}"
+                date_upload = parseDate(element.t)
             }
-        } else {
-            chapters
         }
 
         return SMangaUpdate(details, chapterList)
@@ -141,12 +132,14 @@ abstract class Nicomanga : KeiSource() {
         val document = client.get(url).asJsoup()
 
         val mangas = document.select(".manga-grid .manga-card").map { element ->
+            val titleElement = element.selectFirst(".manga-title")!!
+
             SManga.create().apply {
-                title = element.select(".manga-title").text()
+                title = titleElement.text()
                 // The .manga-title contains the manga detail link, while .manga-cover links to the latest chapter
-                setUrlWithoutDomain(element.select(".manga-title").attr("abs:href"))
-                thumbnail_url = element.select("img.manga-img").let { img ->
-                    img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
+                setUrlWithoutDomain(titleElement.attr("abs:href"))
+                thumbnail_url = element.selectFirst("img.manga-img")?.let { img ->
+                    img.attrOrNull("abs:data-src") ?: img.attrOrNull("abs:src")
                 }
             }
         }
@@ -227,59 +220,67 @@ abstract class Nicomanga : KeiSource() {
         throw Exception("Malformed encoded site payload")
     }
 
-    private fun parseDate(dateString: String?): Long {
-        if (dateString.isNullOrBlank()) return 0L
-        return runCatching {
-            val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-            format.timeZone = TimeZone.getTimeZone("UTC")
-            format.parse(dateString.trim())?.time ?: 0L
-        }.getOrDefault(0L)
+    /**
+     * The payload only carries relative time text for chapters, e.g. "7 days ago"
+     * (note the site also sends "2 year ago"). Returns 0 when unparseable.
+     */
+    private fun parseDate(text: String?): Long {
+        val match = relativeDateRegex.find(text?.trim() ?: return 0L) ?: return 0L
+        val amount = match.groupValues[1].toLongOrNull() ?: return 0L
+        // Week/month/year are date-based units that Instant arithmetic rejects, so
+        // convert to seconds directly (month/year use their average durations).
+        val unitSeconds = when (match.groupValues[2]) {
+            "second" -> 1L
+            "minute" -> 60L
+            "hour" -> 3600L
+            "day" -> 86400L
+            "week" -> 604800L
+            "month" -> 2629746L
+            "year" -> 31556952L
+            else -> return 0L
+        }
+        return System.currentTimeMillis() - amount * unitSeconds * 1000
     }
 
     // ============================== Filters ==============================
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        SortFilter(),
-        MatchingLogic(),
-        Filter.Separator(),
-        GenreList(getGenreList()),
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = jsonInstance.encodeToJsonElement(
+        GenresPayload(
+            client.get("$baseUrl/manga-list.html").asJsoup()
+                .select("a.genre-tag")
+                .mapNotNull { element ->
+                    val id = element.attr("abs:href").toHttpUrlOrNull()?.queryParameter("g")
+                    val name = element.textOrNull()
+                    if (id == null || name == null) return@mapNotNull null
+                    NGenre(id = id, name = name)
+                },
+        ),
     )
 
-    // ============================= Payload models =============================
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.let { element ->
+            runCatching { jsonInstance.decodeFromJsonElement<GenresPayload>(element) }
+                .getOrNull()
+                ?.genres
+                ?.map { Genre(it.name, it.id) }
+                ?.takeIf { it.isNotEmpty() }
+        } ?: getGenreList()
 
-    @Serializable
-    private class Payload(
-        val manga: NManga? = null,
-        val images: List<String>? = null,
-        @SerialName("chapters_list") val chaptersList: List<NChapter>? = null,
-    )
+        return FilterList(
+            SortFilter(),
+            MatchingLogic(),
+            Filter.Separator(),
+            GenreList(genres),
+        )
+    }
 
-    @Serializable
-    private class NManga(
-        val n: String? = null,
-        val c: String? = null,
-        val artists: String? = null,
-        @SerialName("other_name") val otherName: String? = null,
-        val description: String? = null,
-        @SerialName("status_text") val statusText: String? = null,
-        @SerialName("authors_list") val authorsList: List<NLink> = emptyList(),
-        @SerialName("genres_list") val genresList: List<NLink> = emptyList(),
-    )
-
-    @Serializable
-    private class NChapter(
-        val chapter: String? = null,
-        val n: String? = null,
-        val u: String? = null,
-        val ur: String? = null,
-    )
-
-    @Serializable
-    private class NLink(
-        val n: String = "",
-    )
+    // ============================= Companion =============================
 
     private companion object {
         const val PAYLOAD_KEY = "NicoMangaX2"
+
+        val relativeDateRegex = Regex("""(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago""")
     }
 }
