@@ -108,8 +108,8 @@ abstract class Hachiraw : HttpSource() {
                     setUrlWithoutDomain(it.attr("href"))
                     title = it.text()
                 }
-                thumbnail_url = element.selectFirst("img")?.let { 
-                    it.absUrl("data-original").ifEmpty { it.absUrl("src") } 
+                thumbnail_url = element.selectFirst("img")?.let {
+                    it.absUrl("data-original").ifEmpty { it.absUrl("src") }
                 }
             }
         }
