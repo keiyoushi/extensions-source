@@ -2,9 +2,9 @@ import keiyoushi.gradle.Lang
 import keiyoushi.gradle.Source
 
 Source(
-    name = "ManhuaRMTL (Arabic MTL)",
+    name = "ManhuaRMTL",
     baseUrl = "https://manhuarmtl.com",
     lang = Lang.EN,
-    versionCode = 1,
+    versionCode = 2,
     isNsfw = false,
 )
