@@ -17,7 +17,7 @@ class LibraryResponse(
     @Serializable
     class Series(
         val data: List<BrowseManga>,
-        val meta: Meta,
+        val meta: Meta? = null,
     ) {
         @Serializable
         class Meta(
@@ -28,6 +28,11 @@ class LibraryResponse(
         )
     }
 }
+
+@Serializable
+class SearchResponse(
+    val data: List<BrowseManga>,
+)
 
 @Serializable
 class BrowseManga(
