@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.3
+
+- Normalize cached chapter URLs in pageListRequest.
+- Bump version.
+
 ## 1.4.2
 
 - Fix chapter URL construction without slug.

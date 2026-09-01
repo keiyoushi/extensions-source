@@ -181,15 +181,8 @@ class Kumanga :
         document.select("a[href*='/capitulo/'], a[href*='/manga/c/']").forEach { el ->
             val href = el.attr("href")
             val chNum = href.substringAfterLast("/").trim()
-            val normalizedUrl = if (href.startsWith("http")) {
-                href.removePrefix(baseUrl)
-            } else if (href.startsWith("/")) {
-                href
-            } else {
-                "/$href"
-            }
             val ch = SChapter.create().apply {
-                url = normalizedUrl
+                url = "/manga/$mangaId/capitulo/$chNum"
                 name = "Capítulo $chNum"
                 chapter_number = chNum.toFloatOrNull() ?: -1f
             }
@@ -216,7 +209,18 @@ class Kumanga :
         return chapterList.distinctBy { it.url }.sortedByDescending { it.chapter_number }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val raw = chapter.url
+        val withSlash = if (raw.startsWith("/")) raw else "/$raw"
+        val cleanUrl = if (withSlash.contains("/capitulo/")) {
+            val mangaId = withSlash.substringAfter("/manga/").substringBefore("/")
+            val capNum = withSlash.substringAfterLast("/").trim()
+            "/manga/$mangaId/capitulo/$capNum"
+        } else {
+            withSlash
+        }
+        return GET("$baseUrl$cleanUrl", headers)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -229,7 +233,7 @@ class Kumanga :
                 ?.substringAfterLast("/")?.trim()
             ?: currentPath.substringAfterLast("/").trim()
 
-        if (mangaId.isNotBlank() && chapterId.isNotBlank()) {
+        if (mangaId.isNotBlank() && chapterId.isNotBlank() && chapterId != mangaId) {
             val pages = mutableListOf<Page>()
             var pageNum = 1
             while (pageNum <= 150) {
