@@ -21,7 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import kotlin.time.Clock
 
 @Source
 abstract class Tranh18 : KeiSource() {
@@ -157,7 +156,6 @@ abstract class Tranh18 : KeiSource() {
                 val a = element.selectFirst("a")!!
                 setUrlWithoutDomain(a.absUrl("href"))
                 name = a.text()
-                date_upload = Clock.System.now().toEpochMilliseconds()
                 chapter_number = CHAPTER_NUMBER_REGEX.find(name)?.value?.toFloatOrNull() ?: 0f
             }
         }
@@ -183,7 +181,7 @@ abstract class Tranh18 : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/comics").use { it.asJsoup() }
+        val document = client.get("$baseUrl/comics").asJsoup()
 
         val tags = document.select("#tags dd").map {
             FilterOption(it.text(), it.attr("data-val"))
