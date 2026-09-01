@@ -64,9 +64,9 @@ abstract class Tranh18 : KeiSource() {
                 addPathSegment("comics")
                 filters.forEach {
                     when (it) {
-                        is TagList -> addQueryParameter("tag", it.values[it.state].genre)
-                        is StatusList -> addQueryParameter("end", it.values[it.state].genre)
-                        is GenreList -> addQueryParameter("area", it.values[it.state].genre)
+                        is TagList -> addQueryParameter("tag", it.values[it.state].value)
+                        is StatusList -> addQueryParameter("end", it.values[it.state].value)
+                        is GenreList -> addQueryParameter("area", it.values[it.state].value)
                         else -> {}
                     }
                 }
@@ -203,9 +203,9 @@ abstract class Tranh18 : KeiSource() {
 
         return FilterList(
             Filter.Header("Không dùng chung với tìm kiếm bằng từ khóa."),
-            TagList(filterData.tags.map { Genre(it.name, it.value) }.toTypedArray()),
-            GenreList(filterData.areas.map { Genre(it.name, it.value) }.toTypedArray()),
-            StatusList(filterData.end.map { Genre(it.name, it.value) }.toTypedArray()),
+            TagList(filterData.tags.toTypedArray()),
+            GenreList(filterData.areas.toTypedArray()),
+            StatusList(filterData.end.toTypedArray()),
         )
     }
 
