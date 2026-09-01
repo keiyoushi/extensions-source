@@ -97,7 +97,7 @@ class ChapterDto(
 class PagesDto(
     val pages: List<ImageDto>,
 ) {
-    fun toPageList(decode: (String) -> String) = pages.mapIndexed { index, image ->
+    suspend fun toPageList(decode: suspend (String) -> String) = pages.mapIndexed { index, image ->
         Page(index, imageUrl = decode(image.url))
     }
 }

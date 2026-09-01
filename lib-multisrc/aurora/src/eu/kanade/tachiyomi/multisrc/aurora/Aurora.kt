@@ -108,13 +108,19 @@ abstract class Aurora : KeiSource() {
             .build()
             .get(getChapterUrl(chapter), pageHeaders)
 
-        val key = getKey()
-
-        return response.extractNextJs<PagesDto>()?.toPageList { decrypt(it, key) } ?: emptyList()
+        return response.extractNextJs<PagesDto>()?.toPageList { encodedUrl ->
+            decrypt(encodedUrl, getKey(encodedUrl))
+        } ?: emptyList()
     }
 
-    private var _key: String? = null
-    suspend fun getKey(): String = _key ?: client.get("$baseUrl/api/atfield/key?v=1&e=20695").parseAs<KeyDto>().k.also {
-        _key = it
+    private var key: String? = null
+    suspend fun getKey(payload: String): String {
+        if (!key.isNullOrBlank()) {
+            return key!!
+        }
+        val (v, e) = getParams(payload)
+        return client.get("$baseUrl/api/atfield/key?v=$v&e=$e").parseAs<KeyDto>().k.also {
+            key = it
+        }
     }
 }

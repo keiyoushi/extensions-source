@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.multisrc.aurora
 
 import android.util.Base64
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -40,4 +42,12 @@ fun decrypt(payload: String, key: String): String {
     }
 
     return String(decryptedBytes, Charsets.UTF_8)
+}
+
+fun getParams(value: String): Pair<Int, Int> {
+    val byteOffset = 1
+    val byteArray = Base64.decode(value, Base64.URL_SAFE or Base64.NO_WRAP)
+    val buffer = ByteBuffer.wrap(byteArray)
+    buffer.order(ByteOrder.BIG_ENDIAN)
+    return byteArray.first().toInt() to buffer.getInt(byteOffset)
 }
