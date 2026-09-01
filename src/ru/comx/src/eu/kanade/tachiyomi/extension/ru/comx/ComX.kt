@@ -311,7 +311,9 @@ abstract class ComX :
                         if (matchNumber != null && (matchNumber - counter) in 0f..1f) {
                             matchNumber
                         } else {
-                            if (isExtraChapter(chap.title)) {
+                            // Extra have a certain word in title or contains exactly `# 1` in title.
+                            // Regex should exclude any #1.0, #12 but match `#1-`, `#1:` or `# 1 `.
+                            if (isExtraChapter(chap.title) || noInfoExtra.containsMatchIn(chap.title)) {
                                 counter + 0.1f
                             } else {
                                 if (anyNumber != null && (anyNumber - counter) in 0f..1f) {
@@ -494,6 +496,7 @@ abstract class ComX :
         private const val FORCE_IMG_DOMAIN_PREF = "FORCE_IMG_DOMAIN_PREF"
         private val chapterNumberRegex = """(?:\d+\s*-|.*?Глава)\s*([\d.]+)""".toRegex()
         private val chapterAnyNumberRegex = """([\d.]+)""".toRegex()
+        private val noInfoExtra = """#\s?1(?!\d|\.\d)""".toRegex()
         private val whitespacesRegex = """\s{2,}""".toRegex()
     }
 }
