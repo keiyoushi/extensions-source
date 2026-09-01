@@ -77,6 +77,7 @@ class Intl(
     private fun createBundle(lang: String): PropertyResourceBundle {
         val fileName = createMessageFileName(lang)
         val fileContent = classLoader.getResourceAsStream(fileName)
+            ?: return PropertyResourceBundle(InputStreamReader("".byteInputStream(), "UTF-8"))
 
         return PropertyResourceBundle(InputStreamReader(fileContent, "UTF-8"))
     }

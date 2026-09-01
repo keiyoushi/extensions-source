@@ -256,7 +256,7 @@ abstract class MangaThemesia : HttpSource() {
 
     protected open fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
-            title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
+            title = seriesDetails.selectFirst(seriesTitleSelector)?.text().orEmpty()
             artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
             author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
             description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
@@ -339,7 +339,7 @@ abstract class MangaThemesia : HttpSource() {
     protected open fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
         setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first()!!.text() }
+        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.first()?.text().orEmpty() }
         date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate()
     }
 
@@ -616,11 +616,10 @@ abstract class MangaThemesia : HttpSource() {
     private fun pathLengthIs(url: HttpUrl, n: Int, strict: Boolean = false): Boolean = ((url.pathSegments.size == n) && (url.pathSegments[n - 1].isNotEmpty())) ||
         (!strict && url.pathSegments.size == n + 1 && url.pathSegments[n].isEmpty())
 
-    protected open fun parseGenres(document: Document): List<GenreData>? = document.selectFirst("ul.genrez")?.select("li")?.map { li ->
-        GenreData(
-            li.selectFirst("label")!!.text(),
-            li.selectFirst("input[type=checkbox]")!!.attr("value"),
-        )
+    protected open fun parseGenres(document: Document): List<GenreData>? = document.selectFirst("ul.genrez")?.select("li")?.mapNotNull { li ->
+        val label = li.selectFirst("label")?.text() ?: return@mapNotNull null
+        val value = li.selectFirst("input[type=checkbox]")?.attr("value") ?: return@mapNotNull null
+        GenreData(label, value)
     }
 
     protected open fun Element.imgAttr(): String = when {
@@ -630,7 +629,7 @@ abstract class MangaThemesia : HttpSource() {
         else -> attr("abs:src")
     }
 
-    protected open fun Elements.imgAttr(): String = this.first()!!.imgAttr()
+    protected open fun Elements.imgAttr(): String = this.firstOrNull()?.imgAttr().orEmpty()
 
     // Unused
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
