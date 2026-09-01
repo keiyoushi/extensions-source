@@ -165,7 +165,7 @@ abstract class MangaLivre :
         ref: ChapterReferenceDto,
     ): ReaderAccessResponseDto {
         val isReader = Exception().stackTrace.any { it.className.contains("reader") }
-        val previousGrant = readerGrantCookie()
+        clearReaderGrantCookie()
         try {
             val intent =
                 Intent().apply {
@@ -184,7 +184,7 @@ abstract class MangaLivre :
             do {
                 delay(VERIFICATION_POLL_INTERVAL)
                 val grant = readerGrantCookie()
-            } while (grant == null || grant == previousGrant)
+            } while (grant == null)
 
             val access = fetchReaderAccess(ref)
                 ?: throw IOException("A verificação não liberou o capítulo.")
@@ -203,6 +203,13 @@ abstract class MangaLivre :
         .getCookie(baseUrl)
         ?.split("; ")
         ?.firstOrNull { it.startsWith("$READER_GRANT_COOKIE=") }
+
+    private fun clearReaderGrantCookie() {
+        CookieManager.getInstance().apply {
+            setCookie(baseUrl, "$READER_GRANT_COOKIE=; Max-Age=0; Path=/; Secure")
+            flush()
+        }
+    }
 
     // ============================== Filters =======================================
 
