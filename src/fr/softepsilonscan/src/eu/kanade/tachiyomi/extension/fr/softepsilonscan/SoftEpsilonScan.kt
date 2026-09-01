@@ -11,8 +11,6 @@ import keiyoushi.annotation.Source
 @Source
 abstract class SoftEpsilonScan : Pam() {
 
-    override val prefPremiumTitle = "Masquer les chapitres Premium"
-
     override val popularFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(3, false)))
     override val latestFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(2, false)))
 

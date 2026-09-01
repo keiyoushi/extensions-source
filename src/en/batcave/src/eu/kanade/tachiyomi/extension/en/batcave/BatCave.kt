@@ -20,13 +20,14 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.net.URLEncoder
 import java.time.format.DateTimeFormatter
+import java.util.Calendar
 
 @Source
 abstract class BatCave : KeiSource() {
@@ -36,24 +37,55 @@ abstract class BatCave : KeiSource() {
         addInterceptor(DleGuardResolver.interceptor(baseUrl))
     }
 
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        set("Sec-Fetch-Dest", "document")
+        set("Sec-Fetch-Mode", "navigate")
+        set("Sec-Fetch-Site", "none")
+        set("Sec-Fetch-User", "?1")
+    }
+
     // ============================== Popular ==============================
-    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortFilter.POPULAR)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("comix")
+            if (page > 1) {
+                addPathSegments("page/$page")
+            }
+            addPathSegment("")
+        }.build()
+
+        val body = FormBody.Builder()
+            .add("dlenewssortby", "rating")
+            .add("dledirection", "desc")
+            .add("set_new_sort", "dle_sort_cat_1")
+            .add("set_direction_sort", "dle_direction_cat_1")
+            .build()
+
+        return parseSearchMangas(client.post(url, body))
+    }
 
     // ============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int) = parseLatestMangas(client.get("$baseUrl/page/$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (page > 1) {
+                addPathSegments("page/$page")
+                addPathSegment("")
+            }
+        }.build()
 
-    private fun parseLatestMangas(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
 
-        val entries = document.select("#content-load > .latest.grid-item").map { element ->
+        val entries = document.select("#content-load > .latest.grid-item").mapNotNull { element ->
             SManga.create().apply {
                 with(element.selectFirst(".latest__title > a")!!) {
+                    if (ownText().isEmpty()) return@mapNotNull null
                     setUrlWithoutDomain(absUrl("href"))
                     title = ownText()
                 }
                 thumbnail_url = element.selectFirst(".latest__img img")?.absUrl("src")
             }
         }
+
         val hasNextPage = document.selectFirst("li.pagination a[href]") != null
 
         return MangasPage(entries, hasNextPage)
@@ -62,59 +94,51 @@ abstract class BatCave : KeiSource() {
     // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
-            val url = buildString {
-                append(baseUrl)
-                append("/search/")
-                append(URLEncoder.encode(query.trim(), "UTF-8"))
+            val url = baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("search")
+                addPathSegment(query)
                 if (page > 1) {
-                    append("/page/")
-                    append(page)
-                    append("/")
+                    addPathSegment("page")
+                    addPathSegment(page.toString())
+                    addPathSegment("")
                 }
-            }
+            }.build()
             return parseSearchMangas(client.get(url))
         }
 
         var filtersApplied = false
         val filterPath = buildString {
-            filters.firstInstanceOrNull<YearFilter>()?.addFilterToUrl(this)?.also { filtersApplied = true }
-            filters.firstInstanceOrNull<PublisherFilter>()?.addFilterToUrl(this)?.also { filtersApplied = true }
-            filters.firstInstanceOrNull<GenreFilter>()?.addFilterToUrl(this)?.also { filtersApplied = true }
+            filters.firstInstanceOrNull<YearFilter>()?.takeIf { it.addFilterToUrl(this) }?.let { filtersApplied = true }
+            filters.firstInstanceOrNull<PublisherFilter>()?.takeIf { it.addFilterToUrl(this) }?.let { filtersApplied = true }
+            filters.firstInstanceOrNull<GenreFilter>()?.takeIf { it.addFilterToUrl(this) }?.let { filtersApplied = true }
         }
 
-        val url = buildString {
-            append(baseUrl)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("ComicList")
+
             if (filtersApplied) {
-                append("/ComicList/")
-                append(filterPath)
+                addPathSegments(filterPath)
             } else {
-                append("/comix/")
+                // Send something to force ComicList
+                addPathSegment("y[from]=1926")
+                addPathSegment("y[to]=${Calendar.getInstance().get(Calendar.YEAR)}")
             }
             if (page > 1) {
-                append("page/")
-                append(page)
-                append("/")
+                addPathSegments("page/$page")
             }
-        }
+            addPathSegment("")
+        }.build()
 
         val sort = filters.firstInstanceOrNull<SortFilter>() ?: SortFilter()
 
-        return if (sort.getSort().isEmpty()) {
-            parseSearchMangas(client.get(url))
-        } else {
-            val form = FormBody.Builder().apply {
-                add("dlenewssortby", sort.getSort())
-                add("dledirection", sort.getDirection())
-                if (filtersApplied) {
-                    add("set_new_sort", "dle_sort_xfilter")
-                    add("set_direction_sort", "dle_direction_xfilter")
-                } else {
-                    add("set_new_sort", "dle_sort_cat_1")
-                    add("set_direction_sort", "dle_direction_cat_1")
-                }
-            }.build()
-            parseSearchMangas(client.post(url, form))
-        }
+        val body = FormBody.Builder()
+            .add("dlenewssortby", sort.getSort())
+            .add("dledirection", sort.getDirection())
+            .add("set_new_sort", "dle_sort_xfilter")
+            .add("set_direction_sort", "dle_direction_xfilter")
+            .build()
+
+        return parseSearchMangas(client.post(url, body))
     }
 
     private fun parseSearchMangas(response: Response): MangasPage {
@@ -126,7 +150,7 @@ abstract class BatCave : KeiSource() {
                     setUrlWithoutDomain(absUrl("href"))
                     title = ownText()
                 }
-                thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+                thumbnail_url = element.selectFirst(".readed__img img")?.absUrl("data-src")
             }
         }
         val hasNextPage = document.selectFirst("div.pagination__pages")
@@ -185,8 +209,8 @@ abstract class BatCave : KeiSource() {
         doc.selectFirst(".page__similar-panel.is-active")?.select(".scroller-2 a.poster")?.let { anchor ->
             memo = buildJsonObject {
                 val similar = anchor.mapNotNull {
-                    val title = it.selectFirst(".poster__title")?.text()?.takeIf { it.isNotBlank() }
-                    val url = it.attr("href").takeIf { it.isNotBlank() }
+                    val title = it.selectFirst(".poster__title")?.text()?.takeIf { str -> str.isNotBlank() }
+                    val url = it.attr("href").takeIf { str -> str.isNotBlank() }
                     val thumb = it.selectFirst("img")?.attr("data-src")
                     if (title != null && url != null) RelatedComic(title, url, thumb) else null
                 }
@@ -254,7 +278,7 @@ abstract class BatCave : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val doc = client.get("$baseUrl/comix").asJsoup()
+        val doc = client.get("$baseUrl/comix/").asJsoup()
         val script = doc.selectFirst("script:containsData(window.__XFILTER__)")?.data()
             ?: error("Filter data not found")
 

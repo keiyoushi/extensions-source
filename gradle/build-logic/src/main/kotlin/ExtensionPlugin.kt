@@ -288,7 +288,7 @@ class ExtensionPlugin : Plugin<Project> {
             val contentWarningOrdinal = keiyoushi.contentWarning.get().ordinal + 1
             val libVersionValue = keiyoushi.libVersion.get()
 
-            val sourceInfoJsonProvider = versionCodeProvider.zip(versionNameProvider) { code, name ->
+            val sourceInfoJsonProvider = androidVersionCodeProvider.zip(versionNameProvider) { code, name ->
                 Json.encodeToString(
                     ExtensionMetadata(
                         // Always the module directory (e.g. "en.example"), even when pkgName

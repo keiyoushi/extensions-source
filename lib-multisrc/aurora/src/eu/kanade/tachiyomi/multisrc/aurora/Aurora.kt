@@ -16,6 +16,7 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import kotlinx.serialization.json.JsonObject
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -27,6 +28,12 @@ abstract class Aurora : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3, 1.seconds)
         .addCookie("mnx_adulto" to "1")
+
+    override fun Headers.Builder.configureHeaders() = set("Sec-Fetch-Dest", "document")
+        .set("Sec-Fetch-Mode", "navigate")
+        .set("Sec-Fetch-Site", "none")
+        .set("Sec-Fetch-User", "?1")
+        .set("Alt-Used", baseUrl.substringAfterLast("/"))
 
     override suspend fun getPopularManga(page: Int) = getMangasPage(client.get("$baseUrl/catalogo"))
 
@@ -101,6 +108,19 @@ abstract class Aurora : KeiSource() {
             .build()
             .get(getChapterUrl(chapter), pageHeaders)
 
-        return response.extractNextJs<PagesDto>()?.toPageList() ?: emptyList()
+        return response.extractNextJs<PagesDto>()?.toPageList { encodedUrl ->
+            decrypt(encodedUrl, getKey(encodedUrl))
+        } ?: emptyList()
+    }
+
+    private var key: String? = null
+    suspend fun getKey(payload: String): String {
+        if (!key.isNullOrBlank()) {
+            return key!!
+        }
+        val (v, e) = getParams(payload)
+        return client.get("$baseUrl/api/atfield/key?v=$v&e=$e").parseAs<KeyDto>().k.also {
+            key = it
+        }
     }
 }
