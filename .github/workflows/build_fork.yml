@@ -1,0 +1,41 @@
+name: Build Fork Extensions
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Kumanga Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Kumanga Debug APK
+        run: |
+          ./gradlew :src:es:kumanga:assembleDebug
+
+      - name: Upload Kumanga APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kumanga-apk
+          path: "**/*.apk"
+          retention-days: 7
