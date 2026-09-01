@@ -20,11 +20,9 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
@@ -36,6 +34,8 @@ class Kumanga :
     override val name = "Kumanga"
 
     override val baseUrl = "https://www.kumanga.com"
+
+    private val apiUrl = "$baseUrl/backend/ajax/searchengine2.php"
 
     override val lang = "es"
 
@@ -51,88 +51,94 @@ class Kumanga :
         .add("Referer", "$baseUrl/")
         .setRandomUserAgent()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangalist?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        val form = FormBody.Builder()
+            .add("page", page.toString())
+            .add("perPage", CONTENT_PER_PAGE.toString())
+            .add("retrieveCategories", "true")
+            .add("retrieveAuthors", "true")
+            .add("contentType", "manga")
+            .build()
 
-    override fun popularMangaParse(response: Response): MangasPage = parseMangasPage(response)
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/mangalist?page=$page&sort=latest", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangasPage(response)
-
-    private fun parseMangasPage(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("a[href*='manga/'], div.manga-item, div.box")
-            .filter { element ->
-                val href = if (element.tagName() == "a") element.attr("href") else element.selectFirst("a[href*='manga/']")?.attr("href") ?: ""
-                href.contains("/manga/") && !href.contains("/capitulo/") && !href.contains("/c/") && !href.contains("/leer/") && !href.contains("mangalist")
-            }
-            .distinctBy { element ->
-                val href = if (element.tagName() == "a") element.attr("href") else element.selectFirst("a[href*='manga/']")?.attr("href") ?: ""
-                href
-            }
-            .map { element -> mangaFromElement(element) }
-
-        val hasNextPage = document.selectFirst(".pagination .next, a[rel=next], .pagination a:contains(»)") != null
-
-        return MangasPage(mangas, hasNextPage)
+        return POST(apiUrl, headers, form)
     }
 
-    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = if (element.tagName() == "a") element else element.selectFirst("a[href*='manga/']") ?: element
-        val href = link.attr("href")
-        url = if (href.startsWith("http")) href.removePrefix(baseUrl) else href
-        title = link.selectFirst("img")?.attr("alt")?.trim()
-            ?: link.selectFirst("h3, h4, .title, .media-heading")?.text()?.trim()
-            ?: link.text().trim()
-        thumbnail_url = link.selectFirst("img")?.let { img ->
-            img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
-        }
+    override fun popularMangaParse(response: Response): MangasPage {
+        val dto = json.decodeFromString<KumangaSearchResponseDto>(response.body.string())
+        val mangas = dto.contents.map { it.toSManga(baseUrl) }
+        return MangasPage(mangas, dto.contents.size >= CONTENT_PER_PAGE)
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("a[href*='manga/']")
+            .filter { element ->
+                val href = element.attr("href")
+                href.contains("/manga/") && !href.contains("/capitulo/") && !href.contains("/c/") && !href.contains("/leer/") && !href.contains("mangalist")
+            }
+            .distinctBy { it.attr("href") }
+            .mapNotNull { element ->
+                val rawHref = element.attr("href")
+                val href = if (rawHref.startsWith("http")) {
+                    rawHref.removePrefix(baseUrl)
+                } else if (rawHref.startsWith("/")) {
+                    rawHref
+                } else {
+                    "/$rawHref"
+                }
+                val title = element.selectFirst("img")?.attr("alt")?.trim()
+                    ?: element.text().trim()
+                if (title.isEmpty()) return@mapNotNull null
+                val id = href.substringAfter("/manga/").substringBefore("/")
+                SManga.create().apply {
+                    this.url = href
+                    this.title = title
+                    this.thumbnail_url = id.toIntOrNull()?.let { "https://static.kumanga.com/manga/${it / 1000}/$it.jpg" }
+                }
+            }
+
+        return MangasPage(mangas, false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/mangalist".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
+        val form = FormBody.Builder()
+            .add("page", page.toString())
+            .add("perPage", CONTENT_PER_PAGE.toString())
+            .add("retrieveCategories", "true")
+            .add("retrieveAuthors", "true")
+            .add("contentType", "manga")
 
         if (query.isNotBlank()) {
-            url.addQueryParameter("keywords", query)
+            form.add("keywords", query)
         }
 
         filters.forEach { filter ->
             when (filter) {
                 is TypeFilter -> {
-                    val types = filter.state
+                    filter.state
                         .filter { it.state }
-                        .map { it.id }
-                    if (types.isNotEmpty()) {
-                        url.addQueryParameter("types", types.joinToString("-"))
-                    }
+                        .forEach { form.add("type_filter[]", it.id) }
                 }
                 is StatusFilter -> {
                     if (filter.state != 0) {
-                        url.addQueryParameter("status", filter.toUriPart())
-                    }
-                }
-                is YearFilter -> {
-                    if (filter.state.isNotBlank()) {
-                        url.addQueryParameter("years", filter.state.trim())
+                        form.add("status_filter[]", filter.toUriPart())
                     }
                 }
                 is GenreFilter -> {
-                    val genres = filter.state
+                    filter.state
                         .filter { it.state }
-                        .map { it.id }
-                    if (genres.isNotEmpty()) {
-                        url.addQueryParameter("categories", genres.joinToString("-"))
-                    }
+                        .forEach { form.add("category_filter[]", it.id) }
                 }
                 else -> {}
             }
         }
 
-        return GET(url.build(), headers)
+        return POST(apiUrl, headers, form.build())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseMangasPage(response)
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
@@ -261,8 +267,6 @@ class Kumanga :
         Filter.Separator(),
         StatusFilter(),
         Filter.Separator(),
-        YearFilter(),
-        Filter.Separator(),
         GenreFilter(getGenreList()),
     )
 
@@ -279,8 +283,6 @@ class Kumanga :
                 Pair("Inconcluso", "3"),
             ),
         )
-
-    private class YearFilter : Filter.Text("Año o rango (ej: 2026 o 2026-2013)")
 
     private class Genre(name: String, val id: String) : Filter.CheckBox(name)
     private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Género", genres)
@@ -352,4 +354,8 @@ class Kumanga :
         Genre("Yaoi", "44"),
         Genre("Yuri", "45"),
     )
+
+    companion object {
+        private const val CONTENT_PER_PAGE = 24
+    }
 }
