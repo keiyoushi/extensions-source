@@ -44,7 +44,7 @@ class Kumanga :
     private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .rateLimit(4, 1, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -211,24 +211,42 @@ class Kumanga :
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        val readerLink = document.selectFirst("a#leer[href], a[href*='manga/leer/']")?.attr("href")
-        val finalDoc = if (readerLink != null) {
-            val readerUrl = if (readerLink.startsWith("http")) readerLink else "$baseUrl/$readerLink".replace("//", "/")
-            client.newCall(GET(readerUrl, headers)).execute().asJsoup()
+        val readerLink = document.selectFirst("a#leer[href], a[href*='manga/leer/'], a[href*='/leer/']")?.attr("href")
+        val readerDoc = if (readerLink != null) {
+            val fullReaderUrl = if (readerLink.startsWith("http")) readerLink else "$baseUrl/${readerLink.removePrefix("/")}"
+            client.newCall(GET(fullReaderUrl, headers)).execute().asJsoup()
         } else {
             document
         }
 
-        val form = finalDoc.selectFirst("form#myForm[action]")
+        val form = readerDoc.selectFirst("form#myForm[action]")
         val targetDoc = if (form != null) {
-            val url = form.attr("action")
+            val actionUrl = form.attr("action")
+            val formUrl = if (actionUrl.startsWith("http")) actionUrl else "$baseUrl/${actionUrl.removePrefix("/")}"
             val bodyBuilder = FormBody.Builder()
             form.select("input").forEach { input ->
                 bodyBuilder.add(input.attr("name"), input.attr("value"))
             }
-            client.newCall(POST(url, headers, bodyBuilder.build())).execute().asJsoup()
+            client.newCall(POST(formUrl, headers, bodyBuilder.build())).execute().asJsoup()
         } else {
-            finalDoc
+            readerDoc
+        }
+
+        val hexImages = targetDoc.select("img[data-src*='img.php?src='], img[src*='img.php?src=']")
+        if (hexImages.isNotEmpty()) {
+            val pages = mutableListOf<Page>()
+            hexImages.forEachIndexed { index, el ->
+                val src = el.attr("data-src").ifEmpty { el.attr("src") }
+                val hex = src.substringAfter("img.php?src=").substringBefore("&")
+                val decodedUrl = decodeHex(hex)
+                if (decodedUrl.isNotBlank()) {
+                    pages.add(Page(index, imageUrl = decodedUrl))
+                } else {
+                    val fullSrc = if (src.startsWith("http")) src else "$baseUrl/${src.removePrefix("/")}"
+                    pages.add(Page(index, imageUrl = fullSrc))
+                }
+            }
+            if (pages.isNotEmpty()) return pages
         }
 
         val rawPUrl = targetDoc.selectFirst("script:containsData(pUrl=)")?.data()
@@ -238,23 +256,42 @@ class Kumanga :
             ?.removeSurrounding("'", "\"")
 
         if (!rawPUrl.isNullOrEmpty()) {
-            val decoded = decodeBase64(decodeBase64(rawPUrl).reversed().drop(10).dropLast(10))
-            val imageList = json.decodeFromString<List<KumangaImageDto>>(decoded)
-            return imageList.mapIndexedNotNull { index, dto ->
-                val imgUrl = dto.imgURL ?: return@mapIndexedNotNull null
-                val fullUrl = if (imgUrl.startsWith("http")) imgUrl else "$baseUrl/$imgUrl".replace("\\", "")
-                Page(index, imageUrl = fullUrl)
+            val decoded = runCatching { decodeBase64(decodeBase64(rawPUrl).reversed().drop(10).dropLast(10)) }.getOrNull()
+            if (decoded != null) {
+                val imageList = runCatching { json.decodeFromString<List<KumangaImageDto>>(decoded) }.getOrNull()
+                if (imageList != null && imageList.isNotEmpty()) {
+                    return imageList.mapIndexedNotNull { index, dto ->
+                        val imgUrl = dto.imgURL ?: return@mapIndexedNotNull null
+                        val fullUrl = if (imgUrl.startsWith("http")) imgUrl else "$baseUrl/${imgUrl.removePrefix("/").replace("\\", "")}"
+                        Page(index, imageUrl = fullUrl)
+                    }
+                }
             }
         }
 
-        val images = targetDoc.select("img.km-img, #img-api-1, div.reading-content img, .page-break img")
-        return images.mapIndexed { index, img ->
+        val fallbackImages = targetDoc.select("img.km-img, #img-api-1, div.reading-content img, .page-break img, .lazy-img")
+        return fallbackImages.mapIndexed { index, img ->
             val src = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
             Page(index, imageUrl = src)
         }
     }
 
+    override fun imageRequest(page: Page): Request {
+        val imageHeaders = headersBuilder()
+            .set("Referer", "$baseUrl/")
+            .build()
+        return GET(page.imageUrl!!, imageHeaders)
+    }
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    private fun decodeHex(hex: String): String = try {
+        hex.chunked(2)
+            .map { it.toInt(16).toChar() }
+            .joinToString("")
+    } catch (_: Exception) {
+        ""
+    }
 
     private fun decodeBase64(encoded: String): String = Base64.decode(encoded, Base64.DEFAULT).toString(Charset.forName("UTF-8"))
 
