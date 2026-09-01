@@ -105,10 +105,7 @@ class WebViewScope<T> internal constructor(
     var useWideViewPort: Boolean by setting({ useWideViewPort }, { useWideViewPort = it })
     var loadWithOverviewMode: Boolean by setting({ loadWithOverviewMode }, { loadWithOverviewMode = it })
 
-    /**
-     * Setting this also spoofs the `Sec-CH-UA` client hints to match the user agent, instead of
-     * advertising the real WebView brand and version.
-     */
+    /** Also spoofs the `Sec-CH-UA` client hints to match the user agent. */
     var userAgent: String
         get() = webView.settings.userAgentString
         set(value) = webView.setUserAgent(value)
@@ -358,8 +355,7 @@ class WebViewSession(private val idleTimeout: Duration = 30.seconds) {
         }
     }
 
-    // Restores the metadata captured before any run could spoof it, so a reused WebView does not
-    // keep advertising a previous run's user agent through its `Sec-CH-UA` client hints.
+    // Resets hints spoofed by a previous run before this WebView is reused.
     internal fun restoreUserAgentMetadata() {
         if (!isUserAgentMetadataSupported()) return
         val metadata = defaultUserAgentMetadata ?: return
@@ -422,13 +418,13 @@ private fun setupWebView(webView: WebView) {
         webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
     }
 }
-private fun isUserAgentMetadataSupported(): Boolean = WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)
+private fun isUserAgentMetadataSupported(): Boolean = try {
+    WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)
+} catch (_: Throwable) {
+    false
+}
 
-/**
- * Sets the user agent along with the matching user agent metadata, which Chromium uses to populate
- * the `Sec-CH-UA` client hints. Without this the hints keep advertising the real WebView brand and
- * version, contradicting the spoofed user agent.
- */
+// Chromium populates Sec-CH-UA client hints from the user agent metadata; spoof both together.
 private fun WebView.setUserAgent(userAgent: String) {
     settings.userAgentString = userAgent
 
