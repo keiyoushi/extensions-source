@@ -6,13 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Kayn Scans"
-    versionCode = 5
+    versionCode = 31
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "iken"
+    theme = "vinetheme"
 
     source {
-        baseUrl = "https://kaynscan.org"
+        baseUrl = "https://kaynscans.com"
         lang = "en"
+        versionId = 2
     }
 }

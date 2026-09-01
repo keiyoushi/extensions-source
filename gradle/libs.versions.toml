@@ -1,5 +1,5 @@
 [versions]
-android-gradle = "9.3.1"
+android-gradle = "9.3.2"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 junit = "4.13.2"
@@ -7,14 +7,14 @@ kotlin-gradle = "2.4.10"
 ksp = "2.3.9"
 kotlinpoet = "2.3.0"
 ktlint = "1.8.0"
-spotless = "8.8.0"
+spotless = "8.10.1"
 tapmoc = "0.4.2"
 okhttp = "5.4.0"
 
 [libraries]
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }
 apksig = { module = "com.android.tools.build:apksig", version.ref = "android-gradle" }
-proguard = { module = "com.guardsquare:proguard-base", version = "7.9.1" }
+proguard = { module = "com.guardsquare:proguard-base", version = "7.10.0" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin-gradle" }
 ksp-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }
@@ -40,10 +40,10 @@ rxjava = { module = "io.reactivex:rxjava", version = "1.3.8" }
 #noinspection SimilarGradleDependency
 tachiyomi-lib-v14 = { module = "com.github.keiyoushi:extensions-lib", version = "18a8e26be2" }
 #noinspection SimilarGradleDependency
-tachiyomi-lib-v16 = { module = "com.github.keiyoushi:extensions-lib", version = "6e0c96cea8" }
+tachiyomi-lib-v16 = { module = "com.github.keiyoushi:extensions-lib", version = "42255ee5fa" }
 
 # Required by Kotlin 2.x compiler to resolve type-use annotations (e.g. org.jspecify.annotations.Nullable) used in Jsoup's API signatures
-jspecify = { module = "org.jspecify:jspecify", version = "1.0.0" }
+jspecify = { module = "org.jspecify:jspecify", version = "1.0.1" }
 
 # app provides it as transitive dependency of okhttp-zstd
 zstd-kmp-okio = { module = "com.squareup.zstd:zstd-kmp-okio", version = "0.4.0" }

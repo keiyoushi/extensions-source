@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.manwa
 
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.toJsonString
 import okhttp3.Interceptor
 import okhttp3.Response

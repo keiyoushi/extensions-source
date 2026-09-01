@@ -8,9 +8,9 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistMangaDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import kotlinx.serialization.decodeFromString
 import okhttp3.Response
 

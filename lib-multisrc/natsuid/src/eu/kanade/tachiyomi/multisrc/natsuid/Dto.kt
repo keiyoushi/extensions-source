@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 
@@ -23,16 +25,13 @@ class Manga(
     @SerialName("_embedded")
     val embedded: Embedded,
 ) {
-    fun toSManga(appendId: Boolean = false) = SManga.create().apply {
+    val isNovel get() = embedded.getTerms("type").contains("Novel")
+
+    fun toSManga() = SManga.create().apply {
         url = MangaUrl(id, slug).toJsonString()
         title = Parser.unescapeEntities(this@Manga.title.rendered, false)
-        description = buildString {
-            append(Jsoup.parseBodyFragment(content.rendered).wholeText())
-            if (appendId) {
-                append("\n\nID: $id")
-            }
-        }
-        thumbnail_url = embedded.featuredMedia.firstOrNull()?.sourceUrl
+        description = Jsoup.parseBodyFragment(content.rendered).wholeText()
+        thumbnail_url = embedded.featuredMedia?.firstOrNull()?.sourceUrl
         author = embedded.getTerms("series-author").joinToString()
         artist = embedded.getTerms("artist").joinToString()
         genre = buildSet {
@@ -48,6 +47,9 @@ class Manga(
                 else -> SManga.UNKNOWN
             }
         }
+        memo = buildJsonObject {
+            put("id", id)
+        }
         initialized = true
     }
 }
@@ -55,7 +57,7 @@ class Manga(
 @Serializable
 class Embedded(
     @SerialName("wp:featuredmedia")
-    val featuredMedia: List<FeaturedMedia>,
+    val featuredMedia: List<FeaturedMedia>?,
     @SerialName("wp:term")
     private val terms: List<List<Term>>,
 ) {

@@ -1,20 +1,18 @@
 package eu.kanade.tachiyomi.extension.en.thepropertyofhate
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 
 @Source
-abstract class ThePropertyOfHate : HttpSource() {
+abstract class ThePropertyOfHate : KeiSource() {
 
     override val supportsLatest = false
 
@@ -31,40 +29,40 @@ abstract class ThePropertyOfHate : HttpSource() {
 
     // ========================= Popular =========================
 
-    override fun fetchPopularManga(page: Int) = Observable.just(MangasPage(listOf(manga), false))!!
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(manga), false)
 
     // ========================= Latest =========================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
     // ========================= Search =========================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
     // ========================= Details =========================
 
-    // write the data again to avoid bugs in backup restore
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(this.manga.also { it.initialized = true })!!
+    override fun getMangaUrl(manga: SManga): String = baseUrl
 
-    // needed for the webview
-    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl, headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val manga = this.manga.also { it.initialized = true }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+        val chapters = if (fetchChapters) {
+            getChapterList()
+        } else {
+            chapters
+        }
 
-    // ========================= Chapters =========================
+        return SMangaUpdate(manga, chapters)
+    }
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/TPoH/", headers)
+    private suspend fun getChapterList(): List<SChapter> {
+        val document = client.get("$baseUrl/TPoH/").asJsoup()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
         val chapters = mutableListOf<SChapter>()
         var addedActiveChapter = false
         var chapterNum = 1f
@@ -106,9 +104,11 @@ abstract class ThePropertyOfHate : HttpSource() {
 
     // ========================= Pages =========================
 
-    override fun pageListParse(response: Response) = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url).asJsoup()
         .select("select.jumpbox option:not([style*=bold]):not([value=-1])")
         .mapIndexed { num, opt -> Page(num, opt.absUrl("value")) }
 
-    override fun imageUrlParse(response: Response): String = response.asJsoup().selectFirst(".comic_comic > img")!!.absUrl("src")
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url).asJsoup()
+        .selectFirst(".comic_comic > img")!!
+        .absUrl("src")
 }

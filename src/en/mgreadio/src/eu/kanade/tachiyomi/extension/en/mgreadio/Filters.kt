@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mgreadio
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl
 
 internal fun HttpUrl.Builder.addFilters(filters: FilterList) {
@@ -40,8 +41,8 @@ internal class RatingMaxFilter : UriSelectFilter("Maximum Rating", "rating_max",
 
 internal class SortFilter : UriSelectFilter("Sort By", "sort", SORT_OPTIONS)
 
-internal class GenreFilter :
-    Filter.Group<Genre>("Genres", GENRES.map { Genre(it.first, it.second) }),
+internal class GenreFilter(genres: List<GenreOption>) :
+    Filter.Group<Genre>("Genres", genres.map { Genre(it.name, it.id) }),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         state.filter { it.state }.forEach { genre ->
@@ -51,6 +52,12 @@ internal class GenreFilter :
 }
 
 internal class Genre(name: String, val id: String) : Filter.CheckBox(name)
+
+@Serializable
+internal class GenreOption(
+    val name: String,
+    val id: String,
+)
 
 private val TYPE_OPTIONS = arrayOf(
     "All Types" to "",
@@ -106,37 +113,4 @@ private val SORT_OPTIONS = arrayOf(
     "Highest Rating" to "rating",
     "Most Power Stone" to "power",
     "Most Followers" to "follow",
-)
-
-private val GENRES = listOf(
-    "Action" to "action",
-    "Adaptation" to "adaptation",
-    "Adventure" to "adventure",
-    "Anime" to "anime",
-    "Comedy" to "comedy",
-    "Cooking" to "cooking",
-    "Crime" to "crime",
-    "Drama" to "drama",
-    "Ecchi" to "ecchi",
-    "Fantasy" to "fantasy",
-    "Harem" to "harem",
-    "Historical" to "historical",
-    "Horror" to "horror",
-    "Isekai" to "isekai",
-    "Josei" to "josei",
-    "Martial Arts" to "martial-arts",
-    "Mature" to "mature",
-    "Mecha" to "mecha",
-    "Medical" to "medical",
-    "Music" to "music",
-    "Mystery" to "mystery",
-    "Romance" to "romance",
-    "School Life" to "school-life",
-    "Shoujo" to "shoujo",
-    "Shounen" to "shounen",
-    "Slice of life" to "slice-of-life",
-    "Smut" to "smut",
-    "Sports" to "sports",
-    "Supernatural" to "supernatural",
-    "Webtoons" to "webtoons",
 )
