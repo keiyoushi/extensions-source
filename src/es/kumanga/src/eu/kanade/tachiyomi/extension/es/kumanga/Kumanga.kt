@@ -95,7 +95,7 @@ class Kumanga :
                 SManga.create().apply {
                     this.url = href
                     this.title = title
-                    this.thumbnail_url = id.toIntOrNull()?.let { "https://static.kumanga.com/manga/${it / 1000}/$it.jpg" }
+                    this.thumbnail_url = id.toIntOrNull()?.let { "https://static.kumanga.com/manga/${(it / 2500) + 1}/$it.jpg" }
                 }
             }
 
@@ -148,9 +148,11 @@ class Kumanga :
             title = document.selectFirst("h1")?.text()?.trim()
                 ?: document.selectFirst("meta[property='og:title']")?.attr("content")?.removeSuffix(" - KuManga")?.trim()
                 ?: ""
-            thumbnail_url = document.selectFirst("img.lazy-loaded, img[data-src*='/manga/'], img[src*='/manga/']")?.let {
-                it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
-            } ?: document.selectFirst("meta[property='og:image']")?.attr("content")
+            val mangaId = response.request.url.encodedPath.substringAfter("/manga/").substringBefore("/").toIntOrNull()
+            thumbnail_url = mangaId?.let { "https://static.kumanga.com/manga/${(it / 2500) + 1}/$it.jpg" }
+                ?: document.selectFirst("img.lazy-loaded, img[data-src*='/manga/'], img[src*='/manga/']")?.let {
+                    it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
+                } ?: document.selectFirst("meta[property='og:image']")?.attr("content")
             description = document.selectFirst("meta[property='og:description']")?.attr("content")
                 ?: document.selectFirst(".panel-body p, .description")?.text()?.trim()
             genre = document.select("a[href*='categories='], a[href*='genre=']")
@@ -210,70 +212,78 @@ class Kumanga :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        val currentPath = response.request.url.encodedPath
+        val mangaId = currentPath.substringAfter("/manga/").substringBefore("/")
 
-        val readerLink = document.selectFirst("a#leer[href], a[href*='manga/leer/'], a[href*='/leer/']")?.attr("href")
-        val readerDoc = if (readerLink != null) {
-            val fullReaderUrl = if (readerLink.startsWith("http")) readerLink else "$baseUrl/${readerLink.removePrefix("/")}"
-            client.newCall(GET(fullReaderUrl, headers)).execute().asJsoup()
-        } else {
-            document
-        }
+        val chapterId = document.selectFirst("input[value*='/manga/c/']")?.attr("value")
+            ?.substringAfterLast("/")?.trim()
+            ?: document.selectFirst("a#leer[href], a[href*='manga/leer/'], a[href*='/leer/']")?.attr("href")
+                ?.substringAfterLast("/")?.trim()
+            ?: currentPath.substringAfterLast("/").trim()
 
-        val form = readerDoc.selectFirst("form#myForm[action]")
-        val targetDoc = if (form != null) {
-            val actionUrl = form.attr("action")
-            val formUrl = if (actionUrl.startsWith("http")) actionUrl else "$baseUrl/${actionUrl.removePrefix("/")}"
-            val bodyBuilder = FormBody.Builder()
-            form.select("input").forEach { input ->
-                bodyBuilder.add(input.attr("name"), input.attr("value"))
-            }
-            client.newCall(POST(formUrl, headers, bodyBuilder.build())).execute().asJsoup()
-        } else {
-            readerDoc
-        }
+        val readerUrl = "$baseUrl/manga/leer/$chapterId"
+        val readerDoc = runCatching {
+            val res = client.newCall(GET(readerUrl, headers)).execute()
+            if (res.isSuccessful) res.asJsoup() else null
+        }.getOrNull()
 
-        val hexImages = targetDoc.select("img[data-src*='img.php?src='], img[src*='img.php?src=']")
-        if (hexImages.isNotEmpty()) {
-            val pages = mutableListOf<Page>()
-            hexImages.forEachIndexed { index, el ->
-                val src = el.attr("data-src").ifEmpty { el.attr("src") }
-                val hex = src.substringAfter("img.php?src=").substringBefore("&")
-                val decodedUrl = decodeHex(hex)
-                if (decodedUrl.isNotBlank()) {
-                    pages.add(Page(index, imageUrl = decodedUrl))
-                } else {
-                    val fullSrc = if (src.startsWith("http")) src else "$baseUrl/${src.removePrefix("/")}"
-                    pages.add(Page(index, imageUrl = fullSrc))
+        if (readerDoc != null) {
+            val hexImages = readerDoc.select("img[data-src*='img.php?src='], img[src*='img.php?src=']")
+            if (hexImages.isNotEmpty()) {
+                val pages = mutableListOf<Page>()
+                hexImages.forEachIndexed { index, el ->
+                    val src = el.attr("data-src").ifEmpty { el.attr("src") }
+                    val hex = src.substringAfter("img.php?src=").substringBefore("&")
+                    val decodedUrl = decodeHex(hex)
+                    if (decodedUrl.isNotBlank()) {
+                        pages.add(Page(index, imageUrl = decodedUrl))
+                    }
                 }
+                if (pages.isNotEmpty()) return pages
             }
-            if (pages.isNotEmpty()) return pages
-        }
 
-        val rawPUrl = targetDoc.selectFirst("script:containsData(pUrl=)")?.data()
-            ?.substringAfter("pUrl=")
-            ?.substringBefore(";")
-            ?.trim()
-            ?.removeSurrounding("'", "\"")
+            val rawPUrl = readerDoc.selectFirst("script:containsData(pUrl=)")?.data()
+                ?.substringAfter("pUrl=")
+                ?.substringBefore(";")
+                ?.trim()
+                ?.removeSurrounding("'", "\"")
 
-        if (!rawPUrl.isNullOrEmpty()) {
-            val decoded = runCatching { decodeBase64(decodeBase64(rawPUrl).reversed().drop(10).dropLast(10)) }.getOrNull()
-            if (decoded != null) {
-                val imageList = runCatching { json.decodeFromString<List<KumangaImageDto>>(decoded) }.getOrNull()
-                if (imageList != null && imageList.isNotEmpty()) {
-                    return imageList.mapIndexedNotNull { index, dto ->
-                        val imgUrl = dto.imgURL ?: return@mapIndexedNotNull null
-                        val fullUrl = if (imgUrl.startsWith("http")) imgUrl else "$baseUrl/${imgUrl.removePrefix("/").replace("\\", "")}"
-                        Page(index, imageUrl = fullUrl)
+            if (!rawPUrl.isNullOrEmpty()) {
+                val decoded = runCatching { decodeBase64(decodeBase64(rawPUrl).reversed().drop(10).dropLast(10)) }.getOrNull()
+                if (decoded != null) {
+                    val imageList = runCatching { json.decodeFromString<List<KumangaImageDto>>(decoded) }.getOrNull()
+                    if (imageList != null && imageList.isNotEmpty()) {
+                        return imageList.mapIndexedNotNull { index, dto ->
+                            val imgUrl = dto.imgURL ?: return@mapIndexedNotNull null
+                            val fullUrl = if (imgUrl.startsWith("http")) imgUrl else "$baseUrl/${imgUrl.removePrefix("/").replace("\\", "")}"
+                            Page(index, imageUrl = fullUrl)
+                        }
                     }
                 }
             }
         }
 
-        val fallbackImages = targetDoc.select("img.km-img, #img-api-1, div.reading-content img, .page-break img, .lazy-img")
-        return fallbackImages.mapIndexed { index, img ->
-            val src = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
-            Page(index, imageUrl = src)
+        if (mangaId.isNotBlank() && chapterId.isNotBlank()) {
+            val pages = mutableListOf<Page>()
+            var pageNum = 1
+            while (pageNum <= 150) {
+                val testUrl = "https://eve.manga.tel/manga/$mangaId/$chapterId/$pageNum.jpg"
+                val check = runCatching {
+                    val req = GET(testUrl, headers)
+                    val res = client.newCall(req).execute()
+                    val ok = res.isSuccessful
+                    res.close()
+                    ok
+                }.getOrDefault(false)
+
+                if (!check) break
+                pages.add(Page(pageNum - 1, imageUrl = testUrl))
+                pageNum++
+            }
+            if (pages.isNotEmpty()) return pages
         }
+
+        return emptyList()
     }
 
     override fun imageRequest(page: Page): Request {

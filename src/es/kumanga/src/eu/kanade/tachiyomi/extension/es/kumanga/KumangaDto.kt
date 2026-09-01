@@ -19,7 +19,7 @@ class KumangaMangaDto(
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         title = name
         url = "/manga/$id/$slug"
-        thumbnail_url = "https://static.kumanga.com/manga/${id / 1000}/$id.jpg"
+        thumbnail_url = "https://static.kumanga.com/manga/${(id / 2500) + 1}/$id.jpg"
         this@KumangaMangaDto.description?.let { description = it }
         genre = categories?.joinToString { it.name }
     }
