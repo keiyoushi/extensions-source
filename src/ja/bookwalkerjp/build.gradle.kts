@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "BookWalker Japan"
-    versionCode = 3
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

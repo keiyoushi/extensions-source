@@ -21,7 +21,6 @@ android {
 dependencies {
     compileOnly(libs.bundles.common)
     compileOnly(libs.tachiyomi.lib.v16)
-    implementation(libs.androidx.webkit) { isTransitive = false }
 
     testImplementation(libs.bundles.common)
     testImplementation(libs.tachiyomi.lib.v16)
