@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import java.text.Normalizer
 
@@ -116,8 +117,8 @@ class ChapterDto(
         date_upload = timestamp
         url = "/$slug/$number"
         memo = buildJsonObject {
-            put("mangaId", mangaId)
-            put("chapterId", id)
+            put("mangaId", JsonPrimitive(mangaId))
+            put("chapterId", JsonPrimitive(id))
         }
     }
 }
