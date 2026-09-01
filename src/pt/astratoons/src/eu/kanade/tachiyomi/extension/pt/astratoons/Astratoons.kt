@@ -13,14 +13,16 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
 
 @Source
 abstract class Astratoons : KeiSource() {
@@ -32,7 +34,7 @@ abstract class Astratoons : KeiSource() {
 
         val mangas = document.select("#comicsSlider a").map { element ->
             SManga.create().apply {
-                title = element.selectFirst("h3")?.text() ?: "Unknown"
+                title = element.selectFirst("h3")!!.text()
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
                 setUrlWithoutDomain(element.absUrl("href"))
             }
@@ -103,26 +105,27 @@ abstract class Astratoons : KeiSource() {
                 "cancelado", "dropado" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
+
+            memo = buildJsonObject {
+                put("id", MANGA_ID.find(document.html())!!.groupValues[1])
+            }
         }
 
         val chapters = when {
-            fetchChapters -> fetchChapterList(document)
+            fetchChapters -> fetchChapters(manga)
             else -> chapters
         }
 
         return SMangaUpdate(manga, chapters)
     }
 
-    private suspend fun fetchChapterList(document: Document): List<SChapter> {
-        val mangaId = MANGA_ID.find(document.html())?.groupValues?.get(1)
-            ?: throw Exception("Could not find manga id")
-
+    private suspend fun fetchChapters(manga: SManga): List<SChapter> {
         var page = 1
         var hasMore = true
         val chapters = mutableListOf<SChapter>()
 
         while (hasMore) {
-            val url = "$baseUrl/api/comics/$mangaId/chapters".toHttpUrl().newBuilder()
+            val url = "$baseUrl/api/comics/${manga.memo["id"]!!.int}/chapters".toHttpUrl().newBuilder()
                 .addQueryParameter("search", "")
                 .addQueryParameter("order", "desc")
                 .addQueryParameter("page", page.toString())
