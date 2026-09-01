@@ -97,12 +97,17 @@ class ChapterDto(
 class PagesDto(
     val pages: List<ImageDto>,
 ) {
-    fun toPageList() = pages.mapIndexed { index, image ->
-        Page(index, imageUrl = image.url)
+    suspend fun toPageList(decode: suspend (String) -> String) = pages.mapIndexed { index, image ->
+        Page(index, imageUrl = decode(image.url))
     }
 }
 
 @Serializable
 class ImageDto(
     val url: String,
+)
+
+@Serializable
+class KeyDto(
+    val k: String,
 )
