@@ -154,7 +154,7 @@ abstract class MangaLivre :
             if (response.isSuccessful) return response.parseAs()
 
             val error = response.parseAs<ReaderAccessErrorDto>()
-            if (response.code == 403 && error.requiresFcaptcha) return null
+            if (response.code == 403 && error.error == READER_VERIFICATION_REQUIRED) return null
             throw IOException(error.error)
         }
     }
@@ -262,6 +262,7 @@ abstract class MangaLivre :
         private const val MAX_PEEK = 1024L
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
+        private const val READER_VERIFICATION_REQUIRED = "Reader verification required"
 
         private const val SORT_POPULAR = "popular"
         private const val SORT_RELEASE = "release"

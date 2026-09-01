@@ -100,7 +100,6 @@ class ReaderChapterDto(
 @Serializable
 class ReaderAccessErrorDto(
     val error: String,
-    val requiresFcaptcha: Boolean = false,
 )
 
 @Serializable
