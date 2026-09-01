@@ -2,7 +2,10 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 
 import android.content.ComponentName
 import android.content.Intent
-import android.webkit.CookieManager
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.ResultReceiver
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -22,7 +25,7 @@ import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
@@ -34,7 +37,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -141,8 +143,12 @@ abstract class MangaLivre :
         val chapterNumber = chapterUrl.pathSegments.last { it.isNotEmpty() }
 
         return verificationMutex.withLock {
-            val access = fetchReaderAccess(ref) ?: openVerificationWebView(chapterUrl.toString(), ref)
-            access.chapter.pages.toPageList(ref.mangaId, chapterNumber)
+            fetchReaderAccess(ref)?.let { access ->
+                return@withLock access.chapter.pages.toPageList(ref.mangaId, chapterNumber)
+            }
+
+            openVerificationWebView(chapterUrl.toString(), ref.mangaId, chapterNumber)
+                .toPageList(ref.mangaId, chapterNumber)
         }
     }
 
@@ -162,53 +168,35 @@ abstract class MangaLivre :
 
     private suspend fun openVerificationWebView(
         readerUrl: String,
-        ref: ChapterReferenceDto,
-    ): ReaderAccessResponseDto {
-        val isReader = Exception().stackTrace.any { it.className.contains("reader") }
-        clearReaderGrantCookie()
-        try {
-            val intent =
-                Intent().apply {
-                    component = ComponentName(applicationContext, WEBVIEW_ACTIVITY)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    putExtra("url_key", readerUrl)
-                    putExtra("source_key", id)
-                    putExtra("title_key", "Conclua a verificação para continuar.")
+        mangaId: String,
+        chapterNumber: String,
+    ): List<String> {
+        val result = CompletableDeferred<List<String>>()
+        val receiver =
+            object : ResultReceiver(Handler(Looper.getMainLooper())) {
+                override fun onReceiveResult(
+                    resultCode: Int,
+                    resultData: Bundle?,
+                ) {
+                    val pages = resultData?.getStringArrayList(ReaderVerificationActivity.EXTRA_PAGES).orEmpty()
+                    if (resultCode == ReaderVerificationActivity.RESULT_PAGES && pages.isNotEmpty()) {
+                        result.complete(pages)
+                    } else {
+                        result.completeExceptionally(IOException("Verificação cancelada."))
+                    }
                 }
-            applicationContext.startActivity(intent)
-        } catch (_: Exception) {
-            throw IOException("Conclua a verificação pela WebView e abra o capítulo novamente.")
-        }
-
-        return withTimeout(VERIFICATION_TIMEOUT) {
-            do {
-                delay(VERIFICATION_POLL_INTERVAL)
-                val grant = readerGrantCookie()
-            } while (grant == null)
-
-            val access = fetchReaderAccess(ref)
-                ?: throw IOException("A verificação não liberou o capítulo.")
-
-            val closeIntent =
-                Intent().apply {
-                    component = ComponentName(applicationContext, if (isReader) READER_ACTIVITY else MAIN_ACTIVITY)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                }
-            applicationContext.startActivity(closeIntent)
-            access
-        }
-    }
-
-    private fun readerGrantCookie(): String? = CookieManager.getInstance()
-        .getCookie(baseUrl)
-        ?.split("; ")
-        ?.firstOrNull { it.startsWith("$READER_GRANT_COOKIE=") }
-
-    private fun clearReaderGrantCookie() {
-        CookieManager.getInstance().apply {
-            setCookie(baseUrl, "$READER_GRANT_COOKIE=; Max-Age=0; Path=/; Secure")
-            flush()
-        }
+            }
+        val intent =
+            Intent().apply {
+                component = ComponentName(EXTENSION_PACKAGE, ReaderVerificationActivity::class.java.name)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(ReaderVerificationActivity.EXTRA_URL, readerUrl)
+                putExtra(ReaderVerificationActivity.EXTRA_MANGA_ID, mangaId)
+                putExtra(ReaderVerificationActivity.EXTRA_CHAPTER_NUMBER, chapterNumber)
+                putExtra(ReaderVerificationActivity.EXTRA_RECEIVER, receiver)
+            }
+        applicationContext.startActivity(intent)
+        return withTimeout(VERIFICATION_TIMEOUT) { result.await() }
     }
 
     // ============================== Filters =======================================
@@ -266,10 +254,7 @@ abstract class MangaLivre :
 
     companion object {
         private val VERIFICATION_TIMEOUT = 2.minutes
-        private val VERIFICATION_POLL_INTERVAL = 500.milliseconds
-        private const val WEBVIEW_ACTIVITY = "eu.kanade.tachiyomi.ui.webview.WebViewActivity"
-        private const val READER_ACTIVITY = "eu.kanade.tachiyomi.ui.reader.ReaderActivity"
-        private const val MAIN_ACTIVITY = "eu.kanade.tachiyomi.ui.main.MainActivity"
+        private const val EXTENSION_PACKAGE = "eu.kanade.tachiyomi.extension.pt.mangalivre"
         private const val CDN_HOST = "cdn.toonlivre.net"
         private const val PROXY_HOST = "slightly-free-mayfly.edgecompute.app"
         private val PAGE_NUMBER_REGEX = Regex("""_(\d+)\.[^.]+$""")
@@ -279,7 +264,6 @@ abstract class MangaLivre :
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
         private const val READER_VERIFICATION_REQUIRED = "Reader verification required"
-        private const val READER_GRANT_COOKIE = "__Secure-tl_anon_grant"
 
         private const val SORT_POPULAR = "popular"
         private const val SORT_RELEASE = "release"
