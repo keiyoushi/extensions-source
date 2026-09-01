@@ -2,35 +2,33 @@ package eu.kanade.tachiyomi.extension.es.sapphirescan
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 
 @Source
 abstract class SapphireScan : ZeistManga() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    override val client = super.client.newBuilder()
-        .rateLimit(3) { it.host == baseUrlHost }
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { it.host == baseUrlHost }
 
     // Madara -> ZeistManga migration
-    override fun chapterListRequest(manga: SManga): Request {
-        if (manga.url.startsWith("/manga/")) {
+    override fun getMangaUrl(manga: SManga): String {
+        if (manga.url.contains("/manga/")) {
             throw Exception("Migrar de $name a $name (misma extensión)")
         }
-        return super.chapterListRequest(manga)
+        return super.getMangaUrl(manga)
     }
 
     // Madara -> ZeistManga migration
-    override fun pageListParse(response: Response): List<Page> {
-        if (response.request.url.encodedPath.startsWith("/manga/")) {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (chapter.url.contains("/manga/")) {
             throw Exception("Migrar de $name a $name (misma extensión)")
         }
-        return super.pageListParse(response)
+        return super.getPageList(chapter)
     }
 
     override val pageListSelector = "div.check-box"
