@@ -8,5 +8,4 @@ import java.util.Locale
 @Source
 abstract class MangaStarz : Madara() {
     override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMMM، yyyy", Locale.forLanguageTag("ar"))
-    override val chapterMode = ChapterMode.AdminAjax
 }

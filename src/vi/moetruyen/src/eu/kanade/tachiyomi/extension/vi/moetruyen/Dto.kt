@@ -29,6 +29,12 @@ class PageAccessResponse(
 )
 
 @Serializable
+class PageAccessWebResponse(
+    val status: Int,
+    val body: String,
+)
+
+@Serializable
 class PageAccessEntry(
     val pageIndex: Int,
     val storageKey: String,

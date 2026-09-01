@@ -2,43 +2,33 @@ package eu.kanade.tachiyomi.extension.vi.truyentuoitho
 
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class TruyenTuoiTho : Madara() {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     override val filterNonMangaItems = false
 
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjaxPaginated
 
-    override fun xhrChaptersRequest(mangaUrl: String): Request {
-        val normalizedMangaUrl = mangaUrl.removeSuffix("/")
-        val chapterHeaders = xhrHeaders.newBuilder()
-            .set("Referer", "$normalizedMangaUrl/")
-            .set("Origin", baseUrl)
-            .build()
-
-        return POST("$normalizedMangaUrl/ajax/chapters/?t=1", chapterHeaders)
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        val defaultPages = super.pageListParse(document)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl).asJsoup()
+        val defaultPages = super.parsePages(document)
         if (defaultPages.isNotEmpty()) return defaultPages
 
         val decodedPayload = document.select("div.reading-content script")

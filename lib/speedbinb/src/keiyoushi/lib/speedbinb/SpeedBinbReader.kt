@@ -2,8 +2,8 @@ package keiyoushi.lib.speedbinb
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.utils.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers

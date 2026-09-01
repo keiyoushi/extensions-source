@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -191,7 +191,7 @@ abstract class MadaraBase : KeiSource() {
 
     protected open fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = SManga.create().apply {
         url = preserveUrl?.takeIf { !it.all(Char::isDigit) } ?: id
-        title = document.selectFirst(mangaDetailsSelectorTitle)!!.text()
+        title = document.selectFirst(mangaDetailsSelectorTitle)!!.ownText()
         author = document.select(mangaDetailsSelectorAuthor).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         artist = document.select(mangaDetailsSelectorArtist).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         description = document.selectFirst(mangaDetailsSelectorDescription)?.let { element ->

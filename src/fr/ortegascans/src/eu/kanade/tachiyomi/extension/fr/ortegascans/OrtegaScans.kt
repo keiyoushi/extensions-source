@@ -1,58 +1,57 @@
 package eu.kanade.tachiyomi.extension.fr.ortegascans
 
+import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 
 @Source
 abstract class OrtegaScans :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
+    private val preferences = getPreferences()
 
-    private val preferences by getPreferencesLazy()
+    private val rscHeaders get() = headersBuilder().add("rsc", "1").build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(3)
+    }
 
-    private val rscHeaders = headersBuilder()
-        .add("rsc", "1")
-        .build()
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val filters = getFilterList().apply {
             firstInstance<SortFilter>().state = 0
         }
-        return searchMangaRequest(page, "", filters)
+        return getSearchMangaList(page, "", filters)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val filters = getFilterList().apply {
             firstInstance<SortFilter>().state = 2
         }
-        return searchMangaRequest(page, "", filters)
+        return getSearchMangaList(page, "", filters)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sortFilter = filters.firstInstance<SortFilter>()
         val statusFilter = filters.firstInstance<StatusFilter>()
         val tagFilter = filters.firstInstance<TagFilter>()
@@ -72,58 +71,62 @@ abstract class OrtegaScans :
             addQueryParameter("maxChapters", maxChaptersFilter.value)
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<SeriesResponse>()
+        val dto = client.get(url).parseAs<SeriesResponse>()
         val mangas = dto.data.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, dto.hasMore)
     }
 
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        TagFilter(),
-        MinChaptersFilter(),
-        MaxChaptersFilter(),
-    )
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val urlObj = manga.url.parseAs<MangaUrl>()
-        return GET("$baseUrl/serie/${urlObj.slug}", rscHeaders)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.extractNextJs<MangaDetailsDataDto>()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val dto = client.get("$baseUrl/serie/${manga.mangaSlug()}", rscHeaders)
+            .extractNextJs<MangaDetailsDataDto>()
             ?: throw Exception("Impossible d'extraire les détails du manga")
-        return dto.manga.toSManga(baseUrl)
-    }
 
-    override fun getMangaUrl(manga: SManga): String {
-        val urlObj = manga.url.parseAs<MangaUrl>()
-        return "$baseUrl/serie/${urlObj.slug}"
-    }
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = response.extractNextJs<ChapterListDataDto>()
-            ?: throw Exception("Impossible d'extraire la liste des chapitres")
-        val slug = response.request.url.pathSegments[1]
         val hidePremium = preferences.getBoolean(PREF_HIDE_PREMIUM, false)
-
-        return dto.chapters
-            .filter { !hidePremium || !it.isPremium }
-            .map { it.toSChapter(slug) }
+        return SMangaUpdate(
+            manga = dto.manga.toSManga(baseUrl),
+            chapters = dto.manga.chapters
+                .filter { !hidePremium || !it.isPremium }
+                .map { it.toSChapter(dto.manga.slug) },
+        )
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val urlObj = chapter.url.parseAs<ChapterUrl>()
-        return GET("$baseUrl/serie/${urlObj.mangaSlug}/chapter/${urlObj.number}", rscHeaders)
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val document = client.get("$baseUrl/serie/${manga.mangaSlug()}").asJsoup()
+        val section = document.selectFirst("section:has(h2:containsOwn(Vous aimeriez))")
+            ?: return emptyList()
+
+        return section.select("a[href^=\"/serie/\"]").mapNotNull { element ->
+            SManga.create().apply {
+                url = element.absUrl("href").toHttpUrl().pathSegments[1]
+                title = element.selectFirst("h3")?.text() ?: return@mapNotNull null
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+            }
+        }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.mangaSlug()}"
+
+    private fun SManga.mangaSlug(): String = if (url.startsWith("{")) url.parseAs<JsonObject>().getString("slug") else url
+
+    private fun requireUpToDateChapterUrl(chapter: SChapter) {
+        if (chapter.url.startsWith("{")) {
+            throw Exception("Ancien format de chapitre détecté. Actualisez la liste des chapitres.")
+        }
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        requireUpToDateChapterUrl(chapter)
+        val response = client.get(
+            "$baseUrl/serie/${chapter.memo.getString("mangaSlug")}/chapter/${chapter.memo.getString("number")}",
+            rscHeaders,
+        )
         val dto = response.extractNextJs<PageListDto>()
             ?: throw Exception("Impossible d'extraire la liste des pages")
         return dto.images.map {
@@ -137,13 +140,19 @@ abstract class OrtegaScans :
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val urlObj = chapter.url.parseAs<ChapterUrl>()
-        return "$baseUrl/serie/${urlObj.mangaSlug}/chapter/${urlObj.number}"
+        requireUpToDateChapterUrl(chapter)
+        return "$baseUrl/serie/${chapter.memo.getString("mangaSlug")}/chapter/${chapter.memo.getString("number")}"
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        SortFilter(),
+        StatusFilter(),
+        TagFilter(),
+        MinChaptersFilter(),
+        MaxChaptersFilter(),
+    )
 
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_HIDE_PREMIUM
             title = "Masquer les chapitres premium"
@@ -151,6 +160,8 @@ abstract class OrtegaScans :
             setDefaultValue(true)
         }.also(screen::addPreference)
     }
-}
 
-private const val PREF_HIDE_PREMIUM = "pref_hide_premium"
+    companion object {
+        private const val PREF_HIDE_PREMIUM = "pref_hide_premium"
+    }
+}

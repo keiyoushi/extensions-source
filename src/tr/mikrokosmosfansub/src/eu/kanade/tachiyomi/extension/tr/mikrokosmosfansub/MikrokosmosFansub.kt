@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.tr.mikrokosmosfansub
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import okhttp3.Response
 import org.jsoup.Jsoup
 
