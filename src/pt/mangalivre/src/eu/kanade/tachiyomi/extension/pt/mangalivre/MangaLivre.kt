@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 
 import android.content.ComponentName
 import android.content.Intent
+import android.webkit.CookieManager
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -164,6 +165,7 @@ abstract class MangaLivre :
         ref: ChapterReferenceDto,
     ): ReaderAccessResponseDto {
         val isReader = Exception().stackTrace.any { it.className.contains("reader") }
+        val previousGrant = readerGrantCookie()
         try {
             val intent =
                 Intent().apply {
@@ -179,11 +181,13 @@ abstract class MangaLivre :
         }
 
         return withTimeout(VERIFICATION_TIMEOUT) {
-            var access: ReaderAccessResponseDto?
             do {
                 delay(VERIFICATION_POLL_INTERVAL)
-                access = fetchReaderAccess(ref)
-            } while (access == null)
+                val grant = readerGrantCookie()
+            } while (grant == null || grant == previousGrant)
+
+            val access = fetchReaderAccess(ref)
+                ?: throw IOException("A verificação não liberou o capítulo.")
 
             val closeIntent =
                 Intent().apply {
@@ -194,6 +198,11 @@ abstract class MangaLivre :
             access
         }
     }
+
+    private fun readerGrantCookie(): String? = CookieManager.getInstance()
+        .getCookie(baseUrl)
+        ?.split("; ")
+        ?.firstOrNull { it.startsWith("$READER_GRANT_COOKIE=") }
 
     // ============================== Filters =======================================
 
@@ -263,6 +272,7 @@ abstract class MangaLivre :
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
         private const val READER_VERIFICATION_REQUIRED = "Reader verification required"
+        private const val READER_GRANT_COOKIE = "__Secure-tl_anon_grant"
 
         private const val SORT_POPULAR = "popular"
         private const val SORT_RELEASE = "release"
