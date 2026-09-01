@@ -108,7 +108,9 @@ abstract class Hachiraw : HttpSource() {
                     setUrlWithoutDomain(it.attr("href"))
                     title = it.text()
                 }
-                thumbnail_url = element.selectFirst("img.img-fluid")?.absUrl("src")
+                thumbnail_url = element.selectFirst("img")?.let { 
+                    it.absUrl("data-original").ifEmpty { it.absUrl("src") } 
+                }
             }
         }
         val hasNextPage = document.selectFirst("ul.pagination li:contains(→)") != null
@@ -116,12 +118,16 @@ abstract class Hachiraw : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val row = response.asJsoup().selectFirst("div.BoxBody > div.row")!!
+        val document = response.asJsoup()
+        val row = document.selectFirst("div.BoxBody > div.row")!!
 
         title = row.selectFirst("h1")!!.text()
         author = row.selectFirst("li.list-group-item:contains(著者)")?.ownText()
         genre = row.select("li.list-group-item:contains(ジャンル) a").joinToString { it.text() }
-        thumbnail_url = row.selectFirst("img.img-fluid")?.absUrl("src")
+
+        thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
+            ?: row.selectFirst("img.img-fluid")?.absUrl("src")
+
         description = buildString {
             row.select("li.list-group-item:has(span.mlabel)").forEach {
                 val key = it.selectFirst("span")!!.text().removeSuffix(":")
