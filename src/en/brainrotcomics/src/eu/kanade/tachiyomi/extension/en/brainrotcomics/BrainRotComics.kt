@@ -7,8 +7,6 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class BrainRotComics : Madara() {
-    override val id = 7621724834621233483
-
     override val chapterMode = ChapterMode.MangaAjax
     override val altNameSelector = "noSelector"
 

@@ -15,5 +15,6 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://brainrotcomics.com"
+        id = 7621724834621233483
     }
 }
