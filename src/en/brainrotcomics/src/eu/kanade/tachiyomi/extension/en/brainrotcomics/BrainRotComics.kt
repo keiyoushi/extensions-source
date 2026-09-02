@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.aryascans
+package eu.kanade.tachiyomi.extension.en.brainrotcomics
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
@@ -6,7 +6,7 @@ import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 
 @Source
-abstract class AryaScans : Madara() {
+abstract class BrainRotComics : Madara() {
     override val chapterMode = ChapterMode.MangaAjax
     override val altNameSelector = "noSelector"
 
