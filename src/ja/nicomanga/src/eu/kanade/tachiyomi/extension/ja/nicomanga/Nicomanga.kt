@@ -15,13 +15,14 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.encodeToJsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import org.jsoup.Jsoup
 
 @Source
 abstract class Nicomanga : KeiSource() {
@@ -94,7 +95,11 @@ abstract class Nicomanga : KeiSource() {
                 else -> SManga.UNKNOWN
             }
             description = buildString {
-                mangaDto.description?.takeIf { it.isNotBlank() }?.let { append(it.trim()) }
+                mangaDto.description
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { it.htmlToText() }
+                    ?.takeIf { !it.equals("Updating", ignoreCase = true) }
+                    ?.let { append(it) }
                 mangaDto.otherName?.takeIf { it.isNotBlank() }?.let {
                     if (isNotEmpty()) append("\n\n")
                     append(it.trim())
@@ -221,6 +226,23 @@ abstract class Nicomanga : KeiSource() {
     }
 
     /**
+     * Some payloads wrap the description in HTML (<p> paragraphs, <div class=sContent>,
+     * <br> line breaks) while others are plain text - convert either to plain text,
+     * keeping paragraphs separated.
+     */
+    private fun String.htmlToText(): String {
+        val document = Jsoup.parseBodyFragment(this)
+        document.select("br").append("\n")
+        document.select("p, div").append("\n\n")
+
+        return document.wholeText()
+            .lines()
+            .map { it.trim() }
+            .joinToString("\n")
+            .replace(Regex("\\n{3,}"), "\n\n")
+    }
+
+    /**
      * The payload only carries relative time text for chapters, e.g. "7 days ago"
      * (note the site also sends "2 year ago"). Returns 0 when unparseable.
      */
@@ -246,27 +268,22 @@ abstract class Nicomanga : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = jsonInstance.encodeToJsonElement(
-        GenresPayload(
-            client.get("$baseUrl/manga-list.html").asJsoup()
-                .select("a.genre-tag")
-                .mapNotNull { element ->
-                    val id = element.attr("abs:href").toHttpUrlOrNull()?.queryParameter("g")
-                    val name = element.textOrNull()
-                    if (id == null || name == null) return@mapNotNull null
-                    NGenre(id = id, name = name)
-                },
-        ),
-    )
+    override suspend fun fetchFilterData(): JsonElement = GenresPayload(
+        client.get("$baseUrl/manga-list.html").asJsoup()
+            .select("a.genre-tag")
+            .mapNotNull { element ->
+                val id = element.attr("abs:href").toHttpUrlOrNull()?.queryParameter("g")
+                val name = element.textOrNull()
+                if (id == null || name == null) return@mapNotNull null
+                NGenre(id = id, name = name)
+            },
+    ).toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.let { element ->
-            runCatching { jsonInstance.decodeFromJsonElement<GenresPayload>(element) }
-                .getOrNull()
-                ?.genres
-                ?.map { Genre(it.name, it.id) }
-                ?.takeIf { it.isNotEmpty() }
-        } ?: getGenreList()
+        val genres = data?.parseAs<GenresPayload>()
+            ?.genres
+            ?.map { Genre(it.name, it.id) }
+            .orEmpty()
 
         return FilterList(
             SortFilter(),
