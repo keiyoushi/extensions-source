@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.templescan
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,35 +7,26 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.safety.Safelist
-import kotlin.math.min
 
 @Source
-abstract class TempleScan :
-    KeiSource(),
-    ConfigurableSource {
+abstract class TempleScan : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1)
     }
 
-    override fun Headers.Builder.configureHeaders() = apply {
-        setRandomUserAgent()
-    }
-
-    private val rscHeaders = headersBuilder()
+    private val rscHeaders get() = headersBuilder()
         .set("rsc", "1")
         .build()
 
@@ -46,19 +34,14 @@ abstract class TempleScan :
 
     override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", OrderFilter.LATEST)
 
-    private lateinit var seriesCache: List<BrowseSeries>
-
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page == 1) {
-            val response = client.get("$baseUrl/comics", rscHeaders)
-            seriesCache = response.extractNextJs<List<BrowseSeries>>()!!
-        }
-        return parseDirectory(page, query, filters)
+        val data = client.get("$baseUrl/comics", rscHeaders).extractNextJs<List<BrowseSeries>>()!!
+        return parseDirectory(data, query, filters)
     }
 
-    private fun parseDirectory(page: Int, query: String, filters: FilterList): MangasPage {
-        val status = filters.get<StatusFilter>()?.selected
-        val mangaList = seriesCache.filter { series ->
+    private fun parseDirectory(series: List<BrowseSeries>, query: String, filters: FilterList): MangasPage {
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.selected
+        val mangaList = series.filter { series ->
 
             val queryFilter = query.isBlank() ||
                 series.title.contains(query, ignoreCase = true) ||
@@ -68,7 +51,7 @@ abstract class TempleScan :
 
             queryFilter && statusFilter
         }.let {
-            val order = filters.get<OrderFilter>()?.selected
+            val order = filters.firstInstanceOrNull<OrderFilter>()?.selected
 
             when (order) {
                 "updated" -> it.sortedByDescending { series -> series.updated }
@@ -79,9 +62,8 @@ abstract class TempleScan :
         }
 
         return MangasPage(
-            mangas = mangaList.subList((page - 1) * 20, min(page * 20, mangaList.size))
-                .map { it.toSManga() },
-            hasNextPage = page * 20 < mangaList.size,
+            mangas = mangaList.map { it.toSManga() },
+            hasNextPage = false,
         )
     }
 
@@ -186,12 +168,6 @@ abstract class TempleScan :
             Page(idx, imageUrl = url)
         }
     }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addRandomUAPreference()
-    }
-
-    private inline fun <reified T : Filter<*>> FilterList.get(): T? = filterIsInstance<T>().firstOrNull()
 
     companion object {
         private val TEXT_TAGS_REGEX = """(?i)#(\w+)""".toRegex()
