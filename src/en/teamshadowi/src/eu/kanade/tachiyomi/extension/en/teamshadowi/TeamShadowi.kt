@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -127,13 +128,11 @@ abstract class TeamShadowi : KeiSource() {
         val slug = manga.url.substringAfterLast('/')
         val chapters = chaptersData.map { chap ->
             val numStr = chap.number.toString().removeSuffix(".0")
-            val cleanDate = chap.createdAt?.substringBefore("+")?.substringBefore("Z")
+            val cleanDate = chap.createdAt
             SChapter.create().apply {
                 url = "/read/$slug/$numStr"
                 name = if (chap.title.isNullOrBlank()) "Chapter $numStr" else "Chapter $numStr: ${chap.title}"
-                cleanDate?.let {
-                    date_upload = Instant.parseOrNull(it)?.toEpochMilliseconds() ?: 0L
-                }
+                date_upload = Instant.tryParse(cleanDate)
                 chapter_number = chap.number
             }
         }.sortedByDescending { it.chapter_number }
