@@ -146,6 +146,7 @@ internal fun String?.toPlainText(): String? = this
     ?.wholeText()
     ?.takeIf { it.isNotEmpty() }
 
+// Website redirect there domain cdn in javascript
 private fun String.normalizeStorageUrl(): String {
     val url = toHttpUrl()
     val replacementHost = when (url.host) {
