@@ -1,0 +1,1 @@
+-if class keiyoushi.webview.internal.WebViewGlueBridge -keep interface org.chromium.support_lib_boundary.** { *; }

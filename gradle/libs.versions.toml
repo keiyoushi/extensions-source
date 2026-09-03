@@ -1,6 +1,5 @@
 [versions]
 android-gradle = "9.3.2"
-androidx-webkit = "1.17.0"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 junit = "4.13.2"
@@ -14,7 +13,6 @@ okhttp = "5.4.0"
 
 [libraries]
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }
-androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidx-webkit" }
 apksig = { module = "com.android.tools.build:apksig", version.ref = "android-gradle" }
 proguard = { module = "com.guardsquare:proguard-base", version = "7.10.0" }
 junit = { module = "junit:junit", version.ref = "junit" }

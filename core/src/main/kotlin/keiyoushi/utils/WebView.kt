@@ -18,9 +18,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.webkit.UserAgentMetadata
-import androidx.webkit.WebSettingsCompat
-import androidx.webkit.WebViewFeature
+import keiyoushi.webview.internal.WebViewGlueBridge
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -30,8 +28,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.Call
@@ -59,6 +55,8 @@ class RenderProcessGoneException internal constructor(
 class WebViewTimeoutException internal constructor(
     timeout: Duration,
 ) : Exception("Timed out waiting for WebView after $timeout")
+
+private val CHROME_VERSION_REGEX = """Chrome/(\d+)(\.[\d.]+)?""".toRegex()
 
 /**
  * DSL for configuring and driving a single [runWebView] run.
@@ -108,7 +106,14 @@ class WebViewScope<T> internal constructor(
     /** Also spoofs the `Sec-CH-UA` client hints to match the user agent. */
     var userAgent: String
         get() = webView.settings.userAgentString
-        set(value) = webView.setUserAgent(value)
+        set(value) {
+            webView.settings.userAgentString = value
+            val match = CHROME_VERSION_REGEX.find(userAgent)
+                ?: return
+            val major = match.groupValues[1]
+            val full = major + match.groupValues[2].ifEmpty { ".0.0.0" }
+            WebViewGlueBridge.setClientHints(webView.settings, major, full)
+        }
 
     /** Runs [block] on every navigation start. */
     fun onPageStarted(block: (url: String) -> Unit) {
@@ -330,73 +335,6 @@ private class LoggingWebChromeClient : WebChromeClient() {
     }
 }
 
-/**
- * Reuses one WebView across multiple [runWebView] calls, destroying it after [idleTimeout]
- * of inactivity. Concurrent [runWebView] calls sharing a session are serialized via [mutex].
- * [obtain] and [release] are only ever called on the main thread by [runWebView].
- */
-class WebViewSession(private val idleTimeout: Duration = 30.seconds) {
-    internal val mutex = Mutex()
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var webView: WebView? = null
-    private var destroyTask: Runnable? = null
-    private var defaultUserAgentMetadata: UserAgentMetadata? = null
-
-    internal fun obtain(): WebView {
-        destroyTask?.let(mainHandler::removeCallbacks)
-        destroyTask = null
-        return webView ?: WebView(applicationContext).also {
-            webView = it
-            if (isUserAgentMetadataSupported()) {
-                defaultUserAgentMetadata = runCatching {
-                    WebSettingsCompat.getUserAgentMetadata(it.settings)
-                }.getOrNull()
-            }
-        }
-    }
-
-    // Resets hints spoofed by a previous run before this WebView is reused.
-    internal fun restoreUserAgentMetadata() {
-        if (!isUserAgentMetadataSupported()) return
-        val metadata = defaultUserAgentMetadata ?: return
-        val current = webView ?: return
-        try {
-            WebSettingsCompat.setUserAgentMetadata(current.settings, metadata)
-        } catch (e: Exception) {
-            Log.e("KeiyoushiWebView", "Failed to reset user agent metadata", e)
-        }
-    }
-
-    internal fun release(dead: Boolean) {
-        val current = webView ?: return
-        if (dead) {
-            current.destroy()
-            webView = null
-            return
-        }
-        current.webViewClient = WebViewClient()
-        current.webChromeClient = null
-        current.loadUrl("about:blank")
-        val task = Runnable {
-            webView?.destroy()
-            webView = null
-            destroyTask = null
-        }
-        destroyTask = task
-        mainHandler.postDelayed(task, idleTimeout.inWholeMilliseconds)
-    }
-
-    /** Immediately destroys the underlying WebView, if any. */
-    fun destroy() {
-        mainHandler.post {
-            destroyTask?.let(mainHandler::removeCallbacks)
-            destroyTask = null
-            webView?.destroy()
-            webView = null
-        }
-    }
-}
-
 @SuppressLint("SetJavaScriptEnabled")
 private fun setupWebView(webView: WebView) {
     webView.settings.apply {
@@ -405,7 +343,6 @@ private fun setupWebView(webView: WebView) {
         blockNetworkImage = false
         useWideViewPort = false
         loadWithOverviewMode = false
-        userAgentString = null
     }
 
     runCatching {
@@ -418,99 +355,39 @@ private fun setupWebView(webView: WebView) {
         webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
     }
 }
-private fun isUserAgentMetadataSupported(): Boolean = try {
-    WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)
-} catch (_: Throwable) {
-    false
-}
-
-// Chromium populates Sec-CH-UA client hints from the user agent metadata; spoof both together.
-private fun WebView.setUserAgent(userAgent: String) {
-    settings.userAgentString = userAgent
-
-    if (!isUserAgentMetadataSupported()) return
-
-    val versionMatch = CHROME_VERSION_REGEX.find(userAgent) ?: return
-    val majorVersion = versionMatch.groupValues[1]
-    val fullVersion = majorVersion + versionMatch.groupValues[2].ifEmpty { ".0.0.0" }
-
-    try {
-        val metadata = WebSettingsCompat.getUserAgentMetadata(settings)
-        val brandVersionList = metadata.brandVersionList.map { brandVersion ->
-            val brand = when (brandVersion.brand) {
-                WEBVIEW_BRAND -> CHROME_BRAND
-                CHROMIUM_BRAND -> CHROMIUM_BRAND
-                else -> return@map brandVersion
-            }
-
-            UserAgentMetadata.BrandVersion.Builder()
-                .setBrand(brand)
-                .setMajorVersion(majorVersion)
-                .setFullVersion(fullVersion)
-                .build()
-        }
-
-        WebSettingsCompat.setUserAgentMetadata(
-            settings,
-            UserAgentMetadata.Builder(metadata)
-                .setBrandVersionList(brandVersionList)
-                .setFullVersion(fullVersion)
-                .build(),
-        )
-    } catch (e: Exception) {
-        Log.e("KeiyoushiWebView", "Failed to set user agent metadata", e)
-    }
-}
-
-private const val WEBVIEW_BRAND = "Android WebView"
-private const val CHROMIUM_BRAND = "Chromium"
-private const val CHROME_BRAND = "Google Chrome"
-private val CHROME_VERSION_REGEX = """Chrome/(\d+)(\.[\d.]+)?""".toRegex()
 
 /**
  * Runs a WebView with [configure], suspending until it calls `resolve`/`reject` or [timeout]
- * elapses. Pass [session] to reuse a WebView across calls instead of spinning up a new one.
- * The WebView is torn down (or returned to [session]) whether this returns, throws, or is
- * canceled.
+ * elapses. The WebView is torn down whether this returns, throws, or is canceled.
  */
 suspend fun <T> runWebView(
-    session: WebViewSession? = null,
     timeout: Duration = 30.seconds,
     configure: WebViewScope<T>.() -> Unit,
-): T {
-    suspend fun execute(): T = withContext(Dispatchers.Main) {
-        val deferred = CompletableDeferred<T>()
-        val webView = session?.obtain() ?: WebView(applicationContext)
-        setupWebView(webView)
-        session?.restoreUserAgentMetadata()
-        val scope = WebViewScope(webView, deferred)
-        webView.webViewClient = ScopeWebViewClient(scope)
-        webView.webChromeClient = LoggingWebChromeClient()
+): T = withContext(Dispatchers.Main) {
+    val deferred = CompletableDeferred<T>()
+    val webView = WebView(applicationContext)
+    setupWebView(webView)
+    val scope = WebViewScope(webView, deferred)
+    webView.webViewClient = ScopeWebViewClient(scope)
+    webView.webChromeClient = LoggingWebChromeClient()
+    try {
         try {
-            try {
-                scope.configure()
-            } catch (t: Throwable) {
-                deferred.completeExceptionally(t)
-            }
-            try {
-                withTimeout(timeout) {
-                    deferred.await()
-                }
-            } catch (_: TimeoutCancellationException) {
-                throw WebViewTimeoutException(timeout)
-            }
-        } finally {
-            scope.destroyed = true
-            webView.stopLoading()
-            if (session != null) {
-                scope.bridgeNames.forEach(webView::removeJavascriptInterface)
-                session.release(dead = scope.renderDead)
-            } else {
-                webView.destroy()
-            }
+            scope.configure()
+        } catch (t: Throwable) {
+            deferred.completeExceptionally(t)
         }
+        try {
+            withTimeout(timeout) {
+                deferred.await()
+            }
+        } catch (_: TimeoutCancellationException) {
+            throw WebViewTimeoutException(timeout)
+        }
+    } finally {
+        scope.destroyed = true
+        webView.stopLoading()
+        webView.destroy()
     }
-    return session?.mutex?.withLock { execute() } ?: execute()
 }
 
 /**
@@ -522,7 +399,6 @@ suspend fun <T> runWebView(
  */
 fun <T> runWebViewBlocking(
     call: Call,
-    session: WebViewSession? = null,
     timeout: Duration = 30.seconds,
     configure: WebViewScope<T>.() -> Unit,
 ): T {
@@ -541,7 +417,7 @@ fun <T> runWebViewBlocking(
                 }
             }
             try {
-                runWebView(session, timeout, configure)
+                runWebView(timeout, configure)
             } finally {
                 watcher.cancel()
             }
