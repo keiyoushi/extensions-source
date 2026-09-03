@@ -13,7 +13,7 @@ keiyoushi {
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://mugiwarasoficial.com"
+        baseUrl = "https://mugiwarasoficial.org"
         versionId = 2
     }
 }

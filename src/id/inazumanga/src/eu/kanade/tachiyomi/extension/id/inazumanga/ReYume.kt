@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
 import keiyoushi.utils.asJsoup
-import okhttp3.Response
+import org.jsoup.nodes.Document
 
 @Source
 abstract class ReYume : ZeistManga() {
@@ -25,13 +25,8 @@ abstract class ReYume : ZeistManga() {
     override val mangaDetailsSelectorInfoDescription = "dd"
 
     override val pageListSelector = ".separator"
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override fun pageListParse(document: Document): List<Page> {
         val textArea = document.selectFirst("textarea#zeist-raw-data")?.text().orEmpty()
-
-        val images = textArea.asJsoup(response.request.url.toString()).select(pageListSelector)
-        return images.select("img[src]").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:src"))
-        }
+        return super.pageListParse(textArea.asJsoup(baseUrl))
     }
 }
