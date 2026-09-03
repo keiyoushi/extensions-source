@@ -29,8 +29,6 @@ abstract class Mokuro :
     KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
-
     private val preferences by getPreferencesLazy()
 
     private val titleLang: String
@@ -159,12 +157,16 @@ abstract class Mokuro :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val catalog = getCatalog()
-        val catalogEntry = catalog.series.find { it.seriesTitle == manga.url }
-            ?: throw Exception("Series not found")
+        val updatedManga = if (fetchDetails) {
+            val catalog = getCatalog()
+            val catalogEntry = catalog.series.find { it.seriesTitle == manga.url }
+                ?: throw Exception("Series not found")
 
-        val updatedManga = manga.apply {
-            catalogEntry.fillDetails(this, titleLang)
+            manga.apply {
+                catalogEntry.fillDetails(this, titleLang)
+            }
+        } else {
+            manga
         }
 
         val chapterList = if (fetchChapters) {
@@ -249,8 +251,8 @@ abstract class Mokuro :
     // ===============================
 
     private suspend fun getCatalog(): CatalogDto {
-        val response = client.get("$baseUrl/mokuro-reader/catalog.json", headers)
-        return response.use { it.parseAs<CatalogDto>() }
+        val response = client.get("$baseUrl/mokuro-reader/catalog.json")
+        return response.parseAs<CatalogDto>()
     }
 
     private suspend fun getSeriesDetail(seriesTitle: String): SeriesDetailDto {
@@ -259,8 +261,8 @@ abstract class Mokuro :
             .addPathSegment("series.json")
             .build()
 
-        val response = client.get(url, headers)
-        return response.use { it.parseAs<SeriesDetailDto>() }
+        val response = client.get(url)
+        return response.parseAs<SeriesDetailDto>()
     }
 
     companion object {

@@ -67,10 +67,10 @@ class CatalogSeriesDto(
             if (anilistId != null || malId != null) {
                 appendLine()
                 anilistId?.let {
-                    append("AniList: https://anilist.co/manga/").appendLine(it)
+                    appendLine("[AniList](https://anilist.co/manga/$it)")
                 }
                 malId?.let {
-                    append("MyAnimeList: https://myanimelist.net/manga/").appendLine(it)
+                    appendLine("[MyAnimeList](https://myanimelist.net/manga/$it)")
                 }
             }
         }.trim().ifEmpty { null }
