@@ -39,11 +39,11 @@ abstract class TruyenQQVN : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(listUrl(POPULAR_PATH, page)))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(listUrl("/truyen-hot", page)))
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(listUrl(LATEST_PATH, page)))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(listUrl("/truyen-moi", page)))
 
     // =============================== Search ===============================
 
@@ -57,7 +57,7 @@ abstract class TruyenQQVN : KeiSource() {
             val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected?.takeIf { it.isNotEmpty() }
             val path = genre?.let { "/the-loai/$it" }
                 ?: filters.firstInstanceOrNull<ListFilter>()?.selected
-                ?: POPULAR_PATH
+                ?: "/truyen-hot"
             listUrl(path, page)
         }
 
@@ -219,9 +219,6 @@ abstract class TruyenQQVN : KeiSource() {
     }
 
     companion object {
-        private const val POPULAR_PATH = "/truyen-hot"
-        private const val LATEST_PATH = "/truyen-moi"
-
         private val RESERVED_PATHS = setOf("tim-kiem", "truyen-hot", "truyen-moi", "truyen-full", "the-loai")
         private val TIME_ZONE: ZoneId = ZoneId.of("Asia/Ho_Chi_Minh")
         private val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
