@@ -42,11 +42,35 @@ abstract class Nicomanga : KeiSource() {
     // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val author = filters.firstInstanceOrNull<AuthorFilter>()?.state?.trim()
+
+        // The site splits name (n) and author (a) search into separate parameters
+        // (ANDing them yields "No Manga Found"), and the global search only fills
+        // the plain query - so when the name search comes back empty, retry the
+        // query as an author search.
+        if (query.isNotBlank() && author.isNullOrBlank() && page == 1) {
+            val byName = searchPage(page, query, null, filters)
+            if (byName.mangas.isNotEmpty()) return byName
+
+            val byAuthor = searchPage(page, null, query, filters)
+            if (byAuthor.mangas.isNotEmpty()) return byAuthor
+
+            return byName
+        }
+
+        return searchPage(page, query, author, filters)
+    }
+
+    private suspend fun searchPage(page: Int, name: String?, author: String?, filters: FilterList): MangasPage {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
             .addQueryParameter("p", page.toString())
 
-        if (query.isNotBlank()) {
-            url.addQueryParameter("n", query.trim())
+        if (!name.isNullOrBlank()) {
+            url.addQueryParameter("n", name.trim())
+        }
+
+        if (!author.isNullOrBlank()) {
+            url.addQueryParameter("a", author.trim())
         }
 
         filters.firstInstanceOrNull<SortFilter>()?.state?.let { state ->
@@ -286,6 +310,7 @@ abstract class Nicomanga : KeiSource() {
             .orEmpty()
 
         return FilterList(
+            AuthorFilter(),
             SortFilter(),
             MatchingLogic(),
             Filter.Separator(),
