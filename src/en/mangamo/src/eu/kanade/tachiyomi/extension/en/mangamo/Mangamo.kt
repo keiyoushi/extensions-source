@@ -256,88 +256,96 @@ abstract class Mangamo :
         val uri = getMangaUrl(manga).toHttpUrl()
         val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
 
-        val details = async {
-            if (!fetchDetails) return@async manga
-            val request = firestore.getDocument("Series/$seriesId") { fields = seriesRequiredFields }
-            client.get(request.url, request.headers).use { response ->
-                processSeries(response.body.string().parseJson<DocumentDto<SeriesDto>>().fields)
-            }
-        }
-        val chapterList = async {
-            if (!fetchChapters) return@async chapters
-
-            val seriesRequest = firestore.getDocument("Series/$seriesId") {
-                fields = listOf(
-                    SeriesDto::maxFreeChapterNumber.name,
-                    SeriesDto::maxMeteredReadingChapterNumber.name,
-                    SeriesDto::onlyTransactional.name,
-                )
-            }
-            val chaptersRequest = firestore.getCollection("Series/$seriesId/chapters") {
-                fields = listOf(
-                    ChapterDto::enabled.name,
-                    ChapterDto::id.name,
-                    ChapterDto::seriesId.name,
-                    ChapterDto::chapterNumber.name,
-                    ChapterDto::name.name,
-                    ChapterDto::createdAt.name,
-                    ChapterDto::onlyTransactional.name,
-                )
-
-                orderBy = listOf(descending(ChapterDto::chapterNumber.name))
-            }
-
-            val seriesDeferred = async {
-                client.get(seriesRequest.url, seriesRequest.headers).use { response ->
+        val seriesDeferred = async {
+            if (fetchDetails || fetchChapters) {
+                val request = firestore.getDocument("Series/$seriesId") {
+                    fields = buildList {
+                        if (fetchDetails) {
+                            addAll(seriesRequiredFields)
+                        }
+                        if (fetchChapters) {
+                            add(SeriesDto::maxFreeChapterNumber.name)
+                            add(SeriesDto::maxMeteredReadingChapterNumber.name)
+                            add(SeriesDto::onlyTransactional.name)
+                        }
+                    }
+                }
+                client.get(request.url, request.headers).use { response ->
                     response.body.string().parseJson<DocumentDto<SeriesDto>>().fields
                 }
+            } else {
+                null
             }
-            val chaptersDeferred = async {
-                client.post(chaptersRequest.url, chaptersRequest.headers, chaptersRequest.body!!).use { response ->
+        }
+        val chaptersDeferred = async {
+            if (fetchChapters) {
+                val request = firestore.getCollection("Series/$seriesId/chapters") {
+                    fields = listOf(
+                        ChapterDto::enabled.name,
+                        ChapterDto::id.name,
+                        ChapterDto::seriesId.name,
+                        ChapterDto::chapterNumber.name,
+                        ChapterDto::name.name,
+                        ChapterDto::createdAt.name,
+                        ChapterDto::onlyTransactional.name,
+                    )
+
+                    orderBy = listOf(descending(ChapterDto::chapterNumber.name))
+                }
+                client.post(request.url, request.headers, request.body!!).use { response ->
                     response.body.string().parseJson<QueryResultDto<ChapterDto>>().elements
                 }
+            } else {
+                null
             }
-
-            val series = seriesDeferred.await()
-            val fetchedChapters = chaptersDeferred.await()
-            val hideCoinChapters = coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_CHAPTERS)
-
-            fetchedChapters
-                .mapNotNull { chapter ->
-                    if (chapter.enabled != true) {
-                        return@mapNotNull null
-                    }
-
-                    val isUserSubscribed = user.isSubscribed == true
-
-                    val isFreeChapter = chapter.chapterNumber!! <= (series.maxFreeChapterNumber ?: 0)
-                    val isMeteredChapter = chapter.chapterNumber <= (series.maxMeteredReadingChapterNumber ?: 0)
-                    val isCoinChapter = chapter.onlyTransactional == true ||
-                        (series.onlyTransactional == true && !isFreeChapter)
-
-                    if (hideCoinChapters && isCoinChapter) {
-                        return@mapNotNull null
-                    }
-
-                    SChapter.create().apply {
-                        chapter_number = chapter.chapterNumber
-                        date_upload = chapter.createdAt!!
-                        name = chapter.name +
-                            if (isCoinChapter) {
-                                " \uD83E\uDE99" // coin emoji
-                            } else if (isFreeChapter || isUserSubscribed) {
-                                ""
-                            } else if (isMeteredChapter) {
-                                " \uD83D\uDD52" // three-o-clock emoji
-                            } else {
-                                // subscriber chapter
-                                " \uD83D\uDD12" // lock emoji
-                            }
-                        url = helper.getChapterUrl(chapter)
-                    }
-                }
         }
-        SMangaUpdate(details.await(), chapterList.await())
+
+        val series = seriesDeferred.await()
+        val chapterList = chaptersDeferred.await()
+        val hideCoinChapters = coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_CHAPTERS)
+
+        if (series == null) return@coroutineScope SMangaUpdate(manga, chapters)
+
+        val updatedManga = if (fetchDetails) processSeries(series) else manga
+        val updatedChapters = if (chapterList != null) {
+            chapterList.mapNotNull { chapter ->
+                if (chapter.enabled != true) {
+                    return@mapNotNull null
+                }
+
+                val isUserSubscribed = user.isSubscribed == true
+
+                val isFreeChapter = chapter.chapterNumber!! <= (series.maxFreeChapterNumber ?: 0)
+                val isMeteredChapter = chapter.chapterNumber <= (series.maxMeteredReadingChapterNumber ?: 0)
+                val isCoinChapter = chapter.onlyTransactional == true ||
+                    (series.onlyTransactional == true && !isFreeChapter)
+
+                if (hideCoinChapters && isCoinChapter) {
+                    return@mapNotNull null
+                }
+
+                SChapter.create().apply {
+                    chapter_number = chapter.chapterNumber
+                    date_upload = chapter.createdAt!!
+                    name = chapter.name +
+                        if (isCoinChapter) {
+                            " \uD83E\uDE99" // coin emoji
+                        } else if (isFreeChapter || isUserSubscribed) {
+                            ""
+                        } else if (isMeteredChapter) {
+                            " \uD83D\uDD52" // three-o-clock emoji
+                        } else {
+                            // subscriber chapter
+                            " \uD83D\uDD12" // lock emoji
+                        }
+                    url = helper.getChapterUrl(chapter)
+                }
+            }
+        } else {
+            chapters
+        }
+
+        SMangaUpdate(updatedManga, updatedChapters)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
