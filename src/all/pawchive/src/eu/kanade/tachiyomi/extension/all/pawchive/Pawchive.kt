@@ -48,10 +48,23 @@ abstract class Pawchive :
         addInterceptor { chain ->
             val request = chain.request()
 
-            val modifiedRequest = if (request.url.pathSegments.firstOrNull() == "api") {
-                request.newBuilder().header("Accept", "text/css").build()
-            } else {
-                request
+            val modifiedRequest = when {
+                request.url.pathSegments.firstOrNull() == "api" -> {
+                    request.newBuilder()
+                        .header("Accept", "text/css")
+                        .build()
+                }
+
+                request.url.toString().startsWith(fileUrl) || request.url.toString().startsWith(imgUrl) -> {
+                    request.newBuilder()
+                        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                        .header("Sec-Fetch-Dest", "image")
+                        .header("Sec-Fetch-Mode", "no-cors")
+                        .header("Sec-Fetch-Site", "same-site")
+                        .build()
+                }
+
+                else -> request
             }
 
             var response = chain.proceed(modifiedRequest)

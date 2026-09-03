@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "XCOMIC"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -27,6 +27,7 @@ keiyoushi {
                 mirrors(
                     "https://xcomic.me",
                     "https://xcomic.net",
+                    "https://comik.to",
                 )
             }
         }
@@ -35,6 +36,7 @@ keiyoushi {
     deeplink {
         host("xcomic.me")
         host("xcomic.net")
+        host("comik.to")
         path("/comic/..*")
     }
 }
