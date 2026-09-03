@@ -24,8 +24,6 @@ abstract class Mangauno :
     KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val apiUrl: String
