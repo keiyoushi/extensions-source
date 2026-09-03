@@ -102,12 +102,13 @@ abstract class Hachiraw : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".Chapter, .PopLink").map { element ->
+        val selector = ".PopLink, .HotUpdateMobile .col-md-6, .LatestChapters .Chapter, div.ng-scope > div.top-15"
+        val mangas = document.select(selector).map { element ->
             SManga.create().apply {
                 element.selectFirst("a")?.let {
                     setUrlWithoutDomain(it.attr("href"))
                 }
-                title = element.selectFirst(".SeriesName, .ItemHead")?.text() ?: ""
+                title = element.selectFirst(".ItemHead, .SeriesName")?.text() ?: ""
                 thumbnail_url = element.selectFirst("img")?.let {
                     it.absUrl("data-original").ifEmpty { it.absUrl("src") }
                 }
