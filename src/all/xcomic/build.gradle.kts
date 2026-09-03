@@ -28,6 +28,7 @@ keiyoushi {
                     "https://xcomic.me",
                     "https://xcomic.net",
                     "https://comik.to",
+                    "https://yona.to",
                 )
             }
         }
@@ -37,6 +38,7 @@ keiyoushi {
         host("xcomic.me")
         host("xcomic.net")
         host("comik.to")
+        host("yona.to")
         path("/comic/..*")
     }
 }
