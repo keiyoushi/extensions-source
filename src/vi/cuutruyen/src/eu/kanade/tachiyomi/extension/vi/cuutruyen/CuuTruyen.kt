@@ -17,6 +17,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -94,7 +95,7 @@ abstract class CuuTruyen :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "mangas") return null
         val mangaId = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = "/mangas/$mangaId" }
+        val manga = SManga.create().apply { this.url = mangaId.toString() }
         return fetchMangaUpdate(manga, emptyList(), true, false).manga
     }
 
@@ -130,30 +131,18 @@ abstract class CuuTruyen :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/mangas/${manga.url.substringAfterLast('/')}"
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val segments = chapter.url.trim('/').split('/')
-        val chapterId = segments.last()
-        val mangaId = if (segments.firstOrNull() == "mangas") {
-            segments.getOrElse(1) { "" }
-        } else {
-            segments.first()
-        }
-        return "$baseUrl/mangas/$mangaId/chapters/$chapterId"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/mangas/${chapter.memo["mangaId"]!!.string}/chapters/${chapter.url}"
 
     // =============================== Pages ================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = chapter.url.substringAfterLast('/')
-        return client.get("$baseUrl/api/v2/chapters/$chapterId")
-            .parseAs<ChapterReaderResponse>()
-            .data
-            .pages
-            .sortedBy(ChapterPageDto::order)
-            .mapIndexed { index, page ->
-                Page(index, imageUrl = page.imageUrlWithDrm())
-            }
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/v2/chapters/${chapter.url}")
+        .parseAs<ChapterReaderResponse>()
+        .data
+        .pages
+        .sortedBy(ChapterPageDto::order)
+        .mapIndexed { index, page ->
+            Page(index, imageUrl = page.imageUrlWithDrm())
+        }
 
     // ============================== Filters ===============================
 

@@ -2,8 +2,11 @@ package eu.kanade.tachiyomi.extension.vi.cuutruyen
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 import java.util.Locale
@@ -29,7 +32,7 @@ class MangaListItem(
     @SerialName("cover_mobile_url") private val coverMobileUrl: String? = null,
 ) {
     fun toSManga(useMobileCover: Boolean): SManga = SManga.create().apply {
-        url = "/mangas/$id"
+        url = id.toString()
         title = name
         thumbnail_url = (if (useMobileCover) coverMobileUrl ?: coverUrl else coverUrl).normalizeStorageUrl()
     }
@@ -49,7 +52,7 @@ class MangaDetailDto(
     private val tags: List<MangaTagDto>,
 ) {
     fun toSManga(useMobileCover: Boolean): SManga = SManga.create().apply {
-        url = "/mangas/$id"
+        url = id.toString()
         title = name
         thumbnail_url = (if (useMobileCover) coverMobileUrl ?: coverUrl else coverUrl).normalizeStorageUrl()
         author = this@MangaDetailDto.author?.name
@@ -85,7 +88,8 @@ class ChapterDto(
     @SerialName("created_at") private val createdAt: String? = null,
 ) {
     fun toSChapter(mangaId: String): SChapter = SChapter.create().apply {
-        url = "/mangas/$mangaId/chapters/$id"
+        url = id.toString()
+        memo = buildJsonObject { put("mangaId", JsonPrimitive(mangaId)) }
         name = buildString {
             append("Chương ")
             append(number)
@@ -94,7 +98,7 @@ class ChapterDto(
                 append(it)
             }
         }
-        date_upload = createdAt?.let(Instant::parseOrNull)?.toEpochMilliseconds() ?: 0L
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
