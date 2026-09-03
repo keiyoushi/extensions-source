@@ -107,12 +107,12 @@ abstract class Astratoons : KeiSource() {
             }
 
             memo = buildJsonObject {
-                put("id", MANGA_ID.find(document.html())!!.groupValues[1])
+                put("id", MANGA_ID.find(document.html())?.groupValues[1])
             }
         }
 
         val chapters = when {
-            fetchChapters -> fetchChapters(manga)
+            fetchChapters || manga.memo["id"] != null -> fetchChapters(manga)
             else -> chapters
         }
 
@@ -163,7 +163,9 @@ abstract class Astratoons : KeiSource() {
             .set("Referer", page.url)
             .build()
 
-        return GET(page.imageUrl!!, imageHeaders)
+        return super.imageRequest(page).newBuilder()
+            .headers(imageHeaders)
+            .build()
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
