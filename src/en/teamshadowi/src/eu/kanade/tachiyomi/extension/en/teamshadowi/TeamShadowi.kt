@@ -22,7 +22,7 @@ import kotlin.time.Instant
 abstract class TeamShadowi : KeiSource() {
 
     // Reusable headers for fetching raw JSON React Server Component payloads
-    private val rscHeaders by lazy { headers.newBuilder().add("Rsc", "1").build() }
+    private val rscHeaders get() = headers.newBuilder().add("Rsc", "1").build()
 
     // ============================== Popular ===============================
 
