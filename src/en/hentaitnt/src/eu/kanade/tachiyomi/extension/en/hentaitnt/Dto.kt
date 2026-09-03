@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.manhwaxxl
+package eu.kanade.tachiyomi.extension.en.hentaitnt
 
 import kotlinx.serialization.Serializable
 

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.manhwaxxl
+package eu.kanade.tachiyomi.extension.en.hentaitnt
 
 import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
@@ -25,7 +25,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 
 @Source
-abstract class ManhwaXXL :
+abstract class HentaiTnT :
     HttpSource(),
     ConfigurableSource {
 
@@ -50,7 +50,7 @@ abstract class ManhwaXXL :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest" + (if (page > 1) "/page/$page" else ""))
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest-updates" + (if (page > 1) "/page/$page" else ""))
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -85,7 +85,7 @@ abstract class ManhwaXXL :
             author = document.selectFirst("i[title=Artists] + span a")?.text()
             description = document.selectFirst("#synopsisText")?.text()
             genre = document.select(".genre-item").joinToString { it.text() }
-            status = when (document.selectFirst("i[title=Status]")?.text()?.lowercase()) {
+            status = when (document.selectFirst("span:has(i[title=Status])")?.text()?.lowercase()) {
                 "completed" -> SManga.COMPLETED
                 "ongoing" -> SManga.ONGOING
                 else -> SManga.UNKNOWN

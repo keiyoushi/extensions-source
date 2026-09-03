@@ -5,14 +5,16 @@ plugins {
 }
 
 keiyoushi {
-    name = "Manhwa XXL"
-    versionCode = 6
+    name = "HentaiTnT"
+    pkgName = "en.manhwaxxl"
+    versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
         lang = "en"
         baseUrl = "https://hentaitnt.net"
+        id = 1823408414151467671L
         versionId = 2
     }
 }
