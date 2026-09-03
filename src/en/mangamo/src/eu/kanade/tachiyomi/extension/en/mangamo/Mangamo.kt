@@ -281,6 +281,7 @@ abstract class Mangamo :
             if (fetchChapters) {
                 val request = firestore.getCollection("Series/$seriesId/chapters") {
                     fields = listOf(
+                        ChapterDto::alwaysFree.name,
                         ChapterDto::enabled.name,
                         ChapterDto::id.name,
                         ChapterDto::seriesId.name,
@@ -288,6 +289,7 @@ abstract class Mangamo :
                         ChapterDto::name.name,
                         ChapterDto::createdAt.name,
                         ChapterDto::onlyTransactional.name,
+                        ChapterDto::type.name,
                     )
 
                     orderBy = listOf(descending(ChapterDto::chapterNumber.name))
@@ -315,17 +317,17 @@ abstract class Mangamo :
                     return@mapNotNull null
                 }
 
-                val isFreeChapter = chapter.chapterNumber!! <= (series.maxFreeChapterNumber ?: 0)
-                val isMeteredChapter = chapter.chapterNumber <= (series.maxMeteredReadingChapterNumber ?: 0)
-                val isCoinChapter = chapter.onlyTransactional == true ||
-                    (series.onlyTransactional == true && !isFreeChapter)
+                val chapterNumber = chapter.chapterNumber!!
+                val isFreeChapter = chapter.alwaysFree == true || chapterNumber <= (series.maxFreeChapterNumber ?: 0)
+                val isMeteredChapter = chapterNumber <= (series.maxMeteredReadingChapterNumber?.toFloatOrNull() ?: 0f)
+                val isCoinChapter = chapter.onlyTransactional == true || (series.onlyTransactional == true && chapter.isVolume && !isFreeChapter)
 
                 if (hideCoinChapters && isCoinChapter) {
                     return@mapNotNull null
                 }
 
                 SChapter.create().apply {
-                    chapter_number = chapter.chapterNumber
+                    chapter_number = chapterNumber
                     date_upload = chapter.createdAt!!
                     name = chapter.name +
                         if (isCoinChapter) {
