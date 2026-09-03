@@ -15,6 +15,5 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://hentaitnt.net"
         id = 1823408414151467671L
-        versionId = 2
     }
 }
