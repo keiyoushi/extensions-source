@@ -65,13 +65,13 @@ abstract class Mangamo :
         FirestoreRequestFactory(helper, auth)
     }
 
-    private val user by cachedBy({ Pair(userToken, firestore) }) {
-        val response = client.newCall(
-            firestore.getDocument("Users/$userToken") {
-                fields = listOf(UserDto::isSubscribed.name)
-            },
-        ).execute()
-        response.body.string().parseJson<DocumentDto<UserDto>>().fields
+    private suspend fun getUser(): UserDto {
+        val request = firestore.getDocument("Users/$userToken") {
+            fields = listOf(UserDto::isSubscribed.name)
+        }
+        return client.get(request.url, request.headers).use { response ->
+            response.body.string().parseJson<DocumentDto<UserDto>>().fields
+        }
     }
 
     private val coinMangaPref
@@ -308,12 +308,12 @@ abstract class Mangamo :
 
         val updatedManga = if (fetchDetails) processSeries(series) else manga
         val updatedChapters = if (chapterList != null) {
+            val isUserSubscribed = getUser().isSubscribed == true
+
             chapterList.mapNotNull { chapter ->
                 if (chapter.enabled != true) {
                     return@mapNotNull null
                 }
-
-                val isUserSubscribed = user.isSubscribed == true
 
                 val isFreeChapter = chapter.chapterNumber!! <= (series.maxFreeChapterNumber ?: 0)
                 val isMeteredChapter = chapter.chapterNumber <= (series.maxMeteredReadingChapterNumber ?: 0)
