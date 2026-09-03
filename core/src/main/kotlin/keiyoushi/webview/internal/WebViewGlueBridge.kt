@@ -88,21 +88,29 @@ internal object WebViewGlueBridge {
             val uaMetadata = boundarySettings.userAgentMetadataMap
             val updated = HashMap(uaMetadata)
 
-            val brandListObj = uaMetadata["BRAND_VERSION_LIST"]
-            if (brandListObj is Array<*> && brandListObj.isArrayOf<Array<String>>()) {
+            val brandList = uaMetadata["BRAND_VERSION_LIST"]
+            if (brandList is Array<*> && brandList.isArrayOf<Array<String>>()) {
                 @Suppress("UNCHECKED_CAST")
-                val brands = brandListObj as Array<Array<String>>
-                for (brand in brands) {
-                    when (brand[0]) {
-                        "Android WebView" -> brand[0] = "Google Chrome"
-                        "Chromium" -> { /* name unchanged, only version updates below */ }
-                        else -> continue
+                val brands = brandList as Array<Array<String>>
+
+                val updatedBrands = brands.map { original ->
+                    original.copyOf().also { brand ->
+                        if (brand.size < 3) return@also
+
+                        when (brand[0]) {
+                            "Android WebView" -> brand[0] = "Google Chrome"
+                            "Chromium" -> Unit
+                            else -> return@also
+                        }
+
+                        brand[1] = majorVersion
+                        brand[2] = fullVersion
                     }
-                    brand[1] = majorVersion
-                    brand[2] = fullVersion
-                }
-                updated["BRAND_VERSION_LIST"] = brands
+                }.toTypedArray()
+
+                updated["BRAND_VERSION_LIST"] = updatedBrands
             }
+
             updated["FULL_VERSION"] = fullVersion
 
             boundarySettings.setUserAgentMetadataFromMap(updated)
