@@ -835,9 +835,8 @@ val html = runWebView<String> {
 }
 ```
 
-- `runWebView(session, timeout, configure)` suspends until `resolve`/`reject` is called inside `configure`, or `timeout` (default 30s) elapses; it always runs on the main thread internally.
+- `runWebView(timeout, configure)` suspends until `resolve`/`reject` is called inside `configure`, or `timeout` (default 30s) elapses; it always runs on the main thread internally.
 - The `WebViewScope` DSL exposes: `javaScriptEnabled`/`domStorageEnabled`/`blockImages`/`useWideViewPort`/`loadWithOverviewMode`/`userAgent` settings, `onPageStarted`/`onPageFinished`/`onReceivedError` hooks, `interceptRequest` to inspect/replace/block resource loads, `jsBridge(name, handler)` to expose a `window.<name>.post(message)` callback from the page, `loadUrl`/`loadData`, `evaluateJs`, and `poll(interval)` to repeat a check until resolved. Setting `userAgent` also spoofs the `Sec-CH-UA` client hints to match it, instead of advertising the real WebView brand and version.
-- Pass a shared `WebViewSession` if the same source needs to reuse one WebView instance across multiple calls (e.g. to keep cookies/state) instead of spinning up a new one each time; it is torn down automatically after an idle timeout.
 - For the common case of just reading a `localStorage` value after loading a page, use the ready-made `getLocalStorage(url, key)` helper instead of writing your own `runWebView` call.
 - `runWebViewBlocking(call, ...)` exists for non-suspend call sites (e.g. inside an OkHttp interceptor where you must pass the interceptor's chain.call()) - only use it there, never from a suspend function.
 
