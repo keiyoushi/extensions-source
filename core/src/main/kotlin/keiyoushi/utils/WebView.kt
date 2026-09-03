@@ -56,8 +56,6 @@ class WebViewTimeoutException internal constructor(
     timeout: Duration,
 ) : Exception("Timed out waiting for WebView after $timeout")
 
-private val CHROME_VERSION_REGEX = """Chrome/(\d+)(\.[\d.]+)?""".toRegex()
-
 /**
  * DSL for configuring and driving a single [runWebView] run.
  *
@@ -108,11 +106,7 @@ class WebViewScope<T> internal constructor(
         get() = webView.settings.userAgentString
         set(value) {
             webView.settings.userAgentString = value
-            val match = CHROME_VERSION_REGEX.find(userAgent)
-                ?: return
-            val major = match.groupValues[1]
-            val full = major + match.groupValues[2].ifEmpty { ".0.0.0" }
-            WebViewGlueBridge.setClientHints(webView.settings, major, full)
+            WebViewGlueBridge.setClientHintsFromUserAgent(webView.settings, value)
         }
 
     /** Runs [block] on every navigation start. */

@@ -57,21 +57,63 @@ internal object WebViewGlueBridge {
                 if (featureName == feature) return true
             }
         } catch (e: Throwable) {
-            Log.e("WebViewGlueBridge", """isFeatureSupported("$featureName")""", e)
+            Log.e("KeiyoushiWebView.WebViewGlueBridge", """isFeatureSupported("$featureName")""", e)
         }
         return false
     }
 
     /** Spoofs the Sec-CH-UA client hints.  */
     @Synchronized
-    fun setClientHints(
+    fun setClientHintsFromUserAgent(
         settings: WebSettings,
-        majorVersion: String,
-        fullVersion: String,
+        userAgent: String,
     ) {
-        if (!isFeatureSupported("USER_AGENT_METADATA")) {
-            Log.i("WebViewGlueBridge", "USER_AGENT_METADATA not supported")
+        val versionMatch = CHROME_VERSION_REGEX.find(userAgent)
+
+        if (versionMatch == null) {
+            Log.i("KeiyoushiWebView.WebViewGlueBridge", "Not a valid Chrome UserAgent for client hints")
             return
+        }
+
+        if (!isFeatureSupported("USER_AGENT_METADATA")) {
+            Log.i("KeiyoushiWebView.WebViewGlueBridge", "USER_AGENT_METADATA not supported")
+            return
+        }
+
+        val majorVersion = versionMatch.groupValues[1]
+        val fullVersion = majorVersion + versionMatch.groupValues[2].ifEmpty { ".0.0.0" }
+        val isMobile = userAgent.contains("Mobile") ||
+            userAgent.contains("Android") ||
+            userAgent.contains("iPhone") ||
+            userAgent.contains("iPad")
+        var platform = "Android"
+        var platformVersion = ""
+        var architecture = "arm"
+
+        when {
+            userAgent.contains("Android") -> {
+                val androidVersion = ANDROID_VERSION_REGEX.find(userAgent)?.groupValues?.get(1) ?: ""
+                platform = "Android"
+                platformVersion = androidVersion
+            }
+            userAgent.contains("iPhone") || userAgent.contains("iPad") -> {
+                platform = "iOS"
+            }
+            userAgent.contains("Windows") -> {
+                platform = "Windows"
+                platformVersion = "19.0.0"
+                architecture = "x86"
+            }
+            userAgent.contains("Macintosh") || userAgent.contains("Mac OS X") -> {
+                val macVersion = MAC_OS_X_REGEX.find(userAgent)?.groupValues?.get(1)?.replace("_", ".")
+                platform = "macOS"
+                platformVersion = macVersion ?: ""
+            }
+            userAgent.contains("Linux") -> {
+                val arch = LINUX_ARCH_REGEX.find(userAgent)?.groupValues?.get(1)
+                platform = "Linux"
+                architecture = if (arch == "aarch64") "arm" else "x86"
+            }
         }
 
         try {
@@ -112,10 +154,19 @@ internal object WebViewGlueBridge {
             }
 
             updated["FULL_VERSION"] = fullVersion
+            updated["PLATFORM"] = platform
+            updated["PLATFORM_VERSION"] = platformVersion
+            updated["ARCHITECTURE"] = architecture
+            updated["MOBILE"] = isMobile
 
             boundarySettings.setUserAgentMetadataFromMap(updated)
         } catch (e: Throwable) {
-            Log.e("WebViewGlueBridge", "setUserClientHints", e)
+            Log.e("KeiyoushiWebView.WebViewGlueBridge", "setUserClientHints", e)
         }
     }
 }
+
+private val CHROME_VERSION_REGEX = """Chrome/(\d+)(\.[\d.]+)?""".toRegex()
+private val MAC_OS_X_REGEX = """Mac OS X ([\d_]+)""".toRegex()
+private val ANDROID_VERSION_REGEX = """Android ([\d.]+)""".toRegex()
+private val LINUX_ARCH_REGEX = """Linux (x86_64|i686|aarch64|armv\d+)""".toRegex()
