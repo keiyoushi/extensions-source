@@ -62,6 +62,7 @@ class Value(val name: String)
 
 @Serializable
 class ChapterListDto(
+    @JsonNames("slug")
     val serieSlug: String,
     val chapters: List<ChapterDto>,
 ) {
