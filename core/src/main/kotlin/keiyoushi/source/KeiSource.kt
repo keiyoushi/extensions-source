@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.CacheControlInterceptor
+import keiyoushi.network.ClientHintsInterceptor
 import keiyoushi.network.RateLimitInterceptor
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
@@ -112,6 +113,9 @@ abstract class KeiSource : HttpSource() {
                     add(cloudflareInterceptor)
                 }
             }
+
+            // automatically set client hints based on user agent
+            addInterceptor(ClientHintsInterceptor)
 
             // last application interceptor
             addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
