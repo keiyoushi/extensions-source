@@ -26,13 +26,11 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Mangahere : KeiSource() {
-    private val notRateLimitClient: OkHttpClient = network.client.newBuilder()
-        .addCookie("isAdult" to "1")
-        .build()
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addCookie("isAdult" to "1")
-        rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        rateLimit(1, 2.seconds) {
+            it.host == baseUrl.toHttpUrl().host && !it.encodedPath.endsWith("/chapterfun.ashx")
+        }
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd,yyyy", Locale.ENGLISH)
@@ -316,7 +314,7 @@ abstract class Mangahere : KeiSource() {
             } else {
                 requestUrl.newBuilder().setQueryParameter("key", "").build()
             }
-            responseText = notRateLimitClient.get(url, pageHeaders).use { it.body.string() }
+            responseText = client.get(url, pageHeaders).use { it.body.string() }
             if (responseText.isNotEmpty()) {
                 return parseImageUrl(responseText)
             }
