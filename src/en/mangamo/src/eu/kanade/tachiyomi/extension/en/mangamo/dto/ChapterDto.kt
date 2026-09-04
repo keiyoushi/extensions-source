@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class ChapterDto(
+    val alwaysFree: Boolean? = null,
     val id: Int? = null,
     val chapterNumber: Float? = null,
     val createdAt: Long? = null,
@@ -11,4 +12,7 @@ class ChapterDto(
     val name: String? = null,
     val onlyTransactional: Boolean? = null,
     val seriesId: Int? = null,
-)
+    val type: String? = null,
+) {
+    val isVolume get() = type == "volume"
+}
