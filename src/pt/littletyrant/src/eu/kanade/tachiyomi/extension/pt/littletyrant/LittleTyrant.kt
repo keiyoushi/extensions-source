@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.littletyrant
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -94,11 +95,14 @@ abstract class LittleTyrant : Madara() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(_proxyUrls)")?.data()
+        val script = document.selectFirst("script:containsData(pages)")?.data()
             ?: return emptyList()
 
         val pages = PAGES_REGEX.find(script)?.groupValues?.last() ?: return emptyList()
-        val tokenBaseUrl = BASE_URL_PAGE_REGEX.find(script)?.groupValues?.last()?.toHttpUrlOrNull() ?: return emptyList()
+        val tokenBaseUrl = BASE_URL_PAGE_REGEX.find(script)?.groupValues?.last()?.toHttpUrlOrNull() ?: return pages.parseAs<List<String>>()
+            .mapIndexed { index, urlEncoded ->
+                Page(index, imageUrl = Base64.decode(urlEncoded, Base64.DEFAULT).toString(Charsets.UTF_8))
+            }
 
         val token = client
             .newCall(pageTokenRequest(tokenBaseUrl))
@@ -135,7 +139,7 @@ abstract class LittleTyrant : Madara() {
     }
 
     companion object {
-        private val PAGES_REGEX = """_proxyUrls\s+=\s+(\[[^]]+])""".toRegex(RegexOption.IGNORE_CASE)
+        private val PAGES_REGEX = """pages\s+=\s+(\[[^]]+])""".toRegex(RegexOption.IGNORE_CASE)
         private val BASE_URL_PAGE_REGEX = """_themePath\s+=\s+"([^"]+)""".toRegex(RegexOption.IGNORE_CASE)
     }
 }
