@@ -9,8 +9,7 @@ import org.jsoup.nodes.Document
 abstract class VioletScans : MangaThemesia() {
     override val mangaUrlDirectory = "/comics"
 
-    override fun searchMangaSelector() =
-        ".utao .uta .imgu, .listupd .bs .bsx:not(:has(.novelabel)), .listo .bs .bsx:not(:has(.novelabel))"
+    override fun searchMangaSelector() = ".utao .uta .imgu, .listupd .bs .bsx:not(:has(.novelabel)), .listo .bs .bsx:not(:has(.novelabel))"
 
     override fun chapterListSelector(): String = "#chapterlist li:not(:has(svg))"
 
