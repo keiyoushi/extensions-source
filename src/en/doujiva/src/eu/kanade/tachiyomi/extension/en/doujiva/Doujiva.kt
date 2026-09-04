@@ -22,18 +22,15 @@ abstract class Doujiva : KeiSource() {
     private val apiUrl = "$baseUrl/api/v1"
 
     // Stay well under the observed 100 req/min API budget.
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder =
-        rateLimit(2)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        mangaList(page, sort = "popular-today")
+    override suspend fun getPopularManga(page: Int): MangasPage = mangaList(page, sort = "popular-today")
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        mangaList(page, sort = "newest")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaList(page, sort = "newest")
 
     // ============================== Search ===============================
 
@@ -230,8 +227,7 @@ abstract class Doujiva : KeiSource() {
         }
     }
 
-    private fun chapterUrl(slug: String, number: Float): String =
-        "/manga/$slug/chapter/${number.toChapterLabel()}"
+    private fun chapterUrl(slug: String, number: Float): String = "/manga/$slug/chapter/${number.toChapterLabel()}"
 
     private fun slugFromMangaUrl(mangaUrl: String): String? {
         val path = mangaUrl.removePrefix(baseUrl).substringBefore('?').trim('/')
@@ -262,8 +258,7 @@ abstract class Doujiva : KeiSource() {
         return null
     }
 
-    private fun Float.toChapterLabel(): String =
-        if (this % 1f == 0f) toInt().toString() else toString()
+    private fun Float.toChapterLabel(): String = if (this % 1f == 0f) toInt().toString() else toString()
 
     private fun String?.toEpochMillis(): Long {
         if (this.isNullOrBlank()) return 0L
