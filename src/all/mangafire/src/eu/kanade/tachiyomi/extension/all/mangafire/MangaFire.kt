@@ -44,6 +44,7 @@ abstract class MangaFire :
         rateLimit(2)
         addInterceptor(VrfSigner().interceptor())
         addInterceptor(ChallengeSolverInterceptor({ client.cookieJar }, { solveCaptcha }))
+        addInterceptor(ClientHintsInterceptor)
     }
 
     override fun Headers.Builder.configureHeaders() = apply {

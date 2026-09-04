@@ -1,4 +1,4 @@
-package keiyoushi.network
+package eu.kanade.tachiyomi.extension.all.mangafire
 
 import okhttp3.Interceptor
 import okhttp3.Response
