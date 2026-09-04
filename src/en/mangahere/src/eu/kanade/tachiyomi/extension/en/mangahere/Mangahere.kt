@@ -267,11 +267,10 @@ abstract class Mangahere : KeiSource() {
             .dropLastIfBroken()
     }
 
-
     /*
         function to drop last imageUrl if it's broken/unneccesary, working imageUrls are incremental (e.g. t001, t002, etc); if the difference between
         the last two isn't 1 or doesn't have an Int at the end of the last imageUrl's filename, drop last Page
-    */
+     */
     private suspend fun List<Page>.dropLastIfBroken(): List<Page> {
         if (size < 2) return this
 
