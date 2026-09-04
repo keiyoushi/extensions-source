@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangafox
 
-import android.webkit.CookieManager
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,15 +8,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Cookie
-import okhttp3.CookieJar
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
@@ -32,35 +29,9 @@ abstract class MangaFox : KeiSource() {
 
     private val mobileUrl get() = baseUrl.replace("://", "://m.")
 
-    override fun OkHttpClient.Builder.configureClient() = // Force readway=2 cookie to get all page URLs at once
-        cookieJar(
-            object : CookieJar {
-                private val cookieManager by lazy { CookieManager.getInstance() }
-
-                init {
-                    cookieManager.setCookie(mobileUrl.toHttpUrl().host, "readway=2")
-                    cookieManager.setCookie(baseUrl.toHttpUrl().host, "isAdult=1")
-                }
-
-                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                    val urlString = url.toString()
-                    cookies.forEach { cookieManager.setCookie(urlString, it.toString()) }
-                }
-
-                override fun loadForRequest(url: HttpUrl): List<Cookie> {
-                    val cookies = cookieManager.getCookie(url.toString())
-
-                    return if (cookies != null && cookies.isNotEmpty()) {
-                        cookies.split(";").mapNotNull {
-                            Cookie.parse(url, it)
-                        }
-                    } else {
-                        emptyList()
-                    }
-                }
-            },
-        )
-            .rateLimit(1, 1.seconds)
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 1.seconds)
+        .addCookie({ mobileUrl.toHttpUrl().host }, "readway" to "2") // Get all page URLs at once
+        .addCookie("isAdult" to "1") // NOTE: subdomain must be ordered before the main domain
 
     private val dateFormat = DateTimeFormatter.ofPattern("MMM d,yyyy", Locale.ENGLISH)
 
