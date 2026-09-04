@@ -55,7 +55,6 @@ or fix them directly by submitting a Pull Request.
       - [KeiSource](#keisource)
       - [Main class key variables](#main-class-key-variables)
     - [HTML and Image Processing](#html-and-image-processing)
-    - [OkHttp and Network](#okhttp-and-network)
     - [Extension call flow](#extension-call-flow)
       - [Popular Manga](#popular-manga)
       - [Latest Manga](#latest-manga)
@@ -836,9 +835,8 @@ val html = runWebView<String> {
 }
 ```
 
-- `runWebView(session, timeout, configure)` suspends until `resolve`/`reject` is called inside `configure`, or `timeout` (default 30s) elapses; it always runs on the main thread internally.
-- The `WebViewScope` DSL exposes: `javaScriptEnabled`/`domStorageEnabled`/`blockImages`/`useWideViewPort`/`loadWithOverviewMode`/`userAgent` settings, `useOkHttpNetwork` (routes WebView requests through the app's own OkHttp client), `onPageStarted`/`onPageFinished`/`onReceivedError` hooks, `interceptRequest` to inspect/replace/block resource loads, `jsBridge(name, handler)` to expose a `window.<name>.post(message)` callback from the page, `loadUrl`/`loadData`, `evaluateJs`, and `poll(interval)` to repeat a check until resolved.
-- Pass a shared `WebViewSession` if the same source needs to reuse one WebView instance across multiple calls (e.g. to keep cookies/state) instead of spinning up a new one each time; it is torn down automatically after an idle timeout.
+- `runWebView(timeout, configure)` suspends until `resolve`/`reject` is called inside `configure`, or `timeout` (default 30s) elapses; it always runs on the main thread internally.
+- The `WebViewScope` DSL exposes: `javaScriptEnabled`/`domStorageEnabled`/`blockImages`/`useWideViewPort`/`loadWithOverviewMode`/`userAgent` settings, `onPageStarted`/`onPageFinished`/`onReceivedError` hooks, `interceptRequest` to inspect/replace/block resource loads, `jsBridge(name, handler)` to expose a `window.<name>.post(message)` callback from the page, `loadUrl`/`loadData`, `evaluateJs`, and `poll(interval)` to repeat a check until resolved. Setting `userAgent` also spoofs the `Sec-CH-UA` client hints to match it, instead of advertising the real WebView brand and version.
 - For the common case of just reading a `localStorage` value after loading a page, use the ready-made `getLocalStorage(url, key)` helper instead of writing your own `runWebView` call.
 - `runWebViewBlocking(call, ...)` exists for non-suspend call sites (e.g. inside an OkHttp interceptor where you must pass the interceptor's chain.call()) - only use it there, never from a suspend function.
 
@@ -1153,35 +1151,6 @@ Behavior `KeiSource` gives you for free:
 - **Prefer stable selectors:** Avoid relying on volatile auto-generated CSS class names (e.g., `styles_Card__jN8og`) or complex regex for parsing. Prefer stable structural selectors.
 - **Use `ownText()` to avoid mutation:** To get text from an element without including text from its children, use `.ownText()`. This avoids the need to select and remove child elements (`.select().remove()`) or mutate the document.
 - **Parse status using `.lowercase()`:** When comparing strings for status parsing (e.g., `contains("ongoing")`), prefer calling `.lowercase()` on the source string once instead of using `ignoreCase = true` on multiple `contains` checks.
-
-### OkHttp and Network
-
-> [!NOTE]
-> `GET()`/`POST()` below build a `Request` object without executing it. On `KeiSource`, prefer the
-> `OkHttpClient.get`/`post`/`put`/`head` suspend helpers (see
-> [HTTP requests](#http-requests---okhttpclientget--post--put--head)), which build and execute the
-> call in one step; reach for `GET()`/`POST()` directly only if you need the `Request` itself
-> (e.g. to pass to something other than `client`).
-
-- **Always pass `headers`:** Every `GET()` and `POST()` call must include `headers` (or a custom headers object). Omitting headers will send the request without the app's default User-Agent and other expected headers.
-- **Referer header trailing slash:** When setting a `Referer` header pointing to the site root, always include a trailing slash: `.add("Referer", "$baseUrl/")`. This matches what browsers send and is required by some servers.
-- **Static URLs don't need `HttpUrl.Builder`:** Use string interpolation directly for URLs with no dynamic query parameters. Only use `HttpUrl.Builder` (or `.toHttpUrl().newBuilder()`) when query parameters need URL-encoding or the URL is built conditionally.
-
-  ```kotlin
-  // Unnecessary builder for a static URL:
-  val url = "$baseUrl/manga".toHttpUrl().newBuilder().build()
-  // Prefer:
-  client.get("$baseUrl/manga")
-  ```
-
-- **GraphQL Queries:** If you are sending GraphQL requests, use Kotlin's raw multi-dollar string interpolation (`$$"""..."""`) for your queries. This prevents having to escape every JSON variable `$` symbol manually. For building the request and parsing the response, prefer the `graphQLPost` and `parseGraphQLAs` helpers in `keiyoushi.utils`.
-- **Empty checks on `.text()`:** Because Jsoup's `.text()` automatically trims whitespace, you can use `.isNotEmpty()` instead of `.isNotBlank()` when checking for empty strings. The same applies to `.ownText()`. This also means you should not use `.trim()` with these functions.
-- **Customize the client via `configureClient()`, not `client` directly:** On `KeiSource`, `client` is `final`; override `OkHttpClient.Builder.configureClient()` instead (see [KeiSource](#keisource)) - e.g. `override fun OkHttpClient.Builder.configureClient() = rateLimit(...)`.
-- **Never use `Thread.sleep()`:** Do not use `Thread.sleep()` for rate limiting. Use the `keiyoushi.network.rateLimit` builder extension function on your `OkHttpClient.Builder` instead.
-- **Never call `client.newCall(...).execute()` directly from a suspend function:** Use the suspend `OkHttpClient.get`/`post`/`put`/`head` helpers instead (see [HTTP requests](#http-requests---okhttpclientget--post--put--head)); they suspend properly instead of blocking a thread. This doesn't apply to genuinely synchronous, non-suspend callback contexts (an `OkHttp` interceptor, a WebView bridge, or the `fetch` callback passed to `readZipDirectory`/`readZipEntry`), where there's no suspend context to hook into and a blocking `.execute()` is expected - see [ZIP streaming](#zip-streaming---readzipdirectory--readzipentry) for an example.
-- **Pass `HttpUrl` directly:** `client.get`/`post`/`put`/`head` and the `GET()`/`POST()` builders all accept an `HttpUrl` object. Do not call `.toString()` on a built `HttpUrl` before passing it.
-- **Use `HttpUrl` for URL manipulation:** When parsing or extracting parts of a URL, prefer using `HttpUrl` methods (like `pathSegments` property, `encodedPathSegments`, or `queryParameter("id")`) over manual string splitting (e.g., `.split("/")`) or regex. This ensures proper separation of concerns and protects against unexpected inputs-such as URL fragments or query parameters-without you needing to manually account for all edge cases.
-- **Use `addCookie` for custom cookies:** See [Custom cookies - `addCookie`](#custom-cookies---addcookie). Do not manually add `Cookie` headers: doing so can discard unrelated cookies already attached to the request, whereas `addCookie` preserves them and replaces only cookies with matching names.
 
 ### Extension call flow
 

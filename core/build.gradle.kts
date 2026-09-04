@@ -9,6 +9,10 @@ plugins {
 android {
     namespace = "keiyoushi.core"
 
+    defaultConfig {
+        consumerProguardFiles("consumer-rules.pro")
+    }
+
     buildFeatures {
         resValues = false
     }
