@@ -26,15 +26,13 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Mangahere : KeiSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
     private val notRateLimitClient: OkHttpClient = network.client.newBuilder()
         .addCookie("isAdult" to "1")
         .build()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addCookie("isAdult" to "1")
-        rateLimit(1, 2.seconds) { it.host == baseUrlHost }
+        rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd,yyyy", Locale.ENGLISH)
