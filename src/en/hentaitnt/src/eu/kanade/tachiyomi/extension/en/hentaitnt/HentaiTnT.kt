@@ -18,7 +18,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getString
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
@@ -99,7 +98,9 @@ abstract class HentaiTnT :
 
         if (mangaId == null) {
             val updatedManga = fetchMangaDetails(manga)
-            val updatedChapters = fetchChapters(updatedManga.memo.getString("id"))
+            val mangaId = updatedManga.memo.getStringOrNull("id")
+                ?: throw Exception("Failed to get chapter id")
+            val updatedChapters = fetchChapters(mangaId)
             return SMangaUpdate(updatedManga, updatedChapters)
         }
 
@@ -126,12 +127,10 @@ abstract class HentaiTnT :
                 "ongoing" -> SManga.ONGOING
                 else -> SManga.UNKNOWN
             }
+
+            val mangaId = detailsDocument.selectFirst("#post_manga_id")?.attr("value")
             memo = buildJsonObject {
-                put(
-                    "id",
-                    detailsDocument.selectFirst("#post_manga_id")?.attr("value")
-                        ?: throw Exception("Failed to get chapter id"),
-                )
+                put("id", mangaId)
             }
         }
     }
