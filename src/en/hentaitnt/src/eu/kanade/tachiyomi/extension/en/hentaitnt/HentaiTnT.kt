@@ -18,10 +18,14 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
@@ -85,10 +89,30 @@ abstract class HentaiTnT :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val chaptersDeferred = async { if (fetchChapters) fetchChapters(manga) else chapters }
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
+    ): SMangaUpdate {
+        val mangaId = manga.memo.getStringOrNull("id")
+
+        if (!fetchChapters) {
+            val updatedManga = if (fetchDetails) fetchMangaDetails(manga) else manga
+            return SMangaUpdate(updatedManga, chapters)
+        }
+
+        if (mangaId == null) {
+            val updatedManga = fetchMangaDetails(manga)
+            val updatedChapters = fetchChapters(updatedManga.memo.getString("id"))
+            return SMangaUpdate(updatedManga, updatedChapters)
+        }
+
+        if (!fetchDetails) {
+            return SMangaUpdate(manga, fetchChapters(mangaId))
+        }
+
+        return coroutineScope {
+            // `mangaId` is stale but stable, requesting both at the same time for performance
+            val mangaDeferred = async { fetchMangaDetails(manga) }
+            val chaptersDeferred = async { fetchChapters(mangaId) }
+            SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+        }
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
@@ -102,14 +126,17 @@ abstract class HentaiTnT :
                 "ongoing" -> SManga.ONGOING
                 else -> SManga.UNKNOWN
             }
+            memo = buildJsonObject {
+                put(
+                    "id",
+                    detailsDocument.selectFirst("#post_manga_id")?.attr("value")
+                        ?: throw Exception("Failed to get chapter id"),
+                )
+            }
         }
     }
 
-    private suspend fun fetchChapters(manga: SManga): List<SChapter> {
-        val detailsDocument = client.get(getMangaUrl(manga)).asJsoup()
-        val mangaId = detailsDocument.selectFirst("#post_manga_id")?.attr("value")
-            ?: throw Exception("Failed to get chapter id")
-
+    private suspend fun fetchChapters(mangaId: String): List<SChapter> {
         val form = FormBody.Builder()
             .add("action", "baka_ajax")
             .add("type", "load_chapters_paginated")
