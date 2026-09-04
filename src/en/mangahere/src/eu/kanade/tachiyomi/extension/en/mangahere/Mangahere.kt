@@ -15,7 +15,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
@@ -229,40 +228,19 @@ abstract class Mangahere : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
         val bar = document.select("script[src*=chapter_bar]")
-        val quickJs = QuickJs.create()
-
-        /*
-            function to drop last imageUrl if it's broken/unneccesary, working imageUrls are incremental (e.g. t001, t002, etc); if the difference between
-            the last two isn't 1 or doesn't have an Int at the end of the last imageUrl's filename, drop last Page
-         */
-        fun List<Page>.dropLastIfBroken(): List<Page> {
-            val list = this.takeLast(2).map { page ->
-                try {
-                    page.imageUrl!!.substringBeforeLast(".").substringAfterLast("/").takeLast(2).toInt()
-                } catch (_: NumberFormatException) {
-                    return this.dropLast(1)
-                }
-            }
-            return when {
-                list[0] == 0 && 100 - list[1] == 1 -> this
-                list[1] - list[0] == 1 -> this
-                else -> this.dropLast(1)
-            }
-        }
 
         // if-branch is for webtoon reader, else is for page-by-page
         return if (bar.isNotEmpty()) {
             val script = document.select("script:containsData(function(p,a,c,k,e,d))").html().removePrefix("eval")
-            val deobfuscatedScript = quickJs.evaluate(script).toString()
+            val deobfuscatedScript = QuickJs.create().use { it.evaluate(script).toString() }
             val urls = deobfuscatedScript.substringAfter("newImgs=['").substringBefore("'];").split("','")
-            quickJs.close()
 
             urls.mapIndexed { index, s -> Page(index, imageUrl = "https:$s") }
         } else {
             val html = document.html()
             val link = document.location()
 
-            var secretKey = extractSecretKey(html, quickJs)
+            val secretKey = QuickJs.create().use { extractSecretKey(html, it) }
 
             val chapterIdStartLoc = html.indexOf("chapterid")
             val chapterId = html.substring(
@@ -275,46 +253,106 @@ abstract class Mangahere : KeiSource() {
             val pagesNumber = pagesLinksElements[pagesLinksElements.size - 2].attr("data-page").toInt()
 
             val pageBase = link.substring(0, link.lastIndexOf("/"))
-            val pageHeaders = Headers.Builder()
-                .set("Referer", link)
-                .set("Accept", "*/*")
-                .set("Accept-Language", "en-US,en;q=0.9")
-                .set("Connection", "keep-alive")
-                .set("Host", "www.mangahere.cc")
-                .set("User-Agent", System.getProperty("http.agent") ?: "")
-                .set("X-Requested-With", "XMLHttpRequest")
-                .build()
+            IntRange(1, pagesNumber).map { page ->
+                val pageUrl = "$pageBase/chapterfun.ashx".toHttpUrl().newBuilder()
+                    .addQueryParameter("cid", chapterId)
+                    .addQueryParameter("page", page.toString())
+                    .addQueryParameter("key", secretKey)
+                    .fragment(link)
+                    .build()
 
-            IntRange(1, pagesNumber).map { i ->
-                val pageLink = "$pageBase/chapterfun.ashx?cid=$chapterId&page=$i&key=$secretKey"
-
-                var responseText = ""
-
-                for (tr in 1..3) {
-                    responseText = notRateLimitClient.get(pageLink, pageHeaders).use { it.body.string() }
-
-                    if (responseText.isNotEmpty()) {
-                        break
-                    } else {
-                        secretKey = ""
-                    }
-                }
-
-                val deobfuscatedScript = quickJs.evaluate(responseText.removePrefix("eval")).toString()
-
-                val baseLinkStartPos = deobfuscatedScript.indexOf("pix=") + 5
-                val baseLinkEndPos = deobfuscatedScript.indexOf(";", baseLinkStartPos) - 1
-                val baseLink = deobfuscatedScript.substring(baseLinkStartPos, baseLinkEndPos)
-
-                val imageLinkStartPos = deobfuscatedScript.indexOf("pvalue=") + 9
-                val imageLinkEndPos = deobfuscatedScript.indexOf("\"", imageLinkStartPos)
-                val imageLink = deobfuscatedScript.substring(imageLinkStartPos, imageLinkEndPos)
-
-                Page(i - 1, imageUrl = "https:$baseLink$imageLink")
+                Page(page - 1, url = pageUrl.toString())
             }
         }
             .dropLastIfBroken()
-            .also { quickJs.close() }
+    }
+
+
+    /*
+        function to drop last imageUrl if it's broken/unneccesary, working imageUrls are incremental (e.g. t001, t002, etc); if the difference between
+        the last two isn't 1 or doesn't have an Int at the end of the last imageUrl's filename, drop last Page
+    */
+    private suspend fun List<Page>.dropLastIfBroken(): List<Page> {
+        if (size < 2) return this
+
+        val resolvedPages = mapIndexed { index, page ->
+            if (index < lastIndex - 1 || page.imageUrl != null) {
+                page
+            } else {
+                page.apply { imageUrl = getImageUrl(this) }
+            }
+        }
+        val pageNumbers = resolvedPages.takeLast(2).map { page ->
+            page.imageUrl
+                ?.substringBeforeLast(".")
+                ?.substringAfterLast("/")
+                ?.takeLast(2)
+                ?.toIntOrNull()
+                ?: return resolvedPages.dropLast(1)
+        }
+
+        return if (
+            pageNumbers[1] - pageNumbers[0] == 1 ||
+            (pageNumbers[0] == 0 && pageNumbers[1] == 99)
+        ) {
+            resolvedPages
+        } else {
+            resolvedPages.dropLast(1)
+        }
+    }
+
+    override suspend fun getImageUrl(page: Page): String {
+        val pageUrl = page.url.toHttpUrl()
+        val referer = pageUrl.fragment ?: error("Missing chapter referer")
+        val requestUrl = pageUrl.newBuilder().fragment(null).build()
+        val pageHeaders = headers.newBuilder()
+            .set("Referer", referer)
+            .set("Accept", "*/*")
+            .set("Accept-Language", "en-US,en;q=0.9")
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
+
+        var responseText: String
+        for (attempt in 0..2) {
+            val url = if (attempt == 0) {
+                requestUrl
+            } else {
+                requestUrl.newBuilder().setQueryParameter("key", "").build()
+            }
+            responseText = notRateLimitClient.get(url, pageHeaders).use { it.body.string() }
+            if (responseText.isNotEmpty()) {
+                return parseImageUrl(responseText)
+            }
+        }
+
+        error("Empty image response")
+    }
+
+    private fun parseImageUrl(responseText: String): String {
+        val deobfuscatedScript = QuickJs.create().use {
+            it.evaluate(responseText.removePrefix("eval")).toString()
+        }
+
+        val baseLinkStart = deobfuscatedScript.indexOf("pix=")
+            .takeIf { it >= 0 }
+            ?.plus(5)
+            ?: error("Missing image host")
+        val baseLinkEnd = deobfuscatedScript.indexOf(";", baseLinkStart)
+            .takeIf { it > baseLinkStart }
+            ?.minus(1)
+            ?: error("Invalid image host")
+        val baseLink = deobfuscatedScript.substring(baseLinkStart, baseLinkEnd)
+
+        val imageLinkStart = deobfuscatedScript.indexOf("pvalue=")
+            .takeIf { it >= 0 }
+            ?.plus(9)
+            ?: error("Missing image path")
+        val imageLinkEnd = deobfuscatedScript.indexOf('"', imageLinkStart)
+            .takeIf { it > imageLinkStart }
+            ?: error("Invalid image path")
+        val imageLink = deobfuscatedScript.substring(imageLinkStart, imageLinkEnd)
+
+        return "https:$baseLink$imageLink"
     }
 
     private fun extractSecretKey(html: String, quickJs: QuickJs): String {
