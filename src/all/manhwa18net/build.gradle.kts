@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manhwa18.net"
-    versionCode = 14
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
