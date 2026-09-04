@@ -79,3 +79,16 @@ fun getGenreList() = listOf(
     Genre("Yaoi", "yaoi"),
     Genre("Yuri", "yuri"),
 )
+
+fun genreLabel(slug: String): String = getGenreList().firstOrNull { it.slug.equals(slug, ignoreCase = true) }?.name
+    ?: slug.replaceFirstChar { it.uppercase() }
+
+fun findGenre(query: String): Genre? {
+    val normalized = query.replace("-", "").replace(" ", "")
+    return getGenreList().firstOrNull { genre ->
+        genre.name.equals(query, ignoreCase = true) ||
+            genre.slug.equals(query, ignoreCase = true) ||
+            genre.name.replace("-", "").replace(" ", "")
+                .equals(normalized, ignoreCase = true)
+    }
+}

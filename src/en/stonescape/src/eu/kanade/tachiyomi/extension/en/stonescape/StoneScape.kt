@@ -89,24 +89,32 @@ abstract class StoneScape : HttpSource() {
             .addQueryParameter("limit", "24")
             .addQueryParameter("contentType", "manhwa")
 
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("search", query)
-        }
-
         filters.firstInstanceOrNull<StatusFilter>()?.let { filter ->
             if (filter.state != 0) {
                 url.addQueryParameter("status", filter.toUriPart())
             }
         }
 
-        filters.firstInstanceOrNull<GenreFilter>()?.let { filter ->
-            val genres = filter.state
-                .filter { it.state }
-                .joinToString(",") { it.slug }
+        val selectedGenres = filters.firstInstanceOrNull<GenreFilter>()
+            ?.state
+            ?.filter { it.state }
+            ?.map { it.slug }
+            .orEmpty()
+            .toMutableList()
 
-            if (genres.isNotEmpty()) {
-                url.addQueryParameter("genres", genres)
+        if (query.isNotEmpty()) {
+            val matchedGenre = findGenre(query)
+            if (matchedGenre != null) {
+                if (matchedGenre.slug !in selectedGenres) {
+                    selectedGenres += matchedGenre.slug
+                }
+            } else {
+                url.addQueryParameter("search", query)
             }
+        }
+
+        if (selectedGenres.isNotEmpty()) {
+            url.addQueryParameter("genres", selectedGenres.joinToString(","))
         }
 
         return GET(url.build(), headers)
