@@ -1,6 +1,9 @@
 name: PR check
 
 on:
+  push:
+    branches:
+      - private/doujiva
   pull_request:
     paths:
       - '**'
