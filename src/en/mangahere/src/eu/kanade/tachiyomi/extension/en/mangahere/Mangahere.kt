@@ -1,54 +1,49 @@
 package eu.kanade.tachiyomi.extension.en.mangahere
 
 import app.cash.quickjs.QuickJs
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class Mangahere : HttpSource() {
+abstract class Mangahere : KeiSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val supportsLatest = true
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
 
     private val notRateLimitClient: OkHttpClient = network.client.newBuilder()
         .addCookie("isAdult" to "1")
         .build()
 
-    override val client: OkHttpClient = notRateLimitClient.newBuilder()
-        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addCookie("isAdult" to "1")
+        rateLimit(1, 2.seconds) { it.host == baseUrlHost }
+    }
 
-    private val dateFormat = SimpleDateFormat("MMM dd,yyyy", Locale.ENGLISH)
+    private val dateFormat = DateTimeFormatter.ofPattern("MMM dd,yyyy", Locale.ENGLISH)
 
     // Popular Manga
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/directory/$page.htm", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/directory/$page.htm").asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
@@ -69,10 +64,8 @@ abstract class Mangahere : HttpSource() {
 
     // Latest Updates
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/directory/$page.htm?latest", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/directory/$page.htm?latest").asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(latestUpdatesNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
@@ -84,7 +77,7 @@ abstract class Mangahere : HttpSource() {
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
 
         filters.forEach { filter ->
@@ -138,11 +131,7 @@ abstract class Mangahere : HttpSource() {
             addEncodedQueryParameter("name", null)
         }
 
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url.build()).asJsoup()
         val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
         val hasNextPage = document.selectFirst(searchMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
@@ -165,8 +154,26 @@ abstract class Mangahere : HttpSource() {
 
     // Manga Details
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val updatedManga = mangaDetailsFromDocument(document)
+        val updatedChapters = chapterListFromDocument(document)
+
+        // Explicitly ignoring `fetchChapters` as we would otherwise provide incomplete data
+        // Get a chapter, check if the manga is licensed.
+        val aChapterUrl = getChapterUrl(updatedChapters.first())
+        val aChapterDocument = client.get(aChapterUrl).asJsoup()
+        if (aChapterDocument.select("p.detail-block-content").hasText()) updatedManga.status = SManga.LICENSED
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
+
+    private fun mangaDetailsFromDocument(document: Document): SManga {
         val manga = SManga.create()
         manga.author = document.selectFirst(".detail-info-right-say > a")?.text()
         manga.genre = document.select(".detail-info-right-tag-list > a").joinToString { it.text() }
@@ -180,11 +187,6 @@ abstract class Mangahere : HttpSource() {
                 else -> manga.status = SManga.UNKNOWN
             }
         }
-
-        // Get a chapter, check if the manga is licensed.
-        val aChapterURL = chapterFromElement(document.selectFirst(chapterListSelector())!!).url
-        val aChapterDocument = client.newCall(GET("$baseUrl$aChapterURL", headers)).execute().asJsoup()
-        if (aChapterDocument.select("p.detail-block-content").hasText()) manga.status = SManga.LICENSED
 
         return manga
     }
@@ -201,10 +203,7 @@ abstract class Mangahere : HttpSource() {
         return chapter
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector()).map { chapterFromElement(it) }
-    }
+    private fun chapterListFromDocument(document: Document): List<SChapter> = document.select(chapterListSelector()).map { chapterFromElement(it) }
 
     private fun parseChapterDate(date: String): Long = if ("Today" in date || " ago" in date) {
         Calendar.getInstance().apply {
@@ -222,13 +221,13 @@ abstract class Mangahere : HttpSource() {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
     } else {
-        dateFormat.tryParse(date)
+        dateFormat.tryParseDate(date)
     }
 
     // Pages
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val bar = document.select("script[src*=chapter_bar]")
         val quickJs = QuickJs.create()
 
@@ -276,6 +275,15 @@ abstract class Mangahere : HttpSource() {
             val pagesNumber = pagesLinksElements[pagesLinksElements.size - 2].attr("data-page").toInt()
 
             val pageBase = link.substring(0, link.lastIndexOf("/"))
+            val pageHeaders = Headers.Builder()
+                .set("Referer", link)
+                .set("Accept", "*/*")
+                .set("Accept-Language", "en-US,en;q=0.9")
+                .set("Connection", "keep-alive")
+                .set("Host", "www.mangahere.cc")
+                .set("User-Agent", System.getProperty("http.agent") ?: "")
+                .set("X-Requested-With", "XMLHttpRequest")
+                .build()
 
             IntRange(1, pagesNumber).map { i ->
                 val pageLink = "$pageBase/chapterfun.ashx?cid=$chapterId&page=$i&key=$secretKey"
@@ -283,19 +291,7 @@ abstract class Mangahere : HttpSource() {
                 var responseText = ""
 
                 for (tr in 1..3) {
-                    val request = Request.Builder()
-                        .url(pageLink)
-                        .addHeader("Referer", link)
-                        .addHeader("Accept", "*/*")
-                        .addHeader("Accept-Language", "en-US,en;q=0.9")
-                        .addHeader("Connection", "keep-alive")
-                        .addHeader("Host", "www.mangahere.cc")
-                        .addHeader("User-Agent", System.getProperty("http.agent") ?: "")
-                        .addHeader("X-Requested-With", "XMLHttpRequest")
-                        .build()
-
-                    val pageResponse = notRateLimitClient.newCall(request).execute()
-                    responseText = pageResponse.body.string()
+                    responseText = notRateLimitClient.get(pageLink, pageHeaders).use { it.body.string() }
 
                     if (responseText.isNotEmpty()) {
                         break
@@ -339,9 +335,7 @@ abstract class Mangahere : HttpSource() {
         return quickJs.evaluate(secretKeyResultScript).toString()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         TypeList(types.keys.toList().sorted().toTypedArray()),
         ArtistFilter("Artist"),
         AuthorFilter("Author"),
