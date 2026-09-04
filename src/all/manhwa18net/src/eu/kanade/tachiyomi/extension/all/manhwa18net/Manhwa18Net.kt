@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
@@ -23,8 +24,6 @@ import kotlin.time.Instant
 abstract class Manhwa18Net : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
-
-    private fun Response.asJsoup() = Jsoup.parse(body.string())
 
     private fun extractPageDto(response: Response): PageDto {
         val document = response.asJsoup()
