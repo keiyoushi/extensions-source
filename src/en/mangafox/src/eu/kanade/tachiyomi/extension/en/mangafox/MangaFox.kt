@@ -68,17 +68,17 @@ abstract class MangaFox : KeiSource() {
         val pageStr = if (page != 1) "$page.html" else ""
         val document = client.get("$baseUrl/directory/$pageStr").asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
-        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
     }
 
     private fun popularMangaSelector() = "ul.manga-list-1-list li"
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        element.select("a").first()!!.let {
+        element.selectFirst("a")!!.let {
             setUrlWithoutDomain(it.absUrl("href"))
             title = it.attr("title")
-            thumbnail_url = it.select("img").attr("abs:src")
+            thumbnail_url = it.selectFirst("img")?.attr("abs:src")
         }
     }
 
@@ -88,7 +88,7 @@ abstract class MangaFox : KeiSource() {
         val pageStr = if (page != 1) "$page.html" else ""
         val document = client.get("$baseUrl/directory/$pageStr?latest").asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
-        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -98,7 +98,7 @@ abstract class MangaFox : KeiSource() {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("search")
             addQueryParameter("title", query)
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            filters.forEach { filter ->
                 when (filter) {
                     is UriPartFilter -> addQueryParameter(filter.query, filter.toUriPart())
 
@@ -133,7 +133,7 @@ abstract class MangaFox : KeiSource() {
         }.build()
         val document = client.get(url).asJsoup()
         val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
-        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -152,12 +152,12 @@ abstract class MangaFox : KeiSource() {
     }
 
     private fun mangaDetailsFromDocument(document: Document): SManga = SManga.create().apply {
-        document.select(".detail-info-right").first()!!.let { it ->
-            author = it.select(".detail-info-right-say a").joinToString(", ") { it.text() }
-            genre = it.select(".detail-info-right-tag-list a").joinToString(", ") { it.text() }
-            description = it.select("p.fullcontent").first()?.text()
-            status = it.select(".detail-info-right-title-tip").first()?.text().orEmpty().let { parseStatus(it) }
-            thumbnail_url = document.select(".detail-info-cover-img").first()?.attr("abs:src")
+        document.selectFirst(".detail-info-right")!!.let { it ->
+            author = it.select(".detail-info-right-say a").joinToString { it.text() }
+            genre = it.select(".detail-info-right-tag-list a").joinToString { it.text() }
+            description = it.selectFirst("p.fullcontent")?.text()
+            status = it.selectFirst(".detail-info-right-title-tip")?.text().let { parseStatus(it) }
+            thumbnail_url = document.selectFirst(".detail-info-cover-img")?.attr("abs:src")
         }
     }
 
@@ -167,7 +167,7 @@ abstract class MangaFox : KeiSource() {
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
-        name = element.select(".detail-main-list-main p").first()?.text().orEmpty()
+        name = element.selectFirst(".detail-main-list-main p")!!.text()
         date_upload = element.select(".detail-main-list-main p").last()?.text()?.let { parseChapterDate(it) } ?: 0
     }
 
@@ -201,7 +201,8 @@ abstract class MangaFox : KeiSource() {
         }
     }
 
-    private fun parseStatus(status: String) = when {
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
         status.contains("Ongoing") -> SManga.ONGOING
         status.contains("Completed") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
