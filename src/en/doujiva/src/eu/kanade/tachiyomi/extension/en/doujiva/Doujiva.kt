@@ -110,7 +110,7 @@ abstract class Doujiva : KeiSource() {
         }
 
         return match.pages.mapIndexed { index, page ->
-            val imageUrl = page.imageUrl.trim()
+            val imageUrl = page.imageUrl
             if (imageUrl.isEmpty()) {
                 throw Exception("Doujiva page ${index + 1} has no image URL")
             }
@@ -219,7 +219,7 @@ abstract class Doujiva : KeiSource() {
                 url = chapterUrl(slug, chapter.number)
                 name = buildString {
                     append("Chapter ${chapter.number.toChapterLabel()}")
-                    chapter.title?.takeIf { it.isNotBlank() }?.let { append(" – $it") }
+                    chapter.title?.takeIf { it.isNotBlank() }?.let { append(" - $it") }
                 }
                 chapter_number = chapter.number
                 date_upload = chapter.createdAt.toEpochMillis()
@@ -260,14 +260,8 @@ abstract class Doujiva : KeiSource() {
 
     private fun Float.toChapterLabel(): String = if (this % 1f == 0f) toInt().toString() else toString()
 
-    private fun String?.toEpochMillis(): Long {
-        if (this.isNullOrBlank()) return 0L
-        return try {
-            java.time.Instant.parse(this).toEpochMilli()
-        } catch (_: Exception) {
-            0L
-        }
-    }
+    private fun String?.toEpochMillis(): Long =
+        this?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
 
     companion object {
         private const val PAGE_LIMIT = 24

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Doujiva"
-    versionCode = 2
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -16,6 +16,6 @@ keiyoushi {
     }
 
     deeplink {
-        path("/..*")
+        path("/manga/..*")
     }
 }

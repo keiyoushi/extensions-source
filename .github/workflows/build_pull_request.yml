@@ -1,9 +1,6 @@
 name: PR check
 
 on:
-  push:
-    branches:
-      - private/doujiva
   pull_request:
     paths:
       - '**'
@@ -83,7 +80,7 @@ jobs:
 
       - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: true
+        if: "github.repository == 'keiyoushi/extensions-source'"
         with:
           name: "individual-apks-${{ matrix.chunk.number }}"
           path: |
