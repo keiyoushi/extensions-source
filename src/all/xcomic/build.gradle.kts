@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "XCOMIC"
-    versionCode = 5
+    versionCode = 6
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -28,6 +28,7 @@ keiyoushi {
                     "https://xcomic.me",
                     "https://xcomic.net",
                     "https://comik.to",
+                    "https://yona.to",
                 )
             }
         }
@@ -37,6 +38,7 @@ keiyoushi {
         host("xcomic.me")
         host("xcomic.net")
         host("comik.to")
+        host("yona.to")
         path("/comic/..*")
     }
 }
