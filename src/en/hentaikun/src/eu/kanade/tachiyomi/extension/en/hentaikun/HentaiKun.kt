@@ -75,7 +75,7 @@ abstract class HentaiKun : KeiSource() {
         thumbnail_url = document.selectFirst("meta[property='og:image']")?.absUrl("content")
 
         author = document.select("h2:has(strong:contains(Artist)) a")
-            .joinToString(", ") { it.text() }
+            .joinToString { it.text() }
             .ifEmpty { null }
 
         val category = document.selectFirst("h2:has(strong:contains(Category)) a")?.text()
@@ -84,7 +84,7 @@ abstract class HentaiKun : KeiSource() {
         genre = buildList {
             if (category != null) add(category)
             addAll(tags)
-        }.joinToString(", ").ifEmpty { null }
+        }.joinToString().ifEmpty { null }
 
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -96,7 +96,7 @@ abstract class HentaiKun : KeiSource() {
     private fun parseChapterList(document: Document): List<SChapter> = document.select("table a.readchap").map { anchor ->
         SChapter.create().apply {
             name = anchor.text().ifEmpty { "Chapter" }
-            setUrlWithoutDomain(anchor.attr("href").trim())
+            setUrlWithoutDomain(anchor.absUrl("href"))
             val row = anchor.closest("tr")
             val dateText = row?.selectFirst("td:last-child h6")?.text()
             date_upload = dateFormat.tryParseDate(dateText)
@@ -119,7 +119,7 @@ abstract class HentaiKun : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
 
-        val firstImageUrl = document.selectFirst("img.image_rin")?.attr("src")?.trim()
+        val firstImageUrl = document.selectFirst("img.image_rin")?.absUrl("src")
             ?: throw Exception("Could not find any images for this chapter.")
 
         val totalPages = document.select("label:contains(Page) + select option").size
@@ -138,7 +138,7 @@ abstract class HentaiKun : KeiSource() {
         val padLength = numberPart.length
 
         return (1..totalPages).map { i ->
-            val pageNum = if (padLength > 0) i.toString().padStart(padLength, '0') else i.toString()
+            val pageNum = i.toString().padStart(padLength, '0')
             Page(i - 1, imageUrl = "$basePath$prefix$pageNum.$ext")
         }
     }
@@ -173,7 +173,7 @@ abstract class HentaiKun : KeiSource() {
         }
     }
 
-    private val dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.ENGLISH)
+    private val dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.ROOT)
 
     companion object {
         private val chapterNumberRegex = Regex("""(\d+(?:\.\d+)?)""")
