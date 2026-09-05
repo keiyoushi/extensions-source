@@ -1,10 +1,8 @@
-package eu.kanade.tachiyomi.extension.en.manhwaxxl
+package eu.kanade.tachiyomi.extension.en.hentaitnt
 
 import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,33 +10,39 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 
 @Source
-abstract class ManhwaXXL :
-    HttpSource(),
+abstract class HentaiTnT :
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/recommended" + (if (page > 1) "/page/$page" else "")).asJsoup()
+        return mangaListParse(document)
+    }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/recommended" + (if (page > 1) "/page/$page" else ""))
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun mangaListParse(document: Document): MangasPage {
         val mangas = document.select(".comic-card a").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
@@ -50,11 +54,12 @@ abstract class ManhwaXXL :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest" + (if (page > 1) "/page/$page" else ""))
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/latest-updates" + (if (page > 1) "/page/$page" else "")).asJsoup()
+        return mangaListParse(document)
+    }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query.isNotEmpty()) {
                 addQueryParameter("s", query)
@@ -74,30 +79,63 @@ abstract class ManhwaXXL :
             }
         }.build()
 
-        return GET(url, headers)
+        val document = client.get(url).asJsoup()
+        return mangaListParse(document)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val mangaId = manga.memo.getStringOrNull("id")
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+        if (!fetchChapters) {
+            val updatedManga = if (fetchDetails) fetchMangaDetails(manga) else manga
+            return SMangaUpdate(updatedManga, chapters)
+        }
+
+        if (mangaId == null) {
+            val updatedManga = fetchMangaDetails(manga)
+            val mangaId = updatedManga.memo.getStringOrNull("id")
+                ?: throw Exception("Failed to get chapter id")
+            val updatedChapters = fetchChapters(mangaId)
+            return SMangaUpdate(updatedManga, updatedChapters)
+        }
+
+        if (!fetchDetails) {
+            return SMangaUpdate(manga, fetchChapters(mangaId))
+        }
+
+        return coroutineScope {
+            // `mangaId` is stale but stable, requesting both at the same time for performance
+            val mangaDeferred = async { fetchMangaDetails(manga) }
+            val chaptersDeferred = async { fetchChapters(mangaId) }
+            SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+        }
+    }
+
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val detailsDocument = client.get(getMangaUrl(manga)).asJsoup()
         return SManga.create().apply {
-            author = document.selectFirst("i[title=Artists] + span a")?.text()
-            description = document.selectFirst("#synopsisText")?.text()
-            genre = document.select(".genre-item").joinToString { it.text() }
-            status = when (document.selectFirst("i[title=Status]")?.text()?.lowercase()) {
+            author = detailsDocument.selectFirst("i[title=Artists] + span a")?.text()
+            description = detailsDocument.selectFirst("#synopsisText")?.text()
+            genre = detailsDocument.select(".genre-item").joinToString { it.text() }
+            status = when (detailsDocument.selectFirst("span:has(i[title=Status])")?.text()?.lowercase()) {
                 "completed" -> SManga.COMPLETED
                 "ongoing" -> SManga.ONGOING
                 else -> SManga.UNKNOWN
             }
+
+            val mangaId = detailsDocument.selectFirst("#post_manga_id")?.attr("value")
+            memo = buildJsonObject {
+                put("id", mangaId)
+            }
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val detailsDocument = response.asJsoup()
-        val mangaId = detailsDocument.selectFirst("#post_manga_id")?.attr("value")
-            ?: throw Exception("Failed to get chapter id")
-
+    private suspend fun fetchChapters(mangaId: String): List<SChapter> {
         val form = FormBody.Builder()
             .add("action", "baka_ajax")
             .add("type", "load_chapters_paginated")
@@ -106,11 +144,7 @@ abstract class ManhwaXXL :
             .add("order", "newest_first")
             .build()
 
-        val ajaxResponse = client.newCall(
-            POST("$baseUrl/wp-admin/admin-ajax.php", headers, form),
-        ).execute()
-
-        val dto = ajaxResponse.parseAs<Dto>()
+        val dto = client.post("$baseUrl/wp-admin/admin-ajax.php", body = form).parseAs<Dto>()
         val chapterDoc = Jsoup.parseBodyFragment(dto.data.html, baseUrl)
 
         return chapterDoc.select(".comic-card").mapNotNull { element ->
@@ -128,16 +162,14 @@ abstract class ManhwaXXL :
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".page-image").mapIndexed { i, it ->
             Page(i, imageUrl = it.absUrl("src"))
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Ignored if using text search"),
         Filters(),
     )
