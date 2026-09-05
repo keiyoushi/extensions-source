@@ -176,14 +176,15 @@ abstract class MangaKatana :
         author = document.select(".author").eachText().joinToString()
         description = document.select(".summary > p").text() +
             (document.select(".alt_name").text().takeIf { it.isNotEmpty() }?.let { "\n\nAlt name(s): $it" } ?: "")
-        status = parseStatus(document.select(".value.status").text())
+        status = parseStatus(document.selectFirst(".value.status")?.text())
         genre = document.select(".genres > a").joinToString { it.text() }
         thumbnail_url = parseThumbnail(document)
     }
 
-    private fun parseThumbnail(document: Document) = document.select("div.media div.cover img").attr("abs:src")
+    private fun parseThumbnail(document: Document) = document.selectFirst("div.media div.cover img")?.attr("abs:src")
 
-    private fun parseStatus(status: String) = when {
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
         status.contains("Ongoing") -> SManga.ONGOING
         status.contains("Completed") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
@@ -195,7 +196,7 @@ abstract class MangaKatana :
         SChapter.create().apply {
             setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
             name = element.selectFirst("a")!!.text()
-            date_upload = dateFormat.tryParseDate(element.select(".update_time").text())
+            date_upload = dateFormat.tryParseDate(element.selectFirst(".update_time")?.text())
         }
     }
 
