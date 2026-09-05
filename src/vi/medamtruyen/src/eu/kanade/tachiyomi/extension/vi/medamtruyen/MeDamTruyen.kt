@@ -1,5 +1,12 @@
 package eu.kanade.tachiyomi.extension.vi.medamtruyen
 
+import android.app.Activity
+import android.app.AlertDialog
+import android.app.Application
+import android.os.Bundle
+import android.text.InputType
+import android.widget.EditText
+import android.widget.FrameLayout
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,10 +19,16 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -24,8 +37,10 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.lang.ref.WeakReference
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -34,6 +49,32 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class MeDamTruyen : KeiSource() {
+
+    private var currentActivity: WeakReference<Activity>? = null
+
+    init {
+        applicationContext.registerActivityLifecycleCallbacks(
+            object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityResumed(a: Activity) {
+                    currentActivity = WeakReference(a)
+                }
+
+                override fun onActivityPaused(a: Activity) {
+                    if (currentActivity?.get() === a) currentActivity = null
+                }
+
+                override fun onActivityDestroyed(a: Activity) {
+                    if (currentActivity?.get() === a) currentActivity = null
+                }
+
+                override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+                override fun onActivityStarted(activity: Activity) = Unit
+                override fun onActivityStopped(activity: Activity) = Unit
+                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+            },
+        )
+    }
+
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(thumbnailFallbackInterceptor)
         rateLimit(3)
@@ -263,10 +304,13 @@ abstract class MeDamTruyen : KeiSource() {
     private fun chapterFromElement(element: Element): SChapter? {
         val linkElement = element.selectFirst("a.chapter-link[href*=-chap-]") ?: return null
         val rawChapterName = element.selectFirst("p.chapter-title")?.text() ?: linkElement.text()
+        val isLocked = linkElement.selectFirst(".glyphicon-lock, .fa-lock, .icon-lock") != null ||
+            element.selectFirst(".glyphicon-lock, .fa-lock, .icon-lock") != null
 
         return SChapter.create().apply {
             setUrlWithoutDomain(linkElement.absUrl("href"))
-            name = normalizeChapterName(rawChapterName)
+            val normalizedName = normalizeChapterName(rawChapterName)
+            name = if (isLocked) "🔒 $normalizedName" else normalizedName
             date_upload = element.selectFirst("p.chapter-meta")
                 ?.text()
                 ?.let(::parseChapterDate)
@@ -298,11 +342,41 @@ abstract class MeDamTruyen : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
-        val chapterUrl = response.request.url.toString()
-        val html = response.use { it.body.string() }
-        if (passwordFormRegex.containsMatchIn(html)) {
-            throw Exception(passwordWebviewMessage)
+        val chapterUrl = getChapterUrl(chapter)
+        val response = client.get(chapterUrl)
+        var html = response.body.string()
+        var document = Jsoup.parse(html, chapterUrl)
+
+        val lockForm = document.selectFirst("form.post-password-form")
+        if (lockForm != null) {
+            val password = promptForPassword(chapter.name)
+            val postAction = lockForm.absUrl("action").ifEmpty {
+                "$baseUrl/wp-login.php?action=postpass"
+            }
+            val formBody = FormBody.Builder()
+                .add("post_password", password)
+                .add("redirect_to", chapterUrl)
+                .add("Submit", "Nhập")
+                .build()
+
+            val postHeaders = headers.newBuilder()
+                .set("Referer", chapterUrl)
+                .build()
+
+            val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
+            val responseUrl = postResponse.request.url.toString()
+            val responseBody = postResponse.body.string()
+
+            html = if (postResponse.isSuccessful && !responseUrl.contains("wp-login.php")) {
+                responseBody
+            } else {
+                client.get(chapterUrl).body.string()
+            }
+
+            document = Jsoup.parse(html, chapterUrl)
+            if (document.selectFirst("form.post-password-form") != null) {
+                throw Exception("Mật khẩu không chính xác")
+            }
         }
 
         val imageUrls = ImageDecryptor.extractImageUrls(html, chapterUrl)
@@ -312,6 +386,71 @@ abstract class MeDamTruyen : KeiSource() {
             Page(index, url = chapterUrl, imageUrl = imageUrl)
         }
     }
+
+    private suspend fun promptForPassword(chapterTitle: String): String {
+        val activity = currentActivity?.get()
+            ?: run {
+                for (i in 0 until 10) {
+                    delay(100)
+                    val act = currentActivity?.get()
+                    if (act != null) return@run act
+                }
+                null
+            }
+            ?: throw Exception("Không tìm thấy màn hình hiển thị để nhập mật khẩu")
+
+        val deferred = CompletableDeferred<String>()
+        var dialog: AlertDialog? = null
+
+        try {
+            withContext(Dispatchers.Main.immediate) {
+                val input = EditText(activity).apply {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    hint = "Mật khẩu"
+                }
+                val container = FrameLayout(activity).apply {
+                    val pad = (16 * resources.displayMetrics.density).toInt()
+                    setPadding(pad, pad / 2, pad, 0)
+                    addView(input)
+                }
+
+                dialog = AlertDialog.Builder(activity)
+                    .setTitle(chapterTitle)
+                    .setMessage("Chương này yêu cầu mật khẩu")
+                    .setView(container)
+                    .setPositiveButton("Mở khóa") { _, _ ->
+                        val text = input.text.toString().trim()
+                        if (text.isNotBlank()) {
+                            deferred.complete(text)
+                        } else {
+                            deferred.completeExceptionally(Exception("Mật khẩu không được để trống"))
+                        }
+                    }
+                    .setNegativeButton("Hủy") { _, _ ->
+                        deferred.completeExceptionally(Exception("Đã hủy nhập mật khẩu"))
+                    }
+                    .setOnCancelListener {
+                        deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
+                    }
+                    .setOnDismissListener {
+                        if (!deferred.isCompleted) {
+                            deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
+                        }
+                    }
+                    .show()
+            }
+
+            return deferred.await()
+        } finally {
+            withContext(NonCancellable + Dispatchers.Main.immediate) {
+                dialog?.takeIf { it.isShowing }?.dismiss()
+            }
+        }
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun imageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
@@ -367,7 +506,6 @@ abstract class MeDamTruyen : KeiSource() {
 
     private val thumbLowSize = "-150x150"
     private val thumbHighSize = "-720x970"
-    private val passwordWebviewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
 
     private val truyenPathRegex = Regex("""/truyen/""", RegexOption.IGNORE_CASE)
     private val chapterNameRegex = Regex(
@@ -378,10 +516,6 @@ abstract class MeDamTruyen : KeiSource() {
     private val chapterNumberRegex = Regex("""\d+(?:[.,]\d+)?""")
     private val chapterDateRegex = Regex("""\d{2}/\d{2}/\d{2}""")
     private val multiSpaceRegex = Regex("""\s+""")
-    private val passwordFormRegex = Regex(
-        """post-password-form|name=['"]post_password['"]""",
-        RegexOption.IGNORE_CASE,
-    )
     private val thumbFallbackMap = ConcurrentHashMap<String, String>()
     private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
     private val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
