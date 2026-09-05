@@ -22,8 +22,7 @@ abstract class Doujiva : KeiSource() {
     private val apiUrl get() = "$baseUrl/api/v1"
 
     // Stay well under the observed 100 req/min API budget.
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder =
-        rateLimit(2) { !it.encodedPath.contains("/thumbnail/path/change/me/") }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2) { !it.encodedPath.contains("/thumbnail/path/change/me/") }
 
     // ============================== Popular ==============================
 
