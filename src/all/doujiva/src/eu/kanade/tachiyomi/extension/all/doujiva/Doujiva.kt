@@ -14,15 +14,16 @@ import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import kotlin.math.abs
+import kotlin.time.Instant
 
 @Source
 abstract class Doujiva : KeiSource() {
 
-    private val apiUrl = "$baseUrl/api/v1"
+    private val apiUrl get() = "$baseUrl/api/v1"
 
     // Stay well under the observed 100 req/min API budget.
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder =
+        rateLimit(2) { !it.encodedPath.contains("/thumbnail/path/change/me/") }
 
     // ============================== Popular ==============================
 
@@ -74,21 +75,13 @@ abstract class Doujiva : KeiSource() {
         val dto = fetchMangaDto(slug)
             ?: throw Exception("Doujiva manga not found: $slug")
 
-        val details = if (fetchDetails) {
-            dto.toSMangaOrNull()?.apply {
-                initialized = true
-                // Keep the relative URL already stored by the list/search entry.
-                url = manga.url
-            } ?: manga
-        } else {
-            manga
-        }
+        val details = dto.toSMangaOrNull()?.apply {
+            initialized = true
+            // Keep the relative URL already stored by the list/search entry.
+            url = manga.url
+        } ?: manga
 
-        val chapterList = if (fetchChapters) {
-            dto.toSChapterList()
-        } else {
-            chapters
-        }
+        val chapterList = dto.toSChapterList()
 
         return SMangaUpdate(details, chapterList)
     }
@@ -96,25 +89,15 @@ abstract class Doujiva : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val (slug, chapterNumber) = parseChapterUrl(chapter.url)
-            ?: throw Exception("Invalid Doujiva chapter url: ${chapter.url}")
+        val chapterId = chapter.url.substringAfterLast('/').substringBefore('?')
+        val slug = chapter.memo["slug"]
+            ?: throw Exception("Missing Doujiva manga slug for chapter: ${chapter.url}")
 
-        val dto = fetchMangaDto(slug)
-            ?: throw Exception("Doujiva manga not found: $slug")
+        val response = client.get("$apiUrl/manga/$slug/chapters/$chapterId")
+            .parseAs<ChapterPagesResponse>()
 
-        val match = findChapter(dto, chapterNumber)
-            ?: throw Exception("Doujiva chapter not found for $slug #$chapterNumber")
-
-        if (match.pages.isEmpty()) {
-            throw Exception("Doujiva chapter has no pages: $slug #$chapterNumber")
-        }
-
-        return match.pages.mapIndexed { index, page ->
-            val imageUrl = page.imageUrl
-            if (imageUrl.isEmpty()) {
-                throw Exception("Doujiva page ${index + 1} has no image URL")
-            }
-            Page(index = index, imageUrl = imageUrl)
+        return response.data.map { page ->
+            Page(imageUrl = page.imageUrl)
         }
     }
 
@@ -142,26 +125,11 @@ abstract class Doujiva : KeiSource() {
         return response.data
     }
 
-    /**
-     * Match a chapter by number with float tolerance, falling back to the sole chapter
-     * only when the work has exactly one chapter (typical gallery case).
-     */
-    private fun findChapter(dto: MangaDto, chapterNumber: Float): ChapterDto? {
-        val chapters = dto.chapters
-        if (chapters.isEmpty()) return null
-
-        chapters.firstOrNull { abs(it.number - chapterNumber) < CHAPTER_EPSILON }?.let { return it }
-
-        // Only fall back when there is a single unambiguous chapter.
-        if (chapters.size == 1) return chapters[0]
-
-        return null
-    }
-
     private fun MangaDto.toSMangaOrNull(): SManga? {
         if (slug.isBlank() || title.isBlank()) return null
         return SManga.create().apply {
             url = "/manga/$slug"
+            memo["slug"] = slug
             title = this@toSMangaOrNull.title
             thumbnail_url = coverUrl?.takeIf { it.isNotBlank() }
             description = buildDescription()
@@ -202,21 +170,14 @@ abstract class Doujiva : KeiSource() {
 
     private fun MangaDto.toSChapterList(): List<SChapter> {
         if (chapters.isEmpty()) {
-            // Gallery with no chapter payload: synthesize a single chapter when pages exist.
-            if (pageCount <= 0 && firstPageUrl.isNullOrBlank()) return emptyList()
-            return listOf(
-                SChapter.create().apply {
-                    url = chapterUrl(slug, 1f)
-                    name = "Chapter 1"
-                    chapter_number = 1f
-                    date_upload = uploadedAt.toEpochMillis()
-                },
-            )
+            return emptyList()
         }
 
         return chapters.map { chapter ->
             SChapter.create().apply {
-                url = chapterUrl(slug, chapter.number)
+                url = "/manga/$slug/read/${chapter.id}"
+                memo["slug"] = slug
+                memo["number"] = chapter.number.toString()
                 name = buildString {
                     append("Chapter ${chapter.number.toChapterLabel()}")
                     chapter.title?.takeIf { it.isNotBlank() }?.let { append(" - $it") }
@@ -226,8 +187,6 @@ abstract class Doujiva : KeiSource() {
             }
         }
     }
-
-    private fun chapterUrl(slug: String, number: Float): String = "/manga/$slug/chapter/${number.toChapterLabel()}"
 
     private fun slugFromMangaUrl(mangaUrl: String): String? {
         val path = mangaUrl.removePrefix(baseUrl).substringBefore('?').trim('/')
@@ -246,24 +205,11 @@ abstract class Doujiva : KeiSource() {
         return null
     }
 
-    private fun parseChapterUrl(chapterUrl: String): Pair<String, Float>? {
-        // Canonical form: /manga/{slug}/chapter/{number}
-        val path = chapterUrl.removePrefix(baseUrl).substringBefore('?').trim('/')
-        val segments = path.split('/').filter { it.isNotEmpty() }
-        if (segments.size >= 4 && segments[0] == "manga" && segments[2] == "chapter") {
-            val slug = segments[1]
-            val number = segments[3].toFloatOrNull() ?: return null
-            return slug to number
-        }
-        return null
-    }
-
     private fun Float.toChapterLabel(): String = if (this % 1f == 0f) toInt().toString() else toString()
 
-    private fun String?.toEpochMillis(): Long = this?.let { kotlin.time.Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
+    private fun String?.toEpochMillis(): Long = this?.let { Instant.tryParse(it)?.toEpochMilliseconds() } ?: 0L
 
     companion object {
         private const val PAGE_LIMIT = 24
-        private const val CHAPTER_EPSILON = 0.001f
     }
 }

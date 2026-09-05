@@ -20,30 +20,24 @@ class SearchResponse(
 class MangaDetailResponse(
     val data: MangaDto? = null,
     val ok: Boolean = false,
-    val error: String? = null,
 )
 
 @Serializable
 class Meta(
-    val page: Int = 1,
-    val limit: Int = 20,
-    val total: Int = 0,
     val totalPages: Int = 0,
 )
 
 @Serializable
 class MangaDto(
-    val id: String = "",
-    val slug: String = "",
-    val title: String = "",
+    val id: String,
+    val slug: String,
+    val title: String,
     val description: String? = null,
     val coverUrl: String? = null,
-    val firstPageUrl: String? = null,
     val language: String? = null,
     val mediaType: String? = null,
     val pageCount: Int = 0,
     val status: String? = null,
-    val uploadedAt: String? = null,
     val tags: List<TagDto> = emptyList(),
     val chapters: List<ChapterDto> = emptyList(),
     val sourceName: String? = null,
@@ -51,22 +45,26 @@ class MangaDto(
 
 @Serializable
 class TagDto(
-    val name: String = "",
-    val category: String = "",
+    val name: String,
+    val category: String,
 )
 
 @Serializable
 class ChapterDto(
-    val id: String = "",
+    val id: String,
     val number: Float = 1f,
     val title: String? = null,
     val pageCount: Int = 0,
     val createdAt: String? = null,
-    val pages: List<PageDto> = emptyList(),
 )
 
 @Serializable
-class PageDto(
-    val number: Int = 0,
-    val imageUrl: String = "",
+class ChapterPagesResponse(
+    val data: List<ChapterPageDto> = emptyList(),
+    val ok: Boolean = false,
+)
+
+@Serializable
+class ChapterPageDto(
+    val imageUrl: String,
 )
