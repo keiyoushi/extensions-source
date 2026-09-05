@@ -12,6 +12,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -27,6 +28,7 @@ import keiyoushi.utils.parseAs
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -45,7 +47,9 @@ abstract class ScanManga :
     HttpSource(),
     ConfigurableSource {
 
-    private val domain = baseUrl.toHttpUrl().host
+    // Effective registrable domain (baseUrl is the www host), used for the
+    // static. image and bqj. search subdomains.
+    private val domain = baseUrl.toHttpUrl().topPrivateDomain()!!
     private val baseImageUrl = "https://static.$domain/img/manga"
     private val baseSearchUrl = "https://bqj.$domain/search/quick.json"
 
@@ -90,13 +94,13 @@ abstract class ScanManga :
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-45.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.asJsoup().select("#carouselTOPContainer > div.top").map { element ->
+        val mangas = response.asJsoup().select("div.image_manga.image_listing").mapNotNull { element ->
+            val link = element.selectFirst("a[href]") ?: return@mapNotNull null
+            val img = element.selectFirst("img")
             SManga.create().apply {
-                val titleElement = element.selectFirst("a.atop")!!
-
-                title = titleElement.text()
-                setUrlWithoutDomain(titleElement.attr("href"))
-                thumbnail_url = element.selectFirst("img")?.attr("data-original")
+                setUrlWithoutDomain(link.attr("href"))
+                title = img?.attr("title")?.takeIf { it.isNotBlank() } ?: link.text()
+                thumbnail_url = img?.attr("data-original")
             }
         }
 
@@ -104,26 +108,42 @@ abstract class ScanManga :
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?po", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select("#content_news .publi").map { element ->
+        val mangas = response.asJsoup().select("div.listing:has(a.nom_manga)").mapNotNull { element ->
+            val link = element.selectFirst("a.nom_manga") ?: return@mapNotNull null
             SManga.create().apply {
-                val mangaElement = element.selectFirst("a.l_manga")!!
-
-                title = mangaElement.text()
-                setUrlWithoutDomain(mangaElement.attr("href"))
-
-                thumbnail_url = element.selectFirst("img")?.attr("src")
+                setUrlWithoutDomain(link.attr("href"))
+                title = link.text()
+                val img = element.selectFirst("div.logo_manga img")
+                thumbnail_url = img?.attr("data-original")?.takeIf { it.isNotBlank() }
+                    ?: img?.absUrl("src")
             }
-        }
+        }.distinctBy { it.url }
 
         return MangasPage(mangas, false)
     }
 
     // Search
+    // Adult (18+) titles are hidden from the anonymous search API and browse listings, but
+    // their detail/chapter/reader pages load fine anonymously. Allow pasting a manga URL into
+    // the search box to open such a title directly.
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val trimmed = query.trim()
+        val httpUrl = trimmed.toHttpUrlOrNull()
+        if (httpUrl != null && httpUrl.host.endsWith(domain)) {
+            val path = httpUrl.encodedPath
+            return client.newCall(GET("$baseUrl$path", headers))
+                .asObservableSuccess()
+                .map { response ->
+                    val manga = mangaDetailsParse(response).apply { url = path }
+                    MangasPage(listOf(manga), false)
+                }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseSearchUrl
             .toHttpUrl().newBuilder()
@@ -161,35 +181,30 @@ abstract class ScanManga :
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.select("h1.main_title[itemprop=name]").text()
-            author = document.select("div[itemprop=author]").text()
-            description = document.selectFirst("div.titres_desc[itemprop=description]")?.text()
-            genre = document.selectFirst("div.titres_souspart span[itemprop=genre]")?.text()
+            title = document.selectFirst("[itemprop=name][content]")?.attr("content")
+                ?: document.selectFirst("h1")?.text().orEmpty()
+            author = document.selectFirst("li[itemprop=author]")?.text()
+            description = document.selectFirst("p[itemprop=description]")?.text()
+            genre = document.selectFirst("li[itemprop=genre]")?.text()
 
-            val statutText = document.selectFirst("div.titres_souspart")?.ownText()
+            val statutText = document.select("div.titre_volume_manga span").text()
             status = when {
-                statutText?.contains("En cours", ignoreCase = true) == true -> SManga.ONGOING
-                statutText?.contains("Terminé", ignoreCase = true) == true -> SManga.COMPLETED
+                statutText.contains("En cours", ignoreCase = true) -> SManga.ONGOING
+                statutText.contains("Termin", ignoreCase = true) -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
 
-            thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").attr("src")
+            thumbnail_url = document.selectFirst("meta[itemprop=image]")?.attr("content")
         }
     }
 
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div.chapt_m").map { element ->
-            val linkEl = element.selectFirst("td.publimg span.i a")!!
-            val titleEl = element.selectFirst("td.publititle")
-
-            val chapterName = linkEl.text()
-            val extraTitle = titleEl?.text()
-
+        return response.asJsoup().select("li.chapitre").mapNotNull { element ->
+            val linkEl = element.selectFirst("div.chapitre_nom a[href]") ?: return@mapNotNull null
             SChapter.create().apply {
-                name = if (!extraTitle.isNullOrEmpty()) "$chapterName - $extraTitle" else chapterName
-                setUrlWithoutDomain(linkEl.absUrl("href"))
+                name = linkEl.text()
+                setUrlWithoutDomain(linkEl.attr("href"))
             }
         }
     }
@@ -364,7 +379,13 @@ abstract class ScanManga :
     override fun pageListParse(response: Response): List<Page> = parsePageList(response.asJsoup())
 
     private fun parsePageList(document: org.jsoup.nodes.Document): List<Page> {
-        val packedScript = document.selectFirst(PACKED_SCRIPT_SELECTOR)!!.data()
+        // The packed reader script is the inline <script> matching the Hunter obfuscation.
+        // Locate it by regex rather than a fixed CSS selector: the www reader wraps it as
+        // `eval(/*EB*/function (...))`, and the comment defeats a literal selector.
+        val packedScript = document.select("script")
+            .map { it.data() }
+            .firstOrNull { HUNTER_OBFUSCATION_REGEX.containsMatchIn(it) }
+            ?: error("Failed to find packed reader script.")
         val unpackedScript = decodeHunter(packedScript)
 
         val (sml) = SML_PARAM_REGEX.find(unpackedScript)?.destructured
@@ -373,7 +394,9 @@ abstract class ScanManga :
         val (sme) = SME_PARAM_REGEX.find(unpackedScript)?.destructured
             ?: error("Failed to extract sme parameter.")
 
-        val (chapterId) = CHAPTER_INFO_REGEX.find(packedScript)?.destructured
+        // `const idc` lives in a separate static <script> on the www reader, so search the
+        // whole document rather than only the packed script.
+        val (chapterId) = CHAPTER_INFO_REGEX.find(document.html())?.destructured
             ?: error("Failed to extract chapter ID.")
 
         val availableVariables = mapOf(
@@ -506,8 +529,13 @@ abstract class ScanManga :
     }
 
     companion object {
-        private const val PACKED_SCRIPT_SELECTOR = "script:containsData(eval\\(function \\()"
-        private val HUNTER_OBFUSCATION_REGEX = Regex("""eval\s*\(\s*function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""")
+        // Tolerates an optional `/*...*/` comment between `eval(` and `function` — the www
+        // reader emits `eval(/*EB*/function (...))`. DOT_MATCHES_ALL so the packed function
+        // body may span lines. Groups: 1=encoded, 2=mask, 3=interval, 4=option.
+        private val HUNTER_OBFUSCATION_REGEX = Regex(
+            """eval\s*\(\s*(?:/\*.*?\*/\s*)?function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
         private val SML_PARAM_REGEX = Regex("""sml\s*=\s*'([^']+)'""")
         private val SME_PARAM_REGEX = Regex("""sme\s*=\s*'([^']+)'""")
         private val CHAPTER_INFO_REGEX = Regex("""const idc = (\d+)""")
