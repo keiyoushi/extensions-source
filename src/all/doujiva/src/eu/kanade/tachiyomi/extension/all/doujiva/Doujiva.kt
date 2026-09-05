@@ -89,14 +89,14 @@ abstract class Doujiva : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast('/').substringBefore('?')
-        val slug = chapter.memo["slug"]
+        val slug = chapter.memo.substringBefore('|').takeIf { it.isNotBlank() }
             ?: throw Exception("Missing Doujiva manga slug for chapter: ${chapter.url}")
 
         val response = client.get("$apiUrl/manga/$slug/chapters/$chapterId")
             .parseAs<ChapterPagesResponse>()
 
-        return response.data.map { page ->
-            Page(imageUrl = page.imageUrl)
+        return response.data.mapIndexed { index, page ->
+            Page(index = index, imageUrl = page.imageUrl)
         }
     }
 
@@ -128,7 +128,7 @@ abstract class Doujiva : KeiSource() {
         if (slug.isBlank() || title.isBlank()) return null
         return SManga.create().apply {
             url = "/manga/$slug"
-            memo["slug"] = slug
+            memo = slug
             title = this@toSMangaOrNull.title
             thumbnail_url = coverUrl?.takeIf { it.isNotBlank() }
             description = buildDescription()
@@ -175,8 +175,8 @@ abstract class Doujiva : KeiSource() {
         return chapters.map { chapter ->
             SChapter.create().apply {
                 url = "/manga/$slug/read/${chapter.id}"
-                memo["slug"] = slug
-                memo["number"] = chapter.number.toString()
+                memo = slug
+                memo = "$slug|${chapter.number}"
                 name = buildString {
                     append("Chapter ${chapter.number.toChapterLabel()}")
                     chapter.title?.takeIf { it.isNotBlank() }?.let { append(" - $it") }
@@ -206,7 +206,7 @@ abstract class Doujiva : KeiSource() {
 
     private fun Float.toChapterLabel(): String = if (this % 1f == 0f) toInt().toString() else toString()
 
-    private fun String?.toEpochMillis(): Long = this?.let { Instant.tryParse(it)?.toEpochMilliseconds() } ?: 0L
+    private fun String?.toEpochMillis(): Long = this?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
 
     companion object {
         private const val PAGE_LIMIT = 24
