@@ -26,6 +26,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 
 @Source
@@ -37,6 +38,8 @@ abstract class Inkr :
 
     private val queryApiUrl = "https://icq-api.inkr.com/v1"
     private val contentApiUrl = "https://icd-api.inkr.com/v1"
+
+    private val auth by lazy { InkrAuth(client, baseUrl) }
 
     private val apiHeaders: Headers by lazy {
         headersBuilder()
@@ -50,7 +53,25 @@ abstract class Inkr :
     private val catalogMutex = Mutex()
     private var catalogCache: CatalogCache? = null
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(authInterceptor())
+        .addInterceptor(ImageInterceptor())
+
+    private fun authInterceptor() = Interceptor { chain ->
+        val request = chain.request()
+        val host = request.url.host
+        if (
+            (host == "icq-api.inkr.com" || host == "icd-api.inkr.com") &&
+            request.header("Authorization") == null
+        ) {
+            val token = auth.currentAccessToken()
+            if (token != null) {
+                return@Interceptor chain.proceed(
+                    request.newBuilder().header("Authorization", "Bearer $token").build(),
+                )
+            }
+        }
+        chain.proceed(request)
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = browseManga(page, "", FilterList(), SortMode.Popular)
 
@@ -195,6 +216,7 @@ abstract class Inkr :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
+        auth.ensureLoaded()
         val showPaid = preferences.getBoolean(SHOW_PAID_PREF_KEY, false)
         val titleDeferred = async {
             if (!fetchDetails && !fetchChapters) return@async null
@@ -237,10 +259,16 @@ abstract class Inkr :
                 }.awaitAll()
             }.flatMap { it.entries }.associate { it.key to it.value }
 
+            val isSubscriber = auth.isExtraSubscriber()
             title.chapterList.mapNotNull { oid ->
                 val chapter = chapterMap[oid] ?: return@mapNotNull null
-                if (!chapter.isFree && !showPaid) return@mapNotNull null
-                chapter.toSChapter(titleOid = title.oid, showPaidMarker = showPaid)
+                val accessible = chapter.isAccessible(isSubscriber)
+                if (!accessible && !showPaid) return@mapNotNull null
+                chapter.toSChapter(
+                    titleOid = title.oid,
+                    showPaidMarker = showPaid,
+                    isSubscriber = isSubscriber,
+                )
             }.sortedByDescending { it.chapter_number }
         }
 
@@ -248,16 +276,24 @@ abstract class Inkr :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val isFree = chapter.memo[CHAPTER_FREE_MEMO]?.booleanOrNull
-        if (isFree == false) {
-            throw Exception("Chapter requires INKR coins or subscription")
-        }
+        auth.ensureLoaded()
 
-        if (isFree == null) {
-            val meta = fetchContentMap(listOf(chapter.url), CHAPTER_FIELDS)[chapter.url]
-                ?.parseAs<ChapterDto>()
-            if (meta != null && !meta.isFree) {
-                throw Exception("Chapter requires INKR coins or subscription")
+        val meta = fetchContentMap(listOf(chapter.url), CHAPTER_FIELDS)[chapter.url]
+            ?.parseAs<ChapterDto>()
+        val isSubscriber = auth.isExtraSubscriber()
+        val accessible = meta?.isAccessible(isSubscriber)
+            ?: chapter.memo[CHAPTER_ACCESSIBLE_MEMO]?.booleanOrNull
+            ?: chapter.memo[CHAPTER_FREE_MEMO]?.booleanOrNull
+
+        if (accessible == false) {
+            val revenue = meta?.revenueType?.lowercase().orEmpty()
+            throw when {
+                auth.currentAccessToken() == null ->
+                    Exception("Log in via WebView (INKR account), then reopen this chapter")
+                revenue == "coin-only" ->
+                    Exception("Chapter requires INKR coins (Extra does not unlock coin-only chapters)")
+                else ->
+                    Exception("Chapter requires INKR coins or Extra subscription")
             }
         }
 
@@ -328,8 +364,9 @@ abstract class Inkr :
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_PAID_PREF_KEY
             title = "Show paid chapters"
-            summary = "Display coin/subscription chapters (marked 🔒)."
-            setDefaultValue(false)
+            summary = "Display locked coin/Extra chapters (marked 🔒). " +
+                "Log in via WebView to unlock purchased/Extra chapters, then refresh the series."
+            setDefaultValue(true)
         }.also(screen::addPreference)
     }
 
@@ -426,6 +463,8 @@ abstract class Inkr :
             "publishedDate",
             "revenueType",
             "coinPrice",
+            "isPurchasedByCoin",
+            "isPurchasedBySub",
         )
 
         private val NAMED_FIELDS = listOf("oid", "name", "url")

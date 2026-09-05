@@ -9,6 +9,7 @@ import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
 internal const val CHAPTER_FREE_MEMO = "free"
+internal const val CHAPTER_ACCESSIBLE_MEMO = "accessible"
 internal const val CHAPTER_TITLE_MEMO = "title"
 
 @Serializable
@@ -130,6 +131,8 @@ class ChapterDto(
     val publishedDate: String? = null,
     val revenueType: String? = null,
     val coinPrice: Int = 0,
+    val isPurchasedByCoin: Boolean = false,
+    val isPurchasedBySub: Boolean = false,
 ) {
     val isFree: Boolean
         get() {
@@ -137,8 +140,16 @@ class ChapterDto(
             return type == "ad" || type == "free"
         }
 
-    fun toSChapter(titleOid: String, showPaidMarker: Boolean): SChapter {
-        val chapterName = if (!isFree && showPaidMarker) "🔒 $name" else name
+    fun isAccessible(isSubscriber: Boolean = false): Boolean {
+        if (isFree || isPurchasedByCoin || isPurchasedBySub) return true
+        if (!isSubscriber) return false
+        val type = revenueType?.lowercase()
+        return type == "subscription-only" || type == "mixed"
+    }
+
+    fun toSChapter(titleOid: String, showPaidMarker: Boolean, isSubscriber: Boolean = false): SChapter {
+        val accessible = isAccessible(isSubscriber)
+        val chapterName = if (!accessible && showPaidMarker) "🔒 $name" else name
         return SChapter.create().apply {
             url = oid
             name = chapterName
@@ -146,6 +157,7 @@ class ChapterDto(
             date_upload = Instant.tryParse(firstPublishedDate ?: publishedDate)
             memo = buildJsonObject {
                 put(CHAPTER_FREE_MEMO, isFree)
+                put(CHAPTER_ACCESSIBLE_MEMO, accessible)
                 put(CHAPTER_TITLE_MEMO, titleOid)
             }
         }
