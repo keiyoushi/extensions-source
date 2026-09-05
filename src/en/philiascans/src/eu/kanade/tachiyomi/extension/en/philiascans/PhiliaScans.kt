@@ -122,20 +122,64 @@ abstract class PhiliaScans :
         .set("X-Requested-With", "XMLHttpRequest")
         .build()
 
+    @Volatile
+    private var cachedToken: String? = null
+
+    @Volatile
+    private var cachedExpiresAtMs: Long = 0L
+
+    private fun getReaderAccessToken(forceRefresh: Boolean = false): String {
+        val now = System.currentTimeMillis()
+        if (!forceRefresh) {
+            cachedToken?.let { token ->
+                if (cachedExpiresAtMs - now > TOKEN_SKEW_MS) return token
+            }
+        }
+
+        val response = client.newCall(POST("$apiUrl/reader/access-token", tokenHeaders)).execute()
+        if (!response.isSuccessful) {
+            val code = response.code
+            response.close()
+            when (code) {
+                429 -> throw Exception("Rate limited by Philia Scans. Wait a moment and try again.")
+                401 -> throw Exception("Log in via WebView to renew access.")
+                else -> throw Exception("Failed to get reader access token (HTTP $code).")
+            }
+        }
+
+        val result = response.parseAs<TokenResponse>()
+        cachedToken = result.token
+        cachedExpiresAtMs = result.expiresAt * 1000L
+        return result.token
+    }
+
+    private fun readerHeaders(token: String) = tokenHeaders.newBuilder().add("X-Reader-Access-Token", token).build()
+
+    private fun fetchPageKeys(chapterId: Int, token: String): Pair<String, PageKeys> {
+        val response = client.newCall(GET("$apiUrl/chapters/$chapterId/page-keys", readerHeaders(token))).execute()
+        if (response.code == 404) {
+            response.close()
+            val refreshed = getReaderAccessToken(forceRefresh = true)
+            return refreshed to client.newCall(GET("$apiUrl/chapters/$chapterId/page-keys", readerHeaders(refreshed)))
+                .execute()
+                .parseAs()
+        }
+        return token to response.parseAs()
+    }
+
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
         val response = client.newCall(pageListRequest(chapter)).execute()
         val result = response.parseAs<ViewerResponse>()
         if (!result.hasAccess) throw Exception("Log in via Webview and purchased this chapter to read.")
 
-        val token = client.newCall(POST("$apiUrl/reader/access-token", tokenHeaders)).execute().parseAs<TokenResponse>().token
-        val readerHeaders = tokenHeaders.newBuilder().add("X-Reader-Access-Token", token).build()
+        val (token, pageKeyResponse) = fetchPageKeys(result.chapter.id, getReaderAccessToken())
+        val headers = readerHeaders(token)
 
         val isScrambled = if (result.chapter.scrambled) "1" else "0"
-        val pageKeyResponse = client.newCall(GET("$apiUrl/chapters/${result.chapter.id}/page-keys", readerHeaders)).execute().parseAs<PageKeys>()
 
         val (payloadA, payloadB) = if (pageKeyResponse.sessionDefault) {
-            val openResponse = client.newCall(POST("$apiUrl/chapters/${result.chapter.id}/open", readerHeaders)).execute().parseAs<OpenResponse>()
-            val drmCall = client.newCall(GET("$apiUrl/chapters/${result.chapter.id}/get-drm?session=${openResponse.sessionId}", readerHeaders)).execute()
+            val openResponse = client.newCall(POST("$apiUrl/chapters/${result.chapter.id}/open", headers)).execute().parseAs<OpenResponse>()
+            val drmCall = client.newCall(GET("$apiUrl/chapters/${result.chapter.id}/get-drm?session=${openResponse.sessionId}", headers)).execute()
             val drmResponse = if (drmCall.isSuccessful) {
                 drmCall.parseAs<DrmResponse>()
             } else {
@@ -170,5 +214,6 @@ abstract class PhiliaScans :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val TOKEN_SKEW_MS = 60_000L
     }
 }

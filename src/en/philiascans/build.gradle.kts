@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Philia Scans"
-    versionCode = 59
+    versionCode = 60
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 

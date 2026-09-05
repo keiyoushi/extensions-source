@@ -101,6 +101,7 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale
 @Serializable
 class TokenResponse(
     val token: String,
+    val expiresAt: Long,
 )
 
 @Serializable
