@@ -17,6 +17,5 @@ keiyoushi {
 
     deeplink {
         path("/title/..*")
-        path("/title/.*/chapter/..*")
     }
 }

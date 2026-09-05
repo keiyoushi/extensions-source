@@ -39,7 +39,7 @@ abstract class Inkr :
     private val queryApiUrl = "https://icq-api.inkr.com/v1"
     private val contentApiUrl = "https://icd-api.inkr.com/v1"
 
-    private val auth by lazy { InkrAuth(client, baseUrl) }
+    private val auth = InkrAuth(client = { client }, baseUrl = { baseUrl })
 
     private val apiHeaders: Headers by lazy {
         headersBuilder()
@@ -94,24 +94,23 @@ abstract class Inkr :
         sortMode: SortMode,
     ): MangasPage {
         val showNsfw = preferences.getBoolean(SHOW_NSFW_PREF_KEY, false)
-        val searchQuery = query.trim()
-        val filterRequest = buildFilteredRequest(filters, searchQuery)
-        val cacheKey = catalogKey(searchQuery, filterRequest, sortMode, showNsfw)
+        val filterRequest = buildFilteredRequest(filters, query)
+        val cacheKey = catalogKey(query, filterRequest, sortMode, showNsfw)
         val titles = catalogMutex.withLock {
             val cached = catalogCache
             if (cached != null && cached.key == cacheKey) {
                 cached.titles
             } else {
-                val oids = resolveTitleOids(searchQuery, filterRequest)
+                val oids = resolveTitleOids(query, filterRequest)
                 val hydrated = hydrateTitles(oids)
                     .filter { it.isAvailable && !it.isRemovedFromSale }
                     .filter { showNsfw || !it.isExplicit }
                     // /title/search ranks poorly (often worst-first); keep name matches only
                     .let { list ->
-                        if (searchQuery.isEmpty() || genreIdForName(searchQuery) != null) {
+                        if (query.isEmpty() || genreIdForName(query) != null) {
                             list
                         } else {
-                            list.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                            list.filter { it.name.contains(query, ignoreCase = true) }
                         }
                     }
                 val sorted = when (sortMode) {
@@ -259,7 +258,7 @@ abstract class Inkr :
                 }.awaitAll()
             }.flatMap { it.entries }.associate { it.key to it.value }
 
-            val isSubscriber = auth.isExtraSubscriber()
+            val isSubscriber = auth.isSubscriber
             title.chapterList.mapNotNull { oid ->
                 val chapter = chapterMap[oid] ?: return@mapNotNull null
                 val accessible = chapter.isAccessible(isSubscriber)
@@ -280,7 +279,7 @@ abstract class Inkr :
 
         val meta = fetchContentMap(listOf(chapter.url), CHAPTER_FIELDS)[chapter.url]
             ?.parseAs<ChapterDto>()
-        val isSubscriber = auth.isExtraSubscriber()
+        val isSubscriber = auth.isSubscriber
         val accessible = meta?.isAccessible(isSubscriber)
             ?: chapter.memo[CHAPTER_ACCESSIBLE_MEMO]?.booleanOrNull
             ?: chapter.memo[CHAPTER_FREE_MEMO]?.booleanOrNull
@@ -308,7 +307,7 @@ abstract class Inkr :
                 ),
             ),
         )[chapter.url]?.parseAs<ChapterPagesDto>()
-            ?: throw Exception("No pages found")
+            ?: return emptyList()
 
         return pagesDto.chapterPages.mapIndexed { index, page ->
             Page(index, imageUrl = "${page.url.trimEnd('/')}/$IMAGE_VARIANT")

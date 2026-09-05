@@ -10,12 +10,14 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.FormBody
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 internal class InkrAuth(
-    private val client: OkHttpClient,
-    private val baseUrl: String,
+    private val client: () -> OkHttpClient,
+    private val baseUrl: () -> String,
 ) {
     private val mutex = Mutex()
 
@@ -32,19 +34,18 @@ internal class InkrAuth(
     private var expiresAtMs: Long = 0
 
     @Volatile
-    private var isSubscriber: Boolean = false
+    var isSubscriber: Boolean = false
+        private set
 
     @Volatile
     private var paymentLoaded: Boolean = false
 
     fun currentAccessToken(): String? = accessToken
 
-    fun isExtraSubscriber(): Boolean = isSubscriber
-
     suspend fun ensureLoaded() = mutex.withLock {
         val now = System.currentTimeMillis()
         when {
-            accessToken != null && now < expiresAtMs - 30_000 -> Unit
+            accessToken != null && now < expiresAtMs - 30.seconds.inWholeMilliseconds -> Unit
             refreshToken != null && refreshAccessToken() -> Unit
             else -> loadFromWebView()
         }
@@ -76,20 +77,20 @@ internal class InkrAuth(
         }
         val user = runCatching { stored.value.parseAs<FirebaseAuthUserDto>() }.getOrNull()
         val sts = user?.stsTokenManager
-        if (sts == null || sts.accessToken.isBlank()) {
+        if (sts == null || sts.accessToken.isEmpty()) {
             clearSession()
             return
         }
         accessToken = sts.accessToken
-        refreshToken = sts.refreshToken.takeIf { it.isNotBlank() }
-        firebaseApiKey = user.apiKey.takeIf { it.isNotBlank() }
+        refreshToken = sts.refreshToken.takeIf { it.isNotEmpty() }
+        firebaseApiKey = user.apiKey.takeIf { it.isNotEmpty() }
             ?: apiKeyFromStorageKey(stored.key)
         expiresAtMs = when {
             sts.expirationTime > 1_000_000_000_000L -> sts.expirationTime
             sts.expirationTime > 0L -> sts.expirationTime * 1000
-            else -> System.currentTimeMillis() + 50 * 60 * 1000
+            else -> System.currentTimeMillis() + 50.minutes.inWholeMilliseconds
         }
-        if (System.currentTimeMillis() >= expiresAtMs - 30_000 && refreshToken != null) {
+        if (System.currentTimeMillis() >= expiresAtMs - 30.seconds.inWholeMilliseconds && refreshToken != null) {
             refreshAccessToken()
         }
         paymentLoaded = false
@@ -108,7 +109,7 @@ internal class InkrAuth(
             .set("Accept", "application/json")
             .build()
         val response = runCatching {
-            client.get("https://inkr-payment-api.inkr.com/v1/user/my-info", headers)
+            client().get("https://inkr-payment-api.inkr.com/v1/user/my-info", headers)
         }.getOrNull() ?: return null
 
         if (!response.isSuccessful) {
@@ -123,23 +124,21 @@ internal class InkrAuth(
         return null
     }
 
-    private suspend fun readAuthUser(): StoredAuthUser? {
-        val fromWebView = runCatching {
-            runWebView<String?>(timeout = 15.seconds) {
-                domStorageEnabled = true
-                jsBridge(BRIDGE_NAME) { message ->
-                    resolve(message.takeUnless { it.isBlank() || it == "null" })
-                }
-                onPageFinished {
-                    evaluateJs(READ_AUTH_JS)
-                }
-                loadData(baseUrl, "")
+    private suspend fun readAuthUser(): StoredAuthUser? = runCatching {
+        runWebView<StoredAuthUser?>(timeout = 15.seconds) {
+            domStorageEnabled = true
+            jsBridge(BRIDGE_NAME) { message ->
+                resolve(
+                    message.takeUnless { it.isEmpty() }
+                        ?.let { runCatching { it.parseAs<StoredAuthUser>() }.getOrNull() },
+                )
             }
-        }.getOrNull() ?: return null
-
-        return runCatching { fromWebView.parseAs<StoredAuthUser>() }.getOrNull()
-            ?: StoredAuthUser(key = "", value = fromWebView)
-    }
+            onPageFinished {
+                evaluateJs(READ_AUTH_JS)
+            }
+            loadData(baseUrl(), "")
+        }
+    }.getOrNull()
 
     private suspend fun refreshAccessToken(): Boolean {
         val token = refreshToken ?: return false
@@ -151,21 +150,20 @@ internal class InkrAuth(
         val headers = Headers.Builder()
             .set("Content-Type", "application/x-www-form-urlencoded")
             .build()
+        val url = "https://securetoken.googleapis.com/v1/token".toHttpUrl().newBuilder()
+            .addQueryParameter("key", apiKey)
+            .build()
         val response = runCatching {
-            client.post(
-                "https://securetoken.googleapis.com/v1/token?key=$apiKey",
-                headers,
-                body,
-            ).parseAs<TokenRefreshDto>()
+            client().post(url, headers, body).parseAs<TokenRefreshDto>()
         }.getOrNull() ?: return false
 
-        if (response.idToken.isBlank()) return false
+        if (response.idToken.isEmpty()) return false
         accessToken = response.idToken
-        if (response.refreshToken.isNotBlank()) {
+        if (response.refreshToken.isNotEmpty()) {
             refreshToken = response.refreshToken
         }
-        val expiresInSec = response.expiresIn.toLongOrNull() ?: 3600L
-        expiresAtMs = System.currentTimeMillis() + expiresInSec * 1000
+        val expiresIn = response.expiresIn.toLongOrNull()?.seconds ?: 3600.seconds
+        expiresAtMs = System.currentTimeMillis() + expiresIn.inWholeMilliseconds
         return true
     }
 
@@ -173,13 +171,13 @@ internal class InkrAuth(
         private const val BRIDGE_NAME = "inkrAuthBridge"
         private val STORAGE_KEY_API_KEY = Regex("""^firebase:authUser:([^:]+):""")
 
-        private fun apiKeyFromStorageKey(key: String): String? = STORAGE_KEY_API_KEY.find(key)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+        private fun apiKeyFromStorageKey(key: String): String? = STORAGE_KEY_API_KEY.find(key)?.groupValues?.getOrNull(1)?.takeIf { it.isNotEmpty() }
 
         private val READ_AUTH_JS = """
             (async () => {
               const post = (key, value) => {
                 if (value == null) {
-                  window.$BRIDGE_NAME.post("null");
+                  window.$BRIDGE_NAME.post("");
                   return;
                 }
                 window.$BRIDGE_NAME.post(JSON.stringify({ key: key || "", value: String(value) }));

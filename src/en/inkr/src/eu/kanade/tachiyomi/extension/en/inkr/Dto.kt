@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlin.time.Instant
@@ -64,7 +65,7 @@ class EmptyIncludes
 
 @Serializable
 class ContentMapResponse(
-    val data: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
+    val data: Map<String, JsonElement> = emptyMap(),
 )
 
 @Serializable
