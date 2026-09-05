@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.mangakatana
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,33 +10,33 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class MangaKatana :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val serverPreference = "SERVER_PREFERENCE"
 
-    override val client: OkHttpClient = network.client.newBuilder().addNetworkInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor { chain ->
         val originalResponse = chain.proceed(chain.request())
         if (originalResponse.headers("Content-Type").contains("application/octet-stream")) {
             val orgBody = originalResponse.body.source()
@@ -49,17 +48,15 @@ abstract class MangaKatana :
         } else {
             originalResponse
         }
-    }.build()
+    }
 
     private val imageArrayNameRegex = Regex("""data-src['"],\s*(\w+)""")
     private val imageUrlRegex = Regex("""'([^']*)'""")
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/page/$page").asJsoup()
         val mangas = document.select("div#book_list > div.item").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.selectFirst("div.text > h3 > a")!!.absUrl("href"))
@@ -73,10 +70,8 @@ abstract class MangaKatana :
 
     // Popular (is actually alphabetical)
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga/page/$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/manga/page/$page").asJsoup()
         val mangas = document.select("div#book_list > div.item").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.selectFirst("div.text > h3 > a")!!.absUrl("href"))
@@ -90,63 +85,63 @@ abstract class MangaKatana :
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val filterList = if (filters.isEmpty()) getFilterList(null) else filters
 
-        if (query.isNotEmpty()) {
+        val url = if (query.isNotEmpty()) {
             val type = filterList.firstInstance<TypeFilter>()
-            val url = "$baseUrl/page/$page".toHttpUrl().newBuilder()
+            "$baseUrl/page/$page".toHttpUrl().newBuilder()
                 .addQueryParameter("search", query)
                 .addQueryParameter("search_by", type.toUriPart())
-            return GET(url.build(), headers)
+                .build()
         } else {
-            val url = "$baseUrl/manga/page/$page".toHttpUrl().newBuilder()
-                .addQueryParameter("filter", "1")
-            for (filter in filterList) {
-                when (filter) {
-                    is GenreList -> {
-                        val includedGenres = mutableListOf<String>()
-                        val excludedGenres = mutableListOf<String>()
-                        filter.state.forEach {
-                            if (it.isIncluded()) {
-                                includedGenres.add(it.id)
-                            } else if (it.isExcluded()) {
-                                excludedGenres.add(it.id)
+            "$baseUrl/manga/page/$page".toHttpUrl().newBuilder().apply {
+                addQueryParameter("filter", "1")
+                filterList.forEach { filter ->
+                    when (filter) {
+                        is GenreList -> {
+                            val includedGenres = mutableListOf<String>()
+                            val excludedGenres = mutableListOf<String>()
+                            filter.state.forEach {
+                                if (it.isIncluded()) {
+                                    includedGenres.add(it.id)
+                                } else if (it.isExcluded()) {
+                                    excludedGenres.add(it.id)
+                                }
+                            }
+                            if (includedGenres.isNotEmpty()) addQueryParameter("include", includedGenres.joinToString("_"))
+                            if (excludedGenres.isNotEmpty()) addQueryParameter("exclude", excludedGenres.joinToString("_"))
+                        }
+
+                        is GenreInclusionMode -> addQueryParameter("include_mode", filter.toUriPart())
+
+                        is SortFilter -> addQueryParameter("order", filter.toUriPart())
+
+                        is StatusFilter -> {
+                            if (filter.toUriPart().isNotEmpty()) {
+                                addQueryParameter("status", filter.toUriPart())
                             }
                         }
-                        if (includedGenres.isNotEmpty()) url.addQueryParameter("include", includedGenres.joinToString("_"))
-                        if (excludedGenres.isNotEmpty()) url.addQueryParameter("exclude", excludedGenres.joinToString("_"))
-                    }
 
-                    is GenreInclusionMode -> url.addQueryParameter("include_mode", filter.toUriPart())
-
-                    is SortFilter -> url.addQueryParameter("order", filter.toUriPart())
-
-                    is StatusFilter -> {
-                        if (filter.toUriPart().isNotEmpty()) {
-                            url.addQueryParameter("status", filter.toUriPart())
+                        is ChaptersFilter -> {
+                            when (filter.state.trim()) {
+                                "-1" -> addQueryParameter("chapters", "e1")
+                                "" -> addQueryParameter("chapters", "1")
+                                else -> addQueryParameter("chapters", filter.state.trim())
+                            }
                         }
-                    }
 
-                    is ChaptersFilter -> {
-                        when (filter.state.trim()) {
-                            "-1" -> url.addQueryParameter("chapters", "e1")
-                            "" -> url.addQueryParameter("chapters", "1")
-                            else -> url.addQueryParameter("chapters", filter.state.trim())
-                        }
+                        else -> {}
                     }
-
-                    else -> {}
                 }
             }
-            return GET(url.build(), headers)
+                .build()
         }
-    }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+        val response = client.get(url)
         val pathSegments = response.request.url.pathSegments
+        val document = response.asJsoup()
         return if (pathSegments[0] == "manga" && pathSegments[1] != "page") {
-            val document = response.asJsoup()
             val manga = SManga.create().apply {
                 thumbnail_url = parseThumbnail(document)
                 title = document.selectFirst("h1.heading")!!.text()
@@ -154,7 +149,6 @@ abstract class MangaKatana :
             manga.setUrlWithoutDomain(response.request.url.toString())
             MangasPage(listOf(manga), false)
         } else {
-            val document = response.asJsoup()
             val mangas = document.select("div#book_list > div.item").map { element ->
                 SManga.create().apply {
                     setUrlWithoutDomain(element.selectFirst("div.text > h3 > a")!!.absUrl("href"))
@@ -169,21 +163,30 @@ abstract class MangaKatana :
 
     // Details
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            author = document.select(".author").eachText().joinToString()
-            description = document.select(".summary > p").text() +
-                (document.select(".alt_name").text().takeIf { it.isNotEmpty() }?.let { "\n\nAlt name(s): $it" } ?: "")
-            status = parseStatus(document.select(".value.status").text())
-            genre = document.select(".genres > a").joinToString { it.text() }
-            thumbnail_url = parseThumbnail(document)
-        }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsFromDocument(document), chapterListFromDocument(document))
     }
 
-    private fun parseThumbnail(document: Document) = document.select("div.media div.cover img").attr("abs:src")
+    private fun mangaDetailsFromDocument(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1.heading")!!.text()
+        author = document.select(".author").eachText().joinToString()
+        description = document.select(".summary > p").text() +
+            (document.select(".alt_name").text().takeIf { it.isNotEmpty() }?.let { "\n\nAlt name(s): $it" } ?: "")
+        status = parseStatus(document.selectFirst(".value.status")?.text())
+        genre = document.select(".genres > a").joinToString { it.text() }
+        thumbnail_url = parseThumbnail(document)
+    }
 
-    private fun parseStatus(status: String) = when {
+    private fun parseThumbnail(document: Document) = document.selectFirst("div.media div.cover img")?.attr("abs:src")
+
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
         status.contains("Ongoing") -> SManga.ONGOING
         status.contains("Completed") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
@@ -191,26 +194,30 @@ abstract class MangaKatana :
 
     // Chapters
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("tr:has(.chapter)").map { element ->
-            SChapter.create().apply {
-                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-                name = element.selectFirst("a")!!.text()
-                date_upload = dateFormat.tryParse(element.select(".update_time").text())
-            }
+    private fun chapterListFromDocument(document: Document): List<SChapter> = document.select("tr:has(.chapter)").map { element ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+            name = element.selectFirst("a")!!.text()
+            date_upload = dateFormat.tryParseDate(element.selectFirst(".update_time")?.text())
+        }
+    }
+
+    // Deep link
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.firstOrNull() != "manga" || url.pathSegments.size < 2) return null
+        val mangaUrl = "$baseUrl/manga/${url.pathSegments[1]}"
+        val document = client.get(mangaUrl).asJsoup()
+        return mangaDetailsFromDocument(document).apply {
+            setUrlWithoutDomain(mangaUrl)
         }
     }
 
     // Page List
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val serverSuffix = preferences.getString(serverPreference, "")?.takeIf { it.isNotBlank() }?.let { "?sv=$it" } ?: ""
-        return GET(baseUrl + chapter.url + serverSuffix, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val document = client.get(getChapterUrl(chapter) + serverSuffix).asJsoup()
         val imageScript = document.select("script:containsData(data-src)").firstOrNull()?.data()
             ?: return emptyList()
         val imageArrayName = imageArrayNameRegex.find(imageScript)?.groupValues?.get(1)
@@ -223,8 +230,6 @@ abstract class MangaKatana :
             }
         } ?: emptyList()
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // Preferences
 
@@ -248,7 +253,7 @@ abstract class MangaKatana :
 
     // Filters
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("NOTE: Other filters ignored if using text search!"),
         TypeFilter(),
         Filter.Separator(),
@@ -262,8 +267,6 @@ abstract class MangaKatana :
     )
 
     companion object {
-        private val dateFormat by lazy {
-            SimpleDateFormat("MMM-dd-yyyy", Locale.US)
-        }
+        private val dateFormat = DateTimeFormatter.ofPattern("MMM-dd-yyyy", Locale.US)
     }
 }
