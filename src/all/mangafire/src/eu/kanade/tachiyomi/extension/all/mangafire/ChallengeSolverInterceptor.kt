@@ -34,16 +34,17 @@ class ChallengeSolverInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val call = chain.call()
-        val request = chain
-            .request()
-            .newBuilder()
-            .apply { clientHintsHeaders.forEach { header(it.key, it.value) } }
-            .build()
+        val request = chain.request()
         val url = request.url
 
         val oldClearance = lock.readLock().withLock {
             // We can't just check cookies first because we might need to bypass Cloudflare
-            val response = chain.proceed(request)
+            val response = chain.proceed(
+                request
+                    .newBuilder()
+                    .apply { clientHintsHeaders.forEach { header(it.key, it.value) } }
+                    .build(),
+            )
             if (
                 response.code != 403 ||
                 try {
@@ -98,6 +99,11 @@ class ChallengeSolverInterceptor(
             throw IOException("Failed to solve shape-selecting captcha. Open in WebView to solve manually.")
         }
 
-        return chain.proceed(request)
+        return chain.proceed(
+            request
+                .newBuilder()
+                .apply { clientHintsHeaders.forEach { header(it.key, it.value) } }
+                .build(),
+        )
     }
 }
