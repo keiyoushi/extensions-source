@@ -14,6 +14,7 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class ArtLapsa : Keyoapp() {
+    override val showPaidChaptersDefault = true
 
     override suspend fun requestGeneres() = client.get("$baseUrl/search")
 

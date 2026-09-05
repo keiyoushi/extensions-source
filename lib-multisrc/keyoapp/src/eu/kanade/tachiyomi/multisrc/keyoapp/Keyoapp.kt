@@ -35,6 +35,8 @@ abstract class Keyoapp :
 
     protected val preferences = getPreferences()
 
+    protected open val showPaidChaptersDefault = false
+
     open val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
 
     protected val intl = Intl(
@@ -394,12 +396,12 @@ abstract class Keyoapp :
             title = intl["pref_show_paid_chapter_title"]
             summaryOn = intl["pref_show_paid_chapter_summary_on"]
             summaryOff = intl["pref_show_paid_chapter_summary_off"]
-            setDefaultValue(false)
+            setDefaultValue(showPaidChaptersDefault)
         }.also(screen::addPreference)
     }
 
     protected val showPaidChapters
-        get() = preferences.getBoolean(SHOW_PAID_CHAPTERS_PREF, false)
+        get() = preferences.getBoolean(SHOW_PAID_CHAPTERS_PREF, showPaidChaptersDefault)
 
     companion object {
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
