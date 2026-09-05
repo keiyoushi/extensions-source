@@ -1,17 +1,18 @@
 package eu.kanade.tachiyomi.extension.zh.nnhanman
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Request
-import okhttp3.Response
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -29,9 +30,7 @@ import java.net.URLEncoder
  * name / lang / baseUrl 由 build.gradle.kts 的 keiyoushi 块注入。
  */
 @Source
-abstract class NNHanman : HttpSource() {
-
-    override val supportsLatest = true
+abstract class NNHanman : KeiSource() {
 
     private val encodeURIComponent: (String) -> String = {
         URLEncoder.encode(it, "UTF-8").replace("+", "%20")
@@ -68,54 +67,52 @@ abstract class NNHanman : HttpSource() {
 
     // ---- 热门（排行页，单页无分页） ----
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = MangasPage(parseItemBoxes(response.asJsoup()), false)
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(parseItemBoxes(client.get("$baseUrl/ranking").asJsoup()), false)
 
     // ---- 最新（更新页，无分页） ----
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/update", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = MangasPage(parseItemBoxes(response.asJsoup()), false)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = MangasPage(parseItemBoxes(client.get("$baseUrl/update").asJsoup()), false)
 
     // ---- 搜索与筛选 ----
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val path = if (query.isNotBlank()) {
             val kw = encodeURIComponent(query.trim())
-            val url = if (page > 1) "$baseUrl/search/$kw/page/$page" else "$baseUrl/search/$kw"
-            return GET(url, headers)
-        }
-        // 纯筛选浏览：/comics/{genre}/ob/{order}/st/{status}/page/{N}
-        var genre = "all"
-        var order = "time"
-        var status = "all"
-        filters.forEach { f ->
-            when (f) {
-                is GenreFilter -> genre = f.toUriPart()
-                is OrderFilter -> order = f.toUriPart()
-                is StatusFilter -> status = f.toUriPart()
-                else -> {}
-            }
-        }
-        val url = if (page > 1) {
-            "$baseUrl/comics/$genre/ob/$order/st/$status/page/$page"
+            if (page > 1) "search/$kw/page/$page" else "search/$kw"
         } else {
-            "$baseUrl/comics/$genre/ob/$order/st/$status"
+            // 纯筛选浏览：/comics/{genre}/ob/{order}/st/{status}/page/{N}
+            var genre = "all"
+            var order = "time"
+            var status = "all"
+            filters.forEach { f ->
+                when (f) {
+                    is GenreFilter -> genre = f.toUriPart()
+                    is OrderFilter -> order = f.toUriPart()
+                    is StatusFilter -> status = f.toUriPart()
+                    else -> {}
+                }
+            }
+            if (page > 1) "comics/$genre/ob/$order/st/$status/page/$page" else "comics/$genre/ob/$order/st/$status"
         }
-        return GET(url, headers)
-    }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get("$baseUrl/$path").asJsoup()
         return MangasPage(parseCol3Cards(document), document.hasNextPage())
     }
 
-    // ---- 详情 ----
+    // ---- 详情与章节（同一详情页，只请求一次） ----
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
-        url = response.request.url.encodedPath
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+        return SMangaUpdate(mangaDetails(document, manga.url), chapterList(document))
+    }
+
+    private fun mangaDetails(document: Document, mangaUrl: String): SManga = SManga.create().apply {
+        url = mangaUrl
         title = document.selectFirst("h1")!!.text()
             .removePrefix("《").removeSuffix("》")
         thumbnail_url = document.selectFirst("div.pic img")?.attr("src")
@@ -132,10 +129,7 @@ abstract class NNHanman : HttpSource() {
             ?.removePrefix("介绍:")?.trim()
     }
 
-    // ---- 章节 ----
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun chapterList(document: Document): List<SChapter> {
         // 页面为新→旧排列，先反转为旧→新再编号
         return document.select("#mh-chapter-list-ol-0 li a")
             .asReversed()
@@ -148,22 +142,26 @@ abstract class NNHanman : HttpSource() {
             }
     }
 
+    // ---- URL 搜索（在搜索框粘贴站点链接） ----
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.firstOrNull() != "comic") return null
+        val document = client.get(url).asJsoup()
+        return mangaDetails(document, url.encodedPath)
+    }
+
     // ---- 正文 ----
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(if (chapter.url.startsWith("http")) chapter.url else "$baseUrl${chapter.url}", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(if (chapter.url.startsWith("http")) chapter.url else baseUrl + chapter.url).asJsoup()
         return document.select("#m_r_imgbox_0 img[data-src]")
             .sortedBy { it.attr("data-index").toIntOrNull() ?: 0 }
             .mapIndexed { i, img -> Page(i, imageUrl = img.absUrl("data-src")) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ---- 筛选器 ----
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("分类浏览（搜索时无效）"),
         GenreFilter(),
         OrderFilter(),
