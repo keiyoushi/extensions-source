@@ -12,7 +12,7 @@ keiyoushi {
 
     source {
         baseUrl = "https://doujiva.com"
-        lang = "en"
+        lang = "all"
     }
 
     deeplink {

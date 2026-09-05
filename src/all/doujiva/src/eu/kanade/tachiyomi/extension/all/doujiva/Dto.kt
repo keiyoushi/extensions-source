@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.doujiva
+package eu.kanade.tachiyomi.extension.all.doujiva
 
 import kotlinx.serialization.Serializable
 
