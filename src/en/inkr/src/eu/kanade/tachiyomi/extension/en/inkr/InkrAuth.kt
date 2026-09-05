@@ -22,7 +22,8 @@ internal class InkrAuth(
     private val mutex = Mutex()
 
     @Volatile
-    private var accessToken: String? = null
+    var accessToken: String? = null
+        private set
 
     @Volatile
     private var refreshToken: String? = null
@@ -39,8 +40,6 @@ internal class InkrAuth(
 
     @Volatile
     private var paymentLoaded: Boolean = false
-
-    fun currentAccessToken(): String? = accessToken
 
     suspend fun ensureLoaded() = mutex.withLock {
         val now = System.currentTimeMillis()

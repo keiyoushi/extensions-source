@@ -63,7 +63,7 @@ abstract class Inkr :
             (host == "icq-api.inkr.com" || host == "icd-api.inkr.com") &&
             request.header("Authorization") == null
         ) {
-            val token = auth.currentAccessToken()
+            val token = auth.accessToken
             if (token != null) {
                 return@Interceptor chain.proceed(
                     request.newBuilder().header("Authorization", "Bearer $token").build(),
@@ -287,7 +287,7 @@ abstract class Inkr :
         if (accessible == false) {
             val revenue = meta?.revenueType?.lowercase().orEmpty()
             throw when {
-                auth.currentAccessToken() == null ->
+                auth.accessToken == null ->
                     Exception("Log in via WebView (INKR account), then reopen this chapter")
                 revenue == "coin-only" ->
                     Exception("Chapter requires INKR coins (Extra does not unlock coin-only chapters)")
