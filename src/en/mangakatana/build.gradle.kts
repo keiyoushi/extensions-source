@@ -14,4 +14,8 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://mangakatana.com"
     }
+
+    deeplink {
+        path("/manga/..*")
+    }
 }

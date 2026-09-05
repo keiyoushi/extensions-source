@@ -19,6 +19,7 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -173,6 +174,7 @@ abstract class MangaKatana :
     }
 
     private fun mangaDetailsFromDocument(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1.heading")!!.text()
         author = document.select(".author").eachText().joinToString()
         description = document.select(".summary > p").text() +
             (document.select(".alt_name").text().takeIf { it.isNotEmpty() }?.let { "\n\nAlt name(s): $it" } ?: "")
@@ -197,6 +199,17 @@ abstract class MangaKatana :
             setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
             name = element.selectFirst("a")!!.text()
             date_upload = dateFormat.tryParseDate(element.selectFirst(".update_time")?.text())
+        }
+    }
+
+    // Deep link
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.firstOrNull() != "manga" || url.pathSegments.size < 2) return null
+        val mangaUrl = "$baseUrl/manga/${url.pathSegments[1]}"
+        val document = client.get(mangaUrl).asJsoup()
+        return mangaDetailsFromDocument(document).apply {
+            setUrlWithoutDomain(mangaUrl)
         }
     }
 
