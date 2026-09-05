@@ -3,89 +3,86 @@ package eu.kanade.tachiyomi.multisrc.bakkin
 import android.os.Build
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.AppInfo
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonObject
+import keiyoushi.utils.parseAs
 import okhttp3.Headers
-import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 abstract class BakkinReaderX :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
 
     private val userAgent = "Mozilla/5.0 (" +
         "Android ${Build.VERSION.RELEASE}; Mobile) " +
-        "Tachiyomi/${AppInfo.getVersionName()}"
+        "Keiyoushi/$versionId"
 
     protected val preferences by getPreferencesLazy()
-
-    private val json by lazy { Injekt.get<Json>() }
 
     private val mainUrl: String
         get() = baseUrl + "main.php" + preferences.getString("quality", "")
 
     private var seriesCache = emptyList<Series>()
 
-    private fun <R> observableSeries(block: (List<Series>) -> R) = if (seriesCache.isNotEmpty()) {
-        rx.Observable.just(block(seriesCache))!!
-    } else {
-        client.newCall(GET(mainUrl, headers)).asObservableSuccess().map {
-            seriesCache = json.parseToJsonElement(it.body.string())
-                .jsonObject.values.map(json::decodeFromJsonElement)
-            block(seriesCache)
-        }!!
+    private suspend fun <R> withSeries(block: (List<Series>) -> R): R {
+        if (seriesCache.isEmpty()) {
+            val response = client.get(mainUrl, headers)
+            if (!response.isSuccessful) throw Exception("HTTP error ${response.code}")
+            seriesCache = response.parseAs<Map<String, Series>>().values.toList()
+        }
+        return block(seriesCache)
     }
 
     private fun List<Series>.search(query: String) = if (query.isBlank()) this else filter { it.toString().contains(query, true) }
 
-    override fun headersBuilder() = Headers.Builder().add("User-Agent", userAgent)
+    override fun Headers.Builder.configureHeaders() = add("User-Agent", userAgent)
 
-    override fun fetchPopularManga(page: Int) = fetchSearchManga(page, "", FilterList())
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = observableSeries { series ->
-        series.search(query).map {
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = withSeries { series ->
+        val mangas = series.search(query).map {
             SManga.create().apply {
                 url = it.dir
                 title = it.toString()
                 thumbnail_url = baseUrl + it.cover
-            }
-        }.let { MangasPage(it, false) }
-    }
-
-    override fun fetchMangaDetails(manga: SManga) = observableSeries { series ->
-        series.first { it.dir == manga.url }.let {
-            SManga.create().apply {
-                url = it.dir
-                title = it.toString()
-                thumbnail_url = baseUrl + it.cover
-                initialized = true
-                author = it.author
-                status = when (it.status) {
-                    "Ongoing" -> SManga.ONGOING
-                    "Completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
             }
         }
+        MangasPage(mangas, false)
     }
 
-    override fun fetchChapterList(manga: SManga) = observableSeries { series ->
-        series.first { it.dir == manga.url }.map { chapter ->
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = withSeries { series ->
+        val seriesEntry = series.first { it.dir == manga.url }
+
+        val sManga = SManga.create().apply {
+            url = seriesEntry.dir
+            title = seriesEntry.toString()
+            thumbnail_url = baseUrl + seriesEntry.cover
+            initialized = true
+            author = seriesEntry.author
+            status = when (seriesEntry.status) {
+                "Ongoing" -> SManga.ONGOING
+                "Completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+        }
+
+        val sChapters = seriesEntry.map { chapter ->
             SChapter.create().apply {
                 url = chapter.dir
                 name = chapter.toString()
@@ -93,9 +90,11 @@ abstract class BakkinReaderX :
                 date_upload = 0L
             }
         }.reversed()
+
+        SMangaUpdate(sManga, sChapters)
     }
 
-    override fun fetchPageList(chapter: SChapter) = observableSeries { series ->
+    override suspend fun getPageList(chapter: SChapter) = withSeries { series ->
         series.flatten().first { it.dir == chapter.url }
             .mapIndexed { idx, page -> Page(idx, "", baseUrl + page) }
     }
@@ -121,26 +120,4 @@ abstract class BakkinReaderX :
             }
         }.let(screen::addPreference)
     }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
