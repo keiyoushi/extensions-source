@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.doujiva
 
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -89,7 +93,7 @@ abstract class Doujiva : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast('/').substringBefore('?')
-        val slug = chapter.memo.substringBefore('|').takeIf { it.isNotBlank() }
+        val slug = chapter.memo["slug"]?.jsonPrimitive?.content
             ?: throw Exception("Missing Doujiva manga slug for chapter: ${chapter.url}")
 
         val response = client.get("$apiUrl/manga/$slug/chapters/$chapterId")
@@ -128,7 +132,9 @@ abstract class Doujiva : KeiSource() {
         if (slug.isBlank() || title.isBlank()) return null
         return SManga.create().apply {
             url = "/manga/$slug"
-            memo = slug
+            memo = buildJsonObject {
+                put("slug", slug)
+            }
             title = this@toSMangaOrNull.title
             thumbnail_url = coverUrl?.takeIf { it.isNotBlank() }
             description = buildDescription()
@@ -175,8 +181,10 @@ abstract class Doujiva : KeiSource() {
         return chapters.map { chapter ->
             SChapter.create().apply {
                 url = "/manga/$slug/read/${chapter.id}"
-                memo = slug
-                memo = "$slug|${chapter.number}"
+                memo = buildJsonObject {
+                    put("slug", slug)
+                    put("number", chapter.number.toString())
+                }
                 name = buildString {
                     append("Chapter ${chapter.number.toChapterLabel()}")
                     chapter.title?.takeIf { it.isNotBlank() }?.let { append(" - $it") }
