@@ -10,7 +10,9 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.textOrNull
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 
 @Source
@@ -23,10 +25,6 @@ abstract class ColorizedMangas : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        if (page > 1) {
-            return MangasPage(emptyList(), false)
-        }
-
         val document = client.get(baseUrl).asJsoup()
         val mangas = parseMangaList(document)
         return MangasPage(mangas, false)
@@ -35,10 +33,6 @@ abstract class ColorizedMangas : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getPopularManga(page)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page > 1) {
-            return MangasPage(emptyList(), false)
-        }
-
         val document = client.get(baseUrl).asJsoup()
         val allMangas = parseMangaList(document)
 
@@ -53,6 +47,8 @@ abstract class ColorizedMangas : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
         val pathSegments = url.pathSegments.filter { it.isNotEmpty() }
         if (pathSegments.isEmpty()) return null
 
@@ -71,17 +67,8 @@ abstract class ColorizedMangas : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        val updatedManga = if (fetchDetails) {
-            parseMangaDetails(document, manga)
-        } else {
-            manga
-        }
-
-        val chapterList = if (fetchChapters) {
-            parseChapterList(document)
-        } else {
-            chapters
-        }
+        val updatedManga = parseMangaDetails(document, manga)
+        val chapterList = parseChapterList(document)
 
         return SMangaUpdate(updatedManga, chapterList)
     }
@@ -97,13 +84,7 @@ abstract class ColorizedMangas : KeiSource() {
 
             thumbnail_url = aside.selectFirst("img")?.absUrl("src")
 
-            for (div in aside.select("dl > div")) {
-                val label = div.selectFirst("dt")?.text().orEmpty().lowercase()
-                val value = div.selectFirst("dd")?.text().orEmpty()
-                if ("author" in label) {
-                    author = value
-                }
-            }
+            author = aside.selectFirst("dl > div dt:containsIgnoreCase(author) + dd")?.textOrNull()
 
             val genresBlock = aside.select("p.text-\\[11px\\]").firstOrNull()
             if (genresBlock != null) {
@@ -114,7 +95,7 @@ abstract class ColorizedMangas : KeiSource() {
                     .joinToString()
             }
 
-            description = aside.selectFirst("p.border-t")?.text()
+            description = aside.selectFirst("p.border-t")?.textOrNull()
             status = SManga.UNKNOWN
         }
     }
@@ -123,21 +104,21 @@ abstract class ColorizedMangas : KeiSource() {
         val chapterLinks = document.select("div.space-y-4 section div.space-y-2 > a")
 
         val chapters = chapterLinks.mapNotNull { element ->
-            val chNumText = element.selectFirst("span.font-bold")?.text()
-            val chTitleText = element.selectFirst("div.truncate")?.text().orEmpty()
+            val chNumText = element.selectFirst("span.font-bold")?.textOrNull()
+            val chTitleText = element.selectFirst("div.truncate")?.textOrNull()
 
-            if (chNumText.isNullOrBlank() && chTitleText.isBlank()) {
+            if (chNumText == null && chTitleText == null) {
                 return@mapNotNull null
             }
 
             val chapterName = buildString {
-                if (!chNumText.isNullOrBlank()) {
+                if (chNumText != null) {
                     append(chNumText)
-                    if (chTitleText.isNotBlank() && !chTitleText.equals(chNumText, true)) {
+                    if (chTitleText != null && !chTitleText.equals(chNumText, true)) {
                         append(" — ")
                         append(chTitleText)
                     }
-                } else {
+                } else if (chTitleText != null) {
                     append(chTitleText)
                 }
             }
@@ -145,7 +126,7 @@ abstract class ColorizedMangas : KeiSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 name = chapterName
-                val chNumMatch = CHAPTER_NUMBER_REGEX.find(chNumText ?: chTitleText)
+                val chNumMatch = CHAPTER_NUMBER_REGEX.find(chNumText ?: chTitleText ?: "")
                 chapter_number = chNumMatch?.value?.toFloatOrNull() ?: -1f
             }
         }
@@ -174,7 +155,7 @@ abstract class ColorizedMangas : KeiSource() {
             val slug = href.substringAfterLast("/")
             if (slug.isBlank() || !seenUrls.add(slug)) return@mapNotNull null
 
-            val titleText = element.selectFirst("h3")?.text()
+            val titleText = element.selectFirst("h3")?.textOrNull()
                 ?: return@mapNotNull null
 
             SManga.create().apply {
