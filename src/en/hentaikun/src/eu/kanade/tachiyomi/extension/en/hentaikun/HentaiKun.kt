@@ -12,8 +12,10 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
+import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter
@@ -21,6 +23,25 @@ import java.util.Locale
 
 @Source
 abstract class HentaiKun : KeiSource() {
+
+    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor { chain ->
+        val request = chain.request()
+        val pathSegments = request.url.pathSegments
+        if (pathSegments.firstOrNull() != "manga" || pathSegments.size < 4) {
+            return@addNetworkInterceptor chain.proceed(request)
+        }
+
+        // Reading type:
+        // - One page (1)
+        // - All page (2)
+        val chapterKey = "${pathSegments[2]}/${pathSegments[3]}"
+        val cookies = request.header("Cookie")
+            ?.split("; ")
+            ?.filterNot { it.startsWith("$chapterKey=") }
+            .orEmpty() + "$chapterKey=2"
+
+        chain.proceed(request.newBuilder().header("Cookie", cookies.joinToString("; ")).build())
+    }
 
     // =============================== Popular ================================
 
@@ -119,27 +140,15 @@ abstract class HentaiKun : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
 
-        val firstImageUrl = document.selectFirst("img.image_rin")?.absUrl("src")
+        val jsonData = document.select("script")
+            .firstOrNull { it.data().contains("var jsondata=") }
+            ?.data()
+            ?.substringAfter("var jsondata=")
+            ?.substringBefore(';')
             ?: throw Exception("Could not find any images for this chapter.")
 
-        val totalPages = document.select("label:contains(Page) + select option").size
-            .takeIf { it > 0 }
-            ?: document.select("select[onchange]").last()?.select("option")?.size
-            ?: 0
-
-        if (totalPages == 0) return listOf(Page(0, imageUrl = firstImageUrl))
-
-        val basePath = firstImageUrl.substringBeforeLast('/') + "/"
-        val fileName = firstImageUrl.substringAfterLast('/').substringBeforeLast('.')
-        val ext = firstImageUrl.substringAfterLast('.')
-
-        val prefix = fileName.replace(trailingDigitsRegex, "")
-        val numberPart = fileName.substring(prefix.length)
-        val padLength = numberPart.length
-
-        return (1..totalPages).map { i ->
-            val pageNum = i.toString().padStart(padLength, '0')
-            Page(i - 1, imageUrl = "$basePath$prefix$pageNum.$ext")
+        return jsonData.parseAs<List<String>>().mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
         }
     }
 
@@ -177,6 +186,5 @@ abstract class HentaiKun : KeiSource() {
 
     companion object {
         private val chapterNumberRegex = Regex("""(\d+(?:\.\d+)?)""")
-        private val trailingDigitsRegex = Regex("""\d+$""")
     }
 }
