@@ -42,7 +42,9 @@ abstract class NNHanman : KeiSource() {
     private fun Element.toSManga(): SManga = SManga.create().apply {
         val link = selectFirst("a.ImgA") ?: selectFirst("a[href^=/comic/]")!!
         url = link.attr("href")
-        title = link.attr("title").ifEmpty { selectFirst("a.txtA")?.text()?.ifEmpty { null } ?: text() }
+        title = link.attr("title")
+            .ifEmpty { selectFirst("a.txtA")?.text().orEmpty() }
+            .ifEmpty { text() }
         thumbnail_url = selectFirst("source[srcset]")?.attr("srcset")
             ?: selectFirst("img[src]")?.attr("src")
     }
@@ -63,7 +65,7 @@ abstract class NNHanman : KeiSource() {
         .distinctBy { it.url }
 
     /** 分页条里 "... 147" 的末页数字项，用于判断 hasNextPage */
-    private fun Document.hasNextPage(): Boolean = selectFirst("div.pagination-wrap li:last-child a")?.text()?.trim()?.startsWith("...") == true
+    private fun Document.hasNextPage(): Boolean = selectFirst("div.pagination-wrap li:last-child a")?.text()?.startsWith("...") == true
 
     // ---- 热门（排行页，单页无分页） ----
 
@@ -107,7 +109,7 @@ abstract class NNHanman : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(mangaDetails(document, manga.url), chapterList(document))
     }
 
@@ -118,7 +120,7 @@ abstract class NNHanman : KeiSource() {
         thumbnail_url = document.selectFirst("div.pic img")?.attr("src")
         author = document.select("div.sub_r > p.txtItme")
             .firstOrNull { it.selectFirst("a[href^=/comics/]") == null && it.selectFirst("span.date") == null }
-            ?.ownText()?.trim()?.takeIf { it.isNotEmpty() }
+            ?.ownText()?.takeIf { it.isNotEmpty() }
         genre = document.select("p.txtItme a[href^=/comics/]").joinToString { it.text() }
         status = when {
             document.selectFirst("span.date")?.text()?.contains("连载中") == true -> SManga.ONGOING
@@ -153,7 +155,7 @@ abstract class NNHanman : KeiSource() {
     // ---- 正文 ----
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(if (chapter.url.startsWith("http")) chapter.url else baseUrl + chapter.url).asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("#m_r_imgbox_0 img[data-src]")
             .sortedBy { it.attr("data-index").toIntOrNull() ?: 0 }
             .mapIndexed { i, img -> Page(i, imageUrl = img.absUrl("data-src")) }

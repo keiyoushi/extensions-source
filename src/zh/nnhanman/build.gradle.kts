@@ -15,4 +15,8 @@ keiyoushi {
         lang = "zh"
         baseUrl = "https://nnhanman.xyz"
     }
+
+    deeplink {
+        path("/comic/..*\\.html")
+    }
 }
