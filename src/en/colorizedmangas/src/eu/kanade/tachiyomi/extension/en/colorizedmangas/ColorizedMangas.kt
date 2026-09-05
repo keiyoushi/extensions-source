@@ -84,7 +84,7 @@ abstract class ColorizedMangas : KeiSource() {
 
             thumbnail_url = aside.selectFirst("img")?.absUrl("src")
 
-            author = aside.selectFirst("dl > div dt:containsIgnoreCase(author) + dd")?.textOrNull()
+            author = aside.selectFirst("dl > div dt:contains(Author) + dd")?.textOrNull()
 
             val genresBlock = aside.select("p.text-\\[11px\\]").firstOrNull()
             if (genresBlock != null) {
