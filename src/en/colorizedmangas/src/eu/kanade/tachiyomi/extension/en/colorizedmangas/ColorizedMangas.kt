@@ -20,10 +20,6 @@ abstract class ColorizedMangas : KeiSource() {
 
     override val supportsLatest = false
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get(baseUrl).asJsoup()
         val mangas = parseMangaList(document)
