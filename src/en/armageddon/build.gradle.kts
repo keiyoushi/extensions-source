@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Armageddon"
-    versionCode = 2
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "mangathemesia"
+    libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://www.silentquill.net"
+        baseUrl = "https://silentquill.net"
+        versionId = 2
     }
 }
