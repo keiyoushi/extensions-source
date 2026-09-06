@@ -13,9 +13,9 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
 
 /**
  * 鸟鸟韩漫 (nnhanman.xyz) — qTcms 移动模板
@@ -31,10 +31,6 @@ import java.net.URLEncoder
  */
 @Source
 abstract class NNHanman : KeiSource() {
-
-    private val encodeURIComponent: (String) -> String = {
-        URLEncoder.encode(it, "UTF-8").replace("+", "%20")
-    }
 
     // ---- 通用解析 ----
 
@@ -78,9 +74,13 @@ abstract class NNHanman : KeiSource() {
     // ---- 搜索与筛选 ----
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val path = if (query.isNotBlank()) {
-            val kw = encodeURIComponent(query.trim())
-            if (page > 1) "search/$kw/page/$page" else "search/$kw"
+        val queryTrimmed = query.trim()
+        val url = if (queryTrimmed.isNotEmpty()) {
+            baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("search")
+                .addPathSegment(queryTrimmed)
+                .apply { if (page > 1) addPathSegments("page/$page") }
+                .build()
         } else {
             // 纯筛选浏览：/comics/{genre}/ob/{order}/st/{status}/page/{N}
             var genre = "all"
@@ -94,10 +94,13 @@ abstract class NNHanman : KeiSource() {
                     else -> {}
                 }
             }
-            if (page > 1) "comics/$genre/ob/$order/st/$status/page/$page" else "comics/$genre/ob/$order/st/$status"
+            baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments("comics/$genre/ob/$order/st/$status")
+                .apply { if (page > 1) addPathSegments("page/$page") }
+                .build()
         }
 
-        val document = client.get("$baseUrl/$path").asJsoup()
+        val document = client.get(url).asJsoup()
         return MangasPage(parseCol3Cards(document), document.hasNextPage())
     }
 
@@ -110,11 +113,11 @@ abstract class NNHanman : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        return SMangaUpdate(mangaDetails(document, manga.url), chapterList(document))
+        return SMangaUpdate(mangaDetails(document), chapterList(document))
     }
 
-    private fun mangaDetails(document: Document, mangaUrl: String): SManga = SManga.create().apply {
-        url = mangaUrl
+    private fun mangaDetails(document: Document): SManga = SManga.create().apply {
+        url = document.location().toHttpUrl().encodedPath
         title = document.selectFirst("h1")!!.text()
             .removePrefix("《").removeSuffix("》")
         thumbnail_url = document.selectFirst("div.pic img")?.attr("src")
@@ -122,9 +125,10 @@ abstract class NNHanman : KeiSource() {
             .firstOrNull { it.selectFirst("a[href^=/comics/]") == null && it.selectFirst("span.date") == null }
             ?.ownText()?.takeIf { it.isNotEmpty() }
         genre = document.select("p.txtItme a[href^=/comics/]").joinToString { it.text() }
+        val statusText = document.selectFirst("span.date")?.text().orEmpty()
         status = when {
-            document.selectFirst("span.date")?.text()?.contains("连载中") == true -> SManga.ONGOING
-            document.selectFirst("span.date")?.text()?.contains("已完结") == true -> SManga.COMPLETED
+            statusText.contains("连载中") -> SManga.ONGOING
+            statusText.contains("已完结") -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
         description = document.selectFirst("p.txtDesc")?.text()
@@ -149,7 +153,7 @@ abstract class NNHanman : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.firstOrNull() != "comic") return null
         val document = client.get(url).asJsoup()
-        return mangaDetails(document, url.encodedPath)
+        return mangaDetails(document)
     }
 
     // ---- 正文 ----
