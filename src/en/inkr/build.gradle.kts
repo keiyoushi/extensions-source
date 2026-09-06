@@ -5,20 +5,17 @@ plugins {
 }
 
 keiyoushi {
-    name = "Team Lanh Lung"
-    versionCode = 38
+    name = "INKR"
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
-        name = "Team Lạnh Lùng"
-        lang = "vi"
-        baseUrl {
-            custom("https://lanhlungteam3.top")
-        }
+        baseUrl = "https://comics.inkr.com"
+        lang = "en"
     }
 
     deeplink {
-        path("/.*")
+        path("/title/..*")
     }
 }
