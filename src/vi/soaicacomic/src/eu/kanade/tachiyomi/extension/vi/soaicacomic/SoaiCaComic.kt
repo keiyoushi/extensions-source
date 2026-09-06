@@ -483,10 +483,6 @@ abstract class SoaiCaComic : KeiSource() {
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
-
     // ============================== Filters ===============================
 
     override val supportsFilterFetching get() = true
