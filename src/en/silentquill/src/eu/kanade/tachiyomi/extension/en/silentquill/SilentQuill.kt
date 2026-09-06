@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.armageddon
+package eu.kanade.tachiyomi.extension.en.silentquill
 
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -26,7 +26,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 
 @Source
-abstract class Armageddon : KeiSource() {
+abstract class SilentQuill : KeiSource() {
     private val apiUrl = "$baseUrl/api"
     private val rscHeaders get() = headersBuilder()
         .set("rsc", "1")

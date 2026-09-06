@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.armageddon
+package eu.kanade.tachiyomi.extension.en.silentquill
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.SerialName

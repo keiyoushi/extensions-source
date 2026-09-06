@@ -5,7 +5,8 @@ plugins {
 }
 
 keiyoushi {
-    name = "Armageddon"
+    name = "SilentQuill"
+    pkgName = "en.armageddon"
     versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
@@ -13,6 +14,5 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://silentquill.net"
-        versionId = 2
     }
 }
