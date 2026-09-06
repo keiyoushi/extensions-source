@@ -108,7 +108,7 @@ abstract class ColorizedMangas : KeiSource() {
                 if (chNumText != null) {
                     append(chNumText)
                     if (chTitleText != null && !chTitleText.equals(chNumText, true)) {
-                        append(" — ")
+                        append(" - ")
                         append(chTitleText)
                     }
                 } else if (chTitleText != null) {
