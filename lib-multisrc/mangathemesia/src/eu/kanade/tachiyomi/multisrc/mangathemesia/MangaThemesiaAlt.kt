@@ -9,14 +9,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import java.lang.ref.SoftReference
+
 abstract class MangaThemesiaAlt(
     private val randomUrlPrefKey: String = "pref_auto_random_url",
 ) : MangaThemesia(),
@@ -98,18 +98,16 @@ abstract class MangaThemesiaAlt(
 
     // cache in preference for webview urls
     private var SharedPreferences.urlMapCache: Map<String, String>
-        get(): Map<String, String> {
-            val value = getString("url_map_cache", "{}")!!
-            return try {
-                json.decodeFromString(value)
-            } catch (_: Exception) {
-                emptyMap()
-            }
+        get() = runCatching {
+            getString("url_map_cache", "{}")!!.parseAs<Map<String, String>>()
+        }.getOrElse {
+            emptyMap()
         }
-        set(newMap) = edit().putString("url_map_cache", json.encodeToString(newMap)).apply()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val mp = super.searchMangaParse(response)
+        set(newMap) = edit().putString("url_map_cache", newMap.toJsonString()).apply()
+
+    override fun searchMangaParse(document: Document): MangasPage {
+        val mp = super.searchMangaParse(document)
 
         if (!getRandomUrlPref()) return mp
 
@@ -131,20 +129,6 @@ abstract class MangaThemesiaAlt(
 
     protected open val slugRegex = Regex("""^(\d+-)""")
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        if (!getRandomUrlPref()) return super.mangaDetailsRequest(manga)
-
-        val slug = manga.url
-            .substringBefore("#")
-            .removeSuffix("/")
-            .substringAfterLast("/")
-            .replaceFirst(slugRegex, "")
-
-        val randomSlug = getUrlMap()[slug] ?: slug
-
-        return GET("$baseUrl$mangaUrlDirectory/$randomSlug/", headers)
-    }
-
     override fun getMangaUrl(manga: SManga): String {
         if (!getRandomUrlPref()) return super.getMangaUrl(manga)
 
@@ -158,6 +142,4 @@ abstract class MangaThemesiaAlt(
 
         return "$baseUrl$mangaUrlDirectory/$randomSlug/"
     }
-
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 }

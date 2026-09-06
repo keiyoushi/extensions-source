@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.mangastop
+package eu.kanade.tachiyomi.multisrc.mangathemesia
 
 import okhttp3.Interceptor
 import okhttp3.Response

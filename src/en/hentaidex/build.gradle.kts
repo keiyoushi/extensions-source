@@ -7,8 +7,8 @@ plugins {
 keiyoushi {
     name = "HentaiDex"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {

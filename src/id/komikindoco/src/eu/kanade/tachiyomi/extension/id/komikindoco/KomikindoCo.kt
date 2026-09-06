@@ -4,16 +4,12 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
 abstract class KomikindoCo : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("id"))
+    override val datePattern = "MMM dd, yyyy"
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(4)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 
     override val hasProjectPage = true
 
