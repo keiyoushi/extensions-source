@@ -11,6 +11,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.Jsoup
 import kotlin.time.Instant
 
+private val adDomainRegex = """^999(?:-\d+)?\.jpe?g$""".toRegex()
+private val adDonationRegex = """^997(?:-\d+)?\.jpe?g$""".toRegex()
+private val adVotePreRegex = """^00\.0\.jpg$""".toRegex()
+private val adReadOnRegex = """^00\.1\.jpg$""".toRegex()
+private val adVotePostRegex = """^995\.jpg$""".toRegex()
+
 @Serializable
 internal class SearchResponseDto(
     private val data: List<MangaDto>,
@@ -88,7 +94,28 @@ internal class ChapterDetailDto(
 internal class ChapterPagesDto(
     private val pages: List<PageDto>,
 ) {
-    fun toPageList(): List<Page> = pages.mapIndexed { i, page -> page.toPage(i) }
+    fun toPageList(): List<Page> = buildList {
+        pages.forEachIndexed { i, page ->
+            val maybePage = page.toPage(i)
+
+            val filename = maybePage.imageUrl
+                ?.toHttpUrlOrNull()
+                ?.pathSegments
+                ?.lastOrNull()
+
+            val isAd = when (i) {
+                pages.lastIndex - 0 -> filename?.matches(adDomainRegex) == true
+                pages.lastIndex - 2 -> filename?.matches(adDonationRegex) == true || filename?.matches(adVotePostRegex) == true
+                0 -> filename?.matches(adVotePreRegex) == true
+                1 -> filename?.matches(adReadOnRegex) == true
+                else -> false
+            }
+
+            if (!isAd) {
+                add(maybePage)
+            }
+        }
+    }
 }
 
 @Serializable
