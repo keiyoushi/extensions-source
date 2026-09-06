@@ -9,7 +9,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
+import kotlin.time.Instant
 
 @Serializable
 internal class SearchResponseDto(
@@ -69,11 +69,11 @@ internal class ChapterDto(
     private val number: String,
     @SerialName("created_at") private val createdAt: String? = null,
 ) {
-    fun toSChapter(comicSlug: String, dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
+    fun toSChapter(comicSlug: String): SChapter = SChapter.create().apply {
         url = "/comic/$comicSlug/chapter/$slug"
         name = "Chapter ${number.removeSuffix(".00")}"
         chapter_number = number.toFloatOrNull() ?: -1f
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
