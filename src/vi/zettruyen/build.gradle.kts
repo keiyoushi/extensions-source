@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "ZetTruyen"
-    versionCode = 12
+    versionCode = 13
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
-            custom("https://www.zettruyen.work")
+            custom("https://www.zettruyen1.com")
         }
     }
 

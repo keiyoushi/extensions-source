@@ -5,16 +5,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "Top Truyen"
-    versionCode = 37
+    name = "Hunlight Comics"
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "wpcomics"
+    theme = "madara"
 
     source {
-        lang = "vi"
-        baseUrl {
-            custom("https://www.toptruyenzonee.com")
-        }
+        lang = "en"
+        baseUrl = "https://hunlightcomics.com"
     }
 }

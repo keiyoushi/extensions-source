@@ -5,16 +5,17 @@ plugins {
 }
 
 keiyoushi {
-    name = "Top Truyen"
-    versionCode = 37
+    name = "INKR"
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "wpcomics"
 
     source {
-        lang = "vi"
-        baseUrl {
-            custom("https://www.toptruyenzonee.com")
-        }
+        baseUrl = "https://comics.inkr.com"
+        lang = "en"
+    }
+
+    deeplink {
+        path("/title/..*")
     }
 }
