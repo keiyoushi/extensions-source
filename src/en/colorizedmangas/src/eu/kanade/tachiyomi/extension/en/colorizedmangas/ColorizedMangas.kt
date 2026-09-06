@@ -71,7 +71,7 @@ abstract class ColorizedMangas : KeiSource() {
 
     private fun parseMangaDetails(document: Document, manga: SManga): SManga {
         return manga.apply {
-            val aside = document.selectFirst("aside") ?: return@apply
+            val aside = document.selectFirst("aside")!!
 
             val titleEl = aside.selectFirst("h1")
             if (titleEl != null) {
