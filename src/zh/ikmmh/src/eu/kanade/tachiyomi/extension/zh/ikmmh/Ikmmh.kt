@@ -21,8 +21,10 @@ import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -48,6 +50,11 @@ import kotlin.time.Duration.Companion.milliseconds
 @Source
 abstract class Ikmmh : KeiSource() {
 
+    // 站点对无 Cookie 的请求会在每次响应中轮换下发新 PHPSESSID（实测），
+    // 固定回传同一会话可避免"WAF 会话不连贯"特征；缺失或异常时静默跳过，不影响可用性
+    @Volatile
+    private var sessionCookie: String? = null
+
     // 站点桌面端返回 404，必须使用移动 UA；桌面 UA/英文语境头会触发站点 WAF 封禁出口 IP
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("User-Agent", MOBILE_UA)
@@ -58,10 +65,21 @@ abstract class Ikmmh : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
         .protocols(listOf(Protocol.HTTP_1_1))
         .rateLimit(permits = 2, period = 500.milliseconds) { it.host == baseUrl.toHttpUrl().host }
+        .addInterceptor(SessionInterceptor({ sessionCookie }, { sessionCookie = it }))
+
+    // 所有入口（热门/最新/搜索/详情/读图）先确保已取得 PHPSESSID，失败不阻塞主流程
+    protected suspend fun warmupSession() {
+        if (sessionCookie == null) {
+            runCatching {
+                client.get("$baseUrl/").asJsoup()
+            }
+        }
+    }
 
     // ---- 热门（与分类浏览共用 booklists） ----
 
     override suspend fun getPopularManga(page: Int): MangasPage {
+        warmupSession()
         val document = client.get("$baseUrl/booklists/9/全部/3/$page.html").asJsoup()
         return MangasPage(parseListItemMangas(document), document.hasNextPage())
     }
@@ -72,6 +90,7 @@ abstract class Ikmmh : KeiSource() {
         // 站点 /update/ 按 1 起始且仅前几页有内容，超界返回空页
         if (page > LATEST_MAX_PAGES) return MangasPage(emptyList(), false)
 
+        warmupSession()
         val document = client.get("$baseUrl/update/$page.html").asJsoup()
         return MangasPage(parseListItemMangas(document), page < LATEST_MAX_PAGES)
     }
@@ -79,6 +98,7 @@ abstract class Ikmmh : KeiSource() {
     // ---- 搜索与分类浏览 ----
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        warmupSession()
         if (query.isNotBlank()) {
             // 站点搜索接口无分页
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
@@ -113,7 +133,12 @@ abstract class Ikmmh : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val details = async {
-            if (fetchDetails) client.get(getMangaUrl(manga)).asJsoup().parseDetails(manga) else manga
+            if (fetchDetails) {
+                warmupSession()
+                client.get(getMangaUrl(manga)).asJsoup().parseDetails(manga)
+            } else {
+                manga
+            }
         }
         val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
         SMangaUpdate(details.await(), chapterList.await())
@@ -176,6 +201,7 @@ abstract class Ikmmh : KeiSource() {
         val aid = parts[1]
         val cid = parts[2].substringBefore('.')
 
+        warmupSession()
         val pages = mutableListOf<Page>()
         var offset = 0
         while (pages.size < MAX_PAGES) {
@@ -230,3 +256,26 @@ private const val PAGE_SIZE = 48
 
 /** 分类浏览按 48 条/页整页判定下一页（末页 33 条、空页 0 条实测收敛） */
 private fun Document.hasNextPage(): Boolean = select("li.item.comic-item").size == PAGE_SIZE
+
+/**
+ * 自管 PHPSESSID：请求前回传已缓存的会话 Cookie，响应中捕获站点新下发的 PHPSESSID。
+ * 站点（PHP 后端 + WAF）依赖会话连贯性；不带 Cookie 时每次响应都轮换新 ID，易被判定为异常客户端。
+ */
+private class SessionInterceptor(
+    private val getSessionCookie: () -> String?,
+    private val setSessionCookie: (String) -> Unit,
+) : Interceptor {
+
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val cookie = getSessionCookie()
+        val request = cookie?.let {
+            chain.request().newBuilder().header("Cookie", it).build()
+        } ?: chain.request()
+
+        val response = chain.proceed(request)
+        response.headers("Set-Cookie")
+            .firstOrNull { it.startsWith("PHPSESSID=") }
+            ?.let { setSessionCookie(it.substringBefore(';')) }
+        return response
+    }
+}
