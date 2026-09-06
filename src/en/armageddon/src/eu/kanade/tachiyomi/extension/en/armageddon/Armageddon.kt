@@ -52,10 +52,9 @@ abstract class Armageddon : KeiSource() {
 
         return client.get(searchUrl, rscHeaders).toMangasPage(
             hasNextPage = { it.firstObjectOrNull { obj -> obj.getStringOrNull("href")?.contains("page=${page + 1}") == true } != null },
+            cards = { it.firstObjectOrNull { obj -> obj.getStringOrNull("className")?.contains("grid-cols") == true }?.getArrayOrNull("children") },
         ) { element ->
-            element is JsonObject &&
-                element.getStringOrNull("className")?.contains("grid-cols") == true &&
-                element.firstObjectOrNull { it.getStringOrNull("href") != null } != null
+            element is JsonObject && element.firstObjectOrNull { obj -> obj.getStringOrNull("src") != null && obj.getStringOrNull("alt") != null } != null
         }
     }
 
@@ -67,10 +66,11 @@ abstract class Armageddon : KeiSource() {
 
     private fun Response.toMangasPage(
         hasNextPage: (JsonObject) -> Boolean = { false },
+        cards: (JsonObject) -> JsonArray? = { it.getArrayOrNull("children") },
         predicate: (JsonElement) -> Boolean,
     ): MangasPage {
         val container = extractNextJs<JsonObject>(predicate)
-        val mangas = container?.getArrayOrNull("children").orEmpty().map { card ->
+        val mangas = container?.let(cards).orEmpty().map { card ->
             val img = card.firstObjectOrNull { it.getStringOrNull("src") != null && it.getStringOrNull("alt") != null }!!
             val href = card.firstObjectOrNull { it.getStringOrNull("href") != null }!!.getString("href")
 
