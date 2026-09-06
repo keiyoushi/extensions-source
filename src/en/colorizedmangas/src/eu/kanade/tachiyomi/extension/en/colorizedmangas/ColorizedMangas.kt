@@ -45,14 +45,13 @@ abstract class ColorizedMangas : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
 
-        val pathSegments = url.pathSegments.filter { it.isNotEmpty() }
-        if (pathSegments.isEmpty()) return null
+        val slug = url.pathSegments.firstOrNull { it.isNotEmpty() } ?: return null
 
-        val slug = pathSegments[0]
+        val document = client.get("$baseUrl/$slug").asJsoup()
+
         return SManga.create().apply {
-            this.url = slug
-            this.title = slug.replace("-", " ").replaceFirstChar { it.uppercase() }
-        }
+            this.url = "/$slug"
+        }.let { parseMangaDetails(document, it) }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -71,25 +70,25 @@ abstract class ColorizedMangas : KeiSource() {
 
     private fun parseMangaDetails(document: Document, manga: SManga): SManga {
         return manga.apply {
-            val aside = document.selectFirst("aside")!!
+        val aside = document.selectFirst("aside")!!
 
-            title = aside.selectFirst("h1")!!.text().removePrefix("Colorized").trim()
+        title = aside.selectFirst("h1")!!.text().removePrefix("Colorized").trim()
 
-            thumbnail_url = aside.selectFirst("img")?.absUrl("src")
+        thumbnail_url = aside.selectFirst("img")?.absUrl("src")
 
-            author = aside.selectFirst("dl > div dt:contains(Author) + dd")?.textOrNull()
+        author = aside.selectFirst("dl > div dt:contains(Author) + dd")?.textOrNull()
 
-            val genresBlock = aside.select("p.text-\\[11px\\]").firstOrNull()
-            if (genresBlock != null) {
-                genre = genresBlock.text()
-                    .split("·")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-                    .joinToString()
-            }
+        val genresBlock = aside.select("p.text-\\[11px\\]").firstOrNull()
+        if (genresBlock != null) {
+            genre = genresBlock.text()
+                .split("·")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .joinToString()
+        }
 
-            description = aside.selectFirst("p.border-t")?.textOrNull()
-            status = SManga.UNKNOWN
+        description = aside.selectFirst("p.border-t")?.textOrNull()
+        status = SManga.UNKNOWN
         }
     }
 
@@ -152,7 +151,7 @@ abstract class ColorizedMangas : KeiSource() {
                 ?: return@mapNotNull null
 
             SManga.create().apply {
-                url = slug
+                url = "/$slug"
                 title = titleText
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
