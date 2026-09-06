@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Manhua160"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         name = "漫画160"
-        lang = "zh-Hans"
+        lang = "zh"
         baseUrl = "https://www.mh160mh.com"
     }
 
