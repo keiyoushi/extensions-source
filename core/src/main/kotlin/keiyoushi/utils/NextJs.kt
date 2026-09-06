@@ -80,6 +80,7 @@ private fun resolveNextJsRefs(
                 str[1] == 'n' -> JsonPrimitive(str.substring(2)) // BigInt -> strip '$n' for ReactFlightBigInt
                 str[1] == 'Q' -> resolveMapRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 str[1] == 'W' -> resolveSetRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
+                str[1] == 'L' -> resolveModelRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 // RSC reference (`$<id>` or `$<id>:<path>`) -> resolve via chunk/model cache.
                 else -> resolveModelRef(str.substring(1), chunkCache, modelCache, resolving) ?: element
             }
