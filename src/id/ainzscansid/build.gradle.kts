@@ -12,6 +12,6 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl = "https://v2.ainzscans01.com"
+        baseUrl = "https://v3.ainzscans01.com"
     }
 }
