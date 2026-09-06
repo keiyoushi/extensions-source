@@ -73,10 +73,7 @@ abstract class ColorizedMangas : KeiSource() {
         return manga.apply {
             val aside = document.selectFirst("aside")!!
 
-            val titleEl = aside.selectFirst("h1")
-            if (titleEl != null) {
-                title = titleEl.text().removePrefix("Colorized").trim()
-            }
+            title = aside.selectFirst("h1")!!.text().removePrefix("Colorized").trim()
 
             thumbnail_url = aside.selectFirst("img")?.absUrl("src")
 
