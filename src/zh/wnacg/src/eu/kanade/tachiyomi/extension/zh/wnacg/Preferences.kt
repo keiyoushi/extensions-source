@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.wnacg
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import okhttp3.Interceptor
@@ -26,6 +27,14 @@ fun getPreferencesInternal(
         entries = options.toTypedArray()
         entryValues = Array(count, Int::toString)
     },
+
+    EditTextPreference(context).apply {
+        key = TITLE_BLACKLIST_PREF
+        title = "标题屏蔽关键词"
+        summary = "使用英文逗号或换行分隔多个关键词；忽略大小写，仅作用于热门和最新列表。"
+        dialogTitle = "标题屏蔽关键词"
+        setDefaultValue("")
+    },
 )
 
 val SharedPreferences.baseUrl: String
@@ -36,6 +45,13 @@ val SharedPreferences.baseUrl: String
 
 val SharedPreferences.urlIndex get() = getString(URL_INDEX_PREF, "-1")!!.toInt()
 val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.split(",")
+
+val SharedPreferences.titleBlacklist: List<String>
+    get() = getString(TITLE_BLACKLIST_PREF, "")
+        .orEmpty()
+        .split(',', '\n', '\r')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
 
 fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
@@ -107,3 +123,4 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
 private const val DEFAULT_LIST_PREF = "defaultBaseUrl"
 private const val URL_LIST_PREF = "baseUrlList"
 private const val URL_INDEX_PREF = "baseUrlIndex"
+private const val TITLE_BLACKLIST_PREF = "titleBlacklist"

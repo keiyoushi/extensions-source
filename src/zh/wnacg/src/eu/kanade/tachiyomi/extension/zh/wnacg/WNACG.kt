@@ -51,23 +51,13 @@ abstract class WNACG :
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/albums-favorite_ranking-page-$page-type-week.html", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(".gallary_item").map { mangaFromElement(it) }
-        val hasNextPage = document.selectFirst("span.thispage + a") != null
-        return MangasPage(mangas, hasNextPage)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response).filterBlockedTitles()
 
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/albums-index-page-$page.html", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(".gallary_item").map { mangaFromElement(it) }
-        val hasNextPage = document.selectFirst("span.thispage + a") != null
-        return MangasPage(mangas, hasNextPage)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response).filterBlockedTitles()
 
     // Search
 
@@ -91,7 +81,7 @@ abstract class WNACG :
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = mangaListParse(response)
 
     // Manga details
 
@@ -148,6 +138,23 @@ abstract class WNACG :
     }
 
     // Helpers
+
+    private fun mangaListParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(".gallary_item").map { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst("span.thispage + a") != null
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    private fun MangasPage.filterBlockedTitles(): MangasPage {
+        val blacklist = preferences.titleBlacklist
+        if (blacklist.isEmpty()) return this
+
+        val filteredMangas = mangas.filterNot { manga ->
+            blacklist.any { keyword -> manga.title.contains(keyword, ignoreCase = true) }
+        }
+        return MangasPage(filteredMangas, hasNextPage)
+    }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst(".title > a")!!
