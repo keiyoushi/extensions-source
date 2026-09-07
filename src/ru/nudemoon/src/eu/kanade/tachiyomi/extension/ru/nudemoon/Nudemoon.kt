@@ -107,8 +107,7 @@ abstract class Nudemoon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaUrl = manga.url
-        val response = client.get(baseUrl + mangaUrl).asJsoup()
+        val response = client.get(getMangaUrl(manga)).asJsoup()
 
         val newManga = mangaDetailsParse(response, mangaUrl)
         val newChapters = if (fetchChapters) {
