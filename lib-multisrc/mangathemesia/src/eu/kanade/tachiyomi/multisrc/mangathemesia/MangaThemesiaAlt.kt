@@ -3,15 +3,16 @@ package eu.kanade.tachiyomi.multisrc.mangathemesia
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.jsoup.nodes.Document
@@ -72,8 +73,8 @@ abstract class MangaThemesiaAlt(
         }
     }
 
-    protected open fun fetchUrlMap(): Map<String, String> {
-        client.newCall(GET("$baseUrl$listUrl", headers)).execute().use { response ->
+    protected open suspend fun fetchUrlMap(): Map<String, String> {
+        client.get("$baseUrl$listUrl").use { response ->
             val document = response.asJsoup()
 
             return document.select(listSelector).associate {
@@ -90,10 +91,10 @@ abstract class MangaThemesiaAlt(
         }
     }
 
-    protected fun getUrlMap(cached: Boolean = false): Map<String, String> = if (cached && cachedValue == null) {
+    protected suspend fun getUrlMap(cached: Boolean = false): Map<String, String> = if (cached && cachedValue == null) {
         preferences.urlMapCache
     } else {
-        runBlocking { getUrlMapInternal() }
+        getUrlMapInternal()
     }
 
     // cache in preference for webview urls
@@ -129,6 +130,13 @@ abstract class MangaThemesiaAlt(
 
     protected open val slugRegex = Regex("""^(\d+-)""")
 
+    override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
+        if (getRandomUrlPref()) {
+            getUrlMap()
+        }
+        return super.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
+    }
+
     override fun getMangaUrl(manga: SManga): String {
         if (!getRandomUrlPref()) return super.getMangaUrl(manga)
 
@@ -138,7 +146,7 @@ abstract class MangaThemesiaAlt(
             .substringAfterLast("/")
             .replaceFirst(slugRegex, "")
 
-        val randomSlug = getUrlMap(true)[slug] ?: slug
+        val randomSlug = cachedValue?.get()?.get(slug) ?: slug
 
         return "$baseUrl$mangaUrlDirectory/$randomSlug/"
     }

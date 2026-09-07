@@ -79,6 +79,8 @@ abstract class RizzComic : MangaThemesiaAlt() {
         return parseSearchManga(res)
     }
 
+    override val supportsFilterFetching = false
+
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Filters don't work with text search"),
         SortFilter(),
@@ -101,9 +103,10 @@ abstract class RizzComic : MangaThemesiaAlt() {
         @SerialName("genre_id") val genres: String? = null,
     ) {
         val slug get() = title.trim().lowercase()
+            .replace("-", " ")
+            .replace("'s", "s")
             .replace("'", "")
             .replace(slugRegex, "-")
-            .replace("-s-", "s-")
             .replace("-ll-", "ll-")
             .trim('-')
 
