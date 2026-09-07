@@ -133,13 +133,11 @@ abstract class Hyakuro : KeiSource() {
     private class Category(name: String) : Filter.CheckBox(name)
     private class CategoryFilter(categories: List<Category>) : Filter.Group<Category>("Categories", categories)
 
-    override fun getFilterList(data: JsonElement?): FilterList {
-        Filter.Header("NOTE: Search query will be applied to filters")
-        return FilterList(
-            StatusFilter(),
-            CategoryFilter(getCategoryList()),
-        )
-    }
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        Filter.Header("NOTE: Search query will be applied to filters"),
+        StatusFilter(),
+        CategoryFilter(getCategoryList()),
+    )
 
     private fun getCategoryList() = listOf(
         Category("Action"),
