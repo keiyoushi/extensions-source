@@ -123,7 +123,7 @@ abstract class Nudemoon : KeiSource() {
     private fun mangaDetailsParse(document: Document, mangaUrl: String): SManga = SManga.create().apply {
         val infoElement = document.selectFirst(mangaSelector)
         url = mangaUrl
-        title = document.selectFirst("h1")?.text()?.substringBefore(" / ")?.substringBefore(" №") ?: ""
+        title = document.selectFirst("h1")?.text()?.substringBefore(" / ")?.substringBefore(" №")!!
         author = infoElement?.selectFirst("a[href*=mangaka]")?.text()
         genre = infoElement?.select("div.tag-links a")?.joinToString { it.text() }
         description = document.selectFirst(".description")?.text()
