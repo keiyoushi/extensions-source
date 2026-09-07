@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.os.Build
+import android.preference.PreferenceManager
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -33,6 +33,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -44,8 +45,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 @Source
 class MangaDex(
@@ -68,9 +67,18 @@ class MangaDex(
 
     private val preferences by getPreferencesLazy { sanitizeExistingUuidPrefs() }
 
-    private val helper = MangaDexHelper(lang)
+    @Suppress("DEPRECATION")
+    private val appPreferences by lazy { PreferenceManager.getDefaultSharedPreferences(applicationContext)!! }
 
-    private val komikku = Injekt.get<Application>().packageName.startsWith("app.komikku")
+    private val komikku = applicationContext.packageName.startsWith("app.komikku")
+
+    private fun delegateSources() = try {
+        appPreferences.getBoolean("eh_delegate_sources", komikku)
+    } catch (_: ClassCastException) {
+        false
+    }
+
+    private val helper = MangaDexHelper(lang)
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         val extraHeader = "Android/${Build.VERSION.RELEASE} " +
@@ -129,7 +137,7 @@ class MangaDex(
         .addQueryParameter("limit", MDConstants.LATEST_CHAPTER_LIMIT.toString())
         .addQueryParameter("translatedLanguage[]", dexLang)
         .addQueryParameter("order[publishAt]", "desc")
-        .addQueryParameter("includeFutureUpdates", if (komikku) "1" else "0")
+        .addQueryParameter("includeFutureUpdates", if (delegateSources()) "1" else "0")
         .addQueryParameter("originalLanguage[]", preferences.originalLanguages)
         .addQueryParameter("contentRating[]", preferences.contentRating)
         .addQueryParameter(
@@ -390,7 +398,7 @@ class MangaDex(
         .addQueryParameter("limit", MDConstants.LATEST_CHAPTER_LIMIT.toString())
         .addQueryParameter("translatedLanguage[]", dexLang)
         .addQueryParameter("order[publishAt]", "desc")
-        .addQueryParameter("includeFutureUpdates", if (komikku) "1" else "0")
+        .addQueryParameter("includeFutureUpdates", if (delegateSources()) "1" else "0")
         .addQueryParameter("includeFuturePublishAt", "0")
         .addQueryParameter("includeEmptyPages", "0")
         .addQueryParameter("uploader", uploader)
