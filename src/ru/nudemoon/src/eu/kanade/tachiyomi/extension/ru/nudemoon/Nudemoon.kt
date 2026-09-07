@@ -22,6 +22,9 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
+import java.time.format.SignStyle
+import java.time.temporal.ChronoField
 import java.util.Locale
 
 @Source
@@ -149,7 +152,7 @@ abstract class Nudemoon : KeiSource() {
                     scanlator = informBlock?.selectFirst("a[href*=perevod]")?.text()
 
                     date_upload = informBlock?.selectFirst("""span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")?.text()?.let { text ->
-                        dateFormat.tryParseDate(normalizeDate(text))
+                        dateFormat.tryParseDate(text)
                     } ?: 0L
 
                     chapter_number = name.substringAfter("№").substringBefore(" ").replace("-", ".").toFloatOrNull() ?: -1f
@@ -176,7 +179,7 @@ abstract class Nudemoon : KeiSource() {
         date_upload = document.selectFirst("""td:has(img[src*=time]) span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")
             ?.text()
             ?.let { text ->
-                dateFormat.tryParseDate(normalizeDate(text))
+                dateFormat.tryParseDate(text)
             } ?: 0L
         chapter_number = 0F
     }
@@ -197,20 +200,32 @@ abstract class Nudemoon : KeiSource() {
     override fun getFilterList(data: JsonElement?): FilterList = getFilters()
 
     // ============================== Utilities ======================================
-    private fun normalizeDate(dateStr: String): String = monthRegex.replace(dateStr.lowercase()) { matchResult ->
-        months[matchResult.value] ?: matchResult.value
-    }
-
     companion object {
         private val TAG_ORDERS = arrayOf("&date", "&views", "&like")
         private val ALL_ORDERS = arrayOf("all_manga?date", "all_manga?views", "all_manga?like")
-        private val dateFormat = DateTimeFormatter.ofPattern("[d MMMM yyyy][dd MMMM yyyy]", Locale.forLanguageTag("ru"))
-        private val months = mapOf(
-            "январь" to "января", "февраль" to "февраля", "март" to "марта",
-            "апрель" to "апреля", "май" to "мая", "июнь" to "июня",
-            "июль" to "июля", "август" to "августа", "сентябрь" to "сентября",
-            "октябрь" to "октября", "ноябрь" to "ноября", "декабрь" to "декабря",
-        )
-        private val monthRegex = """\b(${months.keys.joinToString("|")})\b""".toRegex()
+        private val dateFormat: DateTimeFormatter = DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .appendValue(ChronoField.DAY_OF_MONTH, 1, 2, SignStyle.NOT_NEGATIVE)
+            .appendLiteral(' ')
+            .appendText(
+                ChronoField.MONTH_OF_YEAR,
+                mapOf(
+                    1L to "январь", 1L to "января",
+                    2L to "февраль", 2L to "февраля",
+                    3L to "март", 3L to "марта",
+                    4L to "апрель", 4L to "апреля",
+                    5L to "май", 5L to "мая",
+                    6L to "июнь", 6L to "июня",
+                    7L to "июль", 7L to "июля",
+                    8L to "август", 8L to "августа",
+                    9L to "сентябрь", 9L to "сентября",
+                    10L to "октябрь", 10L to "октября",
+                    11L to "ноябрь", 11L to "ноября",
+                    12L to "декабрь", 12L to "декабря",
+                ),
+            )
+            .appendLiteral(' ')
+            .appendValue(ChronoField.YEAR, 4)
+            .toFormatter(Locale.forLanguageTag("ru"))
     }
 }
