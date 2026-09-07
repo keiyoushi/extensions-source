@@ -182,7 +182,7 @@ abstract class Nudemoon : KeiSource() {
 
     // ============================== Pages ======================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val pages = document.select("""img[title~=.+][loading="lazy"]""").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:data-src"))
         }
