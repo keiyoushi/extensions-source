@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.nudemoon
 
-import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -31,7 +30,8 @@ import java.util.Locale
 @Source
 abstract class Nudemoon : KeiSource() {
     private val domain get() = baseUrl.toHttpUrl().host
-    private val cookieManager by lazy { CookieManager.getInstance() }
+    private val isUserAuthenticated: Boolean
+        get() = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).any { it.name == "fusion_user" }
 
     override fun OkHttpClient.Builder.configureClient() = addCookie { listOf("NMfYa" to "1", "nm_mobile" to "1", "Domain" to domain) }
 
@@ -79,7 +79,7 @@ abstract class Nudemoon : KeiSource() {
 
         val response = client.get(url, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
-                if (response.code == 404 && query.isNotBlank() && cookieManager.getCookie(baseUrl)?.contains("fusion_user") != true) {
+                if (response.code == 404 && query.isNotBlank() && !isUserAuthenticated) {
                     throw Exception("Поиск доступен только для авторизированных пользователей")
                 } else {
                     throw HttpException(response.code)
@@ -204,7 +204,7 @@ abstract class Nudemoon : KeiSource() {
         val pages = document.select("""img[title~=.+][loading="lazy"]""").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:data-src"))
         }
-        if (pages.isEmpty() && cookieManager.getCookie(baseUrl)?.contains("fusion_user") != true) {
+        if (pages.isEmpty() && !isUserAuthenticated) {
             throw Exception("Страницы не найдены. Возможно необходима авторизация в WebView")
         }
         return pages
