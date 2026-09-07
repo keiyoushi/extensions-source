@@ -98,7 +98,7 @@ abstract class Nudemoon : KeiSource() {
             title = it.text().substringBefore(" / ").substringBefore(" №")
             setUrlWithoutDomain(it.absUrl("href"))
         } ?: return null
-        thumbnail_url = element.selectFirst("a img")?.attr("abs:src")
+        thumbnail_url = element.selectFirst("a img")?.absUrl("src")
     }
 
     private fun searchMangaParse(document: Document): MangasPage {
