@@ -69,21 +69,13 @@ abstract class MangaThemesia : KeiSource() {
 
     open fun searchMangaUrl(page: Int, query: String) = baseUrl.toHttpUrl().newBuilder().apply {
         addPathSegment(mangaUrlDirectory.drop(1))
-        if (!query.isNullOrEmpty()) addQueryParameter("title", query)
+        if (query.isNotEmpty()) addQueryParameter("title", query)
         addQueryParameter("page", page.toString())
     }
 
     open fun searchMangaUrl(page: Int, query: String, filters: FilterList) = searchMangaUrl(page, query).apply {
         filters.forEach { filter ->
             when (filter) {
-                is AuthorFilter -> {
-                    addQueryParameter("author", filter.state)
-                }
-
-                is YearFilter -> {
-                    addQueryParameter("yearx", filter.state)
-                }
-
                 is StatusFilter -> {
                     addQueryParameter("status", filter.selectedValue())
                 }
@@ -104,6 +96,10 @@ abstract class MangaThemesia : KeiSource() {
                             addQueryParameter("genre[]", value)
                         }
                 }
+
+                is AuthorFilter -> filter.state.takeIf { it.isNotEmpty() }?.let { addQueryParameter("author", it) }
+
+                is YearFilter -> filter.state.takeIf { it.isNotEmpty() }?.let { addQueryParameter("yearx", it) }
 
                 // if site has project page, default value "hasProjectPage" = false
                 is ProjectFilter -> {
