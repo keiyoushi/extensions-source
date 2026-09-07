@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.rokaricomics
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
@@ -12,7 +12,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 
 @Source
-abstract class RokariComics : MangaThemesia() {
+abstract class RokariComics : MangaThemesiaAlt() {
     // Popular - Use homepage "Popular Today" section (first page only, no pagination)
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get(baseUrl).asJsoup()
