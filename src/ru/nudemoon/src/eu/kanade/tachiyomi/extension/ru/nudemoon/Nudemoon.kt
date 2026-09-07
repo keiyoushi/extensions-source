@@ -77,7 +77,7 @@ abstract class Nudemoon : KeiSource() {
     private fun parseMangaElement(element: Element): SManga? = SManga.create().apply {
         element.selectFirst("a:has(h2)")?.let {
             title = it.text().substringBefore(" / ").substringBefore(" №")
-            setUrlWithoutDomain(it.attr("href"))
+            setUrlWithoutDomain(it.absUrl("href"))
         } ?: return null
         thumbnail_url = element.selectFirst("a img")?.attr("abs:src")
     }
