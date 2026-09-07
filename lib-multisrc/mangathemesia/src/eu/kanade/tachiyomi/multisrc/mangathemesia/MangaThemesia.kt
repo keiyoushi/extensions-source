@@ -31,6 +31,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 
 // Formerly WPMangaStream & WPMangaReader -> MangaThemesia
@@ -40,7 +41,8 @@ abstract class MangaThemesia : KeiSource() {
 
     open val datePattern = "MMMM d, yyyy"
     open val dateFormat by lazy {
-        DateTimeFormatter.ofPattern(datePattern, Locale.forLanguageTag(lang))
+        DateTimeFormatterBuilder().parseCaseInsensitive()
+            .appendPattern(datePattern).toFormatter(Locale.forLanguageTag(lang))
     }
 
     protected val intl = Intl(
