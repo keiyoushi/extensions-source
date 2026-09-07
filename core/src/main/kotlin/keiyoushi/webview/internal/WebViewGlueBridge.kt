@@ -37,16 +37,11 @@ internal object WebViewGlueBridge {
             .getDeclaredMethod("createWebViewProviderFactory")
             .invoke(null) as InvocationHandler
 
-        factory = cast(WebViewProviderFactoryBoundaryInterface::class.java, webViewProviderFactory)
-    }
-
-    private fun <T> cast(boundaryClass: Class<T>, handler: InvocationHandler): T {
-        @Suppress("UNCHECKED_CAST")
-        return Proxy.newProxyInstance(
+        factory = Proxy.newProxyInstance(
             WebViewGlueBridge::class.java.getClassLoader(),
-            arrayOf<Class<*>?>(boundaryClass),
-            handler,
-        ) as T
+            arrayOf(WebViewProviderFactoryBoundaryInterface::class.java),
+            webViewProviderFactory,
+        ) as WebViewProviderFactoryBoundaryInterface
     }
 
     @Synchronized
@@ -57,7 +52,7 @@ internal object WebViewGlueBridge {
                 if (featureName == feature) return true
             }
         } catch (e: Throwable) {
-            Log.e("KeiyoushiWebView.WebViewGlueBridge", """isFeatureSupported("$featureName")""", e)
+            Log.e("WebViewGlueBridge", """isFeatureSupported("$featureName")""", e)
         }
         return false
     }
@@ -71,12 +66,12 @@ internal object WebViewGlueBridge {
         val versionMatch = CHROME_VERSION_REGEX.find(userAgent)
 
         if (versionMatch == null) {
-            Log.i("KeiyoushiWebView.WebViewGlueBridge", "Not a valid Chrome UserAgent for client hints")
+            Log.i("WebViewGlueBridge", "Not a valid Chrome UserAgent for client hints")
             return
         }
 
         if (!isFeatureSupported("USER_AGENT_METADATA")) {
-            Log.i("KeiyoushiWebView.WebViewGlueBridge", "USER_AGENT_METADATA not supported")
+            Log.i("WebViewGlueBridge", "USER_AGENT_METADATA not supported")
             return
         }
 
@@ -118,14 +113,17 @@ internal object WebViewGlueBridge {
 
         try {
             ensureFactory()
-            val webkitToCompatConverter = cast(
-                WebkitToCompatConverterBoundaryInterface::class.java,
+            val webkitToCompatConverter = Proxy.newProxyInstance(
+                WebViewGlueBridge::class.java.getClassLoader(),
+                arrayOf(WebkitToCompatConverterBoundaryInterface::class.java),
                 factory.webkitToCompatConverter,
-            )
-            val boundarySettings = cast(
-                WebSettingsBoundaryInterface::class.java,
+            ) as WebkitToCompatConverterBoundaryInterface
+
+            val boundarySettings = Proxy.newProxyInstance(
+                WebViewGlueBridge::class.java.getClassLoader(),
+                arrayOf(WebSettingsBoundaryInterface::class.java),
                 webkitToCompatConverter.convertSettings(settings),
-            )
+            ) as WebSettingsBoundaryInterface
 
             val uaMetadata = boundarySettings.userAgentMetadataMap
             val updated = HashMap(uaMetadata)
@@ -161,7 +159,7 @@ internal object WebViewGlueBridge {
 
             boundarySettings.setUserAgentMetadataFromMap(updated)
         } catch (e: Throwable) {
-            Log.e("KeiyoushiWebView.WebViewGlueBridge", "setUserClientHints", e)
+            Log.e("WebViewGlueBridge", "setUserClientHints", e)
         }
     }
 }
