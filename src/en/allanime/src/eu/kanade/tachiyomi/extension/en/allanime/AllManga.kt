@@ -145,7 +145,7 @@ abstract class AllManga :
             val parts = manga.url.split("/")
             parts[2] to parts[3]
         } else {
-            manga.url to manga.memo["slug"]!!.string
+            manga.url to manga.memo["slug"]?.string
         }
 
         val payload = graphQLBody(
