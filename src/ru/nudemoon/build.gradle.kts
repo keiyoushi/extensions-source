@@ -18,6 +18,6 @@ keiyoushi {
     }
 
     deeplink {
-        path("/..*html")
+        path("/..*--..*\\.html")
     }
 }
