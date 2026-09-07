@@ -146,7 +146,7 @@ abstract class Nudemoon : KeiSource() {
         author = infoElement?.selectFirst("a[href*=mangaka]")?.text()
         genre = infoElement?.select("div.tag-links a")?.joinToString { it.text() }
         description = document.selectFirst(".description")?.text()
-        thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("abs:content")
+        thumbnail_url = document.selectFirst("meta[property=og:image]")?.absUrl("content")
     }
 
     // ============================== Chapters ======================================
@@ -202,7 +202,7 @@ abstract class Nudemoon : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
         val pages = document.select("""img[title~=.+][loading="lazy"]""").mapIndexed { index, img ->
-            Page(index, imageUrl = img.attr("abs:data-src"))
+            Page(index, imageUrl = img.absUrl("data-src"))
         }
         if (pages.isEmpty() && !isUserAuthenticated) {
             throw Exception("Страницы не найдены. Возможно необходима авторизация в WebView")
