@@ -32,7 +32,11 @@ fun getPreferencesInternal(
     EditTextPreference(context).apply {
         key = TITLE_BLACKLIST_PREF
         title = "标题屏蔽关键词"
-        summary = "使用英文逗号或换行分隔多个关键词；忽略大小写，始终作用于热门和最新列表。"
+        summary = titleBlacklistSummary(preferences.getString(TITLE_BLACKLIST_PREF, ""))
+        setOnPreferenceChangeListener { _, newValue ->
+            summary = titleBlacklistSummary(newValue as String)
+            true
+        }
         dialogTitle = "标题屏蔽关键词"
         setDefaultValue("")
     },
@@ -63,6 +67,9 @@ val SharedPreferences.titleBlacklist: List<String>
 
 val SharedPreferences.filterSearchResults: Boolean
     get() = getBoolean(FILTER_SEARCH_RESULTS_PREF, true)
+
+private fun titleBlacklistSummary(value: String?) = value?.takeIf(String::isNotBlank)?.let { "$it\n$TITLE_BLACKLIST_SUMMARY" }
+    ?: TITLE_BLACKLIST_SUMMARY
 
 fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
@@ -136,3 +143,4 @@ private const val URL_LIST_PREF = "baseUrlList"
 private const val URL_INDEX_PREF = "baseUrlIndex"
 private const val TITLE_BLACKLIST_PREF = "titleBlacklist"
 private const val FILTER_SEARCH_RESULTS_PREF = "filterSearchResults"
+private const val TITLE_BLACKLIST_SUMMARY = "使用英文逗号或换行分隔多个关键词；忽略大小写，始终作用于热门和最新列表。"
