@@ -91,7 +91,7 @@ abstract class Nudemoon : KeiSource() {
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val firstSegment = url.pathSegments.firstOrNull() ?: return null
-        if (url.host == domain && firstSegment.endsWith("html")) {
+        if (url.host == domain && firstSegment.endsWith(".html")) {
             val tmpManga = SManga.create().apply {
                 this.url = "/$firstSegment"
             }
