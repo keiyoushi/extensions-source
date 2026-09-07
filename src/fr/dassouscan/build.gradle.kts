@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Dassou Scan"
-    versionCode = 51
+    versionCode = 52
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
