@@ -87,19 +87,21 @@ class MangaDex(
 
     // Popular manga section
 
-    private fun popularMangaUrl(page: Int): HttpUrl = MDConstants.API_MANGA_URL.toHttpUrl().newBuilder()
-        .addQueryParameter("order[followedCount]", "desc")
-        .addQueryParameter("availableTranslatedLanguage[]", dexLang)
-        .addQueryParameter("limit", MDConstants.MANGA_LIMIT.toString())
-        .addQueryParameter("offset", helper.getMangaListOffset(page))
-        .addQueryParameter("includes[]", MDConstants.COVER_ART)
-        .addQueryParameter("contentRating[]", preferences.contentRating)
-        .addQueryParameter("originalLanguage[]", preferences.originalLanguages)
-        .build()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = MDConstants.API_MANGA_URL.toHttpUrl().newBuilder()
+            .addQueryParameter("order[followedCount]", "desc")
+            .addQueryParameter("availableTranslatedLanguage[]", dexLang)
+            .addQueryParameter("limit", MDConstants.MANGA_LIMIT.toString())
+            .addQueryParameter("offset", helper.getMangaListOffset(page))
+            .addQueryParameter("includes[]", MDConstants.COVER_ART)
+            .addQueryParameter("contentRating[]", preferences.contentRating)
+            .addQueryParameter("originalLanguage[]", preferences.originalLanguages)
+            .build()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = popularMangaParse(client.get(popularMangaUrl(page), CacheControl.FORCE_NETWORK))
+        return parseMangasPage(client.get(url, CacheControl.FORCE_NETWORK))
+    }
 
-    fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangasPage(response: Response): MangasPage {
         if (response.code == 204) {
             return MangasPage(emptyList(), false)
         }
@@ -142,11 +144,15 @@ class MangaDex(
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = latestUpdatesParse(client.get(latestUpdatesUrl(page), CacheControl.FORCE_NETWORK))
 
-    @Suppress("unused")
+    /**
+     * Used by Komikku
+     */
     fun latestUpdatesRequest(page: Int): Request = GET(latestUpdatesUrl(page), headers, CacheControl.FORCE_NETWORK)
 
     /**
      * The API endpoint can't sort by date yet, so not implemented.
+     *
+     * Used by Komikku
      */
     fun latestUpdatesParse(response: Response): MangasPage {
         val chapterListDto = response.parseAs<ChapterListDto>()
@@ -213,7 +219,7 @@ class MangaDex(
                     ),
                     cacheControl = CacheControl.FORCE_NETWORK,
                 )
-                .let(::searchMangaParse)
+                .let(::parseMangasPage)
 
         query.startsWith(MDConstants.PREFIX_USER_SEARCH) ->
             client
@@ -229,9 +235,7 @@ class MangaDex(
         query.startsWith(MDConstants.PREFIX_LIST_SEARCH) ->
             client
                 .get(
-                    url = searchMangaListUrl(
-                        list = query.removePrefix(MDConstants.PREFIX_LIST_SEARCH),
-                    ),
+                    url = "${MDConstants.API_LIST_URL}/${query.removePrefix(MDConstants.PREFIX_LIST_SEARCH)}",
                     cacheControl = CacheControl.FORCE_NETWORK,
                 )
                 .let { searchMangaListParse(it, page, filters) }
@@ -246,7 +250,7 @@ class MangaDex(
                     ),
                     cacheControl = CacheControl.FORCE_NETWORK,
                 )
-                .let(::searchMangaParse)
+                .let(::parseMangasPage)
     }
 
     private suspend fun getMangaIdFromChapterId(id: String): String {
@@ -317,10 +321,6 @@ class MangaDex(
             dexLang = dexLang,
         )
     }
-
-    fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    private fun searchMangaListUrl(list: String): HttpUrl = "${MDConstants.API_LIST_URL}/$list".toHttpUrl()
 
     private fun searchMangaListParse(response: Response, page: Int, filters: FilterList): MangasPage {
         val listDto = response.parseAs<ListDto>()
@@ -510,29 +510,12 @@ class MangaDex(
      *
      * @throws Exception if the url is the old format so people migrate
      */
-    private fun chapterListUrl(manga: SManga): HttpUrl {
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
         if (!helper.containsUuid(manga.url)) {
             throw Exception(helper.intl["migrate_warning"])
         }
 
-        return paginatedChapterListUrl(helper.getUUIDFromUrl(manga.url), 0)
-    }
-
-    private suspend fun getChapterList(manga: SManga): List<SChapter> = chapterListParse(client.get(chapterListUrl(manga)))
-
-    /**
-     * Required because the chapter list API endpoint is paginated.
-     */
-    private fun paginatedChapterListUrl(mangaId: String, offset: Int): HttpUrl = helper.getChapterEndpoint(mangaId, offset, dexLang).toHttpUrl().newBuilder()
-        .addQueryParameter("contentRating[]", MDConstants.allContentRatings)
-        .addQueryParameter("excludedGroups[]", preferences.blockedGroups)
-        .addQueryParameter("excludedUploaders[]", preferences.blockedUploaders)
-        .addQueryParameter("includeUnavailable", if (preferences.includeUnavailable) "1" else "0")
-        .build()
-
-    private fun paginatedChapterListRequest(mangaId: String, offset: Int): Request = GET(paginatedChapterListUrl(mangaId, offset), headers, CacheControl.FORCE_NETWORK)
-
-    fun chapterListParse(response: Response): List<SChapter> {
+        val response = client.get(paginatedChapterListUrl(helper.getUUIDFromUrl(manga.url), 0))
         if (response.code == 204) {
             return emptyList()
         }
@@ -553,8 +536,7 @@ class MangaDex(
         while (hasNextPage) {
             offset += chapterListResponse.limit
 
-            val newRequest = paginatedChapterListRequest(mangaId, offset)
-            val newResponse = client.newCall(newRequest).execute()
+            val newResponse = client.get(paginatedChapterListUrl(mangaId, offset), CacheControl.FORCE_NETWORK)
             val newChapterList = newResponse.parseAs<ChapterListDto>()
             chapterListResults.addAll(newChapterList.data)
 
@@ -566,30 +548,37 @@ class MangaDex(
             .map(helper::createChapter)
     }
 
+    /**
+     * Required because the chapter list API endpoint is paginated.
+     */
+    private fun paginatedChapterListUrl(mangaId: String, offset: Int): HttpUrl = helper.getChapterEndpoint(mangaId, offset, dexLang).toHttpUrl().newBuilder()
+        .addQueryParameter("contentRating[]", MDConstants.allContentRatings)
+        .addQueryParameter("excludedGroups[]", preferences.blockedGroups)
+        .addQueryParameter("excludedUploaders[]", preferences.blockedUploaders)
+        .addQueryParameter("includeUnavailable", if (preferences.includeUnavailable) "1" else "0")
+        .build()
+
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
-    private fun pageListUrl(chapter: SChapter): HttpUrl {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (!helper.containsUuid(chapter.url)) {
             throw Exception(helper.intl["migrate_warning"])
         }
 
         val chapterId = chapter.url.substringAfter("/chapter/")
-        return if (preferences.forceStandardHttps) {
+        val url = if (preferences.forceStandardHttps) {
             "${MDConstants.API_URL}/at-home/server/$chapterId?forcePort443=true"
         } else {
             "${MDConstants.API_URL}/at-home/server/$chapterId"
         }.also(helper::mdAtHomeRefresh).toHttpUrl()
-    }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(pageListUrl(chapter), CacheControl.FORCE_NETWORK))
-
-    fun pageListParse(response: Response): List<Page> {
+        val response = client.get(url, CacheControl.FORCE_NETWORK)
         val atHomeRequestUrl = response.request.url
         val atHomeDto = response.parseAs<AtHomeDto>()
         val host = atHomeDto.baseUrl
 
         // Have to add the time, and url to the page because pages timeout within 30 minutes now.
-        val now = Date().time
+        val now = System.currentTimeMillis()
 
         val hash = atHomeDto.chapter.hash
         val pageSuffix = if (preferences.useDataSaver) {
