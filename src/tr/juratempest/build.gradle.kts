@@ -5,7 +5,7 @@ plugins {
 }
 
 keiyoushi {
-    name = "JuraTempest"
+    name = "Jura Tempest"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
