@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "MangaDex"
-    versionCode = 212
+    versionCode = 213
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf(
         "af", "sq", "ar", "az", "eu", "be", "bn", "bg", "my", "ca", "zh-Hans", "zh-Hant",

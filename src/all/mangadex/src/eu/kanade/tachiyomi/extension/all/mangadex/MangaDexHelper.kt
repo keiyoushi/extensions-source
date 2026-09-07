@@ -45,7 +45,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.parser.Parser
-import java.util.Date
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
@@ -214,11 +213,11 @@ class MangaDexHelper(lang: String) {
         val (host, tokenRequestUrl, time) = page.url.split(",")
 
         val mdAtHomeServerUrl =
-            when (Date().time - time.toLong() > MDConstants.mdAtHomeTokenLifespan) {
+            when (System.currentTimeMillis() - time.toLong() > MDConstants.mdAtHomeTokenLifespan) {
                 false -> host
 
                 true -> {
-                    val tokenLifespan = Date().time - (tokenTracker[tokenRequestUrl] ?: 0)
+                    val tokenLifespan = System.currentTimeMillis() - (tokenTracker[tokenRequestUrl] ?: 0)
                     val cacheControl = if (tokenLifespan > MDConstants.mdAtHomeTokenLifespan) {
                         CacheControl.FORCE_NETWORK
                     } else {
@@ -262,10 +261,14 @@ class MangaDexHelper(lang: String) {
         cacheControl: CacheControl,
     ): Request {
         if (cacheControl == CacheControl.FORCE_NETWORK) {
-            tokenTracker[tokenRequestUrl] = Date().time
+            tokenTracker[tokenRequestUrl] = System.currentTimeMillis()
         }
 
         return GET(tokenRequestUrl, headers, cacheControl)
+    }
+
+    fun mdAtHomeRefresh(tokenRequestUrl: String) {
+        tokenTracker[tokenRequestUrl] = System.currentTimeMillis()
     }
 
     private fun List<Map<String, String>>.findTitleByLang(lang: String): String? = firstOrNull { it[lang] != null }?.values?.singleOrNull()
