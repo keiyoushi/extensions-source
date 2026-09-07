@@ -151,9 +151,9 @@ abstract class Nudemoon : KeiSource() {
                     val informBlock = element.selectFirst("tr[valign=top] td[align=left]")
                     scanlator = informBlock?.selectFirst("a[href*=perevod]")?.text()
 
-                    date_upload = informBlock?.selectFirst("""span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")?.text()?.let { text ->
-                        dateFormat.tryParseDate(text)
-                    } ?: 0L
+                    date_upload = dateFormat.tryParseDate(
+                        informBlock?.selectFirst("""span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")?.text(),
+                    )
 
                     chapter_number = name.substringAfter("№").substringBefore(" ").replace("-", ".").toFloatOrNull() ?: -1f
                 }
@@ -176,11 +176,9 @@ abstract class Nudemoon : KeiSource() {
         name = "Сингл $chapterName"
         url = mangaUrl
         scanlator = document.selectFirst("table.news_pic2 a[href*=perevod]")?.text()
-        date_upload = document.selectFirst("""td:has(img[src*=time]) span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")
-            ?.text()
-            ?.let { text ->
-                dateFormat.tryParseDate(text)
-            } ?: 0L
+        date_upload = dateFormat.tryParseDate(
+            document.selectFirst("""td:has(img[src*=time]) span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")?.text(),
+        )
         chapter_number = 0F
     }
 
