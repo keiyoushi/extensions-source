@@ -50,7 +50,13 @@ abstract class Nudemoon : KeiSource() {
     // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = if (query.isNotEmpty()) {
-            "$baseUrl/search?stext=${URLEncoder.encode(query, "CP1251")}&rowstart=${30 * (page - 1)}"
+            buildString {
+                append(baseUrl)
+                append("/search?stext=")
+                append(URLEncoder.encode(query, "CP1251"))
+                append("&rowstart=")
+                append(30 * (page - 1))
+            }
         } else {
             val currentFilters = if (filters.isEmpty()) getFilterList() else filters
             val genreList = currentFilters.firstInstanceOrNull<GenreList>()
