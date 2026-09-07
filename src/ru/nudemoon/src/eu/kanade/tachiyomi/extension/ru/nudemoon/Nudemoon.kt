@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.ru.nudemoon
 
 import android.webkit.CookieManager
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -76,7 +77,16 @@ abstract class Nudemoon : KeiSource() {
             "$baseUrl/$path&rowstart=${30 * (page - 1)}"
         }
 
-        val response = client.get(url).asJsoup()
+        val response = client.get(url, ensureSuccess = false).use { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 404 && query.isNotBlank() && cookieManager.getCookie(baseUrl)?.contains("fusion_user") != true) {
+                    throw Exception("Поиск доступен только для авторизированных пользователей")
+                } else {
+                    throw HttpException(response.code)
+                }
+            }
+            response.asJsoup()
+        }
         return searchMangaParse(response)
     }
 
