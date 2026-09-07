@@ -17,6 +17,7 @@ import keiyoushi.utils.getArrayOrNull
 import keiyoushi.utils.getString
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonArray
@@ -129,5 +130,5 @@ abstract class SilentQuill : KeiSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}/"
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.memo["slug"]}/"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.memo["slug"]!!.string}/"
 }

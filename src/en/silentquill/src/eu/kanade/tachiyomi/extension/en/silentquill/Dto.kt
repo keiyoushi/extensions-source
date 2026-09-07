@@ -20,7 +20,7 @@ class ChapterResponse(
         chapter_number = chapterNo.toFloatOrNull() ?: -1f
         date_upload = timeAgo.toRelativeDate()
         memo = buildJsonObject {
-            put("slug", slug.trim('"'))
+            put("slug", slug)
         }
     }
 }
