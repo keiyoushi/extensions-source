@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -31,9 +32,16 @@ fun getPreferencesInternal(
     EditTextPreference(context).apply {
         key = TITLE_BLACKLIST_PREF
         title = "标题屏蔽关键词"
-        summary = "使用英文逗号或换行分隔多个关键词；忽略大小写，仅作用于热门和最新列表。"
+        summary = "使用英文逗号或换行分隔多个关键词；忽略大小写，始终作用于热门和最新列表。"
         dialogTitle = "标题屏蔽关键词"
         setDefaultValue("")
+    },
+
+    SwitchPreferenceCompat(context).apply {
+        key = FILTER_SEARCH_RESULTS_PREF
+        title = "在搜索结果中使用标题屏蔽"
+        summary = "开启后，关键词、分类和标签搜索结果也会应用标题屏蔽关键词。"
+        setDefaultValue(true)
     },
 )
 
@@ -52,6 +60,9 @@ val SharedPreferences.titleBlacklist: List<String>
         .split(',', '\n', '\r')
         .map(String::trim)
         .filter(String::isNotEmpty)
+
+val SharedPreferences.filterSearchResults: Boolean
+    get() = getBoolean(FILTER_SEARCH_RESULTS_PREF, true)
 
 fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
@@ -124,3 +135,4 @@ private const val DEFAULT_LIST_PREF = "defaultBaseUrl"
 private const val URL_LIST_PREF = "baseUrlList"
 private const val URL_INDEX_PREF = "baseUrlIndex"
 private const val TITLE_BLACKLIST_PREF = "titleBlacklist"
+private const val FILTER_SEARCH_RESULTS_PREF = "filterSearchResults"

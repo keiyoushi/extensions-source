@@ -81,7 +81,10 @@ abstract class WNACG :
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = mangaListParse(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val mangasPage = mangaListParse(response)
+        return if (preferences.filterSearchResults) mangasPage.filterBlockedTitles() else mangasPage
+    }
 
     // Manga details
 
