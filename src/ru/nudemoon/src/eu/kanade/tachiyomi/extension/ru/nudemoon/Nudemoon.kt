@@ -226,7 +226,7 @@ abstract class Nudemoon : KeiSource() {
     companion object {
         private const val MANGA_SELECTOR = "table.news_pic2"
         private const val NEXT_PAGE_SELECTOR = "a.small:contains(>)"
-        private val DATE_REGEX = """\b(0?[1-9]|[12][0-9]|3[01])\s+[А-Яа-я]+\s+(19|20)\d{2}\b""".toRegex()
+        private val DATE_REGEX = """\b\d{1,2}\s+[А-Яа-яЁё]+\s+(?:19|20)\d{2}\b""".toRegex()
         private val dateFormat: DateTimeFormatter = DateTimeFormatterBuilder()
             .parseCaseInsensitive()
             .appendPattern("[d MMMM yyyy][dd MMMM yyyy]")
