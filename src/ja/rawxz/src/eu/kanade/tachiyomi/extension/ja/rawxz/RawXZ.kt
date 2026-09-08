@@ -31,7 +31,7 @@ abstract class RawXZ : KeiSource() {
     private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select(".manga-card").map { element ->
             SManga.create().apply {
-                title = element.selectFirst(".manga-card-title")!!.text()
+                title = element.selectFirst(".manga-card-title")!!.text().removeSuffix(" (Raw – Free)")
                 setUrlWithoutDomain(element.selectFirst("a.manga-card-thumb")!!.absUrl("href"))
                 thumbnail_url = element.selectFirst(".manga-card-thumb img")?.absUrl("src")
             }
@@ -77,7 +77,7 @@ abstract class RawXZ : KeiSource() {
     }
 
     private fun parseDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".md-title")!!.text()
+        title = document.selectFirst(".md-title")!!.text().removeSuffix(" (Raw – Free)")
         author = document.select(".md-meta-row:has(.fa-user) .md-meta-val").text().takeIf { it != "更新中" }
         status = parseStatus(document.select(".md-meta-row:has(.fa-rss) .md-meta-val").text())
         genre = document.select(".md-tag").joinToString { it.text() }
