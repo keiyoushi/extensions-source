@@ -68,8 +68,7 @@ abstract class ColorizedMangas : KeiSource() {
         return SMangaUpdate(updatedManga, chapterList)
     }
 
-    private fun parseMangaDetails(document: Document, manga: SManga): SManga {
-        return manga.apply {
+    private fun parseMangaDetails(document: Document, manga: SManga): SManga = manga.apply {
         val aside = document.selectFirst("aside")!!
 
         title = aside.selectFirst("h1")!!.text().removePrefix("Colorized").trim()
@@ -89,7 +88,6 @@ abstract class ColorizedMangas : KeiSource() {
 
         description = aside.selectFirst("p.border-t")?.textOrNull()
         status = SManga.UNKNOWN
-        }
     }
 
     private fun parseChapterList(document: Document): List<SChapter> {
