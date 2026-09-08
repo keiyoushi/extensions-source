@@ -14,7 +14,7 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl = "https://07.ikiru.wtf"
+        baseUrl = "https://08.ikiru.wtf"
         // Formerly "MangaTale"
         id = 1532456597012176985L
     }
