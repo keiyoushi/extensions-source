@@ -349,7 +349,7 @@ abstract class MeDamTruyen : KeiSource() {
         var html = response.body.string()
         var document = Jsoup.parse(html, chapterUrl)
 
-        var lockForm = document.selectFirst("form.post-password-form")
+        val lockForm = document.selectFirst("form.post-password-form")
         if (lockForm != null) {
             val hint = extractHintText(document)
             val password = promptForPassword(chapter.name, hint)
@@ -397,7 +397,7 @@ abstract class MeDamTruyen : KeiSource() {
         return raw.replaceFirst(hintColonRegex, "$1\n").trim()
     }
 
-    private suspend fun promptForPassword(chapterTitle: String, hint: String? = null): String {
+    private suspend fun promptForPassword(chapterTitle: String, hintText: String? = null): String {
         val activity = currentActivity?.get()
             ?: throw Exception(passwordWebviewMessage)
 
@@ -416,8 +416,8 @@ abstract class MeDamTruyen : KeiSource() {
                     addView(input)
                 }
 
-                val message = if (!hint.isNullOrBlank()) {
-                    "Chương này yêu cầu mật khẩu\n\n$hint"
+                val message = if (!hintText.isNullOrBlank()) {
+                    "Chương này yêu cầu mật khẩu\n\n$hintText"
                 } else {
                     "Chương này yêu cầu mật khẩu"
                 }
