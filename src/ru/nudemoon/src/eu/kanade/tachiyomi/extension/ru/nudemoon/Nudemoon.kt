@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.ru.nudemoon
 
 import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,6 +14,8 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -203,7 +206,21 @@ abstract class Nudemoon : KeiSource() {
     }
 
     // ============================== Filters ======================================
-    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val data = client.get("$baseUrl/tags/").asJsoup()
+        return data.select("input[name*=tag]").map { it.attr("value").trim() }.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = mutableListOf<Filter<*>>()
+        filters.add(OrderBy())
+        data?.parseAs<List<String>>()?.let { d ->
+            if (d.isNotEmpty()) filters.add(GenreList(d.map { Genre(it) }))
+        }
+        return FilterList(filters)
+    }
 
     // ============================== Utilities ======================================
     companion object {
