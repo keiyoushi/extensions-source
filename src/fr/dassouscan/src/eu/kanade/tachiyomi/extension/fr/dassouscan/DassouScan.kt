@@ -2,27 +2,30 @@ package eu.kanade.tachiyomi.extension.fr.dassouscan
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.tryParseDateTime
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
+import org.jsoup.nodes.Document
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class DassouScan :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = true
@@ -41,12 +44,13 @@ abstract class DassouScan :
         }.also(screen::addPreference)
     }
 
-    private val dateFormat = SimpleDateFormat("d MMMM yyyy 'à' HH:mm", Locale.FRENCH)
-    private val shortDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.FRENCH)
+    private val dateTimeFormat = DateTimeFormatter.ofPattern("d MMMM yyyy 'à' HH:mm", Locale.FRENCH)
+    private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.FRENCH)
+    private val zoneId = ZoneId.of("Europe/Paris")
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/catalogue".toHttpUrl().newBuilder().apply {
             addQueryParameter("tri", "popular")
             if (page > 1) {
@@ -54,12 +58,36 @@ abstract class DassouScan :
             }
         }.build()
 
-        return GET(url, headers)
+        return parseCatalogue(client.get(url).asJsoup())
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    // ============================== Latest ===============================
 
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$baseUrl/catalogue".toHttpUrl().newBuilder().apply {
+            addQueryParameter("tri", "latest")
+            if (page > 1) {
+                addQueryParameter("page", page.toString())
+            }
+        }.build()
+
+        return parseCatalogue(client.get(url).asJsoup())
+    }
+
+    // ============================== Search ===============================
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/catalogue".toHttpUrl().newBuilder().apply {
+            addQueryParameter("q", query)
+            if (page > 1) {
+                addQueryParameter("page", page.toString())
+            }
+        }.build()
+
+        return parseCatalogue(client.get(url).asJsoup())
+    }
+
+    private fun parseCatalogue(document: Document): MangasPage {
         val mangas = document.select("article.dsc-cat-card").map { element ->
             SManga.create().apply {
                 title = element.attr("data-title")
@@ -76,54 +104,40 @@ abstract class DassouScan :
         return MangasPage(mangas, hasNextPage)
     }
 
-    // ============================== Latest ===============================
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/catalogue".toHttpUrl().newBuilder().apply {
-            addQueryParameter("tri", "latest")
-            if (page > 1) {
-                addQueryParameter("page", page.toString())
-            }
-        }.build()
-
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    // ============================== Search ===============================
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/catalogue".toHttpUrl().newBuilder().apply {
-            addQueryParameter("q", query)
-            if (page > 1) {
-                addQueryParameter("page", page.toString())
-            }
-        }.build()
-
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-
-        return SManga.create().apply {
-            title = document.selectFirst("h1")?.text()?.takeIf { it.isNotEmpty() } ?: throw Exception("Manga title is missing")
-            description = document.selectFirst(".dsc-mf__synopsis-text")?.text()
-            genre = document.select(".dsc-mf__tags a.dsc-mf__tag").joinToString { it.text() }
-
-            thumbnail_url = document.selectFirst(".dsc-mf__cover img")?.attr("abs:src")
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) {
+            return null
         }
+        if (url.pathSegments.firstOrNull() != "manga" || url.pathSegments.size != 2) {
+            return null
+        }
+        return parseMangaDetails(client.get(url).asJsoup())
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
+    }
+
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+        setUrlWithoutDomain(document.location())
+        title = document.selectFirst("h1")?.text()?.takeIf { it.isNotEmpty() } ?: throw Exception("Manga title is missing")
+        description = document.selectFirst(".dsc-mf__synopsis-text")?.text()
+        genre = document.select(".dsc-mf__tags a.dsc-mf__tag").joinToString { it.text() }
+
+        thumbnail_url = document.selectFirst(".dsc-mf__cover img")?.attr("abs:src")
     }
 
     // ============================= Chapters ==============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun parseChapterList(document: Document): List<SChapter> {
         return document.select("div.dsc-manga-chapter-block:not(:has(a[href*=/inscription/]))").mapNotNull { element ->
             val isPremium = element.hasClass("chapter--locked") ||
                 element.selectFirst(".dsc-ch-hl__access--premium, a.is-locked") != null
@@ -143,9 +157,9 @@ abstract class DassouScan :
 
                 val dateStr = element.selectFirst(".chapter-info")?.text() ?: ""
                 date_upload = if (dateStr.contains("à")) {
-                    dateFormat.tryParse(dateStr)
+                    dateTimeFormat.tryParseDateTime(dateStr, zoneId)
                 } else {
-                    shortDateFormat.tryParse(dateStr)
+                    dateFormat.tryParseDate(dateStr, zoneId)
                 }
             }
         }.reversed()
@@ -153,16 +167,14 @@ abstract class DassouScan :
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
         return document.select("#dsc-chapter-reader-content .dsc-chapter-strip-img").mapIndexed { i, img ->
             val url = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
             Page(i, imageUrl = url)
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val PREF_HIDE_PREMIUM = "pref_hide_premium"
