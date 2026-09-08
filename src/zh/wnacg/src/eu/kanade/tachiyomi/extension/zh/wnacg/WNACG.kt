@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.wnacg
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -49,17 +50,59 @@ abstract class WNACG :
 
     // Popular
 
+    private val popularPagingState = FilterPagingState()
+
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/albums-favorite_ranking-page-$page-type-week.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response).filterBlockedTitles()
 
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        val blacklist = preferences.titleBlacklist
+        if (blacklist.isEmpty()) {
+            popularPagingState.reset()
+            return super.fetchPopularManga(page)
+        }
+        val maxScanPages = preferences.blacklistMaxScanPages
+
+        return fetchFilteredMangaPage(
+            appPage = page,
+            key = "$maxScanPages|${blacklist.joinToString("\u0000")}",
+            state = popularPagingState,
+            requestForPage = ::popularMangaRequest,
+            blacklist = blacklist,
+            maxScanPages = maxScanPages,
+        )
+    }
+
     // Latest
+
+    private val latestPagingState = FilterPagingState()
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/albums-index-page-$page.html", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response).filterBlockedTitles()
 
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        val blacklist = preferences.titleBlacklist
+        if (blacklist.isEmpty()) {
+            latestPagingState.reset()
+            return super.fetchLatestUpdates(page)
+        }
+        val maxScanPages = preferences.blacklistMaxScanPages
+
+        return fetchFilteredMangaPage(
+            appPage = page,
+            key = "$maxScanPages|${blacklist.joinToString("\u0000")}",
+            state = latestPagingState,
+            requestForPage = ::latestUpdatesRequest,
+            blacklist = blacklist,
+            maxScanPages = maxScanPages,
+        )
+    }
+
     // Search
+
+    private val searchPagingState = FilterPagingState()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isBlank()) {
@@ -84,6 +127,26 @@ abstract class WNACG :
     override fun searchMangaParse(response: Response): MangasPage {
         val mangasPage = mangaListParse(response)
         return if (preferences.filterSearchResults) mangasPage.filterBlockedTitles() else mangasPage
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val blacklist = preferences.titleBlacklist
+        if (!preferences.filterSearchResults || blacklist.isEmpty()) {
+            searchPagingState.reset()
+            return super.fetchSearchManga(page, query, filters)
+        }
+
+        val requestForPage = { sourcePage: Int -> searchMangaRequest(sourcePage, query, filters) }
+        val maxScanPages = preferences.blacklistMaxScanPages
+        val key = requestForPage(1).url.toString() + "|$maxScanPages|" + blacklist.joinToString("\u0000")
+        return fetchFilteredMangaPage(
+            appPage = page,
+            key = key,
+            state = searchPagingState,
+            requestForPage = requestForPage,
+            blacklist = blacklist,
+            maxScanPages = maxScanPages,
+        )
     }
 
     // Manga details
@@ -149,8 +212,9 @@ abstract class WNACG :
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun MangasPage.filterBlockedTitles(): MangasPage {
-        val blacklist = preferences.titleBlacklist
+    private fun MangasPage.filterBlockedTitles(
+        blacklist: List<String> = preferences.titleBlacklist,
+    ): MangasPage {
         if (blacklist.isEmpty()) return this
 
         val filteredMangas = mangas.filterNot { manga ->
@@ -158,6 +222,65 @@ abstract class WNACG :
         }
         return MangasPage(filteredMangas, hasNextPage)
     }
+
+    private fun fetchFilteredMangaPage(
+        appPage: Int,
+        key: String,
+        state: FilterPagingState,
+        requestForPage: (Int) -> Request,
+        blacklist: List<String>,
+        maxScanPages: Int,
+    ): Observable<MangasPage> {
+        val snapshot = state.snapshot(appPage, key)
+        val sourcePage = appPage + snapshot.offset
+        return scanFilteredMangaPages(
+            appPage = appPage,
+            sourcePage = sourcePage,
+            state = state,
+            key = key,
+            generation = snapshot.generation,
+            requestForPage = requestForPage,
+            blacklist = blacklist,
+            maxScanPages = maxScanPages,
+        )
+    }
+
+    private fun scanFilteredMangaPages(
+        appPage: Int,
+        sourcePage: Int,
+        state: FilterPagingState,
+        key: String,
+        generation: Int,
+        requestForPage: (Int) -> Request,
+        blacklist: List<String>,
+        maxScanPages: Int,
+        pagesScanned: Int = 1,
+    ): Observable<MangasPage> = client.newCall(requestForPage(sourcePage))
+        .asObservableSuccess()
+        .map { response -> mangaListParse(response).filterBlockedTitles(blacklist) }
+        .flatMap { page ->
+            when {
+                page.mangas.isNotEmpty() -> {
+                    state.updateOffset(key, generation, sourcePage - appPage)
+                    Observable.just(page)
+                }
+                !page.hasNextPage -> Observable.just(MangasPage(emptyList(), false))
+                pagesScanned >= maxScanPages -> Observable.error(
+                    Exception("连续 $maxScanPages 页均无可显示结果，请调整黑名单或扫描页数后刷新。"),
+                )
+                else -> scanFilteredMangaPages(
+                    appPage = appPage,
+                    sourcePage = sourcePage + 1,
+                    state = state,
+                    key = key,
+                    generation = generation,
+                    requestForPage = requestForPage,
+                    blacklist = blacklist,
+                    maxScanPages = maxScanPages,
+                    pagesScanned = pagesScanned + 1,
+                )
+            }
+        }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst(".title > a")!!
@@ -168,5 +291,39 @@ abstract class WNACG :
 
     companion object {
         private val pageImageRegex = Regex("""//\S*(jpeg|jpg|png|webp|gif)""")
+    }
+}
+
+private class PagingSnapshot(
+    val generation: Int,
+    val offset: Int,
+)
+
+private class FilterPagingState {
+    private var key: String? = null
+    private var generation = 0
+    private var offset = 0
+
+    @Synchronized
+    fun snapshot(appPage: Int, key: String): PagingSnapshot {
+        if (appPage == 1 || this.key != key) {
+            this.key = key
+            generation++
+            offset = 0
+        }
+        return PagingSnapshot(generation, offset)
+    }
+
+    @Synchronized
+    fun reset() {
+        key = null
+        generation++
+        offset = 0
+    }
+
+    @Synchronized
+    fun updateOffset(key: String, generation: Int, offset: Int) {
+        if (this.key != key || this.generation != generation) return
+        this.offset = offset
     }
 }
