@@ -86,10 +86,8 @@ abstract class MangaKatana :
     // Search
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val filterList = if (filters.isEmpty()) getFilterList(null) else filters
-
         val url = if (query.isNotEmpty()) {
-            val type = filterList.firstInstance<TypeFilter>()
+            val type = filters.firstInstance<TypeFilter>()
             "$baseUrl/page/$page".toHttpUrl().newBuilder()
                 .addQueryParameter("search", query)
                 .addQueryParameter("search_by", type.toUriPart())
@@ -97,7 +95,7 @@ abstract class MangaKatana :
         } else {
             "$baseUrl/manga/page/$page".toHttpUrl().newBuilder().apply {
                 addQueryParameter("filter", "1")
-                filterList.forEach { filter ->
+                filters.forEach { filter ->
                     when (filter) {
                         is GenreList -> {
                             val includedGenres = mutableListOf<String>()
