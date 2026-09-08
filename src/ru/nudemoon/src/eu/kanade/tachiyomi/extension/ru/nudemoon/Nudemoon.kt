@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.nudemoon
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
