@@ -59,13 +59,11 @@ abstract class PhiliaScans :
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        getSearchMangaList(page, "", FilterList(SortFilter().apply { state = 2 }, OrderFilter()))
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter().apply { state = 2 }, OrderFilter()))
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        getSearchMangaList(page, "", FilterList(SortFilter(), OrderFilter()))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(), OrderFilter()))
 
     // ============================== Search ===============================
 
