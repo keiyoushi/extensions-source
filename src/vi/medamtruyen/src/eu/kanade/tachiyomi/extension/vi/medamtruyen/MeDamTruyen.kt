@@ -351,52 +351,34 @@ abstract class MeDamTruyen : KeiSource() {
 
         var lockForm = document.selectFirst("form.post-password-form")
         if (lockForm != null) {
+            val hint = extractHintText(document)
+            val password = promptForPassword(chapter.name, hint)
             val postAction = lockForm.absUrl("action").ifEmpty {
                 "$baseUrl/wp-login.php?action=postpass"
             }
+            val formBody = FormBody.Builder()
+                .add("post_password", password)
+                .add("redirect_to", chapterUrl)
+                .add("Submit", "Nhập")
+                .build()
 
-            suspend fun submitPassword(password: String): Pair<String, Document> {
-                val formBody = FormBody.Builder()
-                    .add("post_password", password)
-                    .add("redirect_to", chapterUrl)
-                    .add("Submit", "Nhập")
-                    .build()
+            val postHeaders = headers.newBuilder()
+                .set("Referer", chapterUrl)
+                .build()
 
-                val postHeaders = headers.newBuilder()
-                    .set("Referer", chapterUrl)
-                    .build()
+            val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
+            val responseUrl = postResponse.request.url.toString()
+            val responseBody = postResponse.body.string()
 
-                val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
-                val responseUrl = postResponse.request.url.toString()
-                val responseBody = postResponse.body.string()
-
-                val resHtml = if (postResponse.isSuccessful && !responseUrl.contains("wp-login.php")) {
-                    responseBody
-                } else {
-                    client.get(chapterUrl).body.string()
-                }
-
-                return resHtml to Jsoup.parse(resHtml, chapterUrl)
+            html = if (postResponse.isSuccessful && !responseUrl.contains("wp-login.php")) {
+                responseBody
+            } else {
+                client.get(chapterUrl).body.string()
             }
 
-            val hintPassword = extractHintPassword(document)
-            if (!hintPassword.isNullOrBlank()) {
-                val (unlockedHtml, unlockedDoc) = submitPassword(hintPassword)
-                if (unlockedDoc.selectFirst("form.post-password-form") == null) {
-                    html = unlockedHtml
-                    document = unlockedDoc
-                    lockForm = null
-                }
-            }
-
-            if (lockForm != null) {
-                val password = promptForPassword(chapter.name)
-                val (unlockedHtml, unlockedDoc) = submitPassword(password)
-                html = unlockedHtml
-                document = unlockedDoc
-                if (document.selectFirst("form.post-password-form") != null) {
-                    throw Exception("Mật khẩu không chính xác")
-                }
+            document = Jsoup.parse(html, chapterUrl)
+            if (document.selectFirst("form.post-password-form") != null) {
+                throw Exception("Mật khẩu không chính xác")
             }
         }
 
@@ -408,14 +390,14 @@ abstract class MeDamTruyen : KeiSource() {
         }
     }
 
-    private fun extractHintPassword(document: Document): String? {
-        val text = document.selectFirst("p:contains(Gợi ý)")?.text()
+    private fun extractHintText(document: Document): String? {
+        val raw = document.selectFirst("p:contains(Gợi ý)")?.text()
             ?: document.select("*:containsOwn(Gợi ý)").firstOrNull()?.parent()?.text()
             ?: return null
-        return passwordHintRegex.find(text)?.groupValues?.get(1)
+        return raw.replaceFirst(hintColonRegex, "$1\n").trim()
     }
 
-    private suspend fun promptForPassword(chapterTitle: String): String {
+    private suspend fun promptForPassword(chapterTitle: String, hint: String? = null): String {
         val activity = currentActivity?.get()
             ?: throw Exception(passwordWebviewMessage)
 
@@ -434,9 +416,15 @@ abstract class MeDamTruyen : KeiSource() {
                     addView(input)
                 }
 
+                val message = if (!hint.isNullOrBlank()) {
+                    "Chương này yêu cầu mật khẩu\n\n$hint"
+                } else {
+                    "Chương này yêu cầu mật khẩu"
+                }
+
                 dialog = AlertDialog.Builder(activity)
                     .setTitle(chapterTitle)
-                    .setMessage("Chương này yêu cầu mật khẩu")
+                    .setMessage(message)
                     .setView(container)
                     .setPositiveButton("Mở khóa") { _, _ ->
                         val text = input.text.toString().trim()
@@ -536,5 +524,5 @@ abstract class MeDamTruyen : KeiSource() {
     private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
     private val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
     private val passwordWebviewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
-    private val passwordHintRegex = Regex("""Gợi\s*ý.*:\s*([a-zA-Z0-9_-]+)""", RegexOption.IGNORE_CASE)
+    private val hintColonRegex = Regex("""(Gợi\s*ý\s*:?)\s*""", RegexOption.IGNORE_CASE)
 }
