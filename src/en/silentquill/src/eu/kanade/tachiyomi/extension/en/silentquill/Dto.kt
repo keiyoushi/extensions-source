@@ -17,9 +17,7 @@ class ChapterResponse(
     fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
         url = id.toString()
         name = "Chapter $chapterNo"
-        chapter_number = CHAPTER_NUMBER_REGEX.find(chapterNo)?.let {
-            it.groupValues[1].toFloat() + if (it.groups[2] != null) 0.005f else 0f
-        } ?: -1f
+        chapter_number = CHAPTER_NUMBER_REGEX.find(chapterNo)?.value?.toFloat() ?: -1f
         date_upload = timeAgo.toRelativeDate()
         memo = buildJsonObject {
             put("slug", slug)
@@ -28,7 +26,7 @@ class ChapterResponse(
     }
 }
 
-private val CHAPTER_NUMBER_REGEX = Regex("""^(\d+(?:\.\d+)?)\s*(\S.*)?$""")
+private val CHAPTER_NUMBER_REGEX = Regex("""^\d+(?:\.\d+)?""")
 private val RELATIVE_DATE_REGEX = Regex("""(\d+)\s+(minute|hour|day|week|month|year)s?""")
 
 private fun String.toRelativeDate(): Long {
