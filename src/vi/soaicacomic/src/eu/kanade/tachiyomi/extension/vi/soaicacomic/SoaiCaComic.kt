@@ -27,7 +27,6 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
@@ -52,26 +51,29 @@ abstract class SoaiCaComic : KeiSource() {
     private var currentActivity: WeakReference<Activity>? = null
 
     init {
-        applicationContext.registerActivityLifecycleCallbacks(
-            object : Application.ActivityLifecycleCallbacks {
-                override fun onActivityResumed(a: Activity) {
-                    currentActivity = WeakReference(a)
-                }
+        try {
+            applicationContext.registerActivityLifecycleCallbacks(
+                object : Application.ActivityLifecycleCallbacks {
+                    override fun onActivityResumed(a: Activity) {
+                        currentActivity = WeakReference(a)
+                    }
 
-                override fun onActivityPaused(a: Activity) {
-                    if (currentActivity?.get() === a) currentActivity = null
-                }
+                    override fun onActivityPaused(a: Activity) {
+                        if (currentActivity?.get() === a) currentActivity = null
+                    }
 
-                override fun onActivityDestroyed(a: Activity) {
-                    if (currentActivity?.get() === a) currentActivity = null
-                }
+                    override fun onActivityDestroyed(a: Activity) {
+                        if (currentActivity?.get() === a) currentActivity = null
+                    }
 
-                override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-                override fun onActivityStarted(activity: Activity) = Unit
-                override fun onActivityStopped(activity: Activity) = Unit
-                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-            },
-        )
+                    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+                    override fun onActivityStarted(activity: Activity) = Unit
+                    override fun onActivityStopped(activity: Activity) = Unit
+                    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+                },
+            )
+        } catch (_: Throwable) {
+        }
     }
 
     private val thumbnailFallbackInterceptor = Interceptor { chain ->
@@ -424,15 +426,7 @@ abstract class SoaiCaComic : KeiSource() {
 
     private suspend fun promptForPassword(chapterTitle: String): String {
         val activity = currentActivity?.get()
-            ?: run {
-                for (i in 0 until 10) {
-                    delay(100)
-                    val act = currentActivity?.get()
-                    if (act != null) return@run act
-                }
-                null
-            }
-            ?: throw Exception("Không tìm thấy màn hình hiển thị để nhập mật khẩu")
+            ?: throw Exception(passwordWebviewMessage)
 
         val deferred = CompletableDeferred<String>()
         var dialog: AlertDialog? = null
@@ -525,4 +519,5 @@ abstract class SoaiCaComic : KeiSource() {
     private val chapterWordRegex = Regex("chap", RegexOption.IGNORE_CASE)
     private val multiSpaceRegex = Regex("\\s+")
     private val thumbnailFallbackFragmentPrefix = "fallback-url:"
+    private val passwordWebviewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
 }
