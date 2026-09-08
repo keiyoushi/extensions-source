@@ -11,4 +11,5 @@ abstract class MeHentai : ManhwaZ() {
     override val mangaDetailsStatusHeading = "Trạng thái"
 
     override val searchPath = "tim-kiem"
+    override fun popularMangaSelector() = ".main-content .item"
 }

@@ -5,5 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class KSGroupScans : Madara() {
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
 }

@@ -12,7 +12,11 @@ import java.util.Calendar
 
 const val MANGA_ID_MEMO = "mangaId"
 const val CHAPTER_ID_MEMO = "chapterId"
+const val CHAPTER_VOTES_MEMO = "votes"
+const val CHAPTER_OFFICIAL_MEMO = "official"
+const val CHAPTER_GROUP_ID_MEMO = "groupId"
 const val CHAPTER_LIST_DEDUPLICATED_MEMO = "chapterListDeduplicated"
+const val CHAPTER_LIST_BLACKLIST_MEMO = "chapterListBlacklist"
 
 @Serializable
 class Term(
@@ -273,7 +277,12 @@ class Chapter(
                 "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
             }
         }
-        memo = buildJsonObject { put(CHAPTER_ID_MEMO, id) }
+        memo = buildJsonObject {
+            put(CHAPTER_ID_MEMO, id)
+            put(CHAPTER_VOTES_MEMO, votes)
+            put(CHAPTER_OFFICIAL_MEMO, isOfficial)
+            group?.id?.let { put(CHAPTER_GROUP_ID_MEMO, it) }
+        }
         name = buildString {
             append("Chapter ")
             append(this@Chapter.number.toString().removeSuffix(".0"))

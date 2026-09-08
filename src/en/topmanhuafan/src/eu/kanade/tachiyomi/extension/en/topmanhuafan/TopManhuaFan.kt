@@ -1,29 +1,19 @@
 package eu.kanade.tachiyomi.extension.en.topmanhuafan
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import okhttp3.Request
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class TopManhuaFan : Madara() {
-    override val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("en"))
+abstract class TopManhuaFan : MadaraNoAjax() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH)
     override val mangaSubString = "manhua"
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = false
 
     override fun chapterListSelector() = "div.wp-manga-chapter"
 
-    // Madara sends the whole URL, we don't want that
     override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
-
-    // It tries to parse it as a relative date, so it never tries to use dateFormat
-    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
-        date_upload = parseChapterDate(element.selectFirst(chapterDateSelector())?.text())
-    }
 }

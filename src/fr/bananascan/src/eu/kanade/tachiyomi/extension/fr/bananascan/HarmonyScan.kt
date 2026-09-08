@@ -4,4 +4,6 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
 
 @Source
-abstract class HarmonyScan : Madara()
+abstract class HarmonyScan : Madara() {
+    override val chapterMode = ChapterMode.MangaAjax
+}

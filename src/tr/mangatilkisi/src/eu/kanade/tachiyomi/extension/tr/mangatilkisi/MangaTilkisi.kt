@@ -1,24 +1,23 @@
 package eu.kanade.tachiyomi.extension.tr.mangatilkisi
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.post
+import keiyoushi.utils.asJsoup
 import okhttp3.FormBody
-import okhttp3.Request
-import java.text.SimpleDateFormat
+import org.jsoup.nodes.Document
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class MangaTilkisi : Madara() {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr"))
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val useNewChapterEndpoint = true
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.forLanguageTag("tr"))
+    override val chapterMode = ChapterMode.MangaAjax
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun fetchChapterDocument(chapterUrl: String): Document {
         val payload = FormBody.Builder()
             .add("verified", "1")
             .build()
-        return POST(chapter.url, headers, payload)
+        return client.post(chapterUrl, headers, payload).use { it.asJsoup() }
     }
 }

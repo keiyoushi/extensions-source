@@ -1,14 +1,14 @@
 package eu.kanade.tachiyomi.extension.en.manhwacomics
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraBase.ChapterMode
 import keiyoushi.annotation.Source
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class ManhwaComics : Madara() {
-    override val dateFormat = SimpleDateFormat("d MMM yyyy", Locale.US)
     override val mangaSubString = "manhwa"
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
 }

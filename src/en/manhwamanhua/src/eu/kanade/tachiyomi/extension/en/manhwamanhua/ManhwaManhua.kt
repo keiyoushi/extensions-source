@@ -5,6 +5,6 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class ManhwaManhua : Madara() {
-    override val useNewChapterEndpoint = true
     override val filterNonMangaItems = false
+    override val chapterMode = ChapterMode.MangaAjax
 }

@@ -1,6 +1,5 @@
 package keiyoushi.utils
 
-import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -81,6 +80,7 @@ private fun resolveNextJsRefs(
                 str[1] == 'n' -> JsonPrimitive(str.substring(2)) // BigInt -> strip '$n' for ReactFlightBigInt
                 str[1] == 'Q' -> resolveMapRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 str[1] == 'W' -> resolveSetRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
+                str[1] == 'L' -> resolveModelRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 // RSC reference (`$<id>` or `$<id>:<path>`) -> resolve via chunk/model cache.
                 else -> resolveModelRef(str.substring(1), chunkCache, modelCache, resolving) ?: element
             }
@@ -512,10 +512,12 @@ fun <T> Response.extractNextJs(
     deserializer: DeserializationStrategy<T>,
 ): T? {
     val contentType = header("Content-Type") ?: ""
-    return when {
-        "text/x-component" in contentType -> body.string().extractNextJsRsc(predicate, deserializer)
-        "text/html" in contentType -> asJsoup().extractNextJs(predicate, deserializer)
-        else -> error("Unsupported Content-Type for Next.js extraction: $contentType")
+    return use {
+        when {
+            "text/x-component" in contentType -> body.string().extractNextJsRsc(predicate, deserializer)
+            "text/html" in contentType -> asJsoup().extractNextJs(predicate, deserializer)
+            else -> error("Unsupported Content-Type for Next.js extraction: $contentType")
+        }
     }
 }
 

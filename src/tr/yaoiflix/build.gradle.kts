@@ -8,7 +8,7 @@ keiyoushi {
     name = "Yaoi Flix"
     versionCode = 6
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {

@@ -2,37 +2,41 @@ package eu.kanade.tachiyomi.extension.en.vgperson
 
 import android.os.Build.VERSION
 import eu.kanade.tachiyomi.AppInfo
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Response
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
-import rx.Observable
 
 @Source
-abstract class Vgperson : HttpSource() {
+abstract class Vgperson : KeiSource() {
 
     override val supportsLatest = false
+
+    private val homeUrl = "$baseUrl/other/mangaviewer.php"
 
     private val userAgent =
         "Mozilla/5.0 (Android ${VERSION.RELEASE}; Mobile) Tachiyomi/${AppInfo.getVersionName()}"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
-        .add("User-Agent", userAgent)
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("User-Agent", userAgent)
+    }
 
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
+    override fun getHomeUrl(): String = homeUrl
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(homeUrl).asJsoup()
+
         val mangas = document.select(".content a[href^=?m]").map { element ->
             SManga.create().apply {
                 title = element.text()
@@ -43,9 +47,15 @@ abstract class Vgperson : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(homeUrl + manga.url).asJsoup()
+
+        val manga = SManga.create().apply {
             title = document.selectFirst(".title")!!.text()
             thumbnail_url = getCover(title)
             status = when (document.select("div.content .complete").text()) {
@@ -69,11 +79,8 @@ abstract class Vgperson : HttpSource() {
                 }
             }
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(".chaptertable tbody tr").map { element ->
+        val chapters = document.select(".chaptertable tbody tr").map { element ->
             SChapter.create().apply {
                 element.selectFirst("td > a")!!.let {
                     name = it.text()
@@ -85,7 +92,7 @@ abstract class Vgperson : HttpSource() {
                     name += " - ${it.text().substringAfter("- ")}"
                 }
 
-                val fullUrl = "$baseUrl$url".toHttpUrl()
+                val fullUrl = "$homeUrl$url".toHttpUrl()
 
                 // hardcode special chapter numbers for Three Days of Happiness
                 chapter_number = fullUrl.queryParameter("c")?.toFloat()
@@ -93,24 +100,43 @@ abstract class Vgperson : HttpSource() {
                 scanlator = "vgperson"
             }
         }.reversed()
+
+        return SMangaUpdate(manga, chapters)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override fun getMangaUrl(manga: SManga): String = homeUrl + manga.url
+
+    override fun getChapterUrl(chapter: SChapter): String = homeUrl + chapter.url
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(homeUrl + chapter.url).asJsoup()
+
         return document.select("img").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src"))
         }
     }
 
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> = fetchPopularManga(1).map { mp ->
-        MangasPage(
-            mp.mangas.filter { it.title.contains(query, ignoreCase = true) },
-            false,
-        )
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(
+        mangas = getPopularManga(1).mangas.filter { it.title.contains(query, true) },
+        false,
+    )
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[1] != "mangaviewer.php" || !url.queryParameterNames.contains("m")) {
+            return null
+        }
+
+        val slug = "?m=${url.queryParameter("m")}"
+        val manga = SManga.create().apply {
+            this.url = "?m=${url.queryParameter("m")}"
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                this.url = slug
+                initialized = true
+            }
     }
 
     // get known manga covers from imgur
@@ -121,13 +147,5 @@ abstract class Vgperson : HttpSource() {
         else -> null
     }?.let { "https://i.imgur.com/$it" }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 }

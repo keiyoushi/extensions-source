@@ -4,9 +4,9 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Request
@@ -38,7 +38,7 @@ abstract class MonteTai : Madara() {
         val script = document.selectFirst("#mt-header-js-js-extra")!!.data()
 
         val nonce = NONCE_REGEX.find(script)!!.groupValues.last()
-        val mangaId = document.selectFirst("a[data-post]")!!.attr("data-post")
+        val mangaId = document.selectFirst("[data-manga-id]")!!.attr("data-manga-id")
 
         val body = FormBody.Builder()
             .add("action", "mt_get_summary_chapters")

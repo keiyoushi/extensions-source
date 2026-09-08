@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "YuriGarden"
-    versionCode = 11
+    versionCode = 12
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

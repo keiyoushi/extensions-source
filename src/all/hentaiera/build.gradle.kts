@@ -8,7 +8,7 @@ keiyoushi {
     name = "HentaiEra"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "galleryadults"
 
     listOf("en", "ja", "es", "fr", "ko", "de", "ru", "all").forEach { language ->

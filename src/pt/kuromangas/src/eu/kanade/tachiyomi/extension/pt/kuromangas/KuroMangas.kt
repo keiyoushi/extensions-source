@@ -42,7 +42,7 @@ abstract class KuroMangas :
 
     private val cdnUrl = "https://cdn.kuromangas.com"
 
-    private val decryptor = KuroMangasDecryptor(baseUrl, network.client)
+    private val decryptor by lazy { KuroMangasDecryptor(baseUrl, network.client, headers, ::relogin) }
 
     override val client by lazy {
 
@@ -207,7 +207,10 @@ abstract class KuroMangas :
 
     private fun checkLogin(): Boolean {
         if (hasSession()) return true
+        return relogin()
+    }
 
+    private fun relogin(): Boolean {
         val email = preferences.getString(PREF_EMAIL, "") ?: ""
         val password = preferences.getString(PREF_PASSWORD, "") ?: ""
         if (email.isEmpty() || password.isEmpty()) {
@@ -218,10 +221,9 @@ abstract class KuroMangas :
         return hasSession()
     }
 
-    // The site rejects requests carrying a session without its matching nonce.
-    private fun hasSession(): Boolean = client.getCookie(baseUrl, SESSION_COOKIE) != null && client.getCookie(baseUrl, NONCE_COOKIE) != null
+    private fun hasSession(): Boolean = client.getCookie(baseUrl, SESSION_COOKIE) != null
 
-    // Implicit set-cookie: kuro_session + _kn
+    // Implicit set-cookie: kuro_session
     private fun login(email: String, password: String) {
         val payload = buildJsonObject {
             put("email", email)

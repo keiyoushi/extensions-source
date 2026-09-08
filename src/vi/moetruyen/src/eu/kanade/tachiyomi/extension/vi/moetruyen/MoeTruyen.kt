@@ -7,12 +7,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -31,6 +31,7 @@ import okio.source
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.ByteArrayInputStream
+import java.net.URLDecoder
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.LocalDate
@@ -286,11 +287,9 @@ abstract class MoeTruyen : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
-        val images = document.select("img.page-media")
-            .filterNot { element ->
-                element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
-            }
+        val chapterUrl = "$baseUrl${chapter.url}"
+        val document = client.get(chapterUrl).asJsoup()
+        val images = readerImages(document)
         val readerPages = document.selectFirst("[data-reader-lazy-pages]")
 
         val accessUrl = images.firstOrNull()?.attr("data-imgx-access-url")?.ifBlank { null }
@@ -298,14 +297,10 @@ abstract class MoeTruyen : KeiSource() {
 
         if (accessUrl != null) {
             val fullAccessUrl = if (accessUrl.startsWith("http")) accessUrl else "$baseUrl$accessUrl"
-            val proofToken = readerPages
-                ?.attr("data-reader-imgx-proof-token")
-                ?.ifBlank { null }
-
-            return fetchPagesWithGrants(fullAccessUrl, images.size, proofToken)
+            return fetchPagesWithGrants(fullAccessUrl, images, readerPages)
         }
 
-        return images
+        val pages = images
             .asSequence()
             .map { element ->
                 element.absUrl("data-src").ifEmpty { element.absUrl("src") }
@@ -318,33 +313,56 @@ abstract class MoeTruyen : KeiSource() {
             .mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
             }
+        return pages
     }
 
-    private suspend fun fetchPagesWithGrants(accessUrl: String, pageCount: Int, proofToken: String?): List<Page> {
-        val pages = mutableListOf<Page>()
-        val batchSize = 5
+    private fun readerImages(document: Document): List<Element> = document.select("img.page-media")
+        .drop(1)
+        .filterNot { element ->
+            element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
+        }
 
-        for (start in 0 until pageCount step batchSize) {
-            val end = minOf(start + batchSize, pageCount)
-            val indices = (start until end).toList()
+    private suspend fun fetchPagesWithGrants(
+        accessUrl: String,
+        images: List<Element>,
+        readerPages: Element?,
+    ): List<Page> {
+        val initialEntries = readerPages?.attr("data-reader-imgx-initial-pages")
+            ?.ifBlank { null }
+            ?.let { encoded ->
+                runCatching {
+                    URLDecoder.decode(encoded, Charsets.UTF_8.name()).parseAs<List<PageAccessEntry>>()
+                }.getOrDefault(emptyList())
+            }
+            .orEmpty()
+        initialEntries.forEach { entry ->
+            if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
+                imgxGrants[entry.downloadUrl] = entry
+            }
+        }
+
+        val pageIndexes = images.mapNotNull { it.attr("data-imgx-page-index").toIntOrNull() }.distinct()
+        val initialIndices = initialEntries.mapTo(mutableSetOf()) { it.pageIndex }
+        val pages = initialEntries.map { Page(it.pageIndex, imageUrl = it.downloadUrl) }.toMutableList()
+        val proofToken = readerPages?.attr("data-reader-imgx-proof-token")?.ifBlank { null }
+        val remainingIndices = pageIndexes.filterNot { it in initialIndices }
+        val accessHeaders = headers.newBuilder().set("Accept", "application/json").build()
+
+        for (start in remainingIndices.indices step PAGE_ACCESS_BATCH_SIZE) {
+            val indices = remainingIndices.subList(start, minOf(start + PAGE_ACCESS_BATCH_SIZE, remainingIndices.size))
             val proof = proofToken?.let { createPageAccessProof(accessUrl, indices, it) }
-            val body = PageAccessRequest(pageIndexes = indices, pageAccessProof = proof).toJsonRequestBody()
-            val accessHeaders = headers.newBuilder()
-                .set("Accept", "application/json")
-                .apply {
-                    proof?.let {
-                        set("X-IMGX-Reader-Proof", it.proof)
-                        set("X-IMGX-Reader-Proof-Version", it.version)
-                    }
+            val requestBody = PageAccessRequest(pageIndexes = indices, pageAccessProof = proof).toJsonRequestBody()
+            val requestHeaders = accessHeaders.newBuilder().apply {
+                proof?.let {
+                    set("X-IMGX-Reader-Proof", it.proof)
+                    set("X-IMGX-Reader-Proof-Version", it.version)
                 }
-                .build()
-
-            val pageAccess = client.post(accessUrl, accessHeaders, body).parseAs<PageAccessResponse>()
-
-            for (entry in pageAccess.pages) {
+            }.build()
+            val response = client.post(accessUrl, requestHeaders, requestBody).parseAs<PageAccessResponse>()
+            response.pages.forEach { entry ->
                 if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
                     imgxGrants[entry.downloadUrl] = entry
-                    pages.add(Page(entry.pageIndex, imageUrl = entry.downloadUrl))
+                    pages += Page(entry.pageIndex, imageUrl = entry.downloadUrl)
                 }
             }
         }
@@ -478,5 +496,6 @@ abstract class MoeTruyen : KeiSource() {
 
     private companion object {
         const val IMGX_GRANT_CACHE_SIZE = 500
+        const val PAGE_ACCESS_BATCH_SIZE = 10
     }
 }

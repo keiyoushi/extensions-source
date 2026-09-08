@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Siikomik"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "id"
-        baseUrl = "https://siikomik.net"
+        baseUrl = "https://siikomik.id"
         versionId = 3
     }
 }

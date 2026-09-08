@@ -6,10 +6,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -223,20 +223,27 @@ abstract class Origines : KeiSource() {
             SChapter.create().apply {
                 url = link.attr("href").toChapterSlug()
                 name = element.selectFirst("span.ori-chl-nom")?.text() ?: link.text()
-                date_upload = parseChapterDate(element.selectFirst("span.ori-chl-date")?.text())
+                date_upload = parseChapterDate(element.selectFirst("span.ori-chl-date")?.attr("title"))
             }
         }
     }
 
     /**
-     * Dates read `8 Août 2026`: capitalized, shortened month names no locale pattern parses.
+     * Dates can read `8 Août 2026` or `8 Août`. The latter uses the most recent matching year.
      */
     private fun parseChapterDate(date: String?): Long {
         val (day, month, year) = DATE_REGEX.find(date.orEmpty())?.destructured ?: return 0L
         val monthNumber = monthNumber(month) ?: return 0L
+        val today = LocalDate.now(TIME_ZONE)
 
         return runCatching {
-            LocalDate.of(year.toInt(), monthNumber, day.toInt())
+            var chapterDate = LocalDate.of(year.toIntOrNull() ?: today.year, monthNumber, day.toInt())
+
+            if (year.isBlank() && chapterDate.isAfter(today)) {
+                chapterDate = chapterDate.minusYears(1)
+            }
+
+            chapterDate
                 .atStartOfDay(TIME_ZONE)
                 .toInstant()
                 .toEpochMilli()
@@ -268,13 +275,17 @@ abstract class Origines : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get("$baseUrl/$mangaPath/${chapter.url.toChapterSlug()}/").asJsoup()
 
-        return document.select("div.reading-content img.wp-manga-chapter-img").mapIndexed { index, image ->
-            Page(index, imageUrl = image.attr("src").trim())
+        return document.select("div.reading-content img.wp-manga-chapter-img").mapIndexed { index, img ->
+            val image = when {
+                img.hasAttr("data-src") -> img.absUrl("data-src").trim()
+                else -> img.absUrl("src").trim()
+            }
+            Page(index, imageUrl = image)
         }
     }
 
     companion object {
-        private val DATE_REGEX = Regex("""(\d{1,2})\s+(\p{L}+)\.?\s+(\d{4})""")
+        private val DATE_REGEX = Regex("""(\d{1,2})\s+(\p{L}+)\.?(?:\s+(\d{4}))?""")
         private val TIME_ZONE: ZoneId = ZoneId.of("Europe/Paris")
     }
 }

@@ -4,17 +4,14 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class DragonTea : Madara() {
-    override val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US)
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1)
-        .build()
-
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.US)
     override val mangaSubString = "novel"
+    override val chapterMode = ChapterMode.MangaAjax
 
-    override val useNewChapterEndpoint = true
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1) { !it.encodedPath.startsWith("/wp-content/uploads/") }
 }

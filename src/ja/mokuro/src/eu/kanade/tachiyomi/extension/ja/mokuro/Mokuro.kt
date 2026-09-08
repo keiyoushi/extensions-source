@@ -1,84 +1,187 @@
 package eu.kanade.tachiyomi.extension.ja.mokuro
 
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import keiyoushi.zip.zipDirectory
-import okhttp3.Headers
+import keiyoushi.zip.zipDirectoryAsync
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 @Source
 abstract class Mokuro :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = false
-
-    private val apiBaseUrl = "$baseUrl/catalog/api"
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(CbzInterceptor())
-        .build()
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/catalog")
-
     private val preferences by getPreferencesLazy()
+
+    private val titleLang: String
+        get() = preferences.getString(TITLE_LANG_PREF, TITLE_LANG_DEFAULT) ?: TITLE_LANG_DEFAULT
+
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(CbzInterceptor())
+    }
 
     // ===============================
     // Popular
     // ===============================
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = getLibrary().map { library ->
-        MangasPage(library.series.map { it.toSManga(apiBaseUrl, useLatestVolumeCover) }, false)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val catalog = getCatalog()
+        val pref = titleLang
+        return MangasPage(catalog.series.map { it.toSManga(pref) }, false)
+    }
+
+    // ===============================
+    // Latest
+    // ===============================
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val catalog = getCatalog()
+        val pref = titleLang
+        val mangas = catalog.series
+            .sortedByDescending { it.updatedAt.orEmpty() }
+            .map { it.toSManga(pref) }
+        return MangasPage(mangas, false)
     }
 
     // ===============================
     // Search
     // ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = getLibrary().map { library ->
-        val mangas = library.series
-            .filter { it.name.contains(query.trim(), ignoreCase = true) }
-            .map { it.toSManga(apiBaseUrl, useLatestVolumeCover) }
-        MangasPage(mangas, false)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val catalog = getCatalog()
+        val pref = titleLang
+        var sequence = catalog.series.asSequence()
+
+        if (query.isNotBlank()) {
+            sequence = sequence.filter { it.matches(query, pref) }
+        }
+
+        filters.forEach { filter ->
+            when (filter) {
+                is TagFilter -> {
+                    val selected = filter.values[filter.state]
+                    if (selected != "All") {
+                        sequence = sequence.filter { it.tag?.contains(selected, ignoreCase = true) == true }
+                    }
+                }
+                is SortFilter -> {
+                    filter.state?.let { sort ->
+                        sequence = if (sort.ascending) {
+                            when (sort.index) {
+                                0 -> sequence.sortedBy { it.displayTitle(pref).lowercase() }
+                                1 -> sequence.sortedBy { it.updatedAt.orEmpty() }
+                                else -> sequence
+                            }
+                        } else {
+                            when (sort.index) {
+                                0 -> sequence.sortedByDescending { it.displayTitle(pref).lowercase() }
+                                1 -> sequence.sortedByDescending { it.updatedAt.orEmpty() }
+                                else -> sequence.toList().asReversed().asSequence()
+                            }
+                        }
+                    }
+                }
+                else -> {}
+            }
+        }
+
+        return MangasPage(sequence.map { it.toSManga(pref) }.toList(), false)
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        SortFilter(),
+        TagFilter(),
+    )
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val host = url.host
+        val seriesTitle: String? = when {
+            host == baseUrl.toHttpUrl().host -> {
+                url.fragment?.takeIf { it.isNotEmpty() }
+                    ?: if (url.pathSegments.firstOrNull() == "mokuro-reader") url.pathSegments.getOrNull(1) else null
+            }
+            host == "reader.mokuro.app" -> {
+                val fragment = url.fragment ?: ""
+                val cbzParam = fragment.substringAfter("cbz=", "").substringBefore("&").takeIf { it.isNotEmpty() }
+                    ?: url.queryParameter("cbz")
+                cbzParam?.let { raw ->
+                    val decoded = runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
+                    val cbzHttpUrl = decoded.toHttpUrlOrNull()
+                    if (cbzHttpUrl != null && cbzHttpUrl.pathSegments.firstOrNull() == "mokuro-reader") {
+                        cbzHttpUrl.pathSegments.getOrNull(1)
+                    } else {
+                        null
+                    }
+                }
+            }
+            else -> null
+        }
+
+        if (seriesTitle.isNullOrEmpty()) return null
+
+        val decodedTitle = runCatching { URLDecoder.decode(seriesTitle, "UTF-8") }.getOrDefault(seriesTitle)
+        val catalog = getCatalog()
+        val entry = catalog.series.find {
+            it.seriesTitle.equals(seriesTitle, ignoreCase = true) ||
+                it.seriesTitle.equals(decodedTitle, ignoreCase = true)
+        } ?: return null
+
+        return entry.toSManga(titleLang)
     }
 
     // ===============================
-    // Details
+    // Details & Chapters
     // ===============================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = getLibrary().map { library ->
-        library.series.find { it.path == manga.url }?.toSManga(apiBaseUrl, useLatestVolumeCover)
-            ?: throw Exception("Series not found")
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedManga = if (fetchDetails) {
+            val catalog = getCatalog()
+            val catalogEntry = catalog.series.find { it.seriesTitle == manga.url }
+                ?: throw Exception("Series not found")
+
+            manga.apply {
+                catalogEntry.fillDetails(this, titleLang)
+            }
+        } else {
+            manga
+        }
+
+        val chapterList = if (fetchChapters) {
+            val detail = getSeriesDetail(manga.url)
+            detail.volumes.asReversed().map { it.toSChapter(detail.seriesTitle) }
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(updatedManga, chapterList)
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/catalog#${manga.url}"
-
-    // ===============================
-    // Chapters
-    // ===============================
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = getLibrary().map { library ->
-        val series = library.series.find { it.path == manga.url }
-            ?: throw Exception("Series not found")
-
-        series.volumes.asReversed().map { it.toSChapter(series) }
+    override fun getMangaUrl(manga: SManga): String {
+        val encoded = URLEncoder.encode(manga.url, "UTF-8").replace("+", "%20")
+        return "$baseUrl/catalog#$encoded"
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -90,7 +193,7 @@ abstract class Mokuro :
             .build()
             .toString()
 
-        val encodedUrl = java.net.URLEncoder.encode(cbzUrl, "UTF-8")
+        val encodedUrl = URLEncoder.encode(cbzUrl, "UTF-8")
 
         return "https://reader.mokuro.app/#/upload?cbz=$encodedUrl"
     }
@@ -99,114 +202,71 @@ abstract class Mokuro :
     // Pages
     // ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (seriesPath, volumeName) = chapter.url.split("|", limit = 2)
         val url = "$baseUrl/mokuro-reader".toHttpUrl().newBuilder()
             .addPathSegment(seriesPath)
             .addPathSegment("$volumeName.mokuro")
             .build()
-        return GET(url, headers)
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val mokuro = response.parseAs<MokuroDto>()
-        val url = response.request.url
-        val cbzUrl = url.newBuilder()
-            .encodedPath(url.encodedPath.removeSuffix(".mokuro") + ".cbz")
-            .build()
+        val response = client.get(url, headers)
+        return response.use { resp ->
+            val mokuro = resp.parseAs<MokuroDto>()
+            val cbzUrl = resp.request.url.newBuilder()
+                .encodedPath(resp.request.url.encodedPath.removeSuffix(".mokuro") + ".cbz")
+                .build()
 
-        val byName = client.zipDirectory(cbzUrl.toString(), headers).entries.associateBy { it.name }
+            val byName = client.zipDirectoryAsync(cbzUrl.toString(), headers).entries.associateBy { it.name }
 
-        return mokuro.pages.mapIndexed { index, page ->
-            val entry = byName[page.imgPath] ?: throw Exception("Entry not found in CBZ: ${page.imgPath}")
-            val data = ImageRequest(
-                page.imgPath,
-                entry.localHeaderOffset,
-                entry.compressedSize,
-                entry.method,
-            ).toJsonString()
-            Page(index, imageUrl = "$cbzUrl#$data")
+            mokuro.pages.mapIndexed { index, page ->
+                val entry = byName[page.imgPath] ?: throw Exception("Entry not found in CBZ: ${page.imgPath}")
+                val data = ImageRequest(
+                    page.imgPath,
+                    entry.localHeaderOffset,
+                    entry.compressedSize,
+                    entry.method,
+                ).toJsonString()
+                Page(index, imageUrl = "$cbzUrl#$data")
+            }
         }
     }
 
     // ===============================
-    // Settings
+    // Preferences
     // ===============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_USE_LATEST_VOLUME_COVER
-            title = "最新巻の表紙を使用"
-            summary = "デフォルトのシリーズ表紙の代わりに、最新巻の表紙を漫画のサムネイルとして使用します。"
-            setDefaultValue(PREF_USE_LATEST_VOLUME_COVER_DEFAULT)
+        ListPreference(screen.context).apply {
+            key = TITLE_LANG_PREF
+            title = "Display title language"
+            summary = "%s"
+            entries = arrayOf("Native", "English", "Romaji", "Folder name")
+            entryValues = arrayOf("native", "english", "romaji", "folder")
+            setDefaultValue(TITLE_LANG_DEFAULT)
         }.also(screen::addPreference)
-    }
-
-    private val useLatestVolumeCover: Boolean
-        get() = preferences.getBoolean(PREF_USE_LATEST_VOLUME_COVER, PREF_USE_LATEST_VOLUME_COVER_DEFAULT)
-
-    companion object {
-        private const val PREF_USE_LATEST_VOLUME_COVER = "pref_use_latest_volume_cover"
-        private const val PREF_USE_LATEST_VOLUME_COVER_DEFAULT = false
     }
 
     // ===============================
     // Helpers
     // ===============================
 
-    @Volatile
-    private var libraryCache: LibraryDto? = null
-    private var libraryCacheTime = 0L
-    private val cacheDuration = 10 * 60 * 1000L
-
-    @Volatile
-    private var inFlight: Observable<LibraryDto>? = null
-
-    private fun updateLibraryCache(response: Response): LibraryDto {
-        val now = System.currentTimeMillis()
-        return response.parseAs<LibraryDto>().also {
-            synchronized(this) {
-                libraryCache = it
-                libraryCacheTime = now
-            }
-        }
+    private suspend fun getCatalog(): CatalogDto {
+        val response = client.get("$baseUrl/mokuro-reader/catalog.json")
+        return response.parseAs<CatalogDto>()
     }
 
-    private fun getLibrary(): Observable<LibraryDto> {
-        val now = System.currentTimeMillis()
-        val cached = libraryCache
+    private suspend fun getSeriesDetail(seriesTitle: String): SeriesDetailDto {
+        val url = "$baseUrl/mokuro-reader".toHttpUrl().newBuilder()
+            .addPathSegment(seriesTitle)
+            .addPathSegment("series.json")
+            .build()
 
-        if (cached != null && now - libraryCacheTime < cacheDuration) {
-            return Observable.just(cached)
-        }
-
-        synchronized(this) {
-            inFlight?.let { return it }
-
-            val observable = client.newCall(GET("$apiBaseUrl/library", headers))
-                .asObservableSuccess()
-                .map { updateLibraryCache(it) }
-                .doOnTerminate { inFlight = null }
-                .cache()
-
-            inFlight = observable
-            return observable
-        }
+        val response = client.get(url)
+        return response.parseAs<SeriesDetailDto>()
     }
 
-    // ===============================
-    // Unused
-    // ===============================
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun mangaDetailsRequest(manga: SManga): Request = throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    companion object {
+        private const val TITLE_LANG_PREF = "mokuro_title_lang"
+        private const val TITLE_LANG_DEFAULT = "native"
+    }
 }

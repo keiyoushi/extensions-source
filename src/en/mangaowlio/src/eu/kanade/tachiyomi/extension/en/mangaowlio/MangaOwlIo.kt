@@ -6,6 +6,5 @@ import keiyoushi.annotation.Source
 @Source
 abstract class MangaOwlIo : Madara() {
     override val mangaSubString = "read-1"
-
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
 }

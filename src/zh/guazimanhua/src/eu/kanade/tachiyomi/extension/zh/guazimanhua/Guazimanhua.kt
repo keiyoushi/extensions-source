@@ -6,10 +6,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -66,6 +66,9 @@ abstract class Guazimanhua : KeiSource() {
                 title = element.selectFirst("h3 a")!!.text()
                 setUrlWithoutDomain(element.selectFirst("a.cover-wrap")!!.attr("href"))
                 thumbnail_url = element.selectFirst("img.cover")?.attr("src")
+                author = element.selectFirst("div.meta")?.ownText()
+                    ?.substringBefore(" · ")
+                    ?.takeIf { it.isNotEmpty() }
             }
         }
         val hasNextPage = document.select("nav.pager a").any { it.text() == ">" }
@@ -91,6 +94,12 @@ abstract class Guazimanhua : KeiSource() {
             document.selectFirst("img.mobile-comic-cover")?.absUrl("src")?.let { thumbnail_url = it }
             document.selectFirst("p.mobile-comic-desc")?.text()?.let { description = it }
             document.selectFirst("p.mobile-comic-tags")?.text()?.let { genre = it }
+            document.select("div.cinema-strip > div")
+                .firstOrNull { it.selectFirst("span")?.text() == "作者" }
+                ?.selectFirst("b")
+                ?.text()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { author = it }
             val meta = document.selectFirst("p.mobile-comic-meta")?.text().orEmpty()
             status = when {
                 meta.contains("完结") -> SManga.COMPLETED

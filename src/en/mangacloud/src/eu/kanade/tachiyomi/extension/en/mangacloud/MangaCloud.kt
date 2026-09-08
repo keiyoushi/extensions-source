@@ -62,7 +62,7 @@ abstract class MangaCloud : HttpSource() {
         }
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = if (response.request.url.pathSegments.last() == "browse") {
+    override fun popularMangaParse(response: Response): MangasPage = if (response.request.url.pathSegments.last() == "library") {
         searchMangaParse(response)
     } else {
         val data = response.parseAs<Data<DataList<BrowseManga>>>()
@@ -187,7 +187,7 @@ abstract class MangaCloud : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$API_URL/comic/browse"
+        val url = "$API_URL/comic/library"
 
         if (query.isNotBlank() && query.length < 3) {
             throw Exception("Search query must be more than 3 characters!")
@@ -270,7 +270,7 @@ abstract class MangaCloud : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        return GET("$API_URL/chapter5/$chapterId", headers)
+        return GET("$API_URL/chapters/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.Status
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Type
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import keiyoushi.annotation.Source
+import okhttp3.Headers
 
 @Source
 abstract class YaoiFanClub : ZeistManga() {
@@ -21,49 +22,22 @@ abstract class YaoiFanClub : ZeistManga() {
     override val hasGenreFilter = true
     override val hasStatusFilter = true
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "https://www.blogger.com/blogin.g?blogspotURL=$baseUrl/&type=blog&bpli=1")
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("Referer", "https://www.blogger.com/blogin.g?blogspotURL=$baseUrl/&type=blog&bpli=1")
+    }
 
-    override fun getGenreList(): List<Genre> = listOf(
-        Genre("ABO", "ABO"),
-        Genre("Ação", "Ação"),
-        Genre("Anjo", "Anjo"),
-        Genre("Apocalipse", "Apocalipse"),
-        Genre("Aventura", "Aventura"),
-        Genre("Comédia", "Comédia"),
-        Genre("Drama", "Drama"),
-        Genre("Demência", "Demência"),
-        Genre("Demônio", "Demônio"),
-        Genre("Espaço", "Espaço"),
-        Genre("Esporte", "Esporte"),
-        Genre("Fantasma", "Fantasma"),
-        Genre("Fantasia", "Fantasia"),
-        Genre("Ficção", "Ficção"),
-        Genre("Game", "Game"),
-        Genre("Gore", "Gore"),
-        Genre("Harem", "Harem"),
-        Genre("Histórico", "Histórico"),
-        Genre("Horror", "Horror"),
-        Genre("Magia", "Magia"),
-        Genre("Militar", "Militar"),
-        Genre("Mistério", "Mistério"),
-        Genre("Música", "Música"),
-        Genre("Omegaverso", "Omegaverso"),
-        Genre("Paródia", "Paródia"),
-        Genre("Poderes", "Poderes"),
-        Genre("Policial", "Policial"),
-        Genre("Psicológico", "Psicológico"),
-        Genre("Robô", "Robô"),
-        Genre("Romance", "Romance"),
-        Genre("Samurai", "Samurai"),
-        Genre("Sobrenatural", "Sobrenatural"),
-        Genre("Suspense", "Suspense"),
-        Genre("Terror", "Terror"),
-        Genre("Vampiro", "Vampiro"),
-        Genre("Viagem no tempo", "Viagem no tempo"),
-        Genre("Vida Cotidiana", "Vida Cotidiana"),
-        Genre("Zumbi", "Zumbi"),
-    )
+    override fun getGenreList() = listOf(
+        "ABO", "Ação", "Anjo", "Apocalipse",
+        "Aventura", "Comédia", "Drama", "Demência",
+        "Demônio", "Espaço", "Esporte", "Fantasma",
+        "Fantasia", "Ficção", "Game", "Gore",
+        "Harem", "Histórico", "Horror", "Magia",
+        "Militar", "Mistério", "Música", "Omegaverso",
+        "Paródia", "Poderes", "Policial", "Psicológico",
+        "Robô", "Romance", "Samurai", "Sobrenatural",
+        "Suspense", "Terror", "Vampiro", "Viagem no tempo",
+        "Vida Cotidiana", "Zumbi",
+    ).map { Genre(it, it) }
 
     override fun getTypeList(): List<Type> = listOf(
         Type("Todos", ""),

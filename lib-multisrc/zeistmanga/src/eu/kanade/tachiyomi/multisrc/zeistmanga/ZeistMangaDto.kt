@@ -7,19 +7,20 @@ import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
 
 @Serializable
-data class ZeistMangaDto(
+class ZeistMangaDto(
     val feed: ZeistMangaFeedDto? = null,
-    @SerialName("openSearch\$totalResults") val totalResults: TotalResult? = null,
 )
 
 @Serializable
-data class ZeistMangaFeedDto(
+class ZeistMangaFeedDto(
     @SerialName("openSearch\$totalResults") val totalResults: TotalResult? = null,
+    @SerialName("openSearch\$itemsPerPage") val itemsPerPage: TotalResult? = null,
+    val category: List<ZeistMangaCategoryDto>? = emptyList(),
     val entry: List<ZeistMangaEntryDto>? = emptyList(),
 )
 
 @Serializable
-data class ZeistMangaEntryDto(
+class ZeistMangaEntryDto(
     val title: ZeistMangaEntryTitleDto? = null,
     val published: ZeistMangaEntryPublishedDto? = null,
     val updated: ZeistMangaEntryUpdatedDto? = null,
@@ -44,9 +45,9 @@ data class ZeistMangaEntryDto(
         date_upload = dateUpload
     }
 
-    fun getPublishedDate(): String = published?.t?.trim().orEmpty()
+    fun getPublishedDate() = published?.t?.trim()
 
-    fun getUpdatedDate(): String = updated?.t?.trim().orEmpty()
+    fun getUpdatedDate() = updated?.t?.trim()
 
     private fun getChapterLink(list: List<ZeistMangaEntryLink>): String = list.first { it.rel == "alternate" }.href
 
@@ -60,42 +61,56 @@ data class ZeistMangaEntryDto(
 }
 
 @Serializable
-data class ZeistMangaEntryTitleDto(
+class ZeistMangaCategoryDto(
+    val term: String,
+)
+
+@Serializable
+class ZeistMangaEntryTitleDto(
     @SerialName("\$t") val t: String,
 )
 
 @Serializable
-data class ZeistMangaEntryPublishedDto(
+class ZeistMangaEntryPublishedDto(
     @SerialName("\$t") val t: String,
 )
 
 @Serializable
-data class ZeistMangaEntryUpdatedDto(
+class ZeistMangaEntryUpdatedDto(
     @SerialName("\$t") val t: String,
 )
 
 @Serializable
-data class ZeistMangaEntryContentDto(
+class ZeistMangaEntryContentDto(
     @SerialName("\$t") val t: String,
 )
 
 @Serializable
-data class TotalResult(
+class TotalResult(
     @SerialName("\$t") val t: String,
+
 )
 
 @Serializable
-data class ZeistMangaEntryLink(
+class ZeistMangaEntryLink(
     val rel: String,
     val href: String,
 )
 
 @Serializable
-data class ZeistMangaEntryCategory(
+class ZeistMangaEntryCategory(
     val term: String,
 )
 
 @Serializable
-data class ZeistMangaEntryThumbnail(
+class ZeistMangaEntryThumbnail(
     val url: String,
+)
+
+@Serializable
+class FeedUrl(
+    val url: String,
+    val old: Boolean,
+    val new: Boolean,
+    val category: String,
 )

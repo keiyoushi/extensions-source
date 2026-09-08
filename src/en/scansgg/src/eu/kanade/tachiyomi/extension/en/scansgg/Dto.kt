@@ -3,10 +3,10 @@ package eu.kanade.tachiyomi.extension.en.scansgg
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 
 @Serializable
 class ResponseDto<T>(
@@ -58,7 +58,7 @@ class ChapterDto(
     @SerialName("group_id") private val groupId: Int? = null,
     private val group: GroupDto? = null,
 ) {
-    fun toSChapter(seriesIdStr: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(seriesIdStr: String, dateFormat: DateTimeFormatter) = SChapter.create().apply {
         // SChapter.url is used as a full API path to avoid passing multiple fields later
         url = "/chapter-navigation?series_id=$seriesIdStr&chapter_id=$id&group_id=${groupId ?: 0}"
         name = buildString {
@@ -69,7 +69,7 @@ class ChapterDto(
                 append(title)
             }
         }
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = dateFormat.tryParseDateTime(createdAt)
         scanlator = group?.title
     }
 }

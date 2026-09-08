@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>MangaFire Challenge Solver</title>
+    <script src="https://docs.opencv.org/5.0/opencv.js"></script>
+    <script>
+        const SCALE_FACTOR = 1.5;
+        const ANGULAR_BINS = 72;
+        const RADIAL_BINS = 24;
+        const MIN_HOLE_AREA_RATIO = 0.03;
+
+        function contourCenter(c) {
+          const m = cv.moments(c, false);
+
+          if (Math.abs(m.m00) > 1e-8) {
+            return {
+              x: m.m10 / m.m00,
+              y: m.m01 / m.m00
+            };
+          }
+
+          const r = cv.boundingRect(c);
+
+          return {
+            x: r.x + r.width / 2,
+            y: r.y + r.height / 2
+          };
+        }
+
+        function releaseShape(shape) {
+          shape.outer.delete();
+
+          for (const h of shape.holes) {
+            h.delete();
+          }
+        }
+
+        function contourDepth(index, hierarchyData) {
+          let depth = 0;
+          let p = hierarchyData[index * 4 + 3];
+
+          while (p >= 0) {
+            depth++;
+            p = hierarchyData[p * 4 + 3];
+          }
+
+          return depth;
+        }
+
+        function shapeFeatures(shape) {
+          const outerArea = Math.abs(cv.contourArea(shape.outer, false));
+
+          let holeArea = 0;
+          const holeRatios = [];
+
+          for (const h of shape.holes) {
+            const a = Math.abs(cv.contourArea(h, false));
+
+            holeArea += a;
+            holeRatios.push(
+              outerArea > 0 ? a / outerArea : 0
+            );
+          }
+
+          holeRatios.sort((a, b) => b - a);
+
+          const perimeter = cv.arcLength(shape.outer, true);
+
+          const circularity = perimeter > 0 ? (4 * Math.PI * outerArea) / (perimeter * perimeter) : 0;
+
+          const hull = new cv.Mat();
+          cv.convexHull(shape.outer, hull, false, true);
+
+          const hullArea = Math.abs(cv.contourArea(hull, false));
+
+          hull.delete();
+
+          const solidity = hullArea > 0 ? outerArea / hullArea : 0;
+
+          const rr = cv.minAreaRect(shape.outer);
+          const rw = rr.size.width;
+          const rh = rr.size.height;
+
+          const aspect = Math.max(rw, rh) > 0 ? Math.min(rw, rh) / Math.max(rw, rh) : 0;
+
+          return {
+            outerArea,
+            netArea: Math.max(0, outerArea - holeArea),
+            holeArea,
+            holeAreaRatio: outerArea > 0 ? holeArea / outerArea : 0,
+            holeCount: shape.holes.length,
+            holeRatios,
+            circularity,
+            solidity,
+            aspect
+          };
+        }
+
+        function extractHierarchyShapes(binary) {
+          const input = binary.clone();
+
+          const contours = new cv.MatVector();
+          const hierarchy = new cv.Mat();
+
+          cv.findContours(
+            input,
+            contours,
+            hierarchy,
+            cv.RETR_TREE,
+            cv.CHAIN_APPROX_NONE
+          );
+
+          input.delete();
+
+          if (hierarchy.empty()) {
+            contours.delete();
+            hierarchy.delete();
+            return [];
+          }
+
+          const hd = hierarchy.data32S;
+          const result = [];
+
+          for (let i = 0; i < contours.size(); i++) {
+            if ((contourDepth(i, hd) & 1) !== 0) {
+              continue;
+            }
+
+            const outerSrc = contours.get(i);
+
+            const outerArea = Math.abs(cv.contourArea(outerSrc, false));
+
+            if (outerArea < 1) {
+              outerSrc.delete();
+              continue;
+            }
+
+            const outer = outerSrc.clone();
+            outerSrc.delete();
+
+            const holes = [];
+
+            let child = hd[i * 4 + 2];
+
+            while (child >= 0) {
+              const holeSrc = contours.get(child);
+
+              const holeArea = Math.abs(cv.contourArea(holeSrc, false));
+
+              if (holeArea >= Math.max(2, outerArea * MIN_HOLE_AREA_RATIO)) {
+                holes.push(holeSrc.clone());
+              }
+
+              holeSrc.delete();
+
+              child = hd[child * 4];
+            }
+
+            const shape = {
+              outer,
+              holes,
+              center: contourCenter(outer),
+              box: cv.boundingRect(outer)
+            };
+
+            shape.features = shapeFeatures(shape);
+
+            result.push(shape);
+          }
+
+          contours.delete();
+          hierarchy.delete();
+
+          return result;
+        }
+
+        function polarSignature(shape) {
+          const center = shape.center;
+
+          let maxRadius = 0;
+
+          const d = shape.outer.data32S;
+
+          for (let i = 0; i + 1 < d.length; i += 2) {
+            const dx = d[i] - center.x;
+            const dy = d[i + 1] - center.y;
+
+            maxRadius = Math.max(maxRadius, Math.sqrt(dx * dx + dy * dy));
+          }
+
+          if (maxRadius < 1e-6) {
+            return new Float32Array(ANGULAR_BINS * RADIAL_BINS);
+          }
+
+          const raw = new Float32Array(ANGULAR_BINS * RADIAL_BINS);
+
+          for (let a = 0; a < ANGULAR_BINS; a++) {
+            const angle = (a * Math.PI * 2) / ANGULAR_BINS;
+
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+
+            for (let r = 0; r < RADIAL_BINS; r++) {
+              const radius = ((r + 0.5) / RADIAL_BINS) * maxRadius;
+
+              const p = new cv.Point(
+                center.x + cos * radius,
+                center.y + sin * radius
+              );
+
+              let inside = cv.pointPolygonTest(shape.outer, p, false) >= 0;
+
+              if (inside) {
+                for (const hole of shape.holes) {
+                  if (cv.pointPolygonTest(hole, p, false) >= 0) {
+                    inside = false;
+                    break;
+                  }
+                }
+              }
+
+              raw[a * RADIAL_BINS + r] = inside ? 1 : 0;
+            }
+          }
+
+          const smooth = new Float32Array(raw.length);
+
+          function value(a, r) {
+            a = (a + ANGULAR_BINS) % ANGULAR_BINS;
+
+            if (r < 0 || r >= RADIAL_BINS) {
+              return 0;
+            }
+
+            return raw[a * RADIAL_BINS + r];
+          }
+
+          for (let a = 0; a < ANGULAR_BINS; a++) {
+            for (let r = 0; r < RADIAL_BINS; r++) {
+              let sum = 4 * value(a, r);
+
+              let weight = 4;
+
+              sum += value(a - 1, r);
+              sum += value(a + 1, r);
+              weight += 2;
+
+              sum += value(a, r - 1);
+              sum += value(a, r + 1);
+              weight += 2;
+
+              smooth[a * RADIAL_BINS + r] = sum / weight;
+            }
+          }
+
+          return smooth;
+        }
+
+        function polarDistance(a, b) {
+          let best = Infinity;
+
+          for (let shift = 0; shift < ANGULAR_BINS; shift++) {
+            let sum = 0;
+
+            for (let angle = 0; angle < ANGULAR_BINS; angle++) {
+              const otherAngle = (angle + shift) % ANGULAR_BINS;
+
+              const baseA = angle * RADIAL_BINS;
+
+              const baseB = otherAngle * RADIAL_BINS;
+
+              for (let r = 0; r < RADIAL_BINS;r++) {
+                const d = a[baseA + r] - b[baseB + r];
+
+                sum += d * d;
+              }
+            }
+
+            const rms = Math.sqrt(sum / (ANGULAR_BINS * RADIAL_BINS));
+
+            if (rms < best) {
+              best = rms;
+            }
+          }
+
+          return best;
+        }
+
+        function prepareShape(shape) {
+          shape.signature = polarSignature(shape);
+
+          if (!shape.features) {
+            shape.features = shapeFeatures(shape);
+          }
+
+          return shape;
+        }
+
+        function referenceForeground(src) {
+          const mask = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC1);
+
+          const channels = src.channels();
+
+          if (channels === 4) {
+            const planes = new cv.MatVector();
+
+            cv.split(src, planes);
+
+            const alpha = planes.get(3);
+            const alphaMask = new cv.Mat();
+
+            cv.threshold(alpha, alphaMask, 20, 255, cv.THRESH_BINARY);
+
+            const foregroundPixels = cv.countNonZero(alphaMask);
+
+            const useAlpha = foregroundPixels < src.rows * src.cols * 0.98;
+
+            if (useAlpha) {
+              alphaMask.copyTo(mask);
+            }
+
+            alpha.delete();
+            alphaMask.delete();
+            planes.delete();
+
+            if (useAlpha) {
+              return mask;
+            }
+          }
+
+          const data = src.data;
+          const ch = channels;
+
+          const corners = [
+            [0, 0],
+            [src.cols - 1, 0],
+            [0, src.rows - 1],
+            [src.cols - 1, src.rows - 1]
+          ];
+
+          const bg = [0, 0, 0];
+
+          function pixel(x, y, k) {
+            return data[(y * src.cols + x) * ch +k];
+          }
+
+          if (ch === 1) {
+            for (const [x, y] of corners) {
+              bg[0] += pixel(x, y, 0);
+            }
+
+            bg[0] /= corners.length;
+          } else {
+            for (let k = 0; k < 3; ++k) {
+              for (
+                const [x, y] of corners
+              ) {
+                bg[k] += pixel(x, y, k);
+              }
+
+              bg[k] /= corners.length;
+            }
+          }
+
+          const out = mask.data;
+
+          for (let y = 0; y < src.rows; y++) {
+            for (let x = 0; x < src.cols; x++) {
+              const p = (y * src.cols + x) * ch;
+
+              let dist2 = 0;
+
+              if (ch === 1) {
+                const d = data[p] - bg[0];
+
+                dist2 = d * d;
+              } else {
+                for (let k = 0; k < 3;k++) {
+                  const d = data[p + k] - bg[k];
+
+                  dist2 += d * d;
+                }
+              }
+
+              out[y * src.cols + x] = dist2 > 20 * 20 ? 255 : 0;
+            }
+          }
+
+          return mask;
+        }
+
+        function getReferenceShapes(src, count) {
+          const foreground = referenceForeground(src);
+
+          let result = null;
+
+          const maxKernel = Math.max(3, Math.min(15, Math.floor(Math.min(src.rows, src.cols) / 4) | 1));
+
+          for (let k = 3; k <= maxKernel; k += 2) {
+            const opened = new cv.Mat();
+
+            const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(k, k));
+
+            cv.morphologyEx(foreground, opened, cv.MORPH_OPEN, kernel);
+
+            kernel.delete();
+
+            let shapes = extractHierarchyShapes(opened);
+
+            opened.delete();
+
+            shapes = shapes.filter(s => {
+              const b = s.box;
+
+              const valid = s.features.outerArea >= 8 && b.width >= 4 && b.height >= 4;
+
+              if (!valid) {
+                releaseShape(s);
+              }
+
+              return valid;
+            });
+
+            shapes.sort((a, b) => b.features.outerArea - a.features.outerArea);
+
+            if (shapes.length >= count) {
+              result = shapes.slice(0, count);
+
+              for (let i = count; i < shapes.length; i++) {
+                releaseShape(shapes[i]);
+              }
+
+              break;
+            }
+
+            for (const s of shapes) {
+              releaseShape(s);
+            }
+          }
+
+          foreground.delete();
+
+          if (!result || result.length !== count) {
+            if (result) {
+              for (const s of result) {
+                releaseShape(s);
+              }
+            }
+
+            throw new Error(`Could not separate ${count} reference shapes.`);
+          }
+
+          result.sort((a, b) => {
+            const dx = a.center.x - b.center.x;
+
+            if (Math.abs(dx) > 1) {
+              return dx;
+            }
+
+            return a.center.y - b.center.y;
+          });
+
+          for (const s of result) {
+            prepareShape(s);
+          }
+
+          return result;
+        }
+
+        function getSceneCandidates(src, refs) {
+          const channels = new cv.MatVector();
+
+          cv.split(src, channels);
+
+          const edges = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC1);
+
+          const n = src.channels() === 1 ? 1 : Math.min(3, src.channels());
+
+          for (let i = 0; i < n; ++i) {
+            const channel = channels.get(i);
+
+            const e = new cv.Mat();
+
+            cv.Canny(channel, e, 20, 60, 3, false);
+
+            cv.bitwise_or(edges, e, edges);
+
+            channel.delete();
+            e.delete();
+          }
+
+          channels.delete();
+
+          const k3 = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3, 3));
+
+          cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, k3);
+
+          cv.dilate(edges, edges, k3);
+
+          k3.delete();
+
+          const regions = new cv.Mat();
+
+          cv.bitwise_not(edges, regions);
+
+          edges.delete();
+
+          let candidates = extractHierarchyShapes(regions);
+
+          regions.delete();
+
+          let minOuterArea = Infinity;
+          let maxOuterArea = 0;
+
+          let minSide = Infinity;
+          let maxSide = 0;
+
+          for (const ref of refs) {
+            minOuterArea = Math.min(minOuterArea, ref.features.outerArea);
+
+            maxOuterArea = Math.max(maxOuterArea, ref.features.outerArea);
+
+            minSide = Math.min(minSide, ref.box.width, ref.box.height);
+
+            maxSide = Math.max(maxSide, ref.box.width, ref.box.height);
+          }
+
+          const scaleArea = SCALE_FACTOR * SCALE_FACTOR;
+
+          const minAllowedArea = minOuterArea * scaleArea * 0.18;
+
+          const maxAllowedArea = maxOuterArea * scaleArea * 5.0;
+
+          const minAllowedSide = minSide * SCALE_FACTOR * 0.30;
+
+          const maxAllowedSide = maxSide * SCALE_FACTOR * 3.0;
+
+          candidates = candidates.filter(s => {
+            const f = s.features;
+            const b = s.box;
+
+            const ok =
+                  f.outerArea >= minAllowedArea &&
+                  f.outerArea <= maxAllowedArea &&
+                  b.width >= minAllowedSide &&
+                  b.height >= minAllowedSide &&
+                  b.width <= maxAllowedSide &&
+                  b.height <= maxAllowedSide;
+
+            if (!ok) {
+              releaseShape(s);
+            }
+
+            return ok;
+          });
+
+          for (const s of candidates) {
+            prepareShape(s);
+          }
+
+          return candidates;
+        }
+
+        function shapeCost(ref, cand) {
+          const polar = polarDistance(ref.signature, cand.signature);
+
+          const holeAreaPenalty = Math.abs(ref.features.holeAreaRatio - cand.features.holeAreaRatio);
+
+          const holeCountPenalty = Math.min(3, Math.abs(ref.features.holeCount - cand.features.holeCount));
+
+          let holeSizePenalty = 0;
+
+          for (let i = 0; i < 3; ++i) {
+            const a = ref.features.holeRatios[i] || 0;
+
+            const b = cand.features.holeRatios[i] || 0;
+
+            holeSizePenalty += Math.abs(a - b);
+          }
+
+          const dc = (ref.features.circularity - cand.features.circularity) / 0.4;
+
+          const ds = (ref.features.solidity - cand.features.solidity) / 0.3;
+
+          const da = (ref.features.aspect - cand.features.aspect) / 0.3;
+
+          const outerPenalty = Math.sqrt(dc * dc + ds * ds + da * da);
+
+          const measuredScale = Math.sqrt(cand.features.outerArea / Math.max(ref.features.outerArea, 1e-6));
+
+          const scalePenalty = Math.abs(Math.log(Math.max(measuredScale, 1e-6) / SCALE_FACTOR));
+
+          return polar + 0.30 * holeAreaPenalty + 0.07 * holeCountPenalty + 0.12 * holeSizePenalty + 0.08 * outerPenalty + 0.03 * scalePenalty;
+        }
+
+        function groupCandidates(candidates) {
+          const sorted = candidates.slice().sort((a, b) => b.features.outerArea - a.features.outerArea);
+
+          const groups = [];
+
+          for (const candidate of sorted) {
+            let matchedGroup = null;
+
+            for (const group of groups) {
+              const anchor = group.members[0];
+
+              const dx = anchor.center.x - candidate.center.x;
+
+              const dy = anchor.center.y - candidate.center.y;
+
+              const dist = Math.sqrt(dx * dx + dy * dy);
+
+              const size = Math.max(
+                anchor.box.width,
+                anchor.box.height,
+                candidate.box.width,
+                candidate.box.height
+              );
+
+              if (dist > size * 0.25) {
+                continue;
+              }
+
+              const candidateInAnchor = cv.pointPolygonTest(
+                anchor.outer,
+                new cv.Point(candidate.center.x, candidate.center.y),
+                false
+              ) >= 0;
+
+              const anchorInCandidate = cv.pointPolygonTest(
+                candidate.outer,
+                new cv.Point(anchor.center.x, anchor.center.y),
+                false
+              ) >= 0;
+
+              if (candidateInAnchor || anchorInCandidate) {
+                matchedGroup = group;
+                break;
+              }
+            }
+
+            if (matchedGroup) {
+              matchedGroup.members.push(candidate);
+            } else {
+              groups.push({
+                members: [candidate]
+              });
+            }
+          }
+
+          return groups;
+        }
+
+        function hungarian(cost) {
+          const n = cost.length;
+          const m = cost[0].length;
+
+          const u = new Array(n + 1).fill(0);
+
+          const v = new Array(m + 1).fill(0);
+
+          const p = new Array(m + 1).fill(0);
+
+          const way = new Array(m + 1).fill(0);
+
+          for (let i = 1; i <= n; ++i) {
+            p[0] = i;
+
+            let j0 = 0;
+
+            const minv = new Array(m + 1).fill(Infinity);
+
+            const used = new Array(m + 1).fill(false);
+
+            do {
+              used[j0] = true;
+
+              const i0 = p[j0];
+
+              let delta = Infinity;
+              let j1 = 0;
+
+              for (let j = 1; j <= m;j++) {
+                if (used[j]) {
+                  continue;
+                }
+
+                const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
+
+                if (cur < minv[j]) {
+                  minv[j] = cur;
+                  way[j] = j0;
+                }
+
+                if (minv[j] < delta) {
+                  delta = minv[j];
+                  j1 = j;
+                }
+              }
+
+              for (let j = 0; j <= m; j++) {
+                if (used[j]) {
+                  u[p[j]] += delta;
+                  v[j] -= delta;
+                } else {
+                  minv[j] -= delta;
+                }
+              }
+
+              j0 = j1;
+            } while (p[j0] !== 0);
+
+            do {
+              const j1 = way[j0];
+
+              p[j0] = p[j1];
+              j0 = j1;
+            } while (j0 !== 0);
+          }
+
+          const assignment = new Array(n).fill(-1);
+
+          for (let j = 1; j <= m; j++) {
+            if (p[j] > 0 && p[j] <= n) {
+              assignment[p[j] - 1] = j - 1;
+            }
+          }
+
+          return assignment;
+        }
+
+        function findShapes(referenceMat, sceneMat, count) {
+          const refs = getReferenceShapes(referenceMat, count);
+
+          const candidates = getSceneCandidates(sceneMat, refs);
+
+          try {
+            if (candidates.length < count) {
+              throw new Error(`Only ${candidates.length} scene candidates found; ${count} are required.`);
+            }
+
+            let groups = groupCandidates(candidates);
+
+            if (groups.length < count) {
+              groups = candidates.map(c => ({
+                members: [c]
+              }));
+            }
+
+            const costs = [];
+
+            const bestMember = [];
+
+            for (let r = 0; r < refs.length; r++) {
+              const row = [];
+              const memberRow = [];
+
+              for (let g = 0; g < groups.length; g++) {
+                let bestCost = Infinity;
+                let bestIndex = -1;
+
+                for (let k = 0; k < groups[g].members.length; k++) {
+                  const score = shapeCost(refs[r], groups[g].members[k]);
+
+                  if (score < bestCost) {
+                    bestCost = score;
+                    bestIndex = k;
+                  }
+                }
+
+                row.push(bestCost);
+                memberRow.push(bestIndex);
+              }
+
+              costs.push(row);
+              bestMember.push(memberRow);
+            }
+
+            const assignment = hungarian(costs);
+
+            const dots = assignment.flatMap((groupIndex, refIndex) => {
+              if (groupIndex < 0) {
+                throw new Error(
+                  "Could not assign all reference shapes."
+                );
+              }
+
+              const memberIndex = bestMember[refIndex][groupIndex];
+
+              const shape = groups[groupIndex].members[memberIndex];
+
+              return [Math.round(shape.center.x), Math.round(shape.center.y)];
+            });
+
+            return dots;
+          } finally {
+            for (const r of refs) {
+              releaseShape(r);
+            }
+
+            for (const c of candidates) {
+              releaseShape(c);
+            }
+          }
+        }
+
+        function read(url) {
+          return new Promise((resolve, reject) => Object.assign(new Image(), {
+            onload() {
+              const canvas = Object.assign(document.createElement("canvas"), {
+                width: this.width,
+                height: this.height
+              });
+              const ctx = canvas.getContext("2d");
+              ctx.drawImage(this, 0, 0);
+              resolve(cv.imread(canvas));
+              canvas.remove();
+            },
+            onerror: reject,
+            src: url
+          }));
+        }
+
+        function toCanvas(mat) {
+          const canvas = Object.assign(document.createElement("canvas"), {
+            width: mat.rows,
+            height: mat.cols
+          });
+          cv.imshow(canvas, mat);
+          return canvas;
+        }
+
+        async function generate() {
+          const response = await fetch("generate");
+          return response.json();
+        }
+
+        async function verify(captcha_id, dots) {
+          const response = await fetch("verify", {
+            method: "POST",
+            body: JSON.stringify({
+              captcha_id,
+              dots: dots.join(",")
+            })
+          });
+          return response.json();
+        }
+
+        let complete = false;
+
+        function setComplete() {
+          complete = true;
+          return true;
+        }
+
+        function abortIfDone() {
+          if (complete) {
+            throw "Aborted";
+          }
+        }
+
+        async function solve() {
+          abortIfDone();
+
+          const {captcha_id, count, image_base64, thumb_base64} = await generate();
+
+          if (count > 2) {
+            throw "Too many shapes, skipping due to low success rate";
+          }
+
+          abortIfDone();
+
+          const [thumb_mat, image_mat] = await Promise.all([read(thumb_base64), read(image_base64)]);
+
+          try {
+            abortIfDone();
+
+            const dots = findShapes(thumb_mat, image_mat, count);
+
+            const {success} = await verify(captcha_id, dots);
+
+            if (!success) {
+              throw "Failed";
+            }
+          } finally {
+            thumb_mat.delete();
+            image_mat.delete();
+          }
+        }
+
+        (async () => {
+          try {
+            for (let i = 0; i < 10; i++) {
+              if (await Promise.any(Array.from({length: 10}, solve)).then(setComplete, () => false)) {
+                return;
+              }
+            }
+          } finally {
+            bridge.post(`${complete}`);
+          }
+        })();
+    </script>
+</head>
+<body></body>
+</html>

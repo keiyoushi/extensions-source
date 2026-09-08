@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Portal Yaoi"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://lerboyslove.com"
+        baseUrl = "https://portalyaoi.com"
     }
 }

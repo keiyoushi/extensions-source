@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.pt.imperiodabritannia
 
 import eu.kanade.tachiyomi.multisrc.mangotheme.MangoTheme
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import okhttp3.Headers
 
 @Source

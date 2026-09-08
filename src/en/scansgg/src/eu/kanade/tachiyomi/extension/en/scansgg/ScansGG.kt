@@ -1,50 +1,47 @@
 package eu.kanade.tachiyomi.extension.en.scansgg
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
-abstract class ScansGG : HttpSource() {
+abstract class ScansGG : KeiSource() {
 
     override val supportsLatest = true
 
     private val apiUrl = "https://api.scans.gg"
     private val cdnUrl = "https://cdn.scans.gg/uploads"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT).withZone(ZoneId.of("UTC"))
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("limit", POPULAR_LIMIT.toString())
             .addQueryParameter("offset", ((page - 1) * POPULAR_LIMIT).toString())
             .build()
-        return GET(url, headers)
+        val response = client.get(url)
+        return popularMangaParse(response)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<ResponseDto<List<SeriesDto>>>()
         val mangas = dto.data.map { it.toSManga(cdnUrl) }
 
@@ -55,7 +52,7 @@ abstract class ScansGG : HttpSource() {
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", LATEST_LIMIT.toString())
@@ -64,10 +61,11 @@ abstract class ScansGG : HttpSource() {
             .addQueryParameter("group_details", "true")
             .addQueryParameter("sort", "date")
             .build()
-        return GET(url, headers)
+        val response = client.get(url)
+        return latestUpdatesParse(response)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
+    private fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<ResponseDto<List<SeriesDto>>>()
         val mangas = dto.data.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, dto.meta?.hasMore == true)
@@ -75,7 +73,7 @@ abstract class ScansGG : HttpSource() {
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/series".toHttpUrl().newBuilder().apply {
             addQueryParameter("limit", POPULAR_LIMIT.toString())
             addQueryParameter("offset", ((page - 1) * POPULAR_LIMIT).toString())
@@ -91,31 +89,34 @@ abstract class ScansGG : HttpSource() {
             addQueryParameter("q_status", statuses.joinToString(",", "[", "]"))
             addQueryParameter("q_tags", tags.joinToString(",", "[", "]"))
         }.build()
-
-        return GET(url, headers)
+        val response = client.get(url)
+        return popularMangaParse(response)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-
-    // ============================== Details ==============================
+    // ============================== Details + Chapters ===================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate = coroutineScope {
+        val mangaDeferred = async { if (fetchDetails) getMangaDetails(manga) else manga }
+        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
+        SMangaUpdate(
+            manga = mangaDeferred.await(),
+            chapters = chaptersDeferred.await(),
+        )
+    }
+
+    private suspend fun getMangaDetails(manga: SManga): SManga {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("id", manga.url)
             .addQueryParameter("trackers", "true")
             .addQueryParameter("sources", "true")
             .build()
-        return GET(url, headers)
-    }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.parseAs<ResponseDto<SeriesDto>>()
-        return dto.data.toSManga(cdnUrl, tagsMap)
+        return client.get(url)
+            .parseAs<ResponseDto<SeriesDto>>()
+            .data.toSManga(cdnUrl, tagsMap)
     }
-
-    // ============================= Chapters ==============================
 
     override fun getChapterUrl(chapter: SChapter): String {
         // Parse the series_id that we constructed in Dto.kt to safely open the correct webview
@@ -124,7 +125,7 @@ abstract class ScansGG : HttpSource() {
         return "$baseUrl/series/$seriesId"
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
         var page = 1
         var hasMore = true
@@ -136,32 +137,28 @@ abstract class ScansGG : HttpSource() {
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("group_details", "true")
                 .build()
-            val response = client.newCall(GET(url, headers)).execute()
-            val dto = response.parseAs<ResponseDto<List<ChapterDto>>>()
+
+            val dto = client.get(url)
+                .parseAs<ResponseDto<List<ChapterDto>>>()
 
             chapters += dto.data.map { it.toSChapter(manga.url, dateFormat) }
             hasMore = dto.meta?.hasMore == true
             page++
         }
-        chapters
+        return chapters
     }
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(apiUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(apiUrl + chapter.url)
         val dto = response.parseAs<ResponseDto<PageListDto>>()
         return dto.data.toPages(cdnUrl)
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         TypeFilter(),
         StatusFilter(),
         TagFilter(),

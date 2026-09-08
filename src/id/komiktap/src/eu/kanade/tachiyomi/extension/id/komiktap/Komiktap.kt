@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.id.komiktap
 
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import okhttp3.Cookie
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType

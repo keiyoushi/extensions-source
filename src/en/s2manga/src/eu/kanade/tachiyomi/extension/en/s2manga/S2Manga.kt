@@ -6,6 +6,5 @@ import keiyoushi.annotation.Source
 @Source
 abstract class S2Manga : Madara() {
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val pageListParseSelector = "div.page-break img[src*=\"https\"]"
 }

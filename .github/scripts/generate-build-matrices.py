@@ -10,6 +10,7 @@ EXTENSION_REGEX = re.compile(r"^src/(?P<lang>\w+)/(?P<extension>\w+)")
 MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>\w+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>\w+)")
 MODULE_REGEX = re.compile(r"^:src:(?P<lang>\w+):(?P<extension>\w+)$")
+PKG_NAME_REGEX = re.compile(r"""pkgName\s*=\s*["']([^"']+)["']""")
 CORE_FILES_REGEX = re.compile(
     r"^(common/|compiler/|core/|gradle/|build\.gradle\.kts|gradle\.properties|settings\.gradle\.kts|.github/scripts)"
 )
@@ -20,6 +21,35 @@ def run_command(command: str) -> str:
         print(result.stderr.strip())
         sys.exit(result.returncode)
     return result.stdout.strip()
+
+
+def resolve_module_suffix(ref: str, lang: str, extension: str) -> str:
+    """
+    returns the effective applicationId suffix of a module: the DSL override
+    (pkgName) if set, else the directory-derived default
+    """
+    build_file = Path("src", lang, extension, "build.gradle.kts")
+    content = None
+    if build_file.is_file():
+        content = build_file.read_text("utf-8")
+    elif ref:
+        # the module was deleted; read its build file from the base ref
+        result = subprocess.run(
+            f"git show {ref}:src/{lang}/{extension}/build.gradle.kts",
+            capture_output=True,
+            text=True,
+            shell=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            content = result.stdout
+
+    if content:
+        match = PKG_NAME_REGEX.search(content)
+        if match:
+            return match.group(1)
+
+    return f"{lang}.{extension}"
 
 
 def resolve_dependent_libs(libs: set[str]) -> set[str]:
@@ -142,7 +172,7 @@ def get_module_list(ref: str) -> tuple[list[str], list[str], list[str]]:
             extension = match.group("extension")
             if Path("src", lang, extension).is_dir():
                 modules.add(f':src:{lang}:{extension}')
-            deleted.add(f"{lang}.{extension}")
+            deleted.add(resolve_module_suffix(ref, lang, extension))
 
         elif match := MULTISRC_LIB_REGEX.search(file):
             multisrc = match.group("multisrc")
@@ -155,7 +185,7 @@ def get_module_list(ref: str) -> tuple[list[str], list[str], list[str]]:
                 libs.add(lib)
 
     if core_files_changed:
-        (all_modules, all_deleted) = get_all_modules()
+        (all_modules, all_deleted) = get_all_modules(ref)
 
         # update existing set so we include deleted extensions
         modules.update(all_modules)
@@ -176,7 +206,7 @@ def get_module_list(ref: str) -> tuple[list[str], list[str], list[str]]:
     # Resolve extensions that depend on the changed multisrcs or libs
     extensions = resolve_ext(multisrcs, libs)
     modules.update([f":src:{lang}:{extension}" for lang, extension in extensions])
-    deleted.update([f"{lang}.{extension}" for lang, extension in extensions])
+    deleted.update([resolve_module_suffix(ref, lang, extension) for lang, extension in extensions])
 
     lint_modules = {
         *(f":lib:{lib}" for lib in libs),
@@ -185,13 +215,13 @@ def get_module_list(ref: str) -> tuple[list[str], list[str], list[str]]:
 
     return sorted(modules), sorted(deleted), sorted(lint_modules)
 
-def get_all_modules() -> tuple[list[str], list[str]]:
+def get_all_modules(ref: str) -> tuple[list[str], list[str]]:
     modules = []
     deleted = []
     for lang in Path("src").iterdir():
         for extension in lang.iterdir():
             modules.append(f":src:{lang.name}:{extension.name}")
-            deleted.append(f"{lang.name}.{extension.name}")
+            deleted.append(resolve_module_suffix(ref, lang.name, extension.name))
     return modules, deleted
 
 

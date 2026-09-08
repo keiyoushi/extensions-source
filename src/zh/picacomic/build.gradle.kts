@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Picacomic"
-    versionCode = 8
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
+    versionCode = 11
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
 
     source {
         name = "哔咔漫画"
         lang = "zh"
-        baseUrl = "https://picaapi.picacomic.com"
+        baseUrl = "https://manhuabika.com"
+    }
+
+    deeplink {
+        path("/comic/..*")
     }
 }

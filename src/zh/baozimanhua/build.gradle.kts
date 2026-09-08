@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Baozi Manhua"
-    versionCode = 28
+    versionCode = 29
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "包子漫画"
@@ -30,6 +30,8 @@ keiyoushi {
                 "https://cn.dinnerku.com",
                 "https://tw.dinnerku.com",
                 "https://www.dinnerku.com",
+                "https://appcn.baozimh.com",
+                "https://appgb.baozimh.com",
             )
         }
         id = 5724751873601868259L
@@ -49,9 +51,4 @@ keiyoushi {
         path("/comic/..*")
         path("/comic/chapter/..*")
     }
-}
-
-dependencies {
-
-    implementation("com.github.stevenyomi:baozibanner:9ac9b08e1d") // 1.0
 }

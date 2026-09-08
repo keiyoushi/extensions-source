@@ -13,7 +13,7 @@ keiyoushi {
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://mangasbrasuka.com.br"
+        baseUrl = "https://mangasbrasuka.org"
         versionId = 2
     }
 }

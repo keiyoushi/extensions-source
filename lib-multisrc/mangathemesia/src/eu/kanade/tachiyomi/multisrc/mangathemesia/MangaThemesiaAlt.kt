@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex

@@ -7,18 +7,16 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class HotCabaretScan : Madara() {
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale("pt", "BR"))
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor(::checkPasswordProtectedIntercept)
-        .rateLimit(1, 2.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::checkPasswordProtectedIntercept)
+        .rateLimit(1, 2.seconds) { !it.encodedPath.startsWith("/wp-content/uploads/") }
 
     private fun checkPasswordProtectedIntercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
@@ -30,6 +28,4 @@ abstract class HotCabaretScan : Madara() {
 
         return response
     }
-
-    override val useNewChapterEndpoint = true
 }

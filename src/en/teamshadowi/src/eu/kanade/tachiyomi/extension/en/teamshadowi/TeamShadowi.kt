@@ -1,150 +1,151 @@
 package eu.kanade.tachiyomi.extension.en.teamshadowi
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Source
-abstract class TeamShadowi : HttpSource() {
-
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+abstract class TeamShadowi : KeiSource() {
 
     // Reusable headers for fetching raw JSON React Server Component payloads
-    private val rscHeaders by lazy { headers.newBuilder().add("Rsc", "1").build() }
-
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-    }
+    private val rscHeaders get() = headers.newBuilder().add("Rsc", "1").build()
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val offset = (page - 1) * 20
-        return GET("$baseUrl/api/series/popular?timePeriod=all&genre=all&sortBy=rating&offset=$offset&limit=20", headers)
+        val res = client.get("$baseUrl/api/series/popular?timePeriod=all&genre=all&sortBy=rating&offset=$offset&limit=20")
+        return parseMangasPage(res)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangasPage(response: Response): MangasPage {
         val res = response.parseAs<SeriesResponse>()
         val mangas = res.data.map { it.toSManga() }
         return MangasPage(mangas, res.hasMore)
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        val offset = (page - 1) * 20
-        return GET("$baseUrl/api/series/popular?timePeriod=all&genre=all&sortBy=created&offset=$offset&limit=20", headers)
-    }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val offset = (page - 1) * 20
+        val res = client.get("$baseUrl/api/series/popular?timePeriod=all&genre=all&sortBy=created&offset=$offset&limit=20")
+        return parseMangasPage(res)
+    }
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            val url = "$baseUrl/api/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .build()
-            return GET(url, headers)
-        }
 
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = if (query.isNotBlank()) {
+        val url = "$baseUrl/api/search".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .build()
+
+        val res = client.get(url).parseAs<SearchResponse>()
+        val mangas = res.series.map { it.toSManga() }
+        MangasPage(mangas, false)
+    } else {
         val offset = (page - 1) * 20
-        val url = "$baseUrl/api/series/popular".toHttpUrl().newBuilder()
-            .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("limit", "20")
-            .addQueryParameter("timePeriod", "all")
 
-        var genre = "all"
-        var sort = "rating"
+        val url = "$baseUrl/api/series/popular".toHttpUrl().newBuilder().apply {
+            addQueryParameter("offset", offset.toString())
+            addQueryParameter("limit", "20")
+            addQueryParameter("timePeriod", "all")
 
-        for (filter in filters) {
-            when (filter) {
-                is GenreFilter -> genre = filter.toUriPart()
-                is SortFilter -> sort = filter.toUriPart()
-                else -> {}
+            var genre = "all"
+            var sort = "rating"
+
+            for (filter in filters) {
+                when (filter) {
+                    is GenreFilter -> genre = filter.toUriPart()
+                    is SortFilter -> sort = filter.toUriPart()
+                    else -> {}
+                }
             }
-        }
 
-        url.addQueryParameter("genre", genre)
-        url.addQueryParameter("sortBy", sort)
+            addQueryParameter("genre", genre)
+            addQueryParameter("sortBy", sort)
+        }.build()
 
-        return GET(url.build(), headers)
+        parseMangasPage(client.get(url))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val requestUrl = response.request.url.toString()
-
-        if (requestUrl.contains("/api/search")) {
-            val res = response.parseAs<SearchResponse>()
-            val mangas = res.series.map { it.toSManga() }
-            return MangasPage(mangas, false) // Text search endpoint does not paginate
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "series") {
+            return null
         }
 
-        return popularMangaParse(response)
+        val mangaUrl = "/series/${url.pathSegments[1]}"
+        val manga = SManga.create().apply {
+            this.url = mangaUrl
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                initialized = true
+                this.url = mangaUrl
+            }
     }
 
-    // =============================== Details ==============================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
+    // =============================== Updates ==============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.extractNextJs<PublicDataSeries>()?.series
-            ?: throw Exception("Failed to extract series data")
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val data = client.get(baseUrl + manga.url, rscHeaders).extractNextJs<PublicDataSeries>()
+            ?: throw Exception("Failed to extract data")
 
-        return SManga.create().apply {
-            title = data.title
-            description = data.description
-            thumbnail_url = data.thumbnailUrl
-            status = when (data.status?.lowercase()) {
+        val seriesData = data.series
+        val newManga = SManga.create().apply {
+            title = seriesData.title
+            description = seriesData.description
+            thumbnail_url = seriesData.thumbnailUrl
+            status = when (seriesData.status?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            genre = (data.genres.orEmpty() + data.tags.orEmpty()).distinct().joinToString()
+            genre = (seriesData.genres.orEmpty() + seriesData.tags.orEmpty()).distinct().joinToString()
         }
-    }
 
-    // ============================== Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.extractNextJs<PublicDataSeries>()?.chapters
-            ?: return emptyList()
-
-        val slug = response.request.url.pathSegments.last()
-
-        return data.map { chap ->
+        val chaptersData = data.chapters
+        val slug = manga.url.substringAfterLast('/')
+        val chapters = chaptersData.map { chap ->
             val numStr = chap.number.toString().removeSuffix(".0")
-            val cleanDate = chap.createdAt?.substringBefore("+")?.substringBefore("Z")
+            val cleanDate = chap.createdAt
             SChapter.create().apply {
                 url = "/read/$slug/$numStr"
                 name = if (chap.title.isNullOrBlank()) "Chapter $numStr" else "Chapter $numStr: ${chap.title}"
-                date_upload = dateFormat.tryParse(cleanDate)
+                date_upload = Instant.tryParse(cleanDate)
                 chapter_number = chap.number
             }
         }.sortedByDescending { it.chapter_number }
+
+        return SMangaUpdate(newManga, chapters)
     }
 
     // =============================== Pages ================================
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.extractNextJs<PublicDataChapter>()?.pages
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get(baseUrl + chapter.url, rscHeaders)
+            .extractNextJs<PublicDataChapter>()
+            ?.pages
             ?: return emptyList()
 
         return data.mapIndexed { i, url ->
@@ -152,10 +153,9 @@ abstract class TeamShadowi : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ===============================
-    override fun getFilterList() = FilterList(
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         GenreFilter(),
     )

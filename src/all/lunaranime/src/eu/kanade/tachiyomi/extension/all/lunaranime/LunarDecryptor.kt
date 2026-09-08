@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.all.lunaranime
 
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.OkHttpClient
 import okhttp3.Response

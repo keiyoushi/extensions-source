@@ -9,9 +9,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Yaoihub : Madara() {
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds) { !it.encodedPath.startsWith("/wp-content/uploads/") }
 
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
 }

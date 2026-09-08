@@ -13,10 +13,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -477,7 +477,7 @@ abstract class GroupLe :
         val document = client.get(url, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 404) {
-                    throw Exception("Для просмотра главы необходима авторизация через WebView\uD83C\uDF0E (Ошибка 404)  или включите автоматическую авторизацию в настройках расширения")
+                    throw Exception("Для просмотра главы необходима авторизация через WebView\uD83C\uDF0E (Ошибка 404). Авторизуйтесь в WebView и обновите мангу.")
                 } else {
                     throw HttpException(response.code)
                 }
@@ -606,18 +606,14 @@ abstract class GroupLe :
     }
 
     // ============================== Utilities ===============================
-    // Old authGuard() doesn't work properly now. Previously it checked only certain sites, but now any manga on any site can require authorization
-    // Example: https://a.zazaza.me/podniatie_urovnia_v_odinochku__A5ea4
-    // Now all HTML elements related to chapters have two classes: blockedForAnonymous, blockedNonB
-    // When needed site adds JavaScript to the HTML that applies hidden status to these classes in CSS. authGuard now checks that this JS code are present in the HTML body
-    // Check should be universal. AllHentai uses same classes, but different JS code, so it requires its own override/check
     protected open fun authGuard(document: Document) {
-        document.select("script:containsData(UI.ViewHide)").joinToString().let {
-            if (it.contains("\"name\":\"blockedForAnonymous\"") && document.selectFirst(".user-avatar") == null) {
-                throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E или включите автоматическую авторизацию в настройках расширения")
+        document.selectFirst("script:containsData(viewSettings)")?.data()?.let { authReq ->
+            if (authReq.contains("blockedForAnonymous") && document.selectFirst("script:containsData(window.current_user_id)") == null) {
+                throw Exception("Для просмотра контента необходима авторизация через WebView🌍 или включите автоматическую авторизацию в настройках расширения")
             }
         }
     }
+
     private fun checkMinRange(input: String?, min: Int, max: Int): String {
         val value = input?.trim()?.takeIf(String::isNotEmpty)?.toIntOrNull() ?: return min.toString()
         if (value !in min..max) return min.toString()

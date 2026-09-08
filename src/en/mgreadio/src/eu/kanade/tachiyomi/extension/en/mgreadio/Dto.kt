@@ -1,12 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.mgreadio
 
 import eu.kanade.tachiyomi.source.model.SChapter
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Serializable
 class ChapterListDto(
@@ -32,18 +31,15 @@ class ChapterDto(
             ?.let { "Chapter $chapterName - $it" }
             ?: "Chapter $chapterName"
         chapter_number = number
-        date_upload = REST_CHAPTER_DATE_FORMAT.tryParse(createdAt)
-    }
-
-    companion object {
-        private val REST_CHAPTER_DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("GMT+7")
-        }
+        date_upload = REST_CHAPTER_DATE_FORMAT.tryParseDateTime(createdAt)
     }
 }
 
+private val REST_CHAPTER_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
+
 @Serializable
 class MgreadSearchDto(
+    val id: Long,
     val title: String,
     val url: String,
     val thumb: String? = null,

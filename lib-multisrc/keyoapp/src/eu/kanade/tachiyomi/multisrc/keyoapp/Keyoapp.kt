@@ -1,45 +1,41 @@
 package eu.kanade.tachiyomi.multisrc.keyoapp
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
-import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
 abstract class Keyoapp :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    protected val preferences: SharedPreferences by getPreferencesLazy()
+    protected val preferences = getPreferences()
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
+    open val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
 
     protected val intl = Intl(
         language = lang,
@@ -50,7 +46,7 @@ abstract class Keyoapp :
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(baseUrl).asJsoup())
 
     open val popularMangaTitleSelector = listOf(
         "Popular",
@@ -73,17 +69,15 @@ abstract class Keyoapp :
 
     open fun popularMangaNextPageSelector(): String? = null
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        runCatching { fetchGenres() }
-        val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+    open fun popularMangaParse(document: Document): MangasPage {
+        val mangas = document.select(popularMangaSelector()).filter { !it.isNovel() }.map { popularMangaFromElement(it) }
         val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
         return MangasPage(mangas, hasNextPage)
     }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest/", headers)
+    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get("$baseUrl/latest/").asJsoup())
 
     open fun latestUpdatesSelector(): String = "div.grid > div.group"
 
@@ -91,33 +85,32 @@ abstract class Keyoapp :
 
     open fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        runCatching { fetchGenres() }
-        val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }
+    open fun latestUpdatesParse(document: Document): MangasPage {
+        val mangas = document.select(latestUpdatesSelector()).filter { !it.isNovel() }.map { latestUpdatesFromElement(it) }
         val hasNextPage = latestUpdatesNextPageSelector()?.let { document.selectFirst(it) } != null
         return MangasPage(mangas, hasNextPage)
     }
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("series")
-            addPathSegment("")
-            if (query.isNotBlank()) {
-                addQueryParameter("q", query)
-            }
-            filters.firstInstanceOrNull<GenreList>()?.also { filter ->
-                filter.state
-                    .filter { it.state }
-                    .forEach { genre ->
-                        addQueryParameter("genre", genre.id)
-                    }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments.getOrNull(1) ?: return null
+        return mangaDetailsParse(client.get(url).asJsoup())
+    }
+
+    open fun searchUrlBuilder(query: String, page: Int) = "$baseUrl/series".toHttpUrl().newBuilder().apply {
+        if (query.isNotBlank()) addQueryParameter("q", query)
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = searchUrlBuilder(query, page).apply {
+            filters.filterIsInstance<MultiSelectFilter>().forEach {
+                it.addToUri(this)
             }
         }.build()
 
-        return GET(url, headers)
+        return parseSearchManga(client.get(url))
     }
 
     open fun searchMangaSelector() = "#searched_series_page > button"
@@ -126,115 +119,75 @@ abstract class Keyoapp :
 
     open fun searchMangaNextPageSelector(): String? = null
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        runCatching { fetchGenres() }
+    open fun Element.isNovel() = select("""[data-type="novel" i], span:matchesOwn((?i)^novel$)""").isNotEmpty()
+
+    open fun Element.matchesQuery(query: String) = attr("title").contains(query, ignoreCase = true)
+
+    open fun Element.matchesGenres(genres: List<String>): Boolean {
+        val tagsAttr = attr("tags").replace("___", "'")
+        val entryGenres = runCatching { tagsAttr.parseAs<List<String>>() }.getOrDefault(emptyList())
+        return genres.all { genre -> entryGenres.any { it.equals(genre, ignoreCase = true) } }
+    }
+
+    open fun Element.matchesTypes(types: List<String>) = types.any { it.equals(attr("data-type"), ignoreCase = true) }
+
+    open fun Element.matchesStatuses(statuses: List<String>) = statuses.any { it.equals(attr("data-status"), ignoreCase = true) }
+
+    open fun parseSearchManga(response: Response): MangasPage {
+        val url = response.request.url
+
         val document = response.asJsoup()
-
-        val query = response.request.url.queryParameter("q") ?: ""
-        val genres = response.request.url.queryParameterValues("genre").filterNotNull()
-
         val mangaList = document.select(searchMangaSelector())
-            .filter { it.attr("title").contains(query, true) }
             .filter { entry ->
-                val entryGenres = runCatching {
-                    entry.attr("tags").parseAs<List<String>>()
-                }.getOrDefault(emptyList())
-                genres.all { genre -> entryGenres.any { it.equals(genre, true) } }
+                !entry.isNovel() &&
+                    url.queryParameter("q")?.let { entry.matchesQuery(it) } ?: true &&
+                    url.listParams("genre")?.let { entry.matchesGenres(it) } ?: true &&
+                    url.listParams("type")?.let { entry.matchesTypes(it) } ?: true &&
+                    url.listParams("status")?.let { entry.matchesStatuses(it) } ?: true
             }
             .map(::searchMangaFromElement)
 
         return MangasPage(mangaList, false)
     }
 
-    // ============================== Filters ==============================
+    // ========================= Details + Chapters ========================
 
-    /**
-     * Automatically fetched genres from the source to be used in the filters.
-     */
-    private var genresList: List<Genre> = emptyList()
+    override val supportRelatedMangasBySearch = true
 
-    /**
-     * Inner variable to control the genre fetching failed state.
-     */
-    private var fetchGenresFailed: Boolean = false
-
-    /**
-     * Inner variable to control how much tries the genres request was called.
-     */
-    private var fetchGenresAttempts: Int = 0
-
-    class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
-
-    protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
-
-    override fun getFilterList(): FilterList = if (genresList.isNotEmpty()) {
-        FilterList(
-            GenreList("Genres", genresList),
-        )
-    } else {
-        FilterList(
-            Filter.Header("Press 'Reset' to attempt to show the genres"),
-        )
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(doc), chapterListParse(doc))
     }
 
-    /**
-     * Fetch the genres from the source to be used in the filters.
-     */
-    protected open fun fetchGenres() {
-        if (fetchGenresAttempts <= 3 && (genresList.isEmpty() || fetchGenresFailed)) {
-            val genres = runCatching {
-                client.newCall(genresRequest()).execute()
-                    .use { parseGenres(it.asJsoup()) }
-            }
-
-            fetchGenresFailed = genres.isFailure
-            genresList = genres.getOrNull().orEmpty()
-            fetchGenresAttempts++
-        }
-    }
-
-    protected open fun genresRequest(): Request = GET("$baseUrl/series/", headers)
-
-    /**
-     * Get the genres from the search page document.
-     *
-     * @param document The search page document
-     */
-    protected open fun parseGenres(document: Document): List<Genre> = document.select("#series_tags_page > button")
-        .map { btn ->
-            Genre(btn.text(), btn.attr("tag"))
-        }
-
-    // ============================== Details ==============================
     protected open val descriptionSelector: String = "#expand_content p"
     protected open val altNameSelector: String = "div.font-medium:containsOwn(Alternative titles) ~ div span"
     protected open val altNamePrefix: String = "${intl["alt_names_heading"]} "
     protected open val statusSelector: String = "div:has(span:containsOwn(Status)) ~ div"
     protected open val authorSelector: String = "div:has(span:containsOwn(Author)) ~ div"
     protected open val artistSelector: String = "div:has(span:containsOwn(Artist)) ~ div"
-    protected open val genreSelector: String = "div.grid:has(>h1) > div > a:not([title='Status'])"
+    protected open val genreSelector: String = "div:has(>h1) a[href*='genre=']"
 
     protected open val typeSelector: String = "div:has(span:containsOwn(Type)) ~ div"
     protected open val dateSelector: String = ".text-xs"
 
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
-
     open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        setUrlWithoutDomain(document.location())
         title = document.selectFirst("div.grid > h1")!!.text()
-        thumbnail_url = document.getImageUrl("div[class*=photoURL]")
+        thumbnail_url = document.getImageUrl("div[class*=photoURL], div[style*=photoURL]")
         status = document.selectFirst(statusSelector).parseStatus()
         author = document.selectFirst(authorSelector)?.text()
         artist = document.selectFirst(artistSelector)?.text()
         genre = buildList {
             document.selectFirst(typeSelector)?.text()?.replaceFirstChar {
-                if (it.isLowerCase()) {
-                    it.titlecase(Locale.ENGLISH)
-                } else {
-                    it.toString()
-                }
+                it.titlecase(Locale.ENGLISH)
             }?.let(::add)
-            document.select(genreSelector).forEach { add(it.text()) }
-        }.joinToString()
+            document.select(genreSelector).forEach { add(it.text().trim(',', ' ')) }
+        }.filter(String::isNotBlank).joinToString()
 
         val synopsis = document.selectFirst(descriptionSelector)?.text().orEmpty()
         val altNames = document.select(altNameSelector)
@@ -251,25 +204,16 @@ abstract class Keyoapp :
         }.takeIf { it.isNotEmpty() }
     }
 
-    protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
-        "ongoing" -> SManga.ONGOING
-        "dropped" -> SManga.CANCELLED
-        "paused" -> SManga.ON_HIATUS
-        "completed" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
-
-    // ============================= Chapters ==============================
     protected open val paidChapterSelector: String = "img[alt~=Coin]"
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(chapterListSelector()).map { chapterFromElement(it) }
-
     open fun chapterListSelector(): String {
-        if (!preferences.showPaidChapters) {
-            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has($paidChapterSelector))"
+        if (!showPaidChapters) {
+            return "#chapters > :is(a, div):not(:has(.text-sm span:matches(Upcoming))):not(:has($paidChapterSelector))"
         }
-        return "#chapters > a:not(:has(.text-sm span:matches(Upcoming)))"
+        return "#chapters > :is(a, div):not(:has(.text-sm span:matches(Upcoming)))"
     }
+
+    open fun chapterListParse(document: Document): List<SChapter> = document.select(chapterListSelector()).map { chapterFromElement(it) }
 
     open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("abs:href"))
@@ -284,7 +228,7 @@ abstract class Keyoapp :
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> {
         val cdnUrl = getCdnUrl(document)
@@ -318,9 +262,68 @@ abstract class Keyoapp :
 
     private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // ============================== Filters ==============================
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData() = parseGenres(requestGeneres().asJsoup()).toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<Map<String, String>>()?.toSortedMap().orEmpty()
+
+        return FilterList(
+            listOfNotNull(
+                genres.takeIf { it.isNotEmpty() }?.let { GenreFilter(it) },
+                getTypeList().takeIf { it.isNotEmpty() }?.let { TypeFilter(it) },
+                getStatusList().takeIf { it.isNotEmpty() }?.let { StatusFilter(it) },
+            ),
+        )
+    }
+
+    open suspend fun requestGeneres() = client.get("$baseUrl/series/")
+
+    protected open fun parseGenres(document: Document): Map<String, String> {
+        val script = document
+            .select("script:containsData(initializeDropdownMenu)")
+            .firstOrNull() ?.data()
+            ?: return emptyMap()
+
+        val items = script
+            .substringAfter("""initializeDropdownMenu({""")
+            .substringAfter("""type: "genre",""")
+            .substringAfter("items:")
+            .substringBefore("]")
+            .trim() + "]"
+
+        return QuickJs.create().use {
+            it.evaluate("JSON.stringify(Object.fromEntries($items.map(i => [i.displayName, i.value])))")
+        }.toString().parseAs<Map<String, String>>()
+    }
+
+    open fun getTypeList() = listOf(
+        "Manhwa",
+        "Manhua",
+        "Manga",
+        "Mangatoon",
+        "Comic",
+    ).associateWith { it.lowercase() }
+
+    open fun getStatusList() = listOf(
+        "Ongoing",
+        "Completed",
+        "Dropped",
+        "Hiatus",
+    ).associateWith { it.lowercase() }
 
     // ============================= Utilities =============================
+
+    protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "dropped" -> SManga.CANCELLED
+        "paused" -> SManga.ON_HIATUS
+        "completed" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     // From mangathemesia
     private fun Element.imgAttr(): String = when {
@@ -339,10 +342,10 @@ abstract class Keyoapp :
             }
     }
 
-    private fun String.parseDate(): Long = if (this.contains("ago")) {
+    open fun String.parseDate(): Long = if (this.contains("ago")) {
         this.parseRelativeDate()
     } else {
-        dateFormat.tryParse(this)
+        dateFormat.tryParseDate(this)
     }
 
     private fun String.parseRelativeDate(): Long {
@@ -383,22 +386,23 @@ abstract class Keyoapp :
 
     private fun selector(selector: String, contains: List<String>): String = contains.joinToString { selector.replace("%s", it) }
 
+    private fun HttpUrl.listParams(name: String) = queryParameterValues(name).filterNotNull().takeIf { it.isNotEmpty() }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_PAID_CHAPTERS_PREF
             title = intl["pref_show_paid_chapter_title"]
             summaryOn = intl["pref_show_paid_chapter_summary_on"]
             summaryOff = intl["pref_show_paid_chapter_summary_off"]
-            setDefaultValue(SHOW_PAID_CHAPTERS_DEFAULT)
+            setDefaultValue(false)
         }.also(screen::addPreference)
     }
 
-    protected val SharedPreferences.showPaidChapters: Boolean
-        get() = getBoolean(SHOW_PAID_CHAPTERS_PREF, SHOW_PAID_CHAPTERS_DEFAULT)
+    protected val showPaidChapters
+        get() = preferences.getBoolean(SHOW_PAID_CHAPTERS_PREF, false)
 
     companion object {
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
-        private const val SHOW_PAID_CHAPTERS_DEFAULT = false
         val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//([^/]+)""".toRegex()
         val CDN_CLEAN_REGEX = """\$\{[^}]*\}""".toRegex()
         val IMG_REGEX = """url\(['"]?([^(['")])]+)""".toRegex()

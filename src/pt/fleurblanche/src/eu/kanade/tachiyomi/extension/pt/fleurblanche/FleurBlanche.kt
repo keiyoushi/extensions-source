@@ -4,22 +4,20 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class FleurBlanche : Madara() {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.forLanguageTag("pt-BR"))
+    override val chapterMode = ChapterMode.MangaAjax
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(::authWarningIntercept)
-        .rateLimit(1, 2.seconds)
-        .build()
-
-    override val useNewChapterEndpoint = true
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::authWarningIntercept)
+        .rateLimit(1, 2.seconds) { !it.encodedPath.startsWith("/wp-content/uploads/") }
 
     override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"
 

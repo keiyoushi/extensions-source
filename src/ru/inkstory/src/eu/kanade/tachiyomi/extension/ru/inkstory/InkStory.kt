@@ -13,7 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
@@ -26,7 +26,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.text.SimpleDateFormat
-import java.util.LinkedHashMap
 import java.util.Locale
 import java.util.TimeZone
 
@@ -38,50 +37,31 @@ abstract class InkStory :
     override val supportsLatest = true
 
     private val apiBaseUrl = "https://api.inkstory.net"
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences: SharedPreferences = getPreferences {
+        if (contains("inkstory_image_quality")) {
+            edit().remove("inkstory_image_quality").apply()
+        }
 
-    private val secretKeyByChapter = object : LinkedHashMap<String, String>(SECRET_KEY_CACHE_MAX, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > SECRET_KEY_CACHE_MAX
+        if (contains("inkstory_image_type")) {
+            edit().remove("inkstory_image_type").apply()
+        }
+
+        if (contains("inkstory_image_width")) {
+            edit().remove("inkstory_image_width").apply()
+        }
     }
-    private val secretKeyLock = Any()
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageDecryptInterceptor())
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .set("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
         .add("Accept", "application/json, text/plain, */*")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_IMAGE_QUALITY
-            title = "Image quality"
-            entries = IMAGE_QUALITY_OPTIONS
-            entryValues = IMAGE_QUALITY_OPTIONS
-            summary = "%s"
-            setDefaultValue(DEFAULT_IMAGE_QUALITY)
-        }.let(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_IMAGE_TYPE
-            title = "Image type"
-            entries = IMAGE_TYPE_OPTIONS
-            entryValues = IMAGE_TYPE_OPTIONS
-            summary = "%s"
-            setDefaultValue(DEFAULT_IMAGE_TYPE)
-        }.let(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = PREF_IMAGE_WIDTH
-            title = "Image width"
-            entries = IMAGE_WIDTH_OPTIONS
-            entryValues = IMAGE_WIDTH_OPTIONS
-            summary = "%s"
-            setDefaultValue(DEFAULT_IMAGE_WIDTH)
-        }.let(screen::addPreference)
-
         ListPreference(screen.context).apply {
             key = PREF_CHAPTER_BRANCH_MODE
             title = "Режим веток глав"
@@ -123,7 +103,7 @@ abstract class InkStory :
     override fun popularMangaParse(response: Response): MangasPage = booksParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
-        "$apiBaseUrl/v2/chapter-update-feed?page=${(page - 1).coerceAtLeast(0)}&size=$PAGE_SIZE",
+        "$apiBaseUrl/v2/chapter-update-feed?onlyBorderChapters=true&page=${(page - 1).coerceAtLeast(0)}&size=$PAGE_SIZE",
         headers,
     )
 
@@ -223,7 +203,8 @@ abstract class InkStory :
         val mangaId = requireNotNull(mangaIdFromUrl(manga.url)) {
             "Expected manga url format /content/{slug}#id={id}, got: ${manga.url}"
         }
-        return GET("$apiBaseUrl/v2/chapters?bookId=$mangaId", headers)
+
+        return GET("$apiBaseUrl/v2/chapters?bookId=$mangaId&moderationStatus=APPROVED", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -233,8 +214,7 @@ abstract class InkStory :
         val chapters = response.parseAs<List<ChapterDto>>()
 
         val branchMap = fetchBranchNames(bookId)
-        val processedChapters = chapters
-            .let { preprocessChapters(it, branchMap) }
+        val processedChapters = preprocessChapters(chapters, branchMap)
 
         return processedChapters.map { chapter ->
             SChapter.create().apply {
@@ -249,14 +229,13 @@ abstract class InkStory :
                 val subtitle = listOf(chapter.name, chapter.title)
                     .firstOrNull { !it.isNullOrBlank() }
                     ?.trim()
-                val readableName = if (!subtitle.isNullOrBlank() && !baseChapterName.equals(subtitle, true)) {
+                name = if (!subtitle.isNullOrBlank() && !baseChapterName.equals(subtitle, true)) {
                     "$baseChapterName - $subtitle"
                 } else {
                     baseChapterName
                 }
 
                 setUrlWithoutDomain("/chapter/${chapter.id}")
-                name = if (chapter.donut == true) "🔒 $readableName" else readableName
                 chapter_number = chapter.number?.toFloat() ?: -1f
                 date_upload = parseDate(chapter.createdAt)
                 scanlator = resolveBranchName(chapter.branchId, branchMap)
@@ -274,7 +253,7 @@ abstract class InkStory :
     override fun pageListParse(response: Response): List<Page> {
         val chapter = response.parseAs<ChapterDto>()
         val chapterId = chapter.id
-        val secretKey = getSecretKey(chapterId)
+
         return chapter.pages
             .sortedBy { it.index ?: Int.MAX_VALUE }
             .mapIndexedNotNull { index, page ->
@@ -282,26 +261,14 @@ abstract class InkStory :
                     val normalized = normalizeImageUrl(imageUrl)
                     Page(
                         index = index,
-                        url = if (normalized.requiresXorDecode) encodePageMeta(chapterId, secretKey) else "",
+                        url = if (normalized.requiresXorDecode) encodePageMeta(chapterId, SECRET_KEY) else "",
                         imageUrl = normalized.url,
                     )
                 }
             }
     }
 
-    override fun imageRequest(page: Page): Request {
-        val imageUrl = page.imageUrl!!
-        val (chapterId, imageKey) = decodePageMeta(page.url)
-        val imageHeaders = headersBuilder().apply {
-            if (imageKey.isNotBlank()) {
-                add(IMAGE_KEY_HEADER, imageKey)
-            }
-            if (chapterId.isNotBlank()) {
-                add(IMAGE_CHAPTER_HEADER, chapterId)
-            }
-        }.build()
-        return GET(imageUrl, imageHeaders)
-    }
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -363,7 +330,7 @@ abstract class InkStory :
     }
 
     private fun fetchBranchNames(bookId: String): Map<String, String?> {
-        val branches = client.newCall(GET("$apiBaseUrl/v2/branches?bookId=$bookId", headers))
+        val branches = client.newCall(GET("$apiBaseUrl/v2/branches?bookId=$bookId&moderationStatus=APPROVED", headers))
             .execute()
             .parseAs<List<BranchDto>>()
 
@@ -421,7 +388,7 @@ abstract class InkStory :
                 ?.contains(preferredQuery, ignoreCase = true) == true
         }
 
-        val source = if (preferred.isNotEmpty()) preferred else chapters
+        val source = preferred.ifEmpty { chapters }
         return deduplicateChapters(source)
     }
 
@@ -463,37 +430,6 @@ abstract class InkStory :
         format.tryParse(value).takeIf { it != 0L }
     } ?: 0L
 
-    private fun getSecretKey(chapterId: String, forceRefresh: Boolean = false): String {
-        if (!forceRefresh) {
-            synchronized(secretKeyLock) {
-                secretKeyByChapter[chapterId]?.let { return it }
-            }
-        }
-
-        val fetched = fetchSecretKey(chapterId)
-        if (fetched.isNullOrBlank()) {
-            synchronized(secretKeyLock) {
-                return secretKeyByChapter[chapterId] ?: DEFAULT_SECRET_KEY
-            }
-        }
-
-        synchronized(secretKeyLock) {
-            secretKeyByChapter[chapterId] = fetched
-        }
-        return fetched
-    }
-
-    private fun fetchSecretKey(chapterId: String): String? {
-        val request = GET("$baseUrl/chapter/$chapterId", headers)
-        return runCatching {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@use null
-                val html = response.body.string()
-                SECRET_KEY_REGEX.find(html)?.groupValues?.getOrNull(1)
-            }
-        }.getOrNull()
-    }
-
     private fun encodePageMeta(chapterId: String, key: String): String = "$chapterId$PAGE_META_DELIMITER$key"
 
     private fun decodePageMeta(meta: String): Pair<String, String> {
@@ -518,37 +454,7 @@ abstract class InkStory :
             return NormalizedImage(url = imageUrl, requiresXorDecode = false)
         }
 
-        val parsed = imageUrl.toHttpUrlOrNull()
-            ?: return NormalizedImage(url = imageUrl, requiresXorDecode = true)
-
-        val width = preferenceValue(
-            key = PREF_IMAGE_WIDTH,
-            allowedValues = IMAGE_WIDTH_OPTIONS.toSet(),
-            defaultValue = DEFAULT_IMAGE_WIDTH,
-        )
-        val type = preferenceValue(
-            key = PREF_IMAGE_TYPE,
-            allowedValues = IMAGE_TYPE_OPTIONS.toSet(),
-            defaultValue = DEFAULT_IMAGE_TYPE,
-        )
-        val quality = preferenceValue(
-            key = PREF_IMAGE_QUALITY,
-            allowedValues = IMAGE_QUALITY_OPTIONS.toSet(),
-            defaultValue = DEFAULT_IMAGE_QUALITY,
-        )
-
-        val withParams = parsed.newBuilder().apply {
-            if (parsed.queryParameter("width") == null) addQueryParameter("width", width)
-            if (parsed.queryParameter("type") == null) addQueryParameter("type", type)
-            if (parsed.queryParameter("quality") == null) addQueryParameter("quality", quality)
-        }.build().toString()
-
-        return NormalizedImage(url = withParams, requiresXorDecode = true)
-    }
-
-    private fun preferenceValue(key: String, allowedValues: Set<String>, defaultValue: String): String {
-        val value = preferences.getString(key, defaultValue)
-        return if (value in allowedValues) value!! else defaultValue
+        return NormalizedImage(url = imageUrl, requiresXorDecode = true)
     }
 
     private fun detectImageCodec(imageUrl: String): ImageCodec? {
@@ -702,7 +608,6 @@ abstract class InkStory :
         val volume: Double? = null,
         val branchId: String? = null,
         val createdAt: String? = null,
-        val donut: Boolean? = null,
         val pages: List<ChapterPageDto> = emptyList(),
     )
 
@@ -720,30 +625,14 @@ abstract class InkStory :
         private const val IMAGE_NAME_LENGTH = 36
         private const val IMAGE_MODE_INDEX = 14
         private const val MIN_IMAGE_SIGNATURE_SIZE = 12
-
-        private const val IMAGE_KEY_HEADER = "X-InkStory-Xor-Key"
-        private const val IMAGE_CHAPTER_HEADER = "X-InkStory-Chapter-Id"
-
-        private const val PREF_IMAGE_QUALITY = "inkstory_image_quality"
-        private const val PREF_IMAGE_TYPE = "inkstory_image_type"
-        private const val PREF_IMAGE_WIDTH = "inkstory_image_width"
         private const val PREF_CHAPTER_BRANCH_MODE = "inkstory_chapter_branch_mode"
         private const val PREF_PREFERRED_BRANCH_QUERY = "inkstory_preferred_branch_query"
-
-        private const val DEFAULT_IMAGE_QUALITY = "75"
-        private const val DEFAULT_IMAGE_TYPE = "webp"
-        private const val DEFAULT_IMAGE_WIDTH = "1600"
         private const val DEFAULT_CHAPTER_BRANCH_MODE = "all"
         private const val DEFAULT_PREFERRED_BRANCH_QUERY = ""
-
-        private const val SECRET_KEY_CACHE_MAX = 500
-        private const val DEFAULT_SECRET_KEY = "UySkp0BzPhwlvP2V"
+        private const val SECRET_KEY = "UySkp0BzPhwlvP2V"
         private const val PAGE_META_DELIMITER = "|"
         private const val MANGA_URL_ID_DELIMITER = "#id="
 
-        private val IMAGE_QUALITY_OPTIONS = arrayOf("50", "75", "100")
-        private val IMAGE_TYPE_OPTIONS = arrayOf("webp", "jpeg")
-        private val IMAGE_WIDTH_OPTIONS = arrayOf("700", "1200", "1600")
         private val BRANCH_MODE_ENTRIES = arrayOf(
             "Все ветки",
             "Последняя версия главы",
@@ -759,28 +648,12 @@ abstract class InkStory :
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX", Locale.ROOT),
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSX", Locale.ROOT),
         ).onEach { it.timeZone = TimeZone.getTimeZone("UTC") }
-
-        private val SECRET_KEY_REGEX = "\"secret-key\",\"([^\"]+)\"".toRegex()
     }
 
     private inner class ImageDecryptInterceptor : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
-            val request = chain.request()
-            val chapterId = request.header(IMAGE_CHAPTER_HEADER).orEmpty()
-            val initialKey = request.header(IMAGE_KEY_HEADER).orEmpty()
-
-            val cleanRequest = request.newBuilder()
-                .removeHeader(IMAGE_KEY_HEADER)
-                .removeHeader(IMAGE_CHAPTER_HEADER)
-                .build()
-
-            val response = chain.proceed(cleanRequest)
+            val response = chain.proceed(chain.request())
             if (!response.isSuccessful) return response
-
-            var key = initialKey.ifBlank {
-                if (chapterId.isNotBlank()) getSecretKey(chapterId) else ""
-            }
-            if (key.isBlank()) return response
 
             val sourceBody = response.body
             val encryptedPayload = sourceBody.bytes()
@@ -790,19 +663,8 @@ abstract class InkStory :
                     .build()
             }
 
-            var decodedPayload = decodeXor(encryptedPayload, key)
-            var isDecodedImage = looksLikeImage(decodedPayload)
-
-            if (!isDecodedImage && chapterId.isNotBlank()) {
-                val refreshedKey = getSecretKey(chapterId, forceRefresh = true)
-                if (refreshedKey != key) {
-                    val refreshedPayload = decodeXor(encryptedPayload, refreshedKey)
-                    if (looksLikeImage(refreshedPayload)) {
-                        decodedPayload = refreshedPayload
-                        isDecodedImage = true
-                    }
-                }
-            }
+            val decodedPayload = decodeXor(encryptedPayload, SECRET_KEY)
+            val isDecodedImage = looksLikeImage(decodedPayload)
 
             if (!isDecodedImage) {
                 return response.newBuilder()

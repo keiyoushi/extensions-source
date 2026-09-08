@@ -82,7 +82,7 @@ class Chapter(
 }
 
 @Serializable
-class PagesResult(val urls: List<JsonObject>, val scrambleInfo: ScrambleInfo)
+class PagesResult(val urls: List<JsonObject>, val scrambleInfo: ScrambleInfo? = null)
 
 @Serializable
 class ScrambleInfo(val ticket: String, val nonce: String, val cols: Int, val rows: Int) {
