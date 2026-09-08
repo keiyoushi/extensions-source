@@ -45,6 +45,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 @Source
 class MangaDex(
@@ -72,12 +74,6 @@ class MangaDex(
 
     private val komikku = applicationContext.packageName.startsWith("app.komikku")
 
-    private fun delegateSources() = try {
-        appPreferences.getBoolean("eh_delegate_sources", komikku)
-    } catch (_: ClassCastException) {
-        false
-    }
-
     private val helper = MangaDexHelper(lang)
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
@@ -103,9 +99,18 @@ class MangaDex(
             .addQueryParameter("includes[]", MDConstants.COVER_ART)
             .addQueryParameter("contentRating[]", preferences.contentRating)
             .addQueryParameter("originalLanguage[]", preferences.originalLanguages)
+            .addQueryParameter(
+                "createdAtSince",
+                LocalDate
+                    .now()
+                    .minusDays(30)
+                    .atStartOfDay()
+                    .atZone(ZoneOffset.UTC)
+                    .format(MDConstants.dateFormatterNoOffset),
+            )
             .build()
 
-        return parseMangasPage(client.get(url, CacheControl.FORCE_NETWORK))
+        return parseMangasPage(client.get(url))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -137,7 +142,18 @@ class MangaDex(
         .addQueryParameter("limit", MDConstants.LATEST_CHAPTER_LIMIT.toString())
         .addQueryParameter("translatedLanguage[]", dexLang)
         .addQueryParameter("order[publishAt]", "desc")
-        .addQueryParameter("includeFutureUpdates", if (delegateSources()) "1" else "0")
+        .addQueryParameter(
+            "includeFutureUpdates",
+            try {
+                if (appPreferences.getBoolean("eh_delegate_sources", komikku)) {
+                    "1"
+                } else {
+                    "0"
+                }
+            } catch (_: Throwable) {
+                "0"
+            },
+        )
         .addQueryParameter("originalLanguage[]", preferences.originalLanguages)
         .addQueryParameter("contentRating[]", preferences.contentRating)
         .addQueryParameter(
@@ -398,7 +414,18 @@ class MangaDex(
         .addQueryParameter("limit", MDConstants.LATEST_CHAPTER_LIMIT.toString())
         .addQueryParameter("translatedLanguage[]", dexLang)
         .addQueryParameter("order[publishAt]", "desc")
-        .addQueryParameter("includeFutureUpdates", if (delegateSources()) "1" else "0")
+        .addQueryParameter(
+            "includeFutureUpdates",
+            try {
+                if (appPreferences.getBoolean("eh_delegate_sources", komikku)) {
+                    "1"
+                } else {
+                    "0"
+                }
+            } catch (_: Throwable) {
+                "0"
+            },
+        )
         .addQueryParameter("includeFuturePublishAt", "0")
         .addQueryParameter("includeEmptyPages", "0")
         .addQueryParameter("uploader", uploader)
