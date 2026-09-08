@@ -73,14 +73,12 @@ abstract class Doujiva : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val slug = slugFromUrl("$baseUrl${manga.url}".toHttpUrl())
-            ?: throw Exception("Cannot resolve Doujiva manga from url: ${manga.url}")
+        val slug = manga.url
 
         val dto = fetchMangaDto(slug)
             ?: throw Exception("Doujiva manga not found: $slug")
 
         val details = dto.toSMangaOrNull()?.apply {
-            // Keep the relative URL already stored by the list/search entry.
             url = manga.url
         } ?: manga
 
@@ -92,7 +90,7 @@ abstract class Doujiva : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = chapter.url.toHttpUrl().pathSegments.last()
+        val chapterId = chapter.url
         val slug = chapter.memo["slug"]?.jsonPrimitive?.content
             ?: throw Exception("Missing Doujiva manga slug for chapter: ${chapter.url}")
 
@@ -131,7 +129,7 @@ abstract class Doujiva : KeiSource() {
     private fun MangaDto.toSMangaOrNull(): SManga? {
         if (slug.isBlank() || title.isBlank()) return null
         return SManga.create().apply {
-            url = "/manga/$slug"
+            url = slug
             memo = buildJsonObject {
                 put("slug", slug)
             }
@@ -175,7 +173,7 @@ abstract class Doujiva : KeiSource() {
 
     private fun MangaDto.toSChapterList(): List<SChapter> = chapters.map { chapter ->
         SChapter.create().apply {
-            url = "/manga/$slug/read/${chapter.id}"
+            url = chapter.id
             memo = buildJsonObject {
                 put("slug", slug)
                 put("number", chapter.number)
