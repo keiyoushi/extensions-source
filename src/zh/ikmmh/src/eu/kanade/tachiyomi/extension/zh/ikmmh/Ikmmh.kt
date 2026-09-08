@@ -34,7 +34,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * 爱看漫 (ymcdnyfqdapp.ikmmh.com)
  *
  * 站点特征：
- * - 仅移动 UA 可访问（桌面 UA 返回 404），因此硬编码移动 UA
+ * - 仅移动 UA 可访问（桌面 UA 返回 404）；Mihon 默认 UA 即移动端，仅默认 UA 非移动时回退硬编码移动 UA
  * - WAF 对非浏览器形态请求敏感：需锁定 HTTP/1.1、显式 Accept/Accept-Language、去除 Origin，
  *   否则可能触发封禁出口 IP（connection closed 后浏览器也无法访问）
  * - 热门/分类共用 /booklists/{area}/{tag}/{status}/{page}.html，站点按 1 起始分页
@@ -55,9 +55,16 @@ abstract class Ikmmh : KeiSource() {
     @Volatile
     private var sessionCookie: String? = null
 
-    // 站点桌面端返回 404，必须使用移动 UA；桌面 UA/英文语境头会触发站点 WAF 封禁出口 IP
+    // 站点桌面端返回 404，桌面 UA 会触发站点 WAF 封禁出口 IP，必须使用移动 UA。
+    // Mihon 默认 UA 即移动端，仅当默认 UA 非移动时才替换为硬编码移动 UA（保留用户在应用设置里的自定义）
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
-        .set("User-Agent", MOBILE_UA)
+        .apply {
+            // headersBuilder 已预置默认 UA（Mihon 设置 → Default user agent）
+            val defaultUserAgent = build()["User-Agent"]
+            if (defaultUserAgent == null || !defaultUserAgent.contains("Mobile")) {
+                set("User-Agent", MOBILE_UA)
+            }
+        }
         .set("Accept-Language", "zh-CN,zh;q=0.9")
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
         .removeAll("Origin")
@@ -87,9 +94,6 @@ abstract class Ikmmh : KeiSource() {
     // ---- 最新 ----
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        // 站点 /update/ 按 1 起始且仅前几页有内容，超界返回空页
-        if (page > LATEST_MAX_PAGES) return MangasPage(emptyList(), false)
-
         warmupSession()
         val document = client.get("$baseUrl/update/$page.html").asJsoup()
         return MangasPage(parseListItemMangas(document), page < LATEST_MAX_PAGES)
