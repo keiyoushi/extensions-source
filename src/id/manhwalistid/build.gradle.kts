@@ -13,6 +13,6 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl = "https://manhwalist02.asia"
+        baseUrl = "https://manhwalist.asia"
     }
 }

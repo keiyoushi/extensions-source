@@ -13,6 +13,6 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl = "https://v4.luvyaa.co"
+        baseUrl = "https://v5.luvyaa.co"
     }
 }
