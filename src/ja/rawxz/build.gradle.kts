@@ -12,7 +12,7 @@ keiyoushi {
 
     source {
         lang = "ja"
-        baseUrl = "https://rawmiu.net"
+        baseUrl = "https://rawmiu.com"
         id = 7950551186567193810L
     }
 }
