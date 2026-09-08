@@ -1,121 +1,105 @@
 package eu.kanade.tachiyomi.extension.en.hyakuro
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class Hyakuro : HttpSource() {
-    override val supportsLatest = true
+abstract class Hyakuro : KeiSource() {
 
-    private val apiUrl = "$baseUrl/backend/api"
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    private val apiUrl get() = "$baseUrl/backend/api"
 
     // Popular/A-Z
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("populate", "Cover,Chapters")
             .addQueryParameter("sort", "Title:asc")
             .addQueryParameter("pagination[page]", page.toString())
             .build()
-        return GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<PaginatedResponse>()
-        val mangas = result.data.map { it.attributes.toSManga(baseUrl) }
-        val hasNextPage = result.meta.pagination.page < result.meta.pagination.pageCount
-        return MangasPage(mangas, hasNextPage)
+        return parseMangaList(client.get(url).parseAs<PaginatedResponse>())
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("populate", "Cover,Chapters")
             .addQueryParameter("sort", "updatedAt:desc")
             .addQueryParameter("pagination[page]", page.toString())
             .build()
-        return GET(url, headers)
+        return parseMangaList(client.get(url).parseAs<PaginatedResponse>())
     }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
-        url.addQueryParameter("pagination[page]", page.toString())
-        url.addQueryParameter("populate", "Cover,Chapters")
-        url.addQueryParameter("sort", "updatedAt:desc")
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$apiUrl/mangas".toHttpUrl().newBuilder().apply {
+            addQueryParameter("pagination[page]", page.toString())
+            addQueryParameter("populate", "Cover,Chapters")
+            addQueryParameter("sort", "updatedAt:desc")
 
-        if (query.isNotBlank()) {
-            url.addQueryParameter("filters[Title][\$containsi]", query)
-        }
+            if (query.isNotBlank()) {
+                addQueryParameter("filters[Title][\$containsi]", query)
+            }
 
-        filters.forEach { filter ->
-            when (filter) {
-                is StatusFilter -> {
-                    if (filter.state != 0) {
-                        val status = filter.values[filter.state]
-                        if (status == "Oneshot") {
-                            url.addQueryParameter("filters[Oneshot][\$eq]", "true")
-                        } else {
-                            url.addQueryParameter("filters[Status][\$eq]", status)
+            filters.forEach { filter ->
+                when (filter) {
+                    is StatusFilter -> {
+                        if (filter.state != 0) {
+                            val status = filter.values[filter.state]
+                            if (status == "Oneshot") {
+                                addQueryParameter("filters[Oneshot][\$eq]", "true")
+                            } else {
+                                addQueryParameter("filters[Status][\$eq]", status)
+                            }
                         }
                     }
-                }
 
-                is CategoryFilter -> {
-                    filter.state.filter { it.state }.forEachIndexed { index, checkbox ->
-                        url.addQueryParameter("filters[\$and][${index + 1}][Categories][\$containsi]", checkbox.name)
+                    is CategoryFilter -> {
+                        filter.state.filter { it.state }.forEachIndexed { index, checkbox ->
+                            addQueryParameter("filters[\$and][${index + 1}][Categories][\$containsi]", checkbox.name)
+                        }
                     }
-                }
 
-                else -> {}
+                    else -> {}
+                }
             }
-        }
-        return GET(url.build(), headers)
+        }.build()
+        return parseMangaList(client.get(url).parseAs<PaginatedResponse>())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun parseMangaList(result: PaginatedResponse): MangasPage {
+        val mangas = result.data.map { it.attributes.toSManga(baseUrl) }
+        val hasNextPage = result.meta.pagination.page < result.meta.pagination.pageCount
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    // Details
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    // Details and chapters come from the same response
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         val slug = manga.url.substringAfter("/manga/")
         val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("filters[slug][\$eq]", slug)
             .addQueryParameter("populate", "Cover,Chapters")
             .build()
-        return GET(url, headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<PaginatedResponse>()
-        return result.data.first().attributes.toSManga(baseUrl)
-    }
-
-    // Chapter
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaSlug = response.request.url.queryParameter("filters[slug][\$eq]")!!
-        val parent = response.parseAs<PaginatedResponse>().data.first().attributes
-        return parent.chapters!!
-            .sortedByDescending { it.chapter }
-            .map { it.toSChapter(mangaSlug, parent) }
+        val attributes = client.get(url).parseAs<PaginatedResponse>().data.first().attributes
+        return SMangaUpdate(
+            attributes.toSManga(baseUrl),
+            attributes.chapters!!.sortedByDescending { it.chapter }
+                .map { it.toSChapter(slug, attributes) },
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -126,44 +110,34 @@ abstract class Hyakuro : HttpSource() {
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val parts = chapter.url.split("#")
         val slug = parts[0]
-        val chapterId = parts[2]
+        val chapterId = parts[2].toInt()
         val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("filters[slug][\$eq]", slug)
             .addQueryParameter("populate[Chapters][populate]", "*")
-            .fragment(chapterId)
             .build()
-        return GET(url, headers)
-    }
+        val attributes = client.get(url).parseAs<PaginatedResponse>().data.first().attributes
+        val chapterData = attributes.chapters!!.find { it.id == chapterId }!!
 
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterId = response.request.url.fragment!!.toInt()
-        val parent = response.parseAs<PaginatedResponse>().data.first().attributes
-        val chapter = parent.chapters!!.find { it.id == chapterId }!!
-
-        return chapter.pages!!.data
+        return chapterData.pages!!.data
             .sortedBy { it.attributes.url }
             .mapIndexed { index, pageData ->
                 Page(index, imageUrl = "$baseUrl/backend${pageData.attributes.url}")
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // Filters
     private class StatusFilter : Filter.Select<String>("Status", arrayOf("All", "Ongoing", "Completed", "Dropped", "Oneshot"))
     private class Category(name: String) : Filter.CheckBox(name)
     private class CategoryFilter(categories: List<Category>) : Filter.Group<Category>("Categories", categories)
 
-    override fun getFilterList(): FilterList {
-        Filter.Header("NOTE: Search query will be applied to filters")
-        return FilterList(
-            StatusFilter(),
-            CategoryFilter(getCategoryList()),
-        )
-    }
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        Filter.Header("NOTE: Search query will be applied to filters"),
+        StatusFilter(),
+        CategoryFilter(getCategoryList()),
+    )
 
     private fun getCategoryList() = listOf(
         Category("Action"),

@@ -127,14 +127,12 @@ abstract class AllManga :
 
     override fun getFilterList(data: JsonElement?) = getFilters()
 
-    override fun getMangaUrl(manga: SManga): String {
-        if (manga.url.startsWith("/")) {
-            val mangaId = manga.url.split("/")[2]
-            return "$baseUrl/manga/$mangaId"
-        } else {
-            return "$baseUrl/manga/${manga.url}"
-        }
-    }
+    override fun getMangaUrl(manga: SManga) = if (manga.url.startsWith("/")) {
+        val mangaId = manga.url.split("/")[2]
+        "$baseUrl/manga/$mangaId"
+    } else {
+        "$baseUrl/manga/${manga.url}"
+    } + "?fromSearch=1"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -147,12 +145,17 @@ abstract class AllManga :
             val parts = manga.url.split("/")
             parts[2] to parts[3]
         } else {
-            manga.url to manga.memo["slug"]!!.string
+            manga.url to manga.memo["slug"]?.string
         }
 
         val payload = graphQLBody(
             query = UPDATE_QUERY,
-            variables = MangaUpdateVariables(mangaId, "manga@$mangaId"),
+            variables = MangaUpdateVariables(
+                mangaId,
+                "manga@$mangaId",
+                // Manga = null for some if not present
+                mapOf("fromSearch" to true),
+            ),
         )
 
         var data: MangaUpdateData? = null
@@ -243,7 +246,7 @@ abstract class AllManga :
             .map { (('a'..'z') + ('A'..'Z')).random() }
             .joinToString("")
         val mangaId = chapter.memo["mangaId"]?.string ?: throw Exception("Refresh Chapter List")
-        val mangaUrl = "$baseUrl/manga/$mangaId"
+        val mangaUrl = "$baseUrl/manga/$mangaId?fromSearch=1"
         val chapterUrl = getChapterUrl(chapter).toHttpUrl().encodedPath
 
         val document = client.get(mangaUrl, ensureSuccess = false).use { response ->
