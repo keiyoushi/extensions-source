@@ -10,10 +10,6 @@ keiyoushi {
     versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-<<<<<<< HEAD:src/en/silentquill/build.gradle.kts
-=======
-    theme = "mangathemesia"
->>>>>>> bdf338cb2 (1.6):src/en/armageddon/build.gradle.kts
 
     source {
         lang = "en"

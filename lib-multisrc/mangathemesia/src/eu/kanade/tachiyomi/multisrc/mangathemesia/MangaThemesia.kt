@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.mangathemesia
 
 import android.util.Base64
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -23,13 +23,17 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
+import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
@@ -161,7 +165,7 @@ abstract class MangaThemesia : KeiSource() {
 
         return if (sendViewCount && postId != null) {
             coroutineScope {
-                val viewDeffered = async { sendView(postId) }
+                sendView(postId)
                 val detailsDefer = async { client.get(getMangaUrl(manga)).asJsoup() }
 
                 val doc = detailsDefer.await()
@@ -169,7 +173,8 @@ abstract class MangaThemesia : KeiSource() {
             }
         } else {
             val doc = client.get(getMangaUrl(manga)).asJsoup()
-            val postId = sendView(doc.postId())
+            val postId = doc.postId()
+            sendView(postId)
             SMangaUpdate(
                 mangaDetailsParse(doc).apply {
                     if (postId != null) memo = buildJsonObject { put("postId", postId) }
@@ -399,15 +404,21 @@ abstract class MangaThemesia : KeiSource() {
      */
     protected open val sendViewCount: Boolean = true
 
-    protected open suspend fun sendView(postId: String?): String? {
-        if (!sendViewCount || postId.isNullOrEmpty()) return null
+    protected open fun sendView(postId: String?) {
+        if (!sendViewCount || postId.isNullOrEmpty()) return
         val formBody = FormBody.Builder()
             .add("action", "dynamic_view_ajax")
             .add("post_id", postId)
             .build()
 
-        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", formBody, ensureSuccess = false)
-        return if (response.isSuccessful) postId else null
+        val request = POST("$baseUrl/wp-admin/admin-ajax.php", headers, formBody)
+
+        client.newCall(request).enqueue(
+            object : Callback {
+                override fun onFailure(call: Call, e: IOException) = Unit
+                override fun onResponse(call: Call, response: Response) = response.close()
+            },
+        )
     }
 
     open fun Document.postId(): String? = select("script").firstNotNullOfOrNull { script ->
