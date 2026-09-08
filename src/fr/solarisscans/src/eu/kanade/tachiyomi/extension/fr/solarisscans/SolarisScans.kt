@@ -121,7 +121,6 @@ abstract class SolarisScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        require(manga.url.isNotBlank()) { "Refresh the manga entry." }
         val document = client.get(getMangaUrl(manga)).asJsoup()
         val updatedManga = if (fetchDetails) parseDetails(document, manga.url) else manga
         // Extra chapter pages live behind ?chapters_page=N, so only fetch them when asked.
