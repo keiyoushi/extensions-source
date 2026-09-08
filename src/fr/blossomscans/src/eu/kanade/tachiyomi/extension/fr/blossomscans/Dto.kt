@@ -2,49 +2,28 @@ package eu.kanade.tachiyomi.extension.fr.blossomscans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.get
-import keiyoushi.utils.getArray
-import keiyoushi.utils.getArrayOrNull
-import keiyoushi.utils.getBooleanOrNull
-import keiyoushi.utils.getObject
-import keiyoushi.utils.getString
-import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
+@Serializable
 class SeriesListResponse(
     val data: List<SeriesDto>,
     val pagination: PaginationDto,
-) {
-    companion object {
-        fun fromJson(obj: JsonObject) = SeriesListResponse(
-            data = obj.getArray("data").map { SeriesDto.fromJson(it.jsonObject) },
-            pagination = PaginationDto.fromJson(obj.getObject("pagination")),
-        )
-    }
-}
+)
 
+@Serializable
 class PaginationDto(
     val page: Int,
     val totalPages: Int,
-) {
-    companion object {
-        fun fromJson(obj: JsonObject) = PaginationDto(
-            page = obj.get("page")?.jsonPrimitive?.intOrNull ?: 1,
-            totalPages = obj.get("totalPages")?.jsonPrimitive?.intOrNull ?: 1,
-        )
-    }
-}
+)
 
+@Serializable
 class SeriesDto(
     private val slug: String,
     private val title: String,
@@ -55,16 +34,9 @@ class SeriesDto(
         title = this@SeriesDto.title
         thumbnail_url = cover?.let { baseUrl.resolveImage(it) }
     }
-
-    companion object {
-        fun fromJson(obj: JsonObject) = SeriesDto(
-            slug = obj.getString("slug"),
-            title = obj.getString("title"),
-            cover = obj.getStringOrNull("cover"),
-        )
-    }
 }
 
+@Serializable
 class SeriesDetailsDto(
     val slug: String,
     private val title: String,
@@ -91,32 +63,14 @@ class SeriesDetailsDto(
             else -> SManga.UNKNOWN
         }
     }
-
-    companion object {
-        fun fromJson(obj: JsonObject) = SeriesDetailsDto(
-            slug = obj.getString("slug"),
-            title = obj.getString("title"),
-            cover = obj.getStringOrNull("cover"),
-            synopsis = obj.getStringOrNull("synopsis"),
-            status = obj.getStringOrNull("status"),
-            author = obj.getStringOrNull("author"),
-            artist = obj.getStringOrNull("artist"),
-            genres = obj.getArrayOrNull("genres")?.map { GenreDto.fromJson(it.jsonObject) }.orEmpty(),
-            chapters = obj.getArray("chapters").map { ChapterDto.fromJson(it.jsonObject) },
-        )
-    }
 }
 
+@Serializable
 class GenreDto(
     val name: String,
-) {
-    companion object {
-        fun fromJson(obj: JsonObject) = GenreDto(
-            name = obj.getString("name"),
-        )
-    }
-}
+)
 
+@Serializable
 class ChapterDto(
     private val number: Float,
     val chapterId: String,
@@ -161,18 +115,6 @@ class ChapterDto(
     fun pageUrls(baseUrl: String): List<String> = runCatching {
         jsonInstance.parseToJsonElement(pages).jsonArray.map { baseUrl.resolveImage(it.jsonPrimitive.content) }
     }.getOrDefault(emptyList())
-
-    companion object {
-        fun fromJson(obj: JsonObject) = ChapterDto(
-            number = obj.getValue("number").jsonPrimitive.float,
-            chapterId = obj.getString("chapterId"),
-            title = obj.getStringOrNull("title"),
-            pages = obj.getString("pages"),
-            isPremium = obj.getBooleanOrNull("isPremium") ?: false,
-            freeAt = obj.getStringOrNull("freeAt"),
-            publishedAt = obj.getStringOrNull("publishedAt"),
-        )
-    }
 }
 
 private fun String.resolveImage(src: String): String = when {

@@ -16,9 +16,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getString
-import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -80,7 +78,7 @@ abstract class BlossomScans :
             }
         }.build()
 
-        val response = SeriesListResponse.fromJson(client.get(url).parseAs<JsonElement>().obj)
+        val response = client.get(url).parseAs<SeriesListResponse>()
         val mangas = response.data.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, response.pagination.page < response.pagination.totalPages)
     }
@@ -109,7 +107,7 @@ abstract class BlossomScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = SeriesDetailsDto.fromJson(client.get("$baseUrl/api/series/${manga.url}").parseAs<JsonElement>().obj)
+        val details = client.get("$baseUrl/api/series/${manga.url}").parseAs<SeriesDetailsDto>()
         return SMangaUpdate(
             details.toSManga(baseUrl),
             details.chapters.filterNot { it.isLocked && hidePremium }.map { it.toSChapter(details.slug) },
@@ -118,7 +116,7 @@ abstract class BlossomScans :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.memo.getString("mangaSlug")
-        val details = SeriesDetailsDto.fromJson(client.get("$baseUrl/api/series/$slug").parseAs<JsonElement>().obj)
+        val details = client.get("$baseUrl/api/series/$slug").parseAs<SeriesDetailsDto>()
         val entry = details.chapters.firstOrNull { it.chapterId == chapter.url } ?: return emptyList()
         return entry.pageUrls(baseUrl).mapIndexed { index, imageUrl ->
             Page(index, url = getChapterUrl(chapter), imageUrl = imageUrl)
@@ -127,14 +125,18 @@ abstract class BlossomScans :
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs<List<String>>().toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = runCatching { data?.parseAs<List<String>>() }.getOrNull().orEmpty()
+        val genres = data?.parseAs<List<String>>().orEmpty()
         return FilterList(
-            SortFilter(),
-            StatusFilter(),
-            GenreFilter(genres),
+            buildList {
+                add(SortFilter())
+                add(StatusFilter())
+                if (genres.isNotEmpty()) {
+                    add(GenreFilter(genres))
+                }
+            },
         )
     }
 
