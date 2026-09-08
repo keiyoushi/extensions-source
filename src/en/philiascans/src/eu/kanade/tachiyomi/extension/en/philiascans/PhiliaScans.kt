@@ -39,14 +39,13 @@ abstract class PhiliaScans :
 
     private val emptyBody = ByteArray(0).toRequestBody(null)
 
-    private val tokenHeaders by lazy {
-        headersBuilder()
+    private val tokenHeaders
+        get() = headersBuilder()
             .set("Accept", "application/json")
             .set("Accept-Language", "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7,ja;q=0.6")
             .set("Sec-Fetch-Mode", "cors")
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
-    }
 
     private val tokenMutex = Mutex()
 
@@ -60,17 +59,17 @@ abstract class PhiliaScans :
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = searchManga(page, "", FilterList(SortFilter().apply { state = 2 }, OrderFilter()))
+    override suspend fun getPopularManga(page: Int): MangasPage =
+        getSearchMangaList(page, "", FilterList(SortFilter().apply { state = 2 }, OrderFilter()))
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = searchManga(page, "", FilterList(SortFilter(), OrderFilter()))
+    override suspend fun getLatestUpdates(page: Int): MangasPage =
+        getSearchMangaList(page, "", FilterList(SortFilter(), OrderFilter()))
 
     // ============================== Search ===============================
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = searchManga(page, query, filters)
-
-    private suspend fun searchManga(page: Int, query: String, filters: FilterList): MangasPage {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("perPage", "20")
@@ -113,7 +112,7 @@ abstract class PhiliaScans :
         }
         val chaptersDeferred = async {
             if (!fetchChapters) return@async chapters
-            parseChapterList(manga.url)
+            getChapterList(manga.url)
         }
         SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
     }
@@ -130,7 +129,7 @@ abstract class PhiliaScans :
 
     // ============================= Chapters ==============================
 
-    private suspend fun parseChapterList(slug: String): List<SChapter> {
+    private suspend fun getChapterList(slug: String): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         return client.get("$apiUrl/manga/$slug/chapters").parseAs<ChapterResponse>().items
             .filter { !hideLocked || !it.isLocked }
