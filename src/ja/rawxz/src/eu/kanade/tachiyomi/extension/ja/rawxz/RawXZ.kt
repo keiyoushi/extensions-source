@@ -67,13 +67,14 @@ abstract class RawXZ : KeiSource() {
     private fun parseDetails(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst(".md-title")!!.text().removeSuffix(" (Raw – Free)")
         author = document.select(".md-meta-row:has(.fa-user) .md-meta-val").text().takeIf { it != "更新中" }
-        status = parseStatus(document.select(".md-meta-row:has(.fa-rss) .md-meta-val").text())
+        status = parseStatus(document.selectFirst(".md-meta-row:has(.fa-rss) .md-meta-val")?.text())
         genre = document.select(".md-tag").joinToString { it.text() }
         description = document.selectFirst(".md-desc-content")?.text()
         thumbnail_url = document.selectFirst(".md-cover img")?.absUrl("src")
     }
 
-    private fun parseStatus(status: String) = when {
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
         status.contains("連載中") -> SManga.ONGOING
         status.contains("完結") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
