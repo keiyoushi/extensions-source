@@ -18,13 +18,26 @@ import java.util.Calendar
 abstract class RawXZ : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/manga/page/$page/?orderby=views").asJsoup()
-
         return parseMangasPage(document)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val document = client.get("$baseUrl/manga/page/$page/?orderby=date").asJsoup()
+        return parseMangasPage(document)
+    }
 
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (page > 1) {
+                addPathSegment("page")
+                addPathSegment(page.toString())
+                addPathSegment("")
+            }
+            addQueryParameter("s", query)
+            addQueryParameter("post_type", "manga")
+        }.build()
+
+        val document = client.get(url).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -37,32 +50,8 @@ abstract class RawXZ : KeiSource() {
             }
         }
 
-        val hasNextPage = document.selectFirst(".pagination a:has(i.fa-chevron-right)") != null
-
+        val hasNextPage = mangas.size >= 40 && document.selectFirst(".pagination a:has(i.fa-chevron-right)") != null
         return MangasPage(mangas, hasNextPage)
-    }
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (page > 1) {
-                addPathSegment("page")
-                addPathSegment(page.toString())
-            }
-            addQueryParameter("s", query)
-            addQueryParameter("post_type", "manga")
-        }.build()
-
-        val document = client.get(url).asJsoup()
-
-        val mangas = document.select(".manga-card").map { element ->
-            SManga.create().apply {
-                title = element.selectFirst(".manga-card-title")!!.text()
-                setUrlWithoutDomain(element.selectFirst("a.manga-card-thumb")!!.absUrl("href"))
-                thumbnail_url = element.selectFirst(".manga-card-thumb img")?.absUrl("src")
-            }
-        }
-
-        return MangasPage(mangas, mangas.size >= 40)
     }
 
     override suspend fun fetchMangaUpdate(
@@ -72,7 +61,6 @@ abstract class RawXZ : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-
         return SMangaUpdate(parseDetails(document), parseChapters(document))
     }
 
