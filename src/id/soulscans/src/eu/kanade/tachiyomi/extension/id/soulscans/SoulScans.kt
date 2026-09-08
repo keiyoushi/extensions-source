@@ -19,7 +19,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class SoulScans : KeiSource() {
 
     private suspend fun getMangaList(url: HttpUrl): MangasPage {
-        val result = client.get(url, headers).parseAs<MangaListResponseDto>()
+        val result = client.get(url).parseAs<MangaListResponseDto>()
 
         val page = url.queryParameter("page")!!.toInt()
         return MangasPage(result.data.map { it.toSManga() }, page < result.totalPages)
@@ -76,13 +76,13 @@ abstract class SoulScans : KeiSource() {
         return SMangaUpdate(detail.toSManga(), detail.toSChapterList())
     }
 
-    private suspend fun fetchSeriesDetail(slug: String) = client.get("$baseUrl/api/series/comic/$slug", headers).parseAs<SeriesDetailDto>()
+    private suspend fun fetchSeriesDetail(slug: String) = client.get("$baseUrl/api/series/comic/$slug").parseAs<SeriesDetailDto>()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val path = chapter.url.removePrefix("/comic/")
         val (seriesSlug, chapterSlug) = path.split("/chapter/")
 
-        return client.get("$baseUrl/api/series/comic/$seriesSlug/chapter/$chapterSlug", headers)
+        return client.get("$baseUrl/api/series/comic/$seriesSlug/chapter/$chapterSlug")
             .parseAs<ChapterPagesResponseDto>()
             .toPageList()
     }
