@@ -8,9 +8,20 @@ internal class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Тэги", 
 internal class OrderBy :
     Filter.Sort(
         "Сортировка",
-        arrayOf("Дата", "Просмотры", "Лайки"),
+        order.map { it.first }.toTypedArray(),
         Selection(1, false),
-    )
+    ) {
+    val selected: String get() = order[state?.index ?: 1].second
+    companion object {
+        val order = listOf(
+            "Дата" to "date",
+            "Просмотры" to "views",
+            "Лайки" to "like",
+            "Отзывы" to "com",
+            "Количество страниц" to "pages",
+        )
+    }
+}
 
 fun getFilters(): FilterList = FilterList(
     OrderBy(),
