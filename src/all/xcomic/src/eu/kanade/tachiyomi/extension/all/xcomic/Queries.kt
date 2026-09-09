@@ -248,31 +248,3 @@ val CHAPTER_PAGES_QUERY = $$"""
         }
     }
 """
-
-val COMIC_LATEST_QUERY = $$"""
-    query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
-        get_comic_latestUploads(select: $select) {
-            before
-            items {
-                comic {
-                    id
-                    data {
-                        id
-                        name
-                        urlPath
-                        urlCover
-                        translatedLanguage
-                        genres
-                    }
-                }
-                chapters(amount: 1) {
-                    id
-                    data {
-                        id
-                        datePublic
-                    }
-                }
-            }
-        }
-    }
-"""

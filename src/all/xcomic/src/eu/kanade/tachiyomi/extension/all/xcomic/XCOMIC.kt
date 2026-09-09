@@ -44,46 +44,7 @@ abstract class XCOMIC :
     // ========================= Popular & Latest ==========================
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(DefaultSortFilter("field_score")))
 
-    private var latestCursor: Long? = null
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page == 1) {
-            latestCursor = null
-        }
-
-        val targetLang = if (lang == "all") null else mapLangCode(lang)
-        val accumulatedMangas = mutableListOf<SManga>()
-        val seenMangaUrls = mutableSetOf<String>()
-        var hasNextPage = true
-        var apiPageCount = 0
-
-        while (accumulatedMangas.isEmpty() && hasNextPage && apiPageCount < 10) {
-            apiPageCount++
-            val variables = ApiLatestUploadsSelect(
-                size = BROWSE_PAGE_SIZE,
-                before = latestCursor,
-            )
-            val payload = graphQLBody(query = COMIC_LATEST_QUERY, variables = ApiLatestUploadsWrapper(variables))
-            val response = client.post("$baseUrl/query/", payload)
-            val result = response.parseGraphQLAs<LatestUploadsData>().response
-
-            val filteredItems = result.items.filter { item ->
-                item.comic?.data != null && (targetLang == null || item.comic.data.translatedLanguage == targetLang)
-            }
-
-            filteredItems.forEach { item ->
-                val manga = item.comic!!.data!!.toSManga(baseUrl, ::cleanTitleIfNeeded)
-                if (seenMangaUrls.add(manga.url)) {
-                    accumulatedMangas.add(manga)
-                }
-            }
-
-            latestCursor = result.before
-            hasNextPage = latestCursor != null
-        }
-
-        return MangasPage(accumulatedMangas, hasNextPage)
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(DefaultSortFilter("field_update")))
 
     // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

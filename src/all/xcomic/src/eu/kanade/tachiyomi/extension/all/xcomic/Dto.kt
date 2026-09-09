@@ -400,36 +400,6 @@ class ChapterData(
     }
 }
 
-// ========================= Latest Uploads ===========================
-
-@Serializable
-class ApiLatestUploadsSelect(
-    val size: Int? = null,
-    val before: Long? = null,
-    val genre: String? = null,
-)
-
-@Serializable
-class ApiLatestUploadsWrapper(val select: ApiLatestUploadsSelect)
-
-@Serializable
-class LatestUploadsData(
-    @SerialName("get_comic_latestUploads")
-    val response: LatestUploadsResult,
-)
-
-@Serializable
-class LatestUploadsResult(
-    val before: Long? = null,
-    val items: List<LatestUploadsItem>,
-)
-
-@Serializable
-class LatestUploadsItem(
-    val comic: XComicData<ComicNode?>? = null,
-    val chapters: List<XComicData<ChapterData?>>? = null,
-)
-
 @Serializable
 class XComicStrings(
     val text: String? = null,
