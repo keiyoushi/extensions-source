@@ -24,6 +24,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 abstract class MangaMillion : KeiSource() {
     private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://api.$domain/api"
+    private val serviceLang: String
+        get() = if (lang in SERVICE_LANGUAGES) lang else "en"
 
     private var token: String? = null
 
@@ -31,7 +33,7 @@ abstract class MangaMillion : KeiSource() {
         token?.let { return it }
 
         val url = "$apiUrl/register".toHttpUrl().newBuilder()
-            .addQueryParameter("service_language", "en")
+            .addQueryParameter("service_language", serviceLang)
             .build()
 
         val acceptHeaders = Headers.Builder()
@@ -53,13 +55,13 @@ abstract class MangaMillion : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/manga_list".toHttpUrl().newBuilder()
-            .addQueryParameter("service_language", "en")
+            .addQueryParameter("service_language", serviceLang)
             .addQueryParameter("avif_enable", "true")
             .build()
 
         val result = client.get(url).parseAsProto<SeriesResponse>()
         val mangas = result.allSeries.seriesList
-            .filter { "en" in it.languages }
+            .filter { lang in it.languages }
             .sortedByDescending { it.series.views }
             .map { it.series.toSManga() }
         return MangasPage(mangas, false)
@@ -67,13 +69,13 @@ abstract class MangaMillion : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/manga_list".toHttpUrl().newBuilder()
-            .addQueryParameter("service_language", "en")
+            .addQueryParameter("service_language", serviceLang)
             .addQueryParameter("avif_enable", "true")
             .build()
 
         val result = client.get(url).parseAsProto<SeriesResponse>()
         val mangas = result.allSeries.seriesList
-            .filter { "en" in it.languages }
+            .filter { lang in it.languages }
             .sortedByDescending { it.series.uploadTime }
             .map { it.series.toSManga() }
         return MangasPage(mangas, false)
@@ -81,15 +83,15 @@ abstract class MangaMillion : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("service_language", "en")
+            .addQueryParameter("service_language", serviceLang)
             .addQueryParameter("avif_enable", "true")
-            .addQueryParameter("translated_language", "en")
+            .addQueryParameter("translated_language", lang)
             .addQueryParameter("text", query)
             .build()
 
         val result = client.get(url).parseAsProto<SearchResponse>()
         val mangas = result.allSeries.seriesList
-            .filter { "en" in it.languages }
+            .filter { lang in it.languages }
             .map { it.series.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -103,7 +105,7 @@ abstract class MangaMillion : KeiSource() {
         val mangas = async {
             if (!fetchDetails) return@async manga
             val url = "$apiUrl/title_detail".toHttpUrl().newBuilder()
-                .addQueryParameter("service_language", "en")
+                .addQueryParameter("service_language", serviceLang)
                 .addQueryParameter("avif_enable", "true")
                 .addQueryParameter("original_title_id", manga.url)
                 .build()
@@ -112,10 +114,10 @@ abstract class MangaMillion : KeiSource() {
         val chapterList = async {
             if (!fetchChapters) return@async chapters
             val url = "$apiUrl/chapter_list".toHttpUrl().newBuilder()
-                .addQueryParameter("service_language", "en")
+                .addQueryParameter("service_language", serviceLang)
                 .addQueryParameter("avif_enable", "true")
                 .addQueryParameter("original_title_id", manga.url)
-                .addQueryParameter("translated_language", "en")
+                .addQueryParameter("translated_language", lang)
                 .build()
 
             client.get(url).parseAsProto<ChapterResponse>().chapterEntry.chapterGroups
@@ -147,7 +149,7 @@ abstract class MangaMillion : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$apiUrl/viewer".toHttpUrl().newBuilder()
-            .addQueryParameter("service_language", "en")
+            .addQueryParameter("service_language", serviceLang)
             .addQueryParameter("avif_enable", "true")
             .addQueryParameter("translated_chapter_id", chapter.url)
             .addQueryParameter("quality", "middle")
@@ -159,11 +161,14 @@ abstract class MangaMillion : KeiSource() {
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/en/title/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/$serviceLang/title/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/en/title/${chapter.memo["titleId"]!!.string}/chapter/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$serviceLang/title/${chapter.memo["titleId"]!!.string}/chapter/${chapter.url}"
 
     companion object {
         private val EMPTY_BODY = ByteArray(0).toRequestBody()
+        private val SERVICE_LANGUAGES = setOf(
+            "de", "en", "es", "fr", "hi", "id", "it", "ja", "ko-KR", "pt-BR", "ru", "th", "vi", "zh-CN",
+        )
     }
 }
