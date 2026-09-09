@@ -283,6 +283,7 @@ internal class ProtoFieldInfo(descriptor: SerialDescriptor) {
     fun elementInfo(index: Int, elementDescriptor: SerialDescriptor): ProtoFieldInfo = elementInfo[index] ?: of(elementDescriptor).also { elementInfo[index] = it }
 
     companion object {
+        // a message with a field numbered beyond this falls back to a scan rather than a big table
         private const val MAX_LOOKUP_ID = 512
 
         private val cache = ConcurrentHashMap<SerialDescriptor, ProtoFieldInfo>()
