@@ -31,10 +31,7 @@ class ApiTitle(
         author = authors
         description = buildString {
             this@ApiTitle.description?.let { append(it) }
-            altTitle?.let {
-                if (isNotEmpty()) append("\n\n\n\n")
-                append(it)
-            }
+            altTitle?.takeIf { it.isNotEmpty() }?.let { append("\n\nAlternative Title: $it") }
         }
         thumbnail_url = thumbnail
     }
@@ -61,11 +58,4 @@ class ViewerView(
 @Serializable
 class ViewerImage(
     @ProtoNumber(1) val url: String = "",
-)
-
-@Serializable
-class ViewerRequest(
-    @Suppress("unused")
-    @ProtoNumber(1)
-    private val chapterId: Int,
 )
