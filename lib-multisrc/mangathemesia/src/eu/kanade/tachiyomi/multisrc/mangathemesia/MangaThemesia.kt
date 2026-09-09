@@ -15,10 +15,9 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
@@ -164,13 +163,12 @@ abstract class MangaThemesia : KeiSource() {
         val postId = manga.memo["postId"]?.string
 
         return if (sendViewCount && postId != null) {
-            coroutineScope {
-                sendView(postId)
-                val detailsDefer = async { client.get(getMangaUrl(manga)).asJsoup() }
-
-                val doc = detailsDefer.await()
-                SMangaUpdate(mangaDetailsParse(doc), chapterListParse(doc))
-            }
+            sendView(postId)
+            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            SMangaUpdate(
+                mangaDetailsParse(doc).apply { memo = manga.memo },
+                chapterListParse(doc),
+            )
         } else {
             val doc = client.get(getMangaUrl(manga)).asJsoup()
             val postId = doc.postId()
@@ -278,12 +276,12 @@ abstract class MangaThemesia : KeiSource() {
             title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
             artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
             author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
-            description = seriesDetails.selectFirst(seriesDescriptionSelector)?.text()?.trim().orEmpty()
+            description = seriesDetails.selectFirst(seriesDescriptionSelector)?.textOrNull()
             // Add alternative name to manga description
             val altName = seriesDetails.selectFirst(seriesAltNameSelector)?.ownText()
             if (!altName.isNullOrBlank()) {
                 val names = altName.split(ALT_NAME_SEPARATOR).joinToString("\n") { "- ${it.trim()}" }
-                description = "$description\n\n$altNamePrefix\n$names".trim()
+                description = description?.let { "$it\n\n" }.orEmpty() + "$altNamePrefix\n$names".trim()
             }
             val genres = seriesDetails.select(seriesGenreSelector).map { it.text() }.toMutableList()
             // Add series type (manga/manhwa/manhua/other) to genre
@@ -612,7 +610,7 @@ abstract class MangaThemesia : KeiSource() {
 
     companion object {
         // More info: https://issuetracker.google.com/issues/36970498
-        private val MANGA_PAGE_ID_REGEX = """(?:post_id|ts_dynamic_ajax_view|tsUpdateView)\D*(\d+)""".toRegex()
+        private val MANGA_PAGE_ID_REGEX = """(?:post_id["']?\s*:\s*|ts_dynamic_ajax_view\D*|tsUpdateView\D*)(\d+)""".toRegex()
         private val CHAPTER_PAGE_ID_REGEX = "chapter_id\\s*=\\s*(\\d+);".toRegex()
         val JSON_IMAGE_LIST_REGEX = """["']?(?:images|imageUrls)["']?\s*[:=]\s*(\[.*?])""".toRegex()
         private val ALT_NAME_SEPARATOR = Regex("""[|/•,;]""")
