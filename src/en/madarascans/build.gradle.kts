@@ -13,6 +13,11 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl = "https://madarascans.com"
+        baseUrl {
+            mirrors(
+                "https://madarascans.org",
+                "https://madarascans.com",
+            )
+        }
     }
 }
