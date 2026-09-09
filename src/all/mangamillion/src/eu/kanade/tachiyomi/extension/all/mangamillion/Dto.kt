@@ -58,7 +58,7 @@ class Details(
     @ProtoNumber(1) private val cover: String?,
     @ProtoNumber(2) private val name: String,
     @ProtoNumber(3) private val authorName: String?,
-    @ProtoNumber(4) private val genres: List<Genre>?,
+    @ProtoNumber(4) private val genres: List<Tag>?,
     @ProtoNumber(7) private val summary: String?,
 ) {
     fun toSManga() = SManga.create().apply {
@@ -71,8 +71,22 @@ class Details(
 }
 
 @Serializable
-class Genre(
+class Tag(
+    @ProtoNumber(1) val id: Int,
     @ProtoNumber(2) val name: String,
+)
+
+@Serializable
+class SearchParameterResponse(
+    @ProtoNumber(21) val searchParameter: SearchParameter,
+)
+
+@Serializable
+class SearchParameter(
+    @ProtoNumber(2) val genres: List<Tag> = emptyList(),
+    @ProtoNumber(3) val themes: List<Tag> = emptyList(),
+    @ProtoNumber(4) val highlights: List<Tag> = emptyList(),
+    @ProtoNumber(5) val ratings: List<Tag> = emptyList(),
 )
 
 @Serializable

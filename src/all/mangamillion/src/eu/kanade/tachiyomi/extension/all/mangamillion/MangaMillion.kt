@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangamillion
 
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,11 +11,15 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseAsProto
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -82,11 +87,23 @@ abstract class MangaMillion : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val tagIds = filters.filterIsInstance<TagIdGroup>().flatMap { it.checkedIds }
+        val ratingIds = filters.firstInstanceOrNull<RatingFilter>()?.checkedIds.orEmpty()
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("service_language", serviceLang)
             .addQueryParameter("avif_enable", "true")
             .addQueryParameter("translated_language", lang)
-            .addQueryParameter("text", query)
+            .apply {
+                if (query.isNotBlank()) {
+                    addQueryParameter("text", query)
+                }
+                if (tagIds.isNotEmpty()) {
+                    addQueryParameter("tag_id", tagIds.joinToString(","))
+                }
+                if (ratingIds.isNotEmpty()) {
+                    addQueryParameter("rating_id", ratingIds.joinToString(","))
+                }
+            }
             .build()
 
         val result = client.get(url).parseAsProto<SearchResponse>()
@@ -94,6 +111,31 @@ abstract class MangaMillion : KeiSource() {
             .filter { lang in it.languages }
             .map { it.series.toSManga() }
         return MangasPage(mangas, false)
+    }
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val url = "$apiUrl/search_parameter".toHttpUrl().newBuilder()
+            .addQueryParameter("service_language", serviceLang)
+            .addQueryParameter("avif_enable", "true")
+            .build()
+
+        return client.get(url).parseAsProto<SearchParameterResponse>().searchParameter.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val result = data?.parseAs<SearchParameter>() ?: return FilterList()
+
+        return FilterList(
+            buildList {
+                add(Filter.Header("Note: Search and active filters are applied together"))
+                if (result.genres.isNotEmpty()) add(GenreFilter(result.genres))
+                if (result.themes.isNotEmpty()) add(ThemeFilter(result.themes))
+                if (result.highlights.isNotEmpty()) add(HighlightsFilter(result.highlights))
+                if (result.ratings.isNotEmpty()) add(RatingFilter(result.ratings))
+            },
+        )
     }
 
     override suspend fun fetchMangaUpdate(
