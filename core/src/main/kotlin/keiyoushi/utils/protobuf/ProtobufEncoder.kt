@@ -26,7 +26,7 @@ internal class ProtobufSinkWriter(private val root: BufferedSink) {
     private var sink: BufferedSink = root
     private var depth = 0
     private var buffers = arrayOfNulls<Buffer>(8)
-    private val varintScratch = ByteArray(10)
+    private val varintScratch = ByteArray(16)
 
     fun beginMessage() {
         if (depth == buffers.size) buffers = buffers.copyOf(depth * 2)
@@ -39,32 +39,36 @@ internal class ProtobufSinkWriter(private val root: BufferedSink) {
         val message = sink as Buffer
         depth--
         sink = if (depth == 0) root else buffers[depth - 1]!!
-        if (omitIfEmpty && message.size == 0L) return
-        writeTag(fieldNumber, WIRE_SIZE_DELIMITED)
-        writeVarint(message.size)
-        // Buffer to Buffer, so okio moves whole segments where it can rather than copying bytes
-        sink.writeAll(message)
+        val size = message.size
+        if (omitIfEmpty && size == 0L) return
+        val scratch = varintScratch
+        var count = putVarint(scratch, 0, (fieldNumber.toLong() shl 3) or WIRE_SIZE_DELIMITED.toLong())
+        count = putVarint(scratch, count, size)
+        sink.write(scratch, 0, count)
+        sink.write(message, size)
     }
 
     private fun writeTag(fieldNumber: Int, wireType: Int) = writeVarint((fieldNumber.toLong() shl 3) or wireType.toLong())
+
+    private fun putVarint(target: ByteArray, offset: Int, value: Long): Int {
+        var v = value
+        var at = offset
+        while (true) {
+            if (v and 0x7FL.inv() == 0L) {
+                target[at++] = v.toByte()
+                return at
+            }
+            target[at++] = ((v and 0x7F) or 0x80).toByte()
+            v = v ushr 7
+        }
+    }
 
     fun writeVarint(value: Long) {
         if (value and 0x7FL.inv() == 0L) {
             sink.writeByte(value.toInt())
             return
         }
-        val scratch = varintScratch
-        var v = value
-        var count = 0
-        while (true) {
-            if (v and 0x7FL.inv() == 0L) {
-                scratch[count++] = v.toByte()
-                break
-            }
-            scratch[count++] = ((v and 0x7F) or 0x80).toByte()
-            v = v ushr 7
-        }
-        sink.write(scratch, 0, count)
+        sink.write(varintScratch, 0, putVarint(varintScratch, 0, value))
     }
 
     fun writeVarint(fieldNumber: Int, value: Long) {
