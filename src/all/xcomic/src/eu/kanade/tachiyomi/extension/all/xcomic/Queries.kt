@@ -139,6 +139,7 @@ val COMIC_ITEMS_QUERY = $$"""
                 name
                 urlPath
                 urlCover
+                chaps_normal
             }
         }
     }

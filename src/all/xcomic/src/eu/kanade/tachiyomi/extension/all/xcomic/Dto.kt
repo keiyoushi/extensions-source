@@ -49,7 +49,7 @@ class ComicTrackingSites(
 @Serializable
 class ComicNode(
     private val id: String,
-    private val name: String,
+    val name: String,
     private val altNames: List<String>? = null,
     private val authors: List<String>? = null,
     private val authorNodes: List<XComicData<XComicName?>>? = null,
@@ -86,7 +86,7 @@ class ComicNode(
     @SerialName("score_val")
     private val scoreVal: Float? = null,
     @SerialName("chaps_normal")
-    private val chapsNormal: Int? = null,
+    val chapsNormal: Int? = null,
     private val trackingSites: ComicTrackingSites? = null,
 ) {
     fun toSManga(baseUrl: String, cleanTitle: (String) -> String): SManga = SManga.create().apply {

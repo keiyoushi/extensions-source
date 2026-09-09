@@ -145,10 +145,14 @@ abstract class XCOMIC :
 
     private fun parseSearchManga(response: Response): MangasPage {
         val itemsData = response.parseGraphQLAs<SearchItemsData>()
-        val mangas = itemsData.items.map { item ->
+        val hasNextPage = itemsData.items.size >= BROWSE_PAGE_SIZE
+        val validItems = itemsData.items.filter { it.data.chapsNormal != 0 }
+        val dedupedItems = validItems
+            .groupBy { cleanTitleIfNeeded(it.data.name) }
+            .map { (_, list) -> list.maxByOrNull { it.data.chapsNormal ?: 0 } ?: list.first() }
+        val mangas = dedupedItems.map { item ->
             item.data.toSManga(baseUrl, ::cleanTitleIfNeeded)
         }
-        val hasNextPage = mangas.size >= BROWSE_PAGE_SIZE
         return MangasPage(mangas, hasNextPage)
     }
 
