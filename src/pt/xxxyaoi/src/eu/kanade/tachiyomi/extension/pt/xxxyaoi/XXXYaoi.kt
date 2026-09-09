@@ -1,15 +1,19 @@
 package eu.kanade.tachiyomi.extension.pt.xxxyaoi
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -44,8 +48,8 @@ abstract class XXXYaoi : Madara() {
     override val mangaDetailsSelectorTitle = ".xyaoi-main-title, h1"
     override val mangaDetailsSelectorAuthor = "a[href*=author]"
     override val mangaDetailsSelectorArtist = "a[href*=artist]"
-    override val mangaDetailsSelectorStatus = "span[class*=status-value]"
-    override val mangaDetailsSelectorDescription = ".xyaoi-synopsis-content"
+    override val mangaDetailsSelectorStatus = "span:contains(status) + span"
+    override val mangaDetailsSelectorDescription = "[class*=synopsis]"
 
     override val statusFilterOptions: Map<String, String> =
         mapOf(
@@ -84,8 +88,8 @@ abstract class XXXYaoi : Madara() {
     }
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        name = element.selectFirst(".xyaoi-chapter-name")!!.text()
-        date_upload = parseChapterDate(element.selectFirst(".xyaoi-chapter-date-line")?.text())
+        name = element.selectFirst("div > span:nth-child(1)")!!.text()
+        date_upload = parseChapterDate(element.selectFirst("div:has(> span:nth-child(1)) + div")?.text())
         setUrlWithoutDomain(element.selectFirst(chapterUrlSelector)!!.absUrl("href"))
     }
 
@@ -119,7 +123,32 @@ abstract class XXXYaoi : Madara() {
         return FilterList(filters)
     }
 
+    override fun pageListParse(document: Document): List<Page> = getPages(document)
+        .mapIndexed { index, url -> Page(index, imageUrl = url) }
+        .takeUnless(List<Page>::isEmpty)
+        ?: return super.pageListParse(document)
+
+    private fun getPages(document: Document): List<String> {
+        val script = document.selectFirst("script:containsData(page-break)")?.data() ?: return emptyList()
+        val key = KEY_PAGE_REGEX.find(script)!!.groupValues.last()
+        val attr = PAYLOAD_ATTR_REGEX.find(script)!!.groupValues.last()
+
+        val keyBytes = key.toByteArray(Charsets.UTF_8)
+        val encrypted = document.selectFirst("[$attr]")!!.attr(attr)
+
+        val decodedBytes = Base64.decode(encrypted, Base64.DEFAULT)
+        val decryptedBytes = ByteArray(decodedBytes.size) { i ->
+            (decodedBytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte()
+        }
+        return String(decryptedBytes, Charsets.UTF_8).parseAs<List<String>>()
+    }
+
     class GenreOptions(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun selected() = vals[state].second
+    }
+
+    companion object {
+        private val KEY_PAGE_REGEX = """key\s+=\s+.([^']+)""".toRegex()
+        private val PAYLOAD_ATTR_REGEX = """=\s+?'(data[^']+)""".toRegex()
     }
 }
