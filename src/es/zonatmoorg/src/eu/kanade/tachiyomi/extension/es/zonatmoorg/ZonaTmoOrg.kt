@@ -11,35 +11,33 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.getString
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class ZonaTmoOrg : KeiSource() {
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Referer", "$baseUrl/")
-    }
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
     }
 
-    private val ajaxHeaders by lazy {
-        headers
-            .newBuilder()
+    private val ajaxHeaders: Headers
+        get() = headersBuilder()
             .set("Referer", "$baseUrl/biblioteca")
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
-    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, order = "likes_count")
 
@@ -68,10 +66,7 @@ abstract class ZonaTmoOrg : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .build()
 
-        val html =
-            client.get(url, ajaxHeaders).use {
-                JSONObject(it.body.string()).getString("html")
-            }
+        val html = client.get(url, ajaxHeaders).parseAs<JsonObject>().getString("html")
         val document = Jsoup.parse(html, baseUrl)
         val mangas = document.select("#library-grid .element").mapNotNull(::mangaFromElement)
         val hasNextPage =
@@ -130,12 +125,7 @@ abstract class ZonaTmoOrg : KeiSource() {
     }
 
     private fun parseMangaDetails(document: Document) = SManga.create().apply {
-        title =
-            document
-                .selectFirst("h1.element-title")
-                ?.text()
-                ?.trim()
-                .orEmpty()
+        title = document.selectFirst("h1.element-title")!!.text()
         thumbnail_url = document.selectFirst("img.book-thumbnail")?.attr("abs:src")
         description = document.selectFirst("#manga-synopsis")?.text()?.trim()
         genre =
@@ -202,7 +192,14 @@ abstract class ZonaTmoOrg : KeiSource() {
                     .selectFirst(".text-muted.small")
                     ?.text()
                     ?.substringAfterLast(" ")
-                    ?.let { runCatching { dateFormat.parse(it)?.time ?: 0L }.getOrDefault(0L) }
+                    ?.let {
+                        runCatching {
+                            LocalDate.parse(it, dateFormat)
+                                .atStartOfDay(ZoneOffset.UTC)
+                                .toInstant()
+                                .toEpochMilli()
+                        }.getOrDefault(0L)
+                    }
                     ?: 0L
 
             row.select(".chapter-detail a[href*=/view_uploads/]").map { link ->
@@ -235,6 +232,6 @@ abstract class ZonaTmoOrg : KeiSource() {
     override fun getFilterList(data: JsonElement?): FilterList = FilterList()
 
     companion object {
-        private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+        private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     }
 }
