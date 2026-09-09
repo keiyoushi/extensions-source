@@ -8,6 +8,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
@@ -79,7 +80,10 @@ val SharedPreferences.baseUrl: String
     }
 
 val SharedPreferences.urlIndex get() = getString(URL_INDEX_PREF, "-1")!!.toInt()
-val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.split(",")
+val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)
+    .orEmpty()
+    .toValidUrlList()
+    .ifEmpty { DEFAULT_LIST.toValidUrlList() }
 
 val SharedPreferences.titleBlacklist: List<String>
     get() = getString(TITLE_BLACKLIST_PREF, "")
@@ -106,19 +110,22 @@ fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
 fun SharedPreferences.preferenceMigration() {
     if (getString(DEFAULT_LIST_PREF, "")!! != DEFAULT_LIST) {
+        val selectedUrl = urlList.getOrNull(urlIndex)
         edit()
             .remove("overrideBaseUrl")
             .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
-            .setUrlList(DEFAULT_LIST, urlIndex)
+            .setUrlList(DEFAULT_LIST, selectedUrl)
             .apply()
     }
 }
 
-fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int): SharedPreferences.Editor {
-    putString(URL_LIST_PREF, urlList)
-    val maxIndex = urlList.count { it == ',' }
-    if (oldIndex in 0..maxIndex) return this
-    val newIndex = Random.nextInt(0, maxIndex + 1)
+fun SharedPreferences.Editor.setUrlList(urlList: String, selectedUrl: String?): SharedPreferences.Editor {
+    val validUrlList = urlList.toValidUrlList()
+    require(validUrlList.isNotEmpty())
+
+    putString(URL_LIST_PREF, validUrlList.joinToString(","))
+    val selectedIndex = validUrlList.indexOf(selectedUrl)
+    val newIndex = selectedIndex.takeIf { it >= 0 } ?: Random.nextInt(validUrlList.size)
     return putString(URL_INDEX_PREF, newIndex.toString())
 }
 
@@ -133,41 +140,49 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
         val failedResponse = try {
             val response = chain.proceed(request)
             if (response.isSuccessful && response.header("Server") != "Parking/1.0") return response
-            response.close()
-            Result.success(response)
-        } catch (e: Throwable) {
+            response
+        } catch (e: IOException) {
             if (chain.call().isCanceled()) throw e
-            Result.failure(e)
+            if (isUpdated || updateUrl(chain)) {
+                throw IOException("网址已自动更新，请重启应用", e)
+            }
+            throw e
         }
 
+        val statusCode = failedResponse.code
+        failedResponse.close()
         if (isUpdated || updateUrl(chain)) {
             throw IOException("网址已自动更新，请重启应用")
         }
-        return failedResponse.getOrThrow()
+        throw IOException("请求失败：HTTP $statusCode")
     }
 
     @Synchronized
     private fun updateUrl(chain: Interceptor.Chain): Boolean {
         if (isUpdated) return true
-        val response = try {
-            chain.proceed(GET("https://stevenyomi.github.io/source-domains/wnacg.txt"))
-        } catch (_: Throwable) {
-            return false
+        return try {
+            chain.proceed(GET("https://stevenyomi.github.io/source-domains/wnacg.txt")).use {
+                if (!it.isSuccessful) return false
+                val newList = it.body.string().toValidUrlList()
+                if (newList.isEmpty() || newList == preferences.urlList) return false
+
+                val selectedUrl = preferences.urlList.getOrNull(preferences.urlIndex)
+                preferences.edit()
+                    .setUrlList(newList.joinToString(","), selectedUrl)
+                    .apply()
+                isUpdated = true
+                true
+            }
+        } catch (e: IOException) {
+            if (chain.call().isCanceled()) throw e
+            false
         }
-        if (!response.isSuccessful) {
-            response.close()
-            return false
-        }
-        val newList = response.body.string()
-        if (newList != preferences.getString(URL_LIST_PREF, "")!!) {
-            preferences.edit()
-                .setUrlList(newList, preferences.urlIndex)
-                .apply()
-        }
-        isUpdated = true
-        return true
     }
 }
+
+private fun String.toValidUrlList(): List<String> = split(',')
+    .map(String::trim)
+    .filter { it.toHttpUrlOrNull() != null }
 
 private const val DEFAULT_LIST_PREF = "defaultBaseUrl"
 private const val URL_LIST_PREF = "baseUrlList"
