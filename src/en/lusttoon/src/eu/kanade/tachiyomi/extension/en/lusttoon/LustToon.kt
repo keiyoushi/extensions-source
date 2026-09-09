@@ -1,40 +1,35 @@
 package eu.kanade.tachiyomi.extension.en.lusttoon
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+import okhttp3.OkHttpClient
 
 @Source
-abstract class LustToon : HttpSource() {
+abstract class LustToon : KeiSource() {
 
     private val apiUrl = "https://back.lustoon.com"
 
-    override val supportsLatest = true
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor { chain ->
             val request = chain.request()
             if (request.url.scheme == "http") {
                 val newUrl = request.url.newBuilder().scheme("https").build()
@@ -43,15 +38,11 @@ abstract class LustToon : HttpSource() {
                 chain.proceed(request)
             }
         }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
+    }
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/filtrar".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", "24")
@@ -63,19 +54,28 @@ abstract class LustToon : HttpSource() {
             .addQueryParameter("loading", "true")
             .build()
 
-        return GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val resp = response.parseAs<SearchResponseDto>()
+        val resp = client.get(url).parseAs<SearchResponseDto>()
         return MangasPage(resp.mangas, resp.hasNext)
     }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page == 1) {
+            val rscHeaders = headers.newBuilder()
+                .add("RSC", "1")
+                .build()
+            val response = client.get(baseUrl, rscHeaders)
+            val home = response.extractNextJs<HomeDto> { element ->
+                element is JsonObject && "comics" in element && element["comics"] is JsonArray
+            }
+            if (home != null && home.mangas.isNotEmpty()) {
+                return MangasPage(home.mangas, true)
+            }
+        }
+
         val url = "$apiUrl/filtrar".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
+            .addQueryParameter("page", (page - 1).toString())
             .addQueryParameter("limit", "24")
             .addQueryParameter("orderBy", "3")
             .addQueryParameter("sort", "desc")
@@ -85,19 +85,19 @@ abstract class LustToon : HttpSource() {
             .addQueryParameter("loading", "true")
             .build()
 
-        return GET(url, headers)
+        val resp = client.get(url).parseAs<SearchResponseDto>()
+        return MangasPage(resp.mangas, resp.hasNext)
     }
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = "$apiUrl/home/buscar".toHttpUrl().newBuilder()
                 .addQueryParameter("query", query)
                 .build()
-            return GET(url, headers)
+            val items = client.get(url).parseAs<List<SearchItemDto>>()
+            return MangasPage(items.filter { it.slug != null }.map { it.toSManga() }, false)
         }
 
         val sortFilter = filters.firstInstanceOrNull<SortFilter>()
@@ -113,69 +113,81 @@ abstract class LustToon : HttpSource() {
             .addQueryParameter("state", filters.firstInstanceOrNull<StatusFilter>()?.selected ?: "")
             .build()
 
-        return GET(url, headers)
+        val resp = client.get(url).parseAs<SearchResponseDto>()
+        return MangasPage(resp.mangas, resp.hasNext)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val url = response.request.url.toString()
-        if (url.contains("/home/buscar")) {
-            val items = response.parseAs<List<SearchItemDto>>()
-            return MangasPage(items.filter { it.slug != null }.map { it.toSManga() }, false)
+    // =========================== Manga Details ============================
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrlHost) return null
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        if (url.pathSegments.firstOrNull() != "comic" || slug.isBlank()) return null
+
+        val manga = SManga.create().apply {
+            this.url = "/comic/$slug"
         }
-
-        return popularMangaParse(response)
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    // ============================== Details ==============================
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headersBuilder().add("RSC", "1").build())
-
-    override fun mangaDetailsParse(response: Response): SManga {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val rscHeaders = headers.newBuilder()
+            .add("RSC", "1")
+            .build()
+        val response = client.get("$baseUrl${manga.url}", rscHeaders)
         val serie = response.extractNextJs<SerieDto> { element ->
             element is JsonObject && "slug" in element && "chapters" in element
         } ?: throw Exception("Failed to find valid series data")
 
-        return serie.toSManga()
-    }
+        val mangaSlug = serie.slug ?: manga.url.substringAfterLast("/")
 
-    // ============================= Chapters ==============================
+        val updatedManga = if (fetchDetails) serie.toSManga() else manga
+        val updatedChapters = if (fetchChapters) {
+            serie.chapters?.filter { it.slug != null }?.map { it.toSChapter(mangaSlug) } ?: emptyList()
+        } else {
+            chapters
+        }
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val serie = response.extractNextJs<SerieDto> { element ->
-            element is JsonObject && "slug" in element && "chapters" in element
-        } ?: return emptyList()
-
-        val mangaSlug = serie.slug ?: return emptyList()
-
-        return serie.chapters?.filter { it.slug != null }?.map { chapter ->
-            chapter.toSChapter(mangaSlug).apply {
-                chapter.createdAt?.substringBefore("+")?.substringBefore("Z")?.let {
-                    date_upload = dateFormat.tryParse(it)
-                }
-            }
-        } ?: emptyList()
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(baseUrl + chapter.url)
         val document = response.asJsoup()
-        val images = document.select("div.max-w-4xl img")
-
-        return images.mapIndexed { i, img ->
-            Page(i, imageUrl = img.absUrl("src").replace("http://", "https://"))
+        val pageches = document.extractNextJs<PagechesDto> { element ->
+            element is JsonObject && "urlImg" in element && "chapterId" in element
         }
+
+        val images = pageches?.images?.ifEmpty { null } ?: run {
+            imageUrlRegex.findAll(document.html())
+                .map { it.value }
+                .filter { it.contains("/serie/") }
+                .distinct()
+                .toList()
+                .ifEmpty { null }
+        } ?: throw Exception("No pages found")
+
+        return images
+            .filterNot { it.contains("brakeout") }
+            .mapIndexed { i, url ->
+                Page(i, imageUrl = url.replace("http://", "https://"))
+            }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    companion object {
+        private val imageUrlRegex = Regex("""https?://media\.lustoon\.com/file/[^"\s']+\.(?:jpg|jpeg|png|webp|avif)""", RegexOption.IGNORE_CASE)
+    }
 
-    // ============================== Filters ==============================
+    // ============================== Filters ===============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         SortFilter(),
         Filter.Separator(),
         TypeFilter(),
