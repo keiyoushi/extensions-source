@@ -131,6 +131,7 @@ private val types = listOf(
     "Manga" to "JP",
     "Manhwa" to "KR",
     "Manhua" to "CN",
+    "OEL" to "EN",
     "One Shot" to "ONESHOT",
 )
 

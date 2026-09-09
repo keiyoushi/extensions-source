@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Ainz Scans ID"
-    versionCode = 35
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://v2.ainzscans01.com"
+        baseUrl = "https://v3.ainzscans01.com"
     }
 }
