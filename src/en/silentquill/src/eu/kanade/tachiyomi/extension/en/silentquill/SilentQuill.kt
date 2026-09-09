@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
@@ -16,10 +15,8 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getArrayOrNull
 import keiyoushi.utils.getString
 import keiyoushi.utils.getStringOrNull
-import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.textOrNull
-import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -28,7 +25,6 @@ import okhttp3.Response
 
 @Source
 abstract class SilentQuill : KeiSource() {
-    private val apiUrl get() = "$baseUrl/api"
     private val rscHeaders get() = headersBuilder()
         .set("rsc", "1")
         .build()
@@ -97,7 +93,10 @@ abstract class SilentQuill : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        val updatedChapters = document.extractNextJs<List<ChapterResponse>>().orEmpty().map { it.toSChapter() }.reversed()
+        val updatedChapters = document.extractNextJs<List<ChapterResponse>>()
+            .orEmpty()
+            .map { it.toSChapter(manga.url) }
+            .sortedByDescending { it.chapter_number }
 
         val authorLine = document.selectFirst("p.mt-2.text-sm.text-ink-dim")?.textOrNull()
         val state = document.selectFirst("dt:containsOwn(Status)")?.nextElementSibling()?.textOrNull()
@@ -122,13 +121,13 @@ abstract class SilentQuill : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.post("$apiUrl/lectura/", ViewerResponseBody(chapter.url.toInt()).toJsonRequestBody()).parseAs<ViewerResponse>()
-        return result.paginas.mapIndexed { index, url ->
-            Page(index, imageUrl = "$apiUrl/p/${url.pages}")
+        val result = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<ViewerResponse>()
+        return result?.pages.orEmpty().mapIndexed { index, url ->
+            Page(index, imageUrl = baseUrl + url.url)
         }
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}/"
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.memo["slug"]!!.string}/"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.memo["mangaSlug"]!!.string}/${chapter.memo["slug"]!!.string}/"
 }
