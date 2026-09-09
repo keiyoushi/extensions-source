@@ -14,17 +14,19 @@ class ChapterResponse(
     val slug: String,
     @SerialName("time_ago") val timeAgo: String,
 ) {
-    fun toSChapter(): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
         url = id.toString()
         name = "Chapter $chapterNo"
-        chapter_number = chapterNo.toFloatOrNull() ?: -1f
+        chapter_number = CHAPTER_NUMBER_REGEX.find(chapterNo)?.value?.toFloat() ?: -1f
         date_upload = timeAgo.toRelativeDate()
         memo = buildJsonObject {
             put("slug", slug)
+            put("mangaSlug", mangaSlug)
         }
     }
 }
 
+private val CHAPTER_NUMBER_REGEX = Regex("""^\d+(?:\.\d+)?""")
 private val RELATIVE_DATE_REGEX = Regex("""(\d+)\s+(minute|hour|day|week|month|year)s?""")
 
 private fun String.toRelativeDate(): Long {
@@ -49,10 +51,10 @@ class ViewerResponseBody(
 
 @Serializable
 class ViewerResponse(
-    val paginas: List<Pagina>,
+    val pages: List<Pages>,
 )
 
 @Serializable
-class Pagina(
-    @SerialName("t") val pages: String,
+class Pages(
+    val url: String,
 )

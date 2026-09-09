@@ -4,9 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class SeriesResponse(
@@ -89,18 +87,15 @@ class ChapterItem(
         val lock = if (isLocked) "🔒 " else ""
         val validTitle = title?.takeIf { it.isNotBlank() && it != "null" && it != number }
         name = lock + if (validTitle != null) "Chapter $number - $validTitle" else "Chapter $number"
-        date_upload = dateFormat.tryParse(publishedAt)
+        date_upload = Instant.tryParse(publishedAt)
         chapter_number = number.toFloat()
     }
-}
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
 }
 
 @Serializable
 class TokenResponse(
     val token: String,
+    val expiresAt: Long,
 )
 
 @Serializable
