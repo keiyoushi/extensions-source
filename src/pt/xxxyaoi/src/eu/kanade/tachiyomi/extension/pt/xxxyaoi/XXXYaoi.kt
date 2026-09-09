@@ -130,7 +130,7 @@ abstract class XXXYaoi : Madara() {
 
     private fun getPages(document: Document): List<String> {
         val script = document.selectFirst("script:containsData(page-break)")?.data() ?: return emptyList()
-        val key = KEY_PAGE_REGEX.find(script)!!.groupValues.last()
+        val key = PAGE_KEY_REGEX.find(script)!!.groupValues.last()
         val attr = PAYLOAD_ATTR_REGEX.find(script)!!.groupValues.last()
 
         val keyBytes = key.toByteArray(Charsets.UTF_8)
@@ -148,7 +148,7 @@ abstract class XXXYaoi : Madara() {
     }
 
     companion object {
-        private val KEY_PAGE_REGEX = """key\s+=\s+.([^']+)""".toRegex()
+        private val PAGE_KEY_REGEX = """key\s+=\s+.([^']+)""".toRegex()
         private val PAYLOAD_ATTR_REGEX = """=\s+?'(data[^']+)""".toRegex()
     }
 }
