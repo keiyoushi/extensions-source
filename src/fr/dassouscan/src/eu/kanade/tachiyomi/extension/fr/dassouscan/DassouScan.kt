@@ -28,8 +28,6 @@ abstract class DassouScan :
     KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
-
     private val preferences by getPreferencesLazy()
 
     private val hidePremium: Boolean
