@@ -3,60 +3,62 @@ package eu.kanade.tachiyomi.extension.en.tapastic
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
-import rx.Observable
 
 @Source
 abstract class Tapastic :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val apiUrl = "https://story-api.${baseUrl.substringAfterLast("/")}"
 
-    override val supportsLatest = true
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(TextInterceptor())
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(TextInterceptor())
+    }
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", "https://m.tapas.io")
-        .set("User-Agent", USER_AGENT)
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("Referer", "https://m.tapas.io")
+        set("User-Agent", USER_AGENT)
+    }
 
     // ============================== Popular ===================================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/cosmos/api/v1/landing/ranking".toHttpUrl().newBuilder()
             .addQueryParameter("category_type", "COMIC")
             .addQueryParameter("subtab_id", "17")
             .addQueryParameter("size", "25")
             .addQueryParameter("page", (page - 1).toString())
             .build()
-        return GET(url, headers)
+
+        return parseMangaList(client.get(url))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangaList(response: Response): MangasPage {
         val dto = response.parseAs<DataWrapper<WrapperContent>>()
         val mangas = dto.items.map(MangaDto::toSManga)
         return MangasPage(mangas, dto.hasNextPage())
@@ -64,7 +66,7 @@ abstract class Tapastic :
 
     // ============================== Latest ====================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/cosmos/api/v1/landing/genre".toHttpUrl().newBuilder()
             .addQueryParameter("category_type", "COMIC")
             .addQueryParameter("sort_option", "NEWEST_EPISODE")
@@ -72,71 +74,108 @@ abstract class Tapastic :
             .addQueryParameter("pageSize", "25")
             .addQueryParameter("page", (page - 1).toString())
             .build()
-        return GET(url, headers)
-    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+        return parseMangaList(client.get(url))
+    }
 
     // ============================== Search ====================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("pageNumber", page.toString())
             .addQueryParameter("q", query)
             .addQueryParameter("t", "COMICS")
             .build()
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val mangas = document.select(".search-item-wrap").map { element ->
             SManga.create().apply {
                 title = element.select(".item__thumb img").firstOrNull()?.attr("alt") ?: element.select(".title-section .title a").text()
                 thumbnail_url = element.select(".item__thumb img, .thumb-wrap img").attr("src")
                 description = element.selectFirst(".desc.force.mbm")?.text()
-                url = "/series/" + element.selectFirst(".item__thumb a, .title-section .title a")!!.attr("data-series-id")
+                this.url = "/series/" + element.selectFirst(".item__thumb a, .title-section .title a")!!.attr("data-series-id")
             }
         }
 
         return MangasPage(mangas, hasNextPage = document.selectFirst("a[class*=paging__button--next]") != null)
     }
 
-    // ============================== Details ===================================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "series") {
+            return null
+        }
+
+        val slug = url.pathSegments[1]
+        val mangaUrl = if (slug.toIntOrNull() != null) {
+            "/series/$slug"
+        } else {
+            val document = client.get(url).asJsoup()
+            val id = document.selectFirst("meta[content^=tapastic://series]")
+                ?.attr("content")
+                ?.substringAfterLast('/')
+                ?: return null
+            "/series/$id"
+        }
+
+        val manga = SManga.create().apply {
+            this.url = mangaUrl
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                initialized = true
+                this.url = mangaUrl
+            }
+    }
+
+    // ============================== Updates ===================================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}/info"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
-
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst(".info__right .title")!!.text()
-        thumbnail_url = document.selectFirst(".thumb.js-thumbnail img")?.absUrl("src")
-        description = buildString {
-            append(document.selectFirst(".description__body")?.text())
-            document.selectFirst(".colophon")?.text()?.let {
-                appendLine("\n\n$it")
-            }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val (manga, chapters) = coroutineScope {
+            val mangaD = async { if (fetchDetails) getMangaDetails(manga) else manga }
+            val chaptersD = async { if (fetchChapters) getChapterList(manga) else chapters }
+            mangaD.await() to chaptersD.await()
         }
 
-        genre = document.select(".genre-btn").map { it.text() }
-            .distinct()
-            .joinToString()
+        return SMangaUpdate(manga, chapters)
+    }
 
-        author = document.select(".creator-section .name").joinToString { it.text() }
+    private suspend fun getMangaDetails(manga: SManga): SManga {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst(".info__right .title")!!.text()
+            thumbnail_url = document.selectFirst(".thumb.js-thumbnail img")?.absUrl("src")
+            description = buildString {
+                append(document.selectFirst(".description__body")?.text())
+                document.selectFirst(".colophon")?.text()?.let {
+                    appendLine("\n\n$it")
+                }
+            }
 
-        document.selectFirst(".schedule-ico:has(.sp-ico-updated-line-pwt) + .schedule-label")?.text()?.let {
-            status = when {
-                it.contains("updates", ignoreCase = true) -> SManga.ONGOING
-                it.contains("completed", ignoreCase = true) -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
+            genre = document.select(".genre-btn").map { it.text() }
+                .distinct()
+                .joinToString()
+
+            author = document.select(".creator-section .name").joinToString { it.text() }
+
+            document.selectFirst(".schedule-ico:has(.sp-ico-updated-line-pwt) + .schedule-label")?.text()?.let {
+                status = when {
+                    it.contains("updates", ignoreCase = true) -> SManga.ONGOING
+                    it.contains("completed", ignoreCase = true) -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
             }
         }
     }
 
-    // ============================== Chapters ==================================
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
         var page = 1
         val chapters = mutableListOf<SChapter>()
         do {
@@ -148,28 +187,24 @@ abstract class Tapastic :
                 .addQueryParameter("last_access", "0")
                 .addQueryParameter("", "") // make the same request as the browser
                 .build()
-            val response = client.newCall(GET(url, headers)).execute()
+            val response = client.get(url)
             val dto = response.parseAs<DataWrapper<ChapterListDto>>()
             chapters += dto.data.episodes
                 .filter { it.isPaywalledVisible() && it.isScheduledVisible() }
                 .map(ChapterDto::toSChapter)
         } while (dto.data.hasNextPage())
 
-        return Observable.just(chapters)
+        return chapters
     }
 
     private fun ChapterDto.isPaywalledVisible() = showLockedChapterPref || unlocked || free
 
     private fun ChapterDto.isScheduledVisible() = showScheduledChapterPrefer || !scheduled
 
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
     // ============================== Pages =====================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
 
         val pages = document.select("img.content__img").mapIndexed { i, img ->
             Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
@@ -189,12 +224,6 @@ abstract class Tapastic :
 
         return pages.takeIf { it.isNotEmpty() } ?: throw IOException("Chapter locked")
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Filters ===================================
-
-    override fun getFilterList() = FilterList()
 
     // ============================== Settings ==================================
 

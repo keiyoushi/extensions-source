@@ -126,7 +126,7 @@ class ChapterData(
     @SerialName("notes") val title: String? = null,
     private val uploadDates: DateDto? = null,
 ) {
-    fun toSChapter(mangaId: String, mangaSlug: String, legacy: Boolean = false) = SChapter.create().apply {
+    fun toSChapter(mangaId: String, mangaSlug: String?, legacy: Boolean = false) = SChapter.create().apply {
         name = "Chapter $chapterNum"
         if (!title.isNullOrEmpty() && !title.contains(numberRegex)) {
             name += ": $title"
@@ -139,7 +139,7 @@ class ChapterData(
         }
         memo = buildJsonObject {
             put("mangaId", mangaId)
-            put("mangaSlug", mangaSlug)
+            mangaSlug?.let { put("mangaSlug", it) }
         }
         date_upload = uploadDates?.sub?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
     }
