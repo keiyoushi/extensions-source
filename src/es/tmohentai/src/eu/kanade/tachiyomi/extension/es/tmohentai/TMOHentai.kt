@@ -26,11 +26,9 @@ abstract class TMOHentai : KeiSource() {
         rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        parseMangaList(client.get(libraryUrl(page, order = "likes_count")))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get(libraryUrl(page, order = "likes_count")))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        parseMangaList(client.get(libraryUrl(page, order = "creation")))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get(libraryUrl(page, order = "creation")))
 
     override suspend fun getSearchMangaList(
         page: Int,
@@ -42,18 +40,17 @@ abstract class TMOHentai : KeiSource() {
         page: Int,
         order: String? = null,
         search: String? = null,
-    ): HttpUrl =
-        "$baseUrl/biblioteca"
-            .toHttpUrl()
-            .newBuilder()
-            .addQueryParameter("page", page.toString())
-            .apply {
-                order?.let {
-                    addQueryParameter("order_item", it)
-                    addQueryParameter("order_dir", "desc")
-                }
-                search?.takeIf(String::isNotBlank)?.let { addQueryParameter("title", it) }
-            }.build()
+    ): HttpUrl = "$baseUrl/biblioteca"
+        .toHttpUrl()
+        .newBuilder()
+        .addQueryParameter("page", page.toString())
+        .apply {
+            order?.let {
+                addQueryParameter("order_item", it)
+                addQueryParameter("order_dir", "desc")
+            }
+            search?.takeIf(String::isNotBlank)?.let { addQueryParameter("title", it) }
+        }.build()
 
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -130,27 +127,25 @@ abstract class TMOHentai : KeiSource() {
         initialized = true
     }
 
-    private fun chaptersFromDocument(document: Document): List<SChapter> =
-        document
-            .select("a.md-preview-read-btn[href*=/view_uploads/]")
-            .mapIndexed { index, link ->
-                SChapter.create().apply {
-                    setUrlWithoutDomain(link.attr("abs:href").substringBefore('#'))
-                    name = if (index == 0) "Capítulo único" else "Lectura ${index + 1}"
-                }
-            }.distinctBy { it.url }
+    private fun chaptersFromDocument(document: Document): List<SChapter> = document
+        .select("a.md-preview-read-btn[href*=/view_uploads/]")
+        .mapIndexed { index, link ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(link.attr("abs:href").substringBefore('#'))
+                name = if (index == 0) "Capítulo único" else "Lectura ${index + 1}"
+            }
+        }.distinctBy { it.url }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(baseUrl + chapter.url.substringBefore('#')).asJsoup()
 
-        val pages =
-            document
-                .select("#reader-wrap .reader-img-wrap img")
-                .mapNotNull { image ->
-                    sequenceOf("data-src", "data-original", "src")
-                        .map { image.attr("abs:$it") }
-                        .firstOrNull(String::isNotBlank)
-                }.distinct()
+        val pages = document
+            .select("#reader-wrap .reader-img-wrap img")
+            .mapNotNull { image ->
+                sequenceOf("data-src", "data-original", "src")
+                    .map { image.attr("abs:$it") }
+                    .firstOrNull(String::isNotBlank)
+            }.distinct()
 
         if (pages.isEmpty()) throw Exception("El lector no devolvió imágenes")
 
