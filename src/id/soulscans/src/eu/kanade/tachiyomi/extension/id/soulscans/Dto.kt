@@ -97,3 +97,21 @@ class ChapterPagesDto(private val pages: List<PageDto>) {
 
 @Serializable
 class PageDto(@SerialName("image_url") val imageUrl: String)
+
+@Serializable
+class HomeSectionsDto(
+    @SerialName("latest_comic_updates") val latestComicUpdates: List<LatestComicUpdateDto> = emptyList(),
+)
+
+@Serializable
+class LatestComicUpdateDto(
+    @SerialName("series_title") private val seriesTitle: String,
+    @SerialName("series_slug") private val seriesSlug: String,
+    @SerialName("poster_image_url") private val posterImageUrl: String?,
+) {
+    fun toSManga() = SManga.create().apply {
+        title = seriesTitle
+        url = "/comic/$seriesSlug"
+        thumbnail_url = posterImageUrl
+    }
+}
