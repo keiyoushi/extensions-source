@@ -10,6 +10,24 @@ class CatalogResponseDto(
 )
 
 @Serializable
+class LandingResponseDto(
+    @SerialName("latest_updates")
+    val latestUpdates: List<LandingUpdateDto>? = null,
+)
+
+@Serializable
+class LandingUpdateDto(
+    @SerialName("serie_id")
+    val serieId: String? = null,
+    @SerialName("serie_slug")
+    val serieSlug: String,
+    @SerialName("serie_titulo")
+    val serieTitulo: String,
+    @SerialName("portada_url")
+    val portadaUrl: String? = null,
+)
+
+@Serializable
 class CatalogMetaDto(
     @SerialName("has_next")
     val hasNext: Boolean = false,
@@ -87,4 +105,5 @@ class ScrambledDataDto(
     @SerialName("c") val columns: Int,
     @SerialName("r") val rows: Int,
     @SerialName("s") val seed: Long,
+    @SerialName("v") val version: Int = 1,
 )

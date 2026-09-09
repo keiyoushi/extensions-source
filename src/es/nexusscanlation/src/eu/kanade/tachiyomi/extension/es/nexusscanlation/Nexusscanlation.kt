@@ -77,14 +77,24 @@ abstract class Nexusscanlation : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = apiBaseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("catalog")
+            .addPathSegment("public")
+            .addPathSegment("landing")
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("orden", "nuevo")
             .build()
         return GET(url, apiHeaders)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        if (page > 1) {
+            return MangasPage(emptyList(), false)
+        }
+        val root = response.parseAs<LandingResponseDto>()
+        val mangaList = root.latestUpdates.orEmpty()
+            .distinctBy { it.serieSlug }
+            .mapNotNull(::landingToManga)
+        return MangasPage(mangaList, false)
+    }
 
     // ======================= Search =======================================
 
@@ -178,6 +188,8 @@ abstract class Nexusscanlation : HttpSource() {
                     append(it.rows)
                     append(',')
                     append(it.seed)
+                    append(',')
+                    append(it.version)
                 }
             }
 
@@ -193,6 +205,15 @@ abstract class Nexusscanlation : HttpSource() {
             url = item.slug
             title = item.titulo
             thumbnail_url = resolveCoverUrl(item.portadaUrl, item.id)
+        }
+    }
+
+    private fun landingToManga(item: LandingUpdateDto): SManga? {
+        if (item.serieSlug.isBlank() || item.serieTitulo.isBlank()) return null
+        return SManga.create().apply {
+            url = item.serieSlug
+            title = item.serieTitulo
+            thumbnail_url = resolveCoverUrl(item.portadaUrl, item.serieId)
         }
     }
 
