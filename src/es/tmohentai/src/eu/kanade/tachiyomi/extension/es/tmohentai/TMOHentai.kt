@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -63,9 +64,7 @@ abstract class TMOHentai : KeiSource() {
         val title =
             element
                 .selectFirst("h3.manga-card__title")
-                ?.text()
-                ?.trim()
-                ?.takeIf(String::isNotEmpty)
+                ?.textOrNull()
                 ?: return null
 
         return SManga.create().apply {
@@ -101,7 +100,7 @@ abstract class TMOHentai : KeiSource() {
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1#md-title")?.text()?.trim().orEmpty()
+        title = document.selectFirst("h1#md-title")!!.text()
         thumbnail_url =
             document
                 .selectFirst("img#md-cover")
@@ -146,8 +145,6 @@ abstract class TMOHentai : KeiSource() {
                     .map { image.attr("abs:$it") }
                     .firstOrNull(String::isNotBlank)
             }.distinct()
-
-        if (pages.isEmpty()) throw Exception("El lector no devolvió imágenes")
 
         return pages.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
