@@ -2,11 +2,13 @@ package eu.kanade.tachiyomi.multisrc.kemono
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
 import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Serializable
@@ -27,7 +29,7 @@ class KemonoCreatorDto(
 ) {
     var fav: Long = 0
     val updatedDate get() = when {
-        updated.isString -> dateFormat.tryParse(updated.content)
+        updated.isString -> API_DATE_FORMAT.tryParseDateTime(updated.content)
         else -> (updated.double * 1000).toLong()
     }
 
@@ -41,8 +43,6 @@ class KemonoCreatorDto(
     }
 
     companion object {
-        private val dateFormat by lazy { getApiDateFormat() }
-
         fun String.serviceName() = when (this) {
             "fanbox" -> "Pixiv Fanbox"
             "subscribestar" -> "SubscribeStar"
@@ -81,8 +81,8 @@ class KemonoPostDto(
             }
         }.distinctBy { it.path }.map { it.toString() }
 
-    fun toSChapter() = SChapter.create().apply {
-        val postDate = dateFormat.tryParse(edited ?: published ?: added)
+    fun toSChapter(zone: ZoneId) = SChapter.create().apply {
+        val postDate = API_DATE_FORMAT.tryParseDateTime(edited ?: published ?: added, zone)
 
         url = "/$service/user/$user/post/$id"
         date_upload = postDate
@@ -98,8 +98,9 @@ class KemonoPostDto(
     }
 
     companion object {
-        val dateFormat by lazy { getApiDateFormat() }
-        val chapterNameDateFormat by lazy { getChapterNameDateFormat() }
+        private val chapterNameDateFormat by lazy {
+            SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss", Locale.ENGLISH)
+        }
     }
 }
 
@@ -112,6 +113,4 @@ class KemonoAttachmentDto(var name: String? = null, val path: String) {
     override fun toString() = path + if (name != null) "?f=$name" else ""
 }
 
-private fun getApiDateFormat() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
-
-private fun getChapterNameDateFormat() = SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss", Locale.ENGLISH)
+private val API_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
