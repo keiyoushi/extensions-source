@@ -13,6 +13,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
@@ -32,10 +33,10 @@ abstract class LunarAnime : KeiSource() {
     private val apiurlHost by lazy { API_URL.toHttpUrl().host }
     private val cdnurlHost by lazy { CDN_URL.toHttpUrl().host }
 
-    private val signer = LunarWebViewSigner(baseUrl, API_URL)
+    private val serenity = LunarSerenity(API_URL)
 
     override fun OkHttpClient.Builder.configureClient() = this
-        .addInterceptor(signer.dpopInterceptor())
+        .addInterceptor(serenity.interceptor())
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
@@ -50,7 +51,7 @@ abstract class LunarAnime : KeiSource() {
         }
         .rateLimit(2) { it.host == apiurlHost || it.host == cdnurlHost }
 
-    private val crypto by lazy { LunarDecryptor(client, API_URL) }
+    private val crypto by lazy { LunarDecryptor(serenity) }
 
     // ============================== Popular ===============================
 
@@ -198,14 +199,26 @@ abstract class LunarAnime : KeiSource() {
         val language = chapterUrl.queryParameter("lang") ?: "en"
         val (slug, chapterNumber) = chapterUrl.pathSegments.takeLast(2)
 
-        val response = client.get(chapterUrl)
+        val seeds = crypto.extractSeeds(client.get(chapterUrl).asJsoup())
+        val minted = crypto.mint(seeds, slug, chapterNumber)
 
         // Required requests or fake images are returned
         viewChapter(slug, chapterNumber, language)
 
-        // I see decryption is always required now
-        val decryptedImages = crypto.decryptChapterImages(response, slug, chapterNumber, language)
-        return decryptedImages.mapIndexed { index, imageUrl ->
+        val url = API_URL.toHttpUrl().newBuilder()
+            .addPathSegments("api/manga/r")
+            .addPathSegment(minted.token)
+            .apply { if (language != "en") addQueryParameter("language", language) }
+            .build()
+
+        val sessionData = client.get(url).parseAs<LunarPageListResponse>()
+            .data?.sessionData
+            ?: error("session_data is empty")
+
+        val images = crypto.unpack(sessionData, seeds, minted.nonce)
+            .parseAs<LunarPageListDecrypted>().data.images
+
+        return images.mapIndexed { index, imageUrl ->
             Page(index, chapter.url, imageUrl)
         }
     }
