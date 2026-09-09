@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
@@ -22,8 +23,6 @@ import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -187,20 +186,12 @@ abstract class ZonaTmoOrg : KeiSource() {
                 row.attr("data-chapter-number").ifBlank {
                     row.selectFirst(".chapter-number")?.attr("data-number").orEmpty()
                 }
-            val date =
+            val date = dateFormat.tryParseDate(
                 row
                     .selectFirst(".text-muted.small")
                     ?.text()
-                    ?.substringAfterLast(" ")
-                    ?.let {
-                        runCatching {
-                            LocalDate.parse(it, dateFormat)
-                                .atStartOfDay(ZoneOffset.UTC)
-                                .toInstant()
-                                .toEpochMilli()
-                        }.getOrDefault(0L)
-                    }
-                    ?: 0L
+                    ?.substringAfterLast(" "),
+            )
 
             row.select(".chapter-detail a[href*=/view_uploads/]").map { link ->
                 SChapter.create().apply {
