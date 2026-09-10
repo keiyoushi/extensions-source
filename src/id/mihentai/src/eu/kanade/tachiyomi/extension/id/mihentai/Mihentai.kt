@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.id.mihentai
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
+import kotlinx.serialization.json.JsonElement
 
 @Source
 abstract class Mihentai : MangaThemesia() {
@@ -31,12 +32,10 @@ abstract class Mihentai : MangaThemesia() {
             ),
         )
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         listOf(
             StatusFilter(),
             TypeFilter(),
-            OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
-            GenreListFilter(intl["genre_filter_title"], getGenreList()),
-        ),
+        ) + super.getFilterList(data).filter { it is GenreListFilter || it is OrderByFilter },
     )
 }
