@@ -8,35 +8,35 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
 abstract class MangaDenizi : HttpSource() {
     override val supportsLatest = true
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ROOT)
+    override val client = network.client.newBuilder()
+        .addInterceptor(UnscramblerInterceptor())
+        .build()
+
+    private val apiHeaders: Headers by lazy {
+        headersBuilder()
+            .add("Accept", "application/json")
+            .add("Referer", "$baseUrl/manga")
+            .build()
+    }
 
     // ===============================
     // Popular
     // ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "popular")
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/v1/web/manga?sort=popular&page=$page", apiHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val json = response.asJsoup().extractInertia<MangaIndexDto>().manga
+        val json = response.parseAs<MangaApiResponse<MangaIndexData>>().data.manga
         val mangas = json.data.map { it.toSManga() }
         val hasNextPage = json.currentPage < json.lastPage
         return MangasPage(mangas, hasNextPage)
@@ -46,12 +46,7 @@ abstract class MangaDenizi : HttpSource() {
     // Latest
     // ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/v1/web/manga?sort=latest&page=$page", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -60,28 +55,75 @@ abstract class MangaDenizi : HttpSource() {
     // ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, headers)
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+
+        val url = "$baseUrl/api/v1/web/manga".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            if (query.isNotBlank()) {
+                addQueryParameter("q", query.trim())
+            }
+            filterList.forEach { filter ->
+                when (filter) {
+                    is SortFilter -> {
+                        if (filter.toUriPart().isNotEmpty()) {
+                            addQueryParameter("sort", filter.toUriPart())
+                        }
+                    }
+                    is StatusFilter -> {
+                        if (filter.toUriPart().isNotEmpty()) {
+                            addQueryParameter("status[]", filter.toUriPart())
+                        }
+                    }
+                    is CategoryFilter -> {
+                        if (filter.toUriPart().isNotEmpty()) {
+                            addQueryParameter("categories[]", filter.toUriPart())
+                        }
+                    }
+                    is DemographicFilter -> {
+                        if (filter.toUriPart().isNotEmpty()) {
+                            addQueryParameter("demographics[]", filter.toUriPart())
+                        }
+                    }
+                    else -> {}
+                }
+            }
+        }.build()
+        return GET(url, apiHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ===============================
+    // Filters
+    // ===============================
+
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        StatusFilter(),
+        CategoryFilter(),
+        DemographicFilter(),
+    )
+
+    // ===============================
     // Details
     // ===============================
 
-    override fun mangaDetailsParse(response: Response): SManga = response.asJsoup().extractInertia<MangaDetailsDto>().manga.toSManga()
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.url.trim().removePrefix("/").removePrefix("manga/")
+        return GET("$baseUrl/api/v1/web/manga/$slug", apiHeaders)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaApiResponse<MangaDetailsData>>().data.manga.toSManga()
 
     // ===============================
     // Chapters
     // ===============================
 
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val json = response.asJsoup().extractInertia<MangaDetailsDto>().manga
-        return json.chapters.map { it.toSChapter(json.slug, dateFormat) }
+        val manga = response.parseAs<MangaApiResponse<MangaDetailsData>>().data.manga
+        return manga.chapters.map { it.toSChapter(manga.slug) }
     }
 
     // ===============================
@@ -89,28 +131,16 @@ abstract class MangaDenizi : HttpSource() {
     // ===============================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        // Compatibility for old saved URLs
-        val url = if (chapter.url.startsWith("/manga/")) {
-            chapter.url.replace("/manga/", "/read/")
-        } else {
-            chapter.url
-        }
-        return GET(baseUrl + url, headers)
+        val trimmed = chapter.url.trim().removePrefix("/").removePrefix("read/").removePrefix("manga/")
+        val mangaSlug = trimmed.substringBefore("/")
+        val chapterSlug = trimmed.substringAfter("/")
+        return GET("$baseUrl/api/v1/reader/$mangaSlug/$chapterSlug", apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val json = response.asJsoup().extractInertia<ReaderDto>()
-        return json.pages.mapIndexed { index, page -> page.toPage(index) }
+        val dto = response.parseAs<ReaderDto>()
+        return dto.pages.mapIndexed { index, page -> page.toPage(index) }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ===============================
-    // Utilities
-    // ===============================
-
-    private inline fun <reified T> Document.extractInertia(): T {
-        val data = selectFirst("div#app")!!.attr("data-page")
-        return data.parseAs<InertiaDto<T>>().props
-    }
 }
