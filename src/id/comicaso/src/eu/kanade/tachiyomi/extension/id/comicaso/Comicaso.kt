@@ -104,7 +104,7 @@ abstract class Comicaso :
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
-        val response = client.get("$baseUrl/api/trending.php?period=all&limit=$PAGE_SIZE", headers = headers)
+        val response = client.get("$baseUrl/api/trending.php?period=all&limit=$PAGE_SIZE")
         val res = response.parseAs<TrendingResponseDto>()
         return MangasPage(res.data.map { it.toSManga() }, false)
     }
@@ -121,7 +121,7 @@ abstract class Comicaso :
             addQueryParameter("offset", offset.toString())
         }.build()
 
-        val response = client.get(url, headers = headers)
+        val response = client.get(url)
         val res = response.parseAs<HomeResponseDto>()
         return MangasPage(res.data.map { it.toSManga() }, res.hasMore)
     }
@@ -143,7 +143,7 @@ abstract class Comicaso :
             addQueryParameter("offset", offset.toString())
         }.build()
 
-        val response = client.get(url, headers = headers)
+        val response = client.get(url)
         val res = response.parseAs<HomeResponseDto>()
         return MangasPage(res.data.map { it.toSManga() }, res.hasMore)
     }
@@ -159,9 +159,12 @@ abstract class Comicaso :
         } ?: return null
 
         val source = url.queryParameter("source") ?: url.pathSegments.firstOrNull() ?: "all"
-        val response = client.get("$baseUrl/api/manga.php?source=$source&slug=$slug&platform=web", headers = headers)
-        val res = response.parseAs<MangaDetailResponseDto>()
-        return res.data.toSManga(source)
+        val manga = SManga.create().apply {
+            this.url = "$source/$slug"
+        }
+        return runCatching {
+            getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }.getOrNull()
     }
 
     // ============================== Details & Chapters ===================
@@ -189,7 +192,7 @@ abstract class Comicaso :
         val segments = manga.urlSegments()
         val source = segments.getOrNull(0) ?: "all"
         val slug = segments.getOrNull(1) ?: ""
-        val response = client.get("$baseUrl/api/manga.php?source=$source&slug=$slug&platform=web", headers = headers)
+        val response = client.get("$baseUrl/api/manga.php?source=$source&slug=$slug&platform=web")
         val res = response.parseAs<MangaDetailResponseDto>()
         val parsedChapters = res.data.chapters?.map { it.toSChapter(source, res.data.slug) }
             ?.sortedWith(
@@ -222,11 +225,10 @@ abstract class Comicaso :
             addQueryParameter("token", token)
         }.build()
 
-        val chapterUrl = getChapterUrl(chapter)
-        val response = client.get(apiUri, headers = headers)
+        val response = client.get(apiUri)
         val res = response.parseAs<ChapterResponseDto>()
         return res.data.images.orEmpty().mapIndexed { index, imageUrl ->
-            Page(index, chapterUrl, imageUrl = imageUrl)
+            Page(index, imageUrl = imageUrl)
         }
     }
 
