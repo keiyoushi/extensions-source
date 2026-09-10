@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -40,7 +41,34 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, order = "likes_count")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, order = "release_date")
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page > 1) return MangasPage(emptyList(), false)
+
+        val document = client.get("$baseUrl/ultimas-subidas").asJsoup()
+        val seenTitles = mutableSetOf<String>()
+        val mangas = mutableListOf<SManga>()
+
+        for (element in document.select(".upload-file-row")) {
+            val title = element.selectFirst(".thumbnail-title h4")?.textOrNull() ?: continue
+            if (!seenTitles.add(title.lowercase(Locale.ROOT))) continue
+
+            val uploadUrl = element.selectFirst("a[href*=/view_uploads/]")?.attr("abs:href") ?: continue
+            val mangaLink = client.get(uploadUrl)
+                .asJsoup()
+                .selectFirst("a.btn-rh[href*=/library/]")
+                ?: continue
+
+            mangas += SManga.create().apply {
+                setUrlWithoutDomain(mangaLink.attr("abs:href"))
+                this.title = title
+                thumbnail_url = element.selectFirst("style")
+                    ?.data()
+                    ?.let { backgroundImageRegex.find(it)?.groupValues?.get(1) }
+            }
+        }
+
+        return MangasPage(mangas, false)
+    }
 
     override suspend fun getSearchMangaList(
         page: Int,
@@ -223,6 +251,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
     override fun getFilterList(data: JsonElement?): FilterList = FilterList()
 
     companion object {
+        private val backgroundImageRegex = """background-image:\s*url\(['"]?([^'")]+)""".toRegex()
         private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     }
 }
