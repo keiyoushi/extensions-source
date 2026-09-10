@@ -34,40 +34,41 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
     }
 
     private val ajaxHeaders: Headers
-        get() = headersBuilder()
-            .set("Referer", "$baseUrl/biblioteca")
-            .set("X-Requested-With", "XMLHttpRequest")
-            .build()
+        get() =
+            headersBuilder()
+                .set("Referer", "$baseUrl/biblioteca")
+                .set("X-Requested-With", "XMLHttpRequest")
+                .build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, order = "likes_count")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
-
-        val document = client.get("$baseUrl/ultimas-subidas").asJsoup()
+        val url =
+            "$baseUrl/ultimas-subidas"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("page", page.toString())
+                .build()
+        val document = client.get(url).asJsoup()
         val seenTitles = mutableSetOf<String>()
-        val mangas = mutableListOf<SManga>()
+        val mangas =
+            document.select(".upload-file-row").mapNotNull { element ->
+                val title = element.selectFirst(".thumbnail-title h4")?.textOrNull() ?: return@mapNotNull null
+                if (!seenTitles.add(title.lowercase(Locale.ROOT))) return@mapNotNull null
+                val link = element.selectFirst("a[href*=/view_uploads/]") ?: return@mapNotNull null
 
-        for (element in document.select(".upload-file-row")) {
-            val title = element.selectFirst(".thumbnail-title h4")?.textOrNull() ?: continue
-            if (!seenTitles.add(title.lowercase(Locale.ROOT))) continue
-
-            val uploadUrl = element.selectFirst("a[href*=/view_uploads/]")?.attr("abs:href") ?: continue
-            val mangaLink = client.get(uploadUrl)
-                .asJsoup()
-                .selectFirst("a.btn-rh[href*=/library/]")
-                ?: continue
-
-            mangas += SManga.create().apply {
-                setUrlWithoutDomain(mangaLink.attr("abs:href"))
-                this.title = title
-                thumbnail_url = element.selectFirst("style")
-                    ?.data()
-                    ?.let { backgroundImageRegex.find(it)?.groupValues?.get(1) }
+                SManga.create().apply {
+                    setUrlWithoutDomain(link.attr("abs:href"))
+                    this.title = title
+                    thumbnail_url =
+                        element
+                            .selectFirst("style")
+                            ?.data()
+                            ?.let { backgroundImageRegex.find(it)?.groupValues?.get(1) }
+                }
             }
-        }
 
-        return MangasPage(mangas, false)
+        return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
 
     override suspend fun getSearchMangaList(
@@ -144,7 +145,18 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val initialDocument = client.get(baseUrl + manga.url).asJsoup()
+        val document =
+            if (manga.url.startsWith("/view_uploads/")) {
+                val mangaUrl =
+                    initialDocument
+                        .selectFirst("a.btn-rh[href*=/library/]")
+                        ?.attr("abs:href")
+                        ?: throw Exception("No se encontró la ficha del manga")
+                client.get(mangaUrl).asJsoup()
+            } else {
+                initialDocument
+            }
         return SMangaUpdate(
             manga = parseMangaDetails(document),
             chapters = parseChapterList(document),
@@ -214,12 +226,13 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 row.attr("data-chapter-number").ifBlank {
                     row.selectFirst(".chapter-number")?.attr("data-number").orEmpty()
                 }
-            val date = dateFormat.tryParseDate(
-                row
-                    .selectFirst(".text-muted.small")
-                    ?.text()
-                    ?.substringAfterLast(" "),
-            )
+            val date =
+                dateFormat.tryParseDate(
+                    row
+                        .selectFirst(".text-muted.small")
+                        ?.text()
+                        ?.substringAfterLast(" "),
+                )
 
             row.select(".chapter-detail a[href*=/view_uploads/]").map { link ->
                 SChapter.create().apply {
