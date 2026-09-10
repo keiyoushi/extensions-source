@@ -36,14 +36,12 @@ abstract class Doujindesu : KeiSource() {
         addInterceptor(decryptor.xorInterceptor())
         addInterceptor { chain ->
             val request = chain.request()
-            val url = request.url.toString()
-            val headers = request.headers.newBuilder()
-
-            if (imageDomains.any { url.contains(it) }) {
-                headers.removeAll("x-app-secret")
+            if (request.url.host != baseUrl.toHttpUrl().host) {
+                val headers = request.headers.newBuilder().removeAll("x-app-secret").build()
+                chain.proceed(request.newBuilder().headers(headers).build())
+            } else {
+                chain.proceed(request)
             }
-
-            chain.proceed(request.newBuilder().headers(headers.build()).build())
         }
     }
 
@@ -200,7 +198,7 @@ abstract class Doujindesu : KeiSource() {
         GenreList(getGenreList()),
     )
 
-    fun SManga.getSlug(): String {
+    private fun SManga.getSlug(): String {
         val fullUrl = if (url.startsWith("http")) url else "$baseUrl/${url.removePrefix("/")}"
         return fullUrl.toHttpUrl().pathSegments.last { it.isNotBlank() }
     }
@@ -208,7 +206,5 @@ abstract class Doujindesu : KeiSource() {
     companion object {
         private const val APP_SECRET = "dfdf72051dbfdc7d76889ebd31324e74"
         private const val LIMIT = 24
-
-        private val imageDomains = listOf("desu.photos", "cdn-static.desu.xxx", "desu.pics", "uploads", "upload")
     }
 }
