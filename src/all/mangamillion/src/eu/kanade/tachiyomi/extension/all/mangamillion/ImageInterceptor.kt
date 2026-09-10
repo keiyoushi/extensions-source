@@ -18,7 +18,7 @@ class ImageInterceptor : Interceptor {
 
         if (fragment.isNullOrEmpty() || !fragment.contains(":") || !response.isSuccessful) return response
 
-        val (key, iv) = fragment.split(":")
+        val (key, iv) = fragment.split(":", limit = 2)
         val secretKey = SecretKeySpec(key.decodeHex(), "AES")
         val ivSpec = IvParameterSpec(iv.decodeHex())
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")

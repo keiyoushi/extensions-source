@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangamillion
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -27,8 +26,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 @Source
 abstract class MangaMillion : KeiSource() {
-    private val domain = baseUrl.toHttpUrl().host
-    private val apiUrl = "https://api.$domain/api"
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrl get() = "https://api.$domain/api"
     private val serviceLang: String
         get() = if (lang in SERVICE_LANGUAGES) lang else "en"
 
@@ -129,7 +128,6 @@ abstract class MangaMillion : KeiSource() {
 
         return FilterList(
             buildList {
-                add(Filter.Header("Note: Search and active filters are applied together"))
                 if (result.genres.isNotEmpty()) add(GenreFilter(result.genres))
                 if (result.themes.isNotEmpty()) add(ThemeFilter(result.themes))
                 if (result.highlights.isNotEmpty()) add(HighlightsFilter(result.highlights))
