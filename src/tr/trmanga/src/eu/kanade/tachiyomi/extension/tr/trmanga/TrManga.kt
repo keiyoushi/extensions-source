@@ -12,19 +12,19 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
 @Source
 abstract class TrManga : HttpSource() {
 
-    private val dateFormat = SimpleDateFormat("dd MMMM, yy", Locale.ENGLISH)
+    private val dateFormat = DateTimeFormatter.ofPattern("dd MMMM, yy", Locale.ENGLISH)
 
     override val supportsLatest = true
 
@@ -32,15 +32,17 @@ abstract class TrManga : HttpSource() {
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/webtoon-listesi?sort=views&short_type=DESC&page=$page", headers)
 
     private fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a[class]")!!.absUrl("href"))
-        title = element.selectFirst("a[class]")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.selectFirst(".wl-name, .tur-name")?.text() ?: element.attr("title")
+        thumbnail_url = element.selectFirst("img")?.let {
+            it.absUrl("src").ifEmpty { it.absUrl("data-src") }
+        }
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("div.row>div.col-xl-4").map { popularMangaFromElement(it) }
-        val hasNextPage = document.selectFirst("a.page-link:contains(Sonraki)") != null
+        val mangas = document.select(".wl-grid > a.wl-card, .tur-grid > a.tur-card").map { popularMangaFromElement(it) }
+        val hasNextPage = document.selectFirst("a[aria-label=Sonraki], a[rel=next], a.page-link:contains(Sonraki)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -48,15 +50,18 @@ abstract class TrManga : HttpSource() {
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/son-eklenenler?page=$page", headers)
 
     private fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        title = element.selectFirst("span.title")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        val link = element.selectFirst("a.dsc-card-title, a.dsc-card-cover")!!
+        setUrlWithoutDomain(link.absUrl("href"))
+        title = element.selectFirst(".dsc-card-title")?.text() ?: link.text()
+        thumbnail_url = element.selectFirst("img")?.let {
+            it.absUrl("src").ifEmpty { it.absUrl("data-src") }
+        }
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("main#bslistMain>div>div").map { latestUpdatesFromElement(it) }
-        val hasNextPage = document.selectFirst("a.page-link:contains(Sonraki)") != null
+        val mangas = document.select(".dsc-card").map { latestUpdatesFromElement(it) }
+        val hasNextPage = document.selectFirst("a[aria-label=Sonraki], a[rel=next], a.page-link:contains(Sonraki)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -69,14 +74,30 @@ abstract class TrManga : HttpSource() {
         val shortTypeFilter = filterList.firstInstance<OrderFilter>()
         val statusFilter = filterList.firstInstance<StatusFilter>()
 
-        val url = "$baseUrl/webtoon-listesi".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("q", query)
-            .addQueryParameter("genre", genreFilter.toUriPart())
-            .addQueryParameter("sort", sortFilter.toUriPart())
-            .addQueryParameter("short_type", shortTypeFilter.toUriPart())
-            .addQueryParameter("status", statusFilter.toUriPart())
-            .build()
+        val url = "$baseUrl/webtoon-listesi".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            if (query.isNotBlank()) {
+                addQueryParameter("q", query.trim())
+            }
+            val genre = genreFilter.toUriPart()
+            if (genre.isNotEmpty()) {
+                addQueryParameter("genre", genre)
+            }
+            val status = statusFilter.toUriPart()
+            if (status == "uptodate") {
+                addQueryParameter("uptodate", "1")
+            } else if (status.isNotEmpty()) {
+                addQueryParameter("status", status)
+            }
+            val sort = sortFilter.toUriPart()
+            if (sort.isNotEmpty()) {
+                addQueryParameter("sort", sort)
+            }
+            val shortType = shortTypeFilter.toUriPart()
+            if (shortType.isNotEmpty()) {
+                addQueryParameter("short_type", shortType)
+            }
+        }.build()
         return GET(url, headers)
     }
 
@@ -96,11 +117,12 @@ abstract class TrManga : HttpSource() {
         val authorArtistLabel = "Yazar & Çizer İsim(ler) : "
         val statusLabel = "Durum :"
         return SManga.create().apply {
-            title = document.selectFirst(".movie__title")!!.text()
-            author = document.selectFirst("p:contains($authorArtistLabel)")?.text()?.substringAfter(authorArtistLabel)
+            title = document.selectFirst(".movie__title")?.text().orEmpty()
+            author = document.selectFirst("p:contains($authorArtistLabel)")?.text()?.substringAfter(authorArtistLabel)?.trim()
             artist = author
-            status = document.selectFirst("p:contains($statusLabel)>span")?.text()!!.parseStatus()
-            description = document.selectFirst(".movie__plot")?.text()
+            genre = document.select("li.movie__year a[href*=/tur/]").joinToString { it.text() }.takeIf { it.isNotEmpty() }
+            status = document.selectFirst("p:contains($statusLabel) > span")?.text()?.parseStatus() ?: SManga.UNKNOWN
+            description = document.selectFirst(".movie__plot")?.text()?.trim()
             thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("abs:content")
         }
     }
@@ -120,10 +142,10 @@ abstract class TrManga : HttpSource() {
     private fun chapterFromElement(element: Element) = SChapter.create().apply {
         element.selectFirst("a")!!.let {
             setUrlWithoutDomain(it.absUrl("href"))
-            name = it.text()
+            name = it.text().trim()
             date_upload = parseChapterDate(element.selectFirst("td:last-child span:first-child")?.text())
-            chapter_number = chapterNumberRegex.find(it.text())!!.value.toFloat()
-            scanlator = element.selectFirst("td:nth-child(2) a:first-child")?.text()
+            chapter_number = chapterNumberRegex.find(it.text())?.value?.toFloatOrNull() ?: -1f
+            scanlator = element.selectFirst("td:nth-child(2) a:first-child")?.text()?.trim()
         }
     }
 
@@ -138,7 +160,7 @@ abstract class TrManga : HttpSource() {
                 parseRelativeDate(date)
             }
 
-            else -> dateFormat.tryParse(date)
+            else -> dateFormat.tryParseDate(date)
         }
     }
 
@@ -159,8 +181,16 @@ abstract class TrManga : HttpSource() {
     }
 
     // page list
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("img[data-src]").mapIndexed { i, img ->
-        Page(i, imageUrl = img.absUrl("data-src"))
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        if (document.selectFirst(".rd-lock, *:containsOwn(Üyelere Özel)") != null) {
+            throw Exception("Bu bölüm üyelere özeldir. Okumak için WebView üzerinden giriş yapın")
+        }
+        return document.select(".reader-img, img[data-src]")
+            .distinctBy { it.absUrl("data-src").ifEmpty { it.absUrl("src") } }
+            .mapIndexed { i, img ->
+                Page(i, imageUrl = img.absUrl("data-src").ifEmpty { img.absUrl("src") })
+            }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
