@@ -17,6 +17,11 @@ keiyoushi {
         }
         id = 7704282043609669342L
     }
+
+    deeplink {
+        path("/manga/..*")
+        path("/reader/..*")
+    }
 }
 
 dependencies {

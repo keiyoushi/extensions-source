@@ -213,6 +213,7 @@ class Chapter(
 @Serializable
 class PageList(
     @SerialName("content_urls") private val contentUrls: List<String>,
+    @SerialName("manga_slug") val mangaSlug: String? = null,
 ) {
     val pages: List<String>
         get() = contentUrls.map { page ->

@@ -153,8 +153,15 @@ abstract class Doujindesu : KeiSource() {
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
-        val slug = url.pathSegments.getOrNull(1) ?: return null
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = when (url.pathSegments.firstOrNull()) {
+            "manga" -> url.pathSegments.getOrNull(1)
+            "reader" -> {
+                val chapterId = url.pathSegments.getOrNull(1) ?: return null
+                client.get("$apiUrl/chapters/$chapterId".toHttpUrl()).parseAs<PageList>().mangaSlug
+            }
+            else -> return null
+        } ?: return null
         return client.get("$apiUrl/manga/$slug".toHttpUrl()).parseAs<MangaItem>().toSManga(baseUrl).apply {
             setUrlWithoutDomain(getMangaUrl(this))
             initialized = true
