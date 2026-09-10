@@ -86,7 +86,7 @@ abstract class CosmicScansID : KeiSource() {
             return MangasPage(result.data.map { it.toSManga() }, false)
         }
 
-        val key = searchKey(filters)
+        val key = searchKey(query, filters, "filter")
         if (page > 1 && cursorCache["$key:$page"].isNullOrBlank()) {
             return MangasPage(emptyList(), false)
         }
@@ -108,14 +108,15 @@ abstract class CosmicScansID : KeiSource() {
         val firstSegment = url.pathSegments.firstOrNull()
         if (firstSegment != "series" && firstSegment != "manga") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val response = client.get("$apiUrl/mangaDetail/$slug", ensureSuccess = false)
-        if (response.code == 404) return null
-        return response.parseAs<MangaDetailResponse>().data.toSMangaDetails()
+        val manga = SManga.create().apply {
+            setUrlWithoutDomain("/series/$slug")
+        }
+        return runCatching {
+            getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }.getOrNull()
     }
 
     // ======================= Details and Chapters ==========================
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.slug()}"
-
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url.substringAfterLast('/')}"
 
     override suspend fun fetchMangaUpdate(
@@ -131,7 +132,7 @@ abstract class CosmicScansID : KeiSource() {
             .filter { it.slug?.isNotBlank() == true && it.redirectLink.isNullOrBlank() }
             .map { it.toSChapter() }
         return SMangaUpdate(
-            manga = data.toSMangaDetails(),
+            manga = data.toSMangaDetails(slug),
             chapters = parsedChapters,
         )
     }
@@ -188,7 +189,9 @@ abstract class CosmicScansID : KeiSource() {
             .forEach { addQueryParameter("genres_slug", it.slug) }
     }
 
-    private fun searchKey(filters: FilterList): String = listOf(
+    private fun searchKey(query: String, filters: FilterList, endpoint: String): String = listOf(
+        endpoint,
+        query,
         filters.firstInstanceOrNull<OrderFilter>()?.value.orEmpty(),
         filters.firstInstanceOrNull<StatusFilter>()?.value.orEmpty(),
         filters.firstInstanceOrNull<TypeFilter>()?.value.orEmpty(),

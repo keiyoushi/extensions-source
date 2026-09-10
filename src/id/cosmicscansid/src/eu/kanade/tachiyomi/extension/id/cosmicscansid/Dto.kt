@@ -71,9 +71,10 @@ class MangaDetailDto(
     private val status: String? = null,
     val chapters: List<ChapterDto>? = null,
 ) {
-    fun toSMangaDetails(): SManga = SManga.create().apply {
+    fun toSMangaDetails(defaultSlug: String = ""): SManga = SManga.create().apply {
+        val s = this@MangaDetailDto.slug?.takeIf { it.isNotBlank() } ?: defaultSlug
         title = this@MangaDetailDto.title.orEmpty()
-        url = "/series/${this@MangaDetailDto.slug.orEmpty()}"
+        url = "/series/$s"
         thumbnail_url = this@MangaDetailDto.cover
         description = listOfNotNull(
             this@MangaDetailDto.sinopsis,
