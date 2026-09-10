@@ -15,34 +15,27 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Akaya : KeiSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val supportsLatest = true
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val request = chain.request()
 
@@ -59,8 +52,6 @@ abstract class Akaya : KeiSource() {
 
         response
     }.rateLimit(1, 1.seconds) { it.host == baseUrlHost }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Referer", "$baseUrl/")
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
         client.get(
@@ -467,17 +458,26 @@ abstract class Akaya : KeiSource() {
                 SChapter.create().apply {
                     setUrlWithoutDomain(url)
                     name = chapterName
-                    date_upload = dateFormat.tryParse(date)
+                    date_upload = date?.let {
+                        try {
+                            LocalDate.parse(it, dateFormatter)
+                                .atStartOfDay(ZoneOffset.UTC)
+                                .toInstant()
+                                .toEpochMilli()
+                        } catch (_: DateTimeParseException) {
+                            0L
+                        }
+                    } ?: 0L
                 }
             }
     }
 
-    private fun livewirePageRequest(
+    private suspend fun livewirePageRequest(
         snapshot: String,
         token: String,
         page: Int,
         referer: String,
-    ): Request {
+    ): Response {
         val payload = buildJsonObject {
             put("_token", token)
             putJsonArray("components") {
@@ -502,20 +502,20 @@ abstract class Akaya : KeiSource() {
             }
         }
 
-        return Request.Builder()
-            .url("$baseUrl/livewire-c4e82cae/update")
-            .headers(headers)
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
-            .header("X-Livewire", "true")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .header("Referer", referer)
-            .header("Origin", baseUrl)
-            .post(
-                Json.encodeToString(payload)
-                    .toRequestBody("application/json".toMediaType()),
-            )
+        val requestHeaders = headersBuilder()
+            .set("Content-Type", "application/json")
+            .set("Accept", "application/json")
+            .set("X-Livewire", "true")
+            .set("X-Requested-With", "XMLHttpRequest")
+            .set("Referer", referer)
+            .set("Origin", baseUrl)
             .build()
+
+        return client.post(
+            "$baseUrl/livewire-c4e82cae/update",
+            requestHeaders,
+            payload.toJsonRequestBody(),
+        )
     }
 
     private suspend fun parseChaptersWithPagination(
@@ -561,16 +561,12 @@ abstract class Akaya : KeiSource() {
 
         while (true) {
             try {
-                val pageResponse = client
-                    .newCall(
-                        livewirePageRequest(
-                            snapshot = snapshot,
-                            token = token,
-                            page = page,
-                            referer = document.location().substringBefore("?"),
-                        ),
-                    )
-                    .execute()
+                val pageResponse = livewirePageRequest(
+                    snapshot = snapshot,
+                    token = token,
+                    page = page,
+                    referer = document.location().substringBefore("?"),
+                )
 
                 var shouldStop = false
 
@@ -685,6 +681,6 @@ abstract class Akaya : KeiSource() {
     }
 
     companion object {
-        private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
+        private val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
     }
 }
