@@ -7,6 +7,7 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import okio.ForwardingSource
 import okio.buffer
+import kotlin.experimental.xor
 
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -29,7 +30,7 @@ class ImageInterceptor : Interceptor {
 
                 val bytes = buffer.readByteArray()
                 for (i in bytes.indices) {
-                    bytes[i] = (bytes[i].toInt() xor key[(index++ % key.size).toInt()].toInt()).toByte()
+                    bytes[i] = bytes[i] xor key[(index++ % key.size).toInt()]
                 }
 
                 sink.write(bytes)
