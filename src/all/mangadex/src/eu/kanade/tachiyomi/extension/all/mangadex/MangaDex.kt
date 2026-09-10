@@ -71,8 +71,10 @@ class MangaDex(
 
     @Suppress("DEPRECATION")
     private fun isDelegate() = try {
-        val komikku = applicationContext.packageName.startsWith("app.komikku")
-        PreferenceManager.getDefaultSharedPreferences(applicationContext)!!.getBoolean("eh_delegate_sources", komikku)
+        val supportsDelegate = applicationContext.packageName.let {
+            it.startsWith("app.komikku") || it.startsWith("eu.kanade.tachiyomi.sy")
+        }
+        PreferenceManager.getDefaultSharedPreferences(applicationContext)!!.getBoolean("eh_delegate_sources", supportsDelegate)
     } catch (_: Throwable) {
         false
     }
