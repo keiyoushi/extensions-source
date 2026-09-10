@@ -4,15 +4,11 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 import kotlin.getValue
 
 @Source
@@ -20,7 +16,8 @@ abstract class MadaraScans :
     MangaThemesia(),
     ConfigurableSource {
     override val mangaUrlDirectory = "/series"
-    override val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US)
+
+    override val datePattern = "yyyy/MM/dd"
 
     private val preferences by getPreferencesLazy()
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper(lockedChapterSelector = ".locked")
@@ -55,44 +52,12 @@ abstract class MadaraScans :
         setUrlWithoutDomain(urlElements.attr("href"))
         val chapterName = element.select(".ch-num").text().ifBlank { urlElements.firstOrNull()?.text().orEmpty() }
         name = if (!element.hasClass("free")) "🔒 $chapterName" else chapterName
-        val dateElement = element.select(".ch-date")?.text()
+        val dateElement = element.select(".ch-date").text()
         date_upload = dateElement.parseChapterDate()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
-    }
-
-    override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Filter<*>>(
-            Filter.Separator(),
-            StatusFilter(intl["status_filter_title"], statusOptions),
-            TypeFilter(intl["type_filter_title"], typeFilterOptions),
-            OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
-        )
-        if (!genrelist.isNullOrEmpty()) {
-            filters.addAll(
-                listOf(
-                    Filter.Header(intl["genre_exclusion_warning"]),
-                    GenreListFilter(intl["genre_filter_title"], getGenreList()),
-                ),
-            )
-        } else {
-            filters.add(
-                Filter.Header(intl["genre_missing_warning"]),
-            )
-        }
-        if (hasProjectPage) {
-            filters.addAll(
-                mutableListOf<Filter<*>>(
-                    Filter.Separator(),
-                    Filter.Header(intl["project_filter_warning"]),
-                    Filter.Header(intl.format("project_filter_name", name)),
-                    ProjectFilter(intl["project_filter_title"], projectFilterOptions),
-                ),
-            )
-        }
-        return FilterList(filters)
     }
 
     override val pageSelector = ".pagination, .legendary-pagination, .magma-pagination"
