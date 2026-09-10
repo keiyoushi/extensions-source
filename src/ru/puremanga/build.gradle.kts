@@ -5,16 +5,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "InkStory"
+    name = "PureManga"
     versionCode = 0
-    contentWarning = ContentWarning.SAFE
+    contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "inkstory"
 
     source {
         lang = "ru"
-        baseUrl = "https://inkstory.net"
-        versionId = 2
-        id = 941207398290674942L
+        baseUrl = "https://v1.puremanga.me"
     }
 }
