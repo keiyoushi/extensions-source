@@ -8,7 +8,7 @@ keiyoushi {
     name = "APKOMIK"
     versionCode = 6
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {

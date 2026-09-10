@@ -7,7 +7,5 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class ManhwaList : MangaThemesia() {
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 }
