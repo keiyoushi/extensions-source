@@ -15,6 +15,9 @@ import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
@@ -40,6 +43,9 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 .set("X-Requested-With", "XMLHttpRequest")
                 .build()
 
+    private val latestTitleFirstPages = mutableMapOf<String, Int>()
+    private val latestTitleFirstPagesLock = Any()
+
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, order = "likes_count")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -50,12 +56,25 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .build()
         val document = client.get(url).asJsoup()
-        val seenTitles = mutableSetOf<String>()
+        if (page == 1) {
+            synchronized(latestTitleFirstPagesLock) {
+                latestTitleFirstPages.clear()
+            }
+        }
+
+        val seenTitlesOnPage = mutableSetOf<String>()
         val mangas =
             document.select(".upload-file-row").mapNotNull { element ->
                 val title = element.selectFirst(".thumbnail-title h4")?.textOrNull() ?: return@mapNotNull null
-                if (!seenTitles.add(title.lowercase(Locale.ROOT))) return@mapNotNull null
                 val link = element.selectFirst("a[href*=/view_uploads/]") ?: return@mapNotNull null
+                val titleKey = title.lowercase(Locale.ROOT)
+                if (!seenTitlesOnPage.add(titleKey)) return@mapNotNull null
+
+                val firstSeenOnThisPage =
+                    synchronized(latestTitleFirstPagesLock) {
+                        latestTitleFirstPages.getOrPut(titleKey) { page } == page
+                    }
+                if (!firstSeenOnThisPage) return@mapNotNull null
 
                 SManga.create().apply {
                     setUrlWithoutDomain(link.attr("abs:href"))
@@ -68,7 +87,24 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 }
             }
 
-        return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
+        val canonicalMangas =
+            coroutineScope {
+                mangas.map { manga ->
+                    async {
+                        val mangaUrl =
+                            client
+                                .get(baseUrl + manga.url)
+                                .asJsoup()
+                                .selectFirst("a.btn-rh[href*=/library/]")
+                                ?.attr("abs:href")
+                                ?: throw Exception("No se encontró la ficha del manga")
+
+                        manga.apply { setUrlWithoutDomain(mangaUrl) }
+                    }
+                }.awaitAll()
+            }
+
+        return MangasPage(canonicalMangas, document.selectFirst("a[rel=next]") != null)
     }
 
     override suspend fun getSearchMangaList(
