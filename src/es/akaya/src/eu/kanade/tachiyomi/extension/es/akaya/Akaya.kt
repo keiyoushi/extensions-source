@@ -1,83 +1,86 @@
 package eu.kanade.tachiyomi.extension.es.akaya
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class Akaya : HttpSource() {
+abstract class Akaya : KeiSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
+        val request = chain.request()
 
-            if (!request.url.toString().startsWith("$baseUrl/serie")) {
-                return@addInterceptor chain.proceed(request)
-            }
-
-            val response = chain.proceed(request)
-
-            if (response.request.url.toString().removeSuffix("/") == baseUrl) {
-                response.close()
-                throw IOException("Esta serie no se encuentra disponible")
-            }
-
-            response
+        if (!request.url.toString().startsWith("$baseUrl/serie")) {
+            return@addInterceptor chain.proceed(request)
         }
-        .rateLimit(1, 1.seconds) { it.host == baseUrlHost }
-        .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+        val response = chain.proceed(request)
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/collection/bd90cb43-9bf2-4759-b8cc-c9e66a526bc6?page=$page", headers)
+        if (response.request.url.toString().removeSuffix("/") == baseUrl) {
+            response.close()
+            throw IOException("Esta serie no se encuentra disponible")
+        }
 
-    override fun popularMangaParse(response: Response) = parseMangaList(response)
+        response
+    }.rateLimit(1, 1.seconds) { it.host == baseUrlHost }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/explorer/all?page=$page", headers)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Referer", "$baseUrl/")
 
-    override fun latestUpdatesParse(response: Response) = parseMangaList(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
+        client.get(
+            "$baseUrl/collection/bd90cb43-9bf2-4759-b8cc-c9e66a526bc6?page=$page",
+        ),
+    )
 
-    override fun searchMangaRequest(
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(
+        client.get("$baseUrl/explorer/all?page=$page"),
+    )
+
+    override suspend fun getSearchMangaList(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request {
+    ): MangasPage {
         if (query.isNotEmpty()) {
-            return livewireSearchRequest(query)
+            return parseLivewireMangaList(
+                livewireSearch(query),
+            )
         }
 
         val selectedGenres = filters
@@ -88,18 +91,23 @@ abstract class Akaya : HttpSource() {
             .orEmpty()
 
         if (selectedGenres.isNotEmpty()) {
-            return livewireGenreRequest(
-                genres = selectedGenres,
-                page = page,
+            return parseLivewireMangaList(
+                livewireGenreSearch(
+                    genres = selectedGenres,
+                    page = page,
+                ),
             )
         }
 
-        return GET("$baseUrl/explorer/all?page=$page", headers)
+        return parseMangaList(
+            client.get("$baseUrl/explorer/all?page=$page"),
+        )
     }
 
-    private fun livewireSearchRequest(query: String): Request {
-        val homeResponse = client.newCall(GET(baseUrl, headers)).execute()
-        val homeDocument = homeResponse.use { it.asJsoup() }
+    private suspend fun livewireSearch(query: String): Response {
+        val homeDocument = client
+            .get(baseUrl)
+            .asJsoup()
 
         val component = homeDocument
             .select("*")
@@ -148,32 +156,29 @@ abstract class Akaya : HttpSource() {
             }
         }
 
-        return Request.Builder()
-            .url("$baseUrl/livewire-c4e82cae/update")
-            .headers(headers)
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
-            .header("X-Livewire", "1")
-            .header("Origin", baseUrl)
-            .header("Referer", "$baseUrl/")
-            .post(
-                Json.encodeToString(payload)
-                    .toRequestBody("application/json".toMediaType()),
-            )
+        val requestHeaders = headersBuilder()
+            .set("Accept", "application/json")
+            .set("X-Livewire", "1")
+            .set("Origin", baseUrl)
+            .set("Referer", "$baseUrl/")
             .build()
+
+        return client.post(
+            "$baseUrl/livewire-c4e82cae/update",
+            requestHeaders,
+            payload.toJsonRequestBody(),
+        )
     }
 
-    private fun livewireGenreRequest(
+    private suspend fun livewireGenreSearch(
         genres: List<Genre>,
         page: Int,
-    ): Request {
+    ): Response {
         val explorerUrl = "$baseUrl/explorer/all?page=$page"
 
-        val explorerResponse = client
-            .newCall(GET(explorerUrl, headers))
-            .execute()
-
-        val explorerDocument = explorerResponse.use { it.asJsoup() }
+        val explorerDocument = client
+            .get(explorerUrl)
+            .asJsoup()
 
         val component = explorerDocument
             .select("[wire:snapshot]")
@@ -225,38 +230,32 @@ abstract class Akaya : HttpSource() {
             }
         }
 
-        return Request.Builder()
-            .url("$baseUrl/livewire-c4e82cae/update")
-            .headers(headers)
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
-            .header("X-Livewire", "true")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .header("Origin", baseUrl)
-            .header("Referer", explorerUrl)
-            .post(
-                Json.encodeToString(payload)
-                    .toRequestBody("application/json".toMediaType()),
-            )
+        val requestHeaders = headersBuilder()
+            .set("Accept", "application/json")
+            .set("X-Livewire", "true")
+            .set("X-Requested-With", "XMLHttpRequest")
+            .set("Origin", baseUrl)
+            .set("Referer", explorerUrl)
             .build()
+
+        return client.post(
+            "$baseUrl/livewire-c4e82cae/update",
+            requestHeaders,
+            payload.toJsonRequestBody(),
+        )
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    private fun parseLivewireMangaList(response: Response): MangasPage {
         if (!response.request.url.toString().contains("/livewire-c4e82cae/update")) {
             return parseMangaList(response)
         }
 
-        val json = response.parseAs<JsonObject>()
+        val livewire = response.parseAs<LivewireResponseDto>()
 
-        val html = json["components"]
-            ?.jsonArray
-            ?.firstOrNull()
-            ?.jsonObject
-            ?.get("effects")
-            ?.jsonObject
-            ?.get("html")
-            ?.jsonPrimitive
-            ?.content
+        val html = livewire.components
+            .firstOrNull()
+            ?.effects
+            ?.html
             .orEmpty()
 
         if (html.isBlank()) {
@@ -355,16 +354,33 @@ abstract class Akaya : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Los filtros se ignorarán al hacer una búsqueda por texto"),
         Filter.Separator(),
         OrderFilter(),
         GenreFilter(),
     )
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client
+            .get(getMangaUrl(manga))
+            .asJsoup()
 
+        val updatedManga = parseMangaDetails(document)
+        val updatedChapters = parseChaptersWithPagination(document)
+
+        return SMangaUpdate(
+            updatedManga,
+            updatedChapters,
+        )
+    }
+
+    private fun parseMangaDetails(document: Document): SManga {
         val header = document.selectFirst("header.masthead > div.container > div.row")
 
         val statusText = document
@@ -426,8 +442,6 @@ abstract class Akaya : HttpSource() {
                 ?.replace("/chapters/", "/content/")
         }
     }
-
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "?order_direction=desc", headers)
 
     private fun parseChapters(document: org.jsoup.nodes.Document): List<SChapter> {
         return document
@@ -504,8 +518,9 @@ abstract class Akaya : HttpSource() {
             .build()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private suspend fun parseChaptersWithPagination(
+        document: Document,
+    ): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
 
         fun formatChapters(): List<SChapter> {
@@ -552,7 +567,7 @@ abstract class Akaya : HttpSource() {
                             snapshot = snapshot,
                             token = token,
                             page = page,
-                            referer = response.request.url.toString().substringBefore("?"),
+                            referer = document.location().substringBefore("?"),
                         ),
                     )
                     .execute()
@@ -610,15 +625,14 @@ abstract class Akaya : HttpSource() {
         return formatChapters()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.substringAfterLast("#") == "lock") {
             throw Exception("Capítulo bloqueado")
         }
-        return super.pageListRequest(chapter)
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val document = client
+            .get(getChapterUrl(chapter))
+            .asJsoup()
 
         val imageUrls = document.select("img").mapNotNull { image ->
             listOf(
@@ -669,8 +683,6 @@ abstract class Akaya : HttpSource() {
 
         return emptyList()
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
