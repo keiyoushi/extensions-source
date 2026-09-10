@@ -30,8 +30,7 @@ abstract class WNACG :
 
     private val preferences = getPreferences { preferenceMigration() }
 
-    // Dynamic remote domains take precedence over the static declaration used for generated metadata.
-    override val baseUrl = if (System.getenv("CI") == "true") getCiBaseUrl() else preferences.baseUrl
+    override val baseUrl get() = preferences.baseUrl
 
     private val updateUrlInterceptor = UpdateUrlInterceptor(preferences)
 
