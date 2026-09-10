@@ -36,11 +36,10 @@ abstract class Softkomik : KeiSource() {
     private val sessionsByUrlKey = ConcurrentHashMap<String, SessionDto>()
     private var bearerToken: BearerTokenDto? = null
 
-    private val rscHeaders: Headers by lazy {
-        headersBuilder()
+    private val rscHeaders: Headers
+        get() = headersBuilder()
             .add("rsc", "1")
             .build()
-    }
 
     override fun OkHttpClient.Builder.configureClient() = this
         .addInterceptor(::imageInterceptor)
