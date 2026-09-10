@@ -108,7 +108,7 @@ class Episode(
     private val subTitle: String?,
     private val updateDate: String?,
     private val internal: Internal,
-    private val isActive: Boolean,
+    val isActive: Boolean,
 ) {
     fun toSChapter(workCode: String) = SChapter.create().apply {
         val lock = if (!isActive) "🔒 " else ""
