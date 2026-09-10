@@ -2,23 +2,19 @@ package eu.kanade.tachiyomi.extension.id.mangasusu
 
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
 import keiyoushi.utils.asJsoup
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import okhttp3.Cookie
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import java.io.IOException
 
 @Source
 abstract class Mangasusu : MangaThemesia() {
     override val mangaUrlDirectory = "/komik"
-    override val client by lazy {
-        super.client.newBuilder().addInterceptor(::sucuriInterceptor).build()
-    }
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::sucuriInterceptor)
 
     // Taken from es/ManhwasNet
     private fun sucuriInterceptor(chain: Interceptor.Chain): Response {
@@ -53,24 +49,4 @@ abstract class Mangasusu : MangaThemesia() {
         }
         return response
     }
-
-    override fun pageListParse(document: Document): List<Page> {
-        val scriptContent = document.selectFirst("script:containsData(ts_reader)")?.data()
-            ?: return super.pageListParse(document)
-        val jsonString = scriptContent.substringAfter("ts_reader.run(").substringBefore(");")
-        val tsReader = json.decodeFromString<TSReader>(jsonString)
-        val imageUrls = tsReader.sources.firstOrNull()?.images ?: return emptyList()
-        return imageUrls.mapIndexed { index, imageUrl -> Page(index, document.location(), imageUrl) }
-    }
-
-    @Serializable
-    data class TSReader(
-        val sources: List<ReaderImageSource>,
-    )
-
-    @Serializable
-    data class ReaderImageSource(
-        val source: String,
-        val images: List<String>,
-    )
 }

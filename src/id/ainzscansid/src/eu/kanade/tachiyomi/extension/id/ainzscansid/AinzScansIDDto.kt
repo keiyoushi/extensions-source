@@ -9,7 +9,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
+import kotlin.time.Instant
+
+private val adDomainRegex = """^999(?:-\d+)?\.jpe?g$""".toRegex()
+private val adDonationRegex = """^997(?:-\d+)?\.jpe?g$""".toRegex()
+private val adVotePreRegex = """^00\.0\.jpg$""".toRegex()
+private val adReadOnRegex = """^00\.1\.jpg$""".toRegex()
+private val adVotePostRegex = """^995\.jpg$""".toRegex()
 
 @Serializable
 internal class SearchResponseDto(
@@ -69,11 +75,11 @@ internal class ChapterDto(
     private val number: String,
     @SerialName("created_at") private val createdAt: String? = null,
 ) {
-    fun toSChapter(comicSlug: String, dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
+    fun toSChapter(comicSlug: String): SChapter = SChapter.create().apply {
         url = "/comic/$comicSlug/chapter/$slug"
         name = "Chapter ${number.removeSuffix(".00")}"
         chapter_number = number.toFloatOrNull() ?: -1f
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
@@ -88,7 +94,28 @@ internal class ChapterDetailDto(
 internal class ChapterPagesDto(
     private val pages: List<PageDto>,
 ) {
-    fun toPageList(): List<Page> = pages.mapIndexed { i, page -> page.toPage(i) }
+    fun toPageList(): List<Page> = buildList {
+        pages.forEachIndexed { i, page ->
+            val maybePage = page.toPage(i)
+
+            val filename = maybePage.imageUrl
+                ?.toHttpUrlOrNull()
+                ?.pathSegments
+                ?.lastOrNull()
+
+            val isAd = when (i) {
+                pages.lastIndex - 0 -> filename?.matches(adDomainRegex) == true
+                pages.lastIndex - 2 -> filename?.matches(adDonationRegex) == true || filename?.matches(adVotePostRegex) == true
+                0 -> filename?.matches(adVotePreRegex) == true
+                1 -> filename?.matches(adReadOnRegex) == true
+                else -> false
+            }
+
+            if (!isAd) {
+                add(maybePage)
+            }
+        }
+    }
 }
 
 @Serializable

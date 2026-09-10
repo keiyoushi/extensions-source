@@ -168,6 +168,12 @@ class Manga(
     private val malID: Long? = null,
     @SerialName("kitsu_id")
     private val kitsuID: Long? = null,
+    @SerialName("anime_planet_id")
+    private val animePlanetId: String? = null,
+    @SerialName("shikimori_id")
+    private val shikimoriId: Long? = null,
+    @SerialName("ann_id")
+    private val animeNewsNetworkId: Long? = null,
     @SerialName("mangadex_id")
     private val mangadexID: String? = null,
     @SerialName("year")
@@ -211,6 +217,7 @@ class Manga(
                 "JP" -> add("Manga")
                 "KR" -> add("Manhwa")
                 "CN" -> add("Manhua")
+                "EN" -> add("OEL")
             }
             this@Manga.genres.forEach { add(it.trim()) }
             if (showTags) {
@@ -265,10 +272,13 @@ class Manga(
 
             listOfNotNull(
                 anilistID?.let { "[AniList](https://anilist.co/manga/$it)" },
-                mangaupdatesID?.let { "[MangaUpdates](https://mangaupdates.com/series/$it)" },
+                mangaupdatesID?.let { "[MangaUpdates](https://www.mangaupdates.com/series/$it)" },
                 mangabakaID?.let { "[MangaBaka](https://mangabaka.org/$it)" },
                 malID?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
                 kitsuID?.let { "[Kitsu](https://kitsu.app/manga/$it)" },
+                animePlanetId?.let { "[AnimePlanet](https://www.anime-planet.com/manga/$it)" },
+                shikimoriId?.let { "[Shikimori](https://shikimori.io/mangas/$it)" },
+                animeNewsNetworkId?.let { "[AnimeNewsNetwork](https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it)" },
                 mangadexID?.let { "[MangaDex](https://mangadex.org/title/$it)" },
                 sourceUrl?.let { "[Source]($it)" },
             ).also { links ->

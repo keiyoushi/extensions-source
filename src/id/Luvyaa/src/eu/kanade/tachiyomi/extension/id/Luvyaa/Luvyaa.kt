@@ -2,38 +2,40 @@
 
 package eu.kanade.tachiyomi.extension.id.Luvyaa
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Document
 
 @Source
 abstract class Luvyaa :
     MangaThemesia(),
     ConfigurableSource {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+    override val datePattern = "dd/MM/yyyy"
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    override fun searchMangaUrl(page: Int, query: String) = if (query.isNotEmpty()) {
+        baseUrl.toHttpUrl().newBuilder().apply {
+            addQueryParameter("s", query)
+            addQueryParameter("page", page.toString())
+        }
+    } else {
+        super.searchMangaUrl(page, query)
+    }
 
+    override fun chapterListParse(document: Document): List<SChapter> {
         val lockedUrls = LOCKED_URLS_REGEX.find(document.toString())?.groupValues?.get(1)
             ?.split(",")
             ?.map { it.trim().removeSurrounding("'").removeSurrounding("\"").replace("\\/", "/") }
             .orEmpty()
 
         val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED, false)
-
-        countViews(document)
 
         return document.select(super.chapterListSelector()).mapNotNull { element ->
             val chapter = super.chapterFromElement(element)

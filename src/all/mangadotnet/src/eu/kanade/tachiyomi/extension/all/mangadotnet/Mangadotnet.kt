@@ -720,7 +720,7 @@ abstract class Mangadotnet :
         }
     }
 
-    private val allOrigins = setOf("JP", "KR", "CN", "ONESHOT")
+    private val allOrigins = setOf("JP", "KR", "CN", "EN", "ONESHOT")
 
     private fun excludedTypesPref(): Set<String> = preferences.getStringSet(BROWSE_TYPE_PREF, emptySet())!!
 
@@ -811,8 +811,8 @@ abstract class Mangadotnet :
         val browseTypePref = MultiSelectListPreference(screen.context).apply {
             key = BROWSE_TYPE_PREF
             title = "Type Blacklist"
-            entries = arrayOf("Manga", "Manhwa", "Manhua", "One Shot")
-            entryValues = arrayOf("JP", "KR", "CN", "ONESHOT")
+            entries = arrayOf("Manga", "Manhwa", "Manhua", "OEL", "One Shot")
+            entryValues = arrayOf("JP", "KR", "CN", "EN", "ONESHOT")
             setDefaultValue(emptySet<String>())
             summary = "Exclude types from Popular & Latest."
         }
