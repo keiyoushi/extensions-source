@@ -12,8 +12,16 @@ import kotlin.time.Instant
 
 @Serializable
 class SeriesResponse(
-    val total: Int,
     val result: List<Result>,
+    private val total: Int?,
+    private val pagination: Pagination?,
+) {
+    fun hasNextPage(offset: Int, limit: Int): Boolean = offset + limit < (total ?: pagination?.total ?: 0)
+}
+
+@Serializable
+class Pagination(
+    val total: Int,
 )
 
 @Serializable

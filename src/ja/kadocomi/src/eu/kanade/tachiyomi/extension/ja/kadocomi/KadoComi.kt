@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.kadocomi
 
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,8 +10,10 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -43,12 +46,13 @@ abstract class KadoComi : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstance<SortFilter>().value
         val offset = (page - 1) * pageLimit
         val url = "$apiUrl/search/keywords".toHttpUrl().newBuilder()
             .addQueryParameter("keywords", query)
             .addQueryParameter("limit", pageLimit.toString())
             .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("sortBy", "popularity")
+            .addQueryParameter("sortBy", sort)
             .build()
 
         return client.get(url).toMangasPage(offset)
@@ -57,9 +61,13 @@ abstract class KadoComi : KeiSource() {
     private fun Response.toMangasPage(offset: Int): MangasPage {
         val result = this.parseAs<SeriesResponse>()
         val mangas = result.result.map { it.toSManga() }
-        val hasNextPage = offset + pageLimit < result.total
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, result.hasNextPage(offset, pageLimit))
     }
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        Filter.Header("Note: Search and filters are applied together"),
+        SortFilter(),
+    )
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
