@@ -40,7 +40,6 @@ abstract class WNACG :
 
     override fun Headers.Builder.configureHeaders() = apply {
         set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
-        set("Referer", baseUrl)
         set("Sec-Fetch-Mode", "no-cors")
         set("Sec-Fetch-Site", "cross-site")
     }
