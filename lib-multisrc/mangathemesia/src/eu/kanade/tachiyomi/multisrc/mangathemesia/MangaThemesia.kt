@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mangathemesia
 
-import eu.kanade.tachiyomi.network.GET
+import android.util.Base64
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,41 +8,45 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
+import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 
 // Formerly WPMangaStream & WPMangaReader -> MangaThemesia
-abstract class MangaThemesia : HttpSource() {
+abstract class MangaThemesia : KeiSource() {
 
     open val mangaUrlDirectory: String = "/manga"
-    open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 
-    protected open val json: Json by injectLazy()
-
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    open val datePattern = "MMMM d, yyyy"
+    open val dateFormat by lazy {
+        DateTimeFormatterBuilder().parseCaseInsensitive()
+            .appendPattern(datePattern).toFormatter(Locale.forLanguageTag(lang))
+    }
 
     protected val intl = Intl(
         language = lang,
@@ -54,64 +58,39 @@ abstract class MangaThemesia : HttpSource() {
     open val projectPageString = "/project"
 
     // Popular (Search with popular order and nothing else)
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", popularFilter)
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", popularFilter)
 
     // Latest (Search with update order and nothing else)
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", latestFilter)
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", latestFilter)
 
     // Search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            return fetchSearchManga(page, "$URL_SEARCH_PREFIX$query", filters)
-        }
-        if (query.startsWith(URL_SEARCH_PREFIX).not()) return super.fetchSearchManga(page, query, filters)
-
-        val mangaPath = try {
-            mangaPathFromUrl(query.substringAfter(URL_SEARCH_PREFIX))
-                ?: return Observable.just(MangasPage(emptyList(), false))
-        } catch (e: Exception) {
-            return Observable.error(e)
-        }
-
-        return fetchMangaDetails(
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        return getMangaDetails(
             SManga.create()
-                .apply { this.url = "$mangaUrlDirectory/$mangaPath/" },
-        )
-            .map {
-                // Isn't set in returned manga
-                it.url = "$mangaUrlDirectory/$mangaPath/"
-                MangasPage(listOf(it), false)
-            }
+                .apply { this.url = url.encodedPath },
+        ).takeIf { it.title.isNotEmpty() }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment(mangaUrlDirectory.substring(1))
-            .addQueryParameter("title", query)
-            .addQueryParameter("page", page.toString())
+    open fun searchMangaUrl(page: Int, query: String) = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment(mangaUrlDirectory.drop(1))
+        if (query.isNotEmpty()) addQueryParameter("title", query)
+        addQueryParameter("page", page.toString())
+    }
 
+    open fun searchMangaUrl(page: Int, query: String, filters: FilterList) = searchMangaUrl(page, query).apply {
         filters.forEach { filter ->
             when (filter) {
-                is AuthorFilter -> {
-                    url.addQueryParameter("author", filter.state)
-                }
-
-                is YearFilter -> {
-                    url.addQueryParameter("yearx", filter.state)
-                }
-
                 is StatusFilter -> {
-                    url.addQueryParameter("status", filter.selectedValue())
+                    addQueryParameter("status", filter.selectedValue())
                 }
 
                 is TypeFilter -> {
-                    url.addQueryParameter("type", filter.selectedValue())
+                    addQueryParameter("type", filter.selectedValue())
                 }
 
                 is OrderByFilter -> {
-                    url.addQueryParameter("order", filter.selectedValue())
+                    addQueryParameter("order", filter.selectedValue())
                 }
 
                 is GenreListFilter -> {
@@ -119,31 +98,33 @@ abstract class MangaThemesia : HttpSource() {
                         .filter { it.state != Filter.TriState.STATE_IGNORE }
                         .forEach {
                             val value = if (it.state == Filter.TriState.STATE_EXCLUDE) "-${it.value}" else it.value
-                            url.addQueryParameter("genre[]", value)
+                            addQueryParameter("genre[]", value)
                         }
                 }
+
+                is AuthorFilter -> filter.state.takeIf { it.isNotEmpty() }?.let { addQueryParameter("author", it) }
+
+                is YearFilter -> filter.state.takeIf { it.isNotEmpty() }?.let { addQueryParameter("yearx", it) }
 
                 // if site has project page, default value "hasProjectPage" = false
                 is ProjectFilter -> {
                     if (filter.selectedValue() == "project-filter-on") {
-                        url.setPathSegment(0, projectPageString.substring(1))
+                        setPathSegment(0, projectPageString.substring(1))
                     }
                 }
 
                 else -> { /* Do Nothing */ }
             }
         }
-        url.addPathSegment("")
-        return GET(url.build(), headers)
+        addPathSegment("")
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = searchMangaUrl(page, query, filters)
+        return searchMangaParse(client.get(url.build()).asJsoup())
+    }
 
-        if (genrelist == null) {
-            genrelist = parseGenres(document)
-        }
-
+    open fun searchMangaParse(document: Document): MangasPage {
         val mangas = document.select(searchMangaSelector()).map { element ->
             searchMangaFromElement(element)
         }
@@ -165,12 +146,47 @@ abstract class MangaThemesia : HttpSource() {
 
     protected open fun searchMangaNextPageSelector(): String? = "div.pagination .next, div.hpage .r"
 
-    // Manga details
+    // Related
+    override val supportsRelatedMangas = true
+    override suspend fun fetchRelatedMangaList(manga: SManga) = searchMangaParse(
+        client.get(getMangaUrl(manga)).asJsoup(),
+    ).mangas.filterNot { it.title.isEmpty() }
+
+    // Manga details + Chapters
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val postId = manga.memo["postId"]?.string
+
+        return if (sendViewCount && postId != null) {
+            sendView(postId)
+            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            SMangaUpdate(
+                mangaDetailsParse(doc).apply { memo = manga.memo },
+                chapterListParse(doc),
+            )
+        } else {
+            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            val postId = doc.postId()
+            sendView(postId)
+            SMangaUpdate(
+                mangaDetailsParse(doc).apply {
+                    if (postId != null) memo = buildJsonObject { put("postId", postId) }
+                },
+                chapterListParse(doc),
+            )
+        }
+    }
+
     private fun selector(selector: String, contains: List<String>): String = contains.joinToString(", ") { selector.replace("%s", it) }
 
     open val seriesDetailsSelector = "div.bigcontent, div.animefull, div.main-info, div.postbody"
 
-    open val seriesTitleSelector = "h1.entry-title, .ts-breadcrumb li:last-child span"
+    open val seriesTitleSelector = ".entry-title, .ts-breadcrumb li:last-child span"
 
     open val seriesArtistSelector = selector(
         ".infotable tr:contains(%s) td:last-child, .tsinfo .imptdt:contains(%s) i, .fmed b:contains(%s)+span, span:contains(%s)",
@@ -252,18 +268,20 @@ abstract class MangaThemesia : HttpSource() {
 
     open val altNamePrefix = "${intl["alt_names_heading"]} "
 
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
+    open suspend fun getMangaDetails(manga: SManga) = mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup())
 
     protected open fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        setUrlWithoutDomain(document.location())
         document.selectFirst(seriesDetailsSelector)?.let { seriesDetails ->
             title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
             artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
             author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
-            description = seriesDetails.select(seriesDescriptionSelector).joinToString("\n") { it.text() }.trim()
+            description = seriesDetails.selectFirst(seriesDescriptionSelector)?.textOrNull()
             // Add alternative name to manga description
-            val altName = seriesDetails.selectFirst(seriesAltNameSelector)?.ownText().takeIf { it.isNullOrBlank().not() }
-            altName?.let {
-                description = "$description\n\n$altNamePrefix$altName".trim()
+            val altName = seriesDetails.selectFirst(seriesAltNameSelector)?.ownText()
+            if (!altName.isNullOrBlank()) {
+                val names = altName.split(ALT_NAME_SEPARATOR).joinToString("\n") { "- ${it.trim()}" }
+                description = description?.let { "$it\n\n" }.orEmpty() + "$altNamePrefix\n$names".trim()
             }
             val genres = seriesDetails.select(seriesGenreSelector).map { it.text() }.toMutableList()
             // Add series type (manga/manhwa/manhua/other) to genre
@@ -290,7 +308,7 @@ abstract class MangaThemesia : HttpSource() {
         this == null -> SManga.UNKNOWN
 
         listOf(
-            "مستمرة", "en curso", "ongoing", "on going", "ativo", "en cours", "en cours de publication",
+            "مستمرة", "en curso", "ongoing", "on going", "new season", "mass released", "ativo", "en cours", "en cours de publication",
             "đang tiến hành", "em lançamento", "онгоінг", "publishing", "devam ediyor", "em andamento",
             "in corso", "güncel", "berjalan", "продолжается", "updating", "lançando", "in arrivo",
             "emision", "en emision", "مستمر", "curso", "en marcha", "publicandose", "publicando",
@@ -299,14 +317,14 @@ abstract class MangaThemesia : HttpSource() {
 
         listOf(
             "completed", "completo", "complété", "fini", "achevé", "terminé", "tamamlandı", "đã hoàn thành",
-            "hoàn thành", "مكتملة", "завершено", "finished", "finalizado", "completata", "one-shot",
+            "hoàn thành", "مكتملة", "завершено", "finished", "finalizad", "completata", "one-shot",
             "bitti", "tamat", "completado", "concluído", "完結", "concluido", "已完结", "bitmiş",
         ).any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
 
         listOf("canceled", "cancelled", "cancelado", "cancellato", "cancelados", "dropped", "discontinued", "abandonné")
             .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
 
-        listOf("hiatus", "on hold", "pausado", "en espera", "en pause", "en attente", "hiato")
+        listOf("hiatus", "on hold", "season end", "pausado", "en espera", "en pause", "en attente", "hiato")
             .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
 
         else -> SManga.UNKNOWN
@@ -315,11 +333,7 @@ abstract class MangaThemesia : HttpSource() {
     // Chapter list
     protected open fun chapterListSelector() = "div.bxcl li, div.cl li, #chapterlist li, ul li:has(div.chbox):has(div.eph-num)"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-
-        countViews(document)
-
+    open fun chapterListParse(document: Document): List<SChapter> {
         val chapters = document.select(chapterListSelector()).map { chapterFromElement(it) }
 
         // Add timestamp to latest chapter, taken from "Updated On".
@@ -334,7 +348,7 @@ abstract class MangaThemesia : HttpSource() {
         return chapters
     }
 
-    private fun parseUpdatedOnDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH).parse(date)?.time ?: 0L
+    private fun parseUpdatedOnDate(date: String) = DateTimeFormatter.ofPattern("yyyy-MM-dd").tryParseDate(date)
 
     protected open fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
@@ -343,54 +357,43 @@ abstract class MangaThemesia : HttpSource() {
         date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate()
     }
 
-    protected open fun String?.parseChapterDate(): Long {
-        if (this == null) return 0
-        return try {
-            dateFormat.parse(this)?.time ?: 0
-        } catch (_: Exception) {
-            0
-        }
-    }
+    protected open fun String?.parseChapterDate() = dateFormat.tryParseDate(this).takeIf { it != 0L }
+        ?: DateTimeFormatter.ofPattern(datePattern, Locale.US).tryParseDate(this)
 
     // Pages
     open val pageSelector = "div#readerarea img"
 
-    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val doc = client.get(getChapterUrl(chapter)).asJsoup()
+        sendView(doc.postId())
+        return pageListParse(doc)
+    }
 
     protected open fun pageListParse(document: Document): List<Page> {
-        countViews(document)
-
-        val chapterUrl = document.location()
         val htmlPages = document.select(pageSelector)
             .filterNot { it.imgAttr().isEmpty() }
-            .mapIndexed { i, img -> Page(i, chapterUrl, img.imgAttr()) }
+            .mapIndexed { i, img -> Page(i, imageUrl = img.imgAttr()) }
 
         // Some sites also loads pages via javascript
         if (htmlPages.isNotEmpty()) {
             return htmlPages
         }
 
-        val docString = document.toString()
+        // "ts_reader.run({" in base64
+        val script = document.selectFirst("script[src^=data:text/javascript;base64,dHNfcmVhZGVyLnJ1bih7]")
+        val docString = script?.attr("src")
+            ?.substringAfter("base64,")
+            ?.let { Base64.decode(it, Base64.DEFAULT).decodeToString() }
+            ?: document.toString()
+
         val imageListJson = JSON_IMAGE_LIST_REGEX.find(docString)?.destructured?.toList()?.get(0).orEmpty()
-        val imageList = try {
-            json.parseToJsonElement(imageListJson).jsonArray
-        } catch (_: IllegalArgumentException) {
-            emptyList()
+        val imageList = runCatching {
+            imageListJson.parseAs<List<String>>()
+        }.getOrElse { emptyList() }
+
+        return imageList.mapIndexed { i, url ->
+            Page(i, imageUrl = url.absolute())
         }
-        val scriptPages = imageList.mapIndexed { i, jsonEl ->
-            Page(i, chapterUrl, jsonEl.jsonPrimitive.content)
-        }
-
-        return scriptPages
-    }
-
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
-            .set("Referer", page.url)
-            .build()
-
-        return GET(page.imageUrl!!, newHeaders)
     }
 
     /**
@@ -399,43 +402,29 @@ abstract class MangaThemesia : HttpSource() {
      */
     protected open val sendViewCount: Boolean = true
 
-    protected open fun countViewsRequest(document: Document): Request? {
-        val wpMangaData = document.select("script:containsData(dynamic_view_ajax)").firstOrNull()
-            ?.data() ?: return null
-
-        val postId = CHAPTER_PAGE_ID_REGEX.find(wpMangaData)?.groupValues?.get(1)
-            ?: MANGA_PAGE_ID_REGEX.find(wpMangaData)?.groupValues?.get(1)
-            ?: return null
-
+    protected open fun sendView(postId: String?) {
+        if (!sendViewCount || postId.isNullOrEmpty()) return
         val formBody = FormBody.Builder()
             .add("action", "dynamic_view_ajax")
             .add("post_id", postId)
             .build()
 
-        val newHeaders = headersBuilder()
-            .set("Referer", document.location())
-            .build()
+        val request = POST("$baseUrl/wp-admin/admin-ajax.php", headers, formBody)
 
-        return POST("$baseUrl/wp-admin/admin-ajax.php", newHeaders, formBody)
+        client.newCall(request).enqueue(
+            object : Callback {
+                override fun onFailure(call: Call, e: IOException) = Unit
+                override fun onResponse(call: Call, response: Response) = response.close()
+            },
+        )
     }
 
-    /**
-     * Send the view count request to the sites endpoint.
-     *
-     * @param document The response document with the wp-manga data
-     */
-    protected open fun countViews(document: Document) {
-        if (!sendViewCount) {
-            return
-        }
-
-        val request = countViewsRequest(document) ?: return
-        val callback = object : Callback {
-            override fun onResponse(call: Call, response: Response) = response.close()
-            override fun onFailure(call: Call, e: IOException) = Unit
-        }
-
-        client.newCall(request).enqueue(callback)
+    open fun Document.postId(): String? = select("script").firstNotNullOfOrNull { script ->
+        (
+            MANGA_PAGE_ID_REGEX.find(script.data())
+                ?: CHAPTER_PAGE_ID_REGEX.find(script.data())
+            )
+            ?.groupValues?.get(1)
     }
 
     // Filters
@@ -522,6 +511,7 @@ abstract class MangaThemesia : HttpSource() {
         Pair(intl["project_filter_only_project"], "project-filter-on"),
     )
 
+    @Serializable
     protected class GenreData(
         val name: String,
         val value: String,
@@ -536,13 +526,17 @@ abstract class MangaThemesia : HttpSource() {
 
     protected class GenreListFilter(name: String, genres: List<Genre>) : Filter.Group<Genre>(name, genres)
 
-    protected var genrelist: List<GenreData>? = null
-
-    protected open fun getGenreList(): List<Genre> = genrelist?.map { Genre(it.name, it.value, it.state) }.orEmpty()
-
     open val hasProjectPage = false
 
-    override fun getFilterList(): FilterList {
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData() = parseGenres(
+        client.get("$baseUrl/$mangaUrlDirectory").asJsoup(),
+    ).toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genrelist = data?.parseAs<List<GenreData>>()?.map { Genre(it.name, it.value, it.state) }.orEmpty()
+
         val filters = mutableListOf<Filter<*>>(
             Filter.Separator(),
             AuthorFilter(intl["author_filter_title"]),
@@ -551,18 +545,16 @@ abstract class MangaThemesia : HttpSource() {
             TypeFilter(intl["type_filter_title"], typeFilterOptions),
             OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
         )
+
         if (!genrelist.isNullOrEmpty()) {
             filters.addAll(
                 listOf(
                     Filter.Header(intl["genre_exclusion_warning"]),
-                    GenreListFilter(intl["genre_filter_title"], getGenreList()),
+                    GenreListFilter(intl["genre_filter_title"], genrelist),
                 ),
             )
-        } else {
-            filters.add(
-                Filter.Header(intl["genre_missing_warning"]),
-            )
         }
+
         if (hasProjectPage) {
             filters.addAll(
                 mutableListOf<Filter<*>>(
@@ -578,39 +570,21 @@ abstract class MangaThemesia : HttpSource() {
 
     // Helpers
 
-    /**
-     * Given some string which represents an http urlString, returns path for a manga
-     * which can be used to fetch its details at "$baseUrl$mangaUrlDirectory/$mangaPath"
-     *
-     * @param urlString: String
-     *
-     * @returns Path of a manga, or null if none could be found
-     */
-    protected open fun mangaPathFromUrl(urlString: String): String? {
-        val baseMangaUrl = "$baseUrl$mangaUrlDirectory".toHttpUrl()
-        val url = urlString.toHttpUrlOrNull() ?: return null
+    open fun acceptHeaderInterceptor() = Interceptor { chain ->
+        val request = chain.request()
 
-        val isMangaUrl = (baseMangaUrl.host == url.host && pathLengthIs(url, 2) && url.pathSegments[0] == baseMangaUrl.pathSegments[0])
-        if (isMangaUrl) return url.pathSegments[1]
-
-        val potentiallyChapterUrl = pathLengthIs(url, 1)
-        if (potentiallyChapterUrl) {
-            val response = client.newCall(GET(urlString, headers)).execute()
-            if (response.isSuccessful.not()) {
-                response.close()
-                throw IllegalStateException("HTTP error ${response.code}")
-            } else if (response.isSuccessful) {
-                val links = response.asJsoup().select("a[itemprop=item]")
-                //  near the top of page: home > manga > current chapter
-                if (links.size == 3) {
-                    val newUrl = links[1].attr("href").toHttpUrlOrNull() ?: return null
-                    val isNewMangaUrl = (baseMangaUrl.host == newUrl.host && pathLengthIs(newUrl, 2) && newUrl.pathSegments[0] == baseMangaUrl.pathSegments[0])
-                    if (isNewMangaUrl) return newUrl.pathSegments[1]
-                }
-            }
+        if (IMAGE_EXTENSION_REGEX.containsMatchIn(request.url.encodedPath)) {
+            chain.proceed(
+                request.newBuilder()
+                    .header("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
+                    .header("Sec-Fetch-Dest", "image")
+                    .header("Sec-Fetch-Mode", "no-cors")
+                    .header("Sec-Fetch-Site", "same-site")
+                    .build(),
+            )
+        } else {
+            chain.proceed(request)
         }
-
-        return null
     }
 
     private fun pathLengthIs(url: HttpUrl, n: Int, strict: Boolean = false): Boolean = ((url.pathSegments.size == n) && (url.pathSegments[n - 1].isNotEmpty())) ||
@@ -623,6 +597,8 @@ abstract class MangaThemesia : HttpSource() {
         )
     }
 
+    private fun String.absolute() = if (startsWith("/")) baseUrl + this else this
+
     protected open fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
@@ -630,18 +606,14 @@ abstract class MangaThemesia : HttpSource() {
         else -> attr("abs:src")
     }
 
-    protected open fun Elements.imgAttr(): String = this.first()!!.imgAttr()
-
-    // Unused
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    protected open fun Elements.imgAttr() = firstOrNull()?.imgAttr().orEmpty()
 
     companion object {
-        const val URL_SEARCH_PREFIX = "url:"
-
         // More info: https://issuetracker.google.com/issues/36970498
-        private val MANGA_PAGE_ID_REGEX = "post_id\\s*:\\s*(\\d+)\\}".toRegex()
+        private val MANGA_PAGE_ID_REGEX = """(?:post_id["']?\s*:\s*|ts_dynamic_ajax_view\D*|tsUpdateView\D*)(\d+)""".toRegex()
         private val CHAPTER_PAGE_ID_REGEX = "chapter_id\\s*=\\s*(\\d+);".toRegex()
-
-        val JSON_IMAGE_LIST_REGEX = "\"images\"\\s*:\\s*(\\[.*?])".toRegex()
+        val JSON_IMAGE_LIST_REGEX = """["']?(?:images|imageUrls)["']?\s*[:=]\s*(\[.*?])""".toRegex()
+        private val ALT_NAME_SEPARATOR = Regex("""[|/•,;]""")
+        private val IMAGE_EXTENSION_REGEX = Regex("""\.(?:webp|jpe?g|png|gif)""", RegexOption.IGNORE_CASE)
     }
 }

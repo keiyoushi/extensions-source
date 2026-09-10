@@ -14,6 +14,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -54,6 +55,11 @@ abstract class MH1234 : KeiSource() {
     }
 
     // Search Page
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        return parseMangaDetails(client.get(url).asJsoup())
+    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = if (query.isNotBlank()) {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -119,35 +125,64 @@ abstract class MH1234 : KeiSource() {
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        val meta = document.select(".comic-hero__meta .meta-item")
-        author = meta.getOrNull(0)?.text()
-        genre = meta.getOrNull(1)?.text()
-        status = when (document.selectFirst(".stat-item:contains(状态) .stat-value")?.text()) {
+        val info = document.select(".mint-work-info p")
+
+        title = document.selectFirst("#mintWorkTitle")?.text().orEmpty()
+        author = info.getOrNull(0)?.text()?.removeSuffix(" 著")
+        genre = info.getOrNull(1)?.ownText()?.split(" ")?.joinToString()
+        status = when (info.getOrNull(1)?.selectFirst(".mint-tag")?.text()) {
             "连载" -> SManga.ONGOING
             "完结" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        description = document.selectFirst("#comicDesc")?.text()?.removePrefix("介绍:")?.trim()
+        description = document.selectFirst("#mintIntroPanel > div")?.text()
+
+        setUrlWithoutDomain(document.location())
     }
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select(".chapter-list a.chapter-item").mapNotNull { element ->
+    private fun parseChapterList(document: Document): List<SChapter> {
+        val chapters = document.select(".mint-chapter-grid a")
+        return chapters.mapIndexedNotNull { index, element ->
+            val title = element.ownText()
+            if (title.contains("APP")) return@mapIndexedNotNull null
 
-        val title = element.selectFirst(".chapter-title")!!.text()
-        if (title.contains("APP")) return@mapNotNull null
-
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            name = title
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.absUrl("href"))
+                name = title
+                chapter_number = (chapters.size - index).toFloat()
+            }
         }
-    }.reversed()
+    }
+
+    // Related mangas
+
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
+
+        return doc.select(".mint-section:has(h2:contains(喜欢这部的也在看)) .mint-cover-card").mapNotNull {
+            val name = it.selectFirst("h3")?.text()?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+
+            SManga.create().apply {
+                title = name
+                setUrlWithoutDomain(it.absUrl("href"))
+                thumbnail_url = it.selectFirst("img")?.absUrl("src")
+            }
+        }
+    }
 
     // Manga View Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        // Reader page moved to different domain
-        var newUrl = chapter.url.replace("/go/", "$READER_URL")
-        if (newUrl.startsWith("/")) newUrl = getChapterUrl(chapter)
-        val response = client.get(newUrl)
+        var response = client.get(getChapterUrl(chapter))
+        // Handle redirection to reader in JS
+        val url = REPLACE_URL_REGEX.find(response.peekBody(10240).string())?.groupValues?.get(1)
+        if (url != null) {
+            response.close()
+            response = client.get(url)
+        }
+
         val document = response.asJsoup()
         return document.select("img.reader-image").mapIndexed { i, img ->
             Page(i, imageUrl = img.absUrl("data-src"))
@@ -176,7 +211,7 @@ abstract class MH1234 : KeiSource() {
     )
 
     companion object {
-        private const val READER_URL = "https://reader.hqread.cc/r/"
+        private val REPLACE_URL_REGEX = """replace\(["'](https://.*?)["']""".toRegex()
         private const val MANGA_LIST_SELECTOR = ".comic-card"
         private const val NEXT_PAGE_SELECTOR = ".pagination-wrapper a:contains(下一页), .pagination-wrapper a:contains(>)"
     }

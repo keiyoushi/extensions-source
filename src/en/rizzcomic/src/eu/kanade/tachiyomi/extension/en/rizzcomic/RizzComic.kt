@@ -2,35 +2,32 @@ package eu.kanade.tachiyomi.extension.en.rizzcomic
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
-import okhttp3.Request
+import okhttp3.Headers
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class RizzComic : MangaThemesiaAlt() {
     override val mangaUrlDirectory = "/series"
-    override val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
+    override val datePattern = "dd MMM yyyy"
     override val pageSelector = "div#readerarea > img"
 
-    override val client = super.client.newBuilder()
-        .addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor { chain ->
             val request = chain.request()
             val isApiRequest = request.header("X-API-Request") != null
             val headers = request.headers.newBuilder().apply {
@@ -39,18 +36,17 @@ abstract class RizzComic : MangaThemesiaAlt() {
             }.build()
             chain.proceed(request.newBuilder().headers(headers).build())
         }
-        .rateLimit(1, 3.seconds)
-        .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("X-Requested-With", randomString((1..20).random())) // For WebView
-
-    private val apiHeaders by lazy {
-        headersBuilder()
-            .set("X-Requested-With", "XMLHttpRequest")
-            .set("X-API-Request", "1")
-            .build()
+        rateLimit(1)
     }
+
+    // For WebView
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("X-Requested-With", randomString((1..20).random()))
+
+    private val apiHeaders get() = headersBuilder()
+        .set("X-Requested-With", "XMLHttpRequest")
+        .set("X-API-Request", "1")
+        .build()
 
     override val slugRegex = Regex("""^(r\d+-)""")
 
@@ -60,31 +56,32 @@ abstract class RizzComic : MangaThemesiaAlt() {
     override val listUrl = mangaUrlDirectory
     override val listSelector = "div.bsx a"
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortFilter.POPULAR)
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", SortFilter.LATEST)
 
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.LATEST)
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val res = if (query.isNotEmpty()) {
             val form = FormBody.Builder()
                 .add("search_value", query.trim())
                 .build()
 
-            return POST("$baseUrl/Index/live_search", apiHeaders, form)
+            client.post("$baseUrl/Index/live_search", apiHeaders, form)
+        } else {
+            val form = FormBody.Builder().apply {
+                filters.filterIsInstance<FormBodyFilter>().forEach {
+                    it.addFormParameter(this)
+                }
+            }.build()
+
+            client.post("$baseUrl/Index/filter_series", apiHeaders, form)
         }
 
-        val form = FormBody.Builder().apply {
-            filters.filterIsInstance<FormBodyFilter>().forEach {
-                it.addFormParameter(this)
-            }
-        }.build()
-
-        return POST("$baseUrl/Index/filter_series", apiHeaders, form)
+        return parseSearchManga(res)
     }
 
-    override fun getFilterList(): FilterList = FilterList(
+    override val supportsFilterFetching = false
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Filters don't work with text search"),
         SortFilter(),
         StatusFilter(),
@@ -106,9 +103,10 @@ abstract class RizzComic : MangaThemesiaAlt() {
         @SerialName("genre_id") val genres: String? = null,
     ) {
         val slug get() = title.trim().lowercase()
+            .replace("-", " ")
+            .replace("'s", "s")
             .replace("'", "")
             .replace(slugRegex, "-")
-            .replace("-s-", "s-")
             .replace("-ll-", "ll-")
             .trim('-')
 
@@ -119,25 +117,7 @@ abstract class RizzComic : MangaThemesiaAlt() {
         }
     }
 
-    override fun String?.parseStatus(): Int = when {
-        this == null -> SManga.UNKNOWN
-
-        listOf("ongoing", "new season", "mass released")
-            .any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
-
-        listOf("completed")
-            .any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
-
-        listOf("dropped")
-            .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
-
-        listOf("hiatus", "season end")
-            .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
-
-        else -> SManga.UNKNOWN
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
+    private fun parseSearchManga(response: Response): MangasPage {
         val result = response.parseAs<List<Comic>>()
 
         val entries = result.map { comic ->
@@ -161,21 +141,14 @@ abstract class RizzComic : MangaThemesiaAlt() {
 
         return MangasPage(entries, false)
     }
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(mangaDetailsRequest(manga))
-        .asObservableSuccess()
-        .map { mangaDetailsParse(it).apply { description = manga.description } }
-
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
-            .set("Referer", "$baseUrl/")
-            .build()
-
-        return GET(page.imageUrl!!, newHeaders)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ) = super.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters).apply {
+        this.manga.description = manga.description
     }
-
-    private inline fun <reified T> Response.parseAs(): T = use { it.body.string() }.let(json::decodeFromString)
 
     private fun String.capitalize() = replaceFirstChar {
         if (it.isLowerCase()) {
