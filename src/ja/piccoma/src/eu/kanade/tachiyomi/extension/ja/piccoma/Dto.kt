@@ -27,7 +27,7 @@ class SearchProductDto(
     @SerialName("is_anime") val isAnime: Int?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/web/product/$id"
+        url = id.toString()
         title = this@SearchProductDto.title
         thumbnail_url = "https:$img".toCoverUrl()
     }

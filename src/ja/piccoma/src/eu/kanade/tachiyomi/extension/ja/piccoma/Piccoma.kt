@@ -39,14 +39,14 @@ abstract class Piccoma :
     override suspend fun getPopularManga(page: Int): MangasPage = getRanking("K/P/0")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/web/weekday/product/list".toHttpUrl().newBuilder()
+        val requestUrl = "$baseUrl/web/weekday/product/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(requestUrl).asJsoup()
         val mangas = document.select("li a:has(div.PCOM-prdList_info)").map {
             SManga.create().apply {
-                setUrlWithoutDomain(it.absUrl("href"))
+                url = it.absUrl("href").toHttpUrl().pathSegments.last()
                 title = it.selectFirst(".PCOM-prdList_title span")!!.text()
                 thumbnail_url = it.selectFirst("img")?.absUrl("src")?.toCoverUrl()
             }
@@ -56,6 +56,7 @@ abstract class Piccoma :
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val ranking = filters.firstInstance<RankingFilter>().value
         if (query.isNotBlank()) {
             val url = "$baseUrl/web/search/result_ajax/list".toHttpUrl().newBuilder()
                 .addQueryParameter("word", query)
@@ -72,14 +73,14 @@ abstract class Piccoma :
             return MangasPage(mangas, hasNextPage)
         }
 
-        return getRanking(filters.firstInstance<RankingFilter>().value)
+        return getRanking(ranking)
     }
 
     private suspend fun getRanking(path: String): MangasPage {
         val document = client.get("$baseUrl/web/ranking/$path").asJsoup()
         val mangas = document.select("section.PCM-productRanking li > a").map {
             SManga.create().apply {
-                setUrlWithoutDomain(it.absUrl("href"))
+                url = it.absUrl("href").toHttpUrl().pathSegments.last()
                 title = it.selectFirst(".PCM-rankingProduct_title p")!!.text()
                 thumbnail_url = it.selectFirst("img.js_lazy")?.absUrl("data-original")?.toCoverUrl()
             }
@@ -128,7 +129,7 @@ abstract class Piccoma :
     }
 
     private suspend fun getEpisodes(manga: SManga, hideLocked: Boolean): List<SChapter> {
-        val document = client.get("$baseUrl${manga.url}/episodes?etype=E").asJsoup()
+        val document = client.get("${getMangaUrl(manga)}/episodes?etype=E").asJsoup()
         val mangaTitle = document.selectFirst(".PCM-headTitle_name")?.text()
 
         return document.selectFirst("ul#js_episodeList")?.select("li").orEmpty().mapNotNull {
@@ -159,7 +160,7 @@ abstract class Piccoma :
     }
 
     private suspend fun getVolumes(manga: SManga, hideLocked: Boolean): List<SChapter> {
-        val document = client.get("$baseUrl${manga.url}/episodes?etype=V").asJsoup()
+        val document = client.get("${getMangaUrl(manga)}/episodes?etype=V").asJsoup()
         val mangaTitle = document.selectFirst(".PCM-headTitle_name")?.text()
 
         return document.selectFirst("ul#js_volumeList")?.select("li").orEmpty().mapNotNull {
@@ -212,6 +213,8 @@ abstract class Piccoma :
             Page(i, imageUrl = "https:${img.path}$scrambled")
         }
     }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/web/product/${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/web/viewer/${chapter.memo["productId"]!!.string}/${chapter.url}"
 
