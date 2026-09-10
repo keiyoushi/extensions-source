@@ -259,7 +259,7 @@ class Volume(
         get() = purchased != 1 && trialable == 1
 
     fun toSChapter() = SChapter.create().apply {
-        val trial = if (isTrial) "(Preview) " else ""
+        val trial = if (isTrial && isFree != 1) "(Preview) " else ""
         val lock = if (isLockedVolume) "🔒 " else ""
         val trimName = if (title != null) volumeName.replace(title, "").trim() else volumeName
         url = chapterId.toString()
