@@ -31,8 +31,8 @@ abstract class JNovel :
     ConfigurableSource {
     override val supportsLatest = false
 
-    private val domain = baseUrl.toHttpUrl().host
-    private val viewerUrl = "https://labs.$domain/embed/v2"
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val viewerUrl get() = "https://labs.$domain/embed/v2"
     private val preferences by getPreferencesLazy()
     private val manifestReader get() = E4PManifestReader(client, headers)
     private val rscHeaders get() = headersBuilder()
