@@ -59,6 +59,7 @@ class SerieDto(
             else -> SManga.UNKNOWN
         }
         genre = genders?.joinToString { it.name }?.takeIf { it.isNotBlank() }
+        initialized = true
     }
 }
 

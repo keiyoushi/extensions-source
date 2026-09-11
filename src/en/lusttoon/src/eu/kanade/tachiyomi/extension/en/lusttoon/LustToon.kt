@@ -26,8 +26,6 @@ abstract class LustToon : KeiSource() {
 
     private val apiUrl = "https://back.lustoon.com"
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor { chain ->
             val request = chain.request()
@@ -119,16 +117,16 @@ abstract class LustToon : KeiSource() {
 
     // =========================== Manga Details ============================
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrlHost) return null
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = runCatching {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
         if (url.pathSegments.firstOrNull() != "comic" || slug.isBlank()) return null
 
         val manga = SManga.create().apply {
             this.url = "/comic/$slug"
         }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
-    }
+        getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }.getOrNull()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -139,45 +137,40 @@ abstract class LustToon : KeiSource() {
         val rscHeaders = headers.newBuilder()
             .add("RSC", "1")
             .build()
-        val response = client.get("$baseUrl${manga.url}", rscHeaders)
+        val response = client.get(getMangaUrl(manga), rscHeaders)
         val serie = response.extractNextJs<SerieDto> { element ->
             element is JsonObject && "slug" in element && "chapters" in element
         } ?: throw Exception("Failed to find valid series data")
 
         val mangaSlug = serie.slug ?: manga.url.substringAfterLast("/")
 
-        val updatedManga = if (fetchDetails) serie.toSManga() else manga
-        val updatedChapters = if (fetchChapters) {
-            serie.chapters?.filter { it.slug != null }?.map { it.toSChapter(mangaSlug) } ?: emptyList()
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
+        return SMangaUpdate(
+            manga = serie.toSManga(),
+            chapters = serie.chapters?.filter { it.slug != null }?.map { it.toSChapter(mangaSlug) } ?: emptyList(),
+        )
     }
 
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url)
+        val response = client.get(getChapterUrl(chapter))
         val document = response.asJsoup()
         val pageches = document.extractNextJs<PagechesDto> { element ->
             element is JsonObject && "urlImg" in element && "chapterId" in element
         }
 
-        val images = pageches?.images?.ifEmpty { null } ?: run {
-            imageUrlRegex.findAll(document.html())
+        val images = pageches?.images?.ifEmpty { null }
+            ?: imageUrlRegex.findAll(document.html())
                 .map { it.value }
                 .filter { it.contains("/serie/") }
-                .distinct()
                 .toList()
-                .ifEmpty { null }
-        } ?: throw Exception("No pages found")
 
         return images
+            .map { it.replace("http://", "https://") }
+            .distinct()
             .filterNot { it.contains("brakeout") }
             .mapIndexed { i, url ->
-                Page(i, imageUrl = url.replace("http://", "https://"))
+                Page(i, imageUrl = url)
             }
     }
 
