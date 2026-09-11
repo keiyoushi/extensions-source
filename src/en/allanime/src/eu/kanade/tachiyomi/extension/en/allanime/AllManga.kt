@@ -33,6 +33,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import kotlin.time.Duration.Companion.milliseconds
 
 @Source
 abstract class AllManga :
@@ -127,7 +128,9 @@ abstract class AllManga :
 
     override fun getFilterList(data: JsonElement?) = getFilters()
 
-    override fun getMangaUrl(manga: SManga) = if (manga.url.startsWith("/")) {
+    var wvChapterUrl: String? = null
+
+    override fun getMangaUrl(manga: SManga) = wvChapterUrl ?: if (manga.url.startsWith("/")) {
         val mangaId = manga.url.split("/")[2]
         "$baseUrl/manga/$mangaId"
     } else {
@@ -321,7 +324,7 @@ abstract class AllManga :
                     }
 
                    let checkAttempts = 0;
-                   const maxAttempts = 300; // 15 seconds
+                   const maxAttempts = 200; // 10 seconds
 
                    function check() {
                        if (document.querySelector('[data-href]')) {
@@ -340,11 +343,28 @@ abstract class AllManga :
             """.trimIndent()
 
             jsBridge(interfaceName) {
+                wvChapterUrl = null
                 resolve(it)
             }
 
             onPageStarted {
+                evaluateJs(
+                    "localStorage.clear(); sessionStorage.clear()",
+                )
                 evaluateJs(script)
+            }
+
+            var captchaAttempts = 0
+
+            poll(300.milliseconds) {
+                evaluateJs(
+                    "document.querySelector('.captcha-overlay--visible') != null",
+                ) { result ->
+                    if (result == "true" && ++captchaAttempts >= 10) { // 3s
+                        wvChapterUrl = "$baseUrl$chapterUrl"
+                        error("Solve captcha in WebView and retry")
+                    }
+                }
             }
 
             loadData(mangaUrl, document.outerHtml())
