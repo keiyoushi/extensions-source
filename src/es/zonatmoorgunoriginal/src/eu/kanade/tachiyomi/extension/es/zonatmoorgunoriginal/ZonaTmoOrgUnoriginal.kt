@@ -82,14 +82,13 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
     private fun latestMangaUrl(
         title: String,
         type: String?,
-    ): String =
-        "$baseUrl/biblioteca"
-            .toHttpUrl()
-            .newBuilder()
-            .addQueryParameter("title", title.lowercase(Locale.ROOT))
-            .apply { type?.let { addQueryParameter("type", it) } }
-            .build()
-            .toString()
+    ): String = "$baseUrl/biblioteca"
+        .toHttpUrl()
+        .newBuilder()
+        .addQueryParameter("title", title.lowercase(Locale.ROOT))
+        .apply { type?.let { addQueryParameter("type", it) } }
+        .build()
+        .toString()
 
     private suspend fun resolveLatestMangaUrl(
         title: String,
