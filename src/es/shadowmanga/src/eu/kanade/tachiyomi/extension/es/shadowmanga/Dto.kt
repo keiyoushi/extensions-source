@@ -5,8 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class SeriesWrapper(
@@ -62,8 +61,6 @@ class Series(
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ROOT)
-
 @Serializable
 class Chapter(
     private val id: Int,
@@ -80,7 +77,7 @@ class Chapter(
             }
         }
         url = "$mangaId/$id"
-        date_upload = dateFormat.tryParse(uploadDate)
+        date_upload = Instant.tryParse(uploadDate)
     }
 }
 
