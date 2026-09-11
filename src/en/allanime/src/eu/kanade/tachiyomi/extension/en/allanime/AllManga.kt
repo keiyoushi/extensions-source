@@ -157,7 +157,10 @@ abstract class AllManga :
                 mangaId,
                 "manga@$mangaId",
                 // Manga = null for some if not present
-                mapOf("fromSearch" to true),
+                mapOf(
+                    "fromSearch" to true,
+                    "allowAdult" to true,
+                ),
             ),
         )
 
