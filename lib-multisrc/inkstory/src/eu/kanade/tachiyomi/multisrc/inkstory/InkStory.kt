@@ -200,7 +200,7 @@ abstract class InkStory :
             val mangas = response.parseAs<List<BookFromSearchDto>>().map { it.toSManga() }
             val totalHits = response.header("x-estimated-total-hits")?.toIntOrNull()
             val hasNextPage = if (totalHits != null) {
-                (page + 1) * PAGE_SIZE < totalHits
+                page * PAGE_SIZE < totalHits
             } else {
                 mangas.size >= PAGE_SIZE
             }
