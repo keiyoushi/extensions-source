@@ -19,7 +19,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.ZoneId
@@ -41,17 +40,13 @@ abstract class BacaKomik : KeiSource() {
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/daftar-komik/${pagePath(page)}?order=popular".toHttpUrl()
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        return mangaListParse(client.get(url).asJsoup())
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/daftar-komik/${pagePath(page)}?order=update".toHttpUrl()
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        return mangaListParse(client.get(url).asJsoup())
     }
 
     // =============================== Search ===============================
@@ -102,9 +97,7 @@ abstract class BacaKomik : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        return mangaListParse(client.get(url).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -231,8 +224,7 @@ abstract class BacaKomik : KeiSource() {
     )
 
     // ============================= Utilities ==============================
-    private fun mangaListParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun mangaListParse(document: Document): MangasPage {
         val mangas = document.select("div.animepost").map { mangaFromElement(it) }
         val hasNextPage = document.select("a.next.page-numbers").isNotEmpty()
         return MangasPage(mangas, hasNextPage)
