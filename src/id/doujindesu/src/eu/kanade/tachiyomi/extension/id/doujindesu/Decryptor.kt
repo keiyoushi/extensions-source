@@ -8,11 +8,11 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import kotlin.math.abs
 
-class Decryptor(val apiUrl: String) {
+class Decryptor(private val apiUrlProvider: () -> String) {
 
     fun xorInterceptor() = Interceptor { chain ->
         val request = chain.request()
-        if (!request.url.toString().contains(apiUrl)) return@Interceptor chain.proceed(request)
+        if (!request.url.toString().contains(apiUrlProvider())) return@Interceptor chain.proceed(request)
 
         val response = chain.proceed(request)
 

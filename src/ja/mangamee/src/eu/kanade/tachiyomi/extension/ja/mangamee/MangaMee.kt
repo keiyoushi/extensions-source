@@ -2,110 +2,98 @@ package eu.kanade.tachiyomi.extension.ja.mangamee
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAsProto
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 
 @Source
 abstract class MangaMee :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
     private val domain = "manga-mee.jp"
-    override val supportsLatest = true
-
     private val apiUrl = "https://prod2-android.$domain/web/v1"
     private val preferences by getPreferencesLazy()
-    private val rscHeaders = headersBuilder()
+    private val rscHeaders get() = headersBuilder()
         .set("rsc", "1")
         .build()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/title-list/ranking", rscHeaders)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.extractNextJs<RankingResponse>()
-        val mangas = result?.all?.rankingList.orEmpty().find { it.name == "総合" }?.titles.orEmpty().map { it.toSManga() }
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.get("$baseUrl/title-list/ranking", rscHeaders).extractNextJs<RankingResponse>()
+        val mangas = result?.all?.rankingList.orEmpty()
+            .find { it.name == "総合" }?.titles.orEmpty()
+            .map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/title-list/todaysupdate", rscHeaders)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.extractNextJs<LatestResponse>()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val result = client.get("$baseUrl/title-list/todaysupdate", rscHeaders).extractNextJs<LatestResponse>()
         val mangas = result?.titleGroup?.titles.orEmpty().map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search-result/keyword".toHttpUrl().newBuilder()
             .addPathSegment(query)
             .build()
-        return GET(url, rscHeaders)
-    }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.extractNextJs<SearchResponse>()
+        val result = client.get(url, rscHeaders).extractNextJs<SearchResponse>()
         val mangas = result?.popularTitles?.titles.orEmpty().map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (!fetchDetails) return@async manga
+            val url = "$apiUrl/title_detail".toHttpUrl().newBuilder()
+                .addQueryParameter("title_id", manga.url)
+                .build()
+            client.get(url).parseAsProto<DetailResponse>().toSManga()
+        }
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+            client.get("$baseUrl/all-episodes/${manga.url}", rscHeaders)
+                .extractNextJs<ChapterResponse>()?.allEpisodes?.episodes.orEmpty()
+                .filter { !hideLocked || !it.isLocked }
+                .map { it.toSChapter(manga.url) }
+                .reversed()
+        }
+
+        SMangaUpdate(
+            details.await(),
+            chapterList.await(),
+        )
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$apiUrl/title_detail".toHttpUrl().newBuilder()
-            .addQueryParameter("title_id", manga.url)
+            .addQueryParameter("title_id", chapter.memo["titleId"]!!.string)
+            .addQueryParameter("episode_id", chapter.url)
             .build()
-        return GET(url, headers)
-    }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAsProto<DetailResponse>().toSManga()
-
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/detail/${manga.url}"
-
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/all-episodes/${manga.url}", rscHeaders)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val titleId = response.request.url.pathSegments.last()
-        return response.extractNextJs<ChapterResponse>()?.allEpisodes?.episodes.orEmpty()
-            .filter { !hideLocked || !it.isLocked }
-            .map { it.toSChapter(titleId) }
-            .reversed()
-    }
-
-    override fun getChapterUrl(chapter: SChapter): String {
-        val chapterUrl = "$baseUrl/${chapter.url}".toHttpUrl()
-        val titleId = chapterUrl.fragment
-        val chapterId = chapterUrl.pathSegments.first()
-        return "$baseUrl/detail/$titleId?episodeId=$chapterId"
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterUrl = "$baseUrl/${chapter.url}".toHttpUrl()
-        val titleId = chapterUrl.fragment
-        val chapterId = chapterUrl.pathSegments.first()
-        val url = "$apiUrl/title_detail".toHttpUrl().newBuilder()
-            .addQueryParameter("title_id", titleId)
-            .addQueryParameter("episode_id", chapterId)
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAsProto<DetailResponse>()
+        val result = client.get(url).parseAsProto<DetailResponse>()
         if (result.pages.isNullOrEmpty()) {
             throw Exception("This chapter is only accessible via the official マンガMee app.")
         }
@@ -113,6 +101,10 @@ abstract class MangaMee :
             Page(i, imageUrl = "${pages.imageUrl}#key=${pages.key}")
         }
     }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/detail/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/detail/${chapter.memo["titleId"]!!.string}?episodeId=${chapter.url}"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -125,6 +117,4 @@ abstract class MangaMee :
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
