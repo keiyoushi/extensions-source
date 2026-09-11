@@ -17,7 +17,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.ZoneId
@@ -38,18 +37,14 @@ abstract class KomikIndoID : KeiSource() {
 
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$baseUrl/daftar-manga/${pagePath(page)}?order=popular".toHttpUrl()
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        val document = client.get("$baseUrl/daftar-manga/${pagePath(page)}?order=popular").asJsoup()
+        return mangaListParse(document)
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/daftar-manga/${pagePath(page)}?order=update".toHttpUrl()
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        val document = client.get("$baseUrl/daftar-manga/${pagePath(page)}?order=update").asJsoup()
+        return mangaListParse(document)
     }
 
     // =============================== Search ===============================
@@ -128,9 +123,8 @@ abstract class KomikIndoID : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        val document = client.get(url).asJsoup()
+        return mangaListParse(document)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -272,8 +266,7 @@ abstract class KomikIndoID : KeiSource() {
     )
 
     // ============================= Utilities ==============================
-    private fun mangaListParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun mangaListParse(document: Document): MangasPage {
         val mangas = document.select("div.animepost").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("div.tt h3")?.text().orEmpty().ifEmpty {
