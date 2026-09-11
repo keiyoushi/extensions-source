@@ -47,17 +47,13 @@ abstract class Komiku : KeiSource() {
             .addQueryParameter("orderby", "meta_value_num")
             .build()
 
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        return mangaListParse(client.get(url).asJsoup())
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = mangaApiUrlBuilder(page).addQueryParameter("orderby", "modified").build()
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        return mangaListParse(client.get(url).asJsoup())
     }
 
     // =============================== Search ===============================
@@ -72,9 +68,7 @@ abstract class Komiku : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        return mangaListParse(client.get(url).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -232,8 +226,7 @@ abstract class Komiku : KeiSource() {
         return chain.proceed(request)
     }
 
-    private fun mangaListParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun mangaListParse(document: Document): MangasPage {
         val mangas = document.select("div.bge").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("h3")!!.text()
