@@ -36,7 +36,8 @@ abstract class InkStory :
     KeiSource(),
     ConfigurableSource {
 
-    abstract val apiUrl: String
+    private val domain: String get() = baseUrl.toHttpUrl().topPrivateDomain() ?: baseUrl.toHttpUrl().host
+    private val apiUrl: String get() = "https://api.$domain/v2"
 
     private val preferences by getPreferencesLazy()
 

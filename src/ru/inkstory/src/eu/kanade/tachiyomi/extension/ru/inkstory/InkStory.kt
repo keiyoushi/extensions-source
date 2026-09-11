@@ -2,11 +2,6 @@ package eu.kanade.tachiyomi.extension.ru.inkstory
 
 import eu.kanade.tachiyomi.multisrc.inkstory.InkStory
 import keiyoushi.annotation.Source
-import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
-abstract class InkStory : InkStory() {
-    private val domain = baseUrl.toHttpUrl().topPrivateDomain() ?: baseUrl.toHttpUrl().host
-    override val apiUrl: String
-        get() = "https://api.$domain/v2"
-}
+abstract class InkStory : InkStory()

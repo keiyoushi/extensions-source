@@ -15,6 +15,5 @@ keiyoushi {
         lang = "ru"
         baseUrl = "https://inkstory.net"
         versionId = 2
-        id = 941207398290674942L
     }
 }
