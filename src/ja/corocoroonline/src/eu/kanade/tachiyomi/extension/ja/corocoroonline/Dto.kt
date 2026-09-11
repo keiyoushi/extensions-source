@@ -130,9 +130,6 @@ class ViewerView(
 )
 
 @Serializable
-class ViewerRequest
-
-@Serializable
 class CsrImage(
     @ProtoNumber(1) val url: String,
 )
