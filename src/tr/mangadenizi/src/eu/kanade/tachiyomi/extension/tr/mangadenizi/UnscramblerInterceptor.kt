@@ -7,8 +7,9 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
+import java.io.InputStream
 
 class UnscramblerInterceptor : Interceptor {
     companion object {
@@ -83,17 +84,15 @@ class UnscramblerInterceptor : Interceptor {
         val cleanRequest = request.newBuilder().url(cleanUrl).build()
         val response = chain.proceed(cleanRequest)
 
-        val imageBody = response.body
-        val bytes = imageBody.bytes()
-
-        val descrambled = descramble(bytes, grid, seed)
-        val newBody = descrambled.toResponseBody("image/jpeg".toMediaType())
+        val output = response.body.byteStream().use { descramble(it, grid, seed) }
+        val newBody = output.asResponseBody("image/jpeg".toMediaType(), output.size)
         return response.newBuilder().body(newBody).build()
     }
 
-    private fun descramble(bytes: ByteArray, grid: Int, seed: Long): ByteArray {
-        val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            ?: return bytes
+    private fun descramble(image: InputStream, grid: Int, seed: Long): Buffer {
+        val src = BitmapFactory.decodeStream(image)
+        val output = Buffer()
+        if (src == null) return output
 
         val w = src.width
         val h = src.height
@@ -126,9 +125,8 @@ class UnscramblerInterceptor : Interceptor {
 
         src.recycle()
 
-        val output = ByteArrayOutputStream()
-        dst.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        dst.compress(Bitmap.CompressFormat.JPEG, 90, output.outputStream())
         dst.recycle()
-        return output.toByteArray()
+        return output
     }
 }
