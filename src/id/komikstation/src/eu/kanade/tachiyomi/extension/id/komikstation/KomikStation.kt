@@ -9,9 +9,7 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class KomikStation : MangaThemesia() {
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(4)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 
     override val projectPageString = "/project-list"
 
