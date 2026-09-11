@@ -111,9 +111,7 @@ abstract class CosmicScansID : KeiSource() {
         val manga = SManga.create().apply {
             setUrlWithoutDomain("/series/$slug")
         }
-        return runCatching {
-            getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
-        }.getOrNull()
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // ======================= Details and Chapters ==========================
