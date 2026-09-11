@@ -52,7 +52,7 @@ abstract class AcervoEremita : KeiSource() {
         .build().toString()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (!setOf(baseUrl.toHttpUrl().host, "work").all { url.pathSegments.contains(it) }) {
+        if (!baseUrl.toHttpUrl().host.equals(url.host, ignoreCase = true) || !url.pathSegments.contains("work")) {
             return null
         }
         return parseSManga(client.get(url).asJsoup())
@@ -74,6 +74,7 @@ abstract class AcervoEremita : KeiSource() {
 
     private fun parseSManga(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1")!!.text()
+        thumbnail_url = document.selectFirst("img[data-component*=cover]")?.absUrl("src")
         description = document.selectFirst("p[data-component*=description]")?.text()
         genre = document.select("[data-component*=tags] > span").joinToString { it.text() }
         url = document.extractNextJs<WorkId>()!!.workId.toString()
