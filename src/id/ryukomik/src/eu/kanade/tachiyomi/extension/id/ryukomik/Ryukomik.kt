@@ -17,8 +17,6 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -31,10 +29,12 @@ import java.util.Locale
 @Source
 abstract class Ryukomik : KeiSource() {
 
+    private val apiUrl = "https://api.ryukomik.web.id"
+
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "https://api.ryukomik.web.id/komiku/list".toHttpUrl().newBuilder()
+        val url = "$apiUrl/komiku/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
 
@@ -45,10 +45,6 @@ abstract class Ryukomik : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page > 1) {
-            return MangasPage(emptyList(), false)
-        }
-
         val document = client.get(baseUrl).asJsoup()
         val mangas = parseCoverCards(document)
         return MangasPage(mangas, false)
@@ -108,7 +104,7 @@ abstract class Ryukomik : KeiSource() {
             return MangasPage(mangas, false)
         }
 
-        val urlBuilder = "https://api.ryukomik.web.id/komiku/list".toHttpUrl().newBuilder()
+        val urlBuilder = "$apiUrl/komiku/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
         if (typeValue.isNotBlank()) urlBuilder.addQueryParameter("tipe", typeValue)
@@ -128,22 +124,20 @@ abstract class Ryukomik : KeiSource() {
                 .addQueryParameter("q", query)
                 .build()
         } else {
-            "https://api.ryukomik.web.id/$source/search".toHttpUrl().newBuilder()
+            "$apiUrl/$source/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .build()
         }
 
-        return runCatching {
-            val response = client.get(url).parseAs<ListResponseDto>()
-            response.data.mapNotNull { it.toSManga(source) }
-        }.getOrDefault(emptyList())
+        val response = client.get(url).parseAs<ListResponseDto>()
+        return response.data.mapNotNull { it.toSManga(source) }
     }
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = runCatching {
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.size < 3 || url.pathSegments[0] != "komik") return null
-        return mangaDetailsParse(client.get(url).asJsoup())
-    }
+        mangaDetailsParse(client.get(url).asJsoup())
+    }.getOrNull()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -152,9 +146,7 @@ abstract class Ryukomik : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val doc = client.get(getMangaUrl(manga)).asJsoup()
-        val details = if (fetchDetails) mangaDetailsParse(doc) else manga
-        val chapterList = if (fetchChapters) chapterListParse(doc) else chapters
-        return SMangaUpdate(details, chapterList)
+        return SMangaUpdate(mangaDetailsParse(doc), chapterListParse(doc))
     }
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
@@ -175,6 +167,7 @@ abstract class Ryukomik : KeiSource() {
 
         val statusText = document.selectFirst("div.rk-shell div.flex.gap-3 span:last-child")?.text()
         status = parseStatus(statusText)
+        initialized = true
     }
 
     private fun chapterListParse(document: Document): List<SChapter> = document.select("a[href*='/chapter/']").map { el ->
@@ -194,17 +187,13 @@ abstract class Ryukomik : KeiSource() {
         val chapterUrl = getChapterUrl(chapter)
         val html = client.get(chapterUrl).body.string()
 
-        val imagesMatch = IMAGES_REGEX.find(html)?.groupValues?.get(1)
-            ?: throw Exception("Gagal menemukan daftar gambar chapter")
+        val imagesMatch = IMAGES_REGEX.find(html)?.groupValues?.get(1) ?: return emptyList()
 
         val imagesJson = imagesMatch
             .replace("\\\"", "\"")
             .replace("\\\\", "\\")
 
         val images = imagesJson.parseAs<List<String>>()
-        if (images.isEmpty()) {
-            throw Exception("Chapter tidak memiliki gambar")
-        }
 
         return images.mapIndexed { index, imgUrl ->
             val fullUrl = if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
@@ -271,151 +260,8 @@ abstract class Ryukomik : KeiSource() {
         GenreFilter(GENRE_OPTIONS.map { it.first }.toTypedArray()),
     )
 
-    class TypeFilter(values: Array<String>) : Filter.Select<String>("Tipe Komik", values)
-    class StatusFilter(values: Array<String>) : Filter.Select<String>("Status", values)
-    class OrderByFilter(values: Array<String>) : Filter.Select<String>("Urutkan Berdasarkan", values)
-    class LetterFilter(values: Array<String>) : Filter.Select<String>("Huruf Awalan", values)
-    class GenreFilter(values: Array<String>) : Filter.Select<String>("Genre", values)
-
     companion object {
-
-        private val TYPE_OPTIONS = arrayOf(
-            "Semua" to "",
-            "Manga" to "manga",
-            "Manhwa" to "manhwa",
-            "Manhua" to "manhua",
-        )
-
-        private val STATUS_OPTIONS = arrayOf(
-            "Semua" to "",
-            "Ongoing (Berjalan)" to "ongoing",
-            "Completed (Tamat)" to "end",
-        )
-
-        private val ORDER_OPTIONS = arrayOf(
-            "Default" to "",
-            "Chapter Terbaru" to "modified",
-            "Komik Terbaru" to "date",
-            "Acak" to "rand",
-        )
-
-        private val LETTER_OPTIONS = arrayOf(
-            "Semua" to "",
-            "#" to "%23",
-            "A" to "A",
-            "B" to "B",
-            "C" to "C",
-            "D" to "D",
-            "E" to "E",
-            "F" to "F",
-            "G" to "G",
-            "H" to "H",
-            "I" to "I",
-            "J" to "J",
-            "K" to "K",
-            "L" to "L",
-            "M" to "M",
-            "N" to "N",
-            "O" to "O",
-            "P" to "P",
-            "Q" to "Q",
-            "R" to "R",
-            "S" to "S",
-            "T" to "T",
-            "U" to "U",
-            "V" to "V",
-            "W" to "W",
-            "X" to "X",
-            "Y" to "Y",
-            "Z" to "Z",
-        )
-
-        private val GENRE_OPTIONS = arrayOf(
-            "Semua" to "",
-            "Action" to "action",
-            "Adventure" to "adventure",
-            "Boys' Love" to "boys'-love",
-            "Comedy" to "comedy",
-            "Crime" to "crime",
-            "Drama" to "drama",
-            "Ecchi" to "ecchi",
-            "Fantasy" to "fantasy",
-            "Girls' Love" to "girls'-love",
-            "Harem" to "harem",
-            "Historical" to "historical",
-            "Horror" to "horror",
-            "Isekai" to "isekai",
-            "Josei" to "josei",
-            "Magical Girls" to "magical-girls",
-            "Martial Arts" to "martial-arts",
-            "Mecha" to "mecha",
-            "Medical" to "medical",
-            "Music" to "music",
-            "Mystery" to "mystery",
-            "Philosophical" to "philosophical",
-            "Psychological" to "psychological",
-            "Romance" to "romance",
-            "School Life" to "school-life",
-            "Sci-Fi" to "sci-fi",
-            "Seinen" to "seinen",
-            "Shoujo" to "shoujo",
-            "Shoujo Ai" to "shoujo-ai",
-            "Shounen" to "shounen",
-            "Shounen Ai" to "shounen-ai",
-            "Slice of Life" to "slice-of-life",
-            "Sports" to "sports",
-            "Superhero" to "superhero",
-            "Supernatural" to "supernatural",
-            "Thriller" to "thriller",
-            "Tragedy" to "tragedy",
-            "Wuxia" to "wuxia",
-            "Yuri" to "yuri",
-        )
-
         private val IMAGES_REGEX = Regex("""\\?"images\\?"\s*:\s*(\[[^\]]+\])""")
         private val DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     }
 }
-
-@Serializable
-class ListResponseDto(
-    val data: List<ItemDto> = emptyList(),
-    val meta: MetaDto? = null,
-)
-
-@Serializable
-class ItemDto(
-    val title: String? = null,
-    val slug: String? = null,
-    @SerialName("detail_link")
-    val detailLink: String? = null,
-    val link: String? = null,
-    val image: String? = null,
-    @SerialName("cover_url")
-    val coverUrl: String? = null,
-    val source: String? = null,
-    val type: String? = null,
-    val status: String? = null,
-) {
-    fun toSManga(defaultSource: String): SManga? {
-        val s = slug?.takeIf { it.isNotBlank() }
-            ?: detailLink?.trimEnd('/')?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-            ?: link?.trimEnd('/')?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-            ?: return null
-        val mangaSource = source?.takeIf { it.isNotBlank() } ?: defaultSource
-        val mangaTitle = title?.takeIf { it.isNotBlank() } ?: return null
-        val thumb = image ?: coverUrl
-
-        return SManga.create().apply {
-            this.title = mangaTitle
-            thumbnail_url = thumb
-            url = "/komik/$mangaSource/$s"
-        }
-    }
-}
-
-@Serializable
-class MetaDto(
-    val currentPage: Int = 1,
-    val totalPages: Int = 1,
-)
