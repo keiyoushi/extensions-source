@@ -157,6 +157,6 @@ abstract class WNACG :
     }
 
     companion object {
-        private val pageImageRegex = Regex("""//\S*(jpeg|jpg|png|webp|gif)""")
+        private val pageImageRegex = Regex("""//[^\s"'\\]+\.(?:jpeg|jpg|png|webp|gif)(?:\?[^\s"'\\]*)?""", RegexOption.IGNORE_CASE)
     }
 }
