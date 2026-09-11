@@ -17,7 +17,6 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.ZoneId
@@ -30,22 +29,26 @@ abstract class Bacami : KeiSource() {
     private val dateFormat = DateTimeFormatter.ofPattern("d MMMM, yyyy", Locale.ENGLISH)
     private val chapterRegex = Regex("""(?:Chapter|Ch\.)\s+([0-9]+(?:\.[0-9]+)?)""", RegexOption.IGNORE_CASE)
 
-    private fun pagePath(page: Int) = if (page > 1) "page/$page/" else ""
-
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$baseUrl/custom-search/orderby/score/${pagePath(page)}".toHttpUrl()
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("custom-search/orderby/score")
+            if (page > 1) {
+                addPathSegments("page/$page")
+            }
+        }.build()
+        return mangaListParse(client.get(url).asJsoup())
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/custom-search/orderby/latest/${pagePath(page)}".toHttpUrl()
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("custom-search/orderby/latest")
+            if (page > 1) {
+                addPathSegments("page/$page")
+            }
+        }.build()
+        return mangaListParse(client.get(url).asJsoup())
     }
 
     // =============================== Search ===============================
@@ -55,49 +58,58 @@ abstract class Bacami : KeiSource() {
                 addPathSegment("search")
                 addPathSegment(query)
                 if (page > 1) {
-                    addPathSegment("page")
-                    addPathSegment(page.toString())
+                    addPathSegments("page/$page")
                 }
-                addPathSegment("")
             }.build()
         } else {
             val isNewKomik = filters.firstInstanceOrNull<NewKomikFilter>()?.state == true
             if (isNewKomik) {
-                "$baseUrl/komik-baru/${pagePath(page)}".toHttpUrl()
+                baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("komik-baru")
+                    if (page > 1) {
+                        addPathSegments("page/$page")
+                    }
+                }.build()
             } else {
                 val genre = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart() ?: "all"
                 val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart() ?: "all"
                 val type = filters.firstInstanceOrNull<TypeFilter>()?.toUriPart() ?: "all"
                 val orderby = filters.firstInstanceOrNull<OrderByFilter>()?.toUriPart() ?: "latest"
 
-                val urlString = buildString {
-                    append("$baseUrl/custom-search/")
-                    if (genre != "all") append("genre/$genre/")
-                    if (status != "all") append("status/$status/")
-                    if (type != "all") append("type/$type/")
-                    if (orderby != "latest") append("orderby/$orderby/")
-                    if (page > 1) append("page/$page/")
-                }
-                urlString.toHttpUrl()
+                baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("custom-search")
+                    if (genre != "all") addPathSegments("genre/$genre")
+                    if (status != "all") addPathSegments("status/$status")
+                    if (type != "all") addPathSegments("type/$type")
+                    if (orderby != "latest") addPathSegments("orderby/$orderby")
+                    if (page > 1) addPathSegments("page/$page")
+                }.build()
             }
         }
 
-        val response = client.get(url, ensureSuccess = false)
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+        return mangaListParse(client.get(url).asJsoup())
     }
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = runCatching {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        if (url.pathSegments.firstOrNull() != "komik") return null
-        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val targetUrl = "$baseUrl/komik/$slug/".toHttpUrl()
-        val document = client.get(targetUrl).asJsoup()
-        val manga = SManga.create().apply {
-            setUrlWithoutDomain(targetUrl.toString())
+        if (url.pathSegments.none { it.isNotEmpty() }) return null
+
+        val mangaPath = if (url.pathSegments.firstOrNull() == "komik") {
+            url.encodedPath
+        } else {
+            val document = client.get(url).asJsoup()
+            val href = document.selectFirst("div.allc a[href*='/komik/'], a.midall[href*='/komik/'], .breadcrumb a[href*='/komik/']")?.absUrl("href")
+                ?: return null
+            href.toHttpUrl().encodedPath
         }
-        return parseDetails(document, manga)
-    }
+
+        val manga = SManga.create().apply {
+            setUrlWithoutDomain(mangaPath)
+        }
+        getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga.apply {
+            initialized = true
+        }
+    }.getOrNull()
 
     // ======================= Details and Chapters ==========================
     override suspend fun fetchMangaUpdate(
@@ -106,36 +118,36 @@ abstract class Bacami : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(
-            manga = parseDetails(document, manga),
+            manga = parseDetails(document).apply {
+                url = manga.url
+                if (title.isEmpty()) {
+                    title = manga.title
+                }
+            },
             chapters = parseChapters(document),
         )
     }
 
-    private fun parseDetails(document: Document, manga: SManga): SManga = manga.apply {
+    private fun parseDetails(document: Document): SManga = SManga.create().apply {
         val content = document.selectFirst("#komik > section.manga-content") ?: return@apply
 
-        if (title.isEmpty()) {
-            val parsedTitle = content.selectFirst("header > h1")?.text()?.removeSuffix("Bahasa Indonesia")?.trim()
-            if (!parsedTitle.isNullOrEmpty()) {
-                title = parsedTitle
-            }
-        }
-
+        title = content.selectFirst("header > h1")?.text()?.removeSuffix("Bahasa Indonesia")?.trim().orEmpty()
         thumbnail_url = content.selectFirst("figure .image-wrap img")?.imgAttr()
         author = content.selectFirst(".info-item:contains(Author) .info-value")?.text()
             ?.ifEmpty { content.selectFirst("div > div > div:nth-child(3) > span.info-value")?.text() }
         genre = content.select("nav > span > a").joinToString { it.text() }
         status = parseStatus(document)
 
-        val altTitle = content.select("p.manga-altname").text().trim()
-        val desc = content.select("p.manga-description").text().trim()
+        val altTitle = content.select("p.manga-altname").text()
+        val desc = content.select("p.manga-description").text()
         description = if (altTitle.isNotEmpty()) {
             if (desc.isNotEmpty()) "$desc\n\nAlternative Title: $altTitle" else "Alternative Title: $altTitle"
         } else {
             desc
         }
+        initialized = true
     }
 
     private fun parseStatus(document: Document): Int = when {
@@ -159,15 +171,14 @@ abstract class Bacami : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = baseUrl + chapter.url
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val scriptContent = document.selectFirst("script:containsData(imageUrls)")?.data()
             ?: return emptyList()
 
         val jsonString = scriptContent.substringAfter("imageUrls:").substringBefore("],").plus("]")
         val imageUrls = jsonString.parseAs<List<String>>()
         return imageUrls.mapIndexed { index, url ->
-            Page(index, chapterUrl, imageUrl = url)
+            Page(index, imageUrl = url)
         }
     }
 
@@ -185,8 +196,7 @@ abstract class Bacami : KeiSource() {
     )
 
     // ============================= Utilities ==============================
-    private fun mangaListParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun mangaListParse(document: Document): MangasPage {
         val mangas = document.select("article.genre-card").map { element ->
             searchMangaFromElement(element)
         }
@@ -195,10 +205,8 @@ abstract class Bacami : KeiSource() {
     }
 
     private fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("div.genre-info > a")?.text().orEmpty()
-        element.selectFirst("div.genre-cover > a")?.let {
-            setUrlWithoutDomain(it.absUrl("href"))
-        }
+        title = element.selectFirst("div.genre-info > a")!!.text()
+        setUrlWithoutDomain(element.selectFirst("div.genre-cover > a")!!.absUrl("href"))
         thumbnail_url = element.selectFirst("div.genre-cover > a > img")?.imgAttr()
     }
 

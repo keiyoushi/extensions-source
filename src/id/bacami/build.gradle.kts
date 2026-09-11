@@ -17,5 +17,6 @@ keiyoushi {
 
     deeplink {
         path("/komik/..*")
+        path("/..*-chapter-..*")
     }
 }
