@@ -11,10 +11,9 @@ class SearchSuggestionDto(
     fun mangaUrl(
         expectedTitle: String,
         expectedType: String?,
-    ): String? =
-        url?.takeIf {
-            title?.trim()?.equals(expectedTitle.trim(), ignoreCase = true) == true &&
-                (expectedType == null || type?.equals(expectedType, ignoreCase = true) == true) &&
-                "/library/" in it
-        }
+    ): String? = url?.takeIf {
+        title?.trim()?.equals(expectedTitle.trim(), ignoreCase = true) == true &&
+            (expectedType == null || type?.equals(expectedType, ignoreCase = true) == true) &&
+            "/library/" in it
+    }
 }
