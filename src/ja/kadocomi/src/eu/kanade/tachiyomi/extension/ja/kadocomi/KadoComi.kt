@@ -1,271 +1,128 @@
 package eu.kanade.tachiyomi.extension.ja.kadocomi
 
-import eu.kanade.tachiyomi.network.GET
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.utils.decodeHex
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import uy.kohesive.injekt.injectLazy
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import kotlin.experimental.xor
 
 @Source
-abstract class KadoComi : HttpSource() {
+abstract class KadoComi :
+    KeiSource(),
+    ConfigurableSource {
+    private val preferences by getPreferencesLazy()
+    private val apiUrl get() = "$baseUrl/api"
+    private val pageLimit = 30
 
-    private val apiUrl = "https://comic-walker.com/api"
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
-    private val cdnUrl = "https://cdn.comic-walker.com"
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val offset = (page - 1) * pageLimit
+        val url = "$apiUrl/ranking".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", pageLimit.toString())
+            .addQueryParameter("offset", offset.toString())
+            .build()
 
-    override val supportsLatest = true
+        return client.get(url).toMangasPage(offset)
+    }
 
-    private val imageDescrambler: Interceptor = Interceptor { chain ->
-        val request: Request = chain.request()
-        val urlString = request.url.toString()
-        val drmHash = request.url.fragment ?: ""
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val offset = (page - 1) * pageLimit
+        val url = "$apiUrl/series/new".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", pageLimit.toString())
+            .addQueryParameter("offset", offset.toString())
+            .build()
 
-        val response: Response = chain.proceed(request)
+        return client.get(url).toMangasPage(offset)
+    }
 
-        if (urlString.contains("$cdnUrl/images/") && urlString.contains("&Key-Pair-Id=")) {
-            val oldBody = response.body.bytes()
-            val descrambled = descrambleImage(oldBody, drmHash.decodeHex())
-            val newBody = descrambled.toResponseBody("image/jpeg".toMediaTypeOrNull())
-            response.newBuilder()
-                .body(newBody)
-                .build()
-        } else {
-            response
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstance<SortFilter>().value
+        val offset = (page - 1) * pageLimit
+        val url = "$apiUrl/search/keywords".toHttpUrl().newBuilder()
+            .addQueryParameter("keywords", query)
+            .addQueryParameter("limit", pageLimit.toString())
+            .addQueryParameter("offset", offset.toString())
+            .addQueryParameter("sortBy", sort)
+            .build()
+
+        return client.get(url).toMangasPage(offset)
+    }
+
+    private fun Response.toMangasPage(offset: Int): MangasPage {
+        val result = this.parseAs<SeriesResponse>()
+        val mangas = result.result.map { it.toSManga() }
+        return MangasPage(mangas, result.hasNextPage(offset, pageLimit))
+    }
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        Filter.Header("Note: Search and filters are applied together"),
+        SortFilter(),
+    )
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val url = "$apiUrl/contents/details/work".toHttpUrl().newBuilder()
+            .addQueryParameter("workCode", manga.url.substringAfterLast("/"))
+            .build()
+
+        val result = client.get(url).parseAs<DetailsResponse>()
+        return SMangaUpdate(
+            result.work.toSManga(),
+            result.latestEpisodes.result
+                .filter { !hideLocked || it.isActive }
+                .map { it.toSChapter(result.work.code) },
+        )
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = "$apiUrl/contents/viewer".toHttpUrl().newBuilder()
+            .addQueryParameter("episodeId", chapter.url)
+            .addQueryParameter("imageSizeType", IMAGE_SIZE)
+            .build()
+
+        val manuscript = client.get(url).parseAs<ViewerResponse>().manuscripts
+        if (manuscript.isEmpty()) throw Exception("このチャプターは非公開です\nChapter is not available!")
+        return manuscript.mapIndexed { index, pages ->
+            Page(index, imageUrl = "${pages.drmImageUrl}#${pages.drmHash}")
         }
     }
 
-    override val client = network.client.newBuilder()
-        .addNetworkInterceptor(imageDescrambler)
-        .build()
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    private val json: Json by injectLazy()
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/detail/${chapter.memo["workCode"]!!.string}/episodes/${chapter.memo["episodeCode"]!!.string}"
 
-    // ============================== Manga Details ===============================
-
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/detail/${getWorkCode(manga)}"
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("contents")
-            addPathSegment("details")
-            addPathSegment("work")
-            addQueryParameter("workCode", getWorkCode(manga))
-        }
-
-        return GET(url.build(), headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val details = json.decodeFromString<KadoComiWorkDto>(response.body.string())
-
-        var mangaAuthor: String? = null
-        var mangaArtist: String? = null
-
-        details.work.authors?.forEach {
-            when (it.role) {
-                in AUTHOR_ROLES -> {
-                    mangaAuthor = it.name
-                }
-
-                in ARTIST_ROLES -> {
-                    mangaArtist = it.name
-                }
-
-                in COMBINED_ROLES -> {
-                    mangaAuthor = it.name
-                    mangaArtist = it.name
-                }
-            }
-        }
-
-        return SManga.create().apply {
-            url = "/detail/${details.work.code}"
-            title = details.work.title
-            thumbnail_url = getThumbnailUrl(details.work)
-            author = mangaAuthor
-            artist = mangaArtist
-            description = details.work.summary
-            genre = getGenres(details.work)
-            status = when (details.work.serializationStatus.lowercase()) {
-                "ongoing" -> SManga.ONGOING
-                "unknown" -> SManga.UNKNOWN
-                else -> SManga.UNKNOWN
-            }
-        }
-    }
-
-    private fun getGenres(work: KadoComiWork): String = listOfNotNull(work.genre?.name, work.subGenre?.name)
-        .plus(work.tags.orEmpty().map { it.name })
-        .joinToString()
-
-    // ============================== Chapters ===============================
-
-    override fun getChapterUrl(chapter: SChapter): String {
-        // fragment contains two parameters in the format: #workCode={workCode}&episodeCode={episodeCode}"
-        // fragment comes from the URL as a single string, so manipulate to acquire the relevant values
-        val fragment = "$baseUrl${chapter.url}".toHttpUrl().fragment
-        val params = fragment!!.split("&")
-        val workCode = params[0].split("=")[1]
-        val episodeCode = params[1].split("=")[1]
-        return "$baseUrl/detail/$workCode/episodes/$episodeCode"
-    }
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("contents")
-            addPathSegment("details")
-            addPathSegment("work")
-            addQueryParameter("workCode", getWorkCode(manga))
-        }
-
-        return GET(url.build(), headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val details = json.decodeFromString<KadoComiWorkDto>(response.body.string())
-        val workCode = details.work.code
-
-        return details.latestEpisodes?.result.orEmpty().map { episode ->
-            SChapter.create().apply {
-                url = "/api/contents/viewer?episodeId=${episode.id}&imageSizeType=width%3A1284#workCode=$workCode&episodeCode=${episode.code}"
-                name = "${if (!episode.isActive) LOCK else ""} ${episode.title}"
-                date_upload = parseDate(episode.updateDate)
-                chapter_number = episode.internal.episodeNo.toFloat()
-            }
-        }
-    }
-
-    // ============================== Pages ===============================
-
-    override fun pageListParse(response: Response): List<Page> {
-        val viewer = json.decodeFromString<KadoComiViewerDto>(response.body.string())
-
-        val pages = viewer.manuscripts.mapIndexed { idx, manuscript ->
-            Page(idx, imageUrl = "${manuscript.drmImageUrl.substringAfter(baseUrl)}#${manuscript.drmHash}")
-        }
-
-        if (pages.isEmpty()) {
-            throw Exception("このチャプターは非公開です\nChapter is not available!")
-        }
-
-        return pages
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Search ===============================
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val results = json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
-        return MangasPage(searchResultsParse(results), results.result.size >= SEARCH_LIMIT)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val offset = (SEARCH_LIMIT * page) - SEARCH_LIMIT
-
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("search")
-            addPathSegment("keywords")
-            addQueryParameter("keywords", query)
-            addQueryParameter("limit", SEARCH_LIMIT.toString())
-            addQueryParameter("offset", offset.toString())
-            addQueryParameter("sortBy", "popularity")
-        }
-
-        return GET(url.build(), headers)
-    }
-
-    // ============================== Latest ===============================
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val results = json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
-        return MangasPage(searchResultsParse(results), false)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("series")
-            addPathSegment("new")
-            addQueryParameter("limit", NEW_LIMIT.toString())
-        }
-
-        return GET(url.build(), headers)
-    }
-
-    // ============================== Popular ===============================
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val results = json.decodeFromString<KadoComiSearchResultsDto>(response.body.string())
-        return MangasPage(searchResultsParse(results), false)
-    }
-
-    override fun popularMangaRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("ranking")
-            addQueryParameter("limit", RANKING_LIMIT.toString())
-        }
-
-        return GET(url.build(), headers)
-    }
-
-    // ============================= Utilities ==============================
-
-    private fun getWorkCode(manga: SManga): String = manga.url.substringAfterLast("/")
-
-    private fun getThumbnailUrl(work: KadoComiWork): String = work.bookCover ?: work.thumbnail
-
-    private fun descrambleImage(imageByteArray: ByteArray, hashByteArray: ByteArray): ByteArray = imageByteArray.mapIndexed { idx, byte ->
-        byte xor hashByteArray[idx % hashByteArray.size]
-    }.toByteArray()
-
-    private fun searchResultsParse(results: KadoComiSearchResultsDto): List<SManga> = results.result.map {
-        SManga.create().apply {
-            url = "/detail/${it.code}"
-            title = it.title
-            thumbnail_url = getThumbnailUrl(it)
-        }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Unavailable Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     companion object {
-        // inactive chapter icon
-        private const val LOCK = "🔒 "
-
-        // date formatting
-        private fun parseDate(dateStr: String): Long = try {
-            dateFormat.parse(dateStr)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
-
-        private val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
-        }
-
-        // search limits, mimics site functionality
-        private const val SEARCH_LIMIT = 20
-        private const val RANKING_LIMIT = 50
-        private const val NEW_LIMIT = 100
-
-        // author/artist roles
-        private val AUTHOR_ROLES = arrayOf("原作")
-        private val ARTIST_ROLES = arrayOf("漫画", "作画")
-        private val COMBINED_ROLES = arrayOf("著者")
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val IMAGE_SIZE = "width:1284"
     }
 }

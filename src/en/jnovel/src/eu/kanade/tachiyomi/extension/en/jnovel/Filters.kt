@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.jnovel
 
 import eu.kanade.tachiyomi.source.model.Filter
+import okhttp3.HttpUrl.Builder
+
+fun Builder.addFilter(param: String, filter: SelectFilter) = filter.value.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
 
 open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
     val value: String

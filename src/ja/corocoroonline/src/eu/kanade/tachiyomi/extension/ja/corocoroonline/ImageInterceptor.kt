@@ -16,9 +16,9 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val fragment = request.url.fragment
 
-        if (fragment.isNullOrEmpty() || !fragment.startsWith("keys=") || !response.isSuccessful) return response
+        if (fragment.isNullOrEmpty() || !fragment.contains(":") || !response.isSuccessful) return response
 
-        val (key, iv) = fragment.substringAfter("keys=").split(":")
+        val (key, iv) = fragment.split(":")
         val secretKey = SecretKeySpec(key.decodeHex(), "AES")
         val ivSpec = IvParameterSpec(iv.decodeHex())
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
