@@ -22,19 +22,15 @@ import java.util.Locale
 @Source
 abstract class KuraManga : KeiSource() {
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
-
         val document = client.get(baseUrl).asJsoup()
         val mangas = document.select("section:has(h2:contains(Popular)) a.sp-card").mapNotNull { element ->
             val titleEl = element.selectFirst(".sp-cap h3") ?: return@mapNotNull null
             SManga.create().apply {
-                this.title = titleEl.text()
-                this.url = "/" + element.attr("href").removePrefix("/")
-                this.thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                title = titleEl.text()
+                url = "/" + element.attr("href").removePrefix("/")
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
         return MangasPage(mangas, false)
@@ -47,9 +43,9 @@ abstract class KuraManga : KeiSource() {
         val mangas = document.select(".update-list .update-row").mapNotNull { element ->
             val link = element.selectFirst("a.update-series-link") ?: return@mapNotNull null
             SManga.create().apply {
-                this.title = link.text()
-                this.url = "/" + link.attr("href").removePrefix("/")
-                this.thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                title = link.text()
+                url = "/" + link.attr("href").removePrefix("/")
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }.distinctBy { it.url }
 
@@ -58,9 +54,7 @@ abstract class KuraManga : KeiSource() {
     }
 
     // =============================== Search ===============================
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = search(page, query, filters)
-
-    private suspend fun search(page: Int, query: String = "", filters: FilterList = FilterList()): MangasPage {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("ajax", "1")
             addQueryParameter("page", page.toString())
@@ -104,15 +98,15 @@ abstract class KuraManga : KeiSource() {
     }
 
     // =========================== Manga Details ============================
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrlHost) return null
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = runCatching {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.firstOrNull { it.isNotBlank() } ?: return null
         if (slug in setOf("search", "assets", "api", "login", "register")) return null
         val document = client.get("$baseUrl/$slug").asJsoup()
-        return mangaDetailsParse(document).apply {
+        mangaDetailsParse(document).apply {
             this.url = "/$slug"
         }
-    }
+    }.getOrNull()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -120,16 +114,13 @@ abstract class KuraManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
-        val updatedManga = if (fetchDetails) {
-            mangaDetailsParse(document).apply {
-                this.url = manga.url
-            }
-        } else {
-            manga
-        }
-        val updatedChapters = if (fetchChapters) chapterListParse(document) else chapters
-        return SMangaUpdate(updatedManga, updatedChapters)
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            manga = mangaDetailsParse(document).apply {
+                url = manga.url
+            },
+            chapters = chapterListParse(document),
+        )
     }
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
@@ -152,6 +143,7 @@ abstract class KuraManga : KeiSource() {
                 ?: document.selectFirst(".meta-grid div:contains(Status:)")?.text()?.substringAfter("Status:")
             )?.trim()?.lowercase().parseStatus()
         thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
+        initialized = true
     }
 
     private fun String?.parseStatus(): Int = when (this) {
@@ -167,16 +159,16 @@ abstract class KuraManga : KeiSource() {
         return document.select(".chapter-list .chapter-item").mapNotNull { element ->
             val link = element.selectFirst("a") ?: return@mapNotNull null
             SChapter.create().apply {
-                this.name = link.text()
-                this.url = "/" + link.attr("href").removePrefix("/")
-                this.date_upload = dateFormat.tryParseDate(element.selectFirst("time")?.text())
+                name = link.text()
+                url = "/" + link.attr("href").removePrefix("/")
+                date_upload = dateFormat.tryParseDate(element.selectFirst("time")?.text())
             }
         }
     }
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("#chapterImages img").mapIndexed { index, img ->
             val imageUrl = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
             Page(index, imageUrl = imageUrl)
