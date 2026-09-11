@@ -30,11 +30,9 @@ import java.util.Calendar
 @Source
 abstract class Holotoon : KeiSource() {
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        getBrowsePage(page = page, sort = "popular")
+    override suspend fun getPopularManga(page: Int): MangasPage = getBrowsePage(page = page, sort = "popular")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        getBrowsePage(page = page, sort = "latest")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getBrowsePage(page = page, sort = "latest")
 
     override suspend fun getSearchMangaList(
         page: Int,
@@ -187,34 +185,33 @@ abstract class Holotoon : KeiSource() {
         }
     }
 
-    private fun parseChapters(document: Document): List<SChapter> =
-        document.select("a[href^='/read/'][data-chapter]").mapNotNull { element ->
-            val path = element.attr("href").substringBefore('#').substringBefore('?')
-            if (path.isBlank()) return@mapNotNull null
+    private fun parseChapters(document: Document): List<SChapter> = document.select("a[href^='/read/'][data-chapter]").mapNotNull { element ->
+        val path = element.attr("href").substringBefore('#').substringBefore('?')
+        if (path.isBlank()) return@mapNotNull null
 
-            val rawChapter = element.attr("data-chapter")
-            val number = CHAPTER_NUMBER_REGEX.find(rawChapter)?.value?.toFloatOrNull()
-            val label = element.selectFirst("span.font-semibold")?.text()?.trim()
-            val subtitle = element.selectFirst("span.truncate")?.text()?.trim()
-                ?.removePrefix("—")
-                ?.trim()
-                ?.takeIf(String::isNotBlank)
+        val rawChapter = element.attr("data-chapter")
+        val number = CHAPTER_NUMBER_REGEX.find(rawChapter)?.value?.toFloatOrNull()
+        val label = element.selectFirst("span.font-semibold")?.text()?.trim()
+        val subtitle = element.selectFirst("span.truncate")?.text()?.trim()
+            ?.removePrefix("—")
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
 
-            SChapter.create().apply {
-                setUrlWithoutDomain(path)
-                name = when {
-                    !label.isNullOrBlank() && subtitle != null -> "$label - $subtitle"
-                    !label.isNullOrBlank() -> label
-                    subtitle != null -> subtitle
-                    number != null -> "Chapter ${number.toString().removeSuffix(".0")}"
-                    else -> rawChapter.ifBlank { "Chapter" }
-                }
-                chapter_number = number ?: -1f
-                date_upload = parseRelativeDate(
-                    element.selectFirst("span.text-right, span[class*=tabular-nums]:last-child")?.text(),
-                )
+        SChapter.create().apply {
+            setUrlWithoutDomain(path)
+            name = when {
+                !label.isNullOrBlank() && subtitle != null -> "$label - $subtitle"
+                !label.isNullOrBlank() -> label
+                subtitle != null -> subtitle
+                number != null -> "Chapter ${number.toString().removeSuffix(".0")}"
+                else -> rawChapter.ifBlank { "Chapter" }
             }
+            chapter_number = number ?: -1f
+            date_upload = parseRelativeDate(
+                element.selectFirst("span.text-right, span[class*=tabular-nums]:last-child")?.text(),
+            )
         }
+    }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
