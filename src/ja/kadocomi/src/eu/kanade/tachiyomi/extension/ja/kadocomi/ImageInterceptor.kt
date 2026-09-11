@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.mangamee
+package eu.kanade.tachiyomi.extension.ja.kadocomi
 
 import keiyoushi.utils.decodeHex
 import okhttp3.Interceptor
@@ -15,9 +15,9 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val fragment = request.url.fragment
 
-        if (!response.isSuccessful || fragment.isNullOrEmpty() || !fragment.contains("key=")) return response
+        if (!response.isSuccessful || fragment.isNullOrEmpty()) return response
 
-        val key = fragment.substringAfter("key=").decodeHex()
+        val key = fragment.decodeHex()
         if (key.isEmpty()) return response
         val responseBody = response.body
         val decrypted = object : ForwardingSource(responseBody.source()) {

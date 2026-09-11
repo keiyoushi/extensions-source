@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.bookwalker
 
-import android.util.Log
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.FilterDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.FilterInfoDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.LimitOffsetDto
@@ -16,62 +15,26 @@ import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SeriesFormat
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SortDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagFilterDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagInclusionMode
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
+import keiyoushi.network.post
 import keiyoushi.utils.parseAsProto
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 class BookWalkerFilters(private val bookwalker: BookWalker) {
-    var genreFilters: List<TaggedTriState<String>>? = null
-        private set
-
     // There are an enormous amount of tags and while it's not hard to fetch the complete list,
     // Tachiyomi clients typically do not handle large lists of tags well at the moment.
     // BookWalker handles it by allowing users to search for tags by name, but that capability
     // is not supported by the Tachiyomi API.
     // For now, all of the secondary filters will be disabled, but some with a smaller number of
     // items like status (currently broken on BW's side) and launch year can be supported later.
-//    var secondaryFilters: List<TriStateFilter>? = null
-//        private set
 
-    private val fetchMutex = Mutex()
-    private var hasObtainedFilters = false
+    suspend fun fetchGenres(): List<FilterInfoDto> {
+        val response = bookwalker.client.post(
+            bookwalker.endpoint("ContentService/SearchHeader"),
+            bookwalker.headers,
+            SearchHeaderRequestDto().toProtoRequestBody(),
+        ).parseAsProto<SearchHeaderResponseDto>()
 
-    fun fetchIfNecessaryInBackground() {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                fetchIfNecessary()
-            } catch (e: Throwable) {
-                Log.e("bookwalker", e.toString())
-            }
-        }
-    }
-
-    // Lock applied so that we don't try to make additional new requests before the first set of
-    // requests have finished.
-    private suspend fun fetchIfNecessary() = fetchMutex.withLock {
-        // In theory the list of filters could change while the app is alive, but in practice that
-        // seems fairly unlikely, and we can save a lot of unnecessary calls by assuming it won't.
-        if (hasObtainedFilters) {
-            return@withLock
-        }
-
-        val response = bookwalker.client.newCall(
-            POST(
-                bookwalker.endpoint("ContentService/SearchHeader"),
-                bookwalker.headers,
-                SearchHeaderRequestDto().toProtoRequestBody(),
-            ),
-        ).await().parseAsProto<SearchHeaderResponseDto>()
-
-        genreFilters = getAllFilters(response.genres).map { TaggedTriState(it.name, it.id) }
-
-        hasObtainedFilters = true
+        return getAllFilters(response.genres)
     }
 
     private suspend fun getAllFilters(initialList: SearchFilterOptionsDto): List<FilterInfoDto> {
@@ -82,17 +45,15 @@ class BookWalkerFilters(private val bookwalker: BookWalker) {
 
             var lastResponse: SearchFilterOptionsResponseDto? = null
             do {
-                lastResponse = bookwalker.client.newCall(
-                    POST(
-                        bookwalker.endpoint("CollectionService/SearchFilterOptionsV2"),
-                        bookwalker.headers,
-                        SearchFilterOptionsRequestDto(
-                            filterType = initialList.filterType,
-                            limitOffset = LimitOffsetDto(100, lastResponse?.countInfo?.offset ?: 0),
-                            searchDomain = SearchPageTypeDto(SearchPageType.Browse()),
-                        ).toProtoRequestBody(),
-                    ),
-                ).await().parseAsProto<SearchFilterOptionsResponseDto>()
+                lastResponse = bookwalker.client.post(
+                    bookwalker.endpoint("CollectionService/SearchFilterOptionsV2"),
+                    bookwalker.headers,
+                    SearchFilterOptionsRequestDto(
+                        filterType = initialList.filterType,
+                        limitOffset = LimitOffsetDto(100, lastResponse?.countInfo?.offset ?: 0),
+                        searchDomain = SearchPageTypeDto(SearchPageType.Browse()),
+                    ).toProtoRequestBody(),
+                ).parseAsProto<SearchFilterOptionsResponseDto>()
                 results.addAll(lastResponse.results)
             } while (lastResponse.countInfo.limit + lastResponse.countInfo.offset <= lastResponse.countInfo.totalCount)
 

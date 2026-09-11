@@ -3,7 +3,15 @@ package eu.kanade.tachiyomi.extension.ja.zebrack
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.protobuf.ProtoNumber
+
+private const val TYPE_TITLE = "title"
+const val TYPE_MAGAZINE = "magazine"
+const val TYPE_CHAPTER = "chapter"
+const val TYPE_VOLUME = "volume"
+private const val TYPE_ISSUE = "issue"
 
 @Serializable
 class RankingResponse(
@@ -23,9 +31,12 @@ class RankingEntries(
     @ProtoNumber(11) private val info: RankingInfo,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = if (info.magazineId != null) "${info.magazineId}#1" else info.id.toString()
+        url = (info.magazineId ?: info.id).toString()
         title = name
         thumbnail_url = thumbnail
+        memo = buildJsonObject {
+            put("type", if (info.magazineId != null) TYPE_MAGAZINE else TYPE_TITLE)
+        }
     }
 }
 
@@ -50,6 +61,9 @@ class LatestEntries(
         url = id.toString()
         title = name
         thumbnail_url = thumbnail
+        memo = buildJsonObject {
+            put("type", TYPE_TITLE)
+        }
     }
 }
 
@@ -65,11 +79,12 @@ class SearchEntries(
     @ProtoNumber(3) private val name: String,
 ) {
     fun toSManga() = SManga.create().apply {
-        val magazine = if (id.contains("magazineId")) "#1" else ""
-        val titleId = id.substringAfter("=")
-        url = "$titleId$magazine"
+        url = id.substringAfter("=")
         title = name
         thumbnail_url = thumbnail
+        memo = buildJsonObject {
+            put("type", if (id.contains("magazineId")) TYPE_MAGAZINE else TYPE_TITLE)
+        }
     }
 }
 
@@ -93,9 +108,12 @@ class MagazineEntries(
     @ProtoNumber(6) private val name: String,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "$id#1"
+        url = id.toString()
         title = name
         thumbnail_url = thumbnail?.thumb
+        memo = buildJsonObject {
+            put("type", TYPE_MAGAZINE)
+        }
     }
 }
 
@@ -132,6 +150,9 @@ class MangaDetails(
         genre = info?.genres?.mapNotNull { it.genreName }?.joinToString()
         status = if (update != null) SManga.ONGOING else SManga.UNKNOWN
         thumbnail_url = thumbnail?.portrait
+        memo = buildJsonObject {
+            put("type", TYPE_TITLE)
+        }
     }
 }
 
@@ -166,6 +187,9 @@ class MagazineDetails(
         title = name
         description = update
         thumbnail_url = magazineThumbnail?.thumbnail
+        memo = buildJsonObject {
+            put("type", TYPE_MAGAZINE)
+        }
     }
 }
 
@@ -197,8 +221,12 @@ class Chapter(
         get() = price != null && price > 0 && (purchased != null && purchased != 1)
     fun toSChapter() = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
-        url = "$chapterId/0#$titleId"
+        url = chapterId.toString()
         name = lock + chapterName
+        memo = buildJsonObject {
+            put("type", TYPE_CHAPTER)
+            put("titleId", titleId.toString())
+        }
     }
 }
 
@@ -219,6 +247,7 @@ class Volume(
     @ProtoNumber(4) private val title: String?,
     @ProtoNumber(5) private val volumeName: String,
     @ProtoNumber(7) private val uploadDate: Long?,
+    @ProtoNumber(12) private val trialable: Int?,
     @ProtoNumber(17) private val purchased: Int?,
     @ProtoNumber(23) private val isFree: Int?,
     @ProtoNumber(101) val session: SessionError?,
@@ -227,15 +256,20 @@ class Volume(
         get() = isFree != 1 && purchased != 1
 
     private val isTrial: Boolean
-        get() = purchased != 1
+        get() = purchased != 1 && trialable == 1
 
     fun toSChapter() = SChapter.create().apply {
-        val lock = if (isLockedVolume) "🔒 (Preview) " else ""
-        val isTrial = if (isTrial) "1" else "0"
+        val trial = if (isTrial && isFree != 1) "(Preview) " else ""
+        val lock = if (isLockedVolume) "🔒 " else ""
         val trimName = if (title != null) volumeName.replace(title, "").trim() else volumeName
-        url = "$chapterId/1#$titleId:$isTrial"
+        url = chapterId.toString()
         uploadDate?.let { date_upload = it * 1000L }
-        name = lock + "Volume - $trimName"
+        name = lock + trial + "Volume - $trimName"
+        memo = buildJsonObject {
+            put("type", TYPE_VOLUME)
+            put("titleId", titleId.toString())
+            put("trial", isTrial)
+        }
     }
 }
 
@@ -255,18 +289,27 @@ class Magazine(
     @ProtoNumber(4) private val title: String,
     @ProtoNumber(6) private val uploadDate: Long?,
     @ProtoNumber(8) private val purchased: Int?,
+    @ProtoNumber(9) private val trialable: Int?,
     @ProtoNumber(10) private val magazineId: Int,
     @ProtoNumber(1000) val session: SessionError?,
 ) {
     val isLockedMagazine: Boolean
         get() = purchased != 1
 
+    private val isTrial: Boolean
+        get() = purchased != 1 && trialable == 1
+
     fun toSChapter() = SChapter.create().apply {
-        val lock = if (isLockedMagazine) "🔒 (Preview) " else ""
-        val isTrial = if (isLockedMagazine) "1" else "0"
-        url = "$magazineId/2#$issueId:$isTrial"
+        val trial = if (isTrial) "(Preview) " else ""
+        val lock = if (isLockedMagazine) "🔒 " else ""
+        url = issueId.toString()
         uploadDate?.let { date_upload = it * 1000L }
-        name = lock + title
+        name = lock + trial + title
+        memo = buildJsonObject {
+            put("type", TYPE_ISSUE)
+            put("magazineId", magazineId.toString())
+            put("trial", isLockedMagazine)
+        }
     }
 }
 
