@@ -14,6 +14,5 @@ keiyoushi {
     source {
         lang = "pt-BR"
         baseUrl = "https://3xyaoi.com"
-        versionId = 2
     }
 }
