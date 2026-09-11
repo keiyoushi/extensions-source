@@ -13,8 +13,7 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.Response
 import okio.ByteString.Companion.decodeBase64
 import java.io.IOException
 import java.util.Locale
@@ -27,27 +26,16 @@ abstract class KomikNesia : KeiSource() {
 
     private val apiUrl = "https://api-be.komiknesia.my.id/api"
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
-        val request = chain.request()
-        val response = chain.proceed(request)
-        if (!request.url.host.contains("api-be.komiknesia.my.id")) {
-            return@addInterceptor response
-        }
-
-        val body = response.body
-        val bodyString = body.string()
-        if (!bodyString.contains("\"encrypted\":true") && !bodyString.contains("\"encrypted\": true")) {
-            return@addInterceptor response.newBuilder()
-                .body(bodyString.toResponseBody(body.contentType()))
-                .build()
-        }
-
-        val envelope = bodyString.parseAs<EncryptedEnvelopeDto>()
-        val decryptedJson = decrypt(envelope.data, envelope.time)
-        response.newBuilder()
-            .body(decryptedJson.toResponseBody(body.contentType()))
-            .build()
-    }
+    private inline fun <reified T> Response.parseAs(): T = parseAs(
+        transform = { bodyString ->
+            if (bodyString.contains("\"encrypted\":true") || bodyString.contains("\"encrypted\": true")) {
+                val envelope = bodyString.parseAs<EncryptedEnvelopeDto>()
+                decrypt(envelope.data, envelope.time)
+            } else {
+                bodyString
+            }
+        },
+    )
 
     private fun decrypt(encryptedData: String, time: Double): String {
         try {
@@ -111,7 +99,7 @@ abstract class KomikNesia : KeiSource() {
             }
         }.build()
 
-        val payload = client.get(url, headers).parseAs<PayloadDto<List<MangaDto>>>()
+        val payload = client.get(url).parseAs<PayloadDto<List<MangaDto>>>()
         val mangas = payload.data.map { it.toSManga() }
         val hasNextPage = payload.meta?.let { it.page < it.totalPages } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -128,22 +116,23 @@ abstract class KomikNesia : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.removePrefix("/komik/").removePrefix("/")
-        val payload = client.get("$apiUrl/comic/$slug", headers)
+        val payload = client.get("$apiUrl/comic/$slug")
             .parseAs<PayloadDto<MangaDto>>()
         return SMangaUpdate(
-            payload.data.toSManga(),
+            payload.data.toSManga().apply { initialized = true },
             payload.data.chapters?.map { it.toSChapter() } ?: emptyList(),
         )
     }
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = runCatching {
+        if (!url.host.endsWith("komiknesiaku.com")) return null
         val pathSegments = url.pathSegments.filter { it.isNotEmpty() }
         if (pathSegments.firstOrNull() != "komik") return null
         val slug = pathSegments.getOrNull(1) ?: return null
-        val payload = client.get("$apiUrl/comic/$slug", headers)
+        val payload = client.get("$apiUrl/comic/$slug")
             .parseAs<PayloadDto<MangaDto>>()
-        return payload.data.toSManga()
-    }
+        payload.data.toSManga().apply { initialized = true }
+    }.getOrNull()
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/komik/${manga.url.removePrefix("/komik/").removePrefix("/")}"
 
@@ -155,7 +144,7 @@ abstract class KomikNesia : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.removePrefix("/view/").removePrefix("/")
-        val payload = client.get("$apiUrl/chapters/slug/$slug", headers)
+        val payload = client.get("$apiUrl/chapters/slug/$slug")
             .parseAs<PayloadDto<PageListDto>>()
         return payload.data.images.mapIndexed { idx, img ->
             Page(idx, imageUrl = img)
@@ -168,7 +157,7 @@ abstract class KomikNesia : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/contents/genres", headers).parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/contents/genres").parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<PayloadDto<List<GenreDto>>>()?.data
