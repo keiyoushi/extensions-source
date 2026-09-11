@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseAsProto
 import keiyoushi.utils.string
@@ -18,6 +19,8 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -28,33 +31,47 @@ import okhttp3.RequestBody.Companion.toRequestBody
 abstract class MangaMillion : KeiSource() {
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/api"
+    private val preferences by getPreferencesLazy()
+    private val tokenMutex = Mutex()
     private val serviceLang: String
         get() = if (lang in SERVICE_LANGUAGES) lang else "en"
 
-    private var token: String? = null
+    private val token: String
+        get() = preferences.getString(TOKEN_PREF_KEY, "")!!
 
-    private suspend fun getAccessToken(): String {
-        token?.let { return it }
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ImageInterceptor())
+        addInterceptor {
+            val request = it.request()
+            if (request.url.host != "api.$domain" || request.url.pathSegments.last() == "register") return@addInterceptor it.proceed(request)
+
+            val usedToken = request.header("Access-Token").orEmpty()
+            if (usedToken.isNotEmpty()) {
+                val response = it.proceed(request)
+                if (response.code != 403) return@addInterceptor response
+                response.close()
+            }
+
+            val newToken = runBlocking { getToken(rejected = usedToken) }
+            it.proceed(request.newBuilder().header("Access-Token", newToken).build())
+        }
+    }
+
+    override fun Headers.Builder.configureHeaders() = apply {
+        if (token.isNotEmpty()) set("Access-Token", token)
+        set("Accept", "*/*")
+        set("Accept-Language", "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7")
+    }
+
+    private suspend fun getToken(rejected: String): String = tokenMutex.withLock {
+        token.takeIf { it.isNotEmpty() && it != rejected }?.let { return it }
 
         val url = "$apiUrl/register".toHttpUrl().newBuilder()
             .addQueryParameter("service_language", serviceLang)
             .build()
 
-        val acceptHeaders = Headers.Builder()
-            .set("Accept-Language", "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7")
-            .set("Accept", "*/*")
-            .build()
-
-        return client.post(url, acceptHeaders, EMPTY_BODY).parseAsProto<TokenResponse>().token.accessToken.also { token = it }
-    }
-
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        val accessToken = if (token.isNullOrEmpty()) runBlocking { getAccessToken() } else token!!
-        set("Access-Token", accessToken)
-        set("Accept", "*/*")
-        set("Accept-Language", "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7")
+        client.post(url, EMPTY_BODY).parseAsProto<TokenResponse>().token.accessToken
+            .also { preferences.edit().putString(TOKEN_PREF_KEY, it).apply() }
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -206,6 +223,7 @@ abstract class MangaMillion : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$serviceLang/title/${chapter.memo["titleId"]!!.string}/chapter/${chapter.url}"
 
     companion object {
+        private const val TOKEN_PREF_KEY = "access_token"
         private val EMPTY_BODY = ByteArray(0).toRequestBody()
         private val SERVICE_LANGUAGES = setOf(
             "de", "en", "es", "fr", "hi", "id", "it", "ja", "ko-KR", "pt-BR", "ru", "th", "vi", "zh-CN",
