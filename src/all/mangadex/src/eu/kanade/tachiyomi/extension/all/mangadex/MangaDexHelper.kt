@@ -34,6 +34,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
@@ -45,9 +46,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.parser.Parser
-import java.util.Date
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 class MangaDexHelper(lang: String) {
 
@@ -186,8 +187,6 @@ class MangaDexHelper(lang: String) {
         }
     }
 
-    private fun parseDate(dateAsString: String): Long = MDConstants.dateFormatter.parse(dateAsString)?.time ?: 0
-
     /**
      * Chapter URL where we get the token, last request time.
      */
@@ -214,11 +213,11 @@ class MangaDexHelper(lang: String) {
         val (host, tokenRequestUrl, time) = page.url.split(",")
 
         val mdAtHomeServerUrl =
-            when (Date().time - time.toLong() > MDConstants.mdAtHomeTokenLifespan) {
+            when (System.currentTimeMillis() - time.toLong() > MDConstants.mdAtHomeTokenLifespan) {
                 false -> host
 
                 true -> {
-                    val tokenLifespan = Date().time - (tokenTracker[tokenRequestUrl] ?: 0)
+                    val tokenLifespan = System.currentTimeMillis() - (tokenTracker[tokenRequestUrl] ?: 0)
                     val cacheControl = if (tokenLifespan > MDConstants.mdAtHomeTokenLifespan) {
                         CacheControl.FORCE_NETWORK
                     } else {
@@ -262,10 +261,14 @@ class MangaDexHelper(lang: String) {
         cacheControl: CacheControl,
     ): Request {
         if (cacheControl == CacheControl.FORCE_NETWORK) {
-            tokenTracker[tokenRequestUrl] = Date().time
+            tokenTracker[tokenRequestUrl] = System.currentTimeMillis()
         }
 
         return GET(tokenRequestUrl, headers, cacheControl)
+    }
+
+    fun mdAtHomeRefresh(tokenRequestUrl: String) {
+        tokenTracker[tokenRequestUrl] = System.currentTimeMillis()
     }
 
     private fun List<Map<String, String>>.findTitleByLang(lang: String): String? = firstOrNull { it[lang] != null }?.values?.singleOrNull()
@@ -462,7 +465,7 @@ class MangaDexHelper(lang: String) {
         return SChapter.create().apply {
             url = "/chapter/${chapterDataDto.id}"
             name = chapterName.joinToString(" ").removeEntities()
-            date_upload = parseDate(attr.publishAt)
+            date_upload = Instant.tryParse(attr.publishAt)
             scanlator = unavailablePrefix + groups
         }
     }
