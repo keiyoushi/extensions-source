@@ -21,7 +21,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -35,7 +34,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Akaya : KeiSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val request = chain.request()
 
@@ -51,8 +49,7 @@ abstract class Akaya : KeiSource() {
         }
 
         response
-    }.rateLimit(1, 1.seconds) { it.host == baseUrlHost }
-
+    }.rateLimit(1, 1.seconds)
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
         client.get(
             "$baseUrl/collection/bd90cb43-9bf2-4759-b8cc-c9e66a526bc6?page=$page",
