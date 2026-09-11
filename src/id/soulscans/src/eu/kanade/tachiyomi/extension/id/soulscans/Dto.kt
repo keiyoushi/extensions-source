@@ -58,6 +58,7 @@ class SeriesDetailDto(
         artist = artistName
         genre = genres.joinToString()
         status = comicStatus.parseStatus()
+        initialized = true
     }
 
     fun toSChapterList() = units.map { it.toSChapter(slug) }
@@ -79,7 +80,7 @@ class UnitDto(
 ) {
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
         url = "/comic/$seriesSlug/chapter/$slug"
-        name = "Chapter " + number.toFloatOrNull()?.toString()?.removeSuffix(".0")
+        name = "Chapter " + (number.toFloatOrNull()?.toString()?.removeSuffix(".0") ?: number)
         chapter_number = number.toFloatOrNull() ?: -1f
         date_upload = Instant.tryParse(createdAt)
     }

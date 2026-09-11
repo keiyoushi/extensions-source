@@ -27,28 +27,13 @@ abstract class SoulScans : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(searchUrl(page, sort = "popular"))
 
-    private var latestCache: List<SManga> = emptyList()
-
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page == 1 || latestCache.isEmpty()) {
-            val response = client.get("$baseUrl/api/comic/home-sections?sections=latest_comic_updates&updateLimit=240")
-                .parseAs<HomeSectionsDto>()
+        if (page > 1) return MangasPage(emptyList(), false)
 
-            latestCache = response.latestComicUpdates.map { it.toSManga() }
-        }
+        val response = client.get("$baseUrl/api/comic/home-sections?sections=latest_comic_updates&updateLimit=240")
+            .parseAs<HomeSectionsDto>()
 
-        val itemsPerPage = 24
-        val startIndex = (page - 1) * itemsPerPage
-        val endIndex = minOf(startIndex + itemsPerPage, latestCache.size)
-
-        if (startIndex >= latestCache.size) {
-            return MangasPage(emptyList(), false)
-        }
-
-        return MangasPage(
-            latestCache.subList(startIndex, endIndex),
-            endIndex < latestCache.size,
-        )
+        return MangasPage(response.latestComicUpdates.map { it.toSManga() }, false)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getMangaList(searchUrl(page, query, filters = filters))
@@ -81,10 +66,11 @@ abstract class SoulScans : KeiSource() {
         }
         .build()
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = runCatching {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.lastOrNull { it.isNotBlank() } ?: return null
-        return fetchSeriesDetail(slug).toSManga()
-    }
+        fetchSeriesDetail(slug).toSManga()
+    }.getOrNull()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
