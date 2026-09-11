@@ -24,7 +24,6 @@ class AuthorGroupSeriesOption(val display: String, val key: String) {
 
 class AuthorGroupSeriesFilter(options: Array<AuthorGroupSeriesOption>) : Filter.Select<AuthorGroupSeriesOption>("Filter Tipe", options, 0)
 class AuthorGroupSeriesValueFilter : Filter.Text("Nama")
-class CharacterFilter : Filter.Text("Karakter")
 class CategoryNames(categories: Array<Category>) : Filter.Select<Category>("Kategori", categories, 0)
 class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Urutkan", orders, 0)
 class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
