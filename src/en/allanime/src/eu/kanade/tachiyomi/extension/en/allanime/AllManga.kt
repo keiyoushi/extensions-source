@@ -34,6 +34,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class AllManga :
@@ -313,7 +314,7 @@ abstract class AllManga :
             }
         }
 
-        val payload = runWebView {
+        val payload = runWebView(timeout = 20.seconds) {
             blockImages = true
             userAgent = headers["User-Agent"]!!
 
@@ -357,13 +358,23 @@ abstract class AllManga :
                 evaluateJs(script)
             }
 
+            interceptRequest {
+                if (it.url.toString().contains("/mreferer/")) {
+                    error("Failed to attach listener")
+                }
+                null
+            }
+
             var captchaAttempts = 0
 
-            poll(300.milliseconds) {
+            poll(250.milliseconds) {
                 evaluateJs(
-                    "document.querySelector('.captcha-overlay--visible') != null",
+                    """
+                     document.title.includes("Just a moment") ||
+                    document.querySelector('.captcha-overlay--visible') != null
+                    """.trimIndent(),
                 ) { result ->
-                    if (result == "true" && ++captchaAttempts >= 10) { // 3s
+                    if (result == "true" && ++captchaAttempts >= 20) { // 5
                         wvChapterUrl = "$baseUrl$chapterUrl"
                         error("Solve captcha in WebView and retry")
                     }
