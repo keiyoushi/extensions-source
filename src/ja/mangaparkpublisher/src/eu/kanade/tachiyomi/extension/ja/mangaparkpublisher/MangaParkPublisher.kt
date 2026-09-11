@@ -12,8 +12,11 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -105,13 +108,16 @@ abstract class MangaParkPublisher : KeiSource() {
                 name = if (isFree) "\uD83C\uDD93 $title" else title
                 date_upload = dateFormat.tryParseDate(it.selectFirst("div.date span")?.text())
                 chapter_number = it.attr("data-chapter-name").toFloat()
+                memo = buildJsonObject {
+                    put("slug", manga.url)
+                }
             }
         }.reversed()
 
         return SMangaUpdate(mangaDetails, chapterList)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.memo["slug"]!!.string}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get("$apiUrl/${chapter.url}")
