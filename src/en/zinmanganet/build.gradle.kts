@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Zinmanga.net"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madaralegacy"
 
     source {
         lang = "en"
-        baseUrl = "https://zinmanga.net"
+        baseUrl = "https://www.zinmanga.net"
     }
 }

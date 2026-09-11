@@ -9,7 +9,7 @@ import java.util.Locale
 abstract class ZinmangaNet : Madara() {
     override val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT)
     override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = false
+    override val useNewChapterEndpoint = true
 
     override val filterNonMangaItems = false
 }
