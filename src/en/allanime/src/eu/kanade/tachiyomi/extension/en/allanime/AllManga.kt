@@ -114,9 +114,6 @@ abstract class AllManga :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) {
-            throw Exception("Unsupported url")
-        }
         val id = url.pathSegments.getOrNull(1)
             ?: throw Exception("Unsupported url")
 
@@ -374,7 +371,7 @@ abstract class AllManga :
                     document.querySelector('.captcha-overlay--visible') != null
                     """.trimIndent(),
                 ) { result ->
-                    if (result == "true" && ++captchaAttempts >= 20) { // 5
+                    if (result == "true" && ++captchaAttempts >= 20) { // 5s
                         wvChapterUrl = "$baseUrl$chapterUrl"
                         error("Solve captcha in WebView and retry")
                     }
