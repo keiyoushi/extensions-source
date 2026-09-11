@@ -33,6 +33,8 @@ abstract class AcervoEremita : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$baseUrl/explore?page=$page&sort=release&dir=desc"))
 
+    private val mangaSubString = "work"
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/explore".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -47,18 +49,18 @@ abstract class AcervoEremita : KeiSource() {
         return MangasPage(mangas, dto.pagination.hasNext)
     }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/work".toHttpUrl().newBuilder()
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/$mangaSubString".toHttpUrl().newBuilder()
         .addPathSegment(manga.memo["slug"]!!.string)
         .build().toString()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (!baseUrl.toHttpUrl().host.equals(url.host, ignoreCase = true) || !url.pathSegments.contains("work")) {
+        if (!baseUrl.toHttpUrl().host.equals(url.host, ignoreCase = true) || !url.pathSegments.contains(mangaSubString)) {
             return null
         }
         return parseSManga(client.get(url).asJsoup())
     }
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/work/${chapter.memo["slug"]!!.string}/read?chapter=${chapter.chapter_number}&page=1"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/$mangaSubString/${chapter.memo["slug"]!!.string}/read?chapter=${chapter.chapter_number}&page=1"
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
@@ -88,7 +90,7 @@ abstract class AcervoEremita : KeiSource() {
         var cursor = 0.0
         val chapters = mutableListOf<SChapter>()
         do {
-            val dto = client.get("$baseUrl/api/work/chapters?workId=${manga.url}&cursor=$cursor&limit=30")
+            val dto = client.get("$baseUrl/api/$mangaSubString/chapters?workId=${manga.url}&cursor=$cursor&limit=30")
                 .parseAs<PageableChapters>()
             cursor += offset
             chapters += dto.chapters.map { it.toSChapter(manga) }
