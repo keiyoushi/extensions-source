@@ -1,46 +1,40 @@
 package eu.kanade.tachiyomi.extension.es.nexusscanlation
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import java.io.IOException
-import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 @Source
-abstract class Nexusscanlation : HttpSource() {
+abstract class Nexusscanlation : KeiSource() {
     private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
-    override val supportsLatest = true
-
     private val apiBaseUrl = "https://api.nexusscanlation.com/api/v1"
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(ImageInterceptor())
         .rateLimit(1, 3.seconds) { it.host == apiBaseUrlHost } // API: max 1 request per 3 seconds
-        .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
-        .add("Accept-Language", "es-419,es;q=0.9,es-ES;q=0.8")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept-Language", "es-419,es;q=0.9,es-ES;q=0.8")
 
     private val apiHeaders by lazy {
-        headersBuilder()
+        headers.newBuilder()
             .add("Accept", "application/json, text/plain, */*")
             .add("sec-fetch-dest", "empty")
             .add("sec-fetch-mode", "cors")
@@ -59,37 +53,31 @@ abstract class Nexusscanlation : HttpSource() {
 
     // ======================= Popular ======================================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addPathSegment("catalog")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("orden", "popular")
             .build()
-        return GET(url, apiHeaders)
-    }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val root = response.parseAs<CatalogResponseDto>()
+        val root = client.get(url, apiHeaders).parseAs<CatalogResponseDto>()
         return MangasPage(root.data.orEmpty().mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
     }
 
     // ======================= Latest =======================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page > 1) {
+            return MangasPage(emptyList(), false)
+        }
+
         val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addPathSegment("public")
             .addPathSegment("landing")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, apiHeaders)
-    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        if (page > 1) {
-            return MangasPage(emptyList(), false)
-        }
-        val root = response.parseAs<LandingResponseDto>()
+        val root = client.get(url, apiHeaders).parseAs<LandingResponseDto>()
         val mangaList = root.latestUpdates.orEmpty()
             .distinctBy { it.serieSlug }
             .mapNotNull(::landingToManga)
@@ -98,61 +86,103 @@ abstract class Nexusscanlation : HttpSource() {
 
     // ======================= Search =======================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlBuilder = apiBaseUrl.toHttpUrl().newBuilder()
-
-        if (query.isBlank()) {
-            urlBuilder.addPathSegment("catalog")
-        } else {
-            urlBuilder
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isNotBlank()) {
+            val url = apiBaseUrl.toHttpUrl().newBuilder()
                 .addPathSegment("catalog")
                 .addPathSegment("search")
                 .addQueryParameter("q", query)
+                .addQueryParameter("page", page.toString())
+                .build()
+            val root = client.get(url, apiHeaders).parseAs<CatalogResponseDto>()
+            return MangasPage(root.data.orEmpty().mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
         }
 
-        urlBuilder.addQueryParameter("page", page.toString())
-        return GET(urlBuilder.build(), apiHeaders)
+        val urlBuilder = apiBaseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("catalog")
+            .addQueryParameter("page", page.toString())
+
+        filters.forEach { filter ->
+            when (filter) {
+                is SortFilter -> {
+                    urlBuilder.addQueryParameter("orden", filter.selectedValue())
+                }
+                is StatusFilter -> {
+                    filter.selectedValue().takeIf { it.isNotBlank() }?.let {
+                        urlBuilder.addQueryParameter("estado", it)
+                    }
+                }
+                is TypeFilter -> {
+                    filter.selectedValue().takeIf { it.isNotBlank() }?.let {
+                        urlBuilder.addQueryParameter("tipo", it)
+                    }
+                }
+                is GenreFilter -> {
+                    filter.selectedValue().takeIf { it.isNotBlank() }?.let {
+                        urlBuilder.addQueryParameter("genero", it)
+                    }
+                }
+                else -> {}
+            }
+        }
+
+        val root = client.get(urlBuilder.build(), apiHeaders).parseAs<CatalogResponseDto>()
+        return MangasPage(root.data.orEmpty().mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    // ============================== Filters ===============================
 
-    // ======================= Details ======================================
+    override val supportsFilterFetching get() = true
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = apiBaseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("series")
-            .addPathSegment(manga.url)
-            .build()
-        return GET(url, apiHeaders)
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiBaseUrl/catalog/genres?has_series=true", apiHeaders).parseAs()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.runCatching {
+            parseAs<GenresResponseDto>().data.orEmpty().map { it.nombre to it.slug }
+        }?.getOrNull()?.takeIf { it.isNotEmpty() }?.let { listOf("Todos" to "") + it } ?: DEFAULT_GENRES
+
+        return FilterList(
+            SortFilter(),
+            StatusFilter(),
+            TypeFilter(),
+            GenreFilter(genres),
+        )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val root = response.parseAs<SeriesPayloadDto>()
-        return seriesToManga(root.serie)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val currentHost = baseUrl.toHttpUrl().host
+        if (!url.host.equals(currentHost, ignoreCase = true)) return null
+
+        val segments = url.pathSegments
+        if (segments.size < 2 || segments[0] != "series") return null
+        val slug = segments[1].takeIf { it.isNotBlank() } ?: return null
+
+        val apiUrl = "$apiBaseUrl/series/$slug".toHttpUrl()
+        val payload = client.get(apiUrl, apiHeaders).parseAs<SeriesPayloadDto>()
+        return seriesToManga(payload.serie)
     }
 
-    // ======================= Chapters =====================================
+    // ======================= Details and Chapters =========================
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = apiBaseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("series")
-            .addPathSegment(manga.url)
-            .build()
-        return GET(url, apiHeaders)
-    }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val url = "$apiBaseUrl/series/${manga.url}".toHttpUrl()
+        val payload = client.get(url, apiHeaders).parseAs<SeriesPayloadDto>()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val payload = response.parseAs<SeriesPayloadDto>()
+        val series = seriesToManga(payload.serie)
         val seriesSlug = payload.serie.slug
+        val chapterList = payload.capitulos.orEmpty().map { chapterToModel(seriesSlug, it) }
 
-        return payload.capitulos.orEmpty()
-            .map { chapterToModel(seriesSlug, it) }
-            .toList()
+        return SMangaUpdate(series, chapterList)
     }
 
     // ======================= Pages ========================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (seriesSlug, chapterSlug) = chapter.url.split('/', limit = 2)
 
         val url = apiBaseUrl.toHttpUrl().newBuilder()
@@ -162,17 +192,13 @@ abstract class Nexusscanlation : HttpSource() {
             .addPathSegment(chapterSlug)
             .build()
 
-        return GET(url, apiHeaders)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
+        val response = client.get(url, apiHeaders)
         val body = response.body.string()
 
-        val chapterPagesDto = try {
-            body.parseAs<ChapterPagesWrapperDto>().data
-        } catch (_: Exception) {
-            body.parseAs<ChapterPagesDto>()
-        } ?: throw IOException("Failed to decode server response.")
+        val chapterPagesDto = runCatching { body.parseAs<ChapterPagesWrapperDto>().data }
+            .getOrNull()
+            ?: runCatching { body.parseAs<ChapterPagesDto>() }.getOrNull()
+            ?: throw IOException("Failed to decode server response.")
 
         if (chapterPagesDto.esPremium || chapterPagesDto.locked) {
             throw IOException("Premium chapter. Not available.")
@@ -238,11 +264,12 @@ abstract class Nexusscanlation : HttpSource() {
             url = "$seriesSlug/${chapter.slug}"
             name = chapterName
             chapter_number = chapter.numero
-            date_upload = dateFormat.tryParse(chapter.publishedAt)
+            date_upload = Instant.tryParse(chapter.publishedAt)
         }
     }
 
     private fun seriesToManga(series: SeriesDto): SManga = SManga.create().apply {
+        url = series.slug
         title = series.titulo
         thumbnail_url = resolveCoverUrl(series.portadaUrl, series.id)
         description = series.descripcion
@@ -275,6 +302,7 @@ abstract class Nexusscanlation : HttpSource() {
             .distinct()
             .joinToString()
             .ifBlank { null }
+        initialized = true
     }
 
     private fun resolveCoverUrl(rawUrl: String?, seriesId: String?): String? {
@@ -284,6 +312,4 @@ abstract class Nexusscanlation : HttpSource() {
         }
         return rawUrl.takeIf { !it.isNullOrBlank() }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

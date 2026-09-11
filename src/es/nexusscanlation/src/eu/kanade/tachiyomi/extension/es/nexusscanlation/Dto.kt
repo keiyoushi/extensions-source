@@ -107,3 +107,15 @@ class ScrambledDataDto(
     @SerialName("s") val seed: Long,
     @SerialName("v") val version: Int = 1,
 )
+
+@Serializable
+class GenresResponseDto(
+    val data: List<GenreDto>? = null,
+)
+
+@Serializable
+class GenreDto(
+    val id: Long? = null,
+    val slug: String,
+    val nombre: String,
+)
