@@ -20,7 +20,3 @@ keiyoushi {
         path("/..*")
     }
 }
-
-dependencies {
-    implementation(project(":lib:randomua"))
-}

@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.comicaso
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,8 +7,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -26,42 +22,17 @@ import okhttp3.Response
 import java.io.IOException
 
 @Source
-abstract class Comicaso :
-    KeiSource(),
-    ConfigurableSource {
+abstract class Comicaso : KeiSource() {
 
-    private val defaultUserAgent: String? by lazy {
-        headersBuilder()
-        cachedDefaultUserAgent
-    }
-    private var cachedDefaultUserAgent: String? = null
-
-    // Android Chrome UA is the default fallback used by Mihon's WebView (for
-    // both solving this site's Cloudflare challenge and the Google sign-in
-    // step). It is NOT sent on background API calls — see authInterceptor.
-    // If either Cloudflare or Google starts rejecting this default for a
-    // given user, they can override it via Settings > Random user agent
-    // instead of requiring an extension update.
-    override fun Headers.Builder.configureHeaders(): Headers.Builder {
-        if (cachedDefaultUserAgent == null) {
-            cachedDefaultUserAgent = build()["User-Agent"]
-        }
-        return set("User-Agent", DEFAULT_USER_AGENT)
-            .set("X-Comicaso-Platform", "web")
-            .setRandomUserAgent(
-                filterInclude = listOf("Chrome", "Safari"),
-            )
-    }
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", DEFAULT_USER_AGENT)
+        .set("X-Comicaso-Platform", "web")
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::authInterceptor)
         .addInterceptor(::cdnInterceptor)
         .rateLimit(4)
 
     private fun authInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request().newBuilder()
-            .apply { defaultUserAgent?.let { header("User-Agent", it) } }
-            .build()
-
+        val request = chain.request()
         val response = chain.proceed(request)
         if (response.code == 403) {
             val peekBody = response.peekBody(1024).string()
@@ -238,11 +209,6 @@ abstract class Comicaso :
         TypeFilter(),
         GenreFilter(),
     )
-
-    // ============================ Preferences =============================
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addRandomUAPreference()
-    }
 
     // ============================= Utilities =============================
     private fun SManga.urlSegments() = "$baseUrl/$url".toHttpUrl().pathSegments
