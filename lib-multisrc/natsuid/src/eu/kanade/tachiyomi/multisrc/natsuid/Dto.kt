@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
@@ -22,6 +23,8 @@ class Manga(
     val slug: String,
     val title: Rendered,
     val content: Rendered,
+    @JsonNames("metadata")
+    val meta: MangaMeta? = null,
     @SerialName("_embedded")
     val embedded: Embedded,
 ) {
@@ -30,7 +33,23 @@ class Manga(
     fun toSManga() = SManga.create().apply {
         url = MangaUrl(id, slug).toJsonString()
         title = Parser.unescapeEntities(this@Manga.title.rendered, false)
-        description = Jsoup.parseBodyFragment(content.rendered).wholeText()
+        val mainDescription = Jsoup.parseBodyFragment(content.rendered).wholeText().trim()
+        // The alternative_title field is comma-separated on the site
+        val altTitles = meta?.meta?.alternativeTitle
+            ?.split(",")
+            ?.map { Parser.unescapeEntities(it.trim(), false) }
+            ?.filter { it.isNotBlank() && !it.equals(title, ignoreCase = true) }
+            ?.distinct()
+            .orEmpty()
+
+        description = buildString {
+            append(mainDescription)
+            if (altTitles.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                append("Alternative Names:\n")
+                append(altTitles.joinToString("\n") { "- $it" })
+            }
+        }.trim()
         thumbnail_url = embedded.featuredMedia?.firstOrNull()?.sourceUrl
         author = embedded.getTerms("series-author").joinToString()
         artist = embedded.getTerms("artist").joinToString()
@@ -53,6 +72,17 @@ class Manga(
         initialized = true
     }
 }
+
+@Serializable
+class MangaMeta(
+    val meta: InnerMeta? = null,
+)
+
+@Serializable
+class InnerMeta(
+    @SerialName("alternative_title")
+    val alternativeTitle: String? = null,
+)
 
 @Serializable
 class Embedded(
