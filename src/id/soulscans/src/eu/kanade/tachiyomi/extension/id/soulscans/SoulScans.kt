@@ -27,7 +27,12 @@ abstract class SoulScans : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(searchUrl(page, sort = "popular"))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(searchUrl(page, sort = "latest"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val response = client.get("$baseUrl/api/comic/home-sections?sections=latest_comic_updates&updateLimit=240")
+            .parseAs<HomeSectionsDto>()
+
+        return MangasPage(response.latestComicUpdates.map { it.toSManga() }, false)
+    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getMangaList(searchUrl(page, query, filters = filters))
 
@@ -38,32 +43,32 @@ abstract class SoulScans : KeiSource() {
             addQueryParameter("type", "COMIC")
             addQueryParameter("limit", "20")
             addQueryParameter("page", page.toString())
-            addQueryParameter("q", query)
+            if (query.isNotBlank()) addQueryParameter("q", query)
 
             filters?.forEach { filter ->
                 when (filter) {
-                    is SelectFilter.Status -> addQueryParameter("status", filter.selected)
-                    is SelectFilter.Genre -> addQueryParameter("genre", filter.selected)
-                    is SelectFilter.Type -> addQueryParameter("comic_type", filter.selected)
-                    is SelectFilter.Colored -> addQueryParameter("color_format", filter.selected)
-                    is SelectFilter.Format -> addQueryParameter("reading_format", filter.selected)
-                    is TextFilter.Author -> addQueryParameter("author", filter.state)
-                    is TextFilter.Artist -> addQueryParameter("artist", filter.state)
-                    is TextFilter.Publisher -> addQueryParameter("publisher", filter.state)
-                    is SelectFilter.Sort -> addQueryParameter("sort", filter.selected)
-                    is SelectFilter.Order -> addQueryParameter("order", filter.selected)
-                    else -> {
-                    }
+                    is SelectFilter.Status -> filter.selected.takeIf(String::isNotEmpty)?.let { addQueryParameter("status", it) }
+                    is SelectFilter.Genre -> filter.selected.takeIf(String::isNotEmpty)?.let { addQueryParameter("genre", it) }
+                    is SelectFilter.Type -> filter.selected.takeIf(String::isNotEmpty)?.let { addQueryParameter("comic_type", it) }
+                    is SelectFilter.Colored -> filter.selected.takeIf(String::isNotEmpty)?.let { addQueryParameter("color_format", it) }
+                    is SelectFilter.Format -> filter.selected.takeIf(String::isNotEmpty)?.let { addQueryParameter("reading_format", it) }
+                    is TextFilter.Author -> filter.state.takeIf(String::isNotBlank)?.let { addQueryParameter("author", it) }
+                    is TextFilter.Artist -> filter.state.takeIf(String::isNotBlank)?.let { addQueryParameter("artist", it) }
+                    is TextFilter.Publisher -> filter.state.takeIf(String::isNotBlank)?.let { addQueryParameter("publisher", it) }
+                    is SelectFilter.Sort -> filter.selected.takeIf(String::isNotEmpty)?.let { addQueryParameter("sort", it) }
+                    is SelectFilter.Order -> filter.selected.takeIf(String::isNotEmpty)?.let { addQueryParameter("order", it) }
+                    else -> {}
                 }
             }
             if (sort != null) setQueryParameter("sort", sort)
         }
         .build()
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = runCatching {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.lastOrNull { it.isNotBlank() } ?: return null
-        return fetchSeriesDetail(slug).toSManga()
-    }
+        fetchSeriesDetail(slug).toSManga()
+    }.getOrNull()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -109,7 +114,7 @@ abstract class SoulScans : KeiSource() {
         )
 
         if (genres != null) {
-            filters += SelectFilter.Genre(genres)
+            filters += SelectFilter.Genre(listOf("All" to "") + genres)
         }
 
         filters += listOf(
