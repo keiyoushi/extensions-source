@@ -19,8 +19,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
@@ -86,12 +84,9 @@ abstract class JumpToon : KeiSource() {
         val details = async {
             if (!fetchDetails) return@async manga
             val document = client.get(getMangaUrl(manga)).asJsoup()
-            val series = document.extractNextJs<SeriesDetails>() ?: return@async manga
-            val genres = document.extractNextJs<List<JsonElement>> { element ->
-                element is JsonArray && element.isNotEmpty() && element.all { it.genreLabel() != null }
-            }
-
-            series.toSManga(genres.orEmpty().mapNotNull { it.genreLabel() })
+            val series = document.extractNextJs<SeriesDetails> { it is JsonObject && "seriesStatusType" in it } ?: return@async manga
+            val genres = document.select("h1 ~ div > span").map { it.text() }
+            series.toSManga(genres)
         }
 
         val chapterList = async {
@@ -119,18 +114,11 @@ abstract class JumpToon : KeiSource() {
         )
     }
 
-    private fun JsonElement.genreLabel(): String? = (this as? JsonArray)
-        ?.takeIf { (it.getOrNull(1) as? JsonPrimitive)?.contentOrNull == "span" }
-        ?.let { it.getOrNull(3) as? JsonObject }
-        ?.get("children")
-        ?.let { it as? JsonPrimitive }
-        ?.contentOrNull
-
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.memo["seriesId"]!!.string}/episodes/${chapter.url}/"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val content = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<EpisodeContent>()
-            ?: throw Exception("Log in via WebView and purchase this chapter to read.")
+            ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
 
         val seed = "${content.seriesId}:${content.number}".sumOf { it.code }
         return content.pageList.mapIndexed { i, page ->
