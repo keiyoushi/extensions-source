@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.holotoon
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,14 +10,9 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -83,9 +77,13 @@ abstract class Holotoon : KeiSource() {
         val seen = hashSetOf<String>()
 
         val mangas = container.select("a.group[href^='/comic/']").mapNotNull { card ->
-            val path = card.attr("href").substringBefore('#').substringBefore('?')
+            val pathSegments = baseUrl.toHttpUrl().resolve(card.attr("href"))?.pathSegments.orEmpty()
+            if (pathSegments.getOrNull(0) != "comic" || pathSegments.getOrNull(1).isNullOrBlank()) {
+                return@mapNotNull null
+            }
+            val path = "/" + pathSegments.filter(String::isNotBlank).joinToString("/")
             val title = card.selectFirst("h3")?.text()?.trim().orEmpty()
-            if (path.isBlank() || title.isBlank() || !seen.add(path)) return@mapNotNull null
+            if (title.isBlank() || !seen.add(path)) return@mapNotNull null
 
             SManga.create().apply {
                 this.title = title
@@ -110,8 +108,8 @@ abstract class Holotoon : KeiSource() {
         val document = client.get("$baseUrl$path").asJsoup()
 
         return SMangaUpdate(
-            manga = if (fetchDetails) parseDetails(document, path) else manga,
-            chapters = if (fetchChapters) parseChapters(document) else chapters,
+            manga = parseDetails(document, path),
+            chapters = parseChapters(document),
         )
     }
 
@@ -286,68 +284,25 @@ abstract class Holotoon : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement {
         val document = client.get("$baseUrl/browse").asJsoup()
-        return buildJsonArray {
-            document.select("select[name=genre] option").forEach { option ->
-                val value = option.attr("value").trim()
-                val name = option.text().trim()
-                if (value.isNotBlank() && name.isNotBlank()) {
-                    add(
-                        buildJsonObject {
-                            put("name", name)
-                            put("value", value)
-                        },
-                    )
-                }
-            }
-        }
+        return document.select("select[name=genre] option").mapNotNull { option ->
+            val value = option.attr("value").trim()
+            val name = option.text().trim()
+            if (value.isBlank() || name.isBlank()) return@mapNotNull null
+            name to value
+        }.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.jsonArray.orEmpty().mapNotNull { entry ->
-            val obj = entry as? JsonObject ?: return@mapNotNull null
-            val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            val value = obj["value"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            name to value
-        }
+        val genres = data?.parseAs<List<Pair<String, String>>>().orEmpty()
 
         return FilterList(
-            SortFilter(),
-            TypeFilter(),
-            StatusFilter(),
-            GenreFilter(genres),
+            buildList {
+                add(SortFilter())
+                add(TypeFilter())
+                add(StatusFilter())
+                if (genres.isNotEmpty()) add(GenreFilter(genres))
+            },
         )
-    }
-
-    private class SortFilter :
-        Filter.Select<String>(
-            "Urutkan",
-            arrayOf("Terbaru", "Populer", "Rating", "A-Z"),
-        ) {
-        val value get() = arrayOf("latest", "popular", "rating", "az")[state]
-    }
-
-    private class TypeFilter :
-        Filter.Select<String>(
-            "Tipe",
-            arrayOf("Semua", "Manga", "Manhwa", "Manhua", "Comic", "Webtoon"),
-        ) {
-        val value get() = arrayOf("", "manga", "manhwa", "manhua", "comic", "webtoon")[state]
-    }
-
-    private class StatusFilter :
-        Filter.Select<String>(
-            "Status",
-            arrayOf("Semua", "Ongoing", "Completed", "Hiatus"),
-        ) {
-        val value get() = arrayOf("", "ongoing", "completed", "hiatus")[state]
-    }
-
-    private class GenreFilter(private val genres: List<Pair<String, String>>) :
-        Filter.Select<String>(
-            "Genre",
-            (listOf("Semua") + genres.map { it.first }).toTypedArray(),
-        ) {
-        val value get() = if (state == 0) "" else genres[state - 1].second
     }
 
     companion object {
