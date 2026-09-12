@@ -15,8 +15,3 @@ keiyoushi {
         baseUrl = "https://novema.jp"
     }
 }
-
-dependencies {
-
-    implementation(project(":lib:seedrandom"))
-}

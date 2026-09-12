@@ -15,8 +15,3 @@ keiyoushi {
         baseUrl = "https://piccoma.com"
     }
 }
-
-dependencies {
-
-    implementation(project(":lib:seedrandom"))
-}
