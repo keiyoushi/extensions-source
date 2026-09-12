@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "LustToon"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl = "https://lustoon.com"
+    }
+
+    deeplink {
+        path("/comic/..*")
     }
 }
