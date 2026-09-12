@@ -92,6 +92,10 @@ abstract class Pam :
             val document = client.newCall(GET(baseHttpUrl, headers)).execute()
                 .also {
                     if (!it.isSuccessful) {
+                        if (it.code == 403 || it.code == 503) {
+                            it.close()
+                            throw Exception("Solve captcha in WebView and retry")
+                        }
                         it.close()
                         throw Exception("HTTP Error ${it.code}")
                     }
@@ -129,6 +133,43 @@ abstract class Pam :
         } else {
             GET(url, headers)
         }
+    }
+
+    private fun ensureSuccess(response: Response) {
+        if (response.isSuccessful) return
+        response.close()
+        if (response.code == 403 || response.code == 503) {
+            throw Exception("Solve captcha in WebView and retry")
+        }
+        throw IOException("HTTP ${response.code}")
+    }
+
+    private inline fun <T> withVersionRetry(
+        response: Response,
+        includeXSRFToken: Boolean,
+        includeCSRFToken: Boolean,
+        includeVersion: Boolean,
+        parse: (Response) -> T,
+    ): T {
+        if (response.code == 409 && includeVersion) {
+            synchronized(this) {
+                version = null
+                csrfToken = null
+            }
+            response.close()
+            val retry = apiRequest(
+                response.request.url,
+                includeXSRFToken = includeXSRFToken,
+                includeCSRFToken = includeCSRFToken,
+                includeVersion = includeVersion,
+            )
+            client.newCall(retry).execute().use { fresh ->
+                ensureSuccess(fresh)
+                return parse(fresh)
+            }
+        }
+        ensureSuccess(response)
+        return parse(response)
     }
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", popularFilters)
@@ -199,14 +240,18 @@ abstract class Pam :
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.queryParameter("q") != null) {
-            val data = response.parseAs<SearchResponse>().data
+            val data = withVersionRetry(response, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false) {
+                it.parseAs<SearchResponse>().data
+            }
 
             return MangasPage(
                 mangas = data.map { it.toSManga(::createThumbnailUrl) },
                 hasNextPage = false,
             )
         } else {
-            val data = response.parseAs<LibraryResponse>().series
+            val data = withVersionRetry(response, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false) {
+                it.parseAs<LibraryResponse>().series
+            }
 
             return MangasPage(
                 mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
@@ -229,7 +274,9 @@ abstract class Pam :
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.parseAs<MangaResponse>().props.serie
+        val data = withVersionRetry(response, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true) {
+            it.parseAs<MangaResponse>().props.serie
+        }
 
         return SManga.create().apply {
             url = data.slug
@@ -270,7 +317,9 @@ abstract class Pam :
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<MangaResponse>().props.serie
+        val data = withVersionRetry(response, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true) {
+            it.parseAs<MangaResponse>().props.serie
+        }
         val hidePremium = preferences.getBoolean(HIDE_PREMIUM_PREF, false)
 
         return data.chapters
@@ -361,10 +410,9 @@ abstract class Pam :
                 includeVersion = true,
             )
             val props = client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    throw IOException("Could not rebuild chapter session: HTTP ${resp.code}")
+                withVersionRetry(resp, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true) {
+                    it.parseAs<PageListResponse>().props
                 }
-                resp.parseAs<PageListResponse>().props
             }
 
             val sess = handshakeFrom(props)
@@ -374,7 +422,9 @@ abstract class Pam :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val props = response.parseAs<PageListResponse>().props
+        val props = withVersionRetry(response, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true) {
+            it.parseAs<PageListResponse>().props
+        }
         val sess = handshakeFrom(props)
         val id = sessionKey(props.data.serie.slug, props.data.slug)
         sessions[id] = sess
