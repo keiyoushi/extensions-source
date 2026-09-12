@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.nexusscanlation
 
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -24,23 +25,20 @@ import kotlin.time.Instant
 
 @Source
 abstract class Nexusscanlation : KeiSource() {
-    private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
-
     private val apiBaseUrl = "https://api.nexusscanlation.com/api/v1"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(ImageInterceptor())
-        .rateLimit(1, 3.seconds) { it.host == apiBaseUrlHost } // API: max 1 request per 3 seconds
+        .rateLimit(1, 3.seconds) { it.host == "api.nexusscanlation.com" } // API: max 1 request per 3 seconds
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept-Language", "es-419,es;q=0.9,es-ES;q=0.8")
 
-    private val apiHeaders by lazy {
-        headers.newBuilder()
+    private val apiHeaders: Headers
+        get() = headers.newBuilder()
             .add("Accept", "application/json, text/plain, */*")
             .add("sec-fetch-dest", "empty")
             .add("sec-fetch-mode", "cors")
             .add("sec-fetch-site", "same-site")
             .build()
-    }
 
     // ======================= Manga URLs ===================================
 
@@ -67,10 +65,6 @@ abstract class Nexusscanlation : KeiSource() {
     // ======================= Latest =======================================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page > 1) {
-            return MangasPage(emptyList(), false)
-        }
-
         val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addPathSegment("public")
             .addPathSegment("landing")
@@ -137,16 +131,20 @@ abstract class Nexusscanlation : KeiSource() {
     override suspend fun fetchFilterData(): JsonElement = client.get("$apiBaseUrl/catalog/genres?has_series=true", apiHeaders).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.runCatching {
-            parseAs<GenresResponseDto>().data.orEmpty().map { it.nombre to it.slug }
-        }?.getOrNull()?.takeIf { it.isNotEmpty() }?.let { listOf("Todos" to "") + it } ?: DEFAULT_GENRES
-
-        return FilterList(
+        val filters = mutableListOf<Filter<*>>(
             SortFilter(),
             StatusFilter(),
             TypeFilter(),
-            GenreFilter(genres),
         )
+
+        val genres = data?.parseAs<GenresResponseDto>()?.data.orEmpty()
+            .map { it.nombre to it.slug }
+
+        if (genres.isNotEmpty()) {
+            filters.add(GenreFilter(listOf("Todos" to "") + genres))
+        }
+
+        return FilterList(filters)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
