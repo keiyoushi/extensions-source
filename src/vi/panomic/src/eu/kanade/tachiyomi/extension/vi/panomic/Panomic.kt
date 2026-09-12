@@ -1,5 +1,12 @@
 package eu.kanade.tachiyomi.extension.vi.panomic
 
+import android.app.Activity
+import android.app.AlertDialog
+import android.app.Application
+import android.os.Bundle
+import android.text.InputType
+import android.widget.EditText
+import android.widget.FrameLayout
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -7,14 +14,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -26,6 +40,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.lang.ref.WeakReference
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -33,7 +48,45 @@ import java.util.Locale
 
 @Source
 abstract class Panomic : KeiSource() {
+    private var currentActivity: WeakReference<Activity>? = null
+
+    init {
+        try {
+            applicationContext.registerActivityLifecycleCallbacks(
+                object : Application.ActivityLifecycleCallbacks {
+                    override fun onActivityResumed(a: Activity) {
+                        currentActivity = WeakReference(a)
+                    }
+
+                    override fun onActivityPaused(a: Activity) {
+                        if (currentActivity?.get() === a) currentActivity = null
+                    }
+
+                    override fun onActivityDestroyed(a: Activity) {
+                        if (currentActivity?.get() === a) currentActivity = null
+                    }
+
+                    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+                    override fun onActivityStarted(activity: Activity) = Unit
+                    override fun onActivityStopped(activity: Activity) = Unit
+                    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+                },
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+    private val preferences by getPreferencesLazy()
+
+    private var currentPasscodeToken: String
+        get() = preferences.getString("pref_passcode_token", "0d9678e234bc5f4234834a559f1c0157b3d933222d4b147ae2d6e1ac58a1dae0")
+            ?: "0d9678e234bc5f4234834a559f1c0157b3d933222d4b147ae2d6e1ac58a1dae0"
+        set(value) = preferences.edit().putString("pref_passcode_token", value).apply()
+
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
+        .addCookie {
+            listOf("a3_site_passcode_token" to currentPasscodeToken)
+        }
 
     private fun Element.lazyImgUrl(): String? = absUrl("data-lazy-src")
         .ifEmpty { absUrl("data-src") }
@@ -256,23 +309,117 @@ abstract class Panomic : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val imageUrls = client.get("$baseUrl${chapter.url}").use { response ->
-            val html = response.body.string()
-            val loginButton = Jsoup.parse(html).selectFirst(
-                "button.v-btn.v-big-btn[data-toggle=modal][data-target='#info-modal']",
-            )
-            if (loginButton?.text() == "Đăng nhập") {
-                throw Exception("Đăng nhập webview bằng tài khoản phù hợp để xem chương này")
-            }
+        val chapterUrl = "$baseUrl${chapter.url}"
+        var html = client.get(chapterUrl).body.string()
 
-            ImageDecryptor.extractImageUrls(
-                html,
-                response.request.url.toString(),
-            )
+        val loginButton = Jsoup.parse(html).selectFirst(
+            "button.v-btn.v-big-btn[data-toggle=modal][data-target='#info-modal']",
+        )
+        if (loginButton?.text() == "Đăng nhập") {
+            throw Exception("Đăng nhập webview bằng tài khoản phù hợp để xem chương này")
         }
 
+        if ("entered_secret_code" in html) {
+            val document = Jsoup.parse(html, chapterUrl)
+            val hint = document.selectFirst(".gate-box p")?.text()
+            val password = promptForPassword(chapter.name, hint)
+
+            val lockForm = document.selectFirst("form:has(input[name=entered_secret_code])")
+            val postAction = lockForm?.absUrl("action")?.ifEmpty { chapterUrl } ?: chapterUrl
+
+            val formBody = FormBody.Builder()
+                .add("entered_secret_code", password)
+                .add("submit_secret_code", "")
+                .build()
+
+            val postHeaders = headers.newBuilder()
+                .set("Referer", chapterUrl)
+                .build()
+
+            val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
+            val postHtml = postResponse.body.string()
+
+            val setCookieHeaders = postResponse.headers("Set-Cookie") +
+                (postResponse.priorResponse?.headers("Set-Cookie") ?: emptyList())
+            setCookieHeaders.firstNotNullOfOrNull { header ->
+                passcodeCookieRegex.find(header)?.groupValues?.get(1)
+            }?.let { newToken ->
+                currentPasscodeToken = newToken
+            }
+
+            html = if (postResponse.isSuccessful && !postHtml.contains("entered_secret_code")) {
+                postHtml
+            } else {
+                client.get(chapterUrl).body.string()
+            }
+
+            if ("entered_secret_code" in html) {
+                throw Exception("Mật khẩu không chính xác")
+            }
+        }
+
+        val imageUrls = ImageDecryptor.extractImageUrls(html, chapterUrl)
         return imageUrls.distinct().mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    private suspend fun promptForPassword(chapterTitle: String, hintText: String? = null): String {
+        val activity = currentActivity?.get()
+            ?: throw Exception("Mở chương trong WebView để nhập mã bí mật")
+
+        val deferred = CompletableDeferred<String>()
+        var dialog: AlertDialog? = null
+
+        try {
+            withContext(Dispatchers.Main.immediate) {
+                val input = EditText(activity).apply {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    hint = "Mã bí mật"
+                }
+                val container = FrameLayout(activity).apply {
+                    val pad = (16 * resources.displayMetrics.density).toInt()
+                    setPadding(pad, pad / 2, pad, 0)
+                    addView(input)
+                }
+
+                val message = if (!hintText.isNullOrBlank()) {
+                    "Chương này yêu cầu mã bí mật\n\n$hintText"
+                } else {
+                    "Chương này yêu cầu mã bí mật"
+                }
+
+                dialog = AlertDialog.Builder(activity)
+                    .setTitle(chapterTitle)
+                    .setMessage(message)
+                    .setView(container)
+                    .setPositiveButton("Mở khóa") { _, _ ->
+                        val text = input.text.toString().trim()
+                        if (text.isNotBlank()) {
+                            deferred.complete(text)
+                        } else {
+                            deferred.completeExceptionally(Exception("Mã bí mật không được để trống"))
+                        }
+                    }
+                    .setNegativeButton("Hủy") { _, _ ->
+                        deferred.completeExceptionally(Exception("Đã hủy nhập mã bí mật"))
+                    }
+                    .setOnCancelListener {
+                        deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
+                    }
+                    .setOnDismissListener {
+                        if (!deferred.isCompleted) {
+                            deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
+                        }
+                    }
+                    .show()
+            }
+
+            return deferred.await()
+        } finally {
+            withContext(NonCancellable + Dispatchers.Main.immediate) {
+                dialog?.takeIf { it.isShowing }?.dismiss()
+            }
         }
     }
 
@@ -346,4 +493,5 @@ abstract class Panomic : KeiSource() {
     private val chapterNameRegex = Regex("Chap\\s*\\d+(\\.\\d+)?", RegexOption.IGNORE_CASE)
     private val chapterUrlNumberRegex = Regex("-chap-(\\d+(?:\\.\\d+)?)/?", RegexOption.IGNORE_CASE)
     private val thumb150Regex = Regex("-150x150(\\.[a-zA-Z0-9]+)$")
+    private val passcodeCookieRegex = Regex("""a3_site_passcode_token=([a-fA-F0-9]+)""")
 }
