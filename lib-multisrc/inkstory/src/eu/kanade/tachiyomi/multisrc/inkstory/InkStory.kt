@@ -63,16 +63,15 @@ abstract class InkStory :
 
     // ============================== Interceptors ===============================
     private fun imageDecryptInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (detectImageCodec(request.url.toString()) != ImageCodec.XOR) {
-            return chain.proceed(request)
-        }
-
-        val response = chain.proceed(request)
+        val response = chain.proceed(chain.request())
         if (!response.isSuccessful) return response
 
         val contentType = response.body.contentType()
         if (contentType?.subtype == "json") {
+            return response
+        }
+
+        if (detectImageCodec(response.request.url.toString()) != ImageCodec.XOR) {
             return response
         }
 
