@@ -57,14 +57,18 @@ abstract class AcervoEremita : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host || !url.pathSegments.contains(mangaSubString)) {
             return null
         }
-        return parseSManga(client.get(url).asJsoup())
+        return parseSManga(client.get(url).asJsoup()).apply {
+            initialized = true
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/$mangaSubString/${chapter.memo["slug"]!!.string}/read?chapter=${chapter.chapter_number}&page=1"
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
-        val manga = parseSManga(document)
+        val manga = when {
+            fetchDetails -> parseSManga(client.get(getMangaUrl(manga)).asJsoup())
+            else -> manga
+        }
 
         val chapterList: List<SChapter> = when {
             fetchChapters -> fetchChaptersList(manga)
