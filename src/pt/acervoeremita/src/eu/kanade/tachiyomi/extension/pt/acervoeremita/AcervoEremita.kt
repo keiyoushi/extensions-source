@@ -54,7 +54,7 @@ abstract class AcervoEremita : KeiSource() {
         .build().toString()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (!baseUrl.toHttpUrl().host.equals(url.host, ignoreCase = true) || !url.pathSegments.contains(mangaSubString)) {
+        if (url.host != baseUrl.toHttpUrl().host || !url.pathSegments.contains(mangaSubString)) {
             return null
         }
         return parseSManga(client.get(url).asJsoup())
