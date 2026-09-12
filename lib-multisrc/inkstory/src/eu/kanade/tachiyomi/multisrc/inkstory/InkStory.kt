@@ -24,7 +24,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
@@ -108,7 +108,7 @@ abstract class InkStory :
             payload[i] = (payload[i].toInt() xor SECRET_KEY_BYTES[i % SECRET_KEY_BYTES.size].toInt()).toByte()
         }
 
-        val mediaType = detectedType.toMediaTypeOrNull() ?: contentType
+        val mediaType = detectedType.toMediaType()
         return response.newBuilder()
             .body(payload.toResponseBody(mediaType))
             .build()
@@ -133,6 +133,12 @@ abstract class InkStory :
             payload[8] == 0x57.toByte() && payload[9] == 0x45.toByte() &&
             payload[10] == 0x42.toByte() && payload[11] == 0x50.toByte()
         if (isWebp) return "image/webp"
+
+        val isAvif = payload[4] == 0x66.toByte() && payload[5] == 0x74.toByte() &&
+            payload[6] == 0x79.toByte() && payload[7] == 0x70.toByte() &&
+            payload[8] == 0x61.toByte() && payload[9] == 0x76.toByte() &&
+            payload[10] == 0x69.toByte()
+        if (isAvif) return "image/avif"
 
         return null
     }
