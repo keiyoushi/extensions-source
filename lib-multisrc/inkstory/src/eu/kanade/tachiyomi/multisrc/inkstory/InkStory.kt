@@ -87,7 +87,7 @@ abstract class InkStory :
 
         // Peek the first bytes without consuming from buffer
         val peek = buffer.peek().readByteArray(MIN_IMAGE_SIGNATURE_SIZE.toLong())
-        if (looksLikeImage(peek)) {
+        if (looksLikeImage(peek) != null) {
             return response.newBuilder()
                 .body(buffer.asResponseBody(contentType, buffer.size))
                 .build()
@@ -97,43 +97,44 @@ abstract class InkStory :
         val decryptedHeader = ByteArray(MIN_IMAGE_SIGNATURE_SIZE) { index ->
             (peek[index].toInt() xor SECRET_KEY_BYTES[index % SECRET_KEY_BYTES.size].toInt()).toByte()
         }
-        if (!looksLikeImage(decryptedHeader)) {
-            return response.newBuilder()
+
+        val detectedType = looksLikeImage(decryptedHeader)
+            ?: return response.newBuilder()
                 .body(buffer.asResponseBody(contentType, buffer.size))
                 .build()
-        }
 
         val payload = buffer.readByteArray()
         for (i in payload.indices) {
             payload[i] = (payload[i].toInt() xor SECRET_KEY_BYTES[i % SECRET_KEY_BYTES.size].toInt()).toByte()
         }
 
-        val mediaType = contentType ?: "image/jpeg".toMediaTypeOrNull()
+        val mediaType = detectedType.toMediaTypeOrNull() ?: contentType
         return response.newBuilder()
             .body(payload.toResponseBody(mediaType))
             .build()
     }
 
-    private fun looksLikeImage(payload: ByteArray): Boolean {
-        if (payload.size < MIN_IMAGE_SIGNATURE_SIZE) return false
+    private fun looksLikeImage(payload: ByteArray): String? {
+        if (payload.size < MIN_IMAGE_SIGNATURE_SIZE) return null
 
         val isJpeg = payload[0] == 0xFF.toByte() && payload[1] == 0xD8.toByte() && payload[2] == 0xFF.toByte()
-        if (isJpeg) return true
+        if (isJpeg) return "image/jpeg"
 
         val isPng = payload[0] == 0x89.toByte() && payload[1] == 0x50.toByte() &&
             payload[2] == 0x4E.toByte() && payload[3] == 0x47.toByte()
-        if (isPng) return true
+        if (isPng) return "image/png"
 
         val isGif = payload[0] == 0x47.toByte() && payload[1] == 0x49.toByte() &&
             payload[2] == 0x46.toByte() && payload[3] == 0x38.toByte()
-        if (isGif) return true
+        if (isGif) return "image/gif"
 
         val isWebp = payload[0] == 0x52.toByte() && payload[1] == 0x49.toByte() &&
             payload[2] == 0x46.toByte() && payload[3] == 0x46.toByte() &&
             payload[8] == 0x57.toByte() && payload[9] == 0x45.toByte() &&
             payload[10] == 0x42.toByte() && payload[11] == 0x50.toByte()
+        if (isWebp) return "image/webp"
 
-        return isWebp
+        return null
     }
 
     // ============================== Popular ===============================
