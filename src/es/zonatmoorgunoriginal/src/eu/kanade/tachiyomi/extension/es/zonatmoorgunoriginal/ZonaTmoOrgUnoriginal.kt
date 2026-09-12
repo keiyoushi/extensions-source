@@ -181,10 +181,10 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String =
-        manga.canonicalMangaUrl()
-            ?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
-            ?: super.getMangaUrl(manga)
+    override fun getMangaUrl(manga: SManga): String = manga
+        .canonicalMangaUrl()
+        ?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
+        ?: super.getMangaUrl(manga)
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -201,37 +201,34 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 ).toCanonicalMangaUrl()
         val document = client.get(baseUrl.toHttpUrl().resolve(canonicalUrl)!!).asJsoup()
         return SMangaUpdate(
-            manga = parseMangaDetails(document).apply {
-                url = manga.url
-                memo = manga.memo.withCanonicalMangaUrl(canonicalUrl)
-            },
+            manga =
+                parseMangaDetails(document).apply {
+                    url = manga.url
+                    memo = manga.memo.withCanonicalMangaUrl(canonicalUrl)
+                },
             chapters = parseChapterList(document),
         )
     }
 
-    private fun SManga.canonicalMangaUrl(): String? =
-        (memo[MANGA_URL_KEY] as? JsonPrimitive)
-            ?.content
-            ?.takeIf { it.startsWith("/library/") }
-            ?: url.takeIf { it.startsWith("/library/") }
+    private fun SManga.canonicalMangaUrl(): String? = (memo[MANGA_URL_KEY] as? JsonPrimitive)
+        ?.content
+        ?.takeIf { it.startsWith("/library/") }
+        ?: url.takeIf { it.startsWith("/library/") }
 
-    private fun JsonObject.withCanonicalMangaUrl(url: String): JsonObject =
-        JsonObject(this + (MANGA_URL_KEY to JsonPrimitive(url)))
+    private fun JsonObject.withCanonicalMangaUrl(url: String): JsonObject = JsonObject(this + (MANGA_URL_KEY to JsonPrimitive(url)))
 
-    private fun String.toCanonicalMangaUrl(): String =
-        baseUrl
-            .toHttpUrl()
-            .resolve(this)
-            ?.encodedPath
-            ?.takeIf { it.startsWith("/library/") }
-            ?: throw Exception("URL de manga no soportada")
+    private fun String.toCanonicalMangaUrl(): String = baseUrl
+        .toHttpUrl()
+        .resolve(this)
+        ?.encodedPath
+        ?.takeIf { it.startsWith("/library/") }
+        ?: throw Exception("URL de manga no soportada")
 
-    private fun String.mangaType(): String? =
-        baseUrl
-            .toHttpUrl()
-            .resolve(this)
-            ?.pathSegments
-            ?.getOrNull(1)
+    private fun String.mangaType(): String? = baseUrl
+        .toHttpUrl()
+        .resolve(this)
+        ?.pathSegments
+        ?.getOrNull(1)
 
     private fun parseMangaDetails(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.element-title")!!.text()
