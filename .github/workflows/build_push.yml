@@ -21,6 +21,7 @@ concurrency:
 env:
   CI_CHUNK_SIZE: 80
   IS_PR_CHECK: false
+  KEI_CI: true
 
 jobs:
   prepare:
@@ -72,16 +73,13 @@ jobs:
         with:
           cache-read-only: ${{ matrix.chunk.number > 1 }}
 
-      - name: Prepare signing key
-        run: |
-          echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
-
       - name: Build extensions (${{ matrix.chunk.number }})
         env:
           MODULES: ${{ join(matrix.chunk.modules, ' ') }}
-          ALIAS: ${{ secrets.ALIAS }}
-          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          storeFileBase64: ${{ secrets.SIGNING_KEY }}
+          storePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyAlias: ${{ secrets.ALIAS }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
         run: |
           TASKS=()
           for module in $MODULES; do
@@ -99,10 +97,6 @@ jobs:
             **/build/outputs/jar/release/*.jar
             **/build/keiyoushi-source-info.json
           retention-days: 1
-
-      - name: Clean up CI files
-        if: always()
-        run: rm signingkey.jks
 
   publish:
     name: Publish extension repo
