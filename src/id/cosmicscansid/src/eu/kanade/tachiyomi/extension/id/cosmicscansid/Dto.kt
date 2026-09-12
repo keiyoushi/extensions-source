@@ -3,15 +3,12 @@ package eu.kanade.tachiyomi.extension.id.cosmicscansid
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
-    .apply { timeZone = TimeZone.getTimeZone("UTC") }
+import kotlin.time.Instant
 
 @Serializable
 class MangaListResponse(
@@ -53,6 +50,7 @@ class MangaDto(
             "ongoing" -> SManga.ONGOING
             "completed", "complete" -> SManga.COMPLETED
             "hiatus", "on hiatus", "on-hold", "on hold" -> SManga.ON_HIATUS
+            "dropped" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
         description = this@MangaDto.type?.let { "Type: $it" }
@@ -73,9 +71,10 @@ class MangaDetailDto(
     private val status: String? = null,
     val chapters: List<ChapterDto>? = null,
 ) {
-    fun toSMangaDetails(): SManga = SManga.create().apply {
+    fun toSMangaDetails(defaultSlug: String = ""): SManga = SManga.create().apply {
+        val s = this@MangaDetailDto.slug?.takeIf { it.isNotBlank() } ?: defaultSlug
         title = this@MangaDetailDto.title.orEmpty()
-        url = "/series/${this@MangaDetailDto.slug.orEmpty()}"
+        url = "/series/$s"
         thumbnail_url = this@MangaDetailDto.cover
         description = listOfNotNull(
             this@MangaDetailDto.sinopsis,
@@ -88,6 +87,7 @@ class MangaDetailDto(
             "ongoing" -> SManga.ONGOING
             "completed", "complete" -> SManga.COMPLETED
             "hiatus", "on hiatus", "on-hold", "on hold" -> SManga.ON_HIATUS
+            "dropped" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
         initialized = true
@@ -105,7 +105,7 @@ class ChapterDto(
         name = "Chapter ${this@ChapterDto.chapterNum.orEmpty()}".trim()
         url = "/chapter/${this@ChapterDto.slug.orEmpty()}"
         chapter_number = this@ChapterDto.chapterNum?.toFloatOrNull() ?: -1f
-        date_upload = runCatching { dateFormat.parse(this@ChapterDto.time ?: "")?.time }.getOrNull() ?: 0L
+        date_upload = Instant.tryParse(this@ChapterDto.time)
     }
 }
 
@@ -114,10 +114,10 @@ class ReadingPageDto(
     private val chapters: List<String>? = null,
     @SerialName("redirect_link") val redirectLink: String? = null,
 ) {
-    fun toPageList(): List<Page> = chapters.orEmpty()
+    fun toPageList(chapterUrl: String = ""): List<Page> = chapters.orEmpty()
         .mapNotNull { html ->
             Jsoup.parse(html).selectFirst("img")?.attr("src")
                 ?.takeIf { it.isNotBlank() }
         }
-        .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+        .mapIndexed { index, imageUrl -> Page(index, chapterUrl, imageUrl = imageUrl) }
 }
