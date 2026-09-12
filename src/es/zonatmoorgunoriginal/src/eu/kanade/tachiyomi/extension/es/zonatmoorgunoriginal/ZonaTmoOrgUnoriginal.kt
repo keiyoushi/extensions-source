@@ -202,10 +202,10 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         val document = client.get(baseUrl.toHttpUrl().resolve(canonicalUrl)!!).asJsoup()
         return SMangaUpdate(
             manga =
-                parseMangaDetails(document).apply {
-                    url = manga.url
-                    memo = manga.memo.withCanonicalMangaUrl(canonicalUrl)
-                },
+            parseMangaDetails(document).apply {
+                url = manga.url
+                memo = manga.memo.withCanonicalMangaUrl(canonicalUrl)
+            },
             chapters = parseChapterList(document),
         )
     }
