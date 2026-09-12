@@ -22,6 +22,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 import java.time.LocalDate
 import java.time.ZoneId
@@ -35,6 +36,8 @@ abstract class JumpToon : KeiSource() {
 
     private val dayOfWeek: String
         get() = LocalDate.now(ZoneId.of("Asia/Tokyo")).dayOfWeek.name.lowercase(Locale.US)
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val cards = client.get("$baseUrl/series/ranking/overall/", rscHeaders).extractNextJs<List<JsonElement>> { element ->
@@ -126,6 +129,12 @@ abstract class JumpToon : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.memo["seriesId"]!!.string}/episodes/${chapter.url}/"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        TODO()
+        val content = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<EpisodeContent>()
+            ?: throw Exception("Log in via WebView and purchase this chapter to read.")
+
+        val seed = "${content.seriesId}:${content.number}".sumOf { it.code }
+        return content.pageList.mapIndexed { i, page ->
+            Page(i, imageUrl = "${page.imageUrl}#${content.scrambleAlgorithmType}:$seed:${page.width}")
+        }
     }
 }

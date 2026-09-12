@@ -97,3 +97,17 @@ class Episode(
         }
     }
 }
+
+@Serializable
+class EpisodeContent(
+    val seriesId: String,
+    val number: String,
+    val scrambleAlgorithmType: String,
+    val pageList: List<ContentPage>,
+)
+
+@Serializable
+class ContentPage(
+    val width: String,
+    val imageUrl: String,
+)
