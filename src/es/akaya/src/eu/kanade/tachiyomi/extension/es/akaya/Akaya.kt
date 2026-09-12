@@ -1,230 +1,683 @@
 package eu.kanade.tachiyomi.extension.es.akaya
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import okhttp3.FormBody
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
+import okhttp3.OkHttpClient
 import okhttp3.Response
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class Akaya : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+abstract class Akaya : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
+        val request = chain.request()
 
-    override val supportsLatest = true
-
-    @Volatile
-    private var csrfToken: String = ""
-
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            if (!request.url.toString().startsWith("$baseUrl/serie")) return@addInterceptor chain.proceed(request)
-            val response = chain.proceed(request)
-            if (response.request.url.toString().removeSuffix("/") == baseUrl) {
-                response.close()
-                throw IOException("Esta serie no se encuentra disponible")
-            }
-            response
+        if (!request.url.toString().startsWith("$baseUrl/serie")) {
+            return@addInterceptor chain.proceed(request)
         }
-        .addInterceptor { chain ->
-            val request = chain.request()
-            if (!request.url.toString().startsWith("$baseUrl/search")) return@addInterceptor chain.proceed(request)
-            val query = request.url.fragment ?: return@addInterceptor chain.proceed(request)
-            if (csrfToken.isEmpty()) getCsrftoken()
-            var response = chain.proceed(addFormBody(request, query))
-            if (response.code == 419) {
-                response.close()
-                getCsrftoken()
-                response = chain.proceed(addFormBody(request, query))
-            }
-            response
+
+        val response = chain.proceed(request)
+
+        if (response.request.url.toString().removeSuffix("/") == baseUrl) {
+            response.close()
+            throw IOException("Esta serie no se encuentra disponible")
         }
-        .rateLimit(1, 1.seconds) { it.host == baseUrlHost }
-        .build()
 
-    private fun getCsrftoken() {
-        val response = client.newCall(GET(baseUrl, headers)).execute()
-        csrfToken = response.asJsoup().selectFirst("meta[name=csrf-token]")?.attr("content") ?: ""
-    }
+        response
+    }.rateLimit(1, 1.seconds)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
+        client.get(
+            "$baseUrl/collection/bd90cb43-9bf2-4759-b8cc-c9e66a526bc6?page=$page",
+        ),
+    )
 
-    private fun addFormBody(request: Request, query: String): Request {
-        val body = FormBody.Builder()
-            .add("_token", csrfToken)
-            .add("search", query)
-            .build()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(
+        client.get("$baseUrl/explorer/all?page=$page"),
+    )
 
-        return request.newBuilder()
-            .url(request.url.toString().substringBefore("#"))
-            .post(body)
-            .build()
-    }
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/collection/bd90cb43-9bf2-4759-b8cc-c9e66a526bc6?page=$page", headers)
-
-    override fun popularMangaParse(response: Response) = parseMangaList(response)
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/collection/0031a504-706c-4666-9782-a4ae30cad973?page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response) = parseMangaList(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): MangasPage {
         if (query.isNotEmpty()) {
-            return POST("$baseUrl/search#$query", headers)
+            return parseLivewireMangaList(
+                livewireSearch(query),
+            )
         }
 
-        val url = baseUrl.toHttpUrl().newBuilder()
-        val order = filters.firstInstanceOrNull<OrderFilter>()?.toUriPart() ?: "genres"
-        val genres = filters.firstInstanceOrNull<GenreFilter>()?.state
+        val selectedGenres = filters
+            .filterIsInstance<GenreFilter>()
+            .firstOrNull()
+            ?.state
             ?.filter { it.state }
-            ?.map { it.id }
-            ?: emptyList()
+            .orEmpty()
 
-        url.addPathSegment(order)
-        if (genres.isNotEmpty()) {
-            url.addPathSegment(genres.joinToString(",", "[", "]"))
+        if (selectedGenres.isNotEmpty()) {
+            return parseLivewireMangaList(
+                livewireGenreSearch(
+                    genres = selectedGenres,
+                    page = page,
+                ),
+            )
         }
 
-        url.addQueryParameter("page", page.toString())
-
-        return GET(url.build(), headers)
+        return parseMangaList(
+            client.get("$baseUrl/explorer/all?page=$page"),
+        )
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (!response.request.url.toString().contains("/search")) {
+    private suspend fun livewireSearch(query: String): Response {
+        val homeDocument = client
+            .get(baseUrl)
+            .asJsoup()
+
+        val component = homeDocument
+            .select("*")
+            .firstOrNull { element ->
+                element.attr("wire:name") == "home.input-search"
+            }
+            ?: throw IOException("No se encontró el buscador de Akaya")
+
+        val snapshot = component.attr("wire:snapshot")
+
+        if (snapshot.isBlank()) {
+            throw IOException("El buscador no tiene snapshot Livewire")
+        }
+
+        val token = homeDocument
+            .selectFirst("meta[name=csrf-token]")
+            ?.attr("content")
+            .orEmpty()
+
+        val payload = buildJsonObject {
+            put("_token", token)
+
+            putJsonArray("components") {
+                add(
+                    buildJsonObject {
+                        put("snapshot", snapshot)
+
+                        putJsonObject("updates") {
+                            put("search", query)
+                        }
+
+                        putJsonArray("calls") {
+                            add(
+                                buildJsonObject {
+                                    put("method", "\$commit")
+                                    putJsonArray("params") {}
+
+                                    putJsonObject("metadata") {
+                                        put("type", "model.live")
+                                    }
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+        }
+
+        val requestHeaders = headersBuilder()
+            .set("Accept", "application/json")
+            .set("X-Livewire", "1")
+            .set("Origin", baseUrl)
+            .set("Referer", "$baseUrl/")
+            .build()
+
+        return client.post(
+            "$baseUrl/livewire-c4e82cae/update",
+            requestHeaders,
+            payload.toJsonRequestBody(),
+        )
+    }
+
+    private suspend fun livewireGenreSearch(
+        genres: List<Genre>,
+        page: Int,
+    ): Response {
+        val explorerUrl = "$baseUrl/explorer/all?page=$page"
+
+        val explorerDocument = client
+            .get(explorerUrl)
+            .asJsoup()
+
+        val component = explorerDocument
+            .select("[wire:snapshot]")
+            .firstOrNull { element ->
+                val content = element.outerHtml()
+
+                content.contains("toggleGenres") ||
+                    content.contains("Acción", ignoreCase = true)
+            }
+            ?: throw IOException("No se encontró el filtro de géneros de Akaya")
+
+        val snapshot = component.attr("wire:snapshot")
+
+        if (snapshot.isBlank()) {
+            throw IOException("El filtro de géneros no tiene snapshot Livewire")
+        }
+
+        val token = explorerDocument
+            .selectFirst("meta[name=csrf-token]")
+            ?.attr("content")
+            .orEmpty()
+
+        val payload = buildJsonObject {
+            put("_token", token)
+
+            putJsonArray("components") {
+                add(
+                    buildJsonObject {
+                        put("snapshot", snapshot)
+                        putJsonObject("updates") {}
+
+                        putJsonArray("calls") {
+                            genres.forEach { genre ->
+                                add(
+                                    buildJsonObject {
+                                        put("method", "toggleGenres")
+
+                                        putJsonArray("params") {
+                                            add(JsonPrimitive(genre.id))
+                                        }
+
+                                        putJsonObject("metadata") {}
+                                    },
+                                )
+                            }
+                        }
+                    },
+                )
+            }
+        }
+
+        val requestHeaders = headersBuilder()
+            .set("Accept", "application/json")
+            .set("X-Livewire", "true")
+            .set("X-Requested-With", "XMLHttpRequest")
+            .set("Origin", baseUrl)
+            .set("Referer", explorerUrl)
+            .build()
+
+        return client.post(
+            "$baseUrl/livewire-c4e82cae/update",
+            requestHeaders,
+            payload.toJsonRequestBody(),
+        )
+    }
+
+    private fun parseLivewireMangaList(response: Response): MangasPage {
+        if (!response.request.url.toString().contains("/livewire-c4e82cae/update")) {
             return parseMangaList(response)
         }
 
-        val document = response.asJsoup()
-        val mangas = document.select("main > div.search-title > div.rowDiv div.list-search:has(div.inner-img-search)").map {
-            SManga.create().apply {
-                setUrlWithoutDomain(it.selectFirst("div.name-serie-search > a")!!.attr("href"))
-                thumbnail_url = it.selectFirst("div.inner-img-search")?.attr("style")
-                    ?.substringAfter("url(")?.substringBefore(")")
-                title = it.select("div.name-serie-search")?.text() ?: ""
-            }
+        val livewire = response.parseAs<LivewireResponseDto>()
+
+        val html = livewire.components
+            .firstOrNull()
+            ?.effects
+            ?.html
+            .orEmpty()
+
+        if (html.isBlank()) {
+            return MangasPage(emptyList(), false)
         }
 
-        return MangasPage(mangas, false)
+        val document = Jsoup.parse(html, baseUrl)
+
+        val mangas = document
+            .select("a[href*=\"/serie/\"]")
+            .mapNotNull { link ->
+                val card = link.closest("div[role=link]") ?: link.parent()
+                val image = card?.selectFirst("img")
+
+                val titleCandidates = listOf(
+                    card?.selectFirst("h1, h2, h3, h4")?.text(),
+                    card?.selectFirst("[class*=\"title\"], [class*=\"name\"]")?.text(),
+                    link.attr("aria-label"),
+                    link.attr("title"),
+                    link.text(),
+                    image?.attr("alt"),
+                    card?.text(),
+                )
+
+                val title = titleCandidates
+                    .asSequence()
+                    .flatMap { value ->
+                        value
+                            .orEmpty()
+                            .split("\n")
+                            .asSequence()
+                    }
+                    .map { it.trim() }
+                    .firstOrNull { candidate ->
+                        candidate.isNotBlank() &&
+                            !candidate.equals("Leer", ignoreCase = true) &&
+                            !candidate.equals("card image", ignoreCase = true)
+                    }
+                    .orEmpty()
+
+                if (title.isBlank()) {
+                    return@mapNotNull null
+                }
+
+                val cleanTitle = title
+                    .replace(Regex("\\s+series\\s*$", RegexOption.IGNORE_CASE), "")
+                    .trim()
+
+                if (cleanTitle.isBlank()) {
+                    return@mapNotNull null
+                }
+
+                SManga.create().apply {
+                    setUrlWithoutDomain(link.attr("href"))
+                    this.title = cleanTitle
+                    thumbnail_url = image?.absUrl("src")
+                }
+            }
+            .distinctBy { it.url }
+
+        val hasNextPage = document
+            .select("nav[aria-label='Pagination Navigation'] button")
+            .any { it.attr("wire:click").contains("nextPage") }
+
+        return MangasPage(mangas, hasNextPage)
     }
 
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("div.serie_items > div.library-grid-item").map { element ->
-            SManga.create().apply {
-                setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-                title = element.selectFirst("span > h5 > strong")?.text() ?: ""
-                thumbnail_url = element.selectFirst("div.inner-img")?.attr("style")
-                    ?.substringAfter("url(")?.substringBefore(")")
-                    ?: element.selectFirst("div.img-fluid")?.attr("abs:src")
+
+        val mangas = document
+            .select(
+                "div[role=link]:has(img[src*=\"api.akayamedia.com/content/\"])",
+            )
+            .mapNotNull { element ->
+                val link = element.selectFirst("a[href*=\"/serie/\"]")
+                    ?: return@mapNotNull null
+
+                val image = element.selectFirst(
+                    "img[src*=\"api.akayamedia.com/content/\"]",
+                ) ?: return@mapNotNull null
+
+                SManga.create().apply {
+                    setUrlWithoutDomain(link.attr("href"))
+                    title = image.attr("alt").ifBlank {
+                        element.selectFirst("h1")?.text().orEmpty()
+                    }
+                    thumbnail_url = image.attr("abs:src")
+                }
             }
-        }
-        val hasNextPage = document.selectFirst("div.wrapper-navigation ul.pagination > li > a[rel=next]") != null
+
+        val hasNextPage = document
+            .select("nav[aria-label='Pagination Navigation'] button")
+            .any { it.attr("wire:click").contains("nextPage") }
+
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Los filtros se ignorarán al hacer una búsqueda por texto"),
         Filter.Separator(),
         OrderFilter(),
         GenreFilter(),
     )
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client
+            .get(getMangaUrl(manga))
+            .asJsoup()
+
+        val updatedManga = parseMangaDetails(document)
+        val updatedChapters = parseChaptersWithPagination(document)
+
+        return SMangaUpdate(
+            updatedManga,
+            updatedChapters,
+        )
+    }
+
+    private fun parseMangaDetails(document: Document): SManga {
+        val header = document.selectFirst("header.masthead > div.container > div.row")
+
+        val statusText = document
+            .selectFirst("span.text-sm.whitespace-nowrap")
+            ?.text()
+            ?.trim()
+            .orEmpty()
+
+        val genres = document
+            .select("span")
+            .firstOrNull { it.text().trim() == "Géneros" }
+            ?.parent()
+            ?.parent()
+            ?.select("ul li span")
+            ?.eachText()
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?.distinct()
+            .orEmpty()
+
+        val authors = document
+            .select("a[href*=\"/user/\"] .truncate")
+            .eachText()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+
         return SManga.create().apply {
-            document.selectFirst("header.masthead > div.container > div.row")?.let { header ->
-                title = header.selectFirst(".serie-head-title")?.text() ?: ""
-                author = header.selectFirst("ul.persons")?.let { element ->
-                    element.select("li").joinToString { it.text() }.ifEmpty { element.text() }
-                }
-                genre = header.selectFirst("ul.categories")?.let { element ->
-                    element.select("li").joinToString { it.text() }.ifEmpty { element.text() }
-                }
+            title = header
+                ?.selectFirst(".serie-head-title")
+                ?.text()
+                .orEmpty()
+
+            author = authors.joinToString(", ")
+
+            genre = genres.joinToString(", ")
+
+            status = when {
+                statusText.contains("finalizada", ignoreCase = true) ->
+                    SManga.COMPLETED
+
+                statusText.contains("cancelada", ignoreCase = true) ->
+                    SManga.CANCELLED
+
+                else ->
+                    SManga.ONGOING
             }
-            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
+
+            description = document
+                .select("p.text-gray-500.text-sm")
+                .firstOrNull()
+                ?.text()
+                ?.trim()
+                .orEmpty()
+
+            thumbnail_url = document
+                .selectFirst("meta[property=og:image]")
+                ?.attr("content")
                 ?.replace("/chapters/", "/content/")
-            description = document.selectFirst("section.main div.container div.sidebar > p")?.text()
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "?order_direction=desc", headers)
+    private fun parseChapters(document: org.jsoup.nodes.Document): List<SChapter> {
+        return document
+            .select("#chapters-container a[href*=\"/chapter/\"]")
+            .mapNotNull { link ->
+                val url = link.attr("href")
+                if (url.isBlank()) return@mapNotNull null
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div.chapter-desktop div.chapter-item").map { element ->
-            SChapter.create().apply {
-                val link = element.selectFirst("div.text-left > .mt-1 > a")!!
-                setUrlWithoutDomain(link.attr("href"))
-                name = link.text()
-                date_upload = dateFormat.tryParse(element.selectFirst("p.date")?.text())
+                val chapterName = link.text()
+                    .trim()
+                    .ifBlank {
+                        link.parent()?.text()?.trim().orEmpty()
+                    }
 
-                if (element.selectFirst("i.ak-lock") != null) {
-                    name = "🔒 $name"
-                    url = "$url#lock"
+                if (chapterName.isBlank()) return@mapNotNull null
+
+                val chapterElement = link.parent()
+                val date = chapterElement
+                    ?.selectFirst("span.text-gray-300.text-sm")
+                    ?.text()
+                    ?.trim()
+
+                SChapter.create().apply {
+                    setUrlWithoutDomain(url)
+                    name = chapterName
+                    date_upload = date?.let {
+                        try {
+                            LocalDate.parse(it, dateFormatter)
+                                .atStartOfDay(ZoneOffset.UTC)
+                                .toInstant()
+                                .toEpochMilli()
+                        } catch (_: DateTimeParseException) {
+                            0L
+                        }
+                    } ?: 0L
                 }
             }
-        }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    private suspend fun livewirePageRequest(
+        snapshot: String,
+        token: String,
+        page: Int,
+        referer: String,
+    ): Response {
+        val payload = buildJsonObject {
+            put("_token", token)
+            putJsonArray("components") {
+                add(
+                    buildJsonObject {
+                        put("snapshot", snapshot)
+                        putJsonObject("updates") {}
+                        putJsonArray("calls") {
+                            add(
+                                buildJsonObject {
+                                    put("method", "gotoPage")
+                                    putJsonArray("params") {
+                                        add(JsonPrimitive(page))
+                                        add(JsonPrimitive("page"))
+                                    }
+                                    putJsonObject("metadata") {}
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+        }
+
+        val requestHeaders = headersBuilder()
+            .set("Content-Type", "application/json")
+            .set("Accept", "application/json")
+            .set("X-Livewire", "true")
+            .set("X-Requested-With", "XMLHttpRequest")
+            .set("Referer", referer)
+            .set("Origin", baseUrl)
+            .build()
+
+        return client.post(
+            "$baseUrl/livewire-c4e82cae/update",
+            requestHeaders,
+            payload.toJsonRequestBody(),
+        )
+    }
+
+    private suspend fun parseChaptersWithPagination(
+        document: Document,
+    ): List<SChapter> {
+        val chapters = mutableListOf<SChapter>()
+
+        fun formatChapters(): List<SChapter> {
+            val uniqueChapters = chapters
+                .distinctBy { it.url }
+                .reversed()
+
+            return uniqueChapters
+                .mapIndexed { index, chapter ->
+                    chapter.apply {
+                        name = "Cap ${uniqueChapters.size - index}"
+                    }
+                }
+        }
+
+        chapters += parseChapters(document)
+
+        val snapshotElement = document
+            .select("*")
+            .firstOrNull {
+                it.hasAttr("wire:snapshot") &&
+                    it.attr("wire:snapshot").contains("serie.index")
+            }
+
+        var snapshot = snapshotElement?.attr("wire:snapshot")
+            ?: return formatChapters()
+
+        val token = document
+            .selectFirst("meta[name=csrf-token]")
+            ?.attr("content")
+            .orEmpty()
+
+        if (token.isEmpty()) {
+            return formatChapters()
+        }
+
+        var page = 2
+
+        while (true) {
+            try {
+                val pageResponse = livewirePageRequest(
+                    snapshot = snapshot,
+                    token = token,
+                    page = page,
+                    referer = document.location().substringBefore("?"),
+                )
+
+                var shouldStop = false
+
+                pageResponse.use {
+                    if (!it.isSuccessful) {
+                        shouldStop = true
+                        return@use
+                    }
+
+                    val responseBody = it.body.string()
+                    val livewire = responseBody.parseAs<LivewireResponseDto>()
+
+                    val component = livewire.components.firstOrNull()
+                    if (component == null) {
+                        shouldStop = true
+                        return@use
+                    }
+
+                    val html = component.effects?.html
+                    if (html == null) {
+                        shouldStop = true
+                        return@use
+                    }
+
+                    val pageDocument = org.jsoup.Jsoup.parse(html)
+                    val pageChapters = parseChapters(pageDocument)
+
+                    val previousChapterCount = chapters.size
+                    chapters += pageChapters
+
+                    if (pageChapters.isEmpty() || chapters.size == previousChapterCount) {
+                        shouldStop = true
+                        return@use
+                    }
+
+                    snapshot = component.snapshot ?: run {
+                        shouldStop = true
+                        return@use
+                    }
+                }
+
+                if (shouldStop) {
+                    break
+                }
+
+                page++
+            } catch (_: Exception) {
+                break
+            }
+        }
+
+        return formatChapters()
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.substringAfterLast("#") == "lock") {
             throw Exception("Capítulo bloqueado")
         }
-        return super.pageListRequest(chapter)
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val scriptContent = document.selectFirst("script:containsData(var chapterData =)")?.data()
+        val document = client
+            .get(getChapterUrl(chapter))
+            .asJsoup()
 
-        if (scriptContent != null) {
-            try {
-                val jsonString = scriptContent
-                    .substringAfter("var chapterData =")
-                    .substringBefore("\n")
-                    .trim()
-                    .removeSuffix(";")
-
-                val chapterData = jsonString.parseAs<ChapterDataDto>()
-                if (chapterData.sortedImages.isNotEmpty()) {
-                    return chapterData.sortedImages.mapIndexed { i, img ->
-                        Page(i, imageUrl = "https://api.akayamedia.com/chapters/${img.image}")
-                    }
-                }
-            } catch (e: Exception) {
-                // Fallback to DOM parsing below
+        val imageUrls = document.select("img").mapNotNull { image ->
+            listOf(
+                image.attr("abs:src"),
+                image.attr("abs:data-src"),
+                image.attr("abs:data-original"),
+                image.attr("abs:data-lazy-src"),
+            ).firstOrNull { url ->
+                url.isNotBlank() &&
+                    (
+                        url.contains("api.akayamedia.com") ||
+                            url.contains("/chapters/")
+                        )
             }
         }
 
-        return document.select("main div.container img.chapter-img, main.separatorReading div.container img.img-fluid").mapIndexed { i, img ->
-            Page(i, imageUrl = img.attr("abs:src"))
+        if (imageUrls.isNotEmpty()) {
+            return imageUrls.distinct().mapIndexed { index, imageUrl ->
+                Page(index, imageUrl = imageUrl)
+            }
         }
+
+        val scriptContent = document
+            .select("script")
+            .firstOrNull { it.data().contains("chapterData") }
+            ?.data()
+            .orEmpty()
+
+        if (scriptContent.isNotBlank()) {
+            try {
+                val jsonString = scriptContent
+                    .substringAfter("var chapterData =")
+                    .substringBefore(";")
+                    .trim()
+
+                val chapterData = jsonString.parseAs<ChapterDataDto>()
+
+                return chapterData.sortedImages.mapIndexed { index, image ->
+                    Page(
+                        index,
+                        imageUrl = "https://api.akayamedia.com/chapters/${image.image}",
+                    )
+                }
+            } catch (_: Exception) {
+                // No se encontraron imágenes en chapterData.
+            }
+        }
+
+        return emptyList()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("es"))
+        private val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
     }
 }
