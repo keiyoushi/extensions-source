@@ -5,6 +5,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
+fun String.toCoverUrl(): String = toHttpUrl().newBuilder().setPathSegment(4, "cover_x3").toString()
+
 @Serializable
 class SearchResponseDto(
     val data: SearchDataDto,
@@ -25,9 +27,9 @@ class SearchProductDto(
     @SerialName("is_anime") val isAnime: Int?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/web/product/$id"
+        url = id.toString()
         title = this@SearchProductDto.title
-        thumbnail_url = "https:$img".toHttpUrl().newBuilder().setPathSegment(4, "cover_x3").toString()
+        thumbnail_url = "https:$img".toCoverUrl()
     }
 }
 
