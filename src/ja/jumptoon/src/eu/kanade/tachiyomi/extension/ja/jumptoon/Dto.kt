@@ -86,16 +86,31 @@ class Episode(
     private val notation: String,
     private val title: String?,
     private val publishStartDatetime: String?,
+    private val offerType: String?,
+    private val userSeriesEpisode: UserSeriesEpisode?,
 ) {
+    val isLocked: Boolean
+        get() = offerType != "FREE" && userSeriesEpisode?.isUnlocked != true
+
     fun toSChapter(): SChapter = SChapter.create().apply {
         url = id
-        name = if (title != null) "$notation - $title" else notation
+        val lock = if (isLocked) "🔒 " else ""
+        name = if (title != null) "$lock$notation - $title" else "$lock$notation"
         chapter_number = number?.toFloat() ?: -1f
         date_upload = publishStartDatetime?.toLong() ?: 0L
         memo = buildJsonObject {
             put("seriesId", seriesId)
         }
     }
+}
+
+@Serializable
+class UserSeriesEpisode(
+    private val isPurchased: Boolean,
+    private val rentalFinishedAt: String?,
+) {
+    val isUnlocked: Boolean
+        get() = isPurchased || (rentalFinishedAt?.toLong() ?: 0L) > System.currentTimeMillis()
 }
 
 @Serializable

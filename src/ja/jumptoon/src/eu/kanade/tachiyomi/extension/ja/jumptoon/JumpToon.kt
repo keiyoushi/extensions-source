@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.jumptoon
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,6 +15,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.get
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import kotlinx.coroutines.async
@@ -25,9 +29,13 @@ import org.jsoup.nodes.Element
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
+import kotlin.getValue
 
 @Source
-abstract class JumpToon : KeiSource() {
+abstract class JumpToon :
+    KeiSource(),
+    ConfigurableSource {
+    private val preferences by getPreferencesLazy()
     private val rscHeaders get() = headersBuilder()
         .set("rsc", "1")
         .build()
@@ -81,6 +89,7 @@ abstract class JumpToon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val details = async {
             if (!fetchDetails) return@async manga
             val document = client.get(getMangaUrl(manga)).asJsoup()
@@ -102,7 +111,9 @@ abstract class JumpToon : KeiSource() {
 
                 val episodePage = client.get(url, rscHeaders).extractNextJs<EpisodeListResponse>() ?: break
                 totalPageCount = episodePage.totalPageCount
-                episodes += episodePage.episodes.edges.map { it.node.toSChapter() }
+                episodes += episodePage.episodes.edges
+                    .filter { !hideLocked || !it.node.isLocked }
+                    .map { it.node.toSChapter() }
                 page++
             }
             episodes
@@ -124,5 +135,17 @@ abstract class JumpToon : KeiSource() {
         return content.pageList.mapIndexed { i, page ->
             Page(i, imageUrl = "${page.imageUrl}#${content.scrambleAlgorithmType}:$seed:${page.width}")
         }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Locked Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
     }
 }
