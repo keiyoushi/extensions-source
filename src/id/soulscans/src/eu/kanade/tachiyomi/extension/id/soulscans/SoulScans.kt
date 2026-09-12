@@ -28,8 +28,6 @@ abstract class SoulScans : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(searchUrl(page, sort = "popular"))
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
-
         val response = client.get("$baseUrl/api/comic/home-sections?sections=latest_comic_updates&updateLimit=240")
             .parseAs<HomeSectionsDto>()
 
