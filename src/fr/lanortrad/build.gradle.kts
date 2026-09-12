@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "LanorTrad"
-    versionCode = 2
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "fr"
         baseUrl = "https://lanortrad.com"
+    }
+
+    deeplink {
+        path("/manga/..*")
+        path("/manga.html")
+        path("/reader.html")
     }
 }

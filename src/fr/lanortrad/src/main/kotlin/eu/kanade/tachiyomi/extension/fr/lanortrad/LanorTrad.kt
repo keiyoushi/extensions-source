@@ -1,252 +1,245 @@
 package eu.kanade.tachiyomi.extension.fr.lanortrad
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.utils.asJsoup
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.array
+import keiyoushi.utils.get
+import keiyoushi.utils.getStringOrNull
+import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.Jsoup
-import rx.Observable
+import java.text.Normalizer
+import java.time.format.DateTimeFormatter
 
 @Source
-abstract class LanorTrad : HttpSource() {
+abstract class LanorTrad : KeiSource() {
 
-    override val supportsLatest = false
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/js/utile/mangaData.js", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = parseMangaData(response.body.string()).map { it.toSManga() }
-        return MangasPage(mangas, false)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        if (page > 1) return MangasPage(emptyList(), false)
+        return MangasPage(fetchSeries().map { it.toSManga(baseUrl) }, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(page)
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters)).asObservableSuccess()
-        .map { response ->
-            // Source stores all manga metadata in a single JS file
-            val allMangas = parseMangaData(response.body.string())
-            val filtered = allMangas.filter { it.title.contains(query, ignoreCase = true) }
-                .map { it.toSManga() }
-            MangasPage(filtered, false)
-        }
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(GET("$baseUrl/js/utile/mangaData.js", headers)).asObservableSuccess()
-        .map { response ->
-            val mangaList = parseMangaData(response.body.string())
-            val mangaData = mangaList.find { it.id == manga.url } ?: throw Exception("Manga not found")
-            mangaData.toSManga().apply {
-                url = manga.url
-            }
-        }
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("Manga")
-            .addPathSegment("${manga.url}.html")
-            .build()
-            .toString()
-
-        return GET(url, headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page > 1) return MangasPage(emptyList(), false)
+        val series = fetchSeries().sortedByDescending { it.lastUpdate }
+        return MangasPage(series.map { it.toSManga(baseUrl) }, false)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga)).asObservableSuccess()
-        .flatMap { response ->
-            val document = response.asJsoup()
-
-            // Oneshots links directly to a dedicated HTML reader page
-            val oneshotElement = document.selectFirst("a[href*=neshot]")
-            if (oneshotElement != null) {
-                return@flatMap Observable.just(
-                    listOf(
-                        SChapter.create().apply {
-                            val absUrl = oneshotElement.absUrl("href").replace(" ", "%20")
-                            setUrlWithoutDomain(absUrl.toHttpUrl().encodedPath)
-                            name = "Oneshot"
-                            chapter_number = 1f
-                        },
-                    ),
-                )
-            }
-
-            val scriptElem = document.selectFirst("script[src*=/js/manga/]")
-            if (scriptElem != null) {
-                val scriptUrl = scriptElem.absUrl("src")
-                client.newCall(GET(scriptUrl, headers)).asObservableSuccess()
-                    .map { response ->
-                        parseChaptersJs(response.body.string())
-                    }
-            } else {
-                Observable.just(emptyList())
-            }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (page > 1) return MangasPage(emptyList(), false)
+        val series = fetchSeries()
+        val filtered = if (query.isBlank()) {
+            series
+        } else {
+            series.filter { it.title.contains(query, ignoreCase = true) }
         }
+        return MangasPage(filtered.map { it.toSManga(baseUrl) }, false)
+    }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        // Series data is needed for chapters too: the series type drives oneshot collapsing in buildChapters.
+        val seriesDeferred = if (fetchDetails || fetchChapters) async { fetchSeries() } else null
+        val indexDeferred = if (fetchChapters) async { fetchChapterData() } else null
+        val dto = seriesDeferred?.await()?.find { it.id == manga.url }
+        val updatedManga = if (fetchDetails) {
+            dto?.toSManga(baseUrl) ?: throw Exception("Manga not found")
+        } else {
+            manga
+        }
+        val updatedChapters = if (fetchChapters) {
+            val chapterData = indexDeferred?.await() ?: throw Exception("Chapters not found")
+            buildChapters(manga.url, chapterData.index, dto?.type)
+        } else {
+            chapters
+        }
+        SMangaUpdate(updatedManga, updatedChapters)
+    }
 
-    private fun parseChaptersJs(js: String): List<SChapter> {
-        val maxChapters = maxChaptersRegex.find(js)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        val currentManga = currentMangaRegex.find(js)?.groupValues?.get(1) ?: ""
-        val chapterPrefix = chapterPrefixRegex.find(js)?.groupValues?.get(1) ?: "Chapitre"
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val seriesId = chapter.url.substringBeforeLast("/")
+        val num = chapter.url.substringAfterLast("/")
+        val chapterData = fetchChapterData()
+        val pagesPath = chapterData.pageFiles[seriesId] ?: return emptyList()
+        val seriesNode = chapterData.index[seriesId]?.obj ?: return emptyList()
+        val defaultPrefix = seriesNode.getStringOrNull("p") ?: ""
+        val folder = seriesNode["c"]?.array?.let { findFolder(it, defaultPrefix, num) } ?: return emptyList()
+        val pagesFile = client.get("$baseUrl/$pagesPath").parseAs<JsonObject> {
+            it.substringAfterLast("=").substringBeforeLast(";")
+        }
+        val files = runCatching {
+            pagesFile[num]?.obj?.get("f")?.array?.map { it.string }.orEmpty()
+        }.getOrNull().orEmpty()
+        return files.mapIndexed { i, file ->
+            Page(i, imageUrl = buildImageUrl(seriesId, folder, file))
+        }
+    }
 
-        val chapters = mutableListOf<SChapter>()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${slugify(manga.url)}/"
 
-        // Regular chapters
-        for (i in 1..maxChapters) {
-            chapters.add(
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = slugify(chapter.url.substringBeforeLast("/"))
+        return if (chapter.name == "Oneshot") {
+            "$baseUrl/manga/$slug/lecture/"
+        } else {
+            "$baseUrl/manga/$slug/chapitre-${chapter.url.substringAfterLast("/")}/"
+        }
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val dtos = fetchSeries()
+        val dto = when (url.pathSegments.firstOrNull()) {
+            "manga" -> {
+                val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
+                dtos.find { slugify(it.id) == slug }
+            }
+            "manga.html" -> url.queryParameter("id")?.let { id -> dtos.find { it.id == id } }
+            "reader.html" -> url.queryParameter("manga")?.let { id -> dtos.find { it.id == id } }
+            else -> return null
+        } ?: return null
+        return dto.toSManga(baseUrl)
+    }
+
+    private suspend fun fetchSeries(): List<Dto> = client.get("$baseUrl/js/data/series.js").parseAs {
+        quoteUnquotedKeys(
+            it.replace(COMMENT_REGEX, "")
+                .substringAfter("window.SERIES =")
+                .substringBeforeLast(";"),
+        )
+    }
+
+    // Single read: chapter index and page map share one response.
+    private suspend fun fetchChapterData(): ChapterData {
+        val body = client.get("$baseUrl/js/data/chapters.js").use { it.body.string() }
+        val index = body.substringAfter("return expand(")
+            .substringBeforeLast("})();")
+            .substringBeforeLast(");")
+            .parseAs<JsonObject>()
+        val pages = CHAPTER_PAGES_REGEX.find(body)?.groupValues?.get(1)?.parseAs<Map<String, String>>().orEmpty()
+        return ChapterData(index, pages)
+    }
+
+    private class ChapterData(
+        val index: JsonObject,
+        val pageFiles: Map<String, String>,
+    )
+
+    private fun buildChapters(seriesId: String, index: JsonObject, seriesType: String?): List<SChapter> {
+        val entries = index[seriesId]?.obj?.get("c")?.array ?: return emptyList()
+        val chapters = entries.mapNotNull { entry ->
+            runCatching {
+                val item = entry.array
+                val num = item[0].string
+                val opts = item.getOrNull(2)?.obj
                 SChapter.create().apply {
-                    name = "$chapterPrefix $i"
-                    url = baseUrl.toHttpUrl().newBuilder()
-                        .addPathSegment("Manga")
-                        .addPathSegment(currentManga)
-                        .addPathSegment("$chapterPrefix $i.html")
-                        .build()
-                        .encodedPath
-                    chapter_number = i.toFloat()
-                },
-            )
+                    url = "$seriesId/$num"
+                    name = "Chapitre $num"
+                    chapter_number = num.toFloatOrNull() ?: -1f
+                    date_upload = DATE_FORMAT.tryParseDate(opts?.getStringOrNull("d"))
+                }
+            }.getOrNull()
+        }.distinctBy { it.url }.sortedByDescending { it.chapter_number }
+        if (seriesType.equals("oneshot", true)) {
+            val oneshot = chapters.firstOrNull() ?: return emptyList()
+            oneshot.name = "Oneshot"
+            return listOf(oneshot)
         }
-
-        // Bonus chapters (numbered with decimals)
-        bonusChaptersRegex.find(js)?.groupValues?.get(1)?.let { bonusBlock ->
-            for (match in bonusNumberRegex.findAll(bonusBlock)) {
-                val numStr = match.groupValues[1]
-                chapters.add(
-                    SChapter.create().apply {
-                        name = "$chapterPrefix $numStr"
-                        url = baseUrl.toHttpUrl().newBuilder()
-                            .addPathSegment("Manga")
-                            .addPathSegment(currentManga)
-                            .addPathSegment("$chapterPrefix $numStr.html")
-                            .build()
-                            .encodedPath
-                        chapter_number = numStr.toFloatOrNull() ?: -1f
-                    },
-                )
-            }
-        }
-
-        return chapters.distinctBy { it.url }.sortedByDescending { it.chapter_number }
+        return chapters
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val body = response.body.string()
-        val pages = mutableListOf<Page>()
-
-        firstImgRegex.find(body)?.let { match ->
-            pages.add(Page(pages.size, imageUrl = match.groupValues[1]))
+    private fun findFolder(entries: JsonArray, defaultPrefix: String, num: String): String? {
+        for (entry in entries) {
+            val item = runCatching { entry.array }.getOrNull() ?: continue
+            if (runCatching { item[0].string }.getOrNull() != num) continue
+            val opts = item.getOrNull(2)?.let { runCatching { it.obj }.getOrNull() }
+            return opts?.getStringOrNull("f") ?: ((opts?.getStringOrNull("p") ?: defaultPrefix) + num)
         }
+        return null
+    }
 
-        val maxPagesMatch = loopRegex.find(body)
-        if (maxPagesMatch != null) {
-            val maxPages = maxPagesMatch.groupValues[1].toInt()
-            val pathPrefix = pathRegex.find(body)?.groupValues?.get(1) ?: ""
-            val pathExt = extRegex.find(body)?.groupValues?.get(1) ?: "jpg"
-            val pad = padRegex.find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 3
+    private fun buildImageUrl(seriesId: String, folder: String, file: String): String {
+        val builder = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("Manga")
+            .addPathSegment(seriesId)
+        folder.split("/").forEach { builder.addPathSegment(it) }
+        return builder.addPathSegment(file).build().toString()
+    }
 
-            for (i in 1..maxPages) {
-                val num = i.toString().padStart(pad, '0')
-                pages.add(Page(pages.size, "", "$pathPrefix$num.$pathExt"))
+    private fun slugify(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD)
+        .replace(COMBINING_MARKS_REGEX, "")
+        .replace(NON_ALNUM_REGEX, "-")
+        .trim('-')
+        .lowercase()
+
+    // Keys may share a line with braces or other entries, so a line-anchored
+    // regex cannot quote them all; scan outside string literals instead.
+    private fun quoteUnquotedKeys(input: String): String = buildString(input.length + 64) {
+        var i = 0
+        var inString = false
+        while (i < input.length) {
+            val c = input[i]
+            if (inString) {
+                append(c)
+                if (c == '\\' && i + 1 < input.length) {
+                    append(input[i + 1])
+                    i += 2
+                    continue
+                }
+                if (c == '"') inString = false
+                i++
+                continue
             }
-        }
-
-        // Fallback for Oneshots
-        if (pages.isEmpty()) {
-            val document = Jsoup.parse(body, response.request.url.toString())
-            document.select("img").forEach { element ->
-                val src = element.absUrl("src")
-                if (src.isNotEmpty() && !src.contains("Logo") && !src.contains("postimg")) {
-                    pages.add(Page(pages.size, "", src))
+            when {
+                c == '"' -> {
+                    inString = true
+                    append(c)
+                    i++
+                }
+                c.isLetterOrDigit() || c == '_' -> {
+                    var j = i
+                    while (j < input.length && (input[j].isLetterOrDigit() || input[j] == '_')) j++
+                    var k = j
+                    while (k < input.length && input[k].isWhitespace()) k++
+                    if (k < input.length && input[k] == ':') {
+                        append('"').append(input, i, j).append("\":")
+                        i = k + 1
+                    } else {
+                        append(input, i, j)
+                        i = j
+                    }
+                }
+                else -> {
+                    append(c)
+                    i++
                 }
             }
         }
-
-        // Append recruitment image at the end
-        lastImgRegex.find(body)?.let { match ->
-            pages.add(Page(pages.size, "", match.groupValues[1]))
-        }
-
-        pages.forEach { page ->
-            page.imageUrl = response.request.url.resolve(page.imageUrl ?: "")?.toString() ?: page.imageUrl
-        }
-
-        return pages
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private fun parseMangaData(jsString: String): List<LanorMangaDto> {
-        val jsonString = jsString.substringAfter("window.MANGA_DATA =").substringBeforeLast(";")
-        if (jsonString.isBlank() || !jsonString.contains("[")) return emptyList()
-
-        val fixedJson = jsonString
-            // Remove double slashes that are not part of URLs
-            .replace(commentRegex, "")
-            // Wrap unquoted javascript object keys in double quotes
-            .replace(unquotedKeyRegex) { match ->
-                "${match.groupValues[1]}\"${match.groupValues[2]}\":"
-            }
-
-        return runCatching {
-            fixedJson.parseAs<List<LanorMangaDto>>()
-        }.getOrElse { emptyList() }
-    }
-
-    private fun LanorMangaDto.toSManga() = SManga.create().also { manga ->
-        manga.title = title
-        val imgToUse = if (type.equals("oneshot", true)) image else coverImage
-        manga.thumbnail_url = if (imgToUse.startsWith("http")) {
-            imgToUse
-        } else {
-            baseUrl.toHttpUrl().newBuilder()
-                .addPathSegments(imgToUse.removePrefix("/"))
-                .build()
-                .toString()
-        }
-        manga.url = id
-        manga.description = description
-        manga.status = when (status.lowercase()) {
-            "en cours" -> SManga.ONGOING
-            "terminé" -> SManga.COMPLETED
-            "en pause" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
-        manga.genre = genres.joinToString { it.trim() }
-        manga.author = "LanorTrad"
     }
 
     companion object {
-        private val maxChaptersRegex = Regex("""maxChapters:\s*(\d+)""")
-        private val currentMangaRegex = Regex("""currentManga:\s*['"]([^'"]+)['"]""")
-        private val chapterPrefixRegex = Regex("""chapterPrefix:\s*['"]([^'"]+)['"]""")
-        private val bonusChaptersRegex = Regex("""bonusChapters\s*=\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL)
-        private val bonusNumberRegex = Regex("""number:\s*([\d.]+)""")
-
-        private val firstImgRegex = Regex("""firstImg\.src\s*=\s*['"]([^'"]+)['"]""")
-        private val loopRegex = Regex("""for\s*\([^;]+;\s*[a-zA-Z]+\s*<=\s*(\d+)[\s;]""")
-        private val pathRegex = Regex("""imgElement\.src\s*=\s*`([^$]+)\$\{""")
-        private val extRegex = Regex("""\}\.([^`]+)`""")
-        private val padRegex = Regex("""padStart\((\d+)""")
-        private val lastImgRegex = Regex("""lastImg\.src\s*=\s*['"]([^'"]+)['"]""")
-
-        private val commentRegex = Regex("""^\s*//.*$""", RegexOption.MULTILINE)
-        private val unquotedKeyRegex = Regex("""^(\s*)([a-zA-Z0-9_]+)\s*:""", RegexOption.MULTILINE)
+        private val COMMENT_REGEX = Regex("""^\s*//.*$""", RegexOption.MULTILINE)
+        private val CHAPTER_PAGES_REGEX = Regex("""window\.CHAPTER_PAGES\s*=\s*(\{.*?\});""", RegexOption.DOT_MATCHES_ALL)
+        private val COMBINING_MARKS_REGEX = Regex("""\p{Mn}+""")
+        private val NON_ALNUM_REGEX = Regex("[^A-Za-z0-9]+")
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     }
 }
