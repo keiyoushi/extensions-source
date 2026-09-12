@@ -17,6 +17,7 @@ import keiyoushi.utils.textOrNull
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -66,7 +67,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                         .selectFirst("style")
                         ?.data()
                         ?.let { backgroundImageRegex.find(it)?.groupValues?.get(1) }
-                val mangaUrl = latestMangaUrl(title, type)
+                val mangaUrl = mangaIdentityUrl(title, type)
                 if (!seenMangaUrls.add(mangaUrl)) return@mapNotNull null
 
                 SManga.create().apply {
@@ -79,7 +80,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
 
-    private fun latestMangaUrl(
+    private fun mangaIdentityUrl(
         title: String,
         type: String?,
     ): String = "$baseUrl/biblioteca"
@@ -143,6 +144,8 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
 
     private fun mangaFromElement(element: Element): SManga? {
         val link = element.selectFirst("a[href*=/library/]") ?: return null
+        val canonicalUrl = link.attr("abs:href").toCanonicalMangaUrl()
+        val type = canonicalUrl.mangaType()
         val title =
             link
                 .selectFirst(".thumbnail-title h4")
@@ -152,8 +155,9 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 ?: return null
 
         return SManga.create().apply {
-            setUrlWithoutDomain(link.attr("abs:href"))
+            setUrlWithoutDomain(mangaIdentityUrl(title, type))
             this.title = title
+            memo = memo.withCanonicalMangaUrl(canonicalUrl)
             thumbnail_url =
                 link
                     .selectFirst("img.cover-bg-img")
@@ -170,10 +174,17 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
             throw Exception("URL no soportada")
         }
 
+        val canonicalUrl = url.toString().toCanonicalMangaUrl()
         return parseMangaDetails(client.get(url).asJsoup()).apply {
-            setUrlWithoutDomain(url.toString())
+            setUrlWithoutDomain(mangaIdentityUrl(title, canonicalUrl.mangaType()))
+            memo = memo.withCanonicalMangaUrl(canonicalUrl)
         }
     }
+
+    override fun getMangaUrl(manga: SManga): String =
+        manga.canonicalMangaUrl()
+            ?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
+            ?: super.getMangaUrl(manga)
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -181,28 +192,46 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document =
-            when {
-                manga.url.startsWith("/biblioteca?title=") -> {
-                    val type = (baseUrl + manga.url).toHttpUrl().queryParameter("type")
-                    client.get(resolveLatestMangaUrl(manga.title, type)).asJsoup()
-                }
-                manga.url.startsWith("/view_uploads/") -> {
-                    val uploadDocument = client.get(baseUrl + manga.url).asJsoup()
-                    val mangaUrl =
-                        uploadDocument
-                            .selectFirst("a.btn-rh[href*=/library/]")
-                            ?.attr("abs:href")
-                            ?: throw Exception("No se encontró la ficha del manga")
-                    client.get(mangaUrl).asJsoup()
-                }
-                else -> client.get(baseUrl + manga.url).asJsoup()
-            }
+        val identityUrl = baseUrl.toHttpUrl().resolve(manga.url)
+        val canonicalUrl =
+            manga.canonicalMangaUrl()
+                ?: resolveLatestMangaUrl(
+                    identityUrl?.queryParameter("title") ?: manga.title,
+                    identityUrl?.queryParameter("type"),
+                ).toCanonicalMangaUrl()
+        val document = client.get(baseUrl.toHttpUrl().resolve(canonicalUrl)!!).asJsoup()
         return SMangaUpdate(
-            manga = parseMangaDetails(document),
+            manga = parseMangaDetails(document).apply {
+                url = manga.url
+                memo = manga.memo.withCanonicalMangaUrl(canonicalUrl)
+            },
             chapters = parseChapterList(document),
         )
     }
+
+    private fun SManga.canonicalMangaUrl(): String? =
+        (memo[MANGA_URL_KEY] as? JsonPrimitive)
+            ?.content
+            ?.takeIf { it.startsWith("/library/") }
+            ?: url.takeIf { it.startsWith("/library/") }
+
+    private fun JsonObject.withCanonicalMangaUrl(url: String): JsonObject =
+        JsonObject(this + (MANGA_URL_KEY to JsonPrimitive(url)))
+
+    private fun String.toCanonicalMangaUrl(): String =
+        baseUrl
+            .toHttpUrl()
+            .resolve(this)
+            ?.encodedPath
+            ?.takeIf { it.startsWith("/library/") }
+            ?: throw Exception("URL de manga no soportada")
+
+    private fun String.mangaType(): String? =
+        baseUrl
+            .toHttpUrl()
+            .resolve(this)
+            ?.pathSegments
+            ?.getOrNull(1)
 
     private fun parseMangaDetails(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.element-title")!!.text()
@@ -305,6 +334,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
     override fun getFilterList(data: JsonElement?): FilterList = FilterList()
 
     companion object {
+        private const val MANGA_URL_KEY = "zonatmoorgunoriginal.mangaUrl"
         private val backgroundImageRegex = """background-image:\s*url\(['"]?([^'")]+)""".toRegex()
         private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     }
