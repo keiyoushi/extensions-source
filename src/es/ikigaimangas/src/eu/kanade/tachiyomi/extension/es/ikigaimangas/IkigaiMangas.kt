@@ -25,16 +25,17 @@ import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.runWebViewBlocking
+import keiyoushi.utils.tryParseZonedDateTime
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -51,31 +52,116 @@ abstract class IkigaiMangas :
     private fun fetchDomainUrl() {
         if (!shouldFetchDomain) return
         shouldFetchDomain = false
-        if (!preferences.fetchDomainPref()) return
+        if (!preferences.fetchDomainPref()) {
+            return
+        }
         try {
             val initClient = network.client
             val headers = super.headersBuilder().build()
-            val document = initClient.newCall(GET("https://ikigaimangas.com", headers)).execute().asJsoup()
+            val response = initClient.newCall(GET("https://ikigaimangas.com", headers)).execute()
+            val document = response.asJsoup()
             val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
-                ?: return
-            val script = initClient.newCall(GET("https://ikigaimangas.com/build/$scriptUrl", headers)).execute().body.string()
+            if (scriptUrl == null) {
+                return
+            }
+            val scriptResponse = initClient.newCall(GET("https://ikigaimangas.com/build/$scriptUrl", headers)).execute()
+            val script = scriptResponse.body.string()
             val domain = script.substringAfter("i(\"").substringBefore("\"")
-            val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
+            val finalResponse = initClient.newCall(GET(domain, headers)).execute()
+            val host = finalResponse.request.url.host
             val newDomain = "https://$host"
             preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+        }
     }
 
-    private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
+    private val imageCdnUrl: String = "https://image3.ikigaimangas.cloud"
 
     override val supportsLatest: Boolean = true
 
     override val client by lazy {
         fetchDomainUrl()
-        network.client.newBuilder()
+        val builder = network.client.newBuilder()
             .addNetworkInterceptor(::nsfwCookieInterceptor)
+            .addInterceptor(::cfChallengeInterceptor)
             .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
-            .build()
+
+        val cfInterceptor = builder.interceptors().firstOrNull { it.javaClass.simpleName == "CloudflareInterceptor" }
+        if (cfInterceptor != null) {
+            builder.interceptors().remove(cfInterceptor)
+            builder.addInterceptor { chain ->
+                val request = chain.request()
+                if (request.url.host.contains("ikigaimangas.cloud")) {
+                    chain.proceed(request)
+                } else {
+                    cfInterceptor.intercept(chain)
+                }
+            }
+        }
+
+        builder.build()
+    }
+
+    private fun cfChallengeInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (!request.url.host.contains("ikigaimangas.cloud")) return chain.proceed(request)
+
+        val response = chain.proceed(request)
+        val isCloudflare = response.headers("Server").any { it.contains("cloudflare", ignoreCase = true) }
+
+        if (response.code !in listOf(403, 503) || !isCloudflare) {
+            return response
+        }
+
+        response.close()
+
+        synchronized(this) {
+            var base64Data: String? = null
+
+            runCatching {
+                runWebViewBlocking(chain.call(), timeout = 60.seconds) {
+                    userAgent = headers["User-Agent"] ?: userAgent
+
+                    jsBridge("imageBridge") { message ->
+                        base64Data = message
+                        resolve(Unit)
+                    }
+
+                    onPageFinished {
+                        evaluateJs(
+                            """
+                            fetch('${request.url}').then(response => {
+                                if (!response.ok) throw new Error('HTTP ' + response.status);
+                                return response.blob();
+                            }).then(blob => {
+                                var reader = new FileReader();
+                                reader.onloadend = function() {
+                                    window.imageBridge.post(reader.result);
+                                }
+                                reader.readAsDataURL(blob);
+                            }).catch(e => window.imageBridge.post('error: ' + e.message));
+                            """.trimIndent(),
+                        )
+                    }
+
+                    loadData("https://${request.url.host}/", "<html><body></body></html>")
+                }
+            }
+
+            if (base64Data?.startsWith("data:image") == true) {
+                val base64String = base64Data!!.substringAfter("base64,")
+                val imageBytes = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT)
+
+                val body = imageBytes.toResponseBody(response.body?.contentType())
+                return response.newBuilder()
+                    .code(200)
+                    .message("OK")
+                    .body(body)
+                    .build()
+            }
+
+            return chain.proceed(request)
+        }
     }
 
     private fun nsfwCookieInterceptor(chain: Interceptor.Chain): Response {
@@ -111,7 +197,7 @@ abstract class IkigaiMangas :
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    private val dateFormat = SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH)
+    private val dateFormat = java.time.format.DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'X", Locale.ENGLISH)
 
     override fun popularMangaRequest(page: Int): Request {
         val headers = headersBuilder()
@@ -189,6 +275,7 @@ abstract class IkigaiMangas :
                         }
                     }
                 }
+
                 is StatusFilter -> {
                     filter.state.forEach { status ->
                         if (status.state) {
@@ -196,10 +283,12 @@ abstract class IkigaiMangas :
                         }
                     }
                 }
+
                 is SortByFilter -> {
                     url.addQueryParameter("ordenar", filter.selected)
                     url.addQueryParameter("direccion", if (filter.state?.ascending == true) "asc" else "desc")
                 }
+
                 else -> {}
             }
         }
@@ -310,7 +399,7 @@ abstract class IkigaiMangas :
         setUrlWithoutDomain(element.attr("abs:href"))
         name = element.selectFirst(".card-body .card-title")!!.text()
         val dateString = element.selectFirst("time")?.attr("datetime")?.substringBeforeLast("(")?.trim()
-        date_upload = dateFormat.tryParse(dateString)
+        date_upload = dateFormat.tryParseZonedDateTime(dateString)
     }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
@@ -318,15 +407,29 @@ abstract class IkigaiMangas :
     override fun pageListParse(response: Response): List<Page> {
         val request = response.request
         var document = response.asJsoup()
+
         document.selectFirst("button > span:contains(permitir nsfw)")?.let {
-            val newRequest = request.newBuilder()
-                .enableNsfw(true)
-                .build()
-            document = client.newCall(newRequest).execute().asJsoup()
+            val nsfwResponse = client.newCall(
+                request.newBuilder().enableNsfw(true).build(),
+            ).execute()
+            document = nsfwResponse.asJsoup()
         }
-        return document.select("section div.img > img").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
+
+        val images = document.select("img[alt^=Página][src*=/series/]")
+        val chapterUrl = response.request.url.toString()
+        return images.mapIndexed { i, element ->
+            Page(i, url = chapterUrl, imageUrl = element.attr("abs:src"))
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val referer = page.url.ifEmpty { "$baseUrl/" }
+        return GET(
+            page.imageUrl!!,
+            headersBuilder()
+                .set("Referer", referer)
+                .build(),
+        )
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
