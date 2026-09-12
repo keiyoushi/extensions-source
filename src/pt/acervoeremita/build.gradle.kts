@@ -14,4 +14,8 @@ keiyoushi {
         lang = "pt-BR"
         baseUrl = "https://acervoeremita.com"
     }
+    
+    deeplink {
+        path("/work/..*")
+    }
 }
