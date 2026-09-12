@@ -96,14 +96,18 @@ class MangaFullDto(
             }
         }
         author = relations
-            ?.filter { it.type == "AUTHOR" }
-            ?.mapNotNull { it.publisher?.name?.trim()?.takeIf(String::isNotEmpty) }
+            ?.mapNotNull { rel ->
+                rel.takeIf { it.type == "AUTHOR" }
+                    ?.publisher?.name?.trim()?.takeIf(String::isNotEmpty)
+            }
             ?.distinct()
             ?.joinToString()
             ?.ifBlank { null }
         artist = relations
-            ?.filter { it.type == "ARTIST" }
-            ?.mapNotNull { it.publisher?.name?.trim()?.takeIf(String::isNotEmpty) }
+            ?.mapNotNull { rel ->
+                rel.takeIf { it.type == "ARTIST" }
+                    ?.publisher?.name?.trim()?.takeIf(String::isNotEmpty)
+            }
             ?.distinct()
             ?.joinToString()
             ?.ifBlank { null }
@@ -158,8 +162,8 @@ class ChapterDto(
 ) {
     fun toSChapter(branches: Map<String, String?>, slug: String): SChapter = SChapter.create().apply {
         url = id
-        val vol = volume.toString().removeSuffix(".0").takeIf { it.isNotBlank() }
-        val num = number.toString().removeSuffix(".0").takeIf { it.isNotBlank() }
+        val vol = volume?.toString()?.removeSuffix(".0")?.takeIf(String::isNotBlank)
+        val num = number?.toString()?.removeSuffix(".0")?.takeIf(String::isNotBlank)
         val baseChapterName = when {
             vol != null && num != null -> "Том $vol Глава $num"
             num != null -> "Глава $num"
@@ -208,11 +212,6 @@ class PagesDto(
 class ChapterPageDto(
     val index: Int? = null,
     val image: String? = null,
-)
-
-class NormalizedImage(
-    val url: String,
-    val requiresXorDecode: Boolean,
 )
 
 enum class ImageCodec {

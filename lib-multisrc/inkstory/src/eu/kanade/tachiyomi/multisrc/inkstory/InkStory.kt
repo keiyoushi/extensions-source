@@ -23,9 +23,8 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
@@ -39,7 +38,18 @@ abstract class InkStory :
     private val domain: String get() = baseUrl.toHttpUrl().topPrivateDomain() ?: baseUrl.toHttpUrl().host
     private val apiUrl: String get() = "https://api.$domain/v2"
 
-    private val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy {
+        val keysToRemove = listOf(
+            "inkstory_image_quality",
+            "inkstory_image_type",
+            "inkstory_image_width",
+        )
+        if (keysToRemove.any(::contains)) {
+            edit().apply {
+                keysToRemove.forEach(::remove)
+            }.apply()
+        }
+    }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         // User Agent required by source. Don't change
@@ -61,6 +71,10 @@ abstract class InkStory :
             return response
         }
 
+        if (detectImageCodec(response.request.url.toString()) != ImageCodec.XOR) {
+            return response
+        }
+
         val source = response.body.source()
         val buffer = Buffer()
         source.readAll(buffer)
@@ -73,7 +87,7 @@ abstract class InkStory :
 
         // Peek the first bytes without consuming from buffer
         val peek = buffer.peek().readByteArray(MIN_IMAGE_SIGNATURE_SIZE.toLong())
-        if (looksLikeImage(peek)) {
+        if (looksLikeImage(peek) != null) {
             return response.newBuilder()
                 .body(buffer.asResponseBody(contentType, buffer.size))
                 .build()
@@ -83,43 +97,50 @@ abstract class InkStory :
         val decryptedHeader = ByteArray(MIN_IMAGE_SIGNATURE_SIZE) { index ->
             (peek[index].toInt() xor SECRET_KEY_BYTES[index % SECRET_KEY_BYTES.size].toInt()).toByte()
         }
-        if (!looksLikeImage(decryptedHeader)) {
-            return response.newBuilder()
+
+        val detectedType = looksLikeImage(decryptedHeader)
+            ?: return response.newBuilder()
                 .body(buffer.asResponseBody(contentType, buffer.size))
                 .build()
-        }
 
         val payload = buffer.readByteArray()
         for (i in payload.indices) {
             payload[i] = (payload[i].toInt() xor SECRET_KEY_BYTES[i % SECRET_KEY_BYTES.size].toInt()).toByte()
         }
 
-        val mediaType = contentType ?: "image/jpeg".toMediaTypeOrNull()
+        val mediaType = detectedType.toMediaType()
         return response.newBuilder()
             .body(payload.toResponseBody(mediaType))
             .build()
     }
 
-    private fun looksLikeImage(payload: ByteArray): Boolean {
-        if (payload.size < MIN_IMAGE_SIGNATURE_SIZE) return false
+    private fun looksLikeImage(payload: ByteArray): String? {
+        if (payload.size < MIN_IMAGE_SIGNATURE_SIZE) return null
 
         val isJpeg = payload[0] == 0xFF.toByte() && payload[1] == 0xD8.toByte() && payload[2] == 0xFF.toByte()
-        if (isJpeg) return true
+        if (isJpeg) return "image/jpeg"
 
         val isPng = payload[0] == 0x89.toByte() && payload[1] == 0x50.toByte() &&
             payload[2] == 0x4E.toByte() && payload[3] == 0x47.toByte()
-        if (isPng) return true
+        if (isPng) return "image/png"
 
         val isGif = payload[0] == 0x47.toByte() && payload[1] == 0x49.toByte() &&
             payload[2] == 0x46.toByte() && payload[3] == 0x38.toByte()
-        if (isGif) return true
+        if (isGif) return "image/gif"
 
         val isWebp = payload[0] == 0x52.toByte() && payload[1] == 0x49.toByte() &&
             payload[2] == 0x46.toByte() && payload[3] == 0x46.toByte() &&
             payload[8] == 0x57.toByte() && payload[9] == 0x45.toByte() &&
             payload[10] == 0x42.toByte() && payload[11] == 0x50.toByte()
+        if (isWebp) return "image/webp"
 
-        return isWebp
+        val isAvif = payload[4] == 0x66.toByte() && payload[5] == 0x74.toByte() &&
+            payload[6] == 0x79.toByte() && payload[7] == 0x70.toByte() &&
+            payload[8] == 0x61.toByte() && payload[9] == 0x76.toByte() &&
+            payload[10] == 0x69.toByte()
+        if (isAvif) return "image/avif"
+
+        return null
     }
 
     // ============================== Popular ===============================
@@ -190,7 +211,7 @@ abstract class InkStory :
             val mangas = response.parseAs<List<BookFromSearchDto>>().map { it.toSManga() }
             val totalHits = response.header("x-estimated-total-hits")?.toIntOrNull()
             val hasNextPage = if (totalHits != null) {
-                (page + 1) * PAGE_SIZE < totalHits
+                page * PAGE_SIZE < totalHits
             } else {
                 mangas.size >= PAGE_SIZE
             }
@@ -293,28 +314,15 @@ abstract class InkStory :
             .mapIndexedNotNull { index, page ->
                 page.image?.takeIf(String::isNotBlank)?.let { imageUrl ->
                     val normalized = normalizeImageUrl(imageUrl)
-                    Page(
-                        index = index,
-                        imageUrl = normalized.url,
-                    )
+                    Page(index = index, imageUrl = normalized)
                 }
             }
     }
 
-    private fun normalizeImageUrl(rawImageUrl: String): NormalizedImage {
-        var imageUrl = rawImageUrl
-        var codec = detectImageCodec(imageUrl)
-
-        if (codec == ImageCodec.SEC) {
-            imageUrl = replaceFileNameMode(imageUrl, 'x')
-            codec = ImageCodec.XOR
-        }
-
-        if (codec != ImageCodec.XOR) {
-            return NormalizedImage(url = imageUrl, requiresXorDecode = false)
-        }
-
-        return NormalizedImage(url = imageUrl, requiresXorDecode = true)
+    private fun normalizeImageUrl(imageUrl: String): String = if (detectImageCodec(imageUrl) == ImageCodec.SEC) {
+        replaceFileNameMode(imageUrl)
+    } else {
+        imageUrl
     }
 
     private fun detectImageCodec(imageUrl: String): ImageCodec? {
@@ -328,24 +336,15 @@ abstract class InkStory :
         }
     }
 
-    private fun replaceFileNameMode(imageUrl: String, replacementMode: Char): String {
-        val parsed = imageUrl.toHttpUrlOrNull() ?: return imageUrl
-        val pathSegments = parsed.pathSegments.toMutableList()
-        val fileName = pathSegments.lastOrNull() ?: return imageUrl
-        val baseName = fileName.substringBeforeLast('.', missingDelimiterValue = fileName)
-        if (baseName.length != IMAGE_NAME_LENGTH || baseName.getOrNull(IMAGE_MODE_INDEX) == null) {
-            return imageUrl
-        }
-        val ext = fileName.substringAfterLast('.', missingDelimiterValue = "")
-        val updatedBaseName = baseName.substring(0, IMAGE_MODE_INDEX) +
-            replacementMode +
-            baseName.substring(IMAGE_MODE_INDEX + 1)
-        val updatedName = if (ext.isBlank()) updatedBaseName else "$updatedBaseName.$ext"
-        pathSegments[pathSegments.lastIndex] = updatedName
-        return parsed.newBuilder()
-            .encodedPath("/" + pathSegments.joinToString("/"))
-            .build()
-            .toString()
+    private fun replaceFileNameMode(imageUrl: String, replacementMode: Char = 'x'): String {
+        val lastSlash = imageUrl.lastIndexOf('/')
+        if (lastSlash == -1) return imageUrl
+        val modeIndex = lastSlash + 1 + IMAGE_MODE_INDEX
+        if (modeIndex >= imageUrl.length) return imageUrl
+
+        val chars = imageUrl.toCharArray()
+        chars[modeIndex] = replacementMode
+        return String(chars)
     }
 
     // ============================== Filters ===============================

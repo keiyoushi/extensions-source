@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "PureManga"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "inkstory"
 
