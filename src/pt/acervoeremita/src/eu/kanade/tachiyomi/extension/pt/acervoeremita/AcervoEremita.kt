@@ -109,7 +109,6 @@ abstract class AcervoEremita : KeiSource() {
         val headers = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .set("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
-            .set("Accept-Encoding", "gzip, deflate")
             .set("Sec-Fetch-Dest", "image")
             .set("Sec-Fetch-Mode", "no-cors")
             .set("Sec-Fetch-Site", "same-origin")
