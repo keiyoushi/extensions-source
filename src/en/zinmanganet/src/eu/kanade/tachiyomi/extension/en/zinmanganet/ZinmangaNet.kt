@@ -1,15 +1,14 @@
 package eu.kanade.tachiyomi.extension.en.zinmanganet
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class ZinmangaNet : Madara() {
-    override val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT)
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
+abstract class ZinmangaNet : MadaraNoAjax() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ROOT)
+    override val chapterMode = ChapterMode.MangaAjax
 
     override val filterNonMangaItems = false
 }
