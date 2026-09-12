@@ -24,8 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class ShadowManga : KeiSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
     private val isNsfw by lazy { name.contains("+18") }
 
     private val cdnHosts = listOf(
@@ -35,8 +33,8 @@ abstract class ShadowManga : KeiSource() {
 
     private val fallbackPrefix = "/api/media/"
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(ImageFallbackInterceptor(cdnHosts, baseUrlHost, fallbackPrefix))
-        .rateLimit(2, 1.seconds, 500.milliseconds) { it.host == baseUrlHost }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(ImageFallbackInterceptor(cdnHosts, "shademanga.com", fallbackPrefix))
+        .rateLimit(2, 1.seconds, 500.milliseconds) { it.host == "shademanga.com" }
 
     private fun getAdultPageToken(page: Int, pageSize: Int = 24): String {
         val half = pageSize / 2
@@ -232,7 +230,7 @@ abstract class ShadowManga : KeiSource() {
     override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/series-locales/tags").parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val tags = data?.runCatching { parseAs<List<String>>() }?.getOrNull().orEmpty()
+        val tags = data?.parseAs<List<String>>().orEmpty()
         return if (isNsfw) {
             FilterList(
                 OrderByFilter(),
