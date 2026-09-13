@@ -4,15 +4,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-private val chapterDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+import kotlin.time.Instant
 
 @Serializable
 class SeriesDto(
@@ -36,6 +29,7 @@ class SeriesDto(
         }
         genre = genres.joinToString()
         author = owner?.username
+        initialized = true
     }
 
     fun toSChapterList(encodedPath: String): List<SChapter> = chapters.map { it.toSChapter(encodedPath) }.sortedByDescending { it.chapter_number }
@@ -58,15 +52,15 @@ class ChapterDto(
         name = chapterTitle?.takeIf { it.isNotBlank() && it != $$"$undefined" }
             ?: "Bölüm $numStr"
         chapter_number = number
-        date_upload = chapterDateFormat.tryParse(createdAt?.removePrefix($$"$D"))
+        date_upload = Instant.tryParse(createdAt?.removePrefix($$"$D"))
     }
 }
 
 @Serializable
 class ChapterDataDto(
-    @SerialName("images_url") private val imagesUrl: List<ImageDto>,
+    private val images: List<ImageDto>,
 ) {
-    fun toPageList(baseUrl: String): List<Page> = imagesUrl.mapIndexed { i, img ->
+    fun toPageList(baseUrl: String): List<Page> = images.mapIndexed { i, img ->
         val imgUrl = if (img.url.startsWith("http")) img.url else baseUrl + img.url
         Page(i, imageUrl = imgUrl)
     }
@@ -79,8 +73,8 @@ class ImageDto(
 
 @Serializable
 class PaginationDto(
-    private val currentPage: Int,
-    private val totalPages: Int,
+    val currentPage: Int,
+    val totalPages: Int,
 ) {
     val hasNextPage get() = currentPage < totalPages
 }
