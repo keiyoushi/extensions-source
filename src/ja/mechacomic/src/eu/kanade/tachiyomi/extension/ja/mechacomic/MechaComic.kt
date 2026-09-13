@@ -15,17 +15,22 @@ import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getString
 import keiyoushi.utils.getStringOrNull
+import keiyoushi.utils.ownTextOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Response
+import org.jsoup.nodes.Document
 
 @Source
 abstract class MechaComic :
@@ -33,10 +38,15 @@ abstract class MechaComic :
     ConfigurableSource {
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "$baseUrl/api/v1"
-    private val cdnUrl = "https://c.$domain/images"
+    private val recommendApiUrl get() = "https://api.one.$domain/v1/recommendation"
+    private val cdnUrl get() = "https://c.$domain"
     private val preferences by getPreferencesLazy()
     private val desktopHeaders get() = headersBuilder()
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
+        .build()
+
+    private val noRedirectClient get() = client.newBuilder()
+        .followRedirects(false)
         .build()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
@@ -48,197 +58,197 @@ abstract class MechaComic :
         val url = "$apiUrl/sales_rankings/current".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
+
         val result = client.get(url).parseAs<RankingResponse>()
         val mangas = result.rankingBooks.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, result.pagination.hasNextPage())
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/books/recent".toHttpUrl().newBuilder()
+        val url = "$recommendApiUrl/recent".toHttpUrl().newBuilder()
+            .addQueryParameter("gender", "all")
+            .addQueryParameter("is_adult", "true")
+            .addQueryParameter("service_name", "web")
+            .addQueryParameter("arrival_type", "new_title")
+            .addQueryParameter("content_format", "all")
+            .addQueryParameter("sort", "newest")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url, desktopHeaders).toMangasPage()
+
+        val result = client.get(url).parseAs<RecentResponse>()
+        val mangas = result.books.map { it.toSManga(cdnUrl) }
+        return MangasPage(mangas, result.hasNextPage)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val genreFilter = filters.firstInstance<GenreFilter>()
-        val sortFilter = filters.firstInstance<SortFilter>()
-        val completedFilter = filters.firstInstance<CompletedFilter>()
-        val booksPath = if (genreFilter.isAdult) "r/books" else "books"
-        val url = "$baseUrl/$booksPath".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("text", query)
-            .apply {
-                genreFilter.value.takeIf { it.isNotEmpty() }?.let {
-                    addQueryParameter("genre", it)
-                }
-                sortFilter.value.takeIf { it.isNotEmpty() }?.let {
-                    addQueryParameter("sort", it)
-                }
-                if (completedFilter.state) {
-                    addQueryParameter("filter[]", "completed")
-                }
-            }.build()
-        return client.get(url, desktopHeaders).toMangasPage()
-    }
+        val genre = filters.firstInstance<GenreFilter>().value
+        val sort = filters.firstInstance<SortFilter>().value
+        val completed = filters.firstInstance<CompletedFilter>().state
 
-    private fun Response.toMangasPage(): MangasPage {
-        val adult = this.request.url.pathSegments.first() == "r"
-        val document = this.asJsoup()
-        val mangas = document.select("li.p-bookList_item").map {
-            SManga.create().apply {
+        if (query.isNotBlank() || genre.isNotEmpty() || completed) {
+            val url = "$baseUrl/books".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .apply {
+                    if (query.isNotBlank()) addQueryParameter("text", query)
+                    if (genre.isNotEmpty()) addQueryParameter("genre", genre)
+                    if (sort.isNotEmpty()) addQueryParameter("sort", sort)
+                    if (completed) addQueryParameter("filter[]", "completed")
+                }
+                .build()
+
+            val document = client.get(url, desktopHeaders).asJsoup()
+            val mangas = document.select("li.p-bookList_item").map {
                 val link = it.selectFirst("dt.p-book_title a")!!
-                val path = link.absUrl("href").toHttpUrl()
-                title = link.text()
-                thumbnail_url = it.selectFirst("div.p-book_jacket img[class^=jacket_image]")?.absUrl("src")
-                url = if (adult) path.pathSegments[2] else path.pathSegments[1]
-                if (adult) {
-                    memo = buildJsonObject {
-                        put("adult", "r")
-                    }
+                SManga.create().apply {
+                    this.url = link.absUrl("href").toHttpUrl().pathSegments.last()
+                    title = link.text()
+                    thumbnail_url = it.selectFirst("div.p-book_jacket img[class^=jacket_image]")?.absUrl("src")
                 }
             }
+            return MangasPage(mangas, document.selectFirst("a.next_page") != null)
         }
-        val hasNextPage = document.selectFirst("a.next_page") != null
-        return MangasPage(mangas, hasNextPage)
+
+        return getPopularManga(page)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        val adult = manga.memo.getStringOrNull("adult") == "r"
-        return if (adult) "$baseUrl/r/books/${manga.url}" else "$baseUrl/books/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/books/${manga.url}"
 
-    // TODO: volumes
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) {
-            return SMangaUpdate(manga, chapters)
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (!fetchDetails) return@async manga
+            val document = client.get(getMangaUrl(manga), desktopHeaders).asJsoup()
+            SManga.create().apply {
+                title = document.selectFirst(".p-bookInfo_title h1")!!.text()
+                author = document.select("#js-anchor-defList dt:contains(作家) + dd .p-sepList_item").joinToString { it.text() }
+                genre = document.select("#js-anchor-defList dt:contains(ジャンル) + dd a, #js-anchor-defList dt:contains(タグ) + dd a").joinToString { it.text() }
+                description = document.selectFirst(".p-bookInfo_summary p")?.textOrNull()
+                status = if (document.selectFirst(".p-bookInfo .c-tag-completed") != null) SManga.COMPLETED else SManga.ONGOING
+                thumbnail_url = document.selectFirst("img.jacket_image_l")?.absUrl("src")
+            }
         }
 
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val chapterList = mutableListOf<SChapter>()
-        var page = 1
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+            val episodes = mutableListOf<SChapter>()
+            val volumes = mutableListOf<SChapter>()
+            var volumesUrl: String? = null
 
-        while (true) {
-            val pageUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .build()
-            val document = client.get(pageUrl, desktopHeaders).asJsoup()
+            var page = 1
+            var hasNextPage = true
+            while (hasNextPage) {
+                val document = getBookPage(getMangaUrl(manga), page)
+                episodes += document.parseChapters(hideLocked)
+                volumes += document.parseVolumes(manga.url, hideLocked)
+                volumesUrl = volumesUrl ?: document.selectFirst("a.c-nav_link[href$=/volumes]")?.absUrl("href")
+                hasNextPage = document.selectFirst("a.next_page") != null
+                page++
+            }
 
-            if (fetchDetails && page == 1) {
-                manga.apply {
-                    title = document.selectFirst(".p-bookInfo_title h1")!!.text()
-                    author = document.select("#js-anchor-defList dt:contains(作家) + dd .p-sepList_item a").joinToString { it.text() }
-                    description = document.selectFirst(".p-bookInfo_summary p")?.text()
-                    genre = document.select("#js-anchor-defList dt:contains(ジャンル) + dd a").joinToString { it.text() }
-                    status = if (document.selectFirst(".c-tag-completed") != null) SManga.COMPLETED else SManga.ONGOING
-                    thumbnail_url = document.selectFirst("img.jacket_image_l")?.absUrl("src")
+            if (volumesUrl != null) {
+                page = 1
+                hasNextPage = true
+                while (hasNextPage) {
+                    val document = getBookPage(volumesUrl, page)
+                    volumes += document.parseVolumes(manga.url, hideLocked)
+                    hasNextPage = document.selectFirst("a.next_page") != null
+                    page++
                 }
             }
 
-            if (fetchChapters) {
-                val chapterItems = document.select("ol.p-chapterList li.p-chapterList_item:has(dl.p-chapterList_txtArea)")
-                chapterList += if (chapterItems.isNotEmpty()) {
-                    chapterItems.mapNotNull {
-                        val btn = it.selectFirst(".p-chapterList_btnArea a.p-btn-chapter") ?: return@mapNotNull null
-                        val isLocked = ((btn.text() != "無料" && btn.absUrl("href").toHttpUrl().pathSegments[0] != "free_chapters") && btn.text() != "読む" && btn.absUrl("href").toHttpUrl().pathSegments[0] != "chapters") || btn.absUrl("href").toHttpUrl().pathSegments[0] != "free_chapters"
-                        if (hideLocked && isLocked) return@mapNotNull null
-
-                        SChapter.create().apply {
-                            val lock = if (isLocked) "🔒 " else ""
-                            val href = btn.absUrl("href").toHttpUrl()
-                            setUrlWithoutDomain(href.pathSegments[1])
-                            if (href.pathSegments[0] == "free_chapters") {
-                                memo = buildJsonObject {
-                                    put("free", "1")
-                                    put("code", href.pathSegments[3])
-                                }
-                            }
-                            name = lock + it.selectFirst("dd.p-chapterList_name")!!.text()
-                            chapter_number = it.selectFirst("dt.p-chapterList_no")!!.text().replace("話", "").trim().toFloatOrNull() ?: -1f
-                        }
-                    }
-                } else {
-                    document.select("ol.p-volumeList li.p-volumeList_item:has(dl.p-volumeInfo_body)").mapNotNull {
-                        val link = it.selectFirst("dt.p-volumeList_no a")!!
-                        val href = link.absUrl("href").toHttpUrl().pathSegments
-                        val buyHref = it.selectFirst(".p-volumeInfo_btnList_item-button2 a.p-btn-volume")?.absUrl("href")?.toHttpUrl()?.pathSegments?.lastOrNull()
-                        val isLocked = buyHref == "buy_confirm" || buyHref == "login"
-                        if (hideLocked && isLocked) return@mapNotNull null
-
-                        SChapter.create().apply {
-                            val lock = if (isLocked) "🔒 " else ""
-                            setUrlWithoutDomain(href[3])
-                            memo = buildJsonObject {
-                                put("type", "1")
-                                put("titleId", href[1])
-                            }
-                            val volumeName = link.text()
-                            name = lock + volumeName
-                            chapter_number = href[3].toFloatOrNull() ?: -1f
-                        }
-                    }
-                }
-            } else {
-                break
-            }
-
-            val hasNextPage = document.selectFirst("a.next_page") != null
-            if (!hasNextPage) break
-            page++
+            (volumes + episodes).reversed()
         }
 
-        return SMangaUpdate(
-            manga = manga,
-            chapters = if (fetchChapters) chapterList.reversed() else chapters,
+        SMangaUpdate(
+            details.await(),
+            chapterList.await(),
         )
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = if (chapter.memo.getStringOrNull("free") == "1") {
-        val code = chapter.memo.getString("code")
-        "$baseUrl/free_chapters/${chapter.url}/download/$code"
-    } else if (chapter.memo.getStringOrNull("type") == "1") {
-        "$baseUrl/books/${chapter.memo.getString("titleId")}/volume/${chapter.url}/download"
-    } else {
-        "$baseUrl/chapters/${chapter.url}/download"
+    private suspend fun getBookPage(url: String, page: Int): Document {
+        val pageUrl = url.toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .build()
+        return client.get(pageUrl, desktopHeaders).asJsoup()
     }
 
-    private val newClient = network.client.newBuilder()
-        .followRedirects(false)
-        .build()
+    private fun Document.parseChapters(hideLocked: Boolean): List<SChapter> = select("ol.p-chapterList li.p-chapterList_item:has(dl.p-chapterList_txtArea)").mapNotNull {
+        val downloadPath = it.selectFirst("a.p-btn-chapter[href*=download]")?.attrOrNull("abs:href")?.toHttpUrl()?.encodedPath
+        if (hideLocked && downloadPath == null) return@mapNotNull null
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = newClient.get(getChapterUrl(chapter), ensureSuccess = false).use { it.header("location")!!.toHttpUrl() }
-        val cryptoKeyPath = url.queryParameter("manifest_url")
-        val directory = url.queryParameter("directory")
-        val ver = url.queryParameter("ver")
-        val contentsPath = url.queryParameter("contents_vertical")
-            ?: url.queryParameter("contents")
-            ?: url.queryParameter("contents_page")
-            ?: throw Exception("Log in via WebView and purchase this product to read.")
+        val number = it.selectFirst("dt.p-chapterList_no")?.ownTextOrNull()
+        SChapter.create().apply {
+            url = it.selectFirst("input[name=\"chapter_ids[]\"]")!!.attrOrNull("value")!!
+            name = (if (downloadPath == null) "🔒 " else "") + it.selectFirst("dd.p-chapterList_name")!!.text()
+            chapter_number = number?.removeSuffix("話")?.toFloatOrNull() ?: -1f
+            if (downloadPath != null) {
+                memo = buildJsonObject { put("download", downloadPath) }
+            }
+        }
+    }
 
-        val contentsUrl = contentsPath.toHttpUrl().newBuilder()
-            .addQueryParameter("ver", ver)
+    private fun Document.parseVolumes(bookId: String, hideLocked: Boolean): List<SChapter> = select("ol.p-volumeList li.p-volumeList_item:has(dl.p-volumeInfo_body)").mapNotNull {
+        val link = it.selectFirst("dt.p-volumeList_no a")!!
+        val downloadPaths = it.select("a.p-btn-volume[href*=download]").map { btn -> btn.absUrl("href").toHttpUrl().encodedPath }
+        val fullPath = downloadPaths.firstOrNull { path -> !path.endsWith("/sample_download") }
+        if (hideLocked && fullPath == null) return@mapNotNull null
+
+        val downloadPath = fullPath ?: downloadPaths.firstOrNull()
+        val icon = when {
+            fullPath != null -> ""
+            downloadPath != null -> "🔒 (Preview) "
+            else -> "🔒 "
+        }
+        SChapter.create().apply {
+            url = link.absUrl("href").toHttpUrl().pathSegments.last()
+            name = icon + link.text()
+            memo = buildJsonObject {
+                put("bookId", bookId)
+                if (downloadPath != null) put("download", downloadPath)
+            }
+        }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        chapter.memo.getStringOrNull("download")?.let { return baseUrl + it }
+        val bookId = chapter.memo.getStringOrNull("bookId")
+        return if (bookId != null) {
+            "$baseUrl/books/$bookId/volume/${chapter.url}/download"
+        } else {
+            "$baseUrl/chapters/${chapter.url}/download"
+        }
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
+        val viewerUrl = noRedirectClient.get(getChapterUrl(chapter), ensureSuccess = false)
+            .use { it.header("Location") }
+            ?.toHttpUrlOrNull()
+        val contentsUrl = viewerUrl?.let {
+            it.queryParameter("contents_vertical")
+                ?: it.queryParameter("contents")
+                ?: it.queryParameter("contents_page")
+        } ?: throw Exception("Log in via WebView and purchase this product to read.")
+
+        val directory = viewerUrl.queryParameter("directory")!!
+        val manifestPath = viewerUrl.queryParameter("manifest_url")!!
+        val contentsRequestUrl = contentsUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("ver", viewerUrl.queryParameter("ver"))
             .build()
 
-        val contentData = client.get(contentsUrl).parseAs<ContentData>()
-        val cryptoKey = client.get("$baseUrl$cryptoKeyPath").parseAs<CryptoKey>().cryptokey
-        return contentData.images.values.mapIndexed { i, pages ->
-            val img = (directory + pages.first().src).toHttpUrl().newBuilder()
-                .addQueryParameter("ver", ver)
-                .fragment("key=$cryptoKey")
-                .build()
-                .toString()
-            Page(i, imageUrl = img)
+        val contentData = async { client.get(contentsRequestUrl).parseAs<ContentData>() }
+        val cryptoKey = async { client.get(baseUrl + manifestPath).parseAs<CryptoKey>().cryptokey }
+
+        contentData.await().imagePaths().mapIndexed { i, path ->
+            Page(i, imageUrl = "$directory$path#key=${cryptoKey.await()}")
         }
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Header("Note: Search and active filters are applied together"),
         Filter.Header("Novels are not supported!"),
         GenreFilter(),
         SortFilter(),

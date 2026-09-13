@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Mecha Comic"
     versionCode = 1
-    contentWarning = ContentWarning.MIXED
+    contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {

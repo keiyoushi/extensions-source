@@ -24,14 +24,7 @@ class GenreFilter :
             "オトナコミック" to "5",
             "レディースコミック" to "34",
         ),
-    ) {
-    val isAdult: Boolean
-        get() = value in ADULT_GENRES
-
-    companion object {
-        private val ADULT_GENRES = setOf("6", "24", "5", "34")
-    }
-}
+    )
 
 class SortFilter :
     SelectFilter(
