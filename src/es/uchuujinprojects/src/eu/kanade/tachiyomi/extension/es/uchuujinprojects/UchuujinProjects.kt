@@ -4,18 +4,14 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.text.SimpleDateFormat
-import java.util.Locale
+import okhttp3.OkHttpClient
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class UchuujinProjects : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es"))
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    override val datePattern = "dd 'de' MMMM 'de' yyyy"
 
-    override val client = super.client.newBuilder()
-        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     override val hasProjectPage = true
 }

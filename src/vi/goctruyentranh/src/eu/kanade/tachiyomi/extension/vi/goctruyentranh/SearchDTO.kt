@@ -9,7 +9,7 @@ class SearchDTO(
 
 @Serializable
 class Data(
-    var name: String,
+    val name: String,
     val slug: String,
     val thumbnail: String?,
 )
@@ -17,6 +17,6 @@ class Data(
 @Serializable
 class Comics(
     val current_page: Int,
-    val data: ArrayList<Data> = arrayListOf(),
+    val data: List<Data> = emptyList(),
     val last_page: Int,
 )

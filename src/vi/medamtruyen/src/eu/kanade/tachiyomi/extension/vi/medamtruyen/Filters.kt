@@ -2,58 +2,41 @@ package eu.kanade.tachiyomi.extension.vi.medamtruyen
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.serialization.Serializable
 
-fun getFilters(): FilterList = FilterList(
-    Filter.Header("Bộ lọc sẽ bị bỏ qua khi tìm kiếm"),
-    GenreFilter(),
+fun getFilters(data: FilterData?): FilterList = FilterList(
+    buildList {
+        add(Filter.Header("Bộ lọc sẽ bị bỏ qua khi tìm kiếm"))
+        data?.genres?.takeIf { it.isNotEmpty() }?.let { add(GenreFilter(it)) }
+        data?.groups?.takeIf { it.isNotEmpty() }?.let { add(GroupFilter(it)) }
+        data?.authors?.takeIf { it.isNotEmpty() }?.let { add(AuthorFilter(it)) }
+    },
 )
 
-class GenreFilter :
-    UriPartFilter(
-        "Thể loại",
-        arrayOf(
-            Pair("Tất cả", null),
-            Pair("Âu Cổ", "au-co"),
-            Pair("Báo Thù", "bao-thu"),
-            Pair("Chiếm Hữu Mạnh Mẽ", "chiem-huu-manh-me"),
-            Pair("Cổ Đại", "co-dai"),
-            Pair("Cổ Phong", "co-phong"),
-            Pair("Cục Cưng", "cuc-cung"),
-            Pair("Cưới Trước Yêu Sau", "cuoi-truoc-yeu-sau"),
-            Pair("Harem", "harem"),
-            Pair("Hậu Cung", "hau-cung"),
-            Pair("Hệ Thống", "he-thong"),
-            Pair("Hiện Đại", "hien-dai"),
-            Pair("Hoàng Gia", "hoang-gia"),
-            Pair("Hoạt Hình", "hoat-hinh"),
-            Pair("Huyền Huyễn", "huyen-huyen"),
-            Pair("Ma Cà Rồng", "ma-ca-rong"),
-            Pair("Manga", "manga"),
-            Pair("Manhua", "manhua"),
-            Pair("Manhwa", "manhwa"),
-            Pair("Ngôn Tình Hắc Đạo", "ngon-tinh-hac-dao"),
-            Pair("Ngược Tâm", "nguoc-tam"),
-            Pair("Nhân Thú", "nhan-thu"),
-            Pair("Nữ Cường", "nu-cuong"),
-            Pair("Nuôi Rồi Thịt", "nuoi-roi-thit"),
-            Pair("Sét ⚡", "set-%e2%9a%a1"),
-            Pair("Showbiz", "showbiz"),
-            Pair("Sủng Ngọt", "sung-ngot"),
-            Pair("Thanh Mai Trúc Mã", "thanh-mai-truc-ma"),
-            Pair("Thanh Xuân Vườn Trường", "thanh-xuan-vuon-truong"),
-            Pair("Tình Cảm Thầy Trò", "tinh-cam-thay-tro"),
-            Pair("Tình Yêu Chị Em", "tinh-yeu-chi-em"),
-            Pair("Tổng Tài", "tong-tai"),
-            Pair("Trâu Già Gặm Cỏ Non", "trau-gia-gam-co-non"),
-            Pair("Trùng Sinh", "trung-sinh"),
-            Pair("Truyện Nữ Giả Nam", "truyen-nu-gia-nam"),
-            Pair("Xuyên Không", "xuyen-khong"),
-        ),
-    )
+@Serializable
+class FilterData(
+    val genres: List<FilterOption>,
+    val groups: List<FilterOption>,
+    val authors: List<FilterOption>,
+)
+
+@Serializable
+class FilterOption(
+    val name: String,
+    val path: String,
+)
+
+class GenreFilter(options: List<FilterOption>) : UriPartFilter("Thể loại", options)
+
+class GroupFilter(options: List<FilterOption>) : UriPartFilter("Nhóm", options)
+
+class AuthorFilter(options: List<FilterOption>) : UriPartFilter("Tác giả", options)
 
 open class UriPartFilter(
     displayName: String,
-    private val vals: Array<Pair<String, String?>>,
-) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-    fun toUriPart(): String? = vals[state].second
+    options: List<FilterOption>,
+) : Filter.Select<String>(displayName, (listOf("Tất cả") + options.map { it.name }).toTypedArray()) {
+    private val paths = listOf<String?>(null) + options.map { it.path }
+
+    fun toUriPart(): String? = paths[state]
 }

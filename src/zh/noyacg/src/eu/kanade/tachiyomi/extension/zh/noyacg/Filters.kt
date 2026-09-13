@@ -4,11 +4,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.FormBody
 
-fun getFilterListInternal() = FilterList(
-    SearchTypeFilter(),
-    SortFilter(),
-    StatusFilter(),
-)
+fun buildFilterList() = FilterList(SearchTypeFilter(), SortFilter(), StatusFilter())
 
 interface SearchFilter {
     fun addTo(builder: FormBody.Builder)
@@ -23,7 +19,7 @@ class SearchTypeFilter :
 }
 
 class SortFilter :
-    Filter.Select<String>("排序方式", arrayOf("預設", "觀看次數", "收藏", "評分")),
+    Filter.Select<String>("排序方式", arrayOf("時間", "閲讀", "收藏", "評分")),
     SearchFilter {
     override fun addTo(builder: FormBody.Builder) {
         builder.addEncoded("sort", arrayOf("", "views", "favorites", "rating")[state])

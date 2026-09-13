@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "VCPVMP"
-    versionCode = 9
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "vercomics"
 
     source {

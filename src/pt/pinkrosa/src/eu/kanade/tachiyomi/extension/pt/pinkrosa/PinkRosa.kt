@@ -1,55 +1,30 @@
 package eu.kanade.tachiyomi.extension.pt.pinkrosa
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 
 @Source
 abstract class PinkRosa : ZeistManga() {
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int) = super.fetchLatestUpdates(page)
+    override val mangaDetailsSelector = "#main"
+    override val mangaDetailsSelectorAuthor = "#tauther"
+    override val mangaDetailsSelectorDescription = "#syn_bod"
+    override val mangaDetailsSelectorGenres = "a[href*=label][rel]"
+    override val mangaDetailsSelectorStatus = "div[class*=bg-green] span"
+    override val mangaDetailsSelectorThumbnail = ".hidden img"
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst("h1")!!.text()
-        description = document.selectFirst("#syn_bod")?.text()
-        thumbnail_url = document.selectFirst(".thum")?.attr("style")?.let {
-            THUMBNAIL_REGEX.find(it)?.groups?.get(1)?.value
-        }
-        author = document.selectFirst("#tauther")?.text()
-        genre = document.select("a[href*=label][rel]").joinToString { it.text() }
-        setUrlWithoutDomain(document.location())
-    }
-
-    override fun getChapterFeedUrl(doc: Document): String {
+    override fun getChapterFeedUrl(doc: Document, mangaTitle: String): String {
         val label = doc.selectFirst(".chapter_get")!!.attr("data-labelchapter")
-        return "$baseUrl/feeds/posts/default/-".toHttpUrl().newBuilder()
-            .addPathSegment(label)
-            .addQueryParameter("alt", "json")
-            .addQueryParameter("start-index", "1")
-            .addQueryParameter("max-results", "999")
-            .build().toString()
+        return super.getChapterFeedUrl(doc, label)
     }
 
-    override val pageListSelector = "div.separator a"
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select(pageListSelector).mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("href"))
-        }
-    }
+    override val pageListSelector = "div.separator"
 
     companion object {
         val THUMBNAIL_REGEX = """url."([^"]+)""".toRegex()

@@ -2,7 +2,15 @@ plugins {
     alias(kei.plugins.multisrc)
 }
 
+dependencies {
+    api(project(":lib:i18n"))
+}
+
 keiyoushi {
-    baseVersionCode = 13
-    libVersion = "1.4"
+    baseVersionCode = 14
+    libVersion = "1.6"
+
+    deeplink {
+        path("/..*/..*/..*.html")
+    }
 }

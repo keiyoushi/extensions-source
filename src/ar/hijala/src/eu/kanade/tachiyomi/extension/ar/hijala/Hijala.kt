@@ -14,21 +14,16 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
 abstract class Hijala : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(::scrambledImageInterceptor)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::scrambledImageInterceptor)
 
     private fun scrambledImageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -49,7 +44,7 @@ abstract class Hijala : MangaThemesia() {
                     val pieceRequest = request.newBuilder().url(pieceUrl).build()
                     client.newCall(pieceRequest).await().use { response ->
                         response.body.use { body ->
-                            BitmapFactory.decodeStream(body?.byteStream())
+                            BitmapFactory.decodeStream(body.byteStream())
                                 ?: throw Exception("Failed to decode $pieceUrl")
                         }
                     }

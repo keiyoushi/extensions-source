@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Nude-Moon"
-    versionCode = 29
+    versionCode = 30
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         baseUrl {
@@ -16,8 +16,8 @@ keiyoushi {
         }
         lang = "ru"
     }
-}
 
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
+    deeplink {
+        path("/..*--..*\\.html")
+    }
 }

@@ -1,31 +1,32 @@
 package eu.kanade.tachiyomi.extension.en.webnovel
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.util.Calendar
 import java.util.Date
 
 @Source
-abstract class WebNovel : HttpSource() {
+abstract class WebNovel : KeiSource() {
 
     private val baseApiUrl = "$baseUrl$BASE_API_ENDPOINT"
 
@@ -33,79 +34,104 @@ abstract class WebNovel : HttpSource() {
 
     private val baseCdnUrl = baseUrl.replace("www", "comic-image")
 
-    override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client
-        .newBuilder()
-        .addNetworkInterceptor(::csrfTokenInterceptor)
-        .addNetworkInterceptor(::expiredImageUrlInterceptor)
-        .build()
-
-    private val json: Json by injectLazy()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addNetworkInterceptor(::csrfTokenInterceptor)
+        addInterceptor(::expiredImageUrlInterceptor)
+    }
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
-        page = page,
-        query = "",
-        filters = FilterList(SortByFilter(default = 1)),
-    )
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortByFilter(default = 1)))
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
-        page = page,
-        query = "",
-        filters = FilterList(SortByFilter(default = 5)),
-    )
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortByFilter(default = 5)))
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            val url = "$baseApiUrl$QUERY_SEARCH_PATH?type=manga&pageIndex=$page".toHttpUrl()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = if (query.isNotBlank()) {
+            "$baseApiUrl$QUERY_SEARCH_PATH?type=manga&pageIndex=$page".toHttpUrl()
                 .newBuilder()
                 .addQueryParameter("keywords", query)
                 .toString()
+        } else {
+            val sort = filters.firstInstanceOrNull<SortByFilter>()?.selectedValue.orEmpty()
+            val contentStatus = filters.firstInstanceOrNull<ContentStatusFilter>()?.selectedValue.orEmpty()
+            val genre = filters.firstInstanceOrNull<GenreFilter>()?.selectedValue.orEmpty()
 
-            return GET(url, headers)
+            "$baseApiUrl$FILTER_SEARCH_PATH?categoryType=2&pageIndex=$page" +
+                "&categoryId=$genre&bookStatus=$contentStatus&orderBy=$sort"
         }
-        val sort = filters.firstInstanceOrNull<SortByFilter>()?.selectedValue.orEmpty()
-        val contentStatus = filters.firstInstanceOrNull<ContentStatusFilter>()?.selectedValue.orEmpty()
-        val genre = filters.firstInstanceOrNull<GenreFilter>()?.selectedValue.orEmpty()
 
-        val url = "$baseApiUrl$FILTER_SEARCH_PATH?categoryType=2&pageIndex=$page" +
-            "&categoryId=$genre&bookStatus=$contentStatus&orderBy=$sort"
+        val response = client.get(url)
 
-        return GET(url, headers)
+        return if (url.contains(QUERY_SEARCH_PATH)) {
+            response.parseAsForWebNovel<QuerySearchResponse>().toMangasPage(::getCoverUrl)
+        } else {
+            response.parseAsForWebNovel<FilterSearchResponse>().toMangasPage(::getCoverUrl)
+        }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = if (response.request.url.toString().contains(QUERY_SEARCH_PATH)) {
-        response.parseAsForWebNovel<QuerySearchResponse>().toMangasPage(::getCoverUrl)
-    } else {
-        response.parseAsForWebNovel<FilterSearchResponse>().toMangasPage(::getCoverUrl)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "comic") {
+            return null
+        }
+
+        val manga = SManga.create().apply {
+            this.url = url.pathSegments[1].substringAfterLast("_")
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                initialized = true
+            }
     }
 
-    // Manga details
+    // Filters
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        ContentStatusFilter(),
+        SortByFilter(),
+        GenreFilter(),
+    )
+
+    // Manga updates
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.getId}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseApiUrl/comic/getComicDetailPage?comicId=${manga.getId}", headers)
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (comicId, chapterId) = chapter.getMangaAndChapterId
+        return "$baseUrl/comic/$comicId/$chapterId"
+    }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAsForWebNovel<ComicDetailInfoResponse>().toSManga(::getCoverUrl)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val (manga, chapters) = coroutineScope {
+            val mangaD = async { if (fetchDetails) getMangaDetails(manga) else manga }
+            val chaptersD = async { if (fetchChapters) getChapterList(manga) else chapters }
+            mangaD.await() to chaptersD.await()
+        }
 
-    // chapters
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseApiUrl/comic/getChapterList?comicId=${manga.getId}", headers)
+        return SMangaUpdate(manga, chapters)
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val chapterList = response.parseAsForWebNovel<ComicChapterListResponse>()
+    private suspend fun getMangaDetails(manga: SManga): SManga {
+        val response = client.get("$baseApiUrl/comic/getComicDetailPage?comicId=${manga.getId}")
+        return response.parseAsForWebNovel<ComicDetailInfoResponse>().toSManga(::getCoverUrl)
+    }
+
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
+        val chapterList = client.get("$baseApiUrl/comic/getChapterList?comicId=${manga.getId}")
+            .parseAsForWebNovel<ComicChapterListResponse>()
+
         val comic = chapterList.comic
         val chapters = chapterList.chapters.reversed().asSequence()
 
         val accurateUpdateTimes = runCatching {
-            client.newCall(GET("$WEBNOVEL_UPLOAD_TIME/${comic.id}.json"))
-                .execute()
-                .parseAs<Map<String, Long>>()
+            client.get("$WEBNOVEL_UPLOAD_TIME/${comic.id}.json").parseAs<Map<String, Long>>()
         }
             .getOrDefault(emptyMap())
 
@@ -141,27 +167,6 @@ abstract class WebNovel : HttpSource() {
     }
 
     // Pages
-    override fun getChapterUrl(chapter: SChapter): String {
-        val (comicId, chapterId) = chapter.getMangaAndChapterId
-        return "$baseUrl/comic/$comicId/$chapterId"
-    }
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservableSuccess()
-        .map { response ->
-            pageListParse(response)
-        }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val (comicId, chapterId) = chapter.getMangaAndChapterId
-        return pageListRequest(comicId, chapterId)
-    }
-
-    private fun pageListRequest(comicId: String, chapterId: String): Request {
-        // Given a high [width] value WebNovel returns the highest resolution image publicly available
-        return GET("$baseApiUrl/comic/getContent?comicId=$comicId&chapterId=$chapterId&width=9999")
-    }
-
     data class ChapterPage(
         val id: String,
         val url: String,
@@ -172,23 +177,25 @@ abstract class WebNovel : HttpSource() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<ChapterPage>>?): Boolean = size > 25
     }
 
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val (comicId, chapterId) = chapter.getMangaAndChapterId
+        val response = client.get(pageListUrl(comicId, chapterId))
+        return parsePageList(response)
+    }
+
+    private fun pageListUrl(comicId: String, chapterId: String): String {
+        // Given a high [width] value WebNovel returns the highest resolution image publicly available
+        return "$baseApiUrl/comic/getContent?comicId=$comicId&chapterId=$chapterId&width=9999"
+    }
+
+    private fun parsePageList(response: Response): List<Page> {
         val chapterContent = response.parseAsForWebNovel<ChapterContentResponse>().data
         return chapterContent.pages.map { ChapterPage(it.id, it.url) }
             .also { chapterPageCache[chapterContent.id.toString()] = it }
             .mapIndexed { i, chapterPage -> Page(i, imageUrl = chapterPage.url) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        ContentStatusFilter(),
-        SortByFilter(),
-        GenreFilter(),
-    )
-
+    // Utilities
     private val SManga.getId: String
         get() {
             url.toLongOrNull() ?: throw Exception(MIGRATE_MESSAGE)
@@ -240,7 +247,7 @@ abstract class WebNovel : HttpSource() {
         if (cachedPageUrl != null && isPageUrlStillValid(cachedPageUrl.toHttpUrl())) return chain.proceed(originalRequest)
 
         // Time to get it from site
-        chain.proceed(pageListRequest(comicId, chapterId)).use { pageListParse(it) }
+        parsePageList(chain.proceed(GET(pageListUrl(comicId, chapterId))))
 
         val newPageUrl = chapterPageCache[chapterId]?.firstOrNull { it.id == pageId }?.url?.toHttpUrl()
             ?: throw IOException("Couldn't regenerate expired image url")
@@ -257,17 +264,11 @@ abstract class WebNovel : HttpSource() {
         return Date().time - urlGenerationTime <= 570000
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString<T>(it.body.string())
-    }
-
-    private inline fun <reified T> Response.parseAsForWebNovel(): T = use {
+    private inline fun <reified T> Response.parseAsForWebNovel(): T {
         val parsed = parseAs<ResponseWrapper<T>>()
         if (parsed.code != 0) error("Error ${parsed.code}: ${parsed.msg}")
-        requireNotNull(parsed.data) { "Received response data was null" }
+        return requireNotNull(parsed.data) { "Received response data was null" }
     }
-
-    private inline fun <reified T> List<*>.firstInstanceOrNull() = firstOrNull { it is T } as? T
 
     companion object {
         private const val BASE_API_ENDPOINT = "/go/pcm"

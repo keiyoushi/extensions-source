@@ -1,96 +1,99 @@
 package eu.kanade.tachiyomi.extension.en.ritharscans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.network.get
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 @Source
 abstract class RitharScans : Keyoapp() {
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = super.popularMangaParse(response).mangas
-            .distinctBy { it.url }
+    override suspend fun requestGeneres() = client.get("$baseUrl/search")
 
-        return MangasPage(mangas, false)
+    override fun parseGenres(document: Document) = document.select("[x-data*=genre] button").associate {
+        it.text() to it.attr("wire:key")
     }
 
-    override fun genresRequest() = GET("$baseUrl/search", headers)
-
-    override fun parseGenres(document: Document): List<Genre> = document.select("[x-data*=genre] button").map {
-        val name = it.text()
-        val id = it.attr("wire:key")
-
-        Genre(name, id)
+    override fun searchUrlBuilder(query: String, page: Int) = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        if (query.isNotBlank()) {
+            addQueryParameter("title", query)
+        }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("search")
-            if (query.isNotBlank()) {
-                addQueryParameter("title", query)
-            }
-            filters.firstInstanceOrNull<GenreList>()?.also { filter ->
-                filter.state
-                    .filter { it.state }
-                    .forEach { genre ->
-                        addQueryParameter("genre", genre.id)
-                    }
-            }
-        }.build()
-
-        return GET(url, headers)
-    }
+    // Server-side
+    override fun Element.matchesGenres(genres: List<String>) = true
+    override fun Element.matchesStatuses(statuses: List<String>) = true
 
     override fun searchMangaSelector() = "[wire:snapshot*=pages.search] button[tags]"
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        runCatching { fetchGenres() }
-
-        val mangas = response.asJsoup()
-            .select(searchMangaSelector())
-            .map(::searchMangaFromElement)
-
-        return MangasPage(mangas, false)
-    }
 
     override val altNameSelector: String = "div.font-medium:containsOwn(Alternative titles) ~ div span.select-all"
     override val statusSelector = "[alt=Status]"
     override val typeSelector = "[alt=Type]"
 
-    override fun pageListParse(document: Document): List<Page> {
-        val data = document.selectFirst("script[type=\"application/ld+json\"]")!!.data().parseAs<ChapterLD>()
-        val chapterID = data.url.substringAfterLast('/')
-        val seriesID = data.isPartOf.url.substringAfterLast('/')
+    override val paidChapterSelector = "img[alt~=Coin], img[src*=star-circle]"
 
-        return (1..data.numberOfPages).mapIndexed { i, page ->
-            Page(
-                i,
-                url = document.location(),
-                imageUrl = "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
-            )
+    override fun pageListParse(document: Document): List<Page> {
+        val xData = document.selectFirst("[x-data*=immersiveReader]")?.attr("x-data")
+            ?: return super.pageListParse(document)
+
+        val canRead = CAN_READ_REGEX.find(xData)?.groupValues?.get(1)?.toBooleanStrictOrNull() ?: false
+        if (!canRead) {
+            throw Exception("This chapter is locked. Log in via WebView and unlock this chapter to read.")
         }
+
+        val baseLink = BASE_LINK_REGEX.find(xData)?.groupValues?.get(1) ?: "$baseUrl/storage/"
+        val pagesJson = extractPagesJson(xData)
+            ?: throw Exception("Failed to parse chapter pages")
+
+        val pages = pagesJson.parseAs<List<PageDto>>()
+        if (pages.isEmpty()) {
+            throw Exception("This chapter is locked. Log in via WebView and unlock this chapter to read.")
+        }
+
+        return pages.mapIndexed { i, page ->
+            val imageUrl = if (page.path.startsWith("http://") || page.path.startsWith("https://")) {
+                page.path
+            } else {
+                "${baseLink.trimEnd('/')}/${page.path.trimStart('/')}"
+            }
+            Page(i, document.location(), imageUrl)
+        }
+    }
+
+    private fun extractPagesJson(xData: String): String? {
+        val startIndex = xData.indexOf("pages:").takeIf { it != -1 } ?: return null
+        val afterPages = xData.substring(startIndex + 6).trimStart()
+        if (!afterPages.startsWith("[")) return null
+
+        var depth = 0
+        for (i in afterPages.indices) {
+            when (afterPages[i]) {
+                '[' -> depth++
+                ']' -> {
+                    depth--
+                    if (depth == 0) {
+                        return afterPages.substring(0, i + 1)
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    override fun getTypeList() = emptyMap<String, String>()
+
+    companion object {
+        private val CAN_READ_REGEX = """canRead\s*:\s*(true|false)""".toRegex()
+        private val BASE_LINK_REGEX = """baseLink\s*:\s*['"]([^'"]+)['"]""".toRegex()
     }
 }
 
 @Serializable
-internal class ChapterLD(
-    val isPartOf: SeriesLD,
-    val numberOfPages: Int,
-    val url: String,
-)
-
-@Serializable
-internal class SeriesLD(
-    val url: String,
+class PageDto(
+    val path: String,
 )

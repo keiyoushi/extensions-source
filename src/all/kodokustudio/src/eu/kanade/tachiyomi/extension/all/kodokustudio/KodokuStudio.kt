@@ -5,6 +5,6 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class KodokuStudio : Madara() {
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
     override val mangaSubString = "manhua"
 }

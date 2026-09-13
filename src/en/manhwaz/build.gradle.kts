@@ -8,7 +8,7 @@ keiyoushi {
     name = "ManhwaZ"
     versionCode = 37
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "manhwaz"
 
     source {

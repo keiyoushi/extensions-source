@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "KadoComi"
-    versionCode = 3
-    contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    versionCode = 1
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         name = "カドコミ"

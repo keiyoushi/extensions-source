@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Luvyaa"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {
         lang = "id"
-        baseUrl = "https://v4.luvyaa.co"
+        baseUrl = "https://v5.luvyaa.co"
     }
 }

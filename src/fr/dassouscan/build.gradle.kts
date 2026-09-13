@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Dassou Scan"
-    versionCode = 51
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "fr"
         baseUrl = "https://dassouscan.com"
         versionId = 2
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

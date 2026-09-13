@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Komiic"
-    versionCode = 9
+    versionCode = 10
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "zh"

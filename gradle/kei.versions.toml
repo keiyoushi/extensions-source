@@ -1,6 +1,6 @@
 [versions]
 # Used in [/gradle/build-logic/src/main/kotlin/AndroidBasePlugin.kt]
-android-sdk-min = "21"
+android-sdk-min = "26"
 android-sdk-compile = "37"
 android-sdk-target = "37"
 java = "11"

@@ -5,9 +5,26 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 import java.util.Calendar
 
-class Filters {
+class Filters(
+    private val contentRating: String,
+    private val selectedTypes: Set<String>,
+    private val selectedDemographics: Set<String>,
+    private val blockedGenres: Set<String>,
+) {
     interface UriFilter {
         fun addToUri(builder: HttpUrl.Builder)
+    }
+
+    interface PreferenceFilter : UriFilter
+
+    interface QueryAwareFilter : UriFilter {
+        fun addToUri(builder: HttpUrl.Builder, query: String)
+    }
+
+    interface RequiresTermSelection : UriFilter
+
+    interface TermFilter {
+        val hasSelection: Boolean
     }
 
     companion object {
@@ -15,9 +32,15 @@ class Filters {
             Calendar.getInstance()[Calendar.YEAR]
         }
 
-        // The site allows entries published anywhere from 1928 up to the year
-        // after the current one (it gets used for upcoming releases).
         private const val OLDEST_YEAR = 1928
+
+        private val CONTENT_RATING_OPTIONS = arrayOf(
+            "Show all" to "",
+            "Safe only" to "safe",
+            "Up to Suggestive" to "suggestive",
+            "Up to Erotica" to "erotica",
+            "Up to Pornographic" to "pornographic",
+        )
 
         private fun getYearsArray(forFromFilter: Boolean): Array<Pair<String, String>> {
             val newest = currentYear + 1
@@ -30,11 +53,6 @@ class Filters {
             }
         }
 
-        // Site's curated list of 31 genres (matches the Genres section in the
-        // browse panel exactly). Narrative tags like "Aliens" or "School Life"
-        // used to live here too, but they belong under Tags and are searched
-        // by name rather than enumerated.
-        // Order mirrors the site's "Content preferences" modal.
         fun getGenres() = arrayOf(
             "Action" to "6",
             "Adult" to "87264",
@@ -69,7 +87,6 @@ class Filters {
             "Wuxia" to "30",
         )
 
-        // The 9 site formats (matches the Formats section in the browse panel).
         fun getFormats() = arrayOf(
             "4-Koma" to "93164",
             "Adaptation" to "93167",
@@ -82,7 +99,6 @@ class Filters {
             "Web Comic" to "93171",
         )
 
-        // Order mirrors the site's "Content preferences" modal.
         fun getDemographics() = arrayOf(
             Pair("Josei", "3"),
             Pair("Seinen", "4"),
@@ -90,9 +106,6 @@ class Filters {
             Pair("Shounen", "2"),
         )
 
-        // Same set TypeFilter exposes in the search filter sheet — duplicated
-        // here as a public getter so source-level preferences (in Comix.kt)
-        // can present the identical pick list.
         fun getTypes() = arrayOf(
             Pair("Manga", "manga"),
             Pair("Manhwa", "manhwa"),
@@ -109,19 +122,18 @@ class Filters {
     }
 
     fun getFilterList() = FilterList(
-        // Order mirrors the site's filter panel.
         SortFilter(getSortables()),
-        ContentRatingFilter(),
-        TypeFilter(),
+        ContentRatingFilter(contentRating),
+        TypeFilter(selectedTypes),
         Filter.Separator(),
         Filter.Header("Tags — comma separated"),
         TagsFilter(),
         Filter.Header("Match: AND requires every selection, OR matches any"),
         MatchModeFilter(),
-        GenreFilter(getGenres()),
+        GenreFilter(getGenres(), blockedGenres),
         FormatFilter(getFormats()),
         Filter.Separator(),
-        DemographicFilter(getDemographics()),
+        DemographicFilter(getDemographics(), selectedDemographics),
         StatusFilter(),
         MinChapterFilter(),
         Filter.Separator(),
@@ -146,7 +158,9 @@ class Filters {
     ),
         UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
-            builder.addQueryParameter(param, vals[state].second)
+            vals[state].second.takeIf { it.isNotEmpty() }?.let {
+                builder.addQueryParameter(param, it)
+            }
         }
     }
 
@@ -155,14 +169,21 @@ class Filters {
     private open class UriMultiSelectFilter(
         name: String,
         private val param: String,
-        vals: Array<Pair<String, String>>,
+        private val vals: Array<Pair<String, String>>,
+        private val selectedValues: Set<String> = emptySet(),
+        private val onlyIfSome: Boolean = false,
     ) : Filter.Group<UriMultiSelectOption>(
         name,
-        vals.map { UriMultiSelectOption(it.first, it.second) },
+        vals.map { (name, value) ->
+            UriMultiSelectOption(name, value).apply { state = value in selectedValues }
+        },
     ),
         UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             val checked = state.filter { it.state }
+            // Ignore when no explicit inclusion (default)
+            if (onlyIfSome && checked.size == vals.size) return
+
             checked.forEach {
                 builder.addQueryParameter(param, it.value)
             }
@@ -171,52 +192,46 @@ class Filters {
 
     private open class UriTriSelectOption(name: String, val value: String) : Filter.TriState(name)
 
-    private open class UriTriSelectFilter(
-        name: String,
-        private val param: String,
-        vals: Array<Pair<String, String>>,
-    ) : Filter.Group<UriTriSelectOption>(
-        name,
-        vals.map { UriTriSelectOption(it.first, it.second) },
+    // The API ignores demographic exclusions, so this must remain include/off.
+    private class DemographicFilter(
+        demographics: Array<Pair<String, String>>,
+        selectedValues: Set<String>,
+    ) : UriMultiSelectFilter(
+        "Demographic",
+        "demographics[]",
+        demographics,
+        selectedValues,
+        true,
     ),
-        UriFilter {
-        override fun addToUri(builder: HttpUrl.Builder) {
-            state.forEach { s ->
-                when (s.state) {
-                    TriState.STATE_INCLUDE -> builder.addQueryParameter(param, s.value)
-                    TriState.STATE_EXCLUDE -> builder.addQueryParameter(param, "-${s.value}")
-                }
-            }
-        }
-    }
+        PreferenceFilter
 
-    // The site's API silently ignores `-id` / `demographics_ex[]` for this
-    // field, so a TriState exclusion would never actually exclude anything.
-    // Match the website which only offers include / off.
-    private class DemographicFilter(demographics: Array<Pair<String, String>>) :
-        UriMultiSelectFilter(
-            "Demographic",
-            "demographics[]",
-            demographics,
-        )
-
-    private class TypeFilter :
+    private class TypeFilter(selectedValues: Set<String>) :
         UriMultiSelectFilter(
             "Type",
             "types[]",
             getTypes(),
-        )
+            selectedValues,
+            true,
+        ),
+        PreferenceFilter
 
-    // Genres, Formats, and Tags all share the same `genres_in[]` /
-    // `genres_ex[]` API parameters; the site only splits them apart for the UI.
     private abstract class TermGroupFilter(
         title: String,
         options: Array<Pair<String, String>>,
+        excludedValues: Set<String> = emptySet(),
     ) : Filter.Group<UriTriSelectOption>(
         title,
-        options.map { UriTriSelectOption(it.first, it.second) },
+        options.map { (name, value) ->
+            UriTriSelectOption(name, value).apply {
+                if (value in excludedValues) state = TriState.STATE_EXCLUDE
+            }
+        },
     ),
-        UriFilter {
+        UriFilter,
+        TermFilter {
+        override val hasSelection
+            get() = state.any { it.state != TriState.STATE_IGNORE }
+
         override fun addToUri(builder: HttpUrl.Builder) {
             state.filter { it.state == TriState.STATE_INCLUDE }
                 .forEach { builder.addQueryParameter("genres_in[]", it.value) }
@@ -225,13 +240,14 @@ class Filters {
         }
     }
 
-    private class GenreFilter(genres: Array<Pair<String, String>>) : TermGroupFilter("Genres", genres)
+    private class GenreFilter(
+        genres: Array<Pair<String, String>>,
+        blockedGenres: Set<String>,
+    ) : TermGroupFilter("Genres", genres, blockedGenres),
+        PreferenceFilter
 
     private class FormatFilter(formats: Array<Pair<String, String>>) : TermGroupFilter("Formats", formats)
 
-    // Tags accept arbitrary names — the catalogue has hundreds, so we don't
-    // try to enumerate them. Comix.searchMangaRequest resolves each name to an
-    // ID through /api/v1/tags/search and adds the corresponding `genres_in[]`.
     class TagsFilter : Filter.Text("Tags")
 
     private class StatusFilter :
@@ -263,23 +279,14 @@ class Filters {
             "",
         ) {
         override fun addToUri(builder: HttpUrl.Builder) {
-            // The "Any" option intentionally keeps the parameter unset so the
-            // site doesn't cap the results at a particular year.
             if (state > 0) super.addToUri(builder)
         }
     }
 
-    // Author/Artist accept names; the site filters by ID, so the request
-    // builder doesn't add anything here. Comix.searchMangaRequest resolves
-    // the name to one or more IDs via /api/v1/tags/search and appends the
-    // `authors[]` / `artists[]` parameters there.
     class AuthorFilter : Filter.Text("Author")
 
     class ArtistFilter : Filter.Text("Artist")
 
-    // Controls how Tags/Genres/Formats selections combine. The site sends a
-    // single `genres_mode` parameter that applies to the whole bucket; we
-    // mirror that, defaulting to AND like the site does.
     private class MatchModeFilter :
         UriPartFilter(
             "Match",
@@ -288,37 +295,25 @@ class Filters {
                 "All (AND)" to "and",
                 "Any (OR)" to "or",
             ),
-        )
+        ),
+        RequiresTermSelection
 
-    // Keep the extension's old "up to" behavior even though the site now
-    // expects an explicit comma-separated list of selected content ratings.
-    private class ContentRatingFilter :
+    private class ContentRatingFilter(defaultValue: String) :
         UriPartFilter(
             "Content rating",
             "content_rating",
-            arrayOf(
-                "Use preference" to "",
-                "Safe only" to "safe",
-                "Up to Suggestive" to "suggestive",
-                "Up to Erotica" to "erotica",
-                "Up to Pornographic" to "pornographic",
-            ),
-        ) {
+            CONTENT_RATING_OPTIONS,
+            defaultValue,
+        ),
+        PreferenceFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
-            // Index 0 is "Use preference" — let the source-level setting drive
-            // the parameter instead of the manual filter.
-            if (state != 0) {
-                val selected = when (state) {
-                    1 -> "safe"
-                    2 -> "suggestive"
-                    3 -> "erotica"
-                    4 -> "pornographic"
-                    else -> ""
+            Filters.getContentRatingsUpTo(CONTENT_RATING_OPTIONS[state].second)
+                .takeIf { it.isNotEmpty() }
+                ?.let { ratings ->
+                    ratings.map {
+                        builder.addQueryParameter("content_rating[]", it)
+                    }
                 }
-                Filters.getContentRatingsUpTo(selected)
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { builder.addQueryParameter("content_rating", it.joinToString(",")) }
-            }
         }
     }
 
@@ -341,7 +336,7 @@ class Filters {
     }
 
     private fun getSortables() = arrayOf(
-        Sortable("Best Match", "relevance"),
+        Sortable("Relevance", "relevance"),
         Sortable("Latest update", "chapter_updated_at"),
         Sortable("Recently added", "created_at"),
         Sortable("Title", "title"),
@@ -358,14 +353,24 @@ class Filters {
         Filter.Sort(
             "Sort By",
             sortables.map(Sortable::title).toTypedArray(),
-            Selection(1, false),
+            Selection(0, false),
         ),
-        UriFilter {
+        QueryAwareFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
+            addToUri(builder, "")
+        }
+
+        override fun addToUri(builder: HttpUrl.Builder, query: String) {
             if (state != null) {
-                val query = sortables[state!!.index].value
+                val selected = sortables[state!!.index].value
+                val order = if (selected == "relevance" && query.isBlank()) {
+                    "chapter_updated_at"
+                } else {
+                    selected
+                }
                 val value = if (state!!.ascending) "asc" else "desc"
-                builder.addQueryParameter("order[$query]", value)
+
+                builder.addQueryParameter("order[$order]", value)
             }
         }
     }

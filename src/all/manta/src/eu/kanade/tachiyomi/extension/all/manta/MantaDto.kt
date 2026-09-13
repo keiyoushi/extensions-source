@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.manta
 
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
@@ -32,6 +33,20 @@ class Series<T : Any>(
     }
 
     override fun toString() = data.toString()
+}
+
+fun Series<Title>.toSManga(lang: String) = SManga.create().apply {
+    title = asString(lang)
+    url = id.toString()
+    thumbnail_url = image.toString()
+}
+
+@Serializable
+class RelatedSeries(private val data: RelatedData) {
+    val relatedSeriesList get() = data.relatedSeriesList
+
+    @Serializable
+    class RelatedData(val relatedSeriesList: List<Series<Title>> = emptyList())
 }
 
 @Serializable
@@ -151,3 +166,8 @@ class Status(
 ) {
     override fun toString() = "$description: $message"
 }
+
+@Serializable
+class Token(
+    val token: String,
+)

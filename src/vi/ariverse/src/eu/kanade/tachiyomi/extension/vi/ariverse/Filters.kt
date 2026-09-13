@@ -2,6 +2,10 @@ package eu.kanade.tachiyomi.extension.vi.ariverse
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.utils.string
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonObject
 
 class GenreFilter(
     name: String,
@@ -58,40 +62,19 @@ class SortFilter :
     }
 }
 
-private val GENRE_LIST = listOf(
-    "18+" to "18",
-    "Âu Cổ" to "au-co",
-    "Cách biệt tuổi tác" to "cach-biet-tuoi-tac",
-    "Chiếm hữu" to "chiem-huu",
-    "Cổ trang" to "co-trang",
-    "Drama" to "drama",
-    "Fantasy" to "fantasy",
-    "Girl Crush" to "girl-crush",
-    "Hài hước" to "hai-huoc",
-    "Học đường" to "hoc-duong",
-    "Horror" to "horror",
-    "Idol" to "idol",
-    "Mafia" to "mafia",
-    "Manhua" to "manhua",
-    "Manhwa" to "manhwa",
-    "Mọt sách" to "mot-sach",
-    "Mùa hè và biển cả" to "mua-he-va-bien-ca",
-    "Người lớn" to "nguoi-lon",
-    "Nhẹ nhàng" to "nhe-nhang",
-    "One-shot" to "one-shot",
-    "Quan hệ Chủ-Tớ" to "quan-he-chu-to",
-    "Thanh Xuân Mùa Hạ" to "thanh-xuan-mua-ha",
-    "Tình tay ba" to "tinh-tay-ba",
-    "Tội phạm" to "toi-pham",
-    "Trả thù" to "tra-thu",
-    "Truyện Tranh" to "truyen-tranh",
-    "Tuyết Đầu Mùa" to "tuyet-dau-mua",
-    "Văn phòng" to "van-phong",
-    "Xã hội đen" to "xa-hoi-den",
-)
+fun buildGenreFilter(data: JsonElement?): FilterList {
+    val genres = (data as? JsonArray)
+        ?.mapNotNull {
+            val obj = it.jsonObject
+            val name = obj["name"]?.string ?: return@mapNotNull null
+            val slug = obj["slug"]?.string ?: return@mapNotNull null
+            name to slug
+        }
+        .orEmpty()
 
-fun getFilters(): FilterList = FilterList(
-    GenreFilter("Genre", GENRE_LIST),
-    StatusFilter(),
-    SortFilter(),
-)
+    return FilterList(
+        GenreFilter("Genre", genres),
+        StatusFilter(),
+        SortFilter(),
+    )
+}

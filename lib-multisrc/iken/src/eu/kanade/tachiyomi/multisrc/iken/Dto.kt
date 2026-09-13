@@ -2,15 +2,13 @@ package eu.kanade.tachiyomi.multisrc.iken
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class SearchResponse(
@@ -20,7 +18,18 @@ class SearchResponse(
 
 @Serializable
 class MangaDto(
+    val totalChapterCount: Int? = null,
     val post: Manga,
+)
+
+@Serializable
+class ChapterDto(
+    val post: ChapterPost,
+)
+
+@Serializable
+class ChapterPost(
+    val chapters: List<Chapter>,
 )
 
 @Serializable
@@ -87,7 +96,7 @@ class Manga(
     }.trim()
 
     private fun getStatus() = when (seriesStatus) {
-        "ONGOING", "COMING_SOON" -> SManga.ONGOING
+        "ONGOING", "COMING_SOON", "MASS_RELEASED" -> SManga.ONGOING
         "COMPLETED" -> SManga.COMPLETED
         "CANCELLED", "DROPPED" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
@@ -122,24 +131,22 @@ class Chapter(
     private val number: JsonPrimitive,
     private val title: String? = null,
     private val createdAt: String,
-    private val isAccessible: Boolean,
     private val isLocked: Boolean? = false,
     private val isTimeLocked: Boolean? = false,
     private val mangaPost: MangaPostDto? = null,
-    private val createdBy: CreatorDto? = null,
+    private val price: Int? = 0,
+    private val chapterPurchased: Boolean? = false,
 ) {
-    fun isAccessible() = isAccessible
 
-    fun isLocked() = (isLocked == true) || (isTimeLocked == true)
+    fun isLocked() = (isLocked == true) || (isTimeLocked == true) || (chapterPurchased == false && price != 0)
 
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
-        val prefix = if (!isAccessible()) "🔒 " else ""
+        val prefix = if (isLocked()) "🔒 " else ""
         val suffix = if (!title.isNullOrBlank()) " - $title" else ""
         val seriesSlug = (mangaSlug ?: mangaPost?.slug)!!
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number$suffix"
-        date_upload = dateFormat.tryParse(createdAt)
-        scanlator = createdBy?.name
+        date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
         memo = buildJsonObject {
             put("seriesSlug", seriesSlug)
             put("slug", slug)
@@ -151,11 +158,6 @@ class Chapter(
 @Serializable
 class MangaPostDto(
     val slug: String?,
-)
-
-@Serializable
-class CreatorDto(
-    val name: String? = null,
 )
 
 @Serializable
@@ -171,5 +173,3 @@ class PageParseDto(
     val url: String,
     val order: Int? = null,
 )
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)

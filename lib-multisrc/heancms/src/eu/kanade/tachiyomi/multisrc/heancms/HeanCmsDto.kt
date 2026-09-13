@@ -5,20 +5,18 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
+import kotlin.time.Instant
 
 @Serializable
 class HeanCmsTokenPayloadDto(
     val token: String? = null,
     private val expiresAt: String? = null,
 ) {
-    fun isExpired(dateFormat: SimpleDateFormat): Boolean {
-        val expiredTime = try {
-            // Reduce one day to prevent timezone issues
-            expiresAt?.let { dateFormat.parse(it)?.time?.minus(1000 * 60 * 60 * 24) } ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+    fun isExpired(): Boolean {
+        // Reduce one day to prevent timezone issues
+        val expiredTime = expiresAt
+            ?.let { Instant.parseOrNull(it)?.toEpochMilliseconds()?.minus(1000 * 60 * 60 * 24) }
+            ?: 0L
 
         return System.currentTimeMillis() > expiredTime
     }
@@ -59,7 +57,6 @@ class HeanCmsSeriesDto(
     private val thumbnail: String,
     private val title: String,
     private val tags: List<HeanCmsTagDto>? = emptyList(),
-    val seasons: List<HeanCmsSeasonsDto>? = emptyList(),
 ) {
 
     fun toSManga(
@@ -77,6 +74,7 @@ class HeanCmsSeriesDto(
             ?.ifEmpty { descriptionBody.text().replace("\n", "\n\n") }
         genre = tags.orEmpty()
             .sortedBy(HeanCmsTagDto::name)
+            .plus(HeanCmsTagDto("Manhwa")) // auto webtoon mode, 99% of entries are webtoons
             .joinToString { it.name }
         thumbnail_url = thumbnail.ifEmpty { null }
             ?.toAbsoluteThumbnailUrl(cdnUrl, coverPath)
@@ -84,11 +82,6 @@ class HeanCmsSeriesDto(
         url = "/$mangaSubDirectory/$slug#$id"
     }
 }
-
-@Serializable
-class HeanCmsSeasonsDto(
-    val chapters: List<HeanCmsChapterDto>? = emptyList(),
-)
 
 @Serializable
 class HeanCmsTagDto(val name: String)
@@ -111,7 +104,6 @@ class HeanCmsChapterDto(
     fun toSChapter(
         seriesSlug: String,
         mangaSubDirectory: String,
-        dateFormat: SimpleDateFormat,
     ): SChapter = SChapter.create().apply {
         name = this@HeanCmsChapterDto.name.trim()
 
@@ -123,11 +115,7 @@ class HeanCmsChapterDto(
             name += " \uD83D\uDD12"
         }
 
-        date_upload = try {
-            dateFormat.parse(createdAt)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+        date_upload = createdAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
 
         url = "/$mangaSubDirectory/$seriesSlug/$slug#$id"
     }
@@ -145,7 +133,6 @@ class HeanCmsChapterMetaDto(
 class HeanCmsPagePayloadDto(
     val chapter: HeanCmsPageDto,
     private val paywall: Boolean = false,
-    val data: List<String>? = emptyList(),
 ) {
     fun isPaywalled() = paywall
 }

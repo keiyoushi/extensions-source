@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.vi.seikowo
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 
 @Serializable
 class FeedResponseDto(
@@ -143,6 +145,7 @@ class ChapterItem(
 )
 
 class CatalogueEntry(
+    val postId: String,
     val title: String,
     val url: String,
     val thumbnailUrl: String?,
@@ -156,5 +159,6 @@ class CatalogueEntry(
         url = this@CatalogueEntry.url
         title = this@CatalogueEntry.title
         thumbnail_url = this@CatalogueEntry.thumbnailUrl
+        memo = buildJsonObject { put("postId", JsonPrimitive(postId)) }
     }
 }

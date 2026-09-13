@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "KuroMangas"
-    versionCode = 9
+    versionCode = 12
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 

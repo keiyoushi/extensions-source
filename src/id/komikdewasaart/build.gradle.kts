@@ -8,7 +8,7 @@ keiyoushi {
     name = "Komik Dewasa Art"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {

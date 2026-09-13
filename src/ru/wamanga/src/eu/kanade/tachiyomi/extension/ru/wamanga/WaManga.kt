@@ -128,6 +128,8 @@ abstract class WaManga : KeiSource() {
         return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val sameMangas = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseSvelte<DetailsDto>().sameMangas
         return sameMangas.map { it.toSManga(baseUrl) }

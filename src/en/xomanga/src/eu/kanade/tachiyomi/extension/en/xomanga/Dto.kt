@@ -11,7 +11,6 @@ import java.util.Locale
 
 @Serializable
 class IndexResponse(
-    val slider: List<Manga>,
     val latest: List<Manga>,
 )
 
@@ -42,6 +41,7 @@ class DetailsResponse(
     private val cover: String?,
     private val tags: List<String>?,
     private val status: String?,
+    @SerialName("chapters_list") val chaptersList: List<Chapters>,
 ) {
     fun toSManga() = SManga.create().apply {
         title = this@DetailsResponse.title
@@ -57,11 +57,6 @@ class DetailsResponse(
         thumbnail_url = cover
     }
 }
-
-@Serializable
-class ChapterResponse(
-    @SerialName("chapters_list") val chaptersList: List<Chapters>,
-)
 
 @Serializable
 class Chapters(

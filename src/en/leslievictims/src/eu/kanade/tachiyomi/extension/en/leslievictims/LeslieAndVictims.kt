@@ -25,7 +25,7 @@ abstract class LeslieAndVictims : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/library", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga.json", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = response.parseAs<List<LibraryEntry>>().map { it.toSManga(baseUrl) }
@@ -40,7 +40,7 @@ abstract class LeslieAndVictims : HttpSource() {
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/api/library#$query", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/manga.json#$query", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val query = response.request.url.fragment ?: ""
@@ -74,7 +74,7 @@ abstract class LeslieAndVictims : HttpSource() {
             ?: throw Exception("Missing series ID in chapter URL")
         val chId = url.queryParameter("ch")
             ?: throw Exception("Missing chapter ID in chapter URL")
-        return GET("$baseUrl/api/library#$seriesId|$chId", headers)
+        return GET("$baseUrl/manga.json#$seriesId|$chId", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -147,7 +147,7 @@ abstract class LeslieAndVictims : HttpSource() {
     private fun libraryRequestForManga(manga: SManga): Request {
         val seriesId = (baseUrl + manga.url).toHttpUrl().queryParameter("series")
             ?: throw Exception("Invalid manga URL")
-        return GET("$baseUrl/api/library#$seriesId", headers)
+        return GET("$baseUrl/manga.json#$seriesId", headers)
     }
 
     private fun findEntry(response: Response): LibraryEntry {

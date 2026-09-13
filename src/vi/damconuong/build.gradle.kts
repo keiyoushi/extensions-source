@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "DamCoNuong"
-    versionCode = 7
+    versionCode = 11
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://damconuong.shop"
+        baseUrl {
+            custom("https://damconuong.uno")
+        }
+    }
+
+    deeplink {
+        path("/truyen/..*")
     }
 }

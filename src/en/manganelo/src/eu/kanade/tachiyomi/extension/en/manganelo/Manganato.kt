@@ -3,16 +3,15 @@ package eu.kanade.tachiyomi.extension.en.manganelo
 import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import okhttp3.Request
 
 @Source
 abstract class Manganato : MangaBox() {
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override fun getMangaUrl(manga: SManga): String {
         if (LEGACY_DOMAINS.any { manga.url.startsWith(it) }) {
             throw Exception(MIGRATE_MESSAGE)
         }
-        return super.mangaDetailsRequest(manga)
+        return super.getMangaUrl(manga)
     }
     companion object {
         private val LEGACY_DOMAINS = arrayOf(

@@ -8,9 +8,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
+import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -25,9 +25,7 @@ abstract class HotComics : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .addNetworkInterceptor(
-            CookieInterceptor(baseUrl.removePrefix("https://"), "hc_vfs" to "Y"),
-        )
+        .addCookie("hc_vfs" to "Y")
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

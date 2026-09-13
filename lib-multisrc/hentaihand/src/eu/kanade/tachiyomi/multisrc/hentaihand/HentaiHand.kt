@@ -96,7 +96,7 @@ abstract class HentaiHand :
                 if (idList.isEmpty()) {
                     return@map null
                 } else {
-                    idList.first().toInt()
+                    idList.first()
                 }
             }.toBlocking().first()
     }

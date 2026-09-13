@@ -55,8 +55,8 @@ const val SEARCH_QUERY: String = $$"""
 """
 
 const val UPDATE_QUERY: String = $$"""
-    query ($id: String!, $showId: String!) {
-        manga(_id: $id) {
+    query ($id: String!, $showId: String!, $search: SearchInput) {
+        manga(_id: $id, search: $search) {
             _id
             name
             thumbnail

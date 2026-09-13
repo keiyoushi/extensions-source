@@ -7,8 +7,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -108,7 +108,7 @@ abstract class SabrinaOnline : HttpSource() {
                 Page(index, imageUrl = href)
             } else {
                 val src = img.absUrl("src").ifEmpty { img.attr("src") }
-                Page(index, src)
+                Page(index, imageUrl = src)
             }
         }
     }

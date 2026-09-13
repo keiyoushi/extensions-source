@@ -1,22 +1,19 @@
 package eu.kanade.tachiyomi.extension.tr.kuroimanga
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class KuroiManga : Madara() {
-    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
+abstract class KuroiManga : MadaraNoAjax() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("tr"))
+    override val chapterMode = ChapterMode.MangaAjax
 
-    override fun pageListParse(document: Document): List<Page> {
-        val pageList = super.pageListParse(document)
+    override fun parsePages(document: Document): List<Page> {
+        val pageList = super.parsePages(document)
 
         if (
             pageList.isEmpty() &&
@@ -25,9 +22,5 @@ abstract class KuroiManga : Madara() {
             throw Exception("Bu seriyi okumak için abone olmalısınız")
         }
         return pageList
-    }
-
-    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
-        name = element.selectFirst("li > a")!!.text()
     }
 }

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
 
-import android.os.Build
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -13,11 +12,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -304,20 +303,6 @@ abstract class ProjectSuki :
             }
 
             searchMode == ProjectSukiFilters.SearchMode.SMART -> {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-                    throw Exception(
-                        buildString {
-                            append("Please enable ")
-                            append(ProjectSukiFilters.SearchMode.SIMPLE)
-                            append(" Search Mode: ")
-                            append(ProjectSukiFilters.SearchMode.SMART)
-                            append(" mode requires Android API version >= 24, but ")
-                            append(Build.VERSION.SDK_INT)
-                            append(" was found!")
-                        },
-                    )
-                }
-
                 client.newCall(ProjectSukiAPI.bookSearchRequest(headers))
                     .asObservableSuccess()
                     .map { response -> ProjectSukiAPI.parseBookSearchResponse(response) }

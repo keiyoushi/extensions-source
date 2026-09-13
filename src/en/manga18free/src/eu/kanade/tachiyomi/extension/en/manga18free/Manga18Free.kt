@@ -5,5 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class Manga18Free : Madara() {
-    override fun searchMangaNextPageSelector() = "a.nextpostslink"
+    override val chapterMode = ChapterMode.AdminAjax
 }

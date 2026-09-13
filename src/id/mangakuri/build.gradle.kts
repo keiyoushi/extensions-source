@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Mangakuri"
-    versionCode = 33
+    versionCode = 35
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://lc1.mangakuri.online"
+        baseUrl = "https://lc2.mangakuri.online"
         versionId = 2
+    }
+
+    deeplink {
+        path("/comic/..*")
     }
 }

@@ -1,14 +1,13 @@
 package eu.kanade.tachiyomi.extension.tr.webtoonhatti
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class WebtoonHatti : Madara() {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
-    override val useNewChapterEndpoint = false
+abstract class WebtoonHatti : MadaraNoAjax() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
 
     override val mangaSubString = "webtoon"
 

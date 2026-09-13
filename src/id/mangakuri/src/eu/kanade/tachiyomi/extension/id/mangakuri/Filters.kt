@@ -1,10 +1,11 @@
 package eu.kanade.tachiyomi.extension.id.mangakuri
 
 import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 
 abstract class SelectFilter(
     displayName: String,
-    private val vals: Array<Pair<String, String>>,
+    private val vals: List<Pair<String, String>>,
 ) : Filter.Select<String>(
     displayName,
     vals.map { it.first }.toTypedArray(),
@@ -12,126 +13,74 @@ abstract class SelectFilter(
     fun selectedValue() = vals[state].second
 }
 
-class OrderFilter :
-    SelectFilter(
-        "Order",
-        arrayOf(
-            Pair("DESC", "desc"),
-            Pair("ASC", "asc"),
-        ),
-    )
+val sortOptions = arrayOf(
+    "New" to "new",
+    "Top Views" to "views",
+    "Top Rate" to "rate",
+    "Top Bookmark" to "bookmark",
+    "Title A-Z" to "az",
+    "Title Z-A" to "za",
+)
 
-class SortFilter :
-    SelectFilter(
-        "Sort By",
-        arrayOf(
-            Pair("New", "new"),
-            Pair("Top Views", "views"),
-            Pair("Top Rate", "rate"),
-            Pair("Top Bookmark", "bookmark"),
-            Pair("Title A-Z", "az"),
-            Pair("Title Z-A", "za"),
-        ),
-    )
+class SortFilter(
+    selection: Selection = Selection(0, false),
+) : Filter.Sort("Sort By", sortOptions.map { it.first }.toTypedArray(), selection) {
+
+    val selected get() = sortOptions[state!!.index].second
+    val order get() = if (state!!.ascending) "asc" else "desc"
+
+    companion object {
+        val LATEST = FilterList(SortFilter(Selection(0, false)))
+        val POPULAR = FilterList(SortFilter(Selection(1, false)))
+    }
+}
 
 class StatusFilter :
     SelectFilter(
         "Status",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Ongoing", "ONGOING"),
-            Pair("Completed", "COMPLETED"),
-            Pair("Hiatus", "HIATUS"),
+        listOf(
+            "All" to "",
+            "Ongoing" to "ONGOING",
+            "Completed" to "COMPLETED",
+            "Hiatus" to "HIATUS",
         ),
     )
 
 class TypeFilter :
     SelectFilter(
         "Type",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Manga", "MANGA"),
-            Pair("Manhwa", "MANHWA"),
-            Pair("Manhua", "MANHUA"),
+        listOf(
+            "All" to "",
+            "Manga" to "MANGA",
+            "Manhwa" to "MANHWA",
+            "Manhua" to "MANHUA",
         ),
     )
 
 class ColorFilter :
     SelectFilter(
         "Color",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Full Color", "FULL_COLOR"),
-            Pair("B&W", "BW"),
+        listOf(
+            "All" to "",
+            "Full Color" to "FULL_COLOR",
+            "B&W" to "BW",
         ),
     )
 
 class ReadingFilter :
     SelectFilter(
         "Reading",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Vertical Scroll", "VERTICAL_SCROLL"),
-            Pair("Page", "PAGE"),
+        listOf(
+            "All" to "",
+            "Vertical Scroll" to "VERTICAL_SCROLL",
+            "Page" to "PAGE",
         ),
     )
 
-class GenreFilter :
+class GenreFilter(genres: Map<String, String>) :
     SelectFilter(
         "Genre",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Action", "action"),
-            Pair("Adult", "adult"),
-            Pair("Adventure", "adventure"),
-            Pair("Aksi", "aksi"),
-            Pair("Arts", "arts"),
-            Pair("Bl", "bl"),
-            Pair("Boys Love", "boys-love"),
-            Pair("Boyslove", "boyslove"),
-            Pair("Comedy", "comedy"),
-            Pair("Crybaby Seme", "crybaby-seme"),
-            Pair("Dll", "dll"),
-            Pair("Drama", "drama"),
-            Pair("Fantasi Modern", "fantasi-modern"),
-            Pair("Fantasy", "fantasy"),
-            Pair("Gender Bender", "gender-bender"),
-            Pair("Gong Bucin", "gong-bucin"),
-            Pair("Gong Lebih Tua", "gong-lebih-tua"),
-            Pair("Historical", "historical"),
-            Pair("Horror", "horror"),
-            Pair("Investigasi Kasus", "investigasi-kasus"),
-            Pair("Investigasikasus", "investigasikasus"),
-            Pair("Isekai", "isekai"),
-            Pair("Martial", "martial"),
-            Pair("Martial Arts", "martial-arts"),
-            Pair("Mature", "mature"),
-            Pair("Mystery", "mystery"),
-            Pair("Napolitana Ghost Story", "napolitana-ghost-story"),
-            Pair("Office", "office"),
-            Pair("Okultisme", "okultisme"),
-            Pair("Psychological", "psychological"),
-            Pair("Reincarnation", "reincarnation"),
-            Pair("Revenge", "revenge"),
-            Pair("Romance", "romance"),
-            Pair("Royalty", "royalty"),
-            Pair("Salvation", "salvation"),
-            Pair("School Life", "school-life"),
-            Pair("Sci-Fi", "sci-fi"),
-            Pair("Shounen", "shounen"),
-            Pair("Shounen Ai", "shounen-ai"),
-            Pair("Slice Of Life", "slice-of-life"),
-            Pair("Smut", "smut"),
-            Pair("Smut Supernatural Yaoi", "smut-supernatural-yaoi"),
-            Pair("Su Aktif", "su-aktif"),
-            Pair("Su Cinta Bertepuk Sebelah Tangan", "su-cinta-bertepuk-sebelah-tangan"),
-            Pair("Su Luka Masa Lalu", "su-luka-masa-lalu"),
-            Pair("Su Menggemaskan", "su-menggemaskan"),
-            Pair("Supernatural", "supernatural"),
-            Pair("Xianxia", "xianxia"),
-            Pair("Yaoi", "yaoi"),
-            Pair("Yaoi Bl", "yaoi-bl"),
-        ),
+        listOf("All" to "") + genres.toList(),
     )
 
 class TextFilter(name: String, val queryKey: String) : Filter.Text(name)

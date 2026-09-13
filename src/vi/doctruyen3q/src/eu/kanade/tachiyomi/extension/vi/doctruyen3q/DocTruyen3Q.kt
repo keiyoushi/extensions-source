@@ -2,37 +2,40 @@ package eu.kanade.tachiyomi.extension.vi.doctruyen3q
 
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class DocTruyen3Q :
     WPComics(),
     ConfigurableSource {
 
-    override val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-    }
+    override val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.ROOT)
+
+    override val dateZone: ZoneId = ZoneId.of("Asia/Ho_Chi_Minh")
 
     override val gmtOffset = null
 
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.page-chapter[id] img").mapIndexed { index, element ->
+    override suspend fun parsePageList(response: Response): List<Page> = response.asJsoup().select("div.page-chapter[id] img").mapIndexed { index, element ->
         val rawUrl = element.attr("abs:src").ifEmpty { element.attr("abs:data-src") }
         Page(index, imageUrl = rawUrl)
     }.distinctBy { it.imageUrl }
@@ -50,29 +53,30 @@ abstract class DocTruyen3Q :
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
-
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
-                is StatusFilter -> filter.toUriPart()?.let { url.addQueryParameter("status", it) }
-                else -> {}
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder().apply {
+            filters.forEach { filter ->
+                when (filter) {
+                    is GenreFilter -> filter.toUriPart()?.let { addPathSegment(it) }
+                    is StatusFilter -> filter.toUriPart()?.let { addQueryParameter("status", it) }
+                    else -> {}
+                }
             }
-        }
 
-        when {
-            query.isNotBlank() -> url.addQueryParameter(queryParam, query)
-            else -> url.addQueryParameter("page", page.toString())
-        }
+            if (query.isNotBlank()) {
+                addQueryParameter(queryParam, query)
+            } else {
+                addQueryParameter("page", page.toString())
+            }
+        }.build()
 
-        return GET(url.toString(), headers)
+        return parseMangaPage(client.get(url), searchMangaSelector(), ::searchMangaFromElement)
     }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.title-manga")!!.text()
-        description = document.select("p.detail-summary").joinToString { it.wholeText().trim() }
+        author = document.select("li.author p.col-sm-8").text()
+        description = document.select("p.detail-summary").joinToString("\n") { it.wholeText().trim() }
         status = document.selectFirst("li.status p.detail-info span")?.text().toStatus()
         genre = document.select("li.category p.detail-info a").joinToString { it.text() }
         thumbnail_url = imageOrNull(document.selectFirst("img.image-comic")!!)
@@ -91,8 +95,8 @@ abstract class DocTruyen3Q :
     private var hasCheckedRedirect = false
 
     // Catch redirects
-    override val client = super.client.newBuilder()
-        .addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor { chain ->
             val originalRequest = chain.request()
             val response = chain.proceed(originalRequest)
             if (!hasCheckedRedirect && preferences.getBoolean(AUTO_CHANGE_DOMAIN_PREF, false)) {
@@ -108,11 +112,11 @@ abstract class DocTruyen3Q :
             }
             response
         }
-        .rateLimit(5)
-        .build()
+        rateLimit(5)
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val autoDomainPref = androidx.preference.SwitchPreferenceCompat(screen.context).apply {
+        val autoDomainPref = SwitchPreferenceCompat(screen.context).apply {
             key = AUTO_CHANGE_DOMAIN_PREF
             title = AUTO_CHANGE_DOMAIN_TITLE
             summary = AUTO_CHANGE_DOMAIN_SUMMARY

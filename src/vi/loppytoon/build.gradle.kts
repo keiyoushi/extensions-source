@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "LoppyToon"
-    versionCode = 5
+    versionCode = 6
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://loppytoon.com"
+        baseUrl {
+            custom("https://loppytoon.com")
+        }
+    }
+
+    deeplink {
+        path("/truyen/..*")
     }
 }

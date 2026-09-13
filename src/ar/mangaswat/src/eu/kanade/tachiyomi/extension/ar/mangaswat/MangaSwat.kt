@@ -1,207 +1,120 @@
 package eu.kanade.tachiyomi.extension.ar.mangaswat
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import okhttp3.Headers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
-abstract class MangaSwat : HttpSource() {
-
-    override val supportsLatest = true
-
-    private val apiBaseUrl = "https://meshmanga.com/v2/api/v2"
-
-    private val apiHeaders: Headers by lazy {
-        headersBuilder()
-            .add("Accept", "application/json, text/plain, */*")
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
-            .set("User-Agent", "ktor-client")
-            .build()
+abstract class MangaSwat : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        rateLimit(1)
     }
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(::tokenInterceptor)
-        .rateLimit(1)
-        .build()
-
-    // From Akuma - CSRF token
-    private var storedToken: String? = null
-
-    private fun tokenInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-
-        if (request.method == "POST" && request.header("X-CSRF-TOKEN") == null) {
-            val newRequest = request.newBuilder()
-            val token = getToken()
-            val response = chain.proceed(
-                newRequest
-                    .addHeader("X-CSRF-TOKEN", token)
-                    .build(),
-            )
-
-            if (response.code == 419) {
-                response.close()
-                storedToken = null // reset the token
-                val newToken = getToken()
-                return chain.proceed(
-                    newRequest
-                        .addHeader("X-CSRF-TOKEN", newToken)
-                        .build(),
-                )
-            }
-
-            return response
-        }
-
-        val response = chain.proceed(request)
-
-        if (response.header("Content-Type")?.contains("text/html") != true) {
-            return response
-        }
-
-        storedToken = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
-            .selectFirst("head meta[name*=csrf-token]")
-            ?.attr("content")
-
-        return response
-    }
-
-    private fun getToken(): String {
-        if (storedToken.isNullOrEmpty()) {
-            val request = GET(baseUrl, headers)
-            client.newCall(request).execute().close() // updates token in interceptor
-        }
-        return storedToken!!
-    }
+    private val apiUrl get() = "$baseUrl/v2/api/v2"
 
     private fun String.getMangaId(): String = this.removePrefix("/chapters/").substringBefore("/")
 
-    // Popular
-
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
-            .addQueryParameter("order_by", "-followers_count")
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, apiHeaders)
+    private fun Response.parseMangaList(): MangasPage {
+        val data = this.parseAs<MangaListDto>()
+        val entries = data.results.map { it.toSManga() }
+        return MangasPage(entries, data.hasNext())
     }
 
-    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
+    // ========================= Popular =========================
 
-    // Latest
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$apiUrl/series/?order_by=-followers_count&page=$page")
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiBaseUrl/series/releases".toHttpUrl().newBuilder()
-            .addQueryParameter("page_size", "20")
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, apiHeaders)
+        return response.parseMangaList()
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<LatestUpdatesResponse>()
-        val mangas = data.results.map { it.toSManga() }
-        return MangasPage(mangas, data.hasNext())
+    // ========================= Latest =========================
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val response = client.get("$apiUrl/series/releases/?page=$page")
+
+        return response.parseMangaList()
     }
 
-    // Search
+    //  ========================= Search =========================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
-                .addQueryParameter("search", query)
-                .addQueryParameter("page", page.toString())
-                .build()
-            return GET(url, apiHeaders)
-        }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$apiUrl/series/".toHttpUrl().newBuilder().apply {
+            addQueryParameter("search", query)
+            addQueryParameter("page", page.toString())
+        }.build()
 
-        return popularMangaRequest(page)
+        return client.get(url).parseMangaList()
     }
 
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
-
-    // Details
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
-            .addPathSegment(manga.url)
-            .build()
-        return GET(url, apiHeaders)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsDto>().toSManga()
-
-    // Chapters
+    // ==================== Details & Chapters ====================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = "$apiBaseUrl/chapters/".toHttpUrl().newBuilder()
-            .addQueryParameter("serie", manga.url)
-            .addQueryParameter("order_by", "-order")
-            .addQueryParameter("page_size", "200")
-            .build()
-        return GET(url, apiHeaders)
-    }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaDeferred = async {
+            if (!fetchDetails) return@async manga
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        var data = response.parseAs<ChapterListResponse>()
-        val chapters = mutableListOf<SChapter>()
-        chapters.addAll(data.results.map { it.toSChapter() })
-
-        var nextPage = data.next
-        while (nextPage != null) {
-            val nextResponse = client.newCall(GET(nextPage, response.request.headers)).execute()
-            data = nextResponse.parseAs<ChapterListResponse>()
-            chapters.addAll(data.results.map { it.toSChapter() })
-            nextPage = data.next
+            client.get("$apiUrl/series/${manga.url}/")
+                .parseAs<MangaDetailsDto>().toSManga()
         }
 
-        return chapters
+        val chaptersDeferred = async {
+            if (fetchChapters) getChapterList(manga) else chapters
+        }
+
+        SMangaUpdate(
+            manga = mangaDeferred.await(),
+            chapters = chaptersDeferred.await(),
+        )
     }
 
-    // Pages
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
+        val url = "$apiUrl/chapters/".toHttpUrl().newBuilder().apply {
+            addQueryParameter("serie", manga.url)
+            addQueryParameter("order_by", "-order")
+            addQueryParameter("page_size", "200")
+        }.build()
+
+        return buildList {
+            var nextPage: String? = url.toString()
+
+            while (nextPage != null) {
+                val data = client.get(nextPage).parseAs<ChapterListDto>()
+                addAll(data.results.map { it.toSChapter() })
+                nextPage = data.next
+            }
+        }
+    }
+
+    // ========================= Pages =========================
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url.getMangaId()}"
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$apiBaseUrl/chapters/".toHttpUrl().newBuilder()
-            .addPathSegment(chapter.url.getMangaId())
-            .build()
-        return GET(url, apiHeaders)
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get("$apiUrl/chapters/${chapter.url.getMangaId()}/")
 
-    override fun pageListParse(response: Response): List<Page> {
-        val chapter = response.parseAs<PageListResponse>()
-        return chapter.images.map {
-            Page(it.order, imageUrl = it.image)
-        }
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
-
-    companion object {
-        internal val apiDateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
+        val chapter = response.parseAs<PageListDto>()
+        return chapter.images.mapIndexed { i, page ->
+            Page(i, imageUrl = page.image)
         }
     }
 }
