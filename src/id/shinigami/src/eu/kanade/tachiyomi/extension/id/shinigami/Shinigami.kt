@@ -105,9 +105,9 @@ abstract class Shinigami : KeiSource() {
     }
 
     private fun popularMangaFromObject(obj: ShinigamiBrowseDataDto): SManga = SManga.create().apply {
-        title = obj.title!!
+        title = obj.title.orEmpty()
         thumbnail_url = obj.thumbnail
-        url = obj.mangaId!!
+        url = obj.mangaId.orEmpty()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(

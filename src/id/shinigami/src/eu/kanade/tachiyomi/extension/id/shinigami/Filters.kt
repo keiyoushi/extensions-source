@@ -72,7 +72,7 @@ open class UriMultiTriSelectFilter(
     }
 }
 
-class SortFilter(default: String = "") :
+class SortFilter :
     UriPartFilter(
         "Sort",
         "sort",
@@ -82,7 +82,6 @@ class SortFilter(default: String = "") :
             Pair("Popularity", "popularity"),
             Pair("Rating", "rating"),
         ),
-        default,
     )
 
 class SortOrderFilter :
