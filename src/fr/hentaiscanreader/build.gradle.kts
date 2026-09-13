@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Hentai Scan Reader"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "scanreader"
 
     source {
