@@ -17,10 +17,12 @@ class SeriesDto(
     private val status: String? = null,
     private val owner: OwnerDto? = null,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(manga: SManga, baseUrl: String) = manga.apply {
         title = name
         this.description = this@SeriesDto.description
-        thumbnail_url = cover?.let { if (it.startsWith("http")) it else baseUrl + it }
+        cover?.takeIf { it.isNotEmpty() }?.let {
+            thumbnail_url = if (it.startsWith("http")) it else baseUrl + it
+        }
         this.status = when (this@SeriesDto.status) {
             "Devam Ediyor" -> SManga.ONGOING
             "Tamamlandı" -> SManga.COMPLETED

@@ -15,6 +15,7 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -85,26 +86,25 @@ abstract class SleptManga : KeiSource() {
         val encodedPath = manga.url.removeSuffix("/")
 
         return SMangaUpdate(
-            manga = if (fetchDetails) series.toSManga(baseUrl).apply { url = manga.url } else manga,
+            manga = if (fetchDetails) series.toSManga(manga, baseUrl) else manga,
             chapters = if (fetchChapters) series.toSChapterList(encodedPath) else chapters,
         )
     }
 
     // =============================== Pages ===============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val segments = chapter.url.toHttpUrlOrNull()?.pathSegments
-            ?: baseUrl.toHttpUrl().resolve(chapter.url.removePrefix("/"))?.pathSegments
-            ?: throw Exception("Geçersiz bölüm bağlantısı")
-
-        val slug = segments[segments.size - 2]
-        val chapterNumber = segments.last()
-        val url = "$baseUrl/api/chapters/$slug/$chapterNumber/images"
-
-        val apiHeaders = headers.newBuilder()
+    private val apiHeaders: Headers
+        get() = headersBuilder()
             .add("X-API-Key", API_KEY)
             .add("X-App-Version", APP_VERSION)
             .build()
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val httpUrl = (if (chapter.url.startsWith("http")) chapter.url else baseUrl + chapter.url).toHttpUrl()
+        val segments = httpUrl.pathSegments
+        val slug = segments[segments.size - 2]
+        val chapterNumber = segments.last()
+        val url = "$baseUrl/api/chapters/$slug/$chapterNumber/images"
 
         val response = client.get(url, apiHeaders)
         val data = response.parseAs<ChapterDataDto>()
@@ -128,42 +128,26 @@ abstract class SleptManga : KeiSource() {
         val elements = document.select("div.group:has(h3 a)")
         val mangas = parseMangaElements(elements)
 
-        val pagination = document.extractNextJs<PaginationDto>()
-        val hasNextPage = when {
-            pagination != null -> {
-                if (pagination.currentPage >= pagination.totalPages) {
-                    false
-                } else if (pagination.currentPage == pagination.totalPages - 1) {
-                    val nextUrl = url.toHttpUrl().newBuilder()
-                        .setQueryParameter("page", pagination.totalPages.toString())
-                        .build()
-                    val nextDoc = client.get(nextUrl).asJsoup()
-                    parseMangaElements(nextDoc.select("div.group:has(h3 a)")).isNotEmpty()
-                } else {
-                    true
-                }
-            }
-            else -> elements.size >= 24
-        }
+        val hasNextPage = document.extractNextJs<PaginationDto>()?.hasNextPage ?: (elements.size >= 24)
 
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun parseMangaElements(elements: Elements): List<SManga> = elements
-        .filterNot { it.selectFirst("h3 a")?.absUrl("href")?.toHttpUrlOrNull()?.pathSegments?.firstOrNull() == "novel" }
-        .mapNotNull { element ->
-            val link = element.selectFirst("h3 a") ?: return@mapNotNull null
-            val href = link.absUrl("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            val title = link.text().takeIf { it.isNotBlank() }
-                ?: element.selectFirst("img")?.attr("alt")?.takeIf { it.isNotBlank() }
-                ?: return@mapNotNull null
+    private fun parseMangaElements(elements: Elements): List<SManga> = elements.mapNotNull { element ->
+        val link = element.selectFirst("h3 a") ?: return@mapNotNull null
+        val href = link.absUrl("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        if (href.toHttpUrlOrNull()?.pathSegments?.firstOrNull() == "novel") return@mapNotNull null
 
-            SManga.create().apply {
-                setUrlWithoutDomain(href)
-                this.title = title
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            }
+        val title = link.text().takeIf { it.isNotBlank() }
+            ?: element.selectFirst("img")?.attr("alt")?.takeIf { it.isNotBlank() }
+            ?: return@mapNotNull null
+
+        SManga.create().apply {
+            setUrlWithoutDomain(href)
+            this.title = title
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
+    }
 
     companion object {
         private const val API_KEY = "slept-flutter-xK9mP2wQ7vL4nJ8hB3cF6dR1"
