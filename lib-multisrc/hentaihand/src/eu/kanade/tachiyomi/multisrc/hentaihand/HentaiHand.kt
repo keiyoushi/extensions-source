@@ -85,7 +85,7 @@ abstract class HentaiHand :
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    private fun lookupFilterId(query: String, uri: String): Int? {
+    private fun lookupFilterId(query: String, uri: String, exactMatchOnly: Boolean = false): Int? {
         // filter query needs to be resolved to an ID
         val lookupUrl = "$baseUrl/api/$uri".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
@@ -100,8 +100,9 @@ abstract class HentaiHand :
                 if (results.isEmpty()) {
                     return@map null
                 } else {
-                    results.firstOrNull { it.name.equals(query, ignoreCase = true) }?.id
-                        ?: results.first().id
+                    val exact = results.firstOrNull { it.name.equals(query, ignoreCase = true) }?.id
+                    if (exactMatchOnly) return@map exact
+                    exact ?: results.first().id
                 }
             }.toBlocking().first()
     }
@@ -121,7 +122,7 @@ abstract class HentaiHand :
         val trimmedQuery = query.trim()
         if (trimmedQuery.isNotEmpty() && !hasLookupState) {
             for (uri in QUERY_LOOKUP_URIS) {
-                val id = runCatching { lookupFilterId(trimmedQuery, uri) }.getOrNull() ?: continue
+                val id = runCatching { lookupFilterId(trimmedQuery, uri, exactMatchOnly = true) }.getOrNull() ?: continue
                 queryResolved = true
                 if (!(uri == "languages" && hhLangId.contains(id))) {
                     queryFilter = uri to id
