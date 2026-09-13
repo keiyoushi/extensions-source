@@ -7,12 +7,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getArrayOrNull
 import keiyoushi.utils.getStringOrNull
@@ -207,6 +207,11 @@ abstract class LxHentai : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
 
+        val fetchHookScript = javaClass.getResource("/assets/fetch_hook.js")?.readText()
+            ?: throw IllegalStateException("fetch_hook.js not found in assets")
+        val decodeUrlsScript = javaClass.getResource("/assets/decode_urls.js")?.readText()
+            ?: throw IllegalStateException("decode_urls.js not found in assets")
+
         val (token, imageUrls) = try {
             runWebView<Pair<String, List<String>>>(timeout = 60.seconds) {
                 loadWithOverviewMode = true
@@ -331,12 +336,4 @@ abstract class LxHentai : KeiSource() {
 
     private val backgroundUrlRegex = Regex("""background-image:\s*url\(['"]?([^'")]+)""", RegexOption.IGNORE_CASE)
     private val genreSlugRegex = Regex("""toggleGenre\('([^']+)'\)""")
-    private val fetchHookScript by lazy {
-        javaClass.getResource("/assets/fetch_hook.js")?.readText()
-            ?: throw IllegalStateException("fetch_hook.js not found in assets")
-    }
-    private val decodeUrlsScript by lazy {
-        javaClass.getResource("/assets/decode_urls.js")?.readText()
-            ?: throw IllegalStateException("decode_urls.js not found in assets")
-    }
 }

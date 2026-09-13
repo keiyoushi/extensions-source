@@ -2,14 +2,16 @@ package eu.kanade.tachiyomi.extension.id.astralscans
 
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.post
+import keiyoushi.utils.asJsoup
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.MultipartBody
-import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
@@ -17,23 +19,36 @@ abstract class AstralScans : MangaThemesia() {
 
     override val hasProjectPage = true
 
-    override fun chapterListRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val detailsDeferred = async { if (fetchDetails) getMangaDetails(manga) else manga }
+        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
+        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
+    }
+
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("manga_req", "ping")
             .build()
 
-        return POST(
-            url = baseUrl + manga.url,
-            headers = headersBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .build(),
-            body = body,
+        return chapterListParse(
+            client.post(
+                baseUrl + manga.url,
+                headers = headersBuilder()
+                    .add("X-Requested-With", "XMLHttpRequest")
+                    .build(),
+                body = body,
+            ).asJsoup(),
         )
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val responseString = response.body.string()
+    override fun chapterListParse(document: Document): List<SChapter> {
+        val responseString = document.toString()
 
         if (responseString.startsWith("ASTRAL_")) {
             val parts = responseString.split("|||")
@@ -43,8 +58,7 @@ abstract class AstralScans : MangaThemesia() {
                     val rawHtml = String(Base64.decode(parts[1], Base64.DEFAULT), Charsets.UTF_8)
                     val dynamicDataAttr = parts[2]
 
-                    val document = Jsoup.parse(rawHtml)
-                    val chapters = document.select("[$dynamicDataAttr]").mapNotNull { element ->
+                    val chapters = rawHtml.asJsoup(baseUrl).select("[$dynamicDataAttr]").mapNotNull { element ->
                         val isTrap = element.hasClass("trap") ||
                             element.attr("class").contains("trap") ||
                             element.closest("[class*=trap]") != null
@@ -71,8 +85,7 @@ abstract class AstralScans : MangaThemesia() {
         }
 
         // Fallback: If site reverts to standard MangaThemesia DOM elements
-        val document = Jsoup.parse(responseString, response.request.url.toString())
-        return document.select(chapterListSelector()).map { chapterFromElement(it) }
+        return super.chapterListParse(document)
     }
 
     override fun chapterListSelector() = "div#kumpulan-bab-area .astral-item, div.eplister li"

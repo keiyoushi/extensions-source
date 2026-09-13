@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Comic Festa"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "clipstudioreader"
@@ -15,9 +15,4 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://comic.iowl.jp"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

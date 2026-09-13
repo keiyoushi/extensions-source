@@ -6,16 +6,20 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
+import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -125,28 +129,42 @@ abstract class VyvyManga : KeiSource() {
             thumbnail_url = document.selectFirst(".img-manga img")?.absUrl("src")
         }
 
-        val chapters = document.select(".list-group > a").map { element ->
+        val updatedChapters = document.select(".list-group > a").mapIndexed { index, element ->
             SChapter.create().apply {
-                url = element.absUrl("href")
-                name = element.selectFirst("span")!!.text()
-                date_upload = parseChapterDate(element.selectFirst("> p")?.text())
+                val chapterDate = parseChapterDate(element.selectFirst("> p")?.text())
+                val title = element.selectFirst("span")!!.text()
+                // Avoid the dynamic URLs
+                url = MessageDigest.getInstance("MD5")
+                    .digest("$chapterDate:$title".toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+                    .takeLast(10)
+                name = title
+                date_upload = chapterDate
+                memo = buildJsonObject {
+                    put("chapterUrl", element.absUrl("href"))
+                }
             }
         }
 
-        return SMangaUpdate(manga, chapters)
+        return SMangaUpdate(manga, updatedChapters)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) {
-        chapter.url
-    } else {
-        baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["chapterUrl"]?.string ?: run {
+        if (chapter.url.startsWith("http")) {
+            chapter.url
+        } else {
+            baseUrl + chapter.url
+        }
     }
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (!chapter.url.startsWith("http")) error("Refresh to reload chapters")
+        val url = chapter.memo["chapterUrl"]?.string ?: run {
+            if (!chapter.url.startsWith("http")) error("Refresh to reload chapters")
+            chapter.url
+        }
 
-        val document = client.get(chapter.url).asJsoup()
+        val document = client.get(url).asJsoup()
         return document.select("img.d-block").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("data-src"))
         }

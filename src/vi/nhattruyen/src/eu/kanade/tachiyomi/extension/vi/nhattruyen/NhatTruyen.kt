@@ -1,25 +1,28 @@
 package eu.kanade.tachiyomi.extension.vi.nhattruyen
 
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
+import org.jsoup.nodes.Document
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class NhatTruyen : WPComics() {
 
-    override val dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault())
+    override val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.getDefault())
 
     override val gmtOffset = null
 
@@ -31,38 +34,29 @@ abstract class NhatTruyen : WPComics() {
      * NetTruyen/NhatTruyen redirect back to catalog page if searching query is not found.
      * That makes both sites always return un-relevant results when searching should return empty.
      */
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
-        document.select("article#item-detail").let { info ->
-            author = info.select("li.author p.col-xs-8").text()
-            status = info.select("li.status p.col-xs-8").text().toStatus()
-            genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
-            val otherName = info.select("h2.other-name").text()
-            description = info.select("div.detail-content div.shortened").flatMap { it.children() }.joinToString("\n\n") { it.wholeText().trim() } +
-                if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
-            thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
-        }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        description = document.select("div.detail-content div.shortened").flatMap { it.children() }
+            .joinToString("\n\n") { it.wholeText().trim() }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
-
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
-                is StatusFilter -> filter.toUriPart()?.let { url.addQueryParameter("status", it) }
-                is OrderByFilter -> filter.toUriPart()?.let { url.addQueryParameter("sort", it) }
-                else -> {}
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder().apply {
+            filters.forEach { filter ->
+                when (filter) {
+                    is GenreFilter -> filter.toUriPart()?.let { addPathSegment(it) }
+                    is StatusFilter -> filter.toUriPart()?.let { addQueryParameter("status", it) }
+                    is OrderByFilter -> filter.toUriPart()?.let { addQueryParameter("sort", it) }
+                    else -> {}
+                }
             }
-        }
 
-        url.apply {
             addQueryParameter(queryParam, query)
             addQueryParameter("page", page.toString())
-        }
+        }.build()
 
-        return GET(url.toString(), headers)
+        return parseMangaPage(client.get(url), searchMangaSelector(), ::searchMangaFromElement)
     }
+
     private class OrderByFilter :
         UriPartFilter(
             "Sắp xếp theo",
@@ -78,40 +72,52 @@ abstract class NhatTruyen : WPComics() {
                 Pair("30", "Số chapter"),
             ),
         )
-    override fun getFilterList(): FilterList {
-        launchIO { fetchGenres() }
-        return FilterList(
-            StatusFilter(intl["STATUS"], getStatusList()),
-            OrderByFilter(),
-            if (genreList.isEmpty()) {
-                Filter.Header(intl["GENRES_RESET"])
-            } else {
-                GenreFilter(intl["GENRE"], genreList)
-            },
-        )
-    }
 
-    override fun chapterListRequest(manga: SManga): Request {
+    override fun getFilterList(genres: List<Pair<String?, String>>): FilterList = FilterList(
+        buildList {
+            add(StatusFilter(intl["STATUS"], getStatusList()))
+            add(OrderByFilter())
+            if (genres.isNotEmpty()) {
+                add(GenreFilter(intl["GENRE"], genres))
+            }
+        },
+    )
+
+    override suspend fun mangaUpdateParse(response: Response, manga: SManga, chapters: List<SChapter>): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/") // slug
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("Comic/Services/ComicService.asmx/ChapterList")
-            .addQueryParameter("slug", slug)
-            .build()
-        return GET(url, headers)
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val json = response.parseAs<ChapterDTO>()
-        val slug = response.request.url.queryParameter("slug")!!
-        val chapter = json.data.map {
-            SChapter.create().apply {
-                setUrlWithoutDomain("$baseUrl/truyen-tranh/$slug/${it.chapter_slug}")
-                name = it.chapter_name
-                date_upload = dateFormatChapter.tryParse(it.updated_at)
+        val updatedManga = mangaDetailsParse(response.asJsoup())
+
+        val updatedChapters = run {
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("Comic/Services/ComicService.asmx/ChapterList")
+                .addQueryParameter("slug", slug)
+                .build()
+            val response = client.get(url)
+            val json = response.parseAs<ChapterDTO>()
+            json.data.map {
+                SChapter.create().apply {
+                    setUrlWithoutDomain("$baseUrl/truyen-tranh/$slug/${it.chapterSlug}")
+                    name = it.chapterName
+                    date_upload = dateFormatChapter.tryParseDateTime(it.updatedAt)
+                }
             }
         }
-        return chapter
+
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private val dateFormatChapter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    @Serializable
+    class ChapterDTO(
+        val data: List<Data> = emptyList(),
+    )
+
+    @Serializable
+    class Data(
+        @SerialName("chapter_name") val chapterName: String,
+        @SerialName("chapter_slug") val chapterSlug: String,
+        @SerialName("updated_at") val updatedAt: String,
+    )
+
+    private val dateFormatChapter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 }

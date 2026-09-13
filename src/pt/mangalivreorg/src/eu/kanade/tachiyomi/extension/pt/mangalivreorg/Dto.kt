@@ -37,19 +37,6 @@ class ListItemDto(
 }
 
 @Serializable
-class SearchItemDto(
-    private val label: String,
-    private val link: String,
-    private val cover: String? = null,
-) {
-    fun toSManga() = SManga.create().apply {
-        url = link.substringAfterLast('/')
-        title = label
-        thumbnail_url = cover?.takeIf(String::isNotBlank)
-    }
-}
-
-@Serializable
 class MangaDetailsDto(
     val manga: MangaDto,
     val chapters: List<ChapterDto> = emptyList(),

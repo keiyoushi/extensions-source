@@ -134,7 +134,6 @@ class Chapter(
     private val isLocked: Boolean? = false,
     private val isTimeLocked: Boolean? = false,
     private val mangaPost: MangaPostDto? = null,
-    private val createdBy: CreatorDto? = null,
     private val price: Int? = 0,
     private val chapterPurchased: Boolean? = false,
 ) {
@@ -148,7 +147,6 @@ class Chapter(
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number$suffix"
         date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
-        scanlator = createdBy?.name
         memo = buildJsonObject {
             put("seriesSlug", seriesSlug)
             put("slug", slug)
@@ -160,11 +158,6 @@ class Chapter(
 @Serializable
 class MangaPostDto(
     val slug: String?,
-)
-
-@Serializable
-class CreatorDto(
-    val name: String? = null,
 )
 
 @Serializable

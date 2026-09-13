@@ -12,11 +12,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
+import keiyoushi.network.addCookie
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.jsonInstance
@@ -34,7 +34,7 @@ abstract class Cmoa :
 
     override val client = network.client.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(jsonInstance))
-        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, listOf("safesearch" to "0", "R18user" to "1")))
+        .addCookie(listOf("safesearch" to "0", "R18user" to "1"))
         .build()
 
     private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) } // 1.7070.1001 SBC

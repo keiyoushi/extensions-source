@@ -11,12 +11,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.addCookie
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -52,15 +52,15 @@ abstract class Webtoons :
         .build()
 
     override val client = network.client.newBuilder()
-        .addNetworkInterceptor(
-            CookieInterceptor(
-                domain = "webtoons.com",
-                cookies = listOf(
+        .addCookie(
+            domain = { "webtoons.com" },
+            cookies = {
+                listOf(
                     "ageGatePass" to "true",
                     "locale" to localeForCookie,
                     "needGDPR" to "false",
-                ),
-            ),
+                )
+            },
         )
         .addInterceptor { chain ->
             // m.webtoons.com throws an SSL error that can be solved by a simple retry

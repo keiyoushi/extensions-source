@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Panomic"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
-            custom("https://panomic2.info")
+            custom("https://panomic.online")
         }
     }
 

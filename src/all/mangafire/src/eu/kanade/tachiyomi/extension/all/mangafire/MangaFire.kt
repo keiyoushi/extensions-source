@@ -43,6 +43,7 @@ abstract class MangaFire :
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2)
         addInterceptor(VrfSigner().interceptor())
+        addInterceptor(ChallengeSolverInterceptor({ client.cookieJar }, { solveCaptcha }))
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
@@ -92,7 +93,7 @@ abstract class MangaFire :
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val authorQuery = filters.firstInstanceOrNull<AuthorFilter>()?.state.orEmpty()
+        val authorQuery = filters.firstInstanceOrNull<AuthorFilter>()?.state.orEmpty().trim()
         var authorId: String? = null
 
         if (authorQuery.isNotBlank()) {
@@ -111,7 +112,7 @@ abstract class MangaFire :
 
         val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
-                addQueryParameter("keyword", query)
+                addQueryParameter("keyword", query.trim())
             }
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
@@ -290,6 +291,9 @@ abstract class MangaFire :
     private val preferOfficial: Boolean
         get() = preferences.getBoolean(PREF_PREFER_OFFICIAL, true)
 
+    private val solveCaptcha: Boolean
+        get() = preferences.getBoolean(PREF_SOLVE_CAPTCHA, false)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         MultiSelectListPreference(screen.context).apply {
             key = CONTENT_RATING_PREF
@@ -331,6 +335,12 @@ abstract class MangaFire :
             preferOfficialPref.setEnabled(newValue as Boolean)
             true
         }
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SOLVE_CAPTCHA
+            title = "Automatically solve shape-selecting captcha"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     companion object {
@@ -338,6 +348,7 @@ abstract class MangaFire :
         private const val PREF_SHOW_AS_VOLUMES = "show_as_volumes"
         private const val PREF_MERGE_CHAPTERS = "merge_chapters"
         private const val PREF_PREFER_OFFICIAL = "prefer_official"
+        private const val PREF_SOLVE_CAPTCHA = "solve_captcha"
         private const val SUMMARY_MSG = "Requires Chapter List Refresh to Apply"
     }
 }

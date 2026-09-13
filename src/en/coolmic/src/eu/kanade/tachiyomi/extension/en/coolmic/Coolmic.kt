@@ -11,9 +11,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -37,7 +37,7 @@ abstract class Coolmic :
         .set("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .addNetworkInterceptor(CookieInterceptor(domain, "is_mature" to "true"))
+        .addCookie("is_mature" to "true")
         .addInterceptor(ImageInterceptor())
         .build()
 

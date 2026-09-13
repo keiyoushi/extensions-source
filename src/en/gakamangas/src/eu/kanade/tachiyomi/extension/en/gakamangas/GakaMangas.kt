@@ -5,8 +5,6 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class GakaMangas : Madara() {
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
-
     override val filterNonMangaItems = false
+    override val chapterMode = ChapterMode.MangaAjax
 }

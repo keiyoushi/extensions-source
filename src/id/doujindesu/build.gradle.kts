@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Doujindesu"
-    versionCode = 19
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "id"
@@ -17,9 +17,13 @@ keiyoushi {
         }
         id = 7704282043609669342L
     }
+
+    deeplink {
+        path("/manga/..*")
+        path("/reader/..*")
+    }
 }
 
 dependencies {
     implementation(project(":lib:randomua"))
-    implementation(project(":lib:cookieinterceptor"))
 }

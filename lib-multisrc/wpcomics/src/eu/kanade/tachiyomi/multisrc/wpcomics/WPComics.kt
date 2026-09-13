@@ -1,39 +1,43 @@
 package eu.kanade.tachiyomi.multisrc.wpcomics
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.tryParseDateTime
+import keiyoushi.utils.tryParseZonedDateTime
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-abstract class WPComics : HttpSource() {
+abstract class WPComics : KeiSource() {
 
-    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US)
+    protected open val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy Z", Locale.US)
 
     protected open val gmtOffset: String? = "+0500"
 
-    override val supportsLatest = true
+    protected open val dateZone: ZoneId = ZoneId.systemDefault()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = this
+        .removeAll("Origin")
 
     open val intl = Intl(
         language = lang,
@@ -46,7 +50,7 @@ abstract class WPComics : HttpSource() {
 
     // ============================== Common ======================================
 
-    private fun parseMangaPage(response: Response, selector: String, fromElement: (Element) -> SManga): MangasPage {
+    protected fun parseMangaPage(response: Response, selector: String, fromElement: (Element) -> SManga): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(selector).map(fromElement)
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
@@ -57,9 +61,10 @@ abstract class WPComics : HttpSource() {
 
     open val popularPath = "hot"
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$popularPath" + if (page > 1) "?page=$page" else "", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaPage(response, popularMangaSelector(), ::popularMangaFromElement)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$baseUrl/$popularPath" + if (page > 1) "?page=$page" else ""
+        return parseMangaPage(client.get(url), popularMangaSelector(), ::popularMangaFromElement)
+    }
 
     protected open fun popularMangaSelector() = "div.items div.item"
 
@@ -75,9 +80,10 @@ abstract class WPComics : HttpSource() {
 
     // ============================== Latest ======================================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaPage(response, latestUpdatesSelector(), ::latestUpdatesFromElement)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = baseUrl + if (page > 1) "?page=$page" else ""
+        return parseMangaPage(client.get(url), latestUpdatesSelector(), ::latestUpdatesFromElement)
+    }
 
     protected open fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -88,27 +94,22 @@ abstract class WPComics : HttpSource() {
     protected open val searchPath = "tim-truyen"
     protected open val queryParam = "keyword"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
-
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
-                is StatusFilter -> filter.toUriPart()?.let { url.addQueryParameter("status", it) }
-                else -> {}
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder().apply {
+            filters.forEach { filter ->
+                when (filter) {
+                    is GenreFilter -> filter.toUriPart()?.let { addPathSegment(it) }
+                    is StatusFilter -> filter.toUriPart()?.let { addQueryParameter("status", it) }
+                    else -> {}
+                }
             }
-        }
-
-        url.apply {
             addQueryParameter(queryParam, query)
             addQueryParameter("page", page.toString())
             addQueryParameter("sort", "0")
-        }
+        }.build()
 
-        return GET(url.toString(), headers)
+        return parseMangaPage(client.get(url), searchMangaSelector(), ::searchMangaFromElement)
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaPage(response, searchMangaSelector(), ::searchMangaFromElement)
 
     protected open fun searchMangaSelector() = "div.items div.item"
 
@@ -122,16 +123,30 @@ abstract class WPComics : HttpSource() {
 
     // ============================== Details ======================================
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = mangaUpdateParse(client.get(getMangaUrl(manga)), manga, chapters)
+
+    protected open suspend fun mangaUpdateParse(response: Response, manga: SManga, chapters: List<SChapter>): SMangaUpdate {
         val document = response.asJsoup()
-        document.select("article#item-detail").let { info ->
+        val updatedManga = mangaDetailsParse(document)
+        val updatedChapters = document.select(chapterListSelector()).map(::chapterFromElement)
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
+
+    protected open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.selectFirst("article#item-detail")?.let { info ->
             author = info.select("li.author p.col-xs-8").text()
             status = info.select("li.status p.col-xs-8").text().toStatus()
             genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
+            thumbnail_url = imageOrNull(info.selectFirst("div.col-image img")!!)
             val otherName = info.select("h2.other-name").text()
-            description = info.select("div.detail-content p").joinToString { it.wholeText().trim() } +
-                if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
-            thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
+            description = info.select("div.detail-content p").joinToString("\n") { it.wholeText().trim() } +
+                if (otherName.isNotBlank()) "\n\n${intl["OTHER_NAME"]}: $otherName" else ""
         }
     }
 
@@ -150,11 +165,6 @@ abstract class WPComics : HttpSource() {
 
     // ============================== Chapters ======================================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector()).map(::chapterFromElement)
-    }
-
     protected open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         element.select("a").let {
             name = it.text()
@@ -165,44 +175,43 @@ abstract class WPComics : HttpSource() {
 
     protected open fun chapterListSelector() = "div.list-chapter li.row:not(.heading)"
 
-    protected val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
-
     protected open fun String?.toDate(): Long {
         this ?: return 0L
 
         val secondWords = listOf("second", "giây")
-        val minuteWords = listOf("minute", "phút")
-        val hourWords = listOf("hour", "giờ")
-        val dayWords = listOf("day", "ngày")
-        val weekWords = listOf("week", "tuần")
-        val monthWords = listOf("month", "tháng")
+        val minuteWords = listOf("minute", "phút", "分")
+        val hourWords = listOf("hour", "giờ", "時間")
+        val dayWords = listOf("day", "ngày", "日")
+        val weekWords = listOf("week", "tuần", "週間")
+        val monthWords = listOf("month", "tháng", "月")
         val yearWords = listOf("year", "năm")
-        val agoWords = listOf("ago", "trước")
+        val agoWords = listOf("ago", "trước", "前")
 
         return try {
             if (agoWords.any { this.contains(it, ignoreCase = true) }) {
-                val trimmedDate = this.substringBefore(" ago").removeSuffix("s").split(" ")
-                val calendar = Calendar.getInstance()
+                val amount = Regex("""(\d+)""").find(this)?.groupValues?.get(1)?.toLong() ?: return 0L
+                val now = ZonedDateTime.now(dateZone)
 
-                when {
-                    yearWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.YEAR, -trimmedDate[0].toInt()) }
-                    monthWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
-                    dayWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
-                    weekWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.WEEK_OF_YEAR, -trimmedDate[0].toInt()) }
-                    hourWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
-                    minuteWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
-                    secondWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.SECOND, -trimmedDate[0].toInt()) }
+                val dateTime = when {
+                    yearWords.any { this.contains(it, ignoreCase = true) } -> now.minusYears(amount)
+                    monthWords.any { this.contains(it, ignoreCase = true) } -> now.minusMonths(amount)
+                    dayWords.any { this.contains(it, ignoreCase = true) } -> now.minusDays(amount)
+                    weekWords.any { this.contains(it, ignoreCase = true) } -> now.minusWeeks(amount)
+                    hourWords.any { this.contains(it, ignoreCase = true) } -> now.minusHours(amount)
+                    minuteWords.any { this.contains(it, ignoreCase = true) } -> now.minusMinutes(amount)
+                    secondWords.any { this.contains(it, ignoreCase = true) } -> now.minusSeconds(amount)
+                    else -> now
                 }
 
-                calendar.timeInMillis
+                dateTime.toInstant().toEpochMilli()
             } else {
                 (if (gmtOffset == null) this.substringAfterLast(" ") else "$this $gmtOffset").let {
                     // timestamp has year
                     if (Regex("""\d+/\d+/\d\d""").find(it)?.value != null) {
-                        dateFormat.parse(it)?.time ?: 0L
+                        parseDate(it)
                     } else {
                         // MangaSum - timestamp sometimes doesn't have year (current year implied)
-                        dateFormat.parse("$it/$currentYear")?.time ?: 0L
+                        parseDate("$it/${LocalDateTime.now().year % 100}")
                     }
                 }
             }
@@ -211,6 +220,12 @@ abstract class WPComics : HttpSource() {
         }
     }
 
+    protected open fun parseDate(date: String): Long = dateFormat.tryParseZonedDateTime(date)
+        .takeIf { it != 0L }
+        ?: dateFormat.tryParseDateTime(date, dateZone)
+            .takeIf { it != 0L }
+        ?: dateFormat.tryParseDate(date, dateZone)
+
     // ============================== Pages ======================================
 
     open fun imageOrNull(element: Element): String? {
@@ -218,7 +233,7 @@ abstract class WPComics : HttpSource() {
         fun Element.hasValidAttr(attr: String): Boolean {
             val regex = Regex("""https?://.*""", RegexOption.IGNORE_CASE)
             return when {
-                this.attr(attr).isNullOrBlank() -> false
+                this.attr(attr).isBlank() -> false
                 this.attr("abs:$attr").matches(regex) -> true
                 else -> false
             }
@@ -234,14 +249,14 @@ abstract class WPComics : HttpSource() {
 
     open val pageListSelector = "div.page-chapter > img, li.blocks-gallery-item img"
 
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> = parsePageList(client.get(getChapterUrl(chapter)))
+
+    protected open suspend fun parsePageList(response: Response): List<Page> {
         val document = response.asJsoup()
         return document.select(pageListSelector).mapNotNull { img -> imageOrNull(img) }
             .distinct()
             .mapIndexed { i, image -> Page(i, "", image) }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Filters ======================================
 
@@ -255,33 +270,11 @@ abstract class WPComics : HttpSource() {
         Pair("2", intl["STATUS_COMPLETED"]),
     )
 
-    protected var genreList: List<Pair<String?, String>> = emptyList()
+    override val supportsFilterFetching = true
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    protected fun launchIO(block: suspend () -> Unit) {
-        scope.launch { block() }
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/$searchPath").asJsoup().let { document ->
+        parseGenres(document).toJsonElement()
     }
-
-    private var fetchGenresAttempts: Int = 0
-
-    protected fun fetchGenres() {
-        if (fetchGenresAttempts < 3 && genreList.isEmpty()) {
-            launchIO {
-                try {
-                    client.newCall(genresRequest()).await()
-                        .use { response -> parseGenres(response.asJsoup()) }
-                        .takeIf { it.isNotEmpty() }
-                        ?.also { genreList = it }
-                } catch (_: Exception) {
-                } finally {
-                    fetchGenresAttempts++
-                }
-            }
-        }
-    }
-
-    protected open fun genresRequest() = GET("$baseUrl/$searchPath", headers)
 
     protected open val genresSelector = ".genres ul.nav li:not(.active) a"
 
@@ -302,17 +295,19 @@ abstract class WPComics : HttpSource() {
         }
     }
 
-    override fun getFilterList(): FilterList {
-        launchIO { fetchGenres() }
-        return FilterList(
-            StatusFilter(intl["STATUS"], getStatusList()),
-            if (genreList.isEmpty()) {
-                Filter.Header(intl["GENRES_RESET"])
-            } else {
-                GenreFilter(intl["GENRE"], genreList)
-            },
-        )
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<Pair<String?, String>>>() ?: emptyList()
+        return getFilterList(genres)
     }
+
+    protected open fun getFilterList(genres: List<Pair<String?, String>>): FilterList = FilterList(
+        buildList {
+            add(StatusFilter(intl["STATUS"], getStatusList()))
+            if (genres.isNotEmpty()) {
+                add(GenreFilter(intl["GENRE"], genres))
+            }
+        },
+    )
 
     protected open class UriPartFilter(displayName: String, private val pairs: List<Pair<String?, String>>) : Filter.Select<String>(displayName, pairs.map { it.second }.toTypedArray()) {
         fun toUriPart() = pairs[state].first

@@ -14,12 +14,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.intOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
@@ -390,8 +391,10 @@ abstract class AsuraScans :
     private fun JsonElement.unwrapAstro(): JsonElement = when (this) {
         is JsonArray -> when {
             isEmpty() -> JsonNull
-            size == 1 -> JsonNull
-            size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
+            size == 1 && (this[0] as? JsonPrimitive)?.intOrNull != null ->
+                JsonNull
+            size == 2 && (this[0] as? JsonPrimitive)?.intOrNull != null ->
+                this[1].unwrapAstro()
             else -> JsonArray(map { it.unwrapAstro() })
         }
         is JsonObject -> JsonObject(mapValues { it.value.unwrapAstro() })

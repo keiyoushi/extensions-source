@@ -1,14 +1,22 @@
 package eu.kanade.tachiyomi.extension.en.readcomicsonline
 
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
+import eu.kanade.tachiyomi.multisrc.mmrcms.UriFilter
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -42,6 +50,33 @@ abstract class ReadComicsOnline : MMRCMS() {
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic-list?sort=latest&page=$page")
 
     override fun latestUpdatesSelector() = popularMangaSelector()
+
+    override fun searchMangaSelector(): String = "div a:has(img)"
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters)).asObservableSuccess().map { response ->
+        val resDoc = response.asJsoup()
+        val mangas = resDoc.select(searchMangaSelector()).map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.absUrl("href"))
+                title = element.selectFirst("p")!!.text()
+                thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+            }
+        }
+        val hasNextPage = resDoc.selectFirst("span a[rel=next]") != null
+        MangasPage(mangas, hasNextPage)
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            val filterList = filters.ifEmpty { getFilterList() }
+            addPathSegment("advanced-search")
+            addQueryParameter("name", query)
+            addQueryParameter("page", page.toString())
+            filterList.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
+        }.build()
+
+        return GET(url, headers)
+    }
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1.text-2xl")?.text() ?: ""

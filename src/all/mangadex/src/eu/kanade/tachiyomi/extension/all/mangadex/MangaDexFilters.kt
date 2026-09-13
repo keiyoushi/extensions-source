@@ -8,6 +8,9 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.lib.i18n.Intl
 import okhttp3.HttpUrl
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 
 class MangaDexFilters {
 
@@ -22,6 +25,17 @@ class MangaDexFilters {
         DemographicList(intl, getDemographics(intl)),
         StatusList(intl, getStatus(intl)),
         SortFilter(intl, getSortables(intl)),
+        DaysSinceFilter(
+            intl["created_at"],
+            "createdAtSince",
+            listOf(
+                intl["created_at_any"] to 0,
+                intl["created_at_day"] to 1,
+                intl["created_at_week"] to 7,
+                intl["created_at_month"] to 30,
+                intl["created_at_year"] to 365,
+            ),
+        ),
         TagsFilter(intl, getTagFilters(intl)),
         TagList(intl["content"], getContents(intl)),
         TagList(intl["format"], getFormats(intl)),
@@ -212,6 +226,22 @@ class MangaDexFilters {
 
                 url.addQueryParameter("order[$query]", value)
             }
+        }
+    }
+
+    private class DaysSinceFilter(
+        name: String,
+        private val queryParam: String,
+        private val options: List<Pair<String, Int>>,
+    ) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()),
+        UrlQueryFilter {
+
+        override fun addQueryParameter(url: HttpUrl.Builder, dexLang: String) {
+            val days = options[state].second.takeIf { it > 0 } ?: return
+            val since = LocalDateTime.now(ZoneOffset.UTC)
+                .minusDays(days.toLong())
+                .truncatedTo(ChronoUnit.HOURS)
+            url.addQueryParameter(queryParam, MDConstants.dateFormatterNoOffset.format(since))
         }
     }
 

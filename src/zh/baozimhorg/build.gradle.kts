@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "GoDa"
-    versionCode = 33
+    versionCode = 34
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "goda"
 
     source {

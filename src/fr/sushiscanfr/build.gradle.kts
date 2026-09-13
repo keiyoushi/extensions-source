@@ -8,7 +8,7 @@ keiyoushi {
     name = "Sushiscan.fr"
     versionCode = 3
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {

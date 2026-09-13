@@ -1,136 +1,186 @@
 package eu.kanade.tachiyomi.extension.ru.mangashi
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.tryParse
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
 @Source
-abstract class MangaShi : HttpSource() {
+abstract class MangaShi : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .rateLimit(2)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        rateLimit(2)
+    }
 
     // ========================= Popular =========================
-
-    override fun popularMangaRequest(page: Int): Request = GET(catalogUrl(page, SORT_POPULAR), headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = catalogParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = makeCatalogRequest(page, "popular")
 
     // ========================= Latest =========================
-
-    override fun latestUpdatesRequest(page: Int): Request = GET(catalogUrl(page, SORT_LATEST), headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = catalogParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = makeCatalogRequest(page, "updated")
 
     // ========================= Search =========================
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = makeCatalogRequest(page, "", query, filters)
 
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> {
-        val url = query.toHttpUrlOrNull()
-        if (url != null) {
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported URL")
-            }
-            val slug = url.pathSegments.getOrNull(1) ?: throw Exception("Invalid manga URL")
-            return client.newCall(GET("$baseUrl/manga/$slug/", headers))
-                .asObservableSuccess()
-                .map { response ->
-                    val manga = mangaDetailsParse(response).apply {
-                        setUrlWithoutDomain("$baseUrl/manga/$slug/")
+    // ============================== Search Utilities ===============================
+    private suspend fun makeCatalogRequest(page: Int, sortBy: String = "", query: String = "", filters: FilterList? = null): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("catalog")
+            addPathSegment("")
+
+            filters?.forEach { filter ->
+                when (filter) {
+                    is SortFilter -> addQueryParameter("sort", filter.selected)
+                    is StatusFilter -> addQueryParameter("status", filter.selected)
+                    is TypeFilter -> addQueryParameter("type", filter.selected)
+                    is AgeRatingFilter -> addQueryParameter("age_rating", filter.selected)
+                    is YearFilter -> addQueryParameter("year", filter.selected)
+                    is GenreFilter -> {
+                        filter.included?.forEach { addQueryParameter("tag", it) }
+                        filter.excluded?.forEach { addQueryParameter("exclude_tag", it) }
                     }
-                    MangasPage(listOf(manga), false)
+                    else -> {}
                 }
+            }
+
+            if (filters == null) {
+                addQueryParameter("sort", sortBy)
+                addQueryParameter("status", "")
+                addQueryParameter("type", "")
+                addQueryParameter("age_rating", "")
+                addQueryParameter("year", "")
+            }
+
+            addQueryParameter("chapters_min", "")
+            addQueryParameter("chapters_max", "")
+            addQueryParameter("q", query)
+            addQueryParameter("page", page.toString())
+        }.build()
+
+        client.get(url).use {
+            return catalogParse(it.asJsoup())
         }
-        return super.fetchSearchManga(page, query, filters)
     }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("catalog")
-            .addPathSegment("")
-            .addQueryParameter("page", page.toString())
-
-        if (query.isNotBlank()) {
-            url.addQueryParameter("q", query.trim())
-        } else {
-            filters.filterIsInstance<UriFilter>().forEach { it.addToUri(url) }
-        }
-
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = catalogParse(response)
 
     // ========================= Filters =========================
+    override val supportsFilterFetching = true
 
-    override fun getFilterList(): FilterList = getMangaShiFilters()
+    override suspend fun fetchFilterData(): JsonElement {
+        val result = client.get("$baseUrl/catalog/").asJsoup()
 
-    // ========================= Details =========================
+        return result.selectFirst(".genre-flyout")?.select(".group")?.map {
+            it.selectFirst("span")?.text() to it.selectFirst("input")?.attr("value")
+        }?.ifEmpty { emptyList() }.toJsonElement()
+    }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = mutableListOf<Filter<*>>()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
+        filters.add(SortFilter())
 
-            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
-                ?.let { if (it.startsWith("/")) "$baseUrl$it" else it }
-
-            val authorLinks = document.select("a[href*=\"?author=\"]")
-            author = authorLinks.firstOrNull()?.text()?.takeIf(String::isNotEmpty)
-
-            val badges = document.select("span.tracking-widest").map { it.text().trim() }
-            val statusText = badges.firstOrNull { txt ->
-                val lower = txt.lowercase()
-                lower.contains("онгоинг") || lower.contains("выпускается") || lower.contains("заверш") || lower.contains("заморож") || lower.contains("приостановл") || lower.contains("заброш")
-            }
-
-            status = parseStatus(statusText)
-
-            val typeText = badges.firstOrNull { txt ->
-                val lower = txt.lowercase()
-                lower.contains("манга") || lower.contains("манхва") || lower.contains("маньхуа") || lower.contains("комикс")
-            }
-
-            val genreLinks = document.select("a[href*=manga-genre]").eachText()
-            val tagLinks = document.select("a[href*=\"?tag=\"]").eachText()
-            genre = (listOfNotNull(typeText) + genreLinks + tagLinks)
-                .filter(String::isNotEmpty)
-                .distinct()
-                .joinToString()
-
-            description = document.selectFirst("p.leading-relaxed, .leading-relaxed")
-                ?.wholeText()?.trim()
+        data?.parseAs<List<Pair<String, String>>>().let {
+            if (it?.isNotEmpty() == true) filters.add(GenreFilter(it))
         }
+
+        filters.addAll(
+            listOf(
+                StatusFilter(),
+                TypeFilter(),
+                AgeRatingFilter(),
+                YearFilter(),
+            ),
+        )
+
+        return FilterList(filters)
+    }
+
+    // =========================== Deeplink ============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga") {
+            val tmpManga = SManga.create().apply {
+                this.url = "/${url.pathSegments[0]}/${url.pathSegments[1]}/"
+            }
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }
+        return null
+    }
+
+    // ========================= Manga =========================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val newUrl = manga.url
+        val document = client.get("${baseUrl}$newUrl").asJsoup()
+
+        val mangaNew = parseMangaDetails(document, newUrl)
+
+        val chaptersNew = if (fetchChapters) {
+            parseChapterList(document)
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(mangaNew, chaptersNew)
+    }
+
+    // ========================= Manga Details =========================
+    private fun parseMangaDetails(document: Document, newUrl: String): SManga = SManga.create().apply {
+        url = newUrl
+        title = document.selectFirst("h1")!!.text()
+
+        thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
+            ?.let { if (it.startsWith("/")) "$baseUrl$it" else it }
+
+        val authorLinks = document.select("a[href*=\"?author=\"]")
+        author = authorLinks.firstOrNull()?.text()?.takeIf(String::isNotEmpty)
+
+        val badges = document.select("span.tracking-widest").map { it.text().trim() }
+        val statusText = badges.firstOrNull { txt ->
+            val lower = txt.lowercase()
+            lower.contains("онгоинг") || lower.contains("выпускается") || lower.contains("заверш") || lower.contains("заморож") || lower.contains("приостановл") || lower.contains("заброш") || lower.contains("хиатус")
+        }
+
+        status = parseStatus(statusText)
+
+        val typeText = badges.firstOrNull { txt ->
+            val lower = txt.lowercase()
+            lower.contains("манга") || lower.contains("манхва") || lower.contains("маньхуа") || lower.contains("комикс")
+        }
+
+        val genreLinks = document.select("a[href*=manga-genre]").eachText()
+        val tagLinks = document.select("a[href*=\"?tag=\"]").eachText()
+        genre = (listOfNotNull(typeText) + genreLinks + tagLinks)
+            .filter(String::isNotEmpty)
+            .distinct()
+            .joinToString { it.removePrefix("#").lowercase(Locale.ROOT) }
+
+        description = Jsoup.parseBodyFragment(
+            document.selectFirst("div.leading-relaxed[x-ref*=\"descDesktop\"]")
+                ?.wholeText()?.trim().toString(),
+        ).text()
     }
 
     private fun parseStatus(raw: String?): Int {
@@ -145,22 +195,23 @@ abstract class MangaShi : HttpSource() {
     }
 
     // ========================= Chapters =========================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private suspend fun parseChapterList(document: Document): List<SChapter> {
         val chapters = document.select("#chapters-list > a[href*=\"/glava\"]")
             .mapNotNull(::parseChapter)
             .toMutableList()
 
-        var nextUrl = document.selectFirst("#chapters-load-more[hx-get], #chapters-load-more [hx-get]")
+        var nextUrl = document.selectFirst("#chapters-load-more a")
             ?.attr("hx-get")
 
+        val chapUrl = "$baseUrl${nextUrl?.substringBefore("?")}?"
+        nextUrl = nextUrl?.substringAfter("?")
+
         while (nextUrl != null) {
-            client.newCall(GET("$baseUrl$nextUrl", headers)).execute().use { nextResponse ->
+            client.get("${chapUrl}$nextUrl").use { nextResponse ->
                 val fragment = Jsoup.parseBodyFragment(nextResponse.body.string(), baseUrl)
                 chapters.addAll(fragment.select("a[href*=\"/glava\"]").mapNotNull(::parseChapter))
-                nextUrl = fragment.selectFirst("#chapters-load-more[hx-get], #chapters-load-more [hx-get]")
-                    ?.attr("hx-get")
+                nextUrl = fragment.selectFirst("nav.flex a:last-child:contains(Дальше)")
+                    ?.attr("href")?.substringAfter("?")
             }
         }
 
@@ -175,8 +226,8 @@ abstract class MangaShi : HttpSource() {
             setUrlWithoutDomain(
                 if (href.startsWith("/")) "$baseUrl$href" else link.absUrl("href"),
             )
-            name = link.selectFirst("span.chapter-title span")?.text()?.trim()
-                ?: link.ownText().trim().ifEmpty { href.substringAfterLast("/manga/") }
+            name = link.select("span.chapter-title > span").text().trim()
+
             val dateText = link.select("span span").eachText()
                 .lastOrNull { ABSOLUTE_DATE_REGEX.containsMatchIn(it) || RELATIVE_DATE_REGEX.containsMatchIn(it) }
             date_upload = parseChapterDate(dateText?.trim())
@@ -191,7 +242,7 @@ abstract class MangaShi : HttpSource() {
         if (dateStr.isNullOrBlank()) return 0L
         val trimmed = dateStr.trim()
         if (ABSOLUTE_DATE_REGEX.matches(trimmed)) {
-            return dateFormat.tryParse(trimmed)
+            return dateFormat.tryParseDate(trimmed)
         }
         val lower = trimmed.lowercase()
         val amount = RELATIVE_NUMBER_REGEX.find(lower)?.groupValues?.get(1)?.toIntOrNull()
@@ -214,25 +265,14 @@ abstract class MangaShi : HttpSource() {
 
     // ========================= Pages =========================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get("$baseUrl${chapter.url}").asJsoup()
         return document.select("img.reader-image").mapIndexed { i, img ->
             Page(i, imageUrl = img.imgAttr())
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private fun catalogUrl(page: Int, sort: String): String = baseUrl.toHttpUrl().newBuilder()
-        .addPathSegment("catalog")
-        .addPathSegment("")
-        .addQueryParameter("sort", sort)
-        .addQueryParameter("page", page.toString())
-        .build()
-        .toString()
-
-    private fun catalogParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun catalogParse(document: Document): MangasPage {
         val grid = document.selectFirst("#manga-grid") ?: return MangasPage(emptyList(), false)
         val mangas = grid.select("> a[href*=\"/manga/\"]")
             .map(::cardToSManga)
@@ -254,16 +294,12 @@ abstract class MangaShi : HttpSource() {
     }
 
     companion object {
-        private const val SORT_POPULAR = "popular"
-        private const val SORT_LATEST = "updated"
         private const val MIN_PAGE_SIZE = 20
-
         private val CHAPTER_URL_REGEX = Regex("""/glava[-_]""")
         private val CHAPTER_NUMBER_REGEX = Regex("""/glava[-_]([\d,]+)""")
         private val ABSOLUTE_DATE_REGEX = Regex("""\d{2}\.\d{2}\.\d{4}""")
         private val RELATIVE_DATE_REGEX = Regex("""\d+\s*(сек|мин|час|дн|день|дня|недел|месяц|год|лет)""")
         private val RELATIVE_NUMBER_REGEX = Regex("""(\d+)""")
-
-        private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.ROOT)
+        private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT)
     }
 }

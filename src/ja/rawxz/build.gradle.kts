@@ -5,14 +5,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "RawZO"
-    versionCode = 51
+    name = "RawMiu"
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "ja"
-        baseUrl = "https://rawzo.net"
+        baseUrl = "https://rawmiu.com"
         id = 7950551186567193810L
     }
 }

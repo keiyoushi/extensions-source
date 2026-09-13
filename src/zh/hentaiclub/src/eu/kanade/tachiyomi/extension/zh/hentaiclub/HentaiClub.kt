@@ -8,9 +8,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -55,7 +55,7 @@ abstract class HentaiClub : HttpSource() {
                 .addPathSegment(query.trim())
                 .build()
                 .toString()
-            val url = if (page > 1) "$searchUrl/page/$page/" else "$searchUrl/"
+            val url = if (page > 1) "$searchUrl/$page/" else "$searchUrl/"
             return GET(url, headers)
         }
 

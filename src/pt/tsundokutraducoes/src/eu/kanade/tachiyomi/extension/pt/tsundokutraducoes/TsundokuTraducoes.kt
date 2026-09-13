@@ -4,17 +4,12 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
-import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TsundokuTraducoes : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("MMMMM d, yyyy", Locale("pt", "BR"))
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds)
 
     override val altNamePrefix = "Nome alternativo: "
 

@@ -5,5 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class HM2D : Madara() {
-    override fun searchMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
+    override val chapterMode = ChapterMode.MangaAjax
 }

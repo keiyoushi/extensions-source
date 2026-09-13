@@ -13,24 +13,17 @@ import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import org.jsoup.nodes.Document
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class MangaKimi : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Bangkok")
-    }
 
-    override val client = super.client.newBuilder()
-        .addNetworkInterceptor(::imageDescrambler)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor(::imageDescrambler)
 
     // Pages
     override val pageSelector = "div#readerarea img, #readerarea div.displayImage + script:containsData(p,a,c,k,e,d)"
@@ -74,13 +67,6 @@ abstract class MangaKimi : MangaThemesia() {
             }
         }.mapIndexed { i, url ->
             Page(i, location, url)
-        }
-
-        // We only call countViews if we parsed pages directly to avoid double counting
-        // since the super fallback also calls it.
-        if (pages.isNotEmpty()) {
-            countViews(document)
-            return pages
         }
 
         // Fallback to super method if no pages are found (e.g., for JSON image lists)

@@ -8,10 +8,9 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MangaForFree : Madara() {
+    override val chapterMode = ChapterMode.AdminAjax
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 1.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 1.seconds) { !it.encodedPath.startsWith("/wp-content/uploads/") }
 
     override fun chapterListSelector() = when (lang) {
         "en" -> "li.wp-manga-chapter:not(:contains(Raw))"

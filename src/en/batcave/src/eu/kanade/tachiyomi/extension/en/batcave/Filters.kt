@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.batcave
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
 import java.util.Calendar
 
 interface UrlPartFilter {
@@ -95,7 +94,7 @@ class YearFilter :
 }
 
 class SortFilter(
-    select: Selection = Selection(0, false),
+    select: Selection = Selection(2, false),
 ) : Filter.Sort(
     "Sort",
     sorts.map { it.first }.toTypedArray(),
@@ -103,15 +102,9 @@ class SortFilter(
 ) {
     fun getSort() = sorts[state?.index ?: 0].second
     fun getDirection() = if (state?.ascending != false) "asc" else "desc"
-
-    companion object {
-        val POPULAR = FilterList(SortFilter(Selection(3, false)))
-        val LATEST = FilterList(SortFilter(Selection(2, false)))
-    }
 }
 
 private val sorts = listOf(
-    "Default" to "",
     "Date" to "date",
     "Date of change" to "editdate",
     "Rating" to "rating",

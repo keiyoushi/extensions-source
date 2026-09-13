@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Manga Online"
-    versionCode = 4
-    contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "madara"
+    versionCode = 57
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://mangaonline.blue"
+        baseUrl = "https://mangaonline.green"
+        versionId = 2
     }
 }

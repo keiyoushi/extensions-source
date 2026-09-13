@@ -10,6 +10,7 @@ EXTENSION_REGEX = re.compile(r"^src/(?P<lang>\w+)/(?P<extension>\w+)")
 MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>\w+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>\w+)")
 MODULE_REGEX = re.compile(r"^:src:(?P<lang>\w+):(?P<extension>\w+)$")
+PKG_NAME_REGEX = re.compile(r"""pkgName\s*=\s*["']([^"']+)["']""")
 CORE_FILES_REGEX = re.compile(
     r"^(common/|compiler/|core/|gradle/|build\.gradle\.kts|gradle\.properties|settings\.gradle\.kts|.github/scripts)"
 )
@@ -20,6 +21,35 @@ def run_command(command: str) -> str:
         print(result.stderr.strip())
         sys.exit(result.returncode)
     return result.stdout.strip()
+
+
+def resolve_module_suffix(ref: str, lang: str, extension: str) -> str:
+    """
+    returns the effective applicationId suffix of a module: the DSL override
+    (pkgName) if set, else the directory-derived default
+    """
+    build_file = Path("src", lang, extension, "build.gradle.kts")
+    content = None
+    if build_file.is_file():
+        content = build_file.read_text("utf-8")
+    elif ref:
+        # the module was deleted; read its build file from the base ref
+        result = subprocess.run(
+            f"git show {ref}:src/{lang}/{extension}/build.gradle.kts",
+            capture_output=True,
+            text=True,
+            shell=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            content = result.stdout
+
+    if content:
+        match = PKG_NAME_REGEX.search(content)
+        if match:
+            return match.group(1)
+
+    return f"{lang}.{extension}"
 
 
 def resolve_dependent_libs(libs: set[str]) -> set[str]:
@@ -118,7 +148,7 @@ def resolve_ext(multisrcs: set[str], libs: set[str]) -> set[tuple[str, str]]:
 
     return extensions
 
-def get_module_list(ref: str) -> tuple[list[str], list[str]]:
+def get_module_list(ref: str) -> tuple[list[str], list[str], list[str]]:
     diff_output = run_command(f"git diff --name-status {ref}").splitlines()
 
     changed_files = [
@@ -142,7 +172,7 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
             extension = match.group("extension")
             if Path("src", lang, extension).is_dir():
                 modules.add(f':src:{lang}:{extension}')
-            deleted.add(f"{lang}.{extension}")
+            deleted.add(resolve_module_suffix(ref, lang, extension))
 
         elif match := MULTISRC_LIB_REGEX.search(file):
             multisrc = match.group("multisrc")
@@ -155,13 +185,13 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
                 libs.add(lib)
 
     if core_files_changed:
-        (all_modules, all_deleted) = get_all_modules()
+        (all_modules, all_deleted) = get_all_modules(ref)
 
         # update existing set so we include deleted extensions
         modules.update(all_modules)
         deleted.update(all_deleted)
 
-        return list(modules), list(deleted)
+        return sorted(modules), sorted(deleted), get_all_lint_modules()
 
     # Resolve libs that depend on the changed libs (recursively)
     libs.update(
@@ -176,39 +206,64 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
     # Resolve extensions that depend on the changed multisrcs or libs
     extensions = resolve_ext(multisrcs, libs)
     modules.update([f":src:{lang}:{extension}" for lang, extension in extensions])
-    deleted.update([f"{lang}.{extension}" for lang, extension in extensions])
+    deleted.update([resolve_module_suffix(ref, lang, extension) for lang, extension in extensions])
 
-    return list(modules), list(deleted)
+    lint_modules = {
+        *(f":lib:{lib}" for lib in libs),
+        *(f":lib-multisrc:{multisrc}" for multisrc in multisrcs),
+    }
 
-def get_all_modules() -> tuple[list[str], list[str]]:
+    return sorted(modules), sorted(deleted), sorted(lint_modules)
+
+def get_all_modules(ref: str) -> tuple[list[str], list[str]]:
     modules = []
     deleted = []
     for lang in Path("src").iterdir():
         for extension in lang.iterdir():
             modules.append(f":src:{lang.name}:{extension.name}")
-            deleted.append(f"{lang.name}.{extension.name}")
+            deleted.append(resolve_module_suffix(ref, lang.name, extension.name))
     return modules, deleted
 
-def main() -> None:
-    _, ref, build_type = sys.argv
-    modules, deleted = get_module_list(ref)
 
-    chunked = {
+def get_all_lint_modules() -> list[str]:
+    modules = [":core"]
+    modules.extend(
+        f":{directory}:{module.name}"
+        for directory in ("lib", "lib-multisrc")
+        for module in Path(directory).iterdir()
+        if (module / "build.gradle.kts").is_file()
+    )
+    return sorted(modules)
+
+
+def create_matrix(modules: list[str]) -> dict:
+    return {
         "chunk": [
-            {"number": i + 1, "modules": modules}
-            for i, modules in
-            enumerate(itertools.batched(
-                map(lambda x: f"{x}:assemble{build_type}", modules),
+            {"number": i + 1, "modules": chunk}
+            for i, chunk in enumerate(itertools.batched(
+                modules,
                 int(os.getenv("CI_CHUNK_SIZE", 65))
             ))
         ]
     }
 
-    print(f"Module chunks to build:\n{json.dumps(chunked, indent=2)}\n\nModule to delete:\n{json.dumps(deleted, indent=2)}")
+
+def main() -> None:
+    _, ref = sys.argv
+    modules, deleted, lint_modules = get_module_list(ref)
+
+    matrix = create_matrix(modules)
+
+    print(
+        f"Module chunks to build:\n{json.dumps(matrix, indent=2)}\n\n"
+        f"Modules to lint:\n{json.dumps(lint_modules, indent=2)}\n\n"
+        f"Module to delete:\n{json.dumps(deleted, indent=2)}"
+    )
 
     if os.getenv("CI") == "true":
         with open(os.getenv("GITHUB_OUTPUT"), 'a') as out_file:
-            out_file.write(f"matrix={json.dumps(chunked)}\n")
+            out_file.write(f"matrix={json.dumps(matrix)}\n")
+            out_file.write(f"lint_modules={json.dumps(lint_modules)}\n")
             out_file.write(f"delete={json.dumps(deleted)}\n")
 
 if __name__ == '__main__':

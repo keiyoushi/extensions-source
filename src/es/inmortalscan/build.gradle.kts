@@ -6,10 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Inmortal Scan"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    theme = "madara"
+    theme = "madaralegacy"
 
     source {
         lang = "es"

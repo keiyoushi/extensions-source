@@ -1,39 +1,29 @@
 package eu.kanade.tachiyomi.extension.id.ainzscansid
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import okhttp3.OkHttpClient
 
 @Source
-abstract class AinzScansID : HttpSource() {
-
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
+abstract class AinzScansID : KeiSource() {
 
     private val apiUrl = "https://api.ainzscans01.com/api"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("type", "COMIC")
             .addQueryParameter("sort", "views")
@@ -41,17 +31,11 @@ abstract class AinzScansID : HttpSource() {
             .addQueryParameter("limit", "20")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<SearchResponseDto>()
-        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        return dto.toMangasPage(page)
+        return client.get(url).parseAs<SearchResponseDto>().toMangasPage(page)
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("type", "COMIC")
             .addQueryParameter("sort", "latest")
@@ -59,13 +43,11 @@ abstract class AinzScansID : HttpSource() {
             .addQueryParameter("limit", "20")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
+        return client.get(url).parseAs<SearchResponseDto>().toMangasPage(page)
     }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("type", "COMIC")
             .addQueryParameter("limit", "20")
@@ -87,38 +69,30 @@ abstract class AinzScansID : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
+        return client.get(url.build()).parseAs<SearchResponseDto>().toMangasPage(page)
     }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${getNormalizedMangaUrl(manga)}"
 
-    // =============================== Details ===============================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series${getNormalizedMangaUrl(manga)}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDetailDto>().toSManga()
-
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
-    // ============================== Chapters ===============================
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = response.parseAs<SeriesDetailDto>()
+    // ======================= Details and Chapters ==========================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val dto = client.get("$apiUrl/series${getNormalizedMangaUrl(manga)}").parseAs<SeriesDetailDto>()
         val comicSlug = dto.toSManga().url.substringAfterLast("/")
-        return dto.units.map { it.toSChapter(comicSlug, dateFormat) }
+        return SMangaUpdate(dto.toSManga(), dto.units.map { it.toSChapter(comicSlug) })
     }
 
     // =============================== Pages ================================
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/series${chapter.url}", headers)
-
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<ChapterDetailDto>().toPageList()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/series${chapter.url}").parseAs<ChapterDetailDto>().toPageList()
 
     // =============================== Filters ===============================
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         OrderFilter(),
         StatusFilter(),
@@ -135,11 +109,5 @@ abstract class AinzScansID : HttpSource() {
         "/comic/${manga.url.substringAfter("/series/").removeSuffix("/")}"
     } else {
         manga.url
-    }
-
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
     }
 }

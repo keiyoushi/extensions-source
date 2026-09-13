@@ -6,9 +6,15 @@ plugins {
 
 keiyoushi {
     name = "Mokuro"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
+
+    deeplink {
+        host("mokuro.moe")
+        path("/catalog.*")
+        path("/mokuro-reader/..*")
+    }
 
     source {
         lang = "ja"

@@ -7,11 +7,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
 import okhttp3.HttpUrl
@@ -104,12 +104,17 @@ abstract class TruyenQQ : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host == baseUrl.toHttpUrl().host) {
-            client.get(url, headers).use { response ->
-                return parseMangaDetails(response.asJsoup())
-            }
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen-tranh") return null
+
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { url.pathSegments.size == 2 } ?: return null
+        val mangaSlug = chapterSlugRegex.matchEntire(slug)?.groupValues?.get(1)
+            ?: slug.takeIf { mangaSlugRegex.matches(it) }
+            ?: return null
+        val mangaPath = "/truyen-tranh/$mangaSlug"
+
+        return parseMangaDetails(client.get("$baseUrl$mangaPath").asJsoup()).apply {
+            setUrlWithoutDomain(mangaPath)
         }
-        return null
     }
 
     // =========================== Manga Details ============================
@@ -189,4 +194,7 @@ abstract class TruyenQQ : KeiSource() {
         SortByFilter(),
         GenreList(getGenreList()),
     )
+
+    private val mangaSlugRegex = Regex(""".+-\d+""")
+    private val chapterSlugRegex = Regex("""(.+-\d+)-chap-.+""")
 }

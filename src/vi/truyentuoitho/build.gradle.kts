@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "TruyenTuoiTho"
-    versionCode = 3
+    versionCode = 5
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "vi"
-        baseUrl = "https://truyentuoitho.online"
+        baseUrl = "https://truyentuoitho.com"
     }
 }

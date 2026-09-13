@@ -14,14 +14,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -36,8 +38,6 @@ import okio.IOException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -49,6 +49,7 @@ abstract class MangaBuff :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::tokenInterceptor)
         addInterceptor(::gifToWebpInterceptor)
+        rateLimit(1) { it.encodedPath.startsWith("/manga/") || it.encodedPath.contains("chapters/load") }
     }
 
     // From Akuma - CSRF token
@@ -211,9 +212,9 @@ abstract class MangaBuff :
 
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga") {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga" && url.pathSegments[1].length > 1) {
             val tmpManga = SManga.create().apply {
-                this.url = url.encodedPath
+                this.url = "/${url.pathSegments[0]}/${url.pathSegments[1]}"
             }
             return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
         }
@@ -345,9 +346,7 @@ abstract class MangaBuff :
     private fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
         name = element.select(".chapters__volume, .chapters__value, .chapters__name").text()
-        date_upload = runCatching {
-            LocalDate.parse(element.selectFirst(".chapters__add-date")?.text(), dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-        }.getOrDefault(0L)
+        date_upload = dateFormat.tryParseDate(element.selectFirst(".chapters__add-date")?.text())
         chapter_number = element.select(".chapters__value").text()
             .substringAfter(" ").toFloatOrNull() ?: -1f
     }

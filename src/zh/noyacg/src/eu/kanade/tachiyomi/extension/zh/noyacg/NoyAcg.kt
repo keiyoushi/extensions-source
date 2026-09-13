@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.noyacg
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -39,11 +40,15 @@ abstract class NoyAcg :
 
     private val pref by getPreferencesLazy()
     private val imgBaseUrl get() = baseUrl.replace("api", "img")
+    private val loginLock = Any()
 
-    override fun getHomeUrl() = "https://beta.noyteam.online"
+    @Volatile
+    private var sessionGeneration = 0
+
+    override fun getHomeUrl() = WEB_BASE_URL
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        getPreferencesInternal(screen.context).forEach(screen::addPreference)
+        getPreferencesInternal(screen.context, pref).forEach(screen::addPreference)
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
@@ -53,11 +58,55 @@ abstract class NoyAcg :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         cookieJar(SessionCookieJar(getHomeUrl().toHttpUrl(), network.client.cookieJar))
-        addNetworkInterceptor { chain ->
-            val resp = chain.proceed(chain.request())
-            resp.takeUnless {
-                it.header("Content-Type")?.contains("application/json") == true && it.header("Content-Length") == "18"
-            } ?: resp.use { throw IOException("請在 WebView 中登入") }
+        addInterceptor { chain ->
+            val requestGeneration = sessionGeneration
+            val response = chain.proceed(chain.request())
+            if (!response.isLoginRequired()) return@addInterceptor response
+
+            response.close()
+            synchronized(loginLock) {
+                if (requestGeneration == sessionGeneration) {
+                    login()
+                    sessionGeneration++
+                }
+            }
+            chain.proceed(chain.request()).also {
+                if (it.isLoginRequired()) {
+                    it.close()
+                    throw IOException("登入失敗，請檢查帳號與密碼")
+                }
+            }
+        }
+    }
+
+    private fun Response.isLoginRequired(): Boolean = header("Content-Type")?.contains("application/json") == true &&
+        runCatching {
+            peekBody(LOGIN_RESPONSE_SIZE).string().parseAs<LoginResponseDto>().status == "login"
+        }.getOrDefault(false)
+
+    private fun login() {
+        val username = pref.getString(USERNAME_PREF, "").orEmpty()
+        val password = pref.getString(PASSWORD_PREF, "").orEmpty()
+        if (username.isEmpty() || password.isEmpty()) {
+            throw IOException("請在擴充套件設定中輸入帳號與密碼，或在 WebView 中登入")
+        }
+
+        val body = FormBody.Builder()
+            .add("user", username)
+            .add("pass", password)
+            .build()
+        val loginHeaders = headers.newBuilder()
+            .set("Origin", WEB_BASE_URL)
+            .set("Referer", "$WEB_BASE_URL/")
+            .build()
+        val request = POST("$WEB_BASE_URL/api/login", loginHeaders, body)
+        network.client.newCall(request).execute().use { response ->
+            val status = response.parseAs<LoginResponseDto>().status
+            when (status) {
+                "error" -> throw IOException("帳號或密碼錯誤")
+                "danger" -> throw IOException("帳號或密碼包含不允許的字元")
+                else -> Unit
+            }
         }
     }
 
@@ -175,4 +224,9 @@ abstract class NoyAcg :
     }
 
     override fun imageRequest(page: Page) = GET(imgBaseUrl + page.imageUrl, headers)
+
+    companion object {
+        const val WEB_BASE_URL = "https://noymanga.com"
+        const val LOGIN_RESPONSE_SIZE = 64L
+    }
 }

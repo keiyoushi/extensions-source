@@ -69,11 +69,7 @@ class SeriesDto(
         author = this@SeriesDto.author
         artist = this@SeriesDto.artist
 
-        genre = genres?.joinToString {
-            it.replaceFirstChar { char ->
-                char.uppercase()
-            }
-        }
+        genre = genres?.joinToString { genreLabel(it) }
 
         initialized = true
     }
