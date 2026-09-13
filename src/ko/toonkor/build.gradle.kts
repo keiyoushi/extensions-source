@@ -10,6 +10,10 @@ keiyoushi {
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
+    deeplink {
+        path("/..*")
+    }
+
     source {
         lang = "ko"
         baseUrl {

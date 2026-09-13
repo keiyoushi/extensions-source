@@ -47,13 +47,13 @@ abstract class Toonkor : KeiSource() {
 
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("div.section-item-inner").map { element ->
+        val mangas = document.select("div.section-item-inner").mapNotNull { element ->
+            val link = element.selectFirst("div.section-item-title a") ?: return@mapNotNull null
+            val title = link.selectFirst("h3")?.text()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             SManga.create().apply {
-                element.select("div.section-item-title a").let {
-                    title = it.select("h3").text()
-                    setUrlWithoutDomain(it.attr("abs:href"))
-                }
-                thumbnail_url = element.select("img").attr("abs:src")
+                this.title = title
+                setUrlWithoutDomain(link.attr("href"))
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
         }
 
@@ -68,27 +68,32 @@ abstract class Toonkor : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(baseUrl + manga.url).asJsoup()
         return SMangaUpdate(
-            manga = parseMangaDetails(document),
-            chapters = parseChapterList(document),
+            manga = if (fetchDetails) parseMangaDetails(document, manga) else manga,
+            chapters = if (fetchChapters) parseChapterList(document) else chapters,
         )
     }
 
-    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+    private fun parseMangaDetails(document: Document, manga: SManga): SManga = manga.apply {
         with(document.select("table.bt_view1")) {
-            title = select("td.bt_title").text()
+            select("td.bt_title").text().takeIf { it.isNotBlank() }?.let { title = it }
             author = select("td.bt_label span.bt_data").text()
             description = select("td.bt_over").text()
-            thumbnail_url = select("td.bt_thumb img").firstOrNull()?.attr("abs:src")
+            select("td.bt_thumb img").firstOrNull()?.absUrl("src")?.takeIf { it.isNotBlank() }?.let {
+                thumbnail_url = it
+            }
         }
+        initialized = true
     }
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select("table.web_list tr:has(td.content__title)").map { element ->
+    private fun parseChapterList(document: Document): List<SChapter> = document.select("table.web_list tr:has(td.content__title)").mapNotNull { element ->
+        val titleEl = element.selectFirst("td.content__title") ?: return@mapNotNull null
+        val url = titleEl.attr("data-role").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val name = titleEl.text().takeIf { it.isNotBlank() } ?: return@mapNotNull null
+
         SChapter.create().apply {
-            element.select("td.content__title").let {
-                url = it.attr("data-role")
-                name = it.text()
-            }
-            date_upload = dateFormat.tryParseDate(element.select("td.episode__index").text(), KOREA_ZONE)
+            this.url = url
+            this.name = name
+            date_upload = dateFormat.tryParseDate(element.selectFirst("td.episode__index")?.text(), KOREA_ZONE)
         }
     }
 
@@ -108,15 +113,11 @@ abstract class Toonkor : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val path = url.encodedPath
-        if (path.isBlank() || path == "/" || path.startsWith("/bbs/")) return null
-        return try {
-            val document = client.get(url).asJsoup()
-            parseMangaDetails(document).apply {
-                this.url = path
-            }
-        } catch (_: Exception) {
-            null
+        if (path.isBlank() || path == "/" || path.startsWith("/bbs/") || path.startsWith("/css/") || path.startsWith("/js/")) return null
+        val manga = SManga.create().apply {
+            this.url = path
         }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
