@@ -116,24 +116,20 @@ abstract class HentaiHand :
 
         // A plain text `q` search without any id filter returns HTTP 500 on some sites,
         // which breaks tapping a genre tag (the app searches for the tag name as text).
-        // Resolve the query to a tag/artist/... id when possible and search by id instead.
+        // Resolve the query to a tag/artist/character id when possible and search by id instead.
         var queryFilter: Pair<String, Int>? = null
-        var queryResolved = false
         val trimmedQuery = query.trim()
         if (trimmedQuery.isNotEmpty() && !hasLookupState) {
             for (uri in QUERY_LOOKUP_URIS) {
                 val id = runCatching { lookupFilterId(trimmedQuery, uri, exactMatchOnly = true) }.getOrNull() ?: continue
-                queryResolved = true
-                if (!(uri == "languages" && hhLangId.contains(id))) {
-                    queryFilter = uri to id
-                }
+                queryFilter = uri to id
                 break
             }
         }
 
         if (queryFilter != null) {
             url.addQueryParameter("${queryFilter.first}[0]", queryFilter.second.toString())
-        } else if (trimmedQuery.isNotEmpty() && !queryResolved) {
+        } else if (trimmedQuery.isNotEmpty()) {
             url.addQueryParameter("q", query)
         }
 
@@ -373,10 +369,6 @@ abstract class HentaiHand :
             "tags",
             "artists",
             "characters",
-            "parodies",
-            "groups",
-            "categories",
-            "languages",
         )
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
