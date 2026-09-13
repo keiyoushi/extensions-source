@@ -27,13 +27,12 @@ import kotlin.time.Instant
 abstract class Shinigami : KeiSource() {
     private val apiUrl = "https://api.shngm.io"
 
-    private val apiHeaders: Headers by lazy {
-        headersBuilder()
+    private val apiHeaders: Headers
+        get() = headersBuilder()
             .add("Accept", "application/json")
             .add("DNT", "1")
             .add("Sec-GPC", "1")
             .build()
-    }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
         .addInterceptor { chain ->
