@@ -116,59 +116,7 @@ abstract class Shinigami : KeiSource() {
         StatusFilter(),
         FormatFilter(),
         TypeFilter(),
-        GenreFilter(getGenres()),
-    )
-
-    private fun getGenres(): Array<Pair<String, String>> = arrayOf(
-        Pair("Action", "action"),
-        Pair("Adaptation", "adaptation"),
-        Pair("Adult", "adult"),
-        Pair("Adventure", "adventure"),
-        Pair("Comedy", "comedy"),
-        Pair("Cooking", "cooking"),
-        Pair("Crime", "crime"),
-        Pair("Demon", "demon"),
-        Pair("Demons", "demons"),
-        Pair("Dra", "dra-genre"),
-        Pair("Drama", "drama"),
-        Pair("Ecchi", "ecchi"),
-        Pair("Fantasy", "fantasy"),
-        Pair("Fight", "fight"),
-        Pair("Game", "game"),
-        Pair("Gender Bender", "gender-bender"),
-        Pair("Harem", "harem"),
-        Pair("Historical", "historical"),
-        Pair("Horror", "horror"),
-        Pair("Isekai", "isekai"),
-        Pair("Josei", "josei-genre"),
-        Pair("Latest", "latest"),
-        Pair("Love", "love"),
-        Pair("Magic", "magic"),
-        Pair("Martial Arts", "martial-arts"),
-        Pair("Mature", "mature"),
-        Pair("Mecha", "mecha"),
-        Pair("Medical", "medical"),
-        Pair("Murim", "murim"),
-        Pair("Mystery", "mystery"),
-        Pair("Philosophical", "philosophical"),
-        Pair("Psychological", "psychological"),
-        Pair("Regression", "regression"),
-        Pair("Revenge", "revenge"),
-        Pair("Romance", "romance"),
-        Pair("School Life", "school-life"),
-        Pair("Sci-fi", "sci-fi"),
-        Pair("Seinen", "seinen"),
-        Pair("Shoujo", "shoujo"),
-        Pair("Shounen", "shounen"),
-        Pair("Slice of Life", "slice-of-life"),
-        Pair("Smut", "smut"),
-        Pair("Sports", "sports"),
-        Pair("Supernatural", "supernatural"),
-        Pair("Supranatural", "supranatural"),
-        Pair("Thriller", "thriller"),
-        Pair("Tragedy", "tragedy"),
-        Pair("Violence", "violence"),
-        Pair("Wuxia", "wuxia"),
+        GenreFilter(),
     )
 
     // ====================== Manga Details & Chapters ======================
@@ -221,10 +169,20 @@ abstract class Shinigami : KeiSource() {
         val mangaDetails = mangaDetailsResponse.data
 
         return manga.apply {
+            mangaDetails.title?.takeIf { it.isNotBlank() }?.let { title = it }
+            (mangaDetails.coverPortraitUrl ?: mangaDetails.coverImageUrl)?.takeIf { it.isNotBlank() }?.let {
+                thumbnail_url = it
+            }
             author = mangaDetails.taxonomy["Author"]?.joinToString { it.name }.orEmpty()
             artist = mangaDetails.taxonomy["Artist"]?.joinToString { it.name }.orEmpty()
             status = mangaDetails.status.toStatus()
-            description = mangaDetails.description
+            description = buildString {
+                append(mangaDetails.description)
+                mangaDetails.altTitle?.takeIf { it.isNotBlank() }?.let {
+                    if (isNotEmpty()) append("\n\n")
+                    append("Alternative Title: ").append(it)
+                }
+            }
 
             val genres = mangaDetails.taxonomy["Genre"]?.joinToString { it.name }.orEmpty()
             val type = mangaDetails.taxonomy["Format"]?.joinToString { it.name }.orEmpty()
@@ -248,6 +206,7 @@ abstract class Shinigami : KeiSource() {
     private fun chapterFromObject(obj: ShinigamiChapterListDataDto): SChapter = SChapter.create().apply {
         date_upload = Instant.tryParse(obj.date)
         name = "Chapter ${obj.name.toString().removeSuffix(".0")} ${obj.title}".trim()
+        chapter_number = obj.name.toFloat()
         url = obj.chapterId
     }
 
