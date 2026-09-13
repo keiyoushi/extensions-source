@@ -25,7 +25,7 @@ abstract class MangaGG : Madara() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaPage(page, "latest")
 
     private suspend fun getMangaPage(page: Int, order: String): MangasPage {
-        val url = baseUrl.toHttpUrl().resolve("/$mangaSubString/")!!.newBuilder().apply {
+        val url = "$baseUrl/$mangaSubString/".toHttpUrl().newBuilder().apply {
             if (page > 1) addPathSegments("page/$page/")
             addQueryParameter("m_orderby", order)
         }.build()
