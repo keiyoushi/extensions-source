@@ -57,7 +57,6 @@ keiyoushi {
 
     oldIds.forEach { (langCode, oldId) ->
         source {
-            name = "MangaDot"
             lang = langCode
             baseUrl = "https://mangadot.net"
             id = oldId
@@ -75,7 +74,6 @@ keiyoushi {
 
     newLangs.forEach { langCode ->
         source {
-            name = "MangaDot"
             lang = langCode
             baseUrl = "https://mangadot.net"
         }
