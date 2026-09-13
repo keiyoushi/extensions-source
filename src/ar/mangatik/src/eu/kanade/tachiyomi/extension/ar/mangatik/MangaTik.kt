@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -16,6 +15,8 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 
 @Source
 abstract class MangaTik : KeiSource() {
@@ -24,8 +25,10 @@ abstract class MangaTik : KeiSource() {
         rateLimit(3)
     }
 
+    private fun Response.toDocument(): Document = Jsoup.parse(body.string())
+
     private fun Response.toMangasPage(): MangasPage {
-        val doc = this.asJsoup()
+        val doc = toDocument()
 
         val mangas = doc.select("article.manga-card").map { article ->
             SManga.create().apply {
@@ -94,7 +97,7 @@ abstract class MangaTik : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get("$baseUrl${manga.url}".toHttpUrl()).asJsoup()
+        val doc = client.get("$baseUrl${manga.url}".toHttpUrl()).toDocument()
         val data: MangaJsonLd = doc.selectFirst("script[type=application/ld+json]")
             ?.data()
             ?.parseAs()
@@ -129,7 +132,7 @@ abstract class MangaTik : KeiSource() {
     // ============================== Pages ==============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val doc = client.get("$baseUrl${chapter.url}".toHttpUrl()).asJsoup()
+        val doc = client.get("$baseUrl${chapter.url}".toHttpUrl()).toDocument()
         return doc.select("img.webtoon-image").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }
