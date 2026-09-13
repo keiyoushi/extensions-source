@@ -10,10 +10,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.annotation.Source
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getString
@@ -22,28 +23,24 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 
-class MechaComic :
+@Source
+abstract class MechaComic :
     KeiSource(),
     ConfigurableSource {
-    override val baseUrl = "https://mechacomic.jp"
-    override val name = "Mecha Comic"
-    override val lang = "ja"
-
-    private val domain = baseUrl.toHttpUrl().host
-    private val apiUrl = "$baseUrl/api/v1"
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrl get() = "$baseUrl/api/v1"
     private val cdnUrl = "https://c.$domain/images"
     private val preferences by getPreferencesLazy()
-    private val desktopHeaders = headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
+    private val desktopHeaders get() = headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
         .build()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addNetworkInterceptor(CookieInterceptor(domain, listOf("_taste" to "all", "_confirmed_adult" to "1")))
+        addCookie { listOf("_taste" to "all", "_confirmed_adult" to "1") }
         addInterceptor(ImageInterceptor())
     }
 
@@ -63,10 +60,10 @@ class MechaComic :
         return client.get(url, desktopHeaders).toMangasPage()
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filterList: FilterList): MangasPage {
-        val genreFilter = filterList.firstInstance<GenreFilter>()
-        val sortFilter = filterList.firstInstance<SortFilter>()
-        val completedFilter = filterList.firstInstance<CompletedFilter>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val genreFilter = filters.firstInstance<GenreFilter>()
+        val sortFilter = filters.firstInstance<SortFilter>()
+        val completedFilter = filters.firstInstance<CompletedFilter>()
         val booksPath = if (genreFilter.isAdult) "r/books" else "books"
         val url = "$baseUrl/$booksPath".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -94,9 +91,11 @@ class MechaComic :
                 val path = link.absUrl("href").toHttpUrl()
                 title = link.text()
                 thumbnail_url = it.selectFirst("div.p-book_jacket img[class^=jacket_image]")?.absUrl("src")
-                setUrlWithoutDomain(if (adult) path.pathSegments[2] else path.pathSegments[1])
+                url = if (adult) path.pathSegments[2] else path.pathSegments[1]
                 if (adult) {
-                    memo = buildJsonObject { put("adult", "r") }
+                    memo = buildJsonObject {
+                        put("adult", "r")
+                    }
                 }
             }
         }
@@ -110,7 +109,7 @@ class MechaComic :
     }
 
     // TODO: volumes
-    override suspend fun getMangaUpdate(
+    override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
@@ -228,7 +227,6 @@ class MechaComic :
 
         val contentData = client.get(contentsUrl).parseAs<ContentData>()
         val cryptoKey = client.get("$baseUrl$cryptoKeyPath").parseAs<CryptoKey>().cryptokey
-
         return contentData.images.values.mapIndexed { i, pages ->
             val img = (directory + pages.first().src).toHttpUrl().newBuilder()
                 .addQueryParameter("ver", ver)
@@ -254,9 +252,6 @@ class MechaComic :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"

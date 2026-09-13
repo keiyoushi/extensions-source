@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -9,11 +11,7 @@ keiyoushi {
     libVersion = "1.6"
 
     source {
-        lang = "ja"
         baseUrl = "https://mechacomic.jp"
+        lang = "ja"
     }
-}
-
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
 }
