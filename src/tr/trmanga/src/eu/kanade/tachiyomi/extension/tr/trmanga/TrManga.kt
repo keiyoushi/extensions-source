@@ -28,8 +28,6 @@ abstract class TrManga : KeiSource() {
 
     private val dateFormat = DateTimeFormatter.ofPattern("dd MMMM, yy", Locale.ENGLISH)
 
-    override val supportsLatest get() = true
-
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
