@@ -24,8 +24,7 @@ import java.io.IOException
 @Source
 abstract class Comicaso : KeiSource() {
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", DEFAULT_USER_AGENT)
-        .set("X-Comicaso-Platform", "web")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("X-Comicaso-Platform", "web")
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::authInterceptor)
         .addInterceptor(::cdnInterceptor)
@@ -74,7 +73,6 @@ abstract class Comicaso : KeiSource() {
 
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
         val response = client.get("$baseUrl/api/trending.php?period=all&limit=$PAGE_SIZE")
         val res = response.parseAs<TrendingResponseDto>()
         return MangasPage(res.data.map { it.toSManga() }, false)
@@ -219,8 +217,6 @@ abstract class Comicaso : KeiSource() {
         private const val PAGE_SIZE = 60
         private val chapterNumberRegex = Regex("""(?i)(?:bab|chapter|ch|ep|episode)\s*(?:[-:]\s*)?(\d+(?:\.\d+)?)""")
         private val chapterNumberFallbackRegex = Regex("""\d+(?:\.\d+)?""")
-        private const val DEFAULT_USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36"
 
         private val CDN_DOMAINS = listOf("basrat.online", "gurihnyoh.site", "jeletot.fun")
         private val HOST_TO_PREFIX = mapOf(
