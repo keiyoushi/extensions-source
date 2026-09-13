@@ -6,9 +6,15 @@ plugins {
 
 keiyoushi {
     name = "Shinigami"
-    versionCode = 81
+    versionCode = 82
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
+
+    deeplink {
+        host("shinigami.asia")
+        host("*.shinigami.asia")
+        path("/series/..*")
+    }
 
     source {
         lang = "id"
