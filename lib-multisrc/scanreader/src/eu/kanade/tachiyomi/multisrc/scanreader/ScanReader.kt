@@ -46,11 +46,11 @@ abstract class ScanReader : KeiSource() {
 
         val mangas = if (page > 1) {
             document.select("div.manga-card")
-                .map { mangaFromCard(it) }
+                .mapNotNull { mangaFromCard(it) }
                 .filterNot { it.title.contains("(Novel)") }
         } else {
             document.select("div.popular-section div.manga-card")
-                .map { mangaFromCard(it) }
+                .mapNotNull { mangaFromCard(it) }
                 .filterNot { it.title.contains("(Novel)") }
         }
 
@@ -84,7 +84,7 @@ abstract class ScanReader : KeiSource() {
             .build()
         val document = client.get(url).asJsoup()
         val mangas = document.select("div.manga-card")
-            .map { mangaFromCard(it) }
+            .mapNotNull { mangaFromCard(it) }
             .filterNot { it.title.contains("(Novel)") }
         return MangasPage(mangas, false)
     }
@@ -125,8 +125,10 @@ abstract class ScanReader : KeiSource() {
 
     private fun parseMangaDetails(document: Document, manga: SManga) {
         manga.apply {
-            title = document.selectFirst("h1.manga-title")!!.text()
-            thumbnail_url = document.selectFirst("meta[property='og:image']")?.absUrl("content")?.takeIf { it.isNotEmpty() } ?: thumbnail_url
+            document.selectFirst("h1.manga-title")?.text()?.let { title = it }
+            thumbnail_url = document.selectFirst("meta[property='og:image']")?.absUrl("content")?.takeIf { it.isNotEmpty() }
+                ?: extractLazySrc(document.selectFirst("img.wp-post-image"))
+                ?: thumbnail_url
             description = document.selectFirst("div.manga-content div[style*='background: #333'] p")?.text()
 
             document.select("div.manga-info-grid > div").forEach { row ->
@@ -209,7 +211,7 @@ abstract class ScanReader : KeiSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(href)
                 name = h4.text()
-                date_upload = dateFormatter.tryParseDate(h4.nextElementSibling()?.ownText()?.trim(), zone = parisZone)
+                date_upload = dateFormatter.tryParseDate(h4.nextElementSibling()?.ownText(), zone = parisZone)
                 this.scanlator = scanlator
             }
         }
@@ -244,14 +246,15 @@ abstract class ScanReader : KeiSource() {
         img.attr("data-lazy-srcset").takeIf { it.isNotEmpty() }?.let { srcset ->
             return srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
         }
-        return img.absUrl("src").takeIf { it.isNotEmpty() }
+        return img.absUrl("src").takeIf { it.isNotEmpty() && !it.startsWith("data:") }
     }
 
-    private fun mangaFromCard(element: Element): SManga {
-        val link = element.selectFirst("a")!!
+    private fun mangaFromCard(element: Element): SManga? {
+        val link = element.selectFirst("a") ?: return null
+        val title = element.selectFirst("h3")?.text() ?: return null
         return SManga.create().apply {
             setUrlWithoutDomain(link.attr("href"))
-            title = element.selectFirst("h3")!!.text()
+            this.title = title
             thumbnail_url = extractCoverFromOnClick(link.attr("onclick"))
                 ?: extractLazySrc(element.selectFirst("img"))
         }
