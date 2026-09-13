@@ -16,7 +16,7 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val fragment = request.url.fragment
 
-        if (!response.isSuccessful || fragment.isNullOrEmpty() || !fragment.contains(":")) return response
+        if (!response.isSuccessful || fragment == null || !fragment.contains(":")) return response
 
         val (algorithm, seed, pageWidth) = fragment.split(":", limit = 3)
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
@@ -54,7 +54,7 @@ class ImageInterceptor : Interceptor {
         val order = IntArray(columns) { it }
         var state = seed
         for (i in (if (remainder != 0) columns - 1 else columns) downTo 2) {
-            state = (1664525L * state + 1013904223L) and 0xFFFFFFFFL
+            state = (1664525L * state + 1013904223L) and 0xFFFFFFFFL // ranqd1 - https://en.wikipedia.org/wiki/Linear_congruential_generator#Parameters_in_common_use
             val j = (state % i).toInt()
             order[j] = order[i - 1].also { order[i - 1] = order[j] }
         }

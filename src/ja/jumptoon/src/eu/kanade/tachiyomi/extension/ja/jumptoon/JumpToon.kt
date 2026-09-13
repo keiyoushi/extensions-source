@@ -19,6 +19,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -40,7 +41,7 @@ abstract class JumpToon :
         .set("rsc", "1")
         .build()
 
-    private val dayOfWeek: String
+    private val currentDayOfWeek: String
         get() = LocalDate.now(ZoneId.of("Asia/Tokyo")).dayOfWeek.name.lowercase(Locale.US)
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
@@ -54,7 +55,7 @@ abstract class JumpToon :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/series/original/$dayOfWeek/").asJsoup()
+        val document = client.get("$baseUrl/series/original/$currentDayOfWeek/").asJsoup()
         val mangas = document.select("main li:has(a[href^=/series/])").map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -100,29 +101,30 @@ abstract class JumpToon :
 
         val chapterList = async {
             if (!fetchChapters) return@async chapters
-            val episodes = mutableListOf<SChapter>()
-            var page = 1
-            var totalPageCount = 1
-            while (page <= totalPageCount) {
-                val url = "${getMangaUrl(manga)}episodes/".toHttpUrl().newBuilder()
-                    .addQueryParameter("sort", "DESC")
-                    .addQueryParameter("page", page.toString())
-                    .build()
+            val firstPage = getEpisodePage(manga, 1) ?: return@async emptyList()
+            val otherPages = (2..firstPage.totalPageCount)
+                .map { page -> async { getEpisodePage(manga, page) } }
+                .awaitAll()
 
-                val episodePage = client.get(url, rscHeaders).extractNextJs<EpisodeListResponse>() ?: break
-                totalPageCount = episodePage.totalPageCount
-                episodes += episodePage.episodes.edges
-                    .filter { !hideLocked || !it.node.isLocked }
-                    .map { it.node.toSChapter() }
-                page++
-            }
-            episodes
+            (listOf(firstPage) + otherPages.filterNotNull())
+                .flatMap { it.episodes.edges }
+                .filter { !hideLocked || !it.node.isLocked }
+                .map { it.node.toSChapter() }
         }
 
         SMangaUpdate(
             details.await(),
             chapterList.await(),
         )
+    }
+
+    private suspend fun getEpisodePage(manga: SManga, page: Int): EpisodeListResponse? {
+        val url = "${getMangaUrl(manga)}episodes/".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "DESC")
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return client.get(url, rscHeaders).extractNextJs<EpisodeListResponse>()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.memo["seriesId"]!!.string}/episodes/${chapter.url}/"
