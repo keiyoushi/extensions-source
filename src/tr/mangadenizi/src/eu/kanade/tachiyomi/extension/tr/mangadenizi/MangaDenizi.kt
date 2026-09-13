@@ -18,16 +18,13 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class MangaDenizi : KeiSource() {
-    override val supportsLatest get() = true
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(UnscramblerInterceptor())
 
-    private val apiHeaders: Headers by lazy {
-        headersBuilder()
-            .add("Accept", "application/json")
-            .add("Referer", "$baseUrl/manga")
+    private val apiHeaders: Headers
+        get() = headersBuilder()
+            .set("Accept", "application/json")
+            .set("Referer", "$baseUrl/manga")
             .build()
-    }
 
     // =============================== Popular ===============================
 
