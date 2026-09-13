@@ -24,6 +24,11 @@ class SecureDto(
 )
 
 @Serializable
+class NonceDto(
+    val secret: String,
+)
+
+@Serializable
 data class MangaListResponse(
     val data: List<MangaDto>,
     val pagination: PaginationDto,

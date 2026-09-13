@@ -6,14 +6,18 @@ plugins {
 
 keiyoushi {
     name = "LuvEvaLand"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
             custom("https://luvevalands2.co")
         }
+    }
+
+    deeplink {
+        path("/truyen-tranh/..*")
     }
 }

@@ -1,12 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.vyvymanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import org.jsoup.nodes.Document
+import kotlinx.serialization.Serializable
 
 abstract class SelectFilter(displayName: String, private val options: Array<Pair<String, String>>) :
     Filter.Select<String>(
@@ -70,44 +65,17 @@ class SortType :
         ),
     )
 
+@Serializable
+class GenreData(
+    val name: String,
+    val id: String,
+) {
+    fun toGenre() = Genre(
+        name = name,
+        id = id,
+    )
+}
+
 class Genre(name: String, val id: String) : Filter.TriState(name)
 
-class GenreFilter : Filter.Group<Genre>("Genre", genrePairs.map { Genre(it.name, it.id) })
-
-private var genrePairs: List<Genre> = emptyList()
-
-private val scope = CoroutineScope(Dispatchers.IO)
-
-fun launchIO(block: () -> Unit) = scope.launch { block() }
-
-private var fetchGenresAttempts: Int = 0
-
-fun fetchGenres(baseUrl: String, headers: okhttp3.Headers, client: okhttp3.OkHttpClient) {
-    if (fetchGenresAttempts < 3 && genrePairs.isEmpty()) {
-        try {
-            genrePairs =
-                client.newCall(genresRequest(baseUrl, headers)).execute()
-                    .asJsoup()
-                    .let(::parseGenres)
-        } catch (_: Exception) {
-        } finally {
-            fetchGenresAttempts++
-        }
-    }
-}
-
-private fun genresRequest(baseUrl: String, headers: okhttp3.Headers) = GET("$baseUrl/search", headers)
-
-private const val GENRES_SELECTOR = ".check-genre div div:has(.checkbox-genre)"
-
-private fun parseGenres(document: Document): List<Genre> {
-    val items = document.select(GENRES_SELECTOR)
-    return buildList(items.size) {
-        items.mapTo(this) {
-            Genre(
-                it.select("label").text(),
-                it.select(".checkbox-genre").attr("data-value"),
-            )
-        }
-    }
-}
+class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)

@@ -6,13 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Mugiwaras Oficial"
-    versionCode = 3
-    contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "madara"
+    versionCode = 55
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
+    theme = "aurora"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://mugiwarasoficial.com"
+        baseUrl = "https://mugiwarasoficial.org"
+        versionId = 2
     }
 }

@@ -10,9 +10,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.unpacker.SubstringExtractor
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.addCookie
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Headers
@@ -40,7 +40,7 @@ abstract class Mangabz :
     private val preferences by getPreferencesLazy()
     override val client by lazy {
         network.client.newBuilder()
-            .addNetworkInterceptor(CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang))
+            .addCookie { listOf(mirror.langCookie to preferences.lang) }
             .rateLimit(5)
             .build()
     }

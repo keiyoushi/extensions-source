@@ -4,13 +4,10 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
 abstract class SushiScanFR : MangaThemesia() {
     override val mangaUrlDirectory = "/catalogue"
-    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.FRENCH)
     override val altNamePrefix = "Nom alternatif : "
     override val seriesAuthorSelector = ".imptdt:contains(Auteur) i, .fmed b:contains(Auteur)+span"
     override val seriesStatusSelector = ".imptdt:contains(Statut) i"

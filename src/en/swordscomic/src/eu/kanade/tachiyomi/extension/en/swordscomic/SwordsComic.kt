@@ -5,24 +5,26 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.tryParseDate
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class SwordsComic : HttpSource() {
+abstract class SwordsComic : KeiSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.client.newBuilder().addInterceptor(TextInterceptor()).build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(TextInterceptor())
+    }
 
     private fun createManga(): SManga = SManga.create().apply {
         title = "Swords Comic"
@@ -35,49 +37,51 @@ abstract class SwordsComic : HttpSource() {
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(createManga()), false)
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(listOf(createManga()), false)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    // Updates
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    private val dateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.US)
 
-    // Details
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val manga = createManga().apply { initialized = true }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    // Chapters
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("a.archive-tile")
-        .map { element ->
-            SChapter.create().apply {
-                name = element.select("strong").text()
-                setUrlWithoutDomain(element.attr("href"))
-                date_upload = element.select("small").text()
-                    .let { SimpleDateFormat("dd MMM yyyy", Locale.US).parse(it)?.time ?: 0L }
-            }
+        val chapters = if (fetchChapters) {
+            client.get(getMangaUrl(manga)).asJsoup()
+                .select("a.archive-tile")
+                .map { element ->
+                    SChapter.create().apply {
+                        name = element.selectFirst("strong")!!.text()
+                        setUrlWithoutDomain(element.attr("abs:href"))
+                        date_upload = element.selectFirst("small")?.text()
+                            .let { dateFormat.tryParseDate(it) }
+                    }
+                }
+                .reversed()
+        } else {
+            chapters
         }
-        .reversed()
+
+        return SMangaUpdate(manga, chapters)
+    }
 
     // Pages
 
-    override fun pageListParse(response: Response): List<Page> {
-        val imageElement = response.asJsoup().select("img#comic-image")
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val imageElement = client.get(getChapterUrl(chapter)).asJsoup().select("img#comic-image")
         if (!imageElement.hasAttr("title")) {
             return listOf(Page(0, "", imageElement.attr("abs:src")))
         }
@@ -85,6 +89,4 @@ abstract class SwordsComic : HttpSource() {
 
         return listOf(Page(0, "", imageElement.attr("abs:src")), Page(1, "", titleText))
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

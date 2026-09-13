@@ -83,17 +83,17 @@ object ImageDecryptor {
         val numBlocks = (data.size + blockSize - 1) / blockSize
         var seed = seedFromKey(key)
 
-        val seeds = UIntArray(numBlocks)
+        val seeds = IntArray(numBlocks)
         for (block in 0 until numBlocks) {
             seed = xorshift32(seed)
-            seeds[block] = seed
+            seeds[block] = seed.toInt()
         }
 
         for (block in numBlocks - 1 downTo 0) {
             val start = block * blockSize
             val end = minOf(start + blockSize, data.size)
             val blockLen = end - start
-            val blockSeed = seeds[block]
+            val blockSeed = seeds[block].toUInt()
 
             val blockKey = (blockSeed and 0xFFu).toInt().toByte()
             val rotateAmount = ((blockSeed shr 8).toInt() % blockLen)

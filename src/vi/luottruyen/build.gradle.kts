@@ -6,14 +6,18 @@ plugins {
 
 keiyoushi {
     name = "LuotTruyen"
-    versionCode = 7
+    versionCode = 12
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
-            custom("https://luottruyen12.com")
+            custom("https://luottruyen999.com")
         }
+    }
+
+    deeplink {
+        path("/truyen-tranh/..*")
     }
 }

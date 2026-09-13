@@ -101,6 +101,9 @@ abstract class Hiperdex : Hiper() {
             mangaUpdate.mangas.map {
                 if (!noCleanTitlesWhileBrowsing()) {
                     it.title = it.title.cleanTitleIfNeeded()
+                } else if (isRemoveTitleVersion() || customRemoveTitle().isNotEmpty()) {
+                    // Allow it to refresh the cleaning title when manga is opened
+                    it.initialized = false
                 }
                 it
             },

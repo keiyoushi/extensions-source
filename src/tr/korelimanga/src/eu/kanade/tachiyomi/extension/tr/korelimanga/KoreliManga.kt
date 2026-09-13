@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.tr.korelimanga
 import eu.kanade.tachiyomi.multisrc.initmanga.InitManga
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import okhttp3.Response
 
 @Source

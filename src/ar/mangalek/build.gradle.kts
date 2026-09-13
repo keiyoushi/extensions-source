@@ -6,10 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Mangalek"
-    versionCode = 12
+    versionCode = 13
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    theme = "madara"
+    theme = "madaralegacy"
 
     source {
         name = "مانجا ليك"

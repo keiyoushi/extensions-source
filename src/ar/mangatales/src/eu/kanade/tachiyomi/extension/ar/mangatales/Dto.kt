@@ -6,8 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.float
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class EncryptedResponse(val data: String)
@@ -37,17 +36,17 @@ class BrowseManga(
     private val cover: String? = null,
     @SerialName("is_novel") val isNovel: Boolean,
 ) {
-    fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
+    context(source: MangaTales)
+    fun toSManga() = SManga.create().apply {
         url = "/mangas/$id"
         title = this@BrowseManga.title
-        thumbnail_url = cover?.let { createThumbnail(id.toString(), cover) }
+        thumbnail_url = cover?.let { source.createThumbnail(id.toString(), cover) }
     }
 }
 
 @Serializable
 class FiltersDto(
-    val categoryTypes: List<FiltersDto>? = null,
-    val categories: List<FilterDto>? = null,
+    val categories: List<FilterDto>,
 )
 
 @Serializable
@@ -78,9 +77,10 @@ class Manga(
     @SerialName("japanese") private val jpTitle: String? = null,
     @SerialName("english") private val enTitle: String? = null,
 ) {
-    fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
+    context(source: MangaTales)
+    fun toSManga() = SManga.create().apply {
         title = this@Manga.title
-        thumbnail_url = cover?.let { createThumbnail(id.toString(), cover) }
+        thumbnail_url = cover?.let { source.createThumbnail(id.toString(), cover) }
         artist = artists.joinToString { it.name }
         author = authors.joinToString { it.name }
         status = when (this@Manga.status) {
@@ -148,19 +148,13 @@ class ChapterRelease(
     fun toSChapter() = SChapter.create().apply {
         url = "/r/$id"
         chapter_number = chapter.float
-        date_upload = try {
-            dateFormat.parse(createdAt)!!.time
-        } catch (_: Exception) {
-            0L
-        }
+        date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
         scanlator = teamName
 
         val chapterName = title.let { if (it.trim() != "") " - $it" else "" }
         name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
     }
 }
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
 @Serializable
 class ReaderDto(

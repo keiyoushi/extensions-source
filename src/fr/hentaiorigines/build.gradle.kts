@@ -6,10 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Hentai Origines"
-    versionCode = 1
+    versionCode = 54
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
-    theme = "madara"
+    libVersion = "1.6"
+    theme = "origines"
 
     source {
         lang = "fr"

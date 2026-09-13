@@ -5,37 +5,36 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class DomalFansub : Madara() {
-    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("tr"))
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Durum) + div.summary-content"
+    override val chapterMode = ChapterMode.MangaAjax
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        if (response.request.url.pathSegments.getOrNull(0) == "giris-korumasi") {
-            throw Exception("Okumak için WebView üzerinden giriş yapın")
-        }
-        return super.mangaDetailsParse(response)
+    override fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga {
+        checkLogin(document)
+        return super.parseDetails(document, id, preserveUrl)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        if (response.request.url.pathSegments.getOrNull(0) == "giris-korumasi") {
-            throw Exception("Okumak için WebView üzerinden giriş yapın")
-        }
-        return super.chapterListParse(response)
+    override fun parseChapterList(document: Document, mangaPath: String): List<SChapter> {
+        checkLogin(document)
+        return super.parseChapterList(document, mangaPath)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun parsePages(document: Document): List<Page> {
         if (document.selectFirst(".login-required") != null) {
             throw Exception("Okumak için WebView üzerinden giriş yapın")
         }
-        return super.pageListParse(document)
+        return super.parsePages(document)
+    }
+
+    private fun checkLogin(document: Document) {
+        if (document.location().contains("/giris-korumasi")) {
+            throw Exception("Okumak için WebView üzerinden giriş yapın")
+        }
     }
 }

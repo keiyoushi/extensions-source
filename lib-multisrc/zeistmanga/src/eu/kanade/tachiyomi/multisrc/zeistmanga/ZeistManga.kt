@@ -1,46 +1,65 @@
 package eu.kanade.tachiyomi.multisrc.zeistmanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
-import okhttp3.Headers
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.format.DateTimeFormatter
+import kotlin.time.Instant
 
-abstract class ZeistManga : HttpSource() {
+abstract class ZeistManga : KeiSource() {
 
-    override val supportsLatest = true
+    protected open val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-    protected val json: Json by injectLazy()
+    protected open val mangaCategory = "Series"
 
-    private val intl by lazy { ZeistMangaIntl(lang) }
+    open fun apiUrl(feed: String = mangaCategory): HttpUrl.Builder = "$baseUrl/feeds/posts/default/-/".toHttpUrl().newBuilder()
+        .addPathSegment(feed)
+        .addQueryParameter("alt", "json")
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    protected val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("ar", "en", "es", "id", "pt-BR"),
+        classLoader = this::class.java.classLoader!!,
+    )
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    // Popular
+    open fun popularMangaUrl(page: Int) = baseUrl
 
     protected open val popularMangaSelector = "div.PopularPosts div.grid > figure"
     protected open val popularMangaSelectorTitle = "figcaption > a"
     protected open val popularMangaSelectorUrl = "figcaption > a"
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector).map { element ->
+    override suspend fun getPopularManga(page: Int) = if (supportsLatest) {
+        parsePopularManga(client.get(popularMangaUrl(page)))
+    } else {
+        getLatestUpdates(page)
+    }
+
+    open fun parsePopularManga(response: Response): MangasPage {
+        val mangas = response.asJsoup().select(popularMangaSelector).map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
                 title = element.selectFirst(popularMangaSelectorTitle)!!.text()
@@ -50,67 +69,80 @@ abstract class ZeistManga : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    // Latest
+    open fun latestUpdatesUrl(page: Int, orderBy: String? = "published"): String {
         val startIndex = MAX_MANGA_RESULTS * (page - 1) + 1
-        val url = apiUrl()
-            .addQueryParameter("orderby", "published")
+        return apiUrl()
+            .addQueryParameter("orderby", orderBy)
             .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
             .addQueryParameter("start-index", startIndex.toString())
-            .build()
-
-        return GET(url, headers)
+            .build().toString()
     }
 
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int) = parseSearchManga(client.get(latestUpdatesUrl(page)))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val startIndex = MAX_MANGA_RESULTS * (page - 1) + 1
-        val url = apiUrl()
-            .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
-            .addQueryParameter("start-index", startIndex.toString())
+    open fun parseLastestUpdates(response: Response) = parseSearchManga(response)
 
-        if (query.isNotBlank()) {
-            url.addQueryParameter("q", query)
-            val searchUrl = url.build().toString().replaceLast("q=", "q=label:$mangaCategory+")
-            return GET(searchUrl, headers)
+    // Search
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.size < 3) return null
+        val doc = client.get(url).asJsoup()
+        return mangaDetailsParse(doc).apply {
+            if (title.isEmpty()) {
+                title = doc.selectFirst("meta[property='og:title']")!!.attr("content")
+                    .substringBefore("-").trim()
+            }
+            setUrlWithoutDomain(url.toString())
         }
+    }
 
-        filters.forEach { filter ->
-            when (filter) {
-                is StatusList -> {
-                    url.addPathSegment(filter.selected.value)
-                }
+    open fun searchMangaUrl(page: Int, query: String) = apiUrl()
 
-                is TypeList -> {
-                    url.addPathSegment(filter.selected.value)
-                }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val startIndex = MAX_MANGA_RESULTS * (page - 1) + 1
+        val url = searchMangaUrl(page, query)
 
-                is LanguageList -> {
-                    url.addPathSegment(filter.selected.value)
-                }
+        val searchUrl = if (query.isNotBlank()) {
+            url.addQueryParameter("q", query)
+                .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
+                .addQueryParameter("start-index", startIndex.toString())
+        } else {
+            filters.forEach { filter ->
+                when (filter) {
+                    is StatusList -> {
+                        url.addPathSegment(filter.selected.value)
+                    }
 
-                is GenreList -> {
-                    filter.state.forEach { genre ->
-                        when (genre.state) {
-                            true -> url.addPathSegment(genre.value)
-                            false -> {}
+                    is TypeList -> {
+                        url.addPathSegment(filter.selected.value)
+                    }
+
+                    is LanguageList -> {
+                        url.addPathSegment(filter.selected.value)
+                    }
+
+                    is GenreList -> {
+                        filter.state.forEach { genre ->
+                            when (genre.state) {
+                                true -> url.addPathSegment(genre.value)
+                                false -> {}
+                            }
                         }
                     }
+
+                    else -> {}
                 }
-
-                else -> {}
             }
-        }
+            url
+        }.build().toString().replaceLast("q=", "q=label:$mangaCategory+")
 
-        return GET(url.build(), headers)
+        return parseSearchManga(client.get(searchUrl))
     }
 
-    protected open val excludedCategories: List<String> = listOf("Anime")
+    protected open val excludedCategories: List<String> = listOf("Anime", "Novel", "Novela")
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val jsonString = response.body.string()
-        val result = json.decodeFromString<ZeistMangaDto>(jsonString)
-
+    open fun parseSearchManga(response: Response): MangasPage {
+        val result = response.parseAs<ZeistMangaDto>()
         val mangas = result.feed?.entry.orEmpty()
             .filter { it.category.orEmpty().any { category -> category.term == mangaCategory } }
             .filterNot { it.category.orEmpty().any { category -> excludedCategories.contains(category.term) } }
@@ -118,11 +150,58 @@ abstract class ZeistManga : HttpSource() {
 
         val mangalist = mangas.toMutableList()
         if (mangas.size == MAX_MANGA_RESULTS + 1) {
-            mangalist.removeLast()
+            mangalist.removeAt(mangalist.lastIndex)
             return MangasPage(mangalist, true)
         }
 
         return MangasPage(mangalist, false)
+    }
+
+    // Details + Chapters
+    override val supportRelatedMangasBySearch = true
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val feedUrl = manga.memo["feedUrl"]?.parseAs<FeedUrl>()
+        return if (feedUrl?.isValid() == true && supportsChapterFeed) {
+            coroutineScope {
+                val mangaDeferred = async {
+                    if (fetchDetails) {
+                        val doc = client.get(getMangaUrl(manga)).asJsoup()
+                        mangaDetailsParse(doc).apply { memo = manga.memo }
+                    } else {
+                        manga
+                    }
+                }
+                val chaptersDeferred = async { if (fetchChapters) getChapterList(feedUrl.url) else chapters }
+                SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+            }
+        } else {
+            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            val url = getChapterFeedUrl(doc, manga.title)
+
+            val updatedManga = mangaDetailsParse(doc).apply {
+                memo = buildJsonObject {
+                    put(
+                        "feedUrl",
+                        FeedUrl(
+                            url,
+                            useOldChapterFeed,
+                            useNewChapterFeed,
+                            chapterCategory,
+                        ).toJsonElement(),
+                    )
+                }
+            }
+            SMangaUpdate(
+                manga = updatedManga,
+                chapters = if (fetchChapters) getChapterList(url, doc) else chapters,
+            )
+        }
     }
 
     protected open val statusSelectorList = listOf(
@@ -134,6 +213,7 @@ abstract class ZeistManga : HttpSource() {
     protected open val authorSelectorList = listOf(
         "Author",
         "Autor",
+        "Mangaka",
         "الكاتب",
         "Yazar",
     )
@@ -146,6 +226,7 @@ abstract class ZeistManga : HttpSource() {
     )
 
     protected open val mangaDetailsSelector = ".grid.gtc-235fr"
+    protected open val mangaDetailsSelectorThumbnail = "img"
     protected open val mangaDetailsSelectorDescription = "#synopsis"
     protected open val mangaDetailsSelectorGenres = "div.mt-15 > a[rel=tag]"
     protected open val mangaDetailsSelectorAuthor = "span#author"
@@ -156,16 +237,15 @@ abstract class ZeistManga : HttpSource() {
     protected open val mangaDetailsSelectorInfoTitle = "strong"
     protected open val mangaDetailsSelectorInfoDescription = "span.dt"
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    open fun mangaDetailsParse(document: Document): SManga {
         val profileManga = document.selectFirst(mangaDetailsSelector)!!
         return SManga.create().apply {
-            thumbnail_url = profileManga.selectFirst("img")!!.attr("abs:src")
+            thumbnail_url = profileManga.selectFirst(mangaDetailsSelectorThumbnail)!!.attr("abs:src")
             description = buildString {
                 append(profileManga.select(mangaDetailsSelectorDescription).text())
                 append("\n\n")
                 profileManga.selectFirst(mangaDetailsSelectorAltName)?.text()?.takeIf { it.isNotBlank() }?.let {
-                    append("Alternative name(s): ")
+                    append(intl["alternative_names"])
                     append(it)
                 }
             }.trim()
@@ -180,15 +260,15 @@ abstract class ZeistManga : HttpSource() {
                 val infoText = element.ownText().trim().ifEmpty { element.selectFirst(mangaDetailsSelectorInfoTitle)?.text()?.trim() ?: "" }
                 val descText = element.select(mangaDetailsSelectorInfoDescription).text().trim()
                 when {
-                    statusSelectorList.any { infoText.contains(it) } -> {
+                    status == SManga.UNKNOWN && statusSelectorList.any { infoText.contains(it) } -> {
                         status = parseStatus(descText)
                     }
 
-                    authorSelectorList.any { infoText.contains(it) } -> {
+                    author == null && authorSelectorList.any { infoText.contains(it) } -> {
                         author = descText
                     }
 
-                    artisSelectorList.any { infoText.contains(it) } -> {
+                    artist == null && artisSelectorList.any { infoText.contains(it) } -> {
                         artist = descText
                     }
                 }
@@ -198,44 +278,36 @@ abstract class ZeistManga : HttpSource() {
 
     protected open val chapterCategory: String = "Chapter"
 
-    private fun fetchChapter(url: String, startIndex: Int, maxResults: Int = MAX_CHAPTER_RESULTS): ZeistMangaDto {
+    open val preferChapterUpdatedDate: Boolean = false
+
+    open suspend fun fetchChapter(url: String, startIndex: Int, maxResults: Int): ZeistMangaDto {
         val paginationUrl = url.toHttpUrl().newBuilder()
             .setQueryParameter("start-index", startIndex.toString())
             .setQueryParameter("max-results", maxResults.toString()).build().toString()
 
-        val res = client.newCall(GET(paginationUrl, headers)).execute()
-        return json.decodeFromString<ZeistMangaDto>(res.body.string())
+        val res = client.get(paginationUrl)
+        return res.parseAs<ZeistMangaDto>()
     }
 
-    protected open val dateFormat: SimpleDateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
-    }
-
-    protected open fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)
-
-    open val preferChapterUpdatedDate: Boolean = false
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    open suspend fun getChapterList(feedUrl: String, doc: Document? = null): List<SChapter> {
         val allEntries = mutableListOf<ZeistMangaEntryDto>()
-        val url = getChapterFeedUrl(document)
 
-        var startIndex = 1
-        // Get total first
-        val result = fetchChapter(url, startIndex, maxResults = 0)
-        val totalResults = (
-            result.totalResults?.t
-                ?: result.feed?.totalResults?.t
-            )?.toIntOrNull() ?: MAX_CHAPTER_RESULTS
+        // Get total and server chunk size by initial max request.
+        val result = fetchChapter(feedUrl, 1, MAX_CHAPTER_RESULTS)
+        val totalResults = result.feed?.totalResults?.t?.toIntOrNull() ?: MAX_CHAPTER_RESULTS
+        val itemsPerPage = result.feed?.itemsPerPage?.t?.toIntOrNull() ?: CHAPTER_CHUNK
 
-        while (allEntries.size < totalResults) {
-            val result = fetchChapter(url, startIndex)
-            val entries = result.feed?.entry ?: throw Exception("Failed to parse from chapter API")
-            if (entries.isEmpty()) break
+        allEntries += result.feed?.entry ?: throw Exception("Failed to parse from chapter API")
 
-            allEntries.addAll(entries)
-            startIndex += entries.size
+        coroutineScope {
+            (allEntries.size until totalResults step itemsPerPage).map { startIndex ->
+                async {
+                    fetchChapter(feedUrl, startIndex + 1, maxResults = itemsPerPage)
+                        .feed!!.entry!!
+                }
+            }.awaitAll().flatten().also(allEntries::addAll)
         }
+
         return allEntries
             .filter { it.category.orEmpty().any { cat -> cat.term == chapterCategory } }
             .map { entry ->
@@ -252,24 +324,28 @@ abstract class ZeistManga : HttpSource() {
             }
     }
 
+    protected open val supportsChapterFeed = true
+
     protected open val useNewChapterFeed = false
     protected open val useOldChapterFeed = false
 
     protected open val chapterFeedRegex = """clwd\.run\(["'](.*?)["']\)""".toRegex()
     protected open val scriptSelector = "#clwd > script"
 
-    open fun getChapterFeedUrl(doc: Document): String {
+    open fun getChapterFeedUrl(doc: Document, mangaTitle: String): String {
         if (useNewChapterFeed) return newChapterFeedUrl(doc)
         if (useOldChapterFeed) return oldChapterFeedUrl(doc)
 
-        val script = doc.selectFirst(scriptSelector)
-            ?: return runCatching { oldChapterFeedUrl(doc) }
-                .getOrElse { newChapterFeedUrl(doc) }
+        val feed = runCatching {
+            val script = doc.selectFirst(scriptSelector)
+                ?: return runCatching { oldChapterFeedUrl(doc) }
+                    .getOrElse { newChapterFeedUrl(doc) }
 
-        val feed = chapterFeedRegex
-            .find(script.html())
-            ?.groupValues?.get(1)
-            ?: throw Exception("Failed to find chapter feed")
+            chapterFeedRegex
+                .find(script.html())
+                ?.groupValues?.get(1)
+                ?: throw Exception("Failed to find chapter feed")
+        }.getOrElse { mangaTitle }
 
         return apiUrl(chapterCategory)
             .addPathSegments(feed)
@@ -314,24 +390,19 @@ abstract class ZeistManga : HttpSource() {
         return url.toString()
     }
 
+    // Pages
     protected open val pageListSelector = "div.check-box div.separator"
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter) = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+
+    open fun pageListParse(document: Document): List<Page> {
         val images = document.select(pageListSelector)
         return images.select("img[src]").mapIndexed { i, img ->
             Page(i, "", img.attr("abs:src"))
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    protected open val mangaCategory: String = "Series"
-
-    open fun apiUrl(feed: String = mangaCategory): HttpUrl.Builder = "$baseUrl/feeds/posts/default/-/".toHttpUrl().newBuilder()
-        .addPathSegment(feed)
-        .addQueryParameter("alt", "json")
-
+    // Filters
     protected open val hasFilters = false
 
     protected open val hasStatusFilter = true
@@ -339,89 +410,60 @@ abstract class ZeistManga : HttpSource() {
     protected open val hasLanguageFilter = true
     protected open val hasGenreFilter = true
 
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filterList = mutableListOf<Filter<*>>()
 
         if (!hasFilters) {
             return FilterList(emptyList())
         }
 
-        filterList.add(Filter.Header(intl.filterWarning))
+        filterList.add(Filter.Header(intl["filter_warning"]))
         filterList.add(Filter.Separator())
 
-        if (hasStatusFilter) filterList.add(StatusList(intl.statusFilterTitle, getStatusList()))
-        if (hasTypeFilter) filterList.add(TypeList(intl.typeFilterTitle, getTypeList()))
-        if (hasLanguageFilter) filterList.add(LanguageList(intl.languageFilterTitle, getLanguageList()))
-        if (hasGenreFilter) filterList.add(GenreList(intl.genreFilterTitle, getGenreList()))
+        if (hasStatusFilter) filterList.add(StatusList(intl["status_filter_title"], getStatusList()))
+        if (hasTypeFilter) filterList.add(TypeList(intl["type_filter_title"], getTypeList()))
+        if (hasLanguageFilter) filterList.add(LanguageList(intl["language_filter_title"], getLanguageList()))
+        if (hasGenreFilter) filterList.add(GenreList(intl["genre_filter_title"], getGenreList()))
 
         return FilterList(filterList)
     }
 
     protected open fun getStatusList(): List<Status> = listOf(
-        Status(intl.all, ""),
-        Status(intl.statusOngoing, "Ongoing"),
-        Status(intl.statusCompleted, "Completed"),
-        Status(intl.statusDropped, "Dropped"),
-        Status(intl.statusUpcoming, "Upcoming"),
-        Status(intl.statusHiatus, "Hiatus"),
-        Status(intl.statusCancelled, "Cancelled"),
+        Status(intl["all"], ""),
+        Status(intl["status_ongoing"], "Ongoing"),
+        Status(intl["status_completed"], "Completed"),
+        Status(intl["status_dropped"], "Dropped"),
+        Status(intl["status_upcoming"], "Upcoming"),
+        Status(intl["status_hiatus"], "Hiatus"),
+        Status(intl["status_cancelled"], "Cancelled"),
     )
 
     protected open fun getTypeList(): List<Type> = listOf(
-        Type(intl.all, ""),
-        Type(intl.typeManga, "Manga"),
-        Type(intl.typeManhua, "Manhua"),
-        Type(intl.typeManhwa, "Manhwa"),
-        Type(intl.typeNovel, "Novel"),
-        Type(intl.typeWebNovelJP, "Web Novel (JP)"),
-        Type(intl.typeWebNovelKR, "Web Novel (KR)"),
-        Type(intl.typeWebNovelCN, "Web Novel (CN)"),
-        Type(intl.typeDoujinshi, "Doujinshi"),
+        Type(intl["all"], ""),
+        Type(intl["type_manga"], "Manga"),
+        Type(intl["type_manhua"], "Manhua"),
+        Type(intl["type_manhwa"], "Manhwa"),
+        Type(intl["type_novel"], "Novel"),
+        Type(intl["type_web_novel_jp"], "Web Novel (JP)"),
+        Type(intl["type_web_novel_kr"], "Web Novel (KR)"),
+        Type(intl["type_web_novel_cn"], "Web Novel (CN)"),
+        Type(intl["type_doujinshi"], "Doujinshi"),
     )
 
-    protected open fun getGenreList(): List<Genre> = listOf(
-        Genre("Action", "Action"),
-        Genre("Adventurer", "Adventurer"),
-        Genre("Comedy", "Comedy"),
-        Genre("Dementia", "Dementia"),
-        Genre("Drama", "Drama"),
-        Genre("Ecchi", "Ecchi"),
-        Genre("Fantasy", "Fantasy"),
-        Genre("Game", "Game"),
-        Genre("Harem", "Harem"),
-        Genre("Historical", "Historical"),
-        Genre("Horror", "Horror"),
-        Genre("Josei", "Josei"),
-        Genre("Magic", "Magic"),
-        Genre("Martial Arts", "Martial Arts"),
-        Genre("Mecha", "Mecha"),
-        Genre("Military", "Military"),
-        Genre("Music", "Music"),
-        Genre("Mystery", "Mystery"),
-        Genre("Parody", "Parody"),
-        Genre("Police", "Police"),
-        Genre("Psychological", "Psychological"),
-        Genre("Romance", "Romance"),
-        Genre("Samurai", "Samurai"),
-        Genre("School", "School"),
-        Genre("Sci-fi", "Sci-fi"),
-        Genre("Seinen", "Seinen"),
-        Genre("Shoujo", "Shoujo"),
-        Genre("Shoujo Ai", "Shoujo Ai"),
-        Genre("Shounen", "Shounen"),
-        Genre("Slice of Life", "Slice of Life"),
-        Genre("Space", "Space"),
-        Genre("Sports", "Sports"),
-        Genre("Super Power", "Super Power"),
-        Genre("SuperNatural", "SuperNatural"),
-        Genre("Thriller", "Thriller"),
-        Genre("Vampire", "Vampire"),
-        Genre("Work Life", "Work Life"),
-        Genre("Yuri", "Yuri"),
-    )
+    protected open fun getGenreList() = listOf(
+        "Action", "Adventure", "Comedy", "Crime",
+        "Drama", "Ecchi", "Fantasy", "Harem",
+        "Historical", "Horror", "Isekai", "Josei",
+        "Magic", "Martial Arts", "Medical", "Military",
+        "Music", "Mystery", "One Shot", "Police",
+        "Psychological", "Reincarnation", "Revenge", "Romance",
+        "School Life", "Sci-Fi", "Seinen", "Shounen",
+        "Slice of Life", "Sports", "Supernatural", "Survival",
+        "Thriller", "Time Travel", "Tragedy", "Vampire",
+    ).map { Genre(it, it) }
 
     protected open fun getLanguageList(): List<Language> = listOf(
-        Language(intl.all, ""),
+        Language(intl["all"], ""),
         Language("Indonesian", "Indonesian"),
         Language("English", "English"),
     )
@@ -430,6 +472,7 @@ abstract class ZeistManga : HttpSource() {
         "ongoing",
         "en curso",
         "en emisión",
+        "em lançamento",
         "activo",
         "ativo",
         "lançando",
@@ -458,6 +501,14 @@ abstract class ZeistManga : HttpSource() {
         "cancelado",
     )
 
+    // Utils
+
+    private fun FeedUrl.isValid() = old == useOldChapterFeed &&
+        new == useNewChapterFeed &&
+        category == chapterCategory
+
+    protected open fun parseDate(dateStr: String?) = dateFormat.tryParseDate(dateStr).takeIf { it > 0 } ?: Instant.tryParse(dateStr)
+
     protected open fun parseStatus(element: String): Int = when (element.lowercase().trim()) {
         in statusOnGoingList -> SManga.ONGOING
         in statusCompletedList -> SManga.COMPLETED
@@ -477,6 +528,7 @@ abstract class ZeistManga : HttpSource() {
 
     companion object {
         private const val MAX_MANGA_RESULTS = 20
-        const val MAX_CHAPTER_RESULTS = 150
+        private const val MAX_CHAPTER_RESULTS = 150
+        private const val CHAPTER_CHUNK = 50
     }
 }

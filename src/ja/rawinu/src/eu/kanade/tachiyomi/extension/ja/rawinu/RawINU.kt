@@ -5,10 +5,10 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -23,7 +23,7 @@ abstract class RawINU : FMReader() {
 
     override val client = super.client.newBuilder()
         .addInterceptor(::ddosChallengeInterceptor)
-        .addNetworkInterceptor(CookieInterceptor(baseUrlHost, "smartlink_shown" to "1"))
+        .addCookie("smartlink_shown" to "1")
         .rateLimit(2) { it.host == baseUrlHost }
         .build()
 

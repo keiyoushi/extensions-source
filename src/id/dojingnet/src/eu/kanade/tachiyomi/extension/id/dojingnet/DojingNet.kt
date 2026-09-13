@@ -8,9 +8,7 @@ import okhttp3.OkHttpClient
 @Source
 abstract class DojingNet : MangaThemesia() {
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(4)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 
     override val hasProjectPage = true
 }

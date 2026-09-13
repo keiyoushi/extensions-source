@@ -131,4 +131,4 @@ class NameDto(val name: String)
 fun List<NameDto>.toNames() = if (this.isEmpty()) null else this.joinToString { it.name }
 
 @Serializable
-class IdDto(val id: String)
+class IdDto(val id: Int)

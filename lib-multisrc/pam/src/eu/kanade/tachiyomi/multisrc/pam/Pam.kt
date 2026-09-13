@@ -12,11 +12,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.secretstream.SecretStream
 import keiyoushi.lib.secretstream.State
 import keiyoushi.lib.secretstream.X25519
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -53,7 +54,12 @@ abstract class Pam :
 
     private val preferences by getPreferencesLazy()
 
-    protected open val prefPremiumTitle = "Hide Premium chapters"
+    protected val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "fr"),
+        classLoader = this::class.java.classLoader!!,
+    )
 
     override val client = network.client.newBuilder()
         .addInterceptor(::imageInterceptor)
@@ -193,7 +199,7 @@ abstract class Pam :
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.queryParameter("q") != null) {
-            val data = response.parseAs<List<BrowseManga>>()
+            val data = response.parseAs<SearchResponse>().data
 
             return MangasPage(
                 mangas = data.map { it.toSManga(::createThumbnailUrl) },
@@ -204,7 +210,7 @@ abstract class Pam :
 
             return MangasPage(
                 mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
-                hasNextPage = data.meta.current < data.meta.last,
+                hasNextPage = data.meta?.let { it.current < it.last } ?: false,
             )
         }
     }
@@ -236,10 +242,10 @@ abstract class Pam :
                     append(it.trim(), "\n\n")
                 }
                 data.releaseYear?.also {
-                    append("Sortie: ", it, "\n\n")
+                    append(intl["release_year"], ": ", it, "\n\n")
                 }
                 data.alternativeName?.also {
-                    append("Noms alternatifs: ", it)
+                    append(intl["alternative_names"], ": ", it)
                 }
             }.trim()
             genre = buildList {
@@ -292,7 +298,7 @@ abstract class Pam :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_PREMIUM_PREF
-            title = prefPremiumTitle
+            title = intl["pref_hide_premium_title"]
             setDefaultValue(false)
         }.also(screen::addPreference)
     }

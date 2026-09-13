@@ -10,8 +10,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -150,38 +150,69 @@ abstract class Kuaikanmanhua : HttpSource() {
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         // Convert the stored url to one that works with the api
-        val newUrl = apiUrl + "/v1/topics/" + manga.url.trimEnd('/').substringAfterLast("/")
+        val newUrl = baseUrl + manga.url
         val response = client.newCall(GET(newUrl, headers)).execute()
         val sManga = mangaDetailsParse(response).apply { initialized = true }
         return Observable.just(sManga)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val data = response.parseAs<ApiMangaResponse>().data
+    fun parseUpdateStatus(status: String): Int = when (status) {
+        "连载中" -> SManga.ONGOING
+        "已完结" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
-        title = data.title
-        thumbnail_url = data.verticalImageUrl
-        author = data.user.nickname
-        description = data.description
-        status = data.updateStatusCode
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        val nuxtDefinition = document.selectFirst("script:containsData(__NUXT__)")!!.data()
+
+        return QuickJs.create().use { quickJs ->
+            quickJs.evaluate("var window = {};")
+            quickJs.evaluate(nuxtDefinition)
+            val nuxtJson = quickJs.evaluate("JSON.stringify(window.__NUXT__)") as String
+            val payload = nuxtJson.parseAs<WebMangaPayload>()
+            val mangaData = requireNotNull(payload.data.getOrNull(0)?.topicInfo) {
+                "Source did not return manga details"
+            }
+
+            SManga.create().apply {
+                title = mangaData.title
+                thumbnail_url = mangaData.verticalImageUrl
+                author = mangaData.user.nickname
+                description = mangaData.description
+                status = parseUpdateStatus(mangaData.updateStatus)
+            }
+        }
     }
 
     // Chapters & Pages
 
     override fun chapterListRequest(manga: SManga): Request = GET(
-        apiUrl + "/v1/topics/" + manga.url.trimEnd('/').substringAfterLast("/"),
+        baseUrl + manga.url,
         headers,
     )
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<ApiMangaResponse>().data
+        val document = response.asJsoup()
+        val nuxtDefinition = document.selectFirst("script:containsData(__NUXT__)")!!.data()
 
-        return data.comics.map { comic ->
-            SChapter.create().apply {
-                url = "/web/comic/${comic.id}"
-                name = comic.title + if (!comic.canView) " \uD83D\uDD12" else ""
-                date_upload = comic.createdAt * 1000
-            }
+        return QuickJs.create().use { quickJs ->
+            quickJs.evaluate("var window = {};")
+            quickJs.evaluate(nuxtDefinition)
+            val nuxtJson = quickJs.evaluate("JSON.stringify(window.__NUXT__)") as String
+            val chapters = nuxtJson.parseAs<WebMangaPayload>()
+                .data
+                .getOrNull(0)
+                ?.comicList
+                .orEmpty()
+
+            chapters.map { comic ->
+                SChapter.create().apply {
+                    url = "/web/comic/${comic.id}"
+                    name = comic.title
+                    date_upload = comic.createdAt
+                }
+            }.reversed()
         }
     }
 
@@ -203,6 +234,8 @@ abstract class Kuaikanmanhua : HttpSource() {
                 .parseAs<WebChapterPayload>()
                 .data
                 .getOrNull(0)
+                ?.res
+                ?.data
                 ?.comicInfo
                 ?.comicImages
                 .orEmpty()

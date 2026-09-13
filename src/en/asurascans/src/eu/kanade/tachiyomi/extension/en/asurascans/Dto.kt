@@ -49,6 +49,8 @@ class MangaDetailsDto(
     private val artist: String? = null,
     private val description: String? = null,
     private val rating: Double? = null,
+    private val bookmarkCount: Int? = null,
+    private val type: String? = null,
     private val popularityRank: Int? = null,
     private val alternativeTitles: String? = null,
     private val genres: List<GenreDto>? = null,
@@ -60,24 +62,39 @@ class MangaDetailsDto(
         author = this@MangaDetailsDto.author
         artist = this@MangaDetailsDto.artist
         description = parseDescription()
-        genre = genres?.joinToString { it.name }
+        genre = buildList {
+            type?.replaceFirstChar { it.uppercase() }?.let { add(it) }
+            genres?.map { it.name }?.let { addAll(it) }
+        }.joinToString()
         status = parseStatus()
         initialized = true
     }
 
     fun parseDescription(): String = buildString {
-        val plainDescription = description?.let { Jsoup.parseBodyFragment(it).text() }
-        plainDescription?.let(::append)
+        val metadata = listOfNotNull(
+            popularityRank?.let { "Rank: #$it" },
+            rating?.let { "Rating: %.2f".format(it) },
+            bookmarkCount?.let {
+                val formatted = when {
+                    it >= 1_000_000 -> "%.1fM".format(it / 1_000_000.0)
+                    it >= 1_000 -> "%.1fK".format(it / 1_000.0)
+                    else -> it.toString()
+                }
+                "Bookmarks: $formatted"
+            },
+        )
 
-        popularityRank?.let {
-            if (isNotEmpty()) append("\n\n")
-            append("Rank: #$it")
+        if (metadata.isNotEmpty()) {
+            append(metadata.joinToString(" • "))
         }
 
-        rating?.let {
-            if (isNotEmpty()) append("\n\n")
-            append("Rating: %.2f".format(it))
-        }
+        description
+            ?.let { Jsoup.parseBodyFragment(it).text() }
+            ?.takeIf { it.isNotEmpty() }
+            ?.let {
+                if (isNotEmpty()) append("\n\n")
+                append(it)
+            }
 
         val cleanAltTitles = alternativeTitles
             ?.let { if (it.contains("•")) it.split("•") else it.split(",") }
@@ -147,9 +164,22 @@ class ChapterDto(
     private val number: Float,
     private val title: String? = null,
     @SerialName("created_at") private val createdAt: String = "",
-    @SerialName("is_locked") val isLocked: Boolean = false,
+    @SerialName("is_premium")
+    @JsonNames("is_locked")
+    private val isPremium: Boolean = false,
+    @SerialName("early_access_until")
+    private val earlyAccessUntil: String? = null,
     @SerialName("series_slug") private val seriesSlug: String? = null,
 ) {
+    val isLocked: Boolean
+        get() {
+            if (isPremium) return true
+            val until = earlyAccessUntil ?: return false
+            return runCatching {
+                Instant.parse(until).toEpochMilliseconds() > System.currentTimeMillis()
+            }.getOrDefault(false)
+        }
+
     fun toSChapter(randomMangaSlug: String) = SChapter.create().apply {
         val numberStr = number.toString().removeSuffix(".0")
         url = "/series/$seriesSlug/chapter/$numberStr"

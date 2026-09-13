@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.masonry
 
 import eu.kanade.tachiyomi.source.model.Filter
+import kotlinx.serialization.Serializable
 
 abstract class SelectFilter(
     name: String,
@@ -38,4 +39,7 @@ private val sortFilterOptions = listOf(
     Pair("Popular", "sort/popular"),
 )
 
-class TagFilter(options: List<Pair<String, String>>) : SelectFilter("Tags", options)
+@Serializable
+class Tag(val name: String, val uriPart: String)
+
+class TagFilter(options: List<Tag>) : SelectFilter("Tags", options.map { it.name to it.uriPart })

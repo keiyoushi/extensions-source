@@ -3,79 +3,74 @@
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
 import eu.kanade.tachiyomi.source.model.Filter
+import okhttp3.HttpUrl
 
-class GenreFilter : Filter.Select<String>("Gêneros", genreOptions.map { it.first }.toTypedArray()) {
-    val selectedValue: String
-        get() = genreOptions[state].second
+interface UrlFilter {
+    fun addToUrl(builder: HttpUrl.Builder)
 }
 
-class TypeFilter : Filter.Select<String>("Tipo", typeOptions.map { it.first }.toTypedArray()) {
-    val selectedValue: String
-        get() = typeOptions[state].second
+open class SelectFilter(
+    name: String,
+    private val parameter: String,
+    private val options: List<Pair<String, String>>,
+) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()),
+    UrlFilter {
+    val selectedValue get() = options[state].second
+
+    override fun addToUrl(builder: HttpUrl.Builder) {
+        selectedValue.takeIf(String::isNotEmpty)?.let { builder.addQueryParameter(parameter, it) }
+    }
 }
 
-class StatusFilter : Filter.Select<String>("Status", statusOptions.map { it.first }.toTypedArray()) {
-    val selectedValue: String
-        get() = statusOptions[state].second
-}
+class SortFilter :
+    SelectFilter(
+        "Ordenar por",
+        "sort",
+        listOf(
+            "Mais recentes" to "newest",
+            "Mais populares" to "popular",
+            "Melhor nota" to "rating",
+            "A-Z" to "az",
+        ),
+    )
 
-class SortFilter : Filter.Select<String>("Ordenar por", sortOptions.map { it.first }.toTypedArray()) {
-    val selectedValue: String
-        get() = sortOptions[state].second
-}
+class TypeFilter :
+    SelectFilter(
+        "Tipo",
+        "type",
+        listOf(
+            "Todos" to "",
+            "Mangá" to "MANGA",
+            "Manhwa" to "MANHWA",
+            "Manhua" to "MANHUA",
+            "Novel" to "NOVEL",
+            "Yaoi" to "YAOI",
+            "Yuri" to "YURI",
+            "Shoujo" to "SHOUJO",
+            "English" to "ENGLISH",
+            "Webtoon" to "WEBTOON",
+            "Doujinshi" to "DOUJINSHI",
+            "Hentai" to "HENTAI",
+            "Pornhwa" to "PORNHWA",
+        ),
+    )
 
-private val genreOptions = listOf(
-    "Gêneros" to "",
-    "Ação" to "Ação",
-    "Aventura" to "Aventura",
-    "Artes Marciais" to "Artes Marciais",
-    "Comédia" to "Comédia",
-    "Drama" to "Drama",
-    "Ecchi" to "Ecchi",
-    "Fantasia" to "Fantasia",
-    "Ficção Científica" to "Ficção Científica",
-    "Harem" to "Harem",
-    "Histórico" to "Histórico",
-    "Maduro" to "Maduro",
-    "Mistério" to "Mistério",
-    "Psicológico" to "Psicológico",
-    "Romance" to "Romance",
-    "Seinen" to "Seinen",
-    "Shoujo" to "Shoujo",
-    "Shounen" to "Shounen",
-    "Sobrenatural" to "Sobrenatural",
-    "Tragédia" to "Tragédia",
-    "Vida Escolar" to "Vida Escolar",
-)
+class StatusFilter :
+    SelectFilter(
+        "Status",
+        "status",
+        listOf(
+            "Todos" to "",
+            "Em lançamento" to "ONGOING",
+            "Completo" to "COMPLETED",
+            "Hiato" to "HIATUS",
+            "Cancelado" to "CANCELED",
+        ),
+    )
 
-private val typeOptions = listOf(
-    "Todos" to "all",
-    "Mangá" to "manga",
-    "Manhwa" to "manhwa",
-    "Manhua" to "manhua",
-    "Novel" to "novel",
-    "Yaoi" to "yaoi",
-    "Yuri" to "yuri",
-    "Shoujo" to "shoujo",
-    "English" to "english",
-    "Webtoon" to "webtoon",
-    "Doujinshi" to "doujinshi",
-    "Hentai" to "hentai",
-    "Pornhwa" to "pornhwa",
-)
-
-private val statusOptions = listOf(
-    "Status" to "all",
-    "Em lançamento" to "ONGOING",
-    "Completo" to "COMPLETED",
-    "Hiato" to "HIATUS",
-    "Cancelado" to "CANCELED",
-)
-
-private val sortOptions = listOf(
-    "Mais Populares" to "popular",
-    "Maior Avaliação" to "rating",
-    "Mais Recentes" to "recent",
-    "Novidades" to "new",
-    "A-Z" to "alphabetical",
-)
+class GenreFilter(genres: List<String>) :
+    SelectFilter(
+        "Gênero",
+        "genre",
+        listOf("Todos" to "") + genres.map { it to it },
+    )

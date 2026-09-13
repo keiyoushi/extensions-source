@@ -8,7 +8,7 @@ keiyoushi {
     name = "Astral Scans"
     versionCode = 7
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {

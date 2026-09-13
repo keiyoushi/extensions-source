@@ -1,19 +1,16 @@
 package eu.kanade.tachiyomi.extension.en.battleinfivesecondsaftermeeting
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import okhttp3.Response
-import rx.Observable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Document
 
 @Source
 abstract class BattleInFiveSecondsAfterMeeting : Madara() {
     override val supportsLatest = false
-    override val fetchGenres = false
 
     override val mangaDetailsSelectorTitle = "h1"
     override val mangaDetailsSelectorAuthor = "h5:contains(Author) + h4 a"
@@ -25,43 +22,19 @@ abstract class BattleInFiveSecondsAfterMeeting : Madara() {
     override val seriesTypeSelector = "h5:contains(Type) + h4"
     override val altNameSelector = "h5:contains(Alternative) + h4"
 
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> = fetchPopularManga(page)
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
-            setUrlWithoutDomain(baseUrl)
-            title = "Battle in 5 Seconds After Meeting Manga"
-            thumbnail_url = "$baseUrl/wp-content/uploads/2022/01/48.jpg"
+    override fun parseChapterList(document: Document, mangaPath: String): List<SChapter> {
+        val dates = document.select(".chapter-item").associate { element ->
+            element.selectFirst("a")!!.attr("abs:href") to parseChapterDate(element.selectFirst(".post-on")?.text())
         }
-
-        return Observable.just(MangasPage(listOf(manga), false))
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-
-        launchIO { countViews(document) }
-
-        val chapterElements = document.select(".main-chapter")
-        val recentChapters = document.select(chapterListSelector()).map(::chapterFromElement)
-
-        return chapterElements.map { element ->
+        return document.select(".main-chapter").mapNotNull { element ->
+            val href = element.selectFirst("a")?.attr("abs:href") ?: return@mapNotNull null
+            val slug = href.toHttpUrl().encodedPath.trimEnd('/').substringAfterLast('/').takeIf(String::isNotEmpty) ?: return@mapNotNull null
             SChapter.create().apply {
-                val chapterContent = element.selectFirst(".chapter-content")!!.text()
-                setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-                name = chapterContent.removePrefix("Battle in 5 Seconds After Meeting, ")
-
-                val otherChapter = recentChapters.find { it.name == chapterContent }
-                if (otherChapter != null) {
-                    date_upload = otherChapter.date_upload
-                }
+                url = slug
+                name = element.selectFirst(".chapter-content")!!.text().removePrefix("Battle in 5 Seconds After Meeting, ")
+                date_upload = dates[href] ?: 0L
+                memo = buildJsonObject { put("mangaPath", mangaPath) }
             }
         }
     }
-
-    override fun getFilterList(): FilterList = FilterList()
 }

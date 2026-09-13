@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Kuaikanmanhua"
-    versionCode = 12
+    versionCode = 13
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 

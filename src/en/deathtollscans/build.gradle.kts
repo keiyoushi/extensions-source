@@ -8,7 +8,7 @@ keiyoushi {
     name = "Death Toll Scans"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "foolslide"
 
     source {

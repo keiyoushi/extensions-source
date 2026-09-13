@@ -1,12 +1,25 @@
 package eu.kanade.tachiyomi.extension.ar.mangatime
 
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.Response
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
 
-inline fun <reified T> Response.parseTrpcList(): T = this.parseAs<List<TrpcResponse<T>>>().first().result.data.json
+@Serializable
+class TrpcEnvelope<T>(
+    @SerialName("0") val first: TrpcData<T>,
+) {
+    constructor(input: T) : this(TrpcData(input))
+}
+
+@Serializable
+class TrpcData<T>(
+    val json: T,
+)
 
 @Serializable
 class TrpcResponse<T>(
@@ -18,40 +31,65 @@ class TrpcResult<T>(
     val data: TrpcData<T>,
 )
 
-@Serializable
-class TrpcData<T>(
-    val json: T,
-)
-
 // List Manga
 
 @Serializable
-class MangaListData(
+class MangaListDto(
     val results: List<MangaSeries>,
     val hasMore: Boolean,
 )
 
 @Serializable
 class MangaSeries(
-    val id: String,
-    val title: String,
-    val slug: String,
-    val coverUrl: String,
-    val type: String,
-)
+    private val id: String,
+    private val title: String,
+    private val slug: String,
+    private val coverUrl: String,
+    private val type: String,
+) {
+    context(source: MangaTime)
+    fun toSManga(): SManga = SManga.create().apply {
+        title = this@MangaSeries.title
+        thumbnail_url = source.toImage(coverUrl)
+        url = "/$type/$slug#$id"
+        memo = buildJsonObject {
+            put("id", id)
+            put("slug", slug)
+            put("type", type)
+        }
+    }
+}
 
 // Details
 
 @Serializable
 class SeriesDto(
-    val title: String,
-    val slug: String,
-    val coverUrl: String,
-    val type: String,
-    val genres: List<Genre>?,
-    val description: String?,
-    val status: String?,
-)
+    private val title: String,
+    private val slug: String,
+    private val coverUrl: String,
+    private val type: String,
+    private val genres: List<Genre>?,
+    private val description: String?,
+    private val status: String?,
+) {
+    context(source: MangaTime)
+    fun toSManga(): SManga = SManga.create().apply {
+        title = this@SeriesDto.title
+        thumbnail_url = source.toImage(coverUrl)
+        description = this@SeriesDto.description
+        status = this@SeriesDto.status.toStatus()
+        genre = ((this@SeriesDto.genres ?: emptyList()).map { it.name } + type)
+            .filter { it.isNotBlank() }.joinToString().replace("\u060c", ",") // Arabic comma
+    }
+
+    private fun String?.toStatus() = when (this?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "hiatus" -> SManga.ON_HIATUS
+        "cancelled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
+}
 
 @Serializable
 class Genre(
@@ -67,26 +105,27 @@ class ChaptersDto(
 
 @Serializable
 class Chapter(
-    val number: Int,
-    val title: String,
-    val publishedAt: String?,
-)
+    private val number: JsonPrimitive,
+    private val title: String,
+    private val publishedAt: String? = null,
+) {
+    fun toSChapter(mangaUrl: String): SChapter = SChapter.create().apply {
+        url = "$mangaUrl/chapter/$number"
+        name = buildString {
+            if (!title.contains(number.content)) {
+                append("Chapter ")
+                append(number)
+                append(" - ")
+            }
+            append(title)
+        }
+        date_upload = publishedAt?.let {
+            Instant.parseOrNull(it)?.toEpochMilliseconds()
+        } ?: 0L
+    }
+}
 
-// pages
-@Serializable
-class TrpcPages(
-    val result: TrpcResultPages,
-)
-
-@Serializable
-class TrpcResultPages(
-    val data: TrpcDataPages,
-)
-
-@Serializable
-class TrpcDataPages(
-    val json: PagesDto,
-)
+// Pages
 
 @Serializable
 class PagesDto(
@@ -96,15 +135,7 @@ class PagesDto(
     val seriesId: String,
 )
 
-// Trpc Request
-
-inline fun <reified T> T.trpcJson(): String = TrpcRequest(TrpcData(this)).toJsonString()
-
-@Serializable
-class TrpcRequest<T>(
-    @SerialName("0")
-    val first: TrpcData<T>,
-)
+// Request payloads
 
 @Serializable
 class SearchDto(

@@ -11,9 +11,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -40,7 +40,7 @@ abstract class MangaKingdom :
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
-        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "is_verified_age_over_18" to "1"))
+        .addCookie("is_verified_age_over_18" to "1")
         .addInterceptor {
             val request = it.request()
             val response = it.proceed(request)

@@ -6,5 +6,5 @@ import keiyoushi.annotation.Source
 @Source
 abstract class WuxiaWorld : Madara() {
     override val mangaSubString = "novel"
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
 }

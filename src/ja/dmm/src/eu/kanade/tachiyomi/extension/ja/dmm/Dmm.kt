@@ -11,12 +11,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.addCookie
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -31,7 +31,6 @@ abstract class Dmm :
 
     override val supportsLatest = true
 
-    private val domain get() = baseUrl.substringAfter("https://")
     private val shopName get() = if (name == "FANZA") "adult" else "general"
 
     private val apiUrl get() = "$baseUrl/ajax/bff"
@@ -40,7 +39,7 @@ abstract class Dmm :
     override val client by lazy {
         network.client.newBuilder()
             .addInterceptor(PublusInterceptor())
-            .addNetworkInterceptor(CookieInterceptor(domain, listOf("book_safe_mode_level" to "off", "age_check_done" to "1")))
+            .addCookie(listOf("book_safe_mode_level" to "off", "age_check_done" to "1"))
             .addInterceptor { chain ->
                 val request = chain.request()
                 val response = chain.proceed(request)

@@ -18,6 +18,7 @@ class SearchResponse(
 
 @Serializable
 class MangaDto(
+    val totalChapterCount: Int? = null,
     val post: Manga,
 )
 
@@ -130,24 +131,22 @@ class Chapter(
     private val number: JsonPrimitive,
     private val title: String? = null,
     private val createdAt: String,
-    private val isAccessible: Boolean,
     private val isLocked: Boolean? = false,
     private val isTimeLocked: Boolean? = false,
     private val mangaPost: MangaPostDto? = null,
-    private val createdBy: CreatorDto? = null,
+    private val price: Int? = 0,
+    private val chapterPurchased: Boolean? = false,
 ) {
-    fun isAccessible() = isAccessible
 
-    fun isLocked() = (isLocked == true) || (isTimeLocked == true)
+    fun isLocked() = (isLocked == true) || (isTimeLocked == true) || (chapterPurchased == false && price != 0)
 
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
-        val prefix = if (!isAccessible()) "🔒 " else ""
+        val prefix = if (isLocked()) "🔒 " else ""
         val suffix = if (!title.isNullOrBlank()) " - $title" else ""
         val seriesSlug = (mangaSlug ?: mangaPost?.slug)!!
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number$suffix"
         date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
-        scanlator = createdBy?.name
         memo = buildJsonObject {
             put("seriesSlug", seriesSlug)
             put("slug", slug)
@@ -159,11 +158,6 @@ class Chapter(
 @Serializable
 class MangaPostDto(
     val slug: String?,
-)
-
-@Serializable
-class CreatorDto(
-    val name: String? = null,
 )
 
 @Serializable

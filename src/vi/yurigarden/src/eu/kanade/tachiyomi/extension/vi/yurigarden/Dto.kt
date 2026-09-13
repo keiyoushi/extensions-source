@@ -5,17 +5,15 @@ import kotlinx.serialization.json.JsonElement
 
 @Serializable
 class ComicsResponse(
-    val comics: List<Comic> = emptyList(),
-    val totalPages: Int = 0,
+    val comics: List<Comic>,
+    val totalPages: Int,
 )
 
 @Serializable
-data class TrendingComic(
+class TrendingComic(
     val id: Int,
-    val image: String = "",
+    val image: String,
     val title: String,
-    val value: Int = 0,
-    val rank: Int = 0,
 )
 
 @Serializable
@@ -32,8 +30,8 @@ class ComicDetail(
     val description: String? = null,
     val status: String? = null,
     val thumbnail: String? = null,
-    val authors: List<Author> = emptyList(),
-    val genres: List<String> = emptyList(),
+    val authors: List<Author>,
+    val genres: List<String>,
 )
 
 @Serializable
@@ -45,22 +43,20 @@ class Author(
 class ChapterData(
     val id: Int,
     val order: Double,
-    val name: String = "",
+    val name: String,
     val volume: Double? = null,
-    val publishedAt: Long = 0L,
-    val lastUpdated: Long? = null,
+    val publishedAt: Long,
     val team: Team? = null,
 )
 
 @Serializable
 class Team(
-    val id: Int? = null,
-    val name: String = "",
+    val name: String,
 )
 
 @Serializable
 class ChapterDetail(
-    val pages: List<PageData> = emptyList(),
+    val pages: List<PageData>,
 )
 
 @Serializable
@@ -71,34 +67,19 @@ class PageData(
 
 @Serializable
 class EncryptedResponse(
-    val encrypted: Boolean = false,
+    val encrypted: Boolean,
     val data: String? = null,
 )
 
 @Serializable
-class UserAuthRequest(
-    val email: String,
+class SystemResources(
+    val genres: Map<String, GenreResource>,
+)
+
+@Serializable
+class GenreResource(
     val name: String,
-    val avatar: String,
-    val token: String,
-)
-
-@Serializable
-class UserAuthResponse(
-    val accessToken: String,
-)
-
-@Serializable
-class WebViewAuthData(
-    val email: String? = null,
-    val displayName: String? = null,
-    val photoURL: String? = null,
-    val stsTokenManager: WebViewTokenManager? = null,
-)
-
-@Serializable
-class WebViewTokenManager(
-    val accessToken: String? = null,
+    val slug: String,
 )
 
 @Serializable

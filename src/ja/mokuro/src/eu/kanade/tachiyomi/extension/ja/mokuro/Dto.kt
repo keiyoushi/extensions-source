@@ -4,47 +4,111 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Serializable
-class LibraryDto(
-    val series: List<SeriesDto>,
+class CatalogDto(
+    val series: List<CatalogSeriesDto>,
 )
 
 @Serializable
-class SeriesDto(
-    val name: String,
-    val path: String,
-    private val cover: String? = null,
-    val volumes: List<VolumeDto>,
+class CatalogSeriesDto(
+    @SerialName("series_title") val seriesTitle: String,
+    @SerialName("external_ids") private val externalIds: ExternalIdsDto? = null,
+    private val titles: TitlesDto? = null,
+    private val synonyms: List<String> = emptyList(),
+    val tag: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
 ) {
-    fun toSManga(apiBaseUrl: String, useLatestVolumeCover: Boolean = false): SManga = SManga.create().apply {
-        title = name
-        url = path
-        val mangaCover = if (useLatestVolumeCover) {
-            volumes.lastOrNull()?.cover ?: cover
-        } else {
-            cover
+    fun displayTitle(pref: String = "native"): String {
+        val base = when (pref) {
+            "english" -> titles?.english ?: titles?.romaji ?: titles?.native ?: seriesTitle
+            "romaji" -> titles?.romaji ?: titles?.english ?: titles?.native ?: seriesTitle
+            "folder" -> seriesTitle
+            else -> titles?.native ?: titles?.romaji ?: titles?.english ?: seriesTitle
         }
-        thumbnail_url = mangaCover?.let {
-            apiBaseUrl.toHttpUrl().newBuilder()
-                .addPathSegment("cover")
-                .addQueryParameter("path", it)
-                .build()
-                .toString()
-        }
+        if (tag.isNullOrBlank()) return base
+        val stripped = stripOuterBrackets(tag)
+        return if (stripped.isNotBlank()) "$base ($stripped)" else base
+    }
+
+    fun matches(query: String, pref: String = "native"): Boolean {
+        val q = query.trim()
+        return displayTitle(pref).contains(q, ignoreCase = true) ||
+            seriesTitle.contains(q, ignoreCase = true) ||
+            (titles?.native?.contains(q, ignoreCase = true) == true) ||
+            (titles?.romaji?.contains(q, ignoreCase = true) == true) ||
+            (titles?.english?.contains(q, ignoreCase = true) == true) ||
+            synonyms.any { it.contains(q, ignoreCase = true) }
+    }
+
+    fun toSManga(pref: String = "native"): SManga = SManga.create().apply {
+        title = displayTitle(pref)
+        url = seriesTitle
+    }
+
+    fun fillDetails(manga: SManga, pref: String = "native") {
+        manga.title = displayTitle(pref)
+        manga.genre = tag
+        manga.description = buildString {
+            titles?.english?.takeIf { it.isNotBlank() && it != manga.title }?.let {
+                append("English: ").appendLine(it)
+            }
+            titles?.romaji?.takeIf { it.isNotBlank() && it != manga.title }?.let {
+                append("Romaji: ").appendLine(it)
+            }
+            titles?.native?.takeIf { it.isNotBlank() && it != manga.title }?.let {
+                append("Native: ").appendLine(it)
+            }
+            if (synonyms.isNotEmpty()) {
+                append("Synonyms: ").appendLine(synonyms.joinToString())
+            }
+            val anilistId = externalIds?.anilist
+            val malId = externalIds?.mal
+            if (anilistId != null || malId != null) {
+                appendLine()
+                anilistId?.let {
+                    appendLine("[AniList](https://anilist.co/manga/$it)")
+                }
+                malId?.let {
+                    appendLine("[MyAnimeList](https://myanimelist.net/manga/$it)")
+                }
+            }
+        }.trim().ifEmpty { null }
     }
 }
 
 @Serializable
-class VolumeDto(
-    val name: String,
-    internal val cover: String? = null,
+class ExternalIdsDto(
+    val anilist: Int? = null,
+    val mal: Int? = null,
+)
+
+@Serializable
+class TitlesDto(
+    val native: String? = null,
+    val romaji: String? = null,
+    val english: String? = null,
+)
+
+@Serializable
+class SeriesDetailDto(
+    @SerialName("series_title") val seriesTitle: String,
+    private val titles: TitlesDto? = null,
+    val volumes: List<VolumeDto> = emptyList(),
 ) {
-    fun toSChapter(series: SeriesDto): SChapter = SChapter.create().apply {
-        name = this@VolumeDto.name
-        chapter_number = parseChapterNumber(this@VolumeDto.name)
-        url = series.path + "|" + this@VolumeDto.name
+    fun displayTitle(): String = titles?.native ?: titles?.romaji ?: titles?.english ?: seriesTitle
+}
+
+@Serializable
+class VolumeDto(
+    @SerialName("volume_title") val volumeTitle: String,
+    @SerialName("mokuro_modified") private val mokuroModified: Long? = null,
+) {
+    fun toSChapter(seriesTitle: String) = SChapter.create().apply {
+        name = this@VolumeDto.volumeTitle
+        chapter_number = parseChapterNumber(this@VolumeDto.volumeTitle)
+        date_upload = mokuroModified?.times(1000L) ?: 0L
+        url = "$seriesTitle|${this@VolumeDto.volumeTitle}"
     }
 
     private fun parseChapterNumber(name: String): Float = chapterNumberRegex.findAll(name).lastOrNull()?.value?.toFloatOrNull() ?: -1f
@@ -69,3 +133,15 @@ class ImageRequest(
 )
 
 private val chapterNumberRegex = """(\d+(\.\d+)?)""".toRegex()
+
+// Mirrors catalog.js stripOuterBracketPair: strips exactly one surrounding bracket pair.
+private val bracketPairs = listOf('(' to ')', '[' to ']', '（' to '）', '【' to '】')
+
+private fun stripOuterBrackets(value: String): String {
+    for ((open, close) in bracketPairs) {
+        if (value.length > 1 && value.first() == open && value.last() == close) {
+            return value.substring(1, value.length - 1).trim()
+        }
+    }
+    return value
+}

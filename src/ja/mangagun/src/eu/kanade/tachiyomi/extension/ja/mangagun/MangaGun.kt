@@ -7,10 +7,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import keiyoushi.network.addCookie
+import keiyoushi.utils.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -24,7 +23,7 @@ abstract class MangaGun : FMReader() {
     override val mangaDetailsSelectorDescription = ".description-text-content, .manga-info-list > li:nth-child(1) .info-field-value"
 
     override val client = super.client.newBuilder()
-        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "smartlink_shown" to "1")).build()
+        .addCookie("smartlink_shown" to "1").build()
 
     // source is picky about URL format
     private fun mangaRequest(sortBy: String, page: Int): Request = GET(

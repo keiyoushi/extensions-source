@@ -43,7 +43,7 @@ fun getGenreList() = listOf(
     Genre("Drama", "drama"),
     Genre("Ecchi", "ecchi"),
     Genre("Fantasy", "fantasy"),
-    Genre("Gender Bender", "gender-bender"),
+    Genre("Gender Bender", "genderbender"),
     Genre("Gore", "gore"),
     Genre("Harem", "harem"),
     Genre("Historical", "historical"),
@@ -51,7 +51,7 @@ fun getGenreList() = listOf(
     Genre("Isekai", "isekai"),
     Genre("Josei", "josei"),
     Genre("Magic", "magic"),
-    Genre("Martial Arts", "martial-arts"),
+    Genre("Martial Arts", "martialarts"),
     Genre("Mature", "mature"),
     Genre("Mecha", "mecha"),
     Genre("Military", "military"),
@@ -60,14 +60,14 @@ fun getGenreList() = listOf(
     Genre("Post-Apocalyptic", "post-apocalyptic"),
     Genre("Psychological", "psychological"),
     Genre("Romance", "romance"),
-    Genre("School Life", "school-life"),
+    Genre("School Life", "schoollife"),
     Genre("Sci-Fi", "sci-fi"),
     Genre("Seinen", "seinen"),
     Genre("Shoujo", "shoujo"),
-    Genre("Shoujo Ai", "shoujo-ai"),
+    Genre("Shoujo Ai", "shoujoai"),
     Genre("Shounen", "shounen"),
-    Genre("Shounen Ai", "shounen-ai"),
-    Genre("Slice of Life", "slice-of-life"),
+    Genre("Shounen Ai", "shounenai"),
+    Genre("Slice of Life", "sliceoflife"),
     Genre("Smut", "smut"),
     Genre("Sports", "sports"),
     Genre("Supernatural", "supernatural"),
@@ -79,3 +79,16 @@ fun getGenreList() = listOf(
     Genre("Yaoi", "yaoi"),
     Genre("Yuri", "yuri"),
 )
+
+fun genreLabel(slug: String): String = getGenreList().firstOrNull { it.slug.equals(slug, ignoreCase = true) }?.name
+    ?: slug.replaceFirstChar { it.uppercase() }
+
+fun findGenre(query: String): Genre? {
+    val normalized = query.replace("-", "").replace(" ", "")
+    return getGenreList().firstOrNull { genre ->
+        genre.name.equals(query, ignoreCase = true) ||
+            genre.slug.equals(query, ignoreCase = true) ||
+            genre.name.replace("-", "").replace(" ", "")
+                .equals(normalized, ignoreCase = true)
+    }
+}

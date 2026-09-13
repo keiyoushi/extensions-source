@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Asura Scans"
-    versionCode = 66
+    versionCode = 69
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

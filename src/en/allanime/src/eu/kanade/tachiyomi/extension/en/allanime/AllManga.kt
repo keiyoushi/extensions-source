@@ -13,13 +13,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLException
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLBody
@@ -33,6 +33,8 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class AllManga :
@@ -112,9 +114,6 @@ abstract class AllManga :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) {
-            throw Exception("Unsupported url")
-        }
         val id = url.pathSegments.getOrNull(1)
             ?: throw Exception("Unsupported url")
 
@@ -127,14 +126,14 @@ abstract class AllManga :
 
     override fun getFilterList(data: JsonElement?) = getFilters()
 
-    override fun getMangaUrl(manga: SManga): String {
-        if (manga.url.startsWith("/")) {
-            val mangaId = manga.url.split("/")[2]
-            return "$baseUrl/manga/$mangaId"
-        } else {
-            return "$baseUrl/manga/${manga.url}"
-        }
-    }
+    var wvChapterUrl: String? = null
+
+    override fun getMangaUrl(manga: SManga) = wvChapterUrl ?: if (manga.url.startsWith("/")) {
+        val mangaId = manga.url.split("/")[2]
+        "$baseUrl/manga/$mangaId"
+    } else {
+        "$baseUrl/manga/${manga.url}"
+    } + "?fromSearch=1"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -147,12 +146,20 @@ abstract class AllManga :
             val parts = manga.url.split("/")
             parts[2] to parts[3]
         } else {
-            manga.url to manga.memo["slug"]!!.string
+            manga.url to manga.memo["slug"]?.string
         }
 
         val payload = graphQLBody(
             query = UPDATE_QUERY,
-            variables = MangaUpdateVariables(mangaId, "manga@$mangaId"),
+            variables = MangaUpdateVariables(
+                mangaId,
+                "manga@$mangaId",
+                // Manga = null for some if not present
+                mapOf(
+                    "fromSearch" to true,
+                    "allowAdult" to true,
+                ),
+            ),
         )
 
         var data: MangaUpdateData? = null
@@ -239,8 +246,11 @@ abstract class AllManga :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val interfaceName = (1..(10..20).random())
+            .map { (('a'..'z') + ('A'..'Z')).random() }
+            .joinToString("")
         val mangaId = chapter.memo["mangaId"]?.string ?: throw Exception("Refresh Chapter List")
-        val mangaUrl = "$baseUrl/manga/$mangaId"
+        val mangaUrl = "$baseUrl/manga/$mangaId?fromSearch=1"
         val chapterUrl = getChapterUrl(chapter).toHttpUrl().encodedPath
 
         val document = client.get(mangaUrl, ensureSuccess = false).use { response ->
@@ -252,29 +262,61 @@ abstract class AllManga :
                 }
             }
 
-            response.asJsoup()
+            response.asJsoup().also {
+                it.head().prepend(
+                    """
+                    <script>
+                    (() => {
+                        const originalJson = Response.prototype.json;
+                        Response.prototype.json = function() {
+                            return originalJson.call(this).then(data => {
+                                if (data && data.chapterPages) {
+                                    window.$interfaceName.post(JSON.stringify(data));
+                                }
+                                return data;
+                            });
+                        };
+
+                        const originalParse = JSON.parse;
+                        JSON.parse = new Proxy(originalParse, {
+                            apply(target, thisArg, args) {
+                                const result = Reflect.apply(target, thisArg, args);
+                                if (result && result.chapterPages) {
+                                    window.$interfaceName.post(args[0]);
+                                }
+                                return result;
+                            }
+                        });
+
+                      const hook = e => {
+                        if (e.tagName.toUpperCase() === "IFRAME") {
+                          Object.defineProperty(e, "contentWindow", {
+                            get: () => null,
+                            configurable: false
+                          });
+                        }
+                        return e;
+                      };
+
+                      for (const k of ["createElement", "createElementNS"]) {
+                        const c = Document.prototype[k];
+                        Document.prototype[k] = function(...a) {
+                          return hook(c.call(this, ...a));
+                        };
+                      }
+                    })();
+                    </script>
+                    """.trimIndent(),
+                )
+            }
         }
 
-        val payload = runWebView {
+        val payload = runWebView(timeout = 20.seconds) {
             blockImages = true
             userAgent = headers["User-Agent"]!!
 
-            val interfaceName = (1..(10..20).random())
-                .map { (('a'..'z') + ('A'..'Z')).random() }
-                .joinToString("")
             val script = """
                 (function () {
-                    const originalParse = JSON.parse;
-                    JSON.parse = new Proxy(originalParse, {
-                        apply(target, thisArg, args) {
-                            const result = Reflect.apply(target, thisArg, args);
-                            if (result && result.chapterPages) {
-                                window.$interfaceName.post(args[0]);
-                            }
-                            return result;
-                        }
-                    });
-
                     function triggerChapterNav() {
                         const a = document.createElement('a');
                         a.href = a.dataset.href = '$chapterUrl';
@@ -283,7 +325,7 @@ abstract class AllManga :
                     }
 
                    let checkAttempts = 0;
-                   const maxAttempts = 300; // 15 seconds
+                   const maxAttempts = 200; // 10 seconds
 
                    function check() {
                        if (document.querySelector('[data-href]')) {
@@ -302,11 +344,38 @@ abstract class AllManga :
             """.trimIndent()
 
             jsBridge(interfaceName) {
+                wvChapterUrl = null
                 resolve(it)
             }
 
             onPageStarted {
+                evaluateJs(
+                    "localStorage.clear(); sessionStorage.clear()",
+                )
                 evaluateJs(script)
+            }
+
+            interceptRequest {
+                if (it.url.toString().contains("/mreferer/")) {
+                    error("Failed to attach listener")
+                }
+                null
+            }
+
+            var captchaAttempts = 0
+
+            poll(250.milliseconds) {
+                evaluateJs(
+                    """
+                     document.title.includes("Just a moment") ||
+                    document.querySelector('.captcha-overlay--visible') != null
+                    """.trimIndent(),
+                ) { result ->
+                    if (result == "true" && ++captchaAttempts >= 20) { // 5s
+                        wvChapterUrl = "$baseUrl$chapterUrl"
+                        error("Solve captcha in WebView and retry")
+                    }
+                }
             }
 
             loadData(mangaUrl, document.outerHtml())

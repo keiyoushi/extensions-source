@@ -11,6 +11,9 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 
+// Must match GENERATED_CLASS_PACKAGE/NAME in compiler/src/main/kotlin/keiyoushi/processor/SourceProcessor.kt
+internal const val GENERATED_EXTENSION_CLASS_FQN = "keiyoushi.source.Generated"
+
 @CacheableTask
 abstract class GenerateManifestTask : DefaultTask() {
     @get:Input
@@ -32,7 +35,6 @@ abstract class GenerateManifestTask : DefaultTask() {
     fun generate() {
         val filterList = filters.get()
         val name = extensionName.get().escapeXml()
-        val cls = "ExtensionGenerated"
         val lib = extensionLib.get()
         val cw = contentWarning.get()
         val nsfw = if (cw == ContentWarning.SAFE) "0" else "1"
@@ -84,7 +86,7 @@ abstract class GenerateManifestTask : DefaultTask() {
             |        android:icon="@mipmap/ic_launcher"
             |        android:label="Tachiyomi: $name">
             |        <meta-data android:name="tachiyomix.name" android:value="$name" />
-            |        <meta-data android:name="tachiyomi.extension.class" android:value=".$cls" />
+            |        <meta-data android:name="tachiyomi.extension.class" android:value="$GENERATED_EXTENSION_CLASS_FQN" />
             |        <meta-data android:name="tachiyomi.extension.nsfw" android:value="$nsfw" />
             |        <meta-data android:name="tachiyomix.contentWarning" android:value="$cwValue" />
             |        <meta-data android:name="tachiyomix.extensionLib" android:value="$lib" />$activitySection

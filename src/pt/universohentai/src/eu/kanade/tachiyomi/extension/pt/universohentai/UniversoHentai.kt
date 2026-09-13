@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.extension.pt.universohentai
 import eu.kanade.tachiyomi.multisrc.gattsu.Gattsu
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Element

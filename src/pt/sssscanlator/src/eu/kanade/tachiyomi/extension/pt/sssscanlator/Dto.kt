@@ -1,95 +1,96 @@
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerialName
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
-class LibraryResponseDto(
-    val pagination: LibraryPaginationDto = LibraryPaginationDto(),
+class ListDto(
+    val series: List<SeriesDto> = emptyList(),
+    val hasNextPage: Boolean = false,
 )
 
 @Serializable
-class LibraryPaginationDto(
-    val page: Int = 1,
-    val totalPages: Int = 1,
-)
-
-@Serializable
-class LibraryMangaDto(
-    val title: String,
-    val cover: String? = null,
-    val slug: String,
-    val type: String? = null,
+class SeriesDto(
+    private val slug: String,
+    private val title: String,
+    private val cover: String? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@LibraryMangaDto.title
-        thumbnail_url = cover?.takeUnless(String::isBlank)
+    fun toSManga() = SManga.create().apply {
         url = "/obra/$slug"
+        title = this@SeriesDto.title
+        thumbnail_url = cover?.takeIf(String::isNotBlank)
     }
 }
 
 @Serializable
-class SeriesPayloadDto(
-    val description: String? = null,
-    val author: String? = null,
-    val artist: String? = null,
-    val coverImage: String? = null,
-    @SerialName("capitulos_lista")
-    val chapters: List<SeriesChapterDto> = emptyList(),
-    private val slug: String? = null,
-)
+class MangaDto(
+    private val slug: String,
+    private val title: String,
+    private val cover: String? = null,
+    private val description: String? = null,
+    private val author: String? = null,
+    private val artist: String? = null,
+    private val status: String? = null,
+    private val genres: List<String> = emptyList(),
+    private val chapters: List<ChapterDto> = emptyList(),
+) {
+    fun toSManga() = SManga.create().apply {
+        url = "/obra/$slug"
+        title = this@MangaDto.title
+        thumbnail_url = cover?.takeIf(String::isNotBlank)
+        description = this@MangaDto.description?.takeIf(String::isNotBlank)
+        author = this@MangaDto.author?.takeIf(String::isNotBlank)
+        artist = this@MangaDto.artist?.takeIf(String::isNotBlank)
+        genre = genres.joinToString()
+        status = when (this@MangaDto.status?.uppercase()) {
+            "ONGOING" -> SManga.ONGOING
+            "COMPLETED" -> SManga.COMPLETED
+            "HIATUS" -> SManga.ON_HIATUS
+            "CANCELED", "CANCELLED" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    val chapterList: List<SChapter> get() = chapters.map { it.toSChapter(slug) }
+}
 
 @Serializable
-class SeriesChapterDto(
-    val number: Double,
-    val title: String? = null,
-    val releaseDate: String? = null,
-    @SerialName("id")
-    val chapterId: String,
-    val releaseAt: String? = null,
+class ChapterDto(
+    private val id: String,
+    private val number: Double,
+    private val title: String? = null,
+    private val releaseDate: String? = null,
+    private val releaseAt: String? = null,
 ) {
-    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
-        val chapterNumberLabel = number.toChapterNumberString()
-
-        url = "/ler/$mangaSlug/$chapterNumberLabel?chapterId=$chapterId"
-        name = title?.takeUnless { it.isBlank() } ?: "Capítulo $chapterNumberLabel"
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+        val label = number.toString().removeSuffix(".0")
+        url = id
+        name = title?.takeIf(String::isNotBlank) ?: "Capítulo $label"
         chapter_number = number.toFloat()
-        date_upload = parseChapterDate(releaseAt, releaseDate)
+        date_upload = Instant.tryParse(releaseAt).takeIf { it != 0L } ?: DATE_FORMAT.tryParseDate(releaseDate)
+        memo = buildJsonObject {
+            put("slug", mangaSlug)
+            put("number", label)
+        }
     }
 
     companion object {
-        private val RELEASE_AT_MILLIS by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
-        }
-
-        private val RELEASE_DATE by lazy {
-            SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
-        }
-
-        private fun parseChapterDate(releaseAt: String?, releaseDate: String?): Long {
-            RELEASE_AT_MILLIS.tryParse(releaseAt).takeIf { it != 0L }?.let { return it }
-            return RELEASE_DATE.tryParse(releaseDate)
-        }
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     }
 }
 
 @Serializable
-class ChapterPageDto(
-    val chapter: ChapterImagesDto,
-)
-
-@Serializable
-class ChapterImagesDto(
-    @SerialName("imagens_lista")
-    val images: List<String>,
-)
-
-private fun Double.toChapterNumberString(): String = toString().removeSuffix(".0")
+class PagesDto(
+    private val pages: List<String> = emptyList(),
+) {
+    fun toPageList() = pages.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+}

@@ -11,17 +11,17 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.publus.PublusAuthHandler
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
 import keiyoushi.lib.publus.parseFragmentOrNull
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -55,7 +55,7 @@ abstract class BookWalkerJp :
         .build()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addNetworkInterceptor(CookieInterceptor(DOMAIN, listOf("holdBook-series" to "1", "safeSearch" to "111", "mySetting/showCoverR15" to "1")))
+        addCookie(listOf("holdBook-series" to "1", "safeSearch" to "111", "mySetting/showCoverR15" to "1"))
         addInterceptor(PublusInterceptor())
         addInterceptor {
             val request = it.request()

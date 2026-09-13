@@ -5,6 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class CucumberManga : Madara() {
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
 }

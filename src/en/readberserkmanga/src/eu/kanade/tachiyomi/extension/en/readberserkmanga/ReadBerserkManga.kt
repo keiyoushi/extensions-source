@@ -1,10 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.readberserkmanga
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -39,6 +40,14 @@ abstract class ReadBerserkManga : MangaCatalog() {
         name = element.select("td:first-child").text()
         url = element.select("a.btn-primary").attr("abs:href")
         date_upload = dateFormat.tryParse(element.select("td:nth-child(2)").text())
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+
+        return document.select("div.pages img.pages__img").mapIndexed { index, element ->
+            Page(index, imageUrl = element.attr("abs:src"))
+        }
     }
 }
 

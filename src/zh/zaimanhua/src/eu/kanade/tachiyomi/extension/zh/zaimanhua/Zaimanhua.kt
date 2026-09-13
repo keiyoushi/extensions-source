@@ -134,7 +134,7 @@ abstract class Zaimanhua :
         if (token.isBlank()) return false
         val parts = token.split(".")
         if (parts.size != 3) throw Exception("token格式错误，不符合JWT规范")
-        val payload = Base64.decode(parts[1], Base64.DEFAULT).toString(Charsets.UTF_8).parseAs<JwtPayload>()
+        val payload = Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8).parseAs<JwtPayload>()
         if (payload.expirationTime * 1000 < System.currentTimeMillis()) return false
 
         val response = client.newCall(

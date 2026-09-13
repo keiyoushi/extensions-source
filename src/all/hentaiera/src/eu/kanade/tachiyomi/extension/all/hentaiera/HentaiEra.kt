@@ -1,13 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.hentaiera
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
-import eu.kanade.tachiyomi.multisrc.galleryadults.Genre
 import eu.kanade.tachiyomi.multisrc.galleryadults.SearchFlagFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.SortOrderFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -26,82 +24,45 @@ abstract class HentaiEra : GalleryAdults() {
         else -> throw IllegalArgumentException("Invalid lang: $lang")
     }
 
-    override val supportsLatest = true
-    override val useIntermediateSearch: Boolean = true
-    override val supportSpeechless: Boolean = true
+    override val useIntermediateSearch = true
+    override val supportSpeechless = true
 
-    override fun Element.mangaTitle(selector: String): String? = mangaFullTitle(selector.replace("caption", "gallery_title")).let {
-        if (preferences.shortTitle) it?.shortenTitle() else it
-    }
+    override val mangaTitleSelector = ".gallery_title"
 
-    override fun Element.mangaLang() = select("a:has(.g_flag)").attr("href")
-        .removeSuffix("/").substringAfterLast("/")
-        .let {
-            // Include Speechless in search results
-            if (it == LANGUAGE_SPEECHLESS) mangaLang else null
-        }
+    override fun Element.mangaLang() = selectFirst("a:has(.g_flag)")?.attr("href")
+        ?.removeSuffix("/")?.substringAfterLast("/")
         ?: selectFirst(".g_flag")?.classNames()
             ?.firstOrNull { it.startsWith("flag-") }
             ?.substringAfter("flag-")
             ?.let { langFlags[it] }
         ?: mangaLang
 
-    private val langFlags by lazy {
-        getLanguageURIs()
-            .associateBy({ it.second }, { it.first })
-            .toMutableMap()
-            .apply {
-                // Keep the existing English flag alias in case the site uses `flag-us`
-                if (!containsKey("us")) {
-                    put("us", LANGUAGE_ENGLISH)
-                }
+    private val langFlags get() = getLanguageURIs()
+        .associateBy({ it.second }, { it.first })
+        .toMutableMap()
+        .apply {
+            // Keep the existing English flag alias in case the site uses `flag-us`
+            if (!containsKey("us")) {
+                put("us", LANGUAGE_ENGLISH)
             }
-    }
-
-    override fun popularMangaRequest(page: Int): Request = if (mangaLang.isBlank()) {
-        // Popular browsing for LANGUAGE_MULTI
-        val popularFilter = SortOrderFilter(getSortOrderURIs())
-            .apply {
-                state = 0
-            }
-        if (useBasicSearch) {
-            basicSearchRequest(page, "", FilterList(popularFilter))
-        } else {
-            searchMangaRequest(page, "", FilterList(popularFilter))
         }
+
+    override val popularMangaUrl get() = if (mangaLang.isBlank()) { // LANGUAGE_MULTI popular
+        val popularFilter = SortOrderFilter(getSortOrderURIs()).apply { state = 0 }
+        basicSearchUrl(0, "", FilterList(popularFilter))
     } else {
-        // Popular browsing for other languages: using source's popular page
-        super.popularMangaRequest(page)
+        super.popularMangaUrl
     }
 
     /* Details */
-    override fun Element.getInfo(tag: String): String = select("li:has(.tags_text:contains($tag)) .tag .item_name")
-        .joinToString {
-            val name = it.ownText()
-            if (tag.contains(regexTag)) {
-                genres[name] = it.parent()!!.attr("href")
-                    .removeSuffix("/").substringAfterLast('/')
-            }
-            listOf(
-                name,
-                it.select(".split_tag").text()
-                    .trim()
-                    .removePrefix("| "),
-            )
-                .filter { s -> s.isNotBlank() }
-                .joinToString()
-        }
+    override fun getInfoSelector(tag: String) = "li:has(.tags_text:contains($tag)) .tag .item_name"
 
     override fun Element.getCover() = selectFirst(".left_cover img")?.imgAttr()
 
     /* Filters */
-    override fun tagsParser(document: Document): List<Genre> = document.select(".galleries .gallery_title a")
-        .mapNotNull {
-            Genre(
-                it.ownText(),
-                it.attr("href")
-                    .removeSuffix("/").substringAfterLast('/'),
-            )
+    override fun tagsParser(document: Document) = document.select(".galleries .gallery_title a")
+        .associate {
+            it.ownText() to it.attr("href").removeSuffix("/").substringAfterLast('/')
         }
 
     override val mangaDetailInfoSelector = ".gallery_first"

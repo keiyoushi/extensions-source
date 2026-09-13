@@ -2,57 +2,41 @@ package eu.kanade.tachiyomi.extension.pt.traducoesdolipe
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import okhttp3.Response
+import keiyoushi.utils.parseAs
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 
 @Source
 abstract class TraducoesDoLipe : ZeistManga() {
     override val supportsLatest = false
+
     override val mangaCategory = "Projeto"
     override val chapterCategory = "Capítulo"
+
     override val hasFilters = true
     override val hasStatusFilter = false
     override val hasTypeFilter = false
     override val hasLanguageFilter = false
     override val hasGenreFilter = true
 
-    override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
+    override val mangaDetailsSelector = ".main-content"
+    override val mangaDetailsSelectorAuthor = "li:contains(Autor) > span"
+    override val mangaDetailsSelectorArtist = "li:contains(Ilustração) > span"
+    override val mangaDetailsSelectorDescription = ".synopsis"
+    override val mangaDetailsSelectorGenres = ".genres a"
+    override val mangaDetailsSelectorStatus = ".status"
 
-    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
-
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst("meta[property='og:description']")!!.attr("content").trim()
-        description = document.selectFirst(".synopsis")?.text()
-        thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
-        genre = document.select(".genres a").joinToString { it.text() }
-        status = parseStatus(document.selectFirst(".status")!!.ownText().trim())
-        setUrlWithoutDomain(document.location())
+    override fun getChapterFeedUrl(doc: Document, mangaTitle: String): String {
+        val label = PROJECT_NAME_REGEX.find(
+            doc.selectFirst("script:containsData(catNameProject)")!!.html(),
+        )!!.groupValues[1]
+        return super.getChapterFeedUrl(doc, label)
     }
 
-    override fun getChapterFeedUrl(doc: Document): String {
-        val feed = doc.select("script").map(Element::html)
-            .firstOrNull { script -> script.contains("catNameProject") }
-            ?.let { script -> PROJECT_NAME_REGEX.find(script)?.groups?.get(1)?.value }
-            ?: throw Exception("Não foi possivel encontrar o nome do projeto")
-
-        return apiUrl(chapterCategory)
-            .addPathSegments(feed)
-            .addQueryParameter("max-results", MAX_CHAPTER_RESULTS.toString())
-            .build().toString()
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override fun pageListParse(document: Document): List<Page> {
         val pages = document.selectFirst(".chapter script")!!.html().let {
-            val list = PAGES_REGEX.find(it)?.groups?.get(1)?.value
-            json.decodeFromString<List<String>>(list!!)
+            PAGES_REGEX.find(it)!!.groups[1]!!.value.parseAs<List<String>>()
         }
-
         return pages.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }

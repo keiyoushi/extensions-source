@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Celestial Moon"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {
@@ -17,9 +17,4 @@ keiyoushi {
         // ZeistManga -> MangaThemesia
         versionId = 2
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

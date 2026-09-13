@@ -2,14 +2,15 @@ package eu.kanade.tachiyomi.extension.tr.diamondfansub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class DiamondFansub : Madara() {
-    override val dateFormat = SimpleDateFormat("d MMMM", Locale("tr", "TR"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.forLanguageTag("tr-TR"))
+    override val chapterDateSelector = ".chapter-release-date .timediff"
     override val mangaSubString = "seri"
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
     override val mangaDetailsSelectorAuthor = ".manga-authors"
     override val mangaDetailsSelectorDescription = ".manga-info"
 }

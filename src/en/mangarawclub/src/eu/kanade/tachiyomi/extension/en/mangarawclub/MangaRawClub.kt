@@ -10,8 +10,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -231,9 +231,11 @@ abstract class MangaRawClub :
     // =============================== Pages ===============================
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("#chapter-reader img").mapIndexed { i, img ->
-            Page(i, imageUrl = img.absUrl("src"))
-        }
+        return document.select("#chapter-reader img")
+            .filterNot { it.absUrl("src").contains("credits-mgeko.png") }
+            .mapIndexed { i, img ->
+                Page(i, imageUrl = img.absUrl("src"))
+            }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()

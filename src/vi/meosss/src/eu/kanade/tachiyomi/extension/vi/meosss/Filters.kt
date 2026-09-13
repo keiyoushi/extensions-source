@@ -2,10 +2,19 @@ package eu.kanade.tachiyomi.extension.vi.meosss
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.serialization.Serializable
 
-class Genre(name: String, val value: String) : Filter.CheckBox(name)
+@Serializable
+class GenreOption(
+    val name: String,
+    val value: String,
+)
 
-class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
+class Genre(option: GenreOption) : Filter.CheckBox(option.name) {
+    val value = option.value
+}
+
+class GenreFilter(genres: List<GenreOption>) : Filter.Group<Genre>("Thể loại", genres.map(::Genre))
 
 class StatusFilter :
     Filter.Select<String>(
@@ -50,13 +59,11 @@ class SortFilter :
         ),
     )
 
-fun getFilters(genres: List<Genre>): FilterList = FilterList(
-    if (genres.isEmpty()) {
-        Filter.Header("Nhấn 'Làm mới' để tải thể loại")
-    } else {
-        GenreFilter(genres)
+fun getFilters(genres: List<GenreOption>): FilterList = FilterList(
+    buildList {
+        if (genres.isNotEmpty()) add(GenreFilter(genres))
+        add(StatusFilter())
+        add(AgeRatingFilter())
+        add(SortFilter())
     },
-    StatusFilter(),
-    AgeRatingFilter(),
-    SortFilter(),
 )

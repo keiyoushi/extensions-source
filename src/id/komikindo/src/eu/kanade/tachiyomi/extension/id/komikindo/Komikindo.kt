@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 
 @Source
@@ -15,17 +16,10 @@ abstract class Komikindo : MangaThemesia() {
 
     private val cdnHeaders = imageRequest(Page(0, "$baseUrl/", baseUrl)).headers
 
-    override val client = super.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url.toString()
-            if (url.contains("/wp-content/uploads/")) {
-                return@addInterceptor chain.proceed(request.newBuilder().headers(cdnHeaders).build())
-            }
-            chain.proceed(request)
-        }
-        .rateLimit(3)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(acceptHeaderInterceptor())
+        rateLimit(3)
+    }
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         thumbnail_url = thumbnail_url

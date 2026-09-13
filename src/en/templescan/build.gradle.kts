@@ -6,18 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Temple Scan"
-    versionCode = 50
+    versionCode = 51
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl = "https://templetoons.com"
         versionId = 3
     }
-}
 
-dependencies {
-
-    implementation(project(":lib:randomua"))
+    deeplink {
+        path("/comic/..*")
+    }
 }

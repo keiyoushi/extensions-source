@@ -20,7 +20,7 @@ object ImageDecryptor {
     private const val PBKDF2_ITERATIONS = 999
     private const val KEY_SIZE_BITS = 256
 
-    private val ENCRYPTED_CONTENT_REGEX = Regex(
+    private val encryptedContentRegex = Regex(
         """var\s+htmlContent\s*=\s*"(.*?)"\s*;""",
         RegexOption.DOT_MATCHES_ALL,
     )
@@ -33,7 +33,7 @@ object ImageDecryptor {
     )
 
     fun extractImageUrls(html: String, baseUrl: String): List<String> {
-        val match = ENCRYPTED_CONTENT_REGEX.find(html)
+        val match = encryptedContentRegex.find(html)
         if (match == null) {
             return extractFallbackImages(html, baseUrl)
         }
@@ -78,7 +78,7 @@ object ImageDecryptor {
     }
 
     private fun extractImagesFromDecryptedHtml(html: String, baseUrl: String): List<String> {
-        val document = Jsoup.parse(html, baseUrl)
+        val document = Jsoup.parseBodyFragment(html, baseUrl)
 
         return document.select("img").mapNotNull { img ->
             val obfuscated = img.attr("data-p3cr24")

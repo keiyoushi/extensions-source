@@ -67,11 +67,6 @@ abstract class Iken :
      */
     protected open val sortPagesByFilename = false
 
-    /**
-     * Whether to use standalone chapters endpoint than manga object
-     */
-    protected open val useChaptersApi = false
-
     // ============================== Popular ==============================
 
     // Popular (Search with popular order and nothing else)
@@ -226,12 +221,15 @@ abstract class Iken :
 
     // ============================== Details ==============================
 
-    private suspend fun getMangaDetails(slug: String): Manga {
-        val mangaUrl = "$apiUrl/api/post?postSlug=$slug"
+    private suspend fun getMangaDetails(slug: String): MangaDto {
+        val mangaUrl = "$apiUrl/api/post".toHttpUrl().newBuilder()
+            .addQueryParameter("postSlug", slug)
+            .build()
+
         val response = client.get(mangaUrl)
-        val data = response.parseAs<MangaDto>().post
-        if (data.isNovel) throw IOException("Novels are unsupported")
-        updateViews(data.id)
+        val data = response.parseAs<MangaDto>()
+        if (data.post.isNovel) throw IOException("Novels are unsupported")
+        updateViews(data.post.id)
         return data
     }
 
@@ -239,7 +237,7 @@ abstract class Iken :
         if (url.pathSegments.size >= 2) {
             val slug = url.pathSegments[1]
             val details = getMangaDetails(slug)
-            return details.toSManga().apply {
+            return details.post.toSManga().apply {
                 initialized = true
             }
         }
@@ -249,9 +247,15 @@ abstract class Iken :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url.substringBeforeLast("#")}"
 
-    protected fun Chapter.isVisible(): Boolean = isAccessible() || (
-        preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false) && isLocked()
+    protected val showLockedChapters get() = preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false)
+
+    protected fun List<Chapter>.getVisible(slug: String): List<SChapter> = (
+        filter { showLockedChapters || !it.isLocked() }.map { it.toSChapter(slug) }
         )
+
+    private var useChaptersApi: Boolean
+        get() = preferences.getBoolean(USE_CHAPTERS_API_PREF_KEY, false)
+        set(value) = preferences.edit().putBoolean(USE_CHAPTERS_API_PREF_KEY, value).apply()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -263,23 +267,48 @@ abstract class Iken :
         val id = manga.url.substringAfterLast("#")
 
         if (useChaptersApi) {
-            val mangaDeferred = async { if (fetchDetails) getMangaDetails(slug).toSManga() else manga }
+            var mangaChapters: List<SChapter> = emptyList()
+
+            val mangaDeferred = async {
+                if (fetchDetails) {
+                    val details = getMangaDetails(slug)
+                    mangaChapters = details.post.chapters.getVisible(slug)
+                    details.post.toSManga()
+                } else {
+                    manga
+                }
+            }
             val chaptersDeferred = async {
                 if (fetchChapters) {
                     val response = client.get("$apiUrl/api/chapters?postId=$id")
                     val chapterData = response.parseAs<ChapterDto>().post
-                    chapterData.chapters.filter { it.isVisible() }.map { it.toSChapter(slug) }
+                    chapterData.chapters.getVisible(slug)
                 } else {
                     chapters
                 }
             }
-            SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+            val updatedManga = mangaDeferred.await()
+            val chaptersResult = chaptersDeferred.await()
+            // Revert to manga object chapters just in case
+            val updatedChapters = if (chaptersResult.size <= mangaChapters.size) {
+                useChaptersApi = false
+                mangaChapters
+            } else {
+                chaptersResult
+            }
+            SMangaUpdate(updatedManga, updatedChapters)
         } else {
             val details = getMangaDetails(slug)
-            val updatedManga = details.toSManga()
+            val updatedManga = details.post.toSManga()
 
-            val updatedChapters = details.chapters.filter { it.isVisible() }.map { it.toSChapter(details.slug) }
-            SMangaUpdate(updatedManga, updatedChapters)
+            // Switch to chapters endpoint if mismatch detected
+            if (!useChaptersApi && details.totalChapterCount?.let { it > details.post.chapters.size } ?: false) {
+                useChaptersApi = true
+                fetchMangaUpdate(updatedManga, chapters, fetchDetails, fetchChapters)
+            } else {
+                val updatedChapters = details.post.chapters.getVisible(slug)
+                SMangaUpdate(updatedManga, updatedChapters)
+            }
         }
     }
 
@@ -374,6 +403,7 @@ abstract class Iken :
 
     companion object {
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
+        const val USE_CHAPTERS_API_PREF_KEY = "pref_use_chapters_api"
         val NUMBER_REGEX = Regex("\\d+")
     }
 }

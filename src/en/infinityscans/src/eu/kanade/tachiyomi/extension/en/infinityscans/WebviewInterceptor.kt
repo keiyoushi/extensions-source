@@ -1,39 +1,29 @@
 package eu.kanade.tachiyomi.extension.en.infinityscans
 
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import keiyoushi.utils.runWebViewBlocking
+import okhttp3.Call
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 const val SESSION_COOKIE = "__Secure-infinityscans.data"
 
 class WebviewInterceptor(private val baseUrl: String) : Interceptor {
 
-    private val context: Application by injectLazy()
-    private val handler by lazy { Handler(Looper.getMainLooper()) }
-
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val userAgent = request.header("User-Agent")
+
         val response = chain.proceed(request)
 
-        if (response.hasSessionCookie()) {
+        if (response.hasDeleteSessionCookie()) {
             response.close()
-
-            resolveInWebview(request.header("User-Agent"))
-
+            resolveInWebview(chain.call(), userAgent)
             val res = chain.proceed(request)
             // If webview failed
-            if (res.hasSessionCookie()) {
-                response.close()
+            if (res.hasDeleteSessionCookie()) {
+                res.close()
                 throw IOException("Solve webview Captcha and refresh.")
             }
             return res
@@ -41,46 +31,26 @@ class WebviewInterceptor(private val baseUrl: String) : Interceptor {
         return response
     }
 
-    private fun resolveInWebview(userAgent: String?) {
-        val latch = CountDownLatch(1)
-        var webView: WebView? = null
-        var hasSetCookies = false
+    private fun resolveInWebview(call: Call, userAgent: String?) {
+        runWebViewBlocking(call, timeout = 15.seconds) {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            this.userAgent = userAgent!!
 
-        handler.post {
-            val webview = WebView(context)
-            webView = webview
-            with(webview.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                useWideViewPort = false
-                loadWithOverviewMode = false
-                userAgentString = userAgent
-            }
+            var hasSetCookies = false
 
-            webview.webViewClient = object : WebViewClient() {
-
-                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest): WebResourceResponse? {
-                    if (request.method == "POST" && request.url.toString().contains("/api/validate")) {
-                        hasSetCookies = true
-                    } else if (request.url.toString().contains(baseUrl) && hasSetCookies) {
-                        latch.countDown()
-                    }
-                    return super.shouldInterceptRequest(view, request)
+            interceptRequest { request ->
+                if (request.method == "POST" && request.url.toString().contains("/api/validate")) {
+                    hasSetCookies = true
+                } else if (request.url.toString().contains(baseUrl) && hasSetCookies) {
+                    resolve(null)
                 }
+                null
             }
-
-            webview.loadUrl("$baseUrl/")
-        }
-
-        latch.await(20, TimeUnit.SECONDS)
-
-        handler.post {
-            webView?.stopLoading()
-            webView?.destroy()
-            webView = null
+            loadUrl("$baseUrl/")
         }
     }
 }
-
-fun Response.hasSessionCookie(): Boolean = headers("Set-Cookie").any { it.startsWith(SESSION_COOKIE) }
+fun Response.hasDeleteSessionCookie(): Boolean = headers("Set-Cookie").any {
+    it.startsWith(SESSION_COOKIE) && it.substringAfter(SESSION_COOKIE + "=").substringBefore(";").isEmpty()
+}

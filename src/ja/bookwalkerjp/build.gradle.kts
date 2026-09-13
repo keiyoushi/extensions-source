@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "BookWalker Japan"
-    versionCode = 1
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -18,5 +18,4 @@ keiyoushi {
 
 dependencies {
     implementation(project(":lib:publus"))
-    implementation(project(":lib:cookieinterceptor"))
 }

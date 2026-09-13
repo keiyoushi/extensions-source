@@ -1,15 +1,15 @@
 package eu.kanade.tachiyomi.extension.ja.kisslove
 
-import eu.kanade.tachiyomi.extension.ja.kisslove.KissLove.Companion.DATE_FORMATTER
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
+import kotlin.time.Instant
 
 @Serializable
-data class PagedManga(
+class PagedManga(
     val currentPage: Long,
     val items: List<Manga>,
     val totalItems: Long,
@@ -17,7 +17,7 @@ data class PagedManga(
 )
 
 @Serializable
-data class Manga(
+class Manga(
     val artists: String?,
     val authors: String,
     val chapters: List<Chapter> = emptyList(),
@@ -55,7 +55,7 @@ data class Manga(
 }
 
 @Serializable
-data class ListPagedManga(
+class ListPagedManga(
     val currentPage: Long,
     val items: List<MangaEntry>,
     val totalItems: Long,
@@ -63,7 +63,7 @@ data class ListPagedManga(
 )
 
 @Serializable
-data class MangaEntry(
+class MangaEntry(
     val artists: String?,
     val authors: String,
     val cover: String,
@@ -90,7 +90,7 @@ data class MangaEntry(
 }
 
 @Serializable
-data class Chapter(
+class Chapter(
     val chapter: Double,
     val content: String = "",
     val hidden: Int?,
@@ -105,14 +105,11 @@ data class Chapter(
     fun toSChapter(slug: String) = SChapter.create().apply {
         url = "$id/$slug-chapter-$chapter"
         name = this@Chapter.name?.takeIf { it.isNotBlank() } ?: "Chapter $chapter"
-
-        date_upload = runCatching {
-            DATE_FORMATTER.tryParse(lastUpdate)
-        }.getOrDefault(0L)
+        date_upload = Instant.tryParse(lastUpdate)
     }
 }
 
 @Serializable
-data class Genre(
+class Genre(
     val name: String,
 )

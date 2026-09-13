@@ -8,7 +8,7 @@ keiyoushi {
     name = "HentaiVN.plus"
     versionCode = 18
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {

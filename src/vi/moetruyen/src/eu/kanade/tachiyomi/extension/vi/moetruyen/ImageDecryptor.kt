@@ -11,7 +11,7 @@ import javax.crypto.spec.SecretKeySpec
 
 object ImageDecryptor {
 
-    fun decrypt(imgxData: ByteArray, grant: ImgxGrant, storageKey: String): ByteArray {
+    fun decrypt(imgxData: ByteArray, grant: ImgxGrant, storageKey: String): DecryptedImage {
         require(imgxData.size > 13) { "IMGX payload empty" }
         require(
             imgxData[0] == 0x49.toByte() && imgxData[1] == 0x4D.toByte() &&
@@ -27,19 +27,19 @@ object ImageDecryptor {
 
     // ========================== v2 ==========================
 
-    private fun decryptV2(imgxData: ByteArray, grant: ImgxGrant, storageKey: String): ByteArray {
-        val payload = imgxData.copyOfRange(13, imgxData.size)
+    private fun decryptV2(imgxData: ByteArray, grant: ImgxGrant, storageKey: String): DecryptedImage {
+        val payloadOffset = 13
         val key = unwrapKey(grant, storageKey, grantSalt = null)
 
-        unshuffle(payload, key)
-        xorDecrypt(payload, key)
+        unshuffle(imgxData, payloadOffset, key)
+        xorDecrypt(imgxData, payloadOffset, key)
 
-        return payload
+        return DecryptedImage(imgxData, payloadOffset, imgxData.size - payloadOffset)
     }
 
     // ========================== v3 ==========================
 
-    private fun decryptV3(imgxData: ByteArray, grant: ImgxGrant, storageKey: String): ByteArray {
+    private fun decryptV3(imgxData: ByteArray, grant: ImgxGrant, storageKey: String): DecryptedImage {
         if (grant.wrappedContentKey != null) {
             return decryptV3AesGcm(imgxData, grant, storageKey)
         }
@@ -48,19 +48,19 @@ object ImageDecryptor {
         val headerBytes = imgxData.copyOfRange(8, 8 + headerSize)
         val header = String(headerBytes, Charsets.UTF_8).parseAs<ImgxV3Header>()
 
-        val payload = imgxData.copyOfRange(8 + headerSize, imgxData.size)
+        val payloadOffset = 8 + headerSize
         val key = unwrapKey(grant, storageKey, grantSalt = header.grantSalt)
 
         if (header.blockSize != null && header.blockSize > 0) {
-            blockCipherDecrypt(payload, key, header.blockSize)
+            blockCipherDecrypt(imgxData, payloadOffset, key, header.blockSize)
         }
-        unshuffle(payload, key)
-        xorDecrypt(payload, key)
+        unshuffle(imgxData, payloadOffset, key)
+        xorDecrypt(imgxData, payloadOffset, key)
 
-        return payload
+        return DecryptedImage(imgxData, payloadOffset, imgxData.size - payloadOffset)
     }
 
-    private fun decryptV3AesGcm(imgxData: ByteArray, grant: ImgxGrant, storageKey: String): ByteArray {
+    private fun decryptV3AesGcm(imgxData: ByteArray, grant: ImgxGrant, storageKey: String): DecryptedImage {
         require(imgxData.size > 41) { "IMGX v3 payload empty" }
 
         val width = imgxData.readIntBigEndian(5)
@@ -69,31 +69,32 @@ object ImageDecryptor {
 
         val key = unwrapContentKey(grant, storageKey)
         val iv = imgxData.copyOfRange(13, 25)
-        val payload = imgxData.copyOfRange(25, imgxData.size)
         val aad = buildV3AdditionalData(grant, storageKey, width, height)
 
-        return Cipher.getInstance("AES/GCM/NoPadding").run {
+        val decrypted = Cipher.getInstance("AES/GCM/NoPadding").run {
             init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
             updateAAD(aad)
-            doFinal(payload)
+            doFinal(imgxData, 25, imgxData.size - 25)
         }
+        return DecryptedImage(decrypted, 0, decrypted.size)
     }
 
-    private fun blockCipherDecrypt(data: ByteArray, key: ByteArray, blockSize: Int) {
-        val numBlocks = (data.size + blockSize - 1) / blockSize
+    private fun blockCipherDecrypt(data: ByteArray, offset: Int, key: ByteArray, blockSize: Int) {
+        val payloadSize = data.size - offset
+        val numBlocks = (payloadSize + blockSize - 1) / blockSize
         var seed = seedFromKey(key)
 
-        val seeds = UIntArray(numBlocks)
+        val seeds = IntArray(numBlocks)
         for (block in 0 until numBlocks) {
             seed = xorshift32(seed)
-            seeds[block] = seed
+            seeds[block] = seed.toInt()
         }
 
         for (block in numBlocks - 1 downTo 0) {
-            val start = block * blockSize
+            val start = offset + block * blockSize
             val end = minOf(start + blockSize, data.size)
             val blockLen = end - start
-            val blockSeed = seeds[block]
+            val blockSeed = seeds[block].toUInt()
 
             val blockKey = (blockSeed and 0xFFu).toInt().toByte()
             val rotateAmount = ((blockSeed shr 8).toInt() % blockLen)
@@ -175,7 +176,7 @@ object ImageDecryptor {
         var hash = fnv1a(input.toByteArray(Charsets.UTF_8))
         for (i in 0 until length) {
             if (i % 4 == 0) {
-                hash = xorshift32(hash + i.toUInt() + GOLDEN_RATIO)
+                hash = xorshift32(hash + i.toUInt() + goldenRatio)
             }
             key[i] = (hash.toInt() ushr (i % 4 * 8) and 0xFF).toByte()
         }
@@ -188,7 +189,7 @@ object ImageDecryptor {
             hash = hash xor b.toUByte().toUInt()
             hash = (hash.toLong() * 16777619L).toUInt()
         }
-        return if (hash == 0u) GOLDEN_RATIO else hash
+        return if (hash == 0u) goldenRatio else hash
     }
 
     private fun xorshift32(input: UInt): UInt {
@@ -199,33 +200,34 @@ object ImageDecryptor {
         return t
     }
 
-    private fun unshuffle(data: ByteArray, key: ByteArray) {
-        val indices = IntArray(data.size)
+    private fun unshuffle(data: ByteArray, offset: Int, key: ByteArray) {
+        val payloadSize = data.size - offset
+        val indices = IntArray(payloadSize)
         var seed = seedFromKey(key)
-        for (i in data.size - 1 downTo 1) {
+        for (i in payloadSize - 1 downTo 1) {
             seed = xorshift32(seed)
             indices[i] = (seed.toLong() % (i + 1)).toInt()
         }
-        for (i in 1 until data.size) {
+        for (i in 1 until payloadSize) {
             val j = indices[i]
             if (i != j) {
-                val tmp = data[i]
-                data[i] = data[j]
-                data[j] = tmp
+                val tmp = data[offset + i]
+                data[offset + i] = data[offset + j]
+                data[offset + j] = tmp
             }
         }
     }
 
-    private fun xorDecrypt(data: ByteArray, key: ByteArray) {
-        for (i in data.indices) {
-            data[i] = (data[i].toInt() xor key[i % key.size].toInt()).toByte()
+    private fun xorDecrypt(data: ByteArray, offset: Int, key: ByteArray) {
+        for (i in offset until data.size) {
+            data[i] = (data[i].toInt() xor key[(i - offset) % key.size].toInt()).toByte()
         }
     }
 
     private fun seedFromKey(key: ByteArray): UInt {
         require(key.size >= 4) { "IMGX key invalid" }
         val seed = key.readIntBigEndian(0).toUInt()
-        return if (seed == 0u) GOLDEN_RATIO else seed
+        return if (seed == 0u) goldenRatio else seed
     }
 
     private fun base64UrlDecode(input: String): ByteArray {
@@ -233,7 +235,7 @@ object ImageDecryptor {
         return Base64.decode(base64, Base64.DEFAULT)
     }
 
-    private val GOLDEN_RATIO = 2654435769u
+    private val goldenRatio = 2654435769u
 
     @Serializable
     private class ImgxV3Header(
@@ -241,3 +243,9 @@ object ImageDecryptor {
         val grantSalt: String? = null,
     )
 }
+
+class DecryptedImage(
+    val data: ByteArray,
+    val offset: Int,
+    val size: Int,
+)
