@@ -14,8 +14,6 @@ import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -27,7 +25,6 @@ abstract class LesPoroiniens : KeiSource() {
     companion object {
         private const val SERIES_DATA_SELECTOR = "#series-data-placeholder"
         private const val READER_DATA_SELECTOR = "#reader-data-placeholder"
-        private const val CACHE_TTL_MS = 10 * 60 * 1000L
     }
 
     override val supportsLatest = false
@@ -47,18 +44,7 @@ abstract class LesPoroiniens : KeiSource() {
         response
     }
 
-    @Volatile
-    private var catalogueCache: List<SeriesData>? = null
-
-    @Volatile
-    private var catalogueTimestamp = 0L
-
-    private val cacheMutex = Mutex()
-
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
-        return fetchCatalogue().toMangasPage()
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchCatalogue().toMangasPage()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
@@ -103,23 +89,9 @@ abstract class LesPoroiniens : KeiSource() {
     }
 
     private suspend fun fetchCatalogue(): List<SeriesData> {
-        getFreshCatalogue()?.let { return it }
-        return cacheMutex.withLock {
-            getFreshCatalogue()?.let { return it }
-            val config = client.get("$baseUrl/data/config.json").parseAs<ConfigResponse>()
-            val catalogue = fetchSeriesFiles(config.localSeriesFiles)
-            catalogueCache = catalogue
-            catalogueTimestamp = System.currentTimeMillis()
-            catalogue
-        }
+        val config = client.get("$baseUrl/data/config.json").parseAs<ConfigResponse>()
+        return fetchSeriesFiles(config.localSeriesFiles)
     }
-
-    private fun getFreshCatalogue(): List<SeriesData>? {
-        val cached = catalogueCache
-        return if (cached != null && isFresh(catalogueTimestamp)) cached else null
-    }
-
-    private fun isFresh(timestamp: Long): Boolean = System.currentTimeMillis() - timestamp < CACHE_TTL_MS
 
     private suspend fun fetchSeriesFiles(fileNames: List<String>): List<SeriesData> = coroutineScope {
         fileNames.map { fileName ->
@@ -143,13 +115,7 @@ abstract class LesPoroiniens : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
         val seriesData = document.selectFirst(SERIES_DATA_SELECTOR)!!.html().parseAs<SeriesData>()
-        val updatedManga = if (fetchDetails) {
-            seriesData.toDetailedSManga()
-        } else {
-            manga
-        }
-        val chapterList = if (fetchChapters) buildChapterList(seriesData) else chapters
-        return SMangaUpdate(updatedManga, chapterList)
+        return SMangaUpdate(seriesData.toDetailedSManga(), buildChapterList(seriesData))
     }
 
     private fun buildChapterList(seriesData: SeriesData): List<SChapter> {
