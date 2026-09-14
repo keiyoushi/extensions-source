@@ -126,7 +126,8 @@ abstract class FavComic :
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val mangaTypeFilter = filters.firstInstance<MangaTypeFilter>()
-        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment(mangaTypeFilter.toString())
+        val pathSegment = if (query.isNotBlank()) "search" else mangaTypeFilter.toString()
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment(pathSegment)
             .addQueryParameter("keyword", query)
             .addQueryParameter("origin", filters[2].toString())
             .addQueryParameter("finished", filters[3].toString())
