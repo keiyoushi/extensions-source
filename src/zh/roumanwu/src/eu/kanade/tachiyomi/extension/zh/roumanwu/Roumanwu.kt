@@ -99,8 +99,7 @@ abstract class Roumanwu : KeiSource() {
         }
     }
 
-    private fun parseMangaList(document: Document): MangasPage =
-        MangasPage(parseEntries(document), hasNextPage(document))
+    private fun parseMangaList(document: Document): MangasPage = MangasPage(parseEntries(document), hasNextPage(document))
 
     // 页码文案形如 "1 / 103"；末页「下一頁」会变成 disabled button
     private fun hasNextPage(document: Document): Boolean {
