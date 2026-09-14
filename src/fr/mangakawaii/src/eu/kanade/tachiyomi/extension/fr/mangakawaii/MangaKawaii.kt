@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.mangakawaii
 
-import android.webkit.WebSettings
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,10 +9,8 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -23,17 +20,6 @@ import java.util.Locale
 
 @Source
 abstract class MangaKawaii : KeiSource() {
-
-    private val webViewUA: String? by lazy {
-        runCatching { WebSettings.getDefaultUserAgent(applicationContext) }
-            .getOrNull()
-    }
-
-    // CF challenge doesn't auto-solve due to needed interaction,
-    // so match UA of manual webview solve with OkHttp
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        webViewUA?.takeIf { it.isNotBlank() }?.let { set("User-Agent", it) }
-    }
 
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -107,23 +93,14 @@ abstract class MangaKawaii : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        return SMangaUpdate(
-            manga = if (fetchDetails) {
-                parseDetails(document).apply {
-                    url = manga.url
-                    if (title.isEmpty()) {
-                        title = manga.title
-                    }
-                }
-            } else {
-                manga
-            },
-            chapters = if (fetchChapters) {
-                parseChapters(document)
-            } else {
-                chapters
-            },
-        )
+        val updatedManga = parseDetails(document).apply {
+            url = manga.url
+            if (title.isEmpty()) {
+                title = manga.title
+            }
+        }
+        val chapterList = if (fetchChapters) parseChapters(document) else chapters
+        return SMangaUpdate(updatedManga, chapterList)
     }
 
     private fun parseDetails(document: Document): SManga = SManga.create().apply {
