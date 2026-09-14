@@ -15,7 +15,6 @@ import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getStringOrNull
@@ -85,30 +84,27 @@ abstract class MechaComic :
         val sort = filters.firstInstance<SortFilter>().value
         val completed = filters.firstInstance<CompletedFilter>().state
 
-        if (query.isNotBlank() || genre.isNotEmpty() || completed) {
-            val url = "$baseUrl/books".toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .apply {
-                    if (query.isNotBlank()) addQueryParameter("text", query)
-                    if (genre.isNotEmpty()) addQueryParameter("genre", genre)
-                    if (sort.isNotEmpty()) addQueryParameter("sort", sort)
-                    if (completed) addQueryParameter("filter[]", "completed")
-                }
-                .build()
-
-            val document = client.get(url, desktopHeaders).asJsoup()
-            val mangas = document.select("li.p-bookList_item").map {
-                val link = it.selectFirst("dt.p-book_title a")!!
-                SManga.create().apply {
-                    this.url = link.absUrl("href").toHttpUrl().pathSegments.last()
-                    title = link.text()
-                    thumbnail_url = it.selectFirst("div.p-book_jacket img[class^=jacket_image]")?.absUrl("src")
-                }
+        val url = "$baseUrl/books".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .apply {
+                if (query.isNotBlank()) addQueryParameter("text", query)
+                if (genre.isNotEmpty()) addQueryParameter("genre", genre)
+                if (sort.isNotEmpty()) addQueryParameter("sort", sort)
+                if (completed) addQueryParameter("filter[]", "completed")
             }
-            return MangasPage(mangas, document.selectFirst("a.next_page") != null)
-        }
+            .build()
 
-        return getPopularManga(page)
+        val document = client.get(url, desktopHeaders).asJsoup()
+        val mangas = document.select("li.p-bookList_item").map {
+            val link = it.selectFirst("dt.p-book_title a")!!
+            SManga.create().apply {
+                this.url = link.absUrl("href").toHttpUrl().pathSegments.last()
+                title = link.text()
+                thumbnail_url = it.selectFirst("div.p-book_jacket img[class^=jacket_image]")?.absUrl("src")
+            }
+        }
+        val hasNextPage = document.selectFirst("a.next_page") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/books/${manga.url}"
@@ -118,55 +114,44 @@ abstract class MechaComic :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (!fetchDetails) return@async manga
-            val document = client.get(getMangaUrl(manga), desktopHeaders).asJsoup()
-            SManga.create().apply {
-                title = document.selectFirst(".p-bookInfo_title h1")!!.text()
-                author = document.select("#js-anchor-defList dt:contains(作家) + dd .p-sepList_item").joinToString { it.text() }
-                genre = document.select("#js-anchor-defList dt:contains(ジャンル) + dd a, #js-anchor-defList dt:contains(タグ) + dd a").joinToString { it.text() }
-                description = document.selectFirst(".p-bookInfo_summary p")?.textOrNull()
-                status = if (document.selectFirst(".p-bookInfo .c-tag-completed") != null) SManga.COMPLETED else SManga.ONGOING
-                thumbnail_url = document.selectFirst("img.jacket_image_l")?.absUrl("src")
-            }
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga), desktopHeaders).asJsoup()
+        val details = SManga.create().apply {
+            title = document.selectFirst(".p-bookInfo_title h1")!!.text()
+            author = document.select("#js-anchor-defList dt:contains(作家) + dd .p-sepList_item").joinToString { it.text() }
+            genre = document.select("#js-anchor-defList dt:contains(ジャンル) + dd a, #js-anchor-defList dt:contains(タグ) + dd a").joinToString { it.text() }
+            description = document.selectFirst(".p-bookInfo_summary p")?.textOrNull()
+            status = if (document.selectFirst(".p-bookInfo .c-tag-completed") != null) SManga.COMPLETED else SManga.ONGOING
+            thumbnail_url = document.selectFirst(".p-bookInfo_jacket img")?.absUrl("src")
         }
 
-        val chapterList = async {
-            if (!fetchChapters) return@async chapters
-            val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-            val episodes = mutableListOf<SChapter>()
-            val volumes = mutableListOf<SChapter>()
-            var volumesUrl: String? = null
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val chapterList = mutableListOf<SChapter>()
 
+        val volumesUrl = document.selectFirst("a.c-nav_link[href$=/volumes]")?.absUrl("href")
+        if (volumesUrl != null) {
             var page = 1
             var hasNextPage = true
             while (hasNextPage) {
-                val document = getBookPage(getMangaUrl(manga), page)
-                episodes += document.parseChapters(hideLocked)
-                volumes += document.parseVolumes(manga.url, hideLocked)
-                volumesUrl = volumesUrl ?: document.selectFirst("a.c-nav_link[href$=/volumes]")?.absUrl("href")
-                hasNextPage = document.selectFirst("a.next_page") != null
+                val volumesDocument = getBookPage(volumesUrl, page)
+                chapterList += volumesDocument.parseVolumes(manga.url, hideLocked)
+                hasNextPage = volumesDocument.selectFirst("a.next_page") != null
                 page++
             }
-
-            if (volumesUrl != null) {
-                page = 1
-                hasNextPage = true
-                while (hasNextPage) {
-                    val document = getBookPage(volumesUrl, page)
-                    volumes += document.parseVolumes(manga.url, hideLocked)
-                    hasNextPage = document.selectFirst("a.next_page") != null
-                    page++
-                }
-            }
-
-            (volumes + episodes).reversed()
         }
 
-        SMangaUpdate(
-            details.await(),
-            chapterList.await(),
+        var page = 1
+        var pageDocument = document
+        while (true) {
+            chapterList += pageDocument.parseChapters(hideLocked)
+            chapterList += pageDocument.parseVolumes(manga.url, hideLocked)
+            if (pageDocument.selectFirst("a.next_page") == null) break
+            pageDocument = getBookPage(getMangaUrl(manga), ++page)
+        }
+
+        return SMangaUpdate(
+            details,
+            chapterList.reversed(),
         )
     }
 
@@ -178,16 +163,20 @@ abstract class MechaComic :
     }
 
     private fun Document.parseChapters(hideLocked: Boolean): List<SChapter> = select("ol.p-chapterList li.p-chapterList_item:has(dl.p-chapterList_txtArea)").mapNotNull {
-        val downloadPath = it.selectFirst("a.p-btn-chapter[href*=download]")?.attrOrNull("abs:href")?.toHttpUrl()?.encodedPath
-        if (hideLocked && downloadPath == null) return@mapNotNull null
+        val downloadPath = it.selectFirst("a.p-btn-chapter[href*=download]")?.absUrl("href")?.toHttpUrl()?.encodedPath
+        val isReadable = downloadPath != null || it.selectFirst("a.p-btn-chapter[class*=c-btn-read]") != null
+        if (hideLocked && !isReadable) return@mapNotNull null
 
         val number = it.selectFirst("dt.p-chapterList_no")?.ownTextOrNull()
         SChapter.create().apply {
-            url = it.selectFirst("input[name=\"chapter_ids[]\"]")!!.attrOrNull("value")!!
-            name = (if (downloadPath == null) "🔒 " else "") + it.selectFirst("dd.p-chapterList_name")!!.text()
+            val lock = if (isReadable) "" else "🔒 "
+            url = it.selectFirst("input[name=\"chapter_ids[]\"]")!!.attr("value")
+            name = lock + it.selectFirst("dd.p-chapterList_name")!!.text()
             chapter_number = number?.removeSuffix("話")?.toFloatOrNull() ?: -1f
             if (downloadPath != null) {
-                memo = buildJsonObject { put("download", downloadPath) }
+                memo = buildJsonObject {
+                    put("download", downloadPath)
+                }
             }
         }
     }
@@ -199,14 +188,14 @@ abstract class MechaComic :
         if (hideLocked && fullPath == null) return@mapNotNull null
 
         val downloadPath = fullPath ?: downloadPaths.firstOrNull()
-        val icon = when {
-            fullPath != null -> ""
-            downloadPath != null -> "🔒 (Preview) "
-            else -> "🔒 "
-        }
         SChapter.create().apply {
+            val lock = when {
+                fullPath != null -> ""
+                downloadPath != null -> "🔒 (Preview) "
+                else -> "🔒 "
+            }
             url = link.absUrl("href").toHttpUrl().pathSegments.last()
-            name = icon + link.text()
+            name = lock + link.text()
             memo = buildJsonObject {
                 put("bookId", bookId)
                 if (downloadPath != null) put("download", downloadPath)
