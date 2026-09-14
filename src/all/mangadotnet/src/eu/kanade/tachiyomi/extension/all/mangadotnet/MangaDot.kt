@@ -51,7 +51,7 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
 @Source
-abstract class Mangadotnet :
+abstract class MangaDot :
     KeiSource(),
     ConfigurableSource {
 
