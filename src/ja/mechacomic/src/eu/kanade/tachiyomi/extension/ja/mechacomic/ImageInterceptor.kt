@@ -16,7 +16,7 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val fragment = request.url.fragment
 
-        if (fragment.isNullOrEmpty() || !fragment.startsWith("key=") || !response.isSuccessful) return response
+        if (fragment == null || !fragment.startsWith("key=") || !response.isSuccessful) return response
 
         val key = fragment.substringAfter("key=")
         val source = response.body.source()
