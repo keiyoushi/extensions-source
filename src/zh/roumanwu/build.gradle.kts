@@ -8,7 +8,7 @@ keiyoushi {
     name = "Roumanwu"
     versionCode = 21
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "肉漫屋"
@@ -21,5 +21,11 @@ keiyoushi {
                 "https://roum29.xyz",
             )
         }
+    }
+
+    deeplink {
+        host("rouman5.com")
+        host("roum29.xyz")
+        path("/books/..*")
     }
 }

@@ -1,31 +1,95 @@
 package eu.kanade.tachiyomi.extension.zh.roumanwu
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
-import okhttp3.Request
-import okhttp3.Response
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Source
-abstract class Roumanwu : HttpSource() {
+abstract class Roumanwu : KeiSource() {
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ScrambledImageInterceptor())
 
-    override val client = network.client.newBuilder().addInterceptor(ScrambledImageInterceptor()).build()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$baseUrl/books".toHttpUrl().newBuilder()
+            .addQueryParameter("page", (page - 1).toString())
+            .build()
+        return parseMangaList(client.get(url).asJsoup())
+    }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/books?page=${page - 1}", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/home").asJsoup()
+        return parseHomePage(document, Regex("最近更新"))
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = if (query.isNotBlank()) {
+            "$baseUrl/search".toHttpUrl().newBuilder()
+                .addQueryParameter("term", query)
+                .addQueryParameter("page", (page - 1).toString())
+                .build()
+        } else {
+            "$baseUrl/books".toHttpUrl().newBuilder()
+                .addQueryParameter("page", (page - 1).toString())
+                .apply {
+                    when (filters.firstInstance<StatusFilter>().state) {
+                        1 -> addQueryParameter("continued", "true")
+                        2 -> addQueryParameter("continued", "false")
+                    }
+                }
+                .build()
+        }
+        return parseMangaList(client.get(url).asJsoup())
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.firstOrNull() != "books") return null
+        val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+        return parseMangaDetails(client.get("$baseUrl/books/$id").asJsoup())
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            manga = parseMangaDetails(document),
+            chapters = parseChapterList(document),
+        )
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val rscHeaders = headers.newBuilder().add("rsc", "1").build()
+        val html = client.get(getChapterUrl(chapter), rscHeaders).use { it.body.string() }
+        return IMAGE_URL_REGEX.findAll(html).mapIndexed { index, match ->
+            Page(index, imageUrl = match.groupValues[1])
+        }.toList()
+    }
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        Filter.Header("提示：搜尋時篩選無效"),
+        StatusFilter(),
+    )
 
     private fun parseEntries(container: Element): List<SManga> = container.select("a.site-comic").map {
         SManga.create().apply {
@@ -35,8 +99,7 @@ abstract class Roumanwu : HttpSource() {
         }
     }
 
-    private fun parseMangaList(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun parseMangaList(document: Document): MangasPage {
         return MangasPage(parseEntries(document), hasNextPage(document))
     }
 
@@ -47,8 +110,6 @@ abstract class Roumanwu : HttpSource() {
         val total = parts.getOrNull(1)?.trim()?.toIntOrNull() ?: return false
         return current < total
     }
-
-    override fun popularMangaParse(response: Response) = parseMangaList(response)
 
     private fun parseHomePage(document: Document, sections: Regex): MangasPage {
         val entries = document.selectFirst("div.site-home")!!.children().flatMap { section ->
@@ -63,35 +124,22 @@ abstract class Roumanwu : HttpSource() {
         return MangasPage(entries, false)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/home", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        return parseHomePage(document, Regex("最近更新"))
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = if (query.isNotBlank()) {
-        GET("$baseUrl/search?term=$query&page=${page - 1}", headers)
-    } else {
-        val parts = filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
-        GET("$baseUrl/books?page=${page - 1}$parts", headers)
-    }
-
-    override fun searchMangaParse(response: Response) = parseMangaList(response)
-
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
         val info = document.selectFirst("div.site-book-info")!!
 
+        setUrlWithoutDomain(document.location())
         title = info.selectFirst("h1")!!.text()
         thumbnail_url = document.selectFirst("img.site-detail-cover")!!.absUrl("src")
 
         val alias = info.selectFirst("p.site-book-alias")?.text()
         val synopsis = document.selectFirst("div.site-book-synopsis")?.text().orEmpty()
-        description = if (!alias.isNullOrEmpty() && alias != title) {
-            "別名: $alias\n\n$synopsis"
-        } else {
-            synopsis
+        description = buildString {
+            if (!alias.isNullOrEmpty() && alias != title) {
+                append("別名: ")
+                append(alias)
+                append("\n\n")
+            }
+            append(synopsis)
         }
 
         val data = info.select("dl.site-book-data dt").associate { dt ->
@@ -114,8 +162,7 @@ abstract class Roumanwu : HttpSource() {
         genre = genres.joinToString()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun parseChapterList(document: Document): List<SChapter> {
         val chapters = document.select("a.site-chapter-link").map {
             SChapter.create().apply {
                 url = it.attr("href")
@@ -123,8 +170,9 @@ abstract class Roumanwu : HttpSource() {
             }
         }.asReversed()
         if (chapters.isNotEmpty()) {
-            val date = DATE_FORMAT.tryParse(
+            val date = DATE_FORMAT.tryParseDate(
                 document.selectFirst("dl.site-book-data dt:contains(更新) + dd")?.text(),
+                ZoneId.of("Asia/Taipei"),
             )
             if (date != 0L) {
                 chapters[0].date_upload = date
@@ -133,39 +181,10 @@ abstract class Roumanwu : HttpSource() {
         return chapters
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        // Rendered HTML might have links sitting on the boundary of two scripts
-        return super.pageListRequest(chapter).newBuilder().addHeader("rsc", "1").build()
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
-        return IMAGE_URL_REGEX.findAll(html).mapIndexedTo(ArrayList()) { index, match ->
-            Page(index, imageUrl = match.groupValues[1])
-        }
-    }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
-        Filter.Header("提示：搜尋時篩選無效"),
-        StatusFilter(),
-    )
-
-    private abstract class UriPartFilter(name: String, values: Array<String>) : Filter.Select<String>(name, values) {
-        abstract fun toUriPart(): String
-    }
-
-    private class StatusFilter : UriPartFilter("狀態", arrayOf("全部", "連載中", "已完結")) {
-        override fun toUriPart() = when (state) {
-            1 -> "&continued=true"
-            2 -> "&continued=false"
-            else -> ""
-        }
-    }
+    private class StatusFilter : Filter.Select<String>("狀態", arrayOf("全部", "連載中", "已完結"))
 
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("M/d/yyyy", Locale.ROOT)
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yyyy")
         private val IMAGE_URL_REGEX = Regex(""""imageUrl":"([^"]+)""")
     }
 }
