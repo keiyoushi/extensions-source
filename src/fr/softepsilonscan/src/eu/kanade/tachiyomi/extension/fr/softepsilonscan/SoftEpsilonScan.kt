@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.multisrc.pam.TriStateGroupFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
+import kotlinx.serialization.json.JsonElement
 
 @Source
 abstract class SoftEpsilonScan : Pam() {
@@ -14,7 +15,7 @@ abstract class SoftEpsilonScan : Pam() {
     override val popularFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(3, false)))
     override val latestFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(2, false)))
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("La recherche textuelle ignore les filtres !"),
         Filter.Separator(),
         SortFilter("Sort", sortValues),

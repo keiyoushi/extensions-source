@@ -5,27 +5,33 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.secretstream.SecretStream
 import keiyoushi.lib.secretstream.State
 import keiyoushi.lib.secretstream.X25519
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
@@ -36,21 +42,19 @@ import okio.buffer
 import java.io.IOException
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Duration.Companion.seconds
 
 abstract class Pam :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     protected val baseHttpUrl = baseUrl.toHttpUrl()
-
-    override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
 
@@ -61,26 +65,23 @@ abstract class Pam :
         classLoader = this::class.java.classLoader!!,
     )
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::imageInterceptor)
-        .rateLimit(1, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", "https://${baseHttpUrl.host}")
-        .set("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(::imageInterceptor)
+        rateLimit(1, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
+    }
 
     private var version: String? = null
     private var csrfToken: String? = null
 
-    @Synchronized
-    private fun apiRequest(
+    private val apiMutex = Mutex()
+
+    private suspend fun apiRequest(
         url: HttpUrl,
         body: RequestBody? = null,
         includeXSRFToken: Boolean,
         includeCSRFToken: Boolean,
         includeVersion: Boolean,
-    ): Request {
+    ): Request = apiMutex.withLock {
         var xsrfToken = client.cookieJar.loadForRequest(baseHttpUrl)
             .firstOrNull { it.name == "XSRF-TOKEN" }?.value
 
@@ -89,14 +90,9 @@ abstract class Pam :
             (includeCSRFToken && csrfToken == null) ||
             (includeVersion && version == null)
         ) {
-            val document = client.newCall(GET(baseHttpUrl, headers)).execute()
-                .also {
-                    if (!it.isSuccessful) {
-                        it.close()
-                        throw Exception("HTTP Error ${it.code}")
-                    }
-                }
-                .asJsoup()
+            val bootstrap = client.get(baseHttpUrl, ensureSuccess = false)
+            ensureSuccess(bootstrap)
+            val document = bootstrap.asJsoup()
 
             version = document.selectFirst("#app")!!
                 .attr("data-page")
@@ -109,7 +105,7 @@ abstract class Pam :
                 .first { it.name == "XSRF-TOKEN" }.value
         }
 
-        val headers = headersBuilder().apply {
+        val headers = headers.newBuilder().apply {
             set("Accept", "application/json")
             set("X-Requested-With", "XMLHttpRequest")
             if (includeVersion) {
@@ -131,32 +127,78 @@ abstract class Pam :
         }
     }
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", popularFilters)
+    private fun ensureSuccess(response: Response) {
+        if (response.isSuccessful) return
+        response.close()
+        if (response.code == 403 || response.code == 503) {
+            throw Exception("Solve captcha in WebView and retry")
+        }
+        throw IOException("HTTP ${response.code}")
+    }
 
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    private suspend inline fun <T> withVersionRetry(
+        response: Response,
+        includeXSRFToken: Boolean,
+        includeCSRFToken: Boolean,
+        includeVersion: Boolean,
+        parse: (Response) -> T,
+    ): T {
+        if (response.code == 409 && includeVersion) {
+            apiMutex.withLock {
+                version = null
+                csrfToken = null
+            }
+            response.close()
+            val retry = apiRequest(
+                response.request.url,
+                includeXSRFToken = includeXSRFToken,
+                includeCSRFToken = includeCSRFToken,
+                includeVersion = includeVersion,
+            )
+            client.newCall(retry).await().use { fresh ->
+                ensureSuccess(fresh)
+                return parse(fresh)
+            }
+        }
+        ensureSuccess(response)
+        return parse(response)
+    }
 
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", latestFilters)
+    override suspend fun getPopularManga(page: Int): MangasPage = searchLibrary(page, popularFilters)
 
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = searchLibrary(page, latestFilters)
 
     protected abstract val popularFilters: FilterList
     protected abstract val latestFilters: FilterList
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
             val url = baseHttpUrl.newBuilder().apply {
                 addPathSegments("api/v1/search/series")
                 addQueryParameter("q", query)
             }.build()
 
-            return apiRequest(
+            val request = apiRequest(
                 url,
                 includeXSRFToken = true,
                 includeCSRFToken = false,
                 includeVersion = false,
             )
+            val response = client.newCall(request).await()
+            val data = withVersionRetry(response, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false) {
+                it.parseAs<SearchResponse>().data
+            }
+
+            return MangasPage(
+                mangas = data.map { it.toSManga(::createThumbnailUrl) },
+                hasNextPage = false,
+            )
         }
 
+        return searchLibrary(page, filters)
+    }
+
+    private suspend fun searchLibrary(page: Int, filters: FilterList): MangasPage {
         val url = baseHttpUrl.newBuilder().apply {
             addPathSegment("library")
             if (page > 1) {
@@ -189,76 +231,80 @@ abstract class Pam :
             }
         }.build()
 
-        return apiRequest(
+        val request = apiRequest(
             url,
             includeXSRFToken = true,
             includeCSRFToken = false,
             includeVersion = false,
         )
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.queryParameter("q") != null) {
-            val data = response.parseAs<SearchResponse>().data
-
-            return MangasPage(
-                mangas = data.map { it.toSManga(::createThumbnailUrl) },
-                hasNextPage = false,
-            )
-        } else {
-            val data = response.parseAs<LibraryResponse>().series
-
-            return MangasPage(
-                mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
-                hasNextPage = data.meta?.let { it.current < it.last } ?: false,
-            )
+        val response = client.newCall(request).await()
+        val data = withVersionRetry(response, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false) {
+            it.parseAs<LibraryResponse>().series
         }
-    }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$baseUrl/serie/${manga.url}".toHttpUrl()
-
-        return apiRequest(
-            url,
-            includeXSRFToken = true,
-            includeCSRFToken = false,
-            includeVersion = true,
+        return MangasPage(
+            mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
+            hasNextPage = data.meta?.let { it.current < it.last } ?: false,
         )
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.parseAs<MangaResponse>().props.serie
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseHttpUrl.host) return null
+        val segments = url.pathSegments.filter { it.isNotEmpty() }
+        if (segments.size < 2 || segments[0] != "serie") return null
+        val manga = SManga.create().apply { this.url = segments[1] }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
 
-        return SManga.create().apply {
-            url = data.slug
-            title = data.title
-            thumbnail_url = createThumbnailUrl(data.image)
-            author = data.author
-            artist = data.artist
-            description = buildString {
-                data.description?.also {
-                    append(it.trim(), "\n\n")
-                }
-                data.releaseYear?.also {
-                    append(intl["release_year"], ": ", it, "\n\n")
-                }
-                data.alternativeName?.also {
-                    append(intl["alternative_names"], ": ", it)
-                }
-            }.trim()
-            genre = buildList {
-                data.type?.name?.also(::add)
-                data.genres.mapTo(this) { it.name }
-            }.joinToString()
-            status = when (data.status?.lowercase()) {
-                "ongoing", "upcoming" -> SManga.ONGOING
-                "finished" -> SManga.COMPLETED
-                "dropped" -> SManga.CANCELLED
-                "onhold" -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val request = apiRequest(
+            "$baseUrl/serie/${manga.url}".toHttpUrl(),
+            includeXSRFToken = true,
+            includeCSRFToken = false,
+            includeVersion = true,
+        )
+        val response = client.newCall(request).await()
+        val data = withVersionRetry(response, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true) {
+            it.parseAs<MangaResponse>().props.serie
+        }
+
+        return SMangaUpdate(parseDetails(data), parseChapters(data))
+    }
+
+    private fun parseDetails(data: MangaResponse.Props.Manga): SManga = SManga.create().apply {
+        url = data.slug
+        title = data.title
+        thumbnail_url = createThumbnailUrl(data.image)
+        author = data.author
+        artist = data.artist
+        description = buildString {
+            data.description?.also {
+                append(it.trim(), "\n\n")
             }
+            data.releaseYear?.also {
+                append(intl["release_year"], ": ", it, "\n\n")
+            }
+            data.alternativeName?.also {
+                append(intl["alternative_names"], ": ", it)
+            }
+        }.trim()
+        genre = buildList {
+            data.type?.name?.also(::add)
+            data.genres.mapTo(this) { it.name }
+        }.joinToString()
+        status = when (data.status?.lowercase()) {
+            "ongoing", "upcoming" -> SManga.ONGOING
+            "finished" -> SManga.COMPLETED
+            "dropped" -> SManga.CANCELLED
+            "onhold" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
         }
     }
 
@@ -267,10 +313,7 @@ abstract class Pam :
         return "$baseUrl$imagePath#$THUMBNAIL_FRAGMENT"
     }
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<MangaResponse>().props.serie
+    private fun parseChapters(data: MangaResponse.Props.Manga): List<SChapter> {
         val hidePremium = preferences.getBoolean(HIDE_PREMIUM_PREF, false)
 
         return data.chapters
@@ -284,16 +327,12 @@ abstract class Pam :
                         }
                         append(it.title)
                     }
-                    date_upload = it.createdAt.substringBefore(".").let { dateStr ->
-                        dateFormat.tryParse(dateStr)
-                    }
+                    date_upload = dateFormat.tryParseDateTime(it.createdAt.substringBefore("."), ZoneId.of("UTC"))
                 }
             }.asReversed()
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -303,15 +342,28 @@ abstract class Pam :
         }.also(screen::addPreference)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$baseUrl${chapter.url}".toHttpUrl()
-
-        return apiRequest(
-            url,
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val request = apiRequest(
+            "$baseUrl${chapter.url}".toHttpUrl(),
             includeXSRFToken = true,
             includeCSRFToken = false,
             includeVersion = true,
         )
+        val response = client.newCall(request).await()
+        val props = withVersionRetry(response, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true) {
+            it.parseAs<PageListResponse>().props
+        }
+        val sess = handshakeFrom(props)
+        val id = sessionKey(props.data.serie.slug, props.data.slug)
+        sessions[id] = sess
+
+        return (1..props.pageCount).map { idx ->
+            Page(
+                index = idx - 1,
+                url = "$id#$idx",
+                imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
+            )
+        }
     }
 
     private val secureRandom = SecureRandom()
@@ -323,7 +375,6 @@ abstract class Pam :
     )
 
     private val sessions = ConcurrentHashMap<String, ChapterSession>()
-    private val sessionLocks = ConcurrentHashMap<String, Any>()
 
     private fun sessionKey(serieSlug: String, chapterSlug: String) = "${name.take(3).lowercase()}-$serieSlug--$chapterSlug"
 
@@ -341,51 +392,6 @@ abstract class Pam :
             sharedSecret = shared,
             clientPubkeyB64 = Base64.encodeToString(clientPub, Base64.NO_WRAP),
         )
-    }
-
-    private fun ensureSession(serieSlug: String, chapterSlug: String): ChapterSession {
-        val id = sessionKey(serieSlug, chapterSlug)
-        sessions[id]?.let { return it }
-
-        val lock = sessionLocks[id] ?: Any().let { fresh ->
-            sessionLocks.putIfAbsent(id, fresh) ?: fresh
-        }
-        synchronized(lock) {
-            sessions[id]?.let { return it }
-
-            val url = "$baseUrl/serie/$serieSlug/chapter/$chapterSlug".toHttpUrl()
-            val req = apiRequest(
-                url,
-                includeXSRFToken = true,
-                includeCSRFToken = false,
-                includeVersion = true,
-            )
-            val props = client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    throw IOException("Could not rebuild chapter session: HTTP ${resp.code}")
-                }
-                resp.parseAs<PageListResponse>().props
-            }
-
-            val sess = handshakeFrom(props)
-            sessions[id] = sess
-            return sess
-        }
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val props = response.parseAs<PageListResponse>().props
-        val sess = handshakeFrom(props)
-        val id = sessionKey(props.data.serie.slug, props.data.slug)
-        sessions[id] = sess
-
-        return (1..props.pageCount).map { idx ->
-            Page(
-                index = idx - 1,
-                url = "$id#$idx",
-                imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
-            )
-        }
     }
 
     private fun hexNonce(byteCount: Int = 16): String {
@@ -411,8 +417,8 @@ abstract class Pam :
         val chapterSlug = seg[3]
         val pageIndex = seg[5].toInt()
 
-        val session = ensureSession(serieSlug, chapterSlug)
         val sessionId = sessionKey(serieSlug, chapterSlug)
+        val session = sessions[sessionId] ?: throw IOException("Missing chapter session, reopen the chapter")
 
         val ts = (System.currentTimeMillis() / 1000).toString()
         val nonce = hexNonce()
@@ -429,7 +435,7 @@ abstract class Pam :
             .fragment(sessionId)
             .build()
 
-        val h = headersBuilder()
+        val h = headers.newBuilder()
             .set("X-Client-Pubkey", session.clientPubkeyB64)
             .build()
 
@@ -508,8 +514,6 @@ abstract class Pam :
             .body(decryptedSource.asResponseBody("image/jpg".toMediaType()))
             .build()
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
