@@ -31,11 +31,9 @@ abstract class Toonkor : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl$WEBTOONS_PATH$ALL_STATUS_PATH$SORT_LATEST"))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val filterList = filters.ifEmpty { getFilterList() }
-
-        val type = filterList.firstInstanceOrNull<TypeFilter>()
-        val status = filterList.firstInstanceOrNull<StatusFilter>()
-        val sort = filterList.firstInstanceOrNull<SortFilter>()
+        val type = filters.firstInstanceOrNull<TypeFilter>()
+        val status = filters.firstInstanceOrNull<StatusFilter>()
+        val sort = filters.firstInstanceOrNull<SortFilter>()
 
         val requestPath = when {
             query.isNotEmpty() -> "/bbs/search.php?sfl=wr_subject%7C%7Cwr_content&stx=$query"
@@ -68,8 +66,8 @@ abstract class Toonkor : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(baseUrl + manga.url).asJsoup()
         return SMangaUpdate(
-            manga = if (fetchDetails) parseMangaDetails(document, manga) else manga,
-            chapters = if (fetchChapters) parseChapterList(document) else chapters,
+            manga = parseMangaDetails(document, manga),
+            chapters = parseChapterList(document),
         )
     }
 
