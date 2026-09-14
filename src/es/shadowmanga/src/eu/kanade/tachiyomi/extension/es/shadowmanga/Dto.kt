@@ -5,8 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class SeriesWrapper(
@@ -14,14 +13,27 @@ class SeriesWrapper(
 )
 
 @Serializable
+class RecentChaptersResponse(
+    val items: List<RecentChapterItem> = emptyList(),
+    val page: Int = 1,
+    val pageSize: Int = 24,
+    val totalPages: Int = 1,
+)
+
+@Serializable
+class RecentChapterItem(
+    val serie: Series,
+)
+
+@Serializable
 class Series(
     val id: Int,
     @SerialName("titulo") val title: String,
-    @SerialName("portadaUrl") private val thumbnailUrl: String?,
-    @SerialName("descripcion") private val description: String?,
-    @SerialName("autor") private val author: String?,
-    @SerialName("generos") private val genres: String?,
-    @SerialName("estado") private val status: String?,
+    @SerialName("portadaUrl") private val thumbnailUrl: String? = null,
+    @SerialName("descripcion") private val description: String? = null,
+    @SerialName("autor") private val author: String? = null,
+    @SerialName("generos") private val genres: String? = null,
+    @SerialName("estado") private val status: String? = null,
     @SerialName("capitulos") val chapters: List<Chapter> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
@@ -49,8 +61,6 @@ class Series(
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ROOT)
-
 @Serializable
 class Chapter(
     private val id: Int,
@@ -67,7 +77,7 @@ class Chapter(
             }
         }
         url = "$mangaId/$id"
-        date_upload = dateFormat.tryParse(uploadDate)
+        date_upload = Instant.tryParse(uploadDate)
     }
 }
 
@@ -75,3 +85,58 @@ class Chapter(
 class PagesWrapper(
     @SerialName("paginas") val pages: List<String>,
 )
+
+@Serializable
+class AdultCatalogResponse(
+    val total: Int = 0,
+    val items: List<AdultSeriesItem> = emptyList(),
+    val page: Int = 1,
+    val pageSize: Int = 48,
+    val totalPages: Int = 1,
+    val pageTokens: PageTokens? = null,
+)
+
+@Serializable
+class PageTokens(
+    val next: String? = null,
+)
+
+@Serializable
+class AdultSeriesItem(
+    val id: Int = 0,
+    @SerialName("titulo") val title: String,
+    @SerialName("portadaUrl") private val thumbnailUrl: String? = null,
+    @SerialName("autor") private val author: String? = null,
+    @SerialName("generos") private val genres: String? = null,
+    val externo: Boolean = false,
+    val smId: Long? = null,
+) {
+    fun toSManga() = SManga.create().apply {
+        title = this@AdultSeriesItem.title
+        url = if ((externo || id == 0) && smId != null) "ext/$smId" else id.toString()
+        thumbnail_url = this@AdultSeriesItem.thumbnailUrl
+    }
+
+    fun getGenreList(): List<String> = genres.orEmpty().split(",").map { it.trim() }
+}
+
+@Serializable
+class OneshotDetails(
+    val smId: Long,
+    @SerialName("titulo") val title: String,
+    @SerialName("autor") private val author: String? = null,
+    @SerialName("descripcion") private val description: String? = null,
+    @SerialName("generos") private val genres: String? = null,
+    @SerialName("portadaUrl") private val thumbnailUrl: String? = null,
+    @SerialName("capituloId") val chapterId: Int = 1,
+    @SerialName("totalPaginas") val totalPages: Int = 0,
+) {
+    fun toSMangaDetails() = SManga.create().apply {
+        title = this@OneshotDetails.title
+        thumbnail_url = this@OneshotDetails.thumbnailUrl
+        description = this@OneshotDetails.description
+        author = this@OneshotDetails.author
+        genre = genres?.split(",")?.joinToString { it.trim() }
+        status = SManga.COMPLETED
+    }
+}

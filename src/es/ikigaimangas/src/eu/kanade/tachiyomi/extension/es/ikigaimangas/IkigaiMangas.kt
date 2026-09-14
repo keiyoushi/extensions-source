@@ -66,7 +66,9 @@ abstract class IkigaiMangas :
         } catch (_: Exception) {}
     }
 
-    private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
+    // image2 is a transformed CDN protected by Cloudflare. The media host serves
+    // the same originals directly and is also used by normalizeImageUrl().
+    private val imageCdnUrl: String = "https://media.ikigaimangas.cloud"
 
     override val supportsLatest: Boolean = true
 
@@ -125,7 +127,7 @@ abstract class IkigaiMangas :
         val document = response.asJsoup()
         val mangaList = document.select("div.grid > div.card").map { element ->
             SManga.create().apply {
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                thumbnail_url = element.selectFirst("img")?.normalizedImageUrl()
                 title = element.selectFirst(".card-body .card-title")!!.text()
                 val seriesUrl = element.selectFirst(".card-actions > a.btn[href]")!!.attr("href")
                 url = seriesUrl.substringAfterLast("/series/").substringBefore("/")
@@ -146,7 +148,7 @@ abstract class IkigaiMangas :
         val document = response.asJsoup()
         val mangaList = document.select("section[aria-labelledby=new-chapters-heading] > ul.grid:last-of-type a.card").map { element ->
             SManga.create().apply {
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                thumbnail_url = element.selectFirst("img")?.normalizedImageUrl()
                 title = element.selectFirst(".card-body .card-title")!!.text()
                 url = element.attr("href").substringAfterLast("/series/").substringBefore("/")
             }
@@ -233,7 +235,7 @@ abstract class IkigaiMangas :
         val document = response.asJsoup()
         val mangaList = document.select("section[aria-labelledby=archive-heading] > ul.grid a.card").map { element ->
             SManga.create().apply {
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                thumbnail_url = element.selectFirst("img")?.normalizedImageUrl()
                 title = element.selectFirst("h3")!!.text()
                 url = element.attr("href").substringAfterLast("/series/").substringBefore("/")
             }
@@ -267,7 +269,7 @@ abstract class IkigaiMangas :
         return document.selectFirst("article.card")!!.let { element ->
             SManga.create().apply {
                 title = element.selectFirst(".card-body .card-title")!!.text()
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                thumbnail_url = element.selectFirst("img")?.normalizedImageUrl()
                 description = element.selectFirst(".card-body > p")?.text()
                 status = parseStatus(element.selectFirst("figure > ul a[href*=?estados]")?.text())
                 genre = element.select(".card-body > ul > li > a[href*=?generos]").joinToString { it.text().trim() }
@@ -324,14 +326,35 @@ abstract class IkigaiMangas :
                 .build()
             document = client.newCall(newRequest).execute().asJsoup()
         }
-        return document.select("section div.img > img").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
+        val pages = document.select("section div.img > img")
+            .mapNotNull { it.normalizedImageUrl() }
+
+        if (pages.isNotEmpty()) {
+            return pages.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
         }
+
+        return QWIK_PAGE_URL_REGEX.findAll(document.html())
+            .map { normalizeImageUrl(it.value) }
+            .distinct()
+            .mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+            .toList()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
     override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
+
+    private fun Element.normalizedImageUrl(): String? {
+        val value = sequenceOf(
+            attr("abs:data-src"),
+            attr("abs:data-lazy-src"),
+            attr("abs:data-original"),
+            attr("abs:src"),
+            attr("abs:srcset").substringBefore(',').substringBefore(' '),
+        ).firstOrNull { it.isNotBlank() && !it.startsWith("data:", ignoreCase = true) }
+
+        return value?.let(::normalizeImageUrl)
+    }
 
     override fun getFilterList() = FilterList(
         Filter.Header("Nota: Los filtros son ignorados si se realiza una búsqueda por texto."),
@@ -472,5 +495,7 @@ abstract class IkigaiMangas :
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
         private const val PAGE_SIZE = 20
         private const val ENABLE_NSFW_HEADER = "X-Add-Nsfw-Cookie"
+        private val QWIK_PAGE_URL_REGEX =
+            Regex("""https://image3\.ikigaimangas\.cloud/series/[^"\\\s]+""")
     }
 }
