@@ -84,7 +84,6 @@ internal class AgeFilter(data: List<Pair<String, String>>) : TriStateGroup("Во
 internal class StatusFilter(data: List<Pair<String, String>>) : TriStateGroup("Статус", data)
 internal class TranslationStatusFilter(data: List<Pair<String, String>>) : TriStateGroup("Статус перевода", data)
 internal class CountryFilters(data: List<Pair<String, String>>) : TriStateGroup("Страна", data)
-
 internal class ChaptersRangeFilter : RangeFilter("Количество глав")
 internal class RatingRangeFilter : RangeFilter("Рейтинг")
 internal class YearRangeFilter : RangeFilter("Год выпуска")

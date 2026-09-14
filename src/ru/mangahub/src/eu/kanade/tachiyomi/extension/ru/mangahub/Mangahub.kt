@@ -247,6 +247,9 @@ abstract class Mangahub : KeiSource() {
             if (it.age?.isNotEmpty() == true) filters.add(AgeFilter(it.age))
             if (it.country?.isNotEmpty() == true) filters.add(CountryFilters(it.country))
         }
+        filters.add(RatingRangeFilter())
+        filters.add(ChaptersRangeFilter())
+        filters.add(YearRangeFilter())
         return FilterList(filters)
     }
 
