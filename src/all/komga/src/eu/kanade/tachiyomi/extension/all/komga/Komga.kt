@@ -82,6 +82,23 @@ class Komga(
 
     override val supportsLatest = true
 
+    override val supportsFilterFetching = true
+
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    init {
+        if (baseUrl.isNotBlank()) {
+            scope.launch {
+                try {
+                    client.get("$baseUrl/api/v1/libraries").close()
+                    getFilterList()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
+            }
+        }
+    }
+
     override val baseUrl
         get() = preferences.getString(PREF_ADDRESS, "")!!.removeSuffix("/")
 
@@ -374,7 +391,6 @@ class Komga(
     }
 
     private var loginJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val handler = Handler(Looper.getMainLooper())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
