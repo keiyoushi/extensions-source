@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "XCOMIC"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     listOf(
-        "all", "en", "fr", "es", "es-419", "pt", "pt-BR", "ja", "ko", "zh", "ru", "id",
+        "all", "en", "fr", "es", "es-419", "pt", "pt-BR", "ja", "ko", "zh", "zh-Hant", "ru", "id",
         "ab", "af", "sq", "am", "ar", "hy", "az", "be", "bn", "bs", "bg", "my", "km",
         "ca", "ceb", "hr", "cs", "cv", "da", "nl", "et", "eo", "eu", "fo", "fil", "fi",
         "ka", "de", "el", "gn", "gu", "ht", "ha", "he", "hi", "hu", "is", "ig", "ga",
