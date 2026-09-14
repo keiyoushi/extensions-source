@@ -37,16 +37,6 @@ abstract class FavComic :
 
     private val pref by getPreferencesLazy()
 
-    override val baseUrl: String
-        get() {
-            val customUrl = pref.getString(PREF_CUSTOM_BASE_URL, "")?.trim()
-            if (!customUrl.isNullOrBlank()) {
-                return customUrl.removeSuffix("/")
-            }
-            return pref.getString(PREF_MIRROR, "https://www.favcomic.com")
-                ?.takeIf(String::isNotBlank)?.removeSuffix("/") ?: "https://www.favcomic.com"
-        }
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         preferencesInternal(screen.context, pref).forEach(screen::addPreference)
     }
