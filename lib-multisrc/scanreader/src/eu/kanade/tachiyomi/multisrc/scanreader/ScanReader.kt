@@ -110,17 +110,9 @@ abstract class ScanReader : KeiSource() {
         val mangaUrl = getMangaUrl(manga)
         val document = client.get(mangaUrl).asJsoup()
 
-        if (fetchDetails) {
-            parseMangaDetails(document, manga)
-        }
+        parseMangaDetails(document, manga)
 
-        val chapterList = if (fetchChapters) {
-            fetchChapterList(document, mangaUrl)
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(manga, chapterList)
+        return SMangaUpdate(manga, fetchChapterList(document, mangaUrl))
     }
 
     private fun parseMangaDetails(document: Document, manga: SManga) {
@@ -185,7 +177,7 @@ abstract class ScanReader : KeiSource() {
     }
 
     private fun parseChapterList(response: Response): List<SChapter> {
-        val bodyStr = response.use { it.body.string() }
+        val bodyStr = response.body.string()
 
         // admin-ajax.php may return raw HTML or a JSON envelope: {"success":true,"data":"<html>"}
         val html = runCatching { bodyStr.parseAs<AjaxResponse>().data }
@@ -220,7 +212,7 @@ abstract class ScanReader : KeiSource() {
     // ====================== Page List ======================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val body = client.get(baseUrl + chapter.url).use { it.body.string() }
+        val body = client.get(baseUrl + chapter.url).body.string()
 
         val arrayMatch = imageArrayRegex.find(body) ?: return emptyList()
 
