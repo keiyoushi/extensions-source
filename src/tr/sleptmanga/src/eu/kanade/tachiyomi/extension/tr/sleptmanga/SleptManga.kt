@@ -73,21 +73,26 @@ abstract class SleptManga : KeiSource() {
 
     // ============================== Details & Chapters ===================
 
+    private val rscHeaders: Headers
+        get() = headersBuilder()
+            .add("rsc", "1")
+            .build()
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val series = client.get(getMangaUrl(manga))
+        val series = client.get(getMangaUrl(manga), rscHeaders)
             .extractNextJs<SeriesDto>()
             ?: throw Exception("Manga detayları bulunamadı")
 
         val encodedPath = manga.url.removeSuffix("/")
 
         return SMangaUpdate(
-            manga = if (fetchDetails) series.toSManga(manga, baseUrl) else manga,
-            chapters = if (fetchChapters) series.toSChapterList(encodedPath) else chapters,
+            manga = series.toSManga(manga, baseUrl),
+            chapters = series.toSChapterList(encodedPath),
         )
     }
 
