@@ -60,7 +60,7 @@ class SortFilter :
         "Sort",
         "sort",
         arrayOf(
-            Pair("Popular", "totalViews"),
+            Pair("Popular", "popularity"),
             Pair("Terbaru", "latest"),
             Pair("Rating", "rating"),
             Pair("A-Z", "title"),
