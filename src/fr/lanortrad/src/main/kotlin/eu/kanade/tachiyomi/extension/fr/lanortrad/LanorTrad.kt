@@ -28,10 +28,7 @@ import java.time.format.DateTimeFormatter
 @Source
 abstract class LanorTrad : KeiSource() {
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
-        return MangasPage(fetchSeries().map { it.toSManga(baseUrl) }, false)
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchSeries().map { it.toSManga(baseUrl) }, false)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
