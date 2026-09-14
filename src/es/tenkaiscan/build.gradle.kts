@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Falco Scan"
-    versionCode = 39
+    versionCode = 40
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
