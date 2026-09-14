@@ -85,18 +85,24 @@ abstract class HentaiHand :
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    private fun lookupFilterId(query: String, uri: String): Int? {
+    private fun lookupFilterId(query: String, uri: String, exactMatchOnly: Boolean = false): Int? {
         // filter query needs to be resolved to an ID
-        return client.newCall(GET("$baseUrl/api/$uri?q=$query"))
+        val lookupUrl = "$baseUrl/api/$uri".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .build()
+        return client.newCall(GET(lookupUrl))
             .asObservableSuccess()
             .subscribeOn(Schedulers.io())
             .map { response ->
-                // Returns the first matched id, or null if there are no results
-                val idList = response.parseAs<ResponseDto<List<IdDto>>>().data.map { it.id }
-                if (idList.isEmpty()) {
+                // Returns the exact match when present, else the first match,
+                // or null if there are no results
+                val results = response.parseAs<ResponseDto<List<IdDto>>>().data
+                if (results.isEmpty()) {
                     return@map null
                 } else {
-                    idList.first()
+                    val exact = results.firstOrNull { it.name.equals(query, ignoreCase = true) }?.id
+                    if (exactMatchOnly) return@map exact
+                    exact ?: results.first().id
                 }
             }.toBlocking().first()
     }
@@ -104,13 +110,34 @@ abstract class HentaiHand :
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("q", query)
+
+        val effectiveFilters = if (filters.isEmpty()) getFilterList() else filters
+        val hasLookupState = effectiveFilters.any { it is LookupFilter && it.state.isNotBlank() }
+
+        // A plain text `q` search without any id filter returns HTTP 500 on some sites,
+        // which breaks tapping a genre tag (the app searches for the tag name as text).
+        // Resolve the query to a tag/artist/character id when possible and search by id instead.
+        var queryFilter: Pair<String, Int>? = null
+        val trimmedQuery = query.trim()
+        if (trimmedQuery.isNotEmpty() && !hasLookupState) {
+            for (uri in QUERY_LOOKUP_URIS) {
+                val id = runCatching { lookupFilterId(trimmedQuery, uri, exactMatchOnly = true) }.getOrNull() ?: continue
+                queryFilter = uri to id
+                break
+            }
+        }
+
+        if (queryFilter != null) {
+            url.addQueryParameter("${queryFilter.first}[0]", queryFilter.second.toString())
+        } else if (trimmedQuery.isNotEmpty()) {
+            url.addQueryParameter("q", query)
+        }
 
         hhLangId.forEachIndexed { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
 
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        effectiveFilters.forEach { filter ->
             when (filter) {
                 is SortFilter -> url.addQueryParameter("sort", getSortPairs()[filter.state].second)
 
@@ -338,6 +365,11 @@ abstract class HentaiHand :
     )
 
     companion object {
+        private val QUERY_LOOKUP_URIS = listOf(
+            "tags",
+            "artists",
+            "characters",
+        )
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
         private const val USERNAME_TITLE = "Username"
