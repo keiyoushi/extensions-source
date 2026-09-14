@@ -9,16 +9,22 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import java.text.SimpleDateFormat
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.time.Instant
 
 @Serializable
-class InertiaDto<T>(
-    val props: T,
+class MangaApiResponse<T>(
+    val data: T,
 )
 
 @Serializable
-class MangaIndexDto(
+class MangaIndexData(
     val manga: MangaListDataDto,
+)
+
+@Serializable
+class MangaDetailsData(
+    val manga: MangaDto,
 )
 
 @Serializable
@@ -29,32 +35,29 @@ class MangaListDataDto(
 )
 
 @Serializable
-class MangaDetailsDto(
-    val manga: MangaDto,
-)
-
-@Serializable
 class MangaDto(
     private val title: String,
     val slug: String,
-    @SerialName("cover_url") private val coverUrl: String,
+    @SerialName("cover_url") private val coverUrl: String? = null,
+    @SerialName("cover_thumb_url") private val coverThumbUrl: String? = null,
     private val description: String? = null,
     private val status: String? = null,
     private val categories: List<CategoryDto> = emptyList(),
+    private val genres: List<CategoryDto> = emptyList(),
     private val authors: List<AuthorDto> = emptyList(),
     val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
         title = this@MangaDto.title
         url = "/manga/$slug"
-        thumbnail_url = coverUrl
+        thumbnail_url = coverUrl ?: coverThumbUrl
         description = this@MangaDto.description
         status = when (this@MangaDto.status) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        genre = categories.joinToString { it.name }
+        genre = (categories + genres).map { it.name }.distinct().joinToString()
         author = authors.joinToString { it.name }
     }
 }
@@ -74,24 +77,43 @@ class ChapterDto(
     private val number: JsonElement,
     private val title: String? = null,
     private val slug: String,
-    @SerialName("published_at") private val publishedAt: String,
+    @SerialName("published_at") private val publishedAt: String? = null,
 ) {
-    fun toSChapter(mangaSlug: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         url = "/read/$mangaSlug/$slug"
         val numberStr = number.jsonPrimitive.contentOrNull ?: number.toString()
         name = "Bölüm $numberStr" + (if (title.isNullOrBlank()) "" else ": $title")
-        date_upload = dateFormat.tryParse(publishedAt)
+        chapter_number = numberStr.toFloatOrNull() ?: -1f
+        date_upload = Instant.tryParse(publishedAt)
     }
 }
 
 @Serializable
 class ReaderDto(
-    val pages: List<ReaderPageDto>,
+    val pages: List<ReaderPageDto> = emptyList(),
 )
 
 @Serializable
 class ReaderPageDto(
     @SerialName("image_url") private val url: String,
+    private val scramble: ScrambleDto? = null,
 ) {
-    fun toPage(index: Int) = Page(index, imageUrl = url)
+    fun toPage(index: Int): Page {
+        val pageUrl = if (scramble?.method == "tiled-v1" && scramble.grid != null && scramble.seed != null) {
+            url.toHttpUrl().newBuilder()
+                .addQueryParameter(UnscramblerInterceptor.PARAM_GRID, scramble.grid.toString())
+                .addQueryParameter(UnscramblerInterceptor.PARAM_SEED, scramble.seed.toString())
+                .build().toString()
+        } else {
+            url
+        }
+        return Page(index, imageUrl = pageUrl)
+    }
 }
+
+@Serializable
+class ScrambleDto(
+    val method: String? = null,
+    val grid: Int? = null,
+    val seed: Long? = null,
+)
