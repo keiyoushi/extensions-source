@@ -75,6 +75,16 @@ abstract class IkigaiMangas :
     override val client by lazy {
         fetchDomainUrl()
         network.client.newBuilder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                // Covers bypass imageRequest(), but need the same CDN image header as pages.
+                val imageRequest = if (request.url.host.endsWith(".ikigaimangas.cloud")) {
+                    request.newBuilder().header("Sec-Fetch-Dest", "image").build()
+                } else {
+                    request
+                }
+                chain.proceed(imageRequest)
+            }
             .addNetworkInterceptor(::nsfwCookieInterceptor)
             .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
             .build()
