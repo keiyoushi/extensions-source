@@ -15,6 +15,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -26,10 +27,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
-import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -98,10 +96,7 @@ abstract class Akaya : KeiSource() {
             .asJsoup()
 
         val component = homeDocument
-            .select("*")
-            .firstOrNull { element ->
-                element.attr("wire:name") == "home.input-search"
-            }
+            .selectFirst("[wire:name=home.input-search]")
             ?: throw IOException("No se encontró el buscador de Akaya")
 
         val snapshot = component.attr("wire:snapshot")
@@ -147,8 +142,6 @@ abstract class Akaya : KeiSource() {
         val requestHeaders = headersBuilder()
             .set("Accept", "application/json")
             .set("X-Livewire", "1")
-            .set("Origin", baseUrl)
-            .set("Referer", "$baseUrl/")
             .build()
 
         return client.post(
@@ -169,13 +162,9 @@ abstract class Akaya : KeiSource() {
             .asJsoup()
 
         val component = explorerDocument
-            .select("[wire:snapshot]")
-            .firstOrNull { element ->
-                val content = element.outerHtml()
-
-                content.contains("toggleGenres") ||
-                    content.contains("Acción", ignoreCase = true)
-            }
+            .selectFirst(
+                "[wire:snapshot]:contains(toggleGenres), [wire:snapshot]:contains(Acción)",
+            )
             ?: throw IOException("No se encontró el filtro de géneros de Akaya")
 
         val snapshot = component.attr("wire:snapshot")
@@ -253,19 +242,19 @@ abstract class Akaya : KeiSource() {
         val document = Jsoup.parse(html, baseUrl)
 
         val mangas = document
-            .select("a[href*=\"/serie/\"]")
-            .mapNotNull { link ->
-                val card = link.closest("div[role=link]") ?: link.parent()
-                val image = card?.selectFirst("img")
+            .select("div[role=link]:has(a[href*=\"/serie/\"])")
+            .mapNotNull { card ->
+                val link = card.selectFirst("a[href*=\"/serie/\"]")
+                    ?: return@mapNotNull null
+                val image = card.selectFirst("img")
 
                 val titleCandidates = listOf(
-                    card?.selectFirst("h1, h2, h3, h4")?.text(),
-                    card?.selectFirst("[class*=\"title\"], [class*=\"name\"]")?.text(),
+                    card.selectFirst("h1, h2, h3, h4")?.text(),
+                    card.selectFirst("[class*=\"title\"], [class*=\"name\"]")?.text(),
                     link.attr("aria-label"),
                     link.attr("title"),
                     link.text(),
                     image?.attr("alt"),
-                    card?.text(),
                 )
 
                 val title = titleCandidates
@@ -378,16 +367,13 @@ abstract class Akaya : KeiSource() {
             .orEmpty()
 
         val genres = document
-            .select("span")
-            .firstOrNull { it.text().trim() == "Géneros" }
-            ?.parent()
-            ?.parent()
-            ?.select("ul li span")
-            ?.eachText()
-            ?.map { it.trim() }
-            ?.filter { it.isNotBlank() }
-            ?.distinct()
-            .orEmpty()
+            .select(
+                "div:has(> span:matchesOwn(^Géneros$)) ul li span",
+            )
+            .eachText()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
 
         val authors = document
             .select("a[href*=\"/user/\"] .truncate")
@@ -455,16 +441,7 @@ abstract class Akaya : KeiSource() {
                 SChapter.create().apply {
                     setUrlWithoutDomain(url)
                     name = chapterName
-                    date_upload = date?.let {
-                        try {
-                            LocalDate.parse(it, dateFormatter)
-                                .atStartOfDay(ZoneOffset.UTC)
-                                .toInstant()
-                                .toEpochMilli()
-                        } catch (_: DateTimeParseException) {
-                            0L
-                        }
-                    } ?: 0L
+                    date_upload = dateFormatter.tryParseDate(date)
                 }
             }
     }
@@ -677,7 +654,5 @@ abstract class Akaya : KeiSource() {
         return emptyList()
     }
 
-    companion object {
-        private val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
-    }
+    private val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 }
