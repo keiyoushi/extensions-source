@@ -164,6 +164,12 @@ abstract class TruyenQQ : KeiSource() {
         }
     }
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.currentPath()
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.currentPath()
+
+    private fun String.currentPath() = replaceFirst("/doc-truyen/", "/truyen-tranh/")
+
     private fun DateTimeFormatter.tryParse(date: String): Long = runCatching {
         LocalDate.parse(date, this)
             .atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh"))
