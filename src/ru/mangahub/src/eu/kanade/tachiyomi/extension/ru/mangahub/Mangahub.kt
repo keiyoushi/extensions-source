@@ -222,7 +222,7 @@ abstract class Mangahub : KeiSource() {
             country = data.getFilter("country"),
             sort = data.select(".select-menu-list .select-menu-item").mapNotNull { element ->
                 val value = element.selectFirst("input")?.attr("value")?.trim() ?: return@mapNotNull null
-                val label = element.ownText()
+                val label = element.ownText().trim()
                 label to value
             },
         ).toJsonElement()
