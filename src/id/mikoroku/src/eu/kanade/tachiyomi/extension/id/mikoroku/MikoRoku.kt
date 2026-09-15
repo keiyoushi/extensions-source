@@ -153,7 +153,7 @@ abstract class MikoRoku : KeiSource() {
             fields.pageUrls(baseUrl)
         } else {
             client.get(getChapterUrl(chapter)).asJsoup()
-                .select(".post-body img, .entry-content img")
+                .select(".check-box img, #reader img, .post-body img, .entry-content img")
                 .mapNotNull { it.imageUrl() }
         }
         return images.mapIndexed { index, image -> Page(index, imageUrl = image) }
