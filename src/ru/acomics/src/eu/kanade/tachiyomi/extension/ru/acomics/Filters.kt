@@ -40,3 +40,12 @@ internal class AgeRatings(data: List<Pair<String, String>>) : MultiValueFilter("
         state.forEach { filter -> if (filter.name != "NC-17") filter.state = true }
     }
 }
+internal class Categories : SelectFilter("Разделы поиска", data, "comics") {
+    companion object {
+        val data = listOf(
+            "Песочница" to "sandbox",
+            "Каталог" to "comics",
+            "Рекомендуемые" to "featured",
+        )
+    }
+}

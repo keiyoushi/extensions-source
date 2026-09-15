@@ -12,6 +12,7 @@ import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
@@ -49,7 +50,8 @@ abstract class AComics : KeiSource() {
                 addPathSegment("search")
                 addQueryParameter("keyword", query)
             } else {
-                addPathSegment("comics")
+                val segment = filters.firstInstanceOrNull<Categories>()?.selected ?: "comics"
+                addPathSegment(segment)
                 filters.forEach { filter ->
                     when (filter) {
                         is Genres -> filter.selected?.forEach { addQueryParameter("categories[]", it) }
@@ -158,6 +160,7 @@ abstract class AComics : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>()
+        filters.add(Categories())
         data?.parseAs<Dto>()?.let {
             if (it.sort?.isNotEmpty() == true) filters.add(OrderBy(it.sort))
             if (it.categories?.isNotEmpty() == true) filters.add(Genres(it.categories))
