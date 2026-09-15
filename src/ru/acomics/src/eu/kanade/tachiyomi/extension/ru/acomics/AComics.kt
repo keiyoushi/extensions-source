@@ -11,6 +11,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -31,6 +32,10 @@ abstract class AComics : KeiSource() {
         addCookie { listOf("ageRestrict" to "18") }
     }
 
+    init {
+        applicationContext.cacheDir.resolve("source_$id").deleteRecursively()
+    }
+
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage = makeCatalogRequest("subscr_count", page)
 
@@ -38,10 +43,10 @@ abstract class AComics : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = makeCatalogRequest("last_update", page)
 
     // ============================== Search ===============================
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = makeCatalogRequest(null, page, query, filters)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = makeCatalogRequest("subscr_count", page, query, filters)
 
     // ============================== Search Utilities ===============================
-    protected open suspend fun makeCatalogRequest(sortBy: String?, page: Int, query: String? = null, filters: FilterList = getFilterList()): MangasPage {
+    protected open suspend fun makeCatalogRequest(sortBy: String, page: Int, query: String? = null, filters: FilterList? = null): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query?.isNotBlank() == true) {
                 if (query.length < 3) {
@@ -50,19 +55,29 @@ abstract class AComics : KeiSource() {
                 addPathSegment("search")
                 addQueryParameter("keyword", query)
             } else {
-                val segment = filters.firstInstanceOrNull<Categories>()?.selected ?: "comics"
+                val segment = filters?.firstInstanceOrNull<Categories>()?.selected ?: "comics"
                 addPathSegment(segment)
-                filters.forEach { filter ->
+                filters?.forEach { filter ->
                     when (filter) {
                         is Genres -> filter.selected?.forEach { addQueryParameter("categories[]", it) }
                         is AgeRatings -> filter.selected?.forEach { addQueryParameter("ratings[]", it) }
                         is ComicType -> filter.selected?.let { addQueryParameter("type", it) }
                         is Publication -> filter.selected?.let { addQueryParameter("updatable", it) }
                         is Subscription -> filter.selected?.let { addQueryParameter("subscribe", it) }
-                        is OrderBy -> filter.selected?.let { addQueryParameter("sort", sortBy ?: it) }
+                        is OrderBy -> filter.selected?.let { addQueryParameter("sort", it) }
                         is MinPages -> addQueryParameter("issue_count", filter.state.toIntOrNull()?.coerceIn(0, 9999)?.toString() ?: "2")
                         else -> {}
                     }
+                }
+                if (filters == null) {
+                    addQueryParameter("sort", sortBy)
+                    (1..5).forEach { addQueryParameter("ratings[]", it.toString()) }
+                    listOf(
+                        "type" to "0",
+                        "updatable" to "0",
+                        "subscribe" to "0",
+                        "issue_count" to "2",
+                    ).forEach { (key, value) -> addQueryParameter(key, value) }
                 }
             }
             if (page > 1) addQueryParameter("skip", ((page - 1) * 10).toString())
