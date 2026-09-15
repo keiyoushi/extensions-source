@@ -1,11 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.webkit.JavascriptInterface
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -23,13 +18,11 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -41,7 +34,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -212,7 +204,7 @@ abstract class IkigaiMangas :
 
     private suspend fun getQuerySeriesList(): List<QwikSeriesDto> {
         fetchDomainUrl()
-        val qfunc = getQfuncFromWebView(baseUrl, headers) ?: throw Exception("Ocurrio un error al obtener la lista de series")
+        val qfunc = getQfuncFromWebView(baseUrl, headers)
         val url = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("qfunc", qfunc)
             .build()
@@ -358,105 +350,77 @@ abstract class IkigaiMangas :
             edit().putBoolean(SHOW_NSFW_PREF, value).apply()
         }
 
-    private suspend fun getQfuncFromWebView(url: String, headers: Headers): String? = withTimeoutOrNull(20.seconds) {
-        suspendCancellableCoroutine { continuation ->
-            val handler = Handler(Looper.getMainLooper())
-            val pool = ('a'..'z') + ('A'..'Z')
-            val interfaceName = (1..(10..20).random())
-                .map { pool.random() }
-                .joinToString("")
-            var webView: WebView? = null
-            handler.post {
-                webView = WebView(applicationContext).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.blockNetworkImage = true
-                    settings.userAgentString = headers["User-Agent"]
-                    addJavascriptInterface(
-                        object {
-                            @Suppress("unused")
-                            @JavascriptInterface
-                            fun onQfunc(value: String) {
-                                continuation.resume(value)
-                                handler.post {
-                                    webView?.destroy()
+    private suspend fun getQfuncFromWebView(
+        url: String,
+        headers: Headers,
+    ): String = runWebView(timeout = 20.seconds) {
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+
+        javaScriptEnabled = true
+        domStorageEnabled = true
+        blockImages = true
+        userAgent = headers["User-Agent"].orEmpty()
+
+        jsBridge(interfaceName) { qfunc ->
+            resolve(qfunc)
+        }
+
+        onPageFinished {
+            evaluateJs(
+                """
+                    (function () {
+                        const originalFetch = window.fetch;
+                        window.fetch = async function(resource, options) {
+                            let url = "";
+                            if (typeof resource === "string") {
+                                url = resource;
+                            } else if (resource && resource.url) {
+                                url = resource.url;
+                            }
+                            if (url.includes("qfunc")) {
+                                const match = url.match(/[?&]qfunc=([^&]+)/);
+                                if (match) {
+                                    const qfunc = decodeURIComponent(match[1]);
+                                    window.$interfaceName.post(qfunc);
                                 }
                             }
-                        },
-                        interfaceName,
-                    )
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView, loadedUrl: String) {
-                            super.onPageFinished(view, loadedUrl)
-                            injectFetchInterceptor(view, interfaceName)
-                            clickTargetButton(view)
-                        }
-                    }
-                    loadUrl(url)
-                }
-            }
-            continuation.invokeOnCancellation {
-                handler.post {
-                    webView?.destroy()
-                }
-            }
+                            return originalFetch.apply(this, arguments);
+                        };
+                    })();
+                """.trimIndent(),
+            )
+
+            evaluateJs(
+                """
+                    (function () {
+                        let tries = 0;
+                        const interval = setInterval(() => {
+                            const btn = [...document.querySelectorAll('button')]
+                                .find(button =>
+                                    [...button.querySelectorAll('span')]
+                                        .some(span =>
+                                            span.textContent?.trim().includes('Buscar...')
+                                        )
+                                );
+                            if (btn) {
+                                clearInterval(interval);
+                                btn.click();
+                                return;
+                            }
+                            tries++;
+                            if (tries >= 20) {
+                                clearInterval(interval);
+                            }
+                        }, 500);
+                    })();
+                """.trimIndent(),
+            )
         }
-    }
 
-    private fun injectFetchInterceptor(
-        webView: WebView,
-        interfaceName: String,
-    ) {
-        val script = """
-        (function () {
-            const originalFetch = window.fetch;
-            window.fetch = async function(resource, options) {
-                let url = "";
-                if (typeof resource === "string") {
-                    url = resource;
-                } else if (resource && resource.url) {
-                    url = resource.url;
-                }
-                if (url.includes("qfunc")) {
-                    const match = url.match(/[?&]qfunc=([^&]+)/);
-                    if (match) {
-                        const qfunc = decodeURIComponent(match[1]);
-                        window.$interfaceName.onQfunc(qfunc);
-                    }
-                }
-                return originalFetch.apply(this, arguments);
-            };
-        })();
-        """.trimIndent()
-
-        webView.evaluateJavascript(script, null)
-    }
-
-    private fun clickTargetButton(webView: WebView) {
-        val script = """
-        (function () {
-            let tries = 0;
-            const interval = setInterval(() => {
-                const btn = [...document.querySelectorAll('button')]
-                    .find(button =>
-                        [...button.querySelectorAll('span')]
-                            .some(span =>
-                                span.textContent?.trim().includes('Buscar...')
-                            )
-                    );
-                if (btn) {
-                    clearInterval(interval);
-                    btn.click();
-                    return;
-                }
-                tries++;
-                if (tries >= 20) {
-                    clearInterval(interval);
-                }
-            }, 500);
-        })();
-        """.trimIndent()
-        webView.evaluateJavascript(script, null)
+        loadUrl(url)
     }
 
     private fun Headers.Builder.enableNsfw(flag: Boolean) = this.set(ENABLE_NSFW_HEADER, flag.toString())
