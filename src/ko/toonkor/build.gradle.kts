@@ -17,7 +17,7 @@ keiyoushi {
     source {
         lang = "ko"
         baseUrl {
-            custom("https://tkor152.com")
+            custom("https://tkor153.com")
         }
     }
 }
