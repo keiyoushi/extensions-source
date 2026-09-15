@@ -90,16 +90,19 @@ abstract class MikoRoku : KeiSource() {
 
     private suspend fun getChapters(entry: MangaDto): List<SChapter> {
         val firestore = getFirestoreChapters(entry.slug)
-        val blogger = try {
-            getBloggerChapters(entry.title, BLOGGER_URL)
-        } catch (e: IOException) {
-            if (firestore.isEmpty()) throw e
-            emptyList()
+        var bloggerError: IOException? = null
+        val blogger = listOf(MIRROR_URL, BLOGGER_URL).firstNotNullOfOrNull { host ->
+            try {
+                getBloggerChapters(entry.title, host).takeIf { it.isNotEmpty() }
+            } catch (e: IOException) {
+                bloggerError = e
+                null
+            }
         }
-        val chapters = (firestore + blogger).ifEmpty {
-            getBloggerChapters(entry.title, MIRROR_URL)
+        if (firestore.isEmpty() && blogger == null) {
+            bloggerError?.let { throw it }
         }
-        return chapters.distinctBy {
+        return (firestore + blogger.orEmpty()).distinctBy {
             if (it.chapter_number >= 0) it.chapter_number.toString() else it.url
         }.sortedByDescending { it.chapter_number }
     }
@@ -148,16 +151,42 @@ abstract class MikoRoku : KeiSource() {
             val chapterUrl = "${STORE_URL}manga/$slug/chapters".toHttpUrl().newBuilder()
                 .addPathSegment(id)
                 .build()
-            val fields = client.get(chapterUrl).parseAs<FirestoreDocument<ChapterFields>>().fields
-            if (fields.isDraft) return emptyList()
-            fields.pageUrls(baseUrl)
+            client.get(chapterUrl, ensureSuccess = false).use { response ->
+                if (response.code == 404 || response.code == 429) {
+                    return@use getBloggerPageList(slug, chapter).ifEmpty {
+                        throw IOException("HTTP ${response.code}: Blogger fallback unavailable")
+                    }
+                }
+                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                val fields = response.parseAs<FirestoreDocument<ChapterFields>>().fields
+                if (fields.isDraft) return emptyList()
+                fields.pageUrls(baseUrl)
+            }
         } else {
-            client.get(getChapterUrl(chapter)).asJsoup()
-                .select(".check-box img, #reader img, .post-body img, .entry-content img")
-                .mapNotNull { it.imageUrl() }
+            getBloggerPageList(chapter)
         }
         return images.mapIndexed { index, image -> Page(index, imageUrl = image) }
     }
+
+    private suspend fun getBloggerPageList(slug: String, chapter: SChapter): List<String> {
+        val title = getCatalog().firstOrNull { it.slug == slug }?.title ?: return emptyList()
+        for (host in listOf(MIRROR_URL, BLOGGER_URL)) {
+            val chapters = try {
+                getBloggerChapters(title, host)
+            } catch (_: IOException) {
+                continue
+            }
+            val match = chapters.firstOrNull {
+                chapter.chapter_number >= 0 && it.chapter_number == chapter.chapter_number
+            } ?: chapters.firstOrNull { it.name.normalizeTitle() == chapter.name.normalizeTitle() }
+            if (match != null) return getBloggerPageList(match)
+        }
+        return emptyList()
+    }
+
+    private suspend fun getBloggerPageList(chapter: SChapter): List<String> = client.get(getChapterUrl(chapter)).asJsoup()
+        .select(".check-box img, #reader img, .post-body img, .entry-content img")
+        .mapNotNull { it.imageUrl() }
 
     override fun getChapterUrl(chapter: SChapter): String {
         if (chapter.url.startsWith("/manga-reader")) return baseUrl + chapter.url
