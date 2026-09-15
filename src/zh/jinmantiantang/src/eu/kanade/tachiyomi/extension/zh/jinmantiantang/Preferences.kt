@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.text.InputType
+import android.webkit.CookieManager
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
@@ -10,6 +12,33 @@ import okhttp3.Response
 import java.io.IOException
 
 internal fun getPreferenceList(context: Context, preferences: SharedPreferences, isUrlUpdated: Boolean) = arrayOf(
+    EditTextPreference(context).apply {
+        key = USERNAME_PREF
+        title = "账号"
+        summary = preferences.getString(key, "")?.takeIf(String::isNotEmpty) ?: "未设置，部分漫画需要登录才能观看"
+        dialogTitle = title
+        setOnPreferenceChangeListener { _, newValue ->
+            summary = (newValue as String).takeIf(String::isNotEmpty) ?: "未设置，部分漫画需要登录才能观看"
+            clearSessionCookies(preferences.baseUrl)
+            true
+        }
+    },
+
+    EditTextPreference(context).apply {
+        key = PASSWORD_PREF
+        title = "密码"
+        summary = if (preferences.getString(key, "").isNullOrEmpty()) "未设置" else "已设置"
+        dialogTitle = title
+        setOnBindEditTextListener {
+            it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        setOnPreferenceChangeListener { _, newValue ->
+            summary = if ((newValue as String).isEmpty()) "未设置" else "已设置"
+            clearSessionCookies(preferences.baseUrl)
+            true
+        }
+    },
+
     ListPreference(context).apply {
         key = MAINSITE_RATELIMIT_PREF
         title = "在限制时间内（下个设置项）允许的请求数量。"
@@ -65,6 +94,21 @@ val SharedPreferences.baseUrl: String
     }
 
 internal const val BLOCK_PREF = "BLOCK_GENRES_LIST"
+
+internal const val USERNAME_PREF = "USERNAME"
+internal const val PASSWORD_PREF = "PASSWORD"
+
+// Login/session cookies only; removing them makes changed credentials take effect.
+// AVS (age verification) is intentionally kept.
+private val SESSION_COOKIE_NAMES = arrayOf("PHPSESSID", "jmc_id", "jmc_password")
+
+internal fun clearSessionCookies(baseUrl: String) {
+    val manager = CookieManager.getInstance()
+    for (name in SESSION_COOKIE_NAMES) {
+        manager.setCookie(baseUrl, "$name=; Max-Age=-1; Path=/")
+    }
+    manager.flush()
+}
 
 internal const val MAINSITE_RATELIMIT_PREF = "mainSiteRateLimitPreference"
 internal const val MAINSITE_RATELIMIT_PREF_DEFAULT = 1.toString()
