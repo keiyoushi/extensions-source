@@ -44,28 +44,18 @@ abstract class ArtLapsa : Keyoapp() {
     override val paidChapterSelector = "img[alt~=Coin], img[src*=star-circle]"
 
     override fun pageListParse(document: Document): List<Page> {
-        val data = document.selectFirst("script[type=\"application/ld+json\"]")!!.data().parseAs<ChapterLD>()
-        val chapterID = data.url.substringAfterLast('/')
-        val seriesID = data.isPartOf.url.substringAfterLast('/')
+        val xData = document.selectFirst("[x-data^=immersiveReader]")!!.attr("x-data")
+        val pagesJs = xData.substringAfter("JSON.parse('", "").substringBefore("')")
+        if (pagesJs.isEmpty()) throw Exception("Log in via WebView and purchase this chapter to read.")
 
-        return (1..data.numberOfPages).mapIndexed { i, page ->
-            Page(
-                i,
-                url = document.location(),
-                imageUrl = "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
-            )
+        val pagesJson = "\"$pagesJs\"".parseAs<String>()
+        return pagesJson.parseAs<List<PageDto>>().mapIndexed { i, page ->
+            Page(i, imageUrl = page.path)
         }
     }
 }
 
 @Serializable
-internal class ChapterLD(
-    val isPartOf: SeriesLD,
-    val numberOfPages: Int,
-    val url: String,
-)
-
-@Serializable
-internal class SeriesLD(
-    val url: String,
+private class PageDto(
+    val path: String,
 )
