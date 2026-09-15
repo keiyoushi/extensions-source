@@ -1,49 +1,39 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.webkit.JavascriptInterface
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.addCookie
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.applicationContext
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebViewBlocking
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.tryParseZonedDateTime
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class IkigaiMangas :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
@@ -57,158 +47,58 @@ abstract class IkigaiMangas :
         }
         try {
             val initClient = network.client
-            val headers = super.headersBuilder().build()
-            val response = initClient.newCall(GET("https://ikigaimangas.com", headers)).execute()
+            val initHeaders = Headers.Builder()
+                .set("Referer", "$baseUrl/")
+                .build()
+            val response = initClient.newCall(
+                okhttp3.Request.Builder().url("https://ikigaimangas.com").headers(initHeaders).build(),
+            ).execute()
             val document = response.asJsoup()
             val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
-            if (scriptUrl == null) {
-                return
-            }
-            val scriptResponse = initClient.newCall(GET("https://ikigaimangas.com/build/$scriptUrl", headers)).execute()
+                ?: return
+            val scriptResponse = initClient.newCall(
+                okhttp3.Request.Builder().url("https://ikigaimangas.com/build/$scriptUrl").headers(initHeaders).build(),
+            ).execute()
             val script = scriptResponse.body.string()
             val domain = script.substringAfter("i(\"").substringBefore("\"")
-            val finalResponse = initClient.newCall(GET(domain, headers)).execute()
+            val finalResponse = initClient.newCall(
+                okhttp3.Request.Builder().url(domain).headers(initHeaders).build(),
+            ).execute()
             val host = finalResponse.request.url.host
             val newDomain = "https://$host"
             preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
     }
 
     private val imageCdnUrl: String = "https://image3.ikigaimangas.cloud"
 
-    override val supportsLatest: Boolean = true
-
-    override val client by lazy {
+    override fun OkHttpClient.Builder.configureClient() = apply {
         fetchDomainUrl()
-        val builder = network.client.newBuilder()
-            .addNetworkInterceptor(::nsfwCookieInterceptor)
-            .addInterceptor(::cfChallengeInterceptor)
-            .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
-
-        val cfInterceptor = builder.interceptors().firstOrNull { it.javaClass.simpleName == "CloudflareInterceptor" }
-        if (cfInterceptor != null) {
-            builder.interceptors().remove(cfInterceptor)
-            builder.addInterceptor { chain ->
-                val request = chain.request()
-                if (request.url.host.contains("ikigaimangas.cloud")) {
-                    chain.proceed(request)
-                } else {
-                    cfInterceptor.intercept(chain)
-                }
-            }
-        }
-
-        builder.build()
+        addCookie { listOf("is-adult-enabled" to preferences.showNsfwPref.toString()) }
+        addInterceptor(::imageHeadersInterceptor)
+        rateLimit(1, 2.seconds) { it.host == baseUrlHost }
     }
 
-    private fun cfChallengeInterceptor(chain: Interceptor.Chain): Response {
+    private fun imageHeadersInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (!request.url.host.contains("ikigaimangas.cloud")) return chain.proceed(request)
 
-        val response = chain.proceed(request)
-        val isCloudflare = response.headers("Server").any { it.contains("cloudflare", ignoreCase = true) }
-
-        if (response.code !in listOf(403, 503) || !isCloudflare) {
-            return response
-        }
-
-        response.close()
-
-        synchronized(this) {
-            var base64Data: String? = null
-
-            runCatching {
-                runWebViewBlocking(chain.call(), timeout = 60.seconds) {
-                    userAgent = headers["User-Agent"] ?: userAgent
-
-                    jsBridge("imageBridge") { message ->
-                        base64Data = message
-                        resolve(Unit)
-                    }
-
-                    onPageFinished {
-                        evaluateJs(
-                            """
-                            fetch('${request.url}').then(response => {
-                                if (!response.ok) throw new Error('HTTP ' + response.status);
-                                return response.blob();
-                            }).then(blob => {
-                                var reader = new FileReader();
-                                reader.onloadend = function() {
-                                    window.imageBridge.post(reader.result);
-                                }
-                                reader.readAsDataURL(blob);
-                            }).catch(e => window.imageBridge.post('error: ' + e.message));
-                            """.trimIndent(),
-                        )
-                    }
-
-                    loadData("https://${request.url.host}/", "<html><body></body></html>")
-                }
-            }
-
-            if (base64Data?.startsWith("data:image") == true) {
-                val base64String = base64Data!!.substringAfter("base64,")
-                val imageBytes = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT)
-
-                val body = imageBytes.toResponseBody(response.body?.contentType())
-                return response.newBuilder()
-                    .code(200)
-                    .message("OK")
-                    .body(body)
-                    .build()
-            }
-
-            return chain.proceed(request)
-        }
-    }
-
-    private fun nsfwCookieInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        return request.header(ENABLE_NSFW_HEADER)?.let { value ->
-            val newRequest = request.newBuilder()
-                .removeHeader(ENABLE_NSFW_HEADER)
-                .setCookie("is-adult-enabled", value)
-                .build()
-            chain.proceed(newRequest)
-        } ?: chain.proceed(request)
-    }
-
-    private fun Request.Builder.setCookie(name: String, value: String): Request.Builder {
-        val existingHeader = this.build().header("Cookie") ?: ""
-
-        val cookies = existingHeader
-            .split(";")
-            .mapNotNull {
-                val parts = it.trim().split("=", limit = 2)
-                if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
-            }.toMap().toMutableMap()
-
-        cookies[name] = value
-
-        val mergedHeader = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-
-        return this.header("Cookie", mergedHeader)
+        val newRequest = request.newBuilder()
+            .header("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
+            .header("Sec-Fetch-Dest", "image")
+            .header("Sec-Fetch-Mode", "no-cors")
+            .header("Sec-Fetch-Site", "cross-site")
+            .build()
+        return chain.proceed(newRequest)
     }
 
     private val preferences = getPreferences()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-
     private val dateFormat = java.time.format.DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'X", Locale.ENGLISH)
 
-    override fun popularMangaRequest(page: Int): Request {
-        val headers = headersBuilder()
-            .enableNsfw(preferences.showNsfwPref)
-            .build()
-
-        return GET("$baseUrl/clasificacion/", headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/clasificacion/", headers).asJsoup()
         val mangaList = document.select("div.grid > div.card").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
@@ -220,16 +110,8 @@ abstract class IkigaiMangas :
         return MangasPage(mangaList, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val headers = headersBuilder()
-            .enableNsfw(preferences.showNsfwPref)
-            .build()
-
-        return GET("$baseUrl/?pagina=$page", headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/?pagina=$page", headers).asJsoup()
         val mangaList = document.select("section[aria-labelledby=new-chapters-heading] > ul.grid:last-of-type a.card").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
@@ -241,85 +123,42 @@ abstract class IkigaiMangas :
         return MangasPage(mangaList, hasNextPage)
     }
 
-    private var seriesCache: List<QwikSeriesDto>? = null
-
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
-            if (seriesCache != null) {
-                return Observable.just(qwikDataParse(query, seriesCache!!, page))
-            }
             val series = getQuerySeriesList()
-            return Observable.just(qwikDataParse(query, series, page))
+            return qwikDataParse(query, series, page)
         }
 
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response -> searchMangaParse(response) }
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/series/".toHttpUrl().newBuilder()
-
-        url.addQueryParameter("tipos[]", "comic")
+        val searchUrl = "$baseUrl/series/".toHttpUrl().newBuilder()
+        searchUrl.addQueryParameter("tipos[]", "comic")
 
         filters.forEach { filter ->
             when (filter) {
                 is GenreFilter -> {
                     filter.state.forEach { genre ->
                         if (genre.state) {
-                            url.addQueryParameter("generos[]", genre.id.toString())
+                            searchUrl.addQueryParameter("generos[]", genre.id.toString())
                         }
                     }
                 }
-
                 is StatusFilter -> {
                     filter.state.forEach { status ->
                         if (status.state) {
-                            url.addQueryParameter("estados[]", status.id.toString())
+                            searchUrl.addQueryParameter("estados[]", status.id.toString())
                         }
                     }
                 }
-
                 is SortByFilter -> {
-                    url.addQueryParameter("ordenar", filter.selected)
-                    url.addQueryParameter("direccion", if (filter.state?.ascending == true) "asc" else "desc")
+                    searchUrl.addQueryParameter("ordenar", filter.selected)
+                    searchUrl.addQueryParameter("direccion", if (filter.state?.ascending == true) "asc" else "desc")
                 }
-
                 else -> {}
             }
         }
 
-        url.addQueryParameter("pagina", page.toString())
+        searchUrl.addQueryParameter("pagina", page.toString())
 
-        val headers = headersBuilder()
-            .enableNsfw(preferences.showNsfwPref)
-            .build()
-
-        return GET(url.build(), headers)
-    }
-
-    private fun getQuerySeriesList(): List<QwikSeriesDto> {
-        fetchDomainUrl()
-        val qfunc = getQfuncFromWebView(baseUrl, headers) ?: throw Exception("Ocurrio un error al obtener la lista de series")
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("qfunc", qfunc)
-            .build()
-        val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
-        val body = payload.toRequestBody()
-        val headers = headersBuilder()
-            .set("X-QRL", qfunc)
-            .set("Content-Type", "application/qwik-json")
-            .build()
-        val response = client.newCall(POST(url.toString(), headers, body)).execute()
-        return response.parseAs<QwikData>().parseAsList<QwikSeriesDto>().also { seriesCache = it }
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(searchUrl.build(), headers).asJsoup()
         val mangaList = document.select("section[aria-labelledby=archive-heading] > ul.grid a.card").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
@@ -329,6 +168,22 @@ abstract class IkigaiMangas :
         }
         val hasNextPage = document.selectFirst("nav[aria-label=pagination] > a:last-child:not([class*=btn-disabled])") != null
         return MangasPage(mangaList, hasNextPage)
+    }
+
+    private suspend fun getQuerySeriesList(): List<QwikSeriesDto> {
+        fetchDomainUrl()
+        val qfunc = getQfuncFromWebView(baseUrl) ?: throw Exception("Ocurrio un error al obtener la lista de series")
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("qfunc", qfunc)
+            .build()
+        val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
+        val body = payload.toRequestBody()
+        val qrlHeaders = headersBuilder()
+            .set("X-QRL", qfunc)
+            .set("Content-Type", "application/qwik-json")
+            .build()
+        val response = client.post(url, qrlHeaders, body)
+        return response.parseAs<QwikData>().parseAsList<QwikSeriesDto>()
     }
 
     private fun qwikDataParse(query: String, seriesList: List<QwikSeriesDto>, page: Int): MangasPage {
@@ -349,19 +204,48 @@ abstract class IkigaiMangas :
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}/"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}/", headers)
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return document.selectFirst("article.card")!!.let { element ->
-            SManga.create().apply {
-                title = element.selectFirst(".card-body .card-title")!!.text()
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-                description = element.selectFirst(".card-body > p")?.text()
-                status = parseStatus(element.selectFirst("figure > ul a[href*=?estados]")?.text())
-                genre = element.select(".card-body > ul > li > a[href*=?generos]").joinToString { it.text().trim() }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val detailsManga = if (fetchDetails) {
+            val document = client.get("$baseUrl/series/${manga.url}/", headers).asJsoup()
+            document.selectFirst("article.card")!!.let { element ->
+                SManga.create().apply {
+                    title = element.selectFirst(".card-body .card-title")!!.text()
+                    thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                    description = element.selectFirst(".card-body > p")?.text()
+                    status = parseStatus(element.selectFirst("figure > ul a[href*=?estados]")?.text())
+                    genre = element.select(".card-body > ul > li > a[href*=?generos]").joinToString { it.text() }
+                }
             }
+        } else {
+            manga
         }
+
+        val chapterList = if (fetchChapters) {
+            val allChapters = mutableListOf<SChapter>()
+            var page = 1
+            do {
+                val chapterUrl = "$baseUrl/series/${manga.url}/".toHttpUrl().newBuilder()
+                    .addQueryParameter("pagina", page.toString())
+                    .build()
+                val document = client.get(chapterUrl, headers).asJsoup()
+                val parsed = document.select("section.card > ul.grid a.card").map(::chapterFromElement)
+                if (parsed.isEmpty()) break
+                allChapters.addAll(parsed)
+                page++
+            } while (document.selectFirst("nav[aria-label=pagination] > a:last-child:not([class*=btn-disabled])") != null)
+            allChapters
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(detailsManga, chapterList)
     }
 
     private fun parseStatus(status: String?): Int = when (status?.lowercase()) {
@@ -372,29 +256,6 @@ abstract class IkigaiMangas :
         else -> SManga.UNKNOWN
     }
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        val chapterList = mutableListOf<SChapter>()
-        var page = 1
-        do {
-            val request = chapterListRequest(manga.url, page)
-            val document = client.newCall(request).execute().asJsoup()
-            val chapters = document.select("section.card > ul.grid a.card").map(::chapterFromElement)
-            if (chapters.isEmpty()) break
-            chapterList.addAll(chapters)
-            page++
-        } while (document.selectFirst("nav[aria-label=pagination] > a:last-child:not([class*=btn-disabled])") != null)
-        return@fromCallable chapterList.toList()
-    }
-
-    private fun chapterListRequest(slug: String, page: Int): Request {
-        val url = "$baseUrl/series/$slug/".toHttpUrl().newBuilder()
-            .addQueryParameter("pagina", page.toString())
-            .build()
-        return GET(url, headers)
-    }
-
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("abs:href"))
         name = element.selectFirst(".card-body .card-title")!!.text()
@@ -402,43 +263,33 @@ abstract class IkigaiMangas :
         date_upload = dateFormat.tryParseZonedDateTime(dateString)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val request = response.request
-        var document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        var document = client.get(baseUrl + chapter.url, headers).asJsoup()
 
         document.selectFirst("button > span:contains(permitir nsfw)")?.let {
-            val nsfwResponse = client.newCall(
-                request.newBuilder().enableNsfw(true).build(),
-            ).execute()
-            document = nsfwResponse.asJsoup()
+            preferences.showNsfwPref = true
+            document = client.get(baseUrl + chapter.url, headers).asJsoup()
         }
 
         val images = document.select("img[alt^=Página][src*=/series/]")
-        val chapterUrl = response.request.url.toString()
+        val chapterUrl = baseUrl + chapter.url
         return images.mapIndexed { i, element ->
             Page(i, url = chapterUrl, imageUrl = element.attr("abs:src"))
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        val referer = page.url.ifEmpty { "$baseUrl/" }
-        return GET(
-            page.imageUrl!!,
+    override fun imageRequest(page: Page) = okhttp3.Request.Builder()
+        .url(page.imageUrl!!)
+        .headers(
             headersBuilder()
-                .set("Referer", referer)
+                .set("Referer", page.url.ifEmpty { "$baseUrl/" })
                 .build(),
         )
-    }
+        .build()
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-    override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
-        Filter.Header("Nota: Los filtros son ignorados si se realiza una búsqueda por texto."),
-        Filter.Separator(),
+    override fun getFilterList(data: kotlinx.serialization.json.JsonElement?) = FilterList(
+        eu.kanade.tachiyomi.source.model.Filter.Header("Nota: Los filtros son ignorados si se realiza una búsqueda por texto."),
+        eu.kanade.tachiyomi.source.model.Filter.Separator(),
         SortByFilter("Ordenar por", getSortProperties()),
         StatusFilter("Estados", getStatusFilters()),
         GenreFilter("Géneros", getGenreFilters()),
@@ -467,113 +318,74 @@ abstract class IkigaiMangas :
             edit().putBoolean(SHOW_NSFW_PREF, value).apply()
         }
 
-    private fun getQfuncFromWebView(url: String, headers: Headers): String? {
-        val latch = CountDownLatch(1)
-        val handler = Handler(Looper.getMainLooper())
-        val pool = ('a'..'z') + ('A'..'Z')
-        val interfaceName = (1..(10..20).random())
-            .map { pool.random() }
-            .joinToString("")
-        var result: String? = null
-        var webView: WebView? = null
-        handler.post {
-            webView = WebView(applicationContext).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.blockNetworkImage = true
-                settings.userAgentString = headers["User-Agent"]
-                addJavascriptInterface(
-                    object {
-                        @Suppress("unused")
-                        @JavascriptInterface
-                        fun onQfunc(value: String) {
-                            result = value
-                            latch.countDown()
-                        }
-                    },
-                    interfaceName,
-                )
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView, loadedUrl: String) {
-                        super.onPageFinished(view, loadedUrl)
-                        injectFetchInterceptor(view, interfaceName)
-                        clickTargetButton(view)
-                    }
-                }
-                loadUrl(url)
-            }
+    private suspend fun getQfuncFromWebView(url: String): String? = runWebView<String?>(timeout = 20.seconds) {
+        javaScriptEnabled = true
+        domStorageEnabled = true
+        blockImages = true
+
+        jsBridge("qfuncBridge") { message ->
+            resolve(message)
         }
-        latch.await(20, TimeUnit.SECONDS)
-        handler.post {
-            webView?.destroy()
+
+        onPageFinished {
+            evaluateJs(
+                """
+                    (function () {
+                        const originalFetch = window.fetch;
+                        window.fetch = async function(resource, options) {
+                            let url = "";
+                            if (typeof resource === "string") {
+                                url = resource;
+                            } else if (resource && resource.url) {
+                                url = resource.url;
+                            }
+                            if (url.includes("qfunc")) {
+                                const match = url.match(/[?&]qfunc=([^&]+)/);
+                                if (match) {
+                                    const qfunc = decodeURIComponent(match[1]);
+                                    window.qfuncBridge.post(qfunc);
+                                }
+                            }
+                            return originalFetch.apply(this, arguments);
+                        };
+                    })();
+                """.trimIndent(),
+            )
+
+            evaluateJs(
+                """
+                    (function () {
+                        let tries = 0;
+                        const interval = setInterval(() => {
+                            const btn = [...document.querySelectorAll('button')]
+                                .find(button =>
+                                    [...button.querySelectorAll('span')]
+                                        .some(span =>
+                                            span.textContent?.trim().includes('Buscar...')
+                                        )
+                                );
+                            if (btn) {
+                                clearInterval(interval);
+                                btn.click();
+                                return;
+                            }
+                            tries++;
+                            if (tries >= 20) {
+                                clearInterval(interval);
+                            }
+                        }, 500);
+                    })();
+                """.trimIndent(),
+            )
         }
-        return result
+
+        loadUrl(url)
     }
-
-    private fun injectFetchInterceptor(
-        webView: WebView,
-        interfaceName: String,
-    ) {
-        val script = """
-        (function () {
-            const originalFetch = window.fetch;
-            window.fetch = async function(resource, options) {
-                let url = "";
-                if (typeof resource === "string") {
-                    url = resource;
-                } else if (resource && resource.url) {
-                    url = resource.url;
-                }
-                if (url.includes("qfunc")) {
-                    const match = url.match(/[?&]qfunc=([^&]+)/);
-                    if (match) {
-                        const qfunc = decodeURIComponent(match[1]);
-                        window.$interfaceName.onQfunc(qfunc);
-                    }
-                }
-                return originalFetch.apply(this, arguments);
-            };
-        })();
-        """.trimIndent()
-
-        webView.evaluateJavascript(script, null)
-    }
-
-    private fun clickTargetButton(webView: WebView) {
-        val script = """
-        (function () {
-            let tries = 0;
-            const interval = setInterval(() => {
-                const btn = [...document.querySelectorAll('button')]
-                    .find(button =>
-                        [...button.querySelectorAll('span')]
-                            .some(span =>
-                                span.textContent?.trim().includes('Buscar...')
-                            )
-                    );
-                if (btn) {
-                    clearInterval(interval);
-                    btn.click();
-                    return;
-                }
-                tries++;
-                if (tries >= 20) {
-                    clearInterval(interval);
-                }
-            }, 500);
-        })();
-        """.trimIndent()
-        webView.evaluateJavascript(script, null)
-    }
-
-    private fun Headers.Builder.enableNsfw(flag: Boolean) = this.set(ENABLE_NSFW_HEADER, flag.toString())
-    private fun Request.Builder.enableNsfw(flag: Boolean) = this.header(ENABLE_NSFW_HEADER, flag.toString())
 
     companion object {
         private const val SHOW_NSFW_PREF = "pref_show_nsfw"
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
         private const val PAGE_SIZE = 20
-        private const val ENABLE_NSFW_HEADER = "X-Add-Nsfw-Cookie"
     }
 }
