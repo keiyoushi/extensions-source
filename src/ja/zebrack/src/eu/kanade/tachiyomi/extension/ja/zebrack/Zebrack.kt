@@ -1,414 +1,356 @@
 package eu.kanade.tachiyomi.extension.ja.zebrack
 
-import android.annotation.SuppressLint
-import android.app.Application
-import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.boolean
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAsProto
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.string
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.util.Calendar
-import java.util.TimeZone
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.time.LocalDate
+import java.time.ZoneId
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Zebrack :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
-
     private val subdomain = "zebrack-comic"
     private val apiUrl = "https://api2.$subdomain.com/api"
     private val magazineApiUrl = "https://api.$subdomain.com/api"
-    private val jst = TimeZone.getTimeZone("Asia/Tokyo")
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
+    private val jst = ZoneId.of("Asia/Tokyo")
     private val hideLocked get() = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+    private val secretMutex = Mutex()
 
+    @Volatile
     private var secret: String? = null
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val response = chain.proceed(request)
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ImageInterceptor())
+        addInterceptor(::secretIntercept)
+    }
 
-            if (!response.isSessionExpired()) return@addInterceptor response
+    private fun secretIntercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
 
-            response.close()
+        if (!response.isSessionExpired()) return response
 
-            val failedSecret = request.url.queryParameter("secret")
+        response.close()
 
-            clearSecretIfCurrent(failedSecret)
+        val failedSecret = request.url.queryParameter("secret")
+
+        clearSecretIfCurrent(failedSecret)
+
+        val newSecret = runBlocking {
             flushSecret(failedSecret)
-
-            val newSecret = fetchSecret()
-            val isSecretValid = !newSecret.isNullOrEmpty() && newSecret != failedSecret
-            val newUrl = request.url.newBuilder().apply {
-                if (isSecretValid) {
-                    setQueryParameter("secret", newSecret)
-                } else {
-                    removeAllQueryParameters("secret")
-                    clearSecretIfCurrent(newSecret)
-                }
-            }.build()
-
-            val newRequest = request.newBuilder()
-                .url(newUrl)
-                .build()
-
-            chain.proceed(newRequest)
+            fetchSecret()
         }
-        .build()
+        val isSecretValid = !newSecret.isNullOrEmpty() && newSecret != failedSecret
+        val newUrl = request.url.newBuilder().apply {
+            if (isSecretValid) {
+                setQueryParameter("secret", newSecret)
+            } else {
+                removeAllQueryParameters("secret")
+                clearSecretIfCurrent(newSecret)
+            }
+        }.build()
 
-    override fun popularMangaRequest(page: Int): Request {
+        val newRequest = request.newBuilder()
+            .url(newUrl)
+            .build()
+
+        return chain.proceed(newRequest)
+    }
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/v3/title_tab_view".toHttpUrl().newBuilder()
             .addQueryParameter("os", "browser")
             .addQueryParameter("type", "ranking")
             .build()
-        return GET(url, headers)
-    }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAsProto<RankingResponse>()
+        val result = client.get(url).parseAsProto<RankingResponse>()
         val mangas = result.list.filter { it.type == "総合" }.flatMap { it.titles }.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val weekday = getLatestDay()
-        val url = "$apiUrl/v3/rensai".toHttpUrl().newBuilder()
-            .addQueryParameter("os", "browser")
-            .addQueryParameter("day", weekday)
-            .build()
-        return GET(url, headers)
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getUpdateDay(currentDayInJapan)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangas = response.parseAsProto<LatestResponse>().list.map { it.toSManga() }
-        return MangasPage(mangas, false)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = "$apiUrl/v3/title_search".toHttpUrl().newBuilder()
                 .addQueryParameter("os", "browser")
                 .addQueryParameter("search_order", "related")
                 .addQueryParameter("keyword", query)
                 .build()
-            return GET(url, headers)
+            return client.get(url).toMangasPage()
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
-        val url = when (filter.type) {
-            "day" -> {
-                "$apiUrl/v3/rensai".toHttpUrl().newBuilder()
-                    .addQueryParameter("os", "browser")
-                    .addQueryParameter("day", filter.value)
-            }
+        return when (filter.type) {
+            "day" -> getUpdateDay(filter.value)
             "magazine" -> {
-                "$magazineApiUrl/browser/${filter.value}".toHttpUrl().newBuilder()
+                val url = "$magazineApiUrl/browser/${filter.value}".toHttpUrl().newBuilder()
                     .addQueryParameter("os", "browser")
-            }
-            else -> {
-                "$apiUrl/v3/title_tag_search".toHttpUrl().newBuilder()
-                    .addQueryParameter("os", "browser")
-                    .addQueryParameter("tag_id", filter.value)
-                    .addQueryParameter("search_order", "popular")
-            }
-        }
-        return GET(url.build(), headers)
-    }
+                    .build()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val segment = response.request.url.pathSegments.last()
-        return when (segment) {
-            "rensai" -> latestUpdatesParse(response)
-            "magazine_list" -> {
-                val result = response.parseAsProto<MagazineFilterResponse>()
+                val result = client.get(url).parseAsProto<MagazineFilterResponse>()
                 val mangas = with(result.magazines) {
                     (magazinesListAll + magazinesListMen + magazinesListWoman).map { it.toSManga() }
                 }
                 MangasPage(mangas, false)
             }
             else -> {
-                val mangas = response.parseAsProto<SearchResponse>().list.map { it.toSManga() }
-                MangasPage(mangas, false)
+                val url = "$apiUrl/v3/title_tag_search".toHttpUrl().newBuilder()
+                    .addQueryParameter("os", "browser")
+                    .addQueryParameter("tag_id", filter.value)
+                    .addQueryParameter("search_order", "popular")
+                    .build()
+
+                client.get(url).toMangasPage()
             }
         }
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val mangaUrl = "$baseUrl/${manga.url}".toHttpUrl()
-        val isMagazine = mangaUrl.fragment?.toInt()
-        val magazineId = mangaUrl.pathSegments.first()
-        if (isMagazine == 1) {
-            val url = "$apiUrl/v3/magazine_detail".toHttpUrl().newBuilder()
-                .addQueryParameter("os", "browser")
-                .addQueryParameter("magazine_id", magazineId)
-                .build()
-            return GET(url, headers)
+    private suspend fun getUpdateDay(day: String): MangasPage {
+        val url = "$apiUrl/v3/rensai".toHttpUrl().newBuilder()
+            .addQueryParameter("os", "browser")
+            .addQueryParameter("day", day)
+            .build()
+
+        val mangas = client.get(url).parseAsProto<LatestResponse>().list.map { it.toSManga() }
+        return MangasPage(mangas, false)
+    }
+
+    private fun Response.toMangasPage(): MangasPage {
+        val mangas = this.parseAsProto<SearchResponse>().list.map { it.toSManga() }
+        return MangasPage(mangas, false)
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val isMagazine = manga.isMagazine
+
+        val details = async {
+            if (!fetchDetails) return@async manga
+            if (isMagazine) getMagazineDetails(manga.url) else getTitleDetails(manga.url)
+        }
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            if (isMagazine) getMagazineChapters(manga.url) else getTitleChapters(manga.url)
         }
 
+        SMangaUpdate(
+            details.await(),
+            chapterList.await(),
+        )
+    }
+
+    private suspend fun getTitleDetails(titleId: String): SManga {
         val url = "$apiUrl/browser/title_detail".toHttpUrl().newBuilder()
             .addQueryParameter("os", "browser")
-            .addQueryParameter("title_id", manga.url)
+            .addQueryParameter("title_id", titleId)
             .addQueryParameter("tab", "detail")
             .build()
-        return GET(url, headers)
+
+        return client.get(url).parseAsProto<MangaDetailsResponse>().details.toSManga()
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val isTitleDetail = response.request.url.pathSegments.last().contains("title_detail")
-        return if (isTitleDetail) {
-            response.parseAsProto<MangaDetailsResponse>().details.toSManga()
-        } else {
-            response.parseAsProto<MagazineDetailsResponse>().details.toSManga()
-        }
-    }
-
-    override fun getMangaUrl(manga: SManga): String {
-        val mangaUrl = "$baseUrl/${manga.url}".toHttpUrl()
-        val magazine = mangaUrl.fragment?.toInt()
-        val magazineId = mangaUrl.pathSegments.first()
-        return if (magazine == 1) "$baseUrl/magazine/$magazineId/detail" else "$baseUrl/title/${manga.url}"
-    }
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val mangaUrl = "$baseUrl/${manga.url}".toHttpUrl()
-        if (mangaUrl.fragment?.toInt() == 1) return fetchMagazineChapters(mangaUrl.pathSegments.first())
-        val secretKey = fetchSecret()
-        val chapterUrl = "$apiUrl/v3/title_chapter_list".toHttpUrl().newBuilder()
-            .addQueryParameter("os", "browser")
-            .addQueryParameter("title_id", manga.url)
-            .apply { secretKey?.let { addQueryParameter("secret", it) } }
-            .build()
-
-        val volumeUrl = "$apiUrl/browser/title_volume_list".toHttpUrl().newBuilder()
-            .addQueryParameter("os", "browser")
-            .addQueryParameter("title_id", manga.url)
-            .apply { secretKey?.let { addQueryParameter("secret", it) } }
-            .build()
-
-        val chapters = client.newCall(GET(chapterUrl, headers))
-            .asObservableSuccess()
-            .map { it.parseChapterResponse() }
-
-        val volumes = client.newCall(GET(volumeUrl, headers))
-            .asObservableSuccess()
-            .map { it.parseVolumeResponse() }
-
-        return Observable.zip(volumes, chapters) { vols, chaps -> (vols + chaps).reversed() }
-    }
-
-    private fun Response.parseChapterResponse(): List<SChapter> {
-        val result = parseAsProto<ChapterResponse>()
-        val sessionMsg = result.chapterList
-            ?.flatMap { it.chapters.orEmpty() }
-            ?.firstNotNullOfOrNull { it.session?.message }
-        checkSessionExpired(sessionMsg, request.url.queryParameter("secret"))
-        return result.chapterList.orEmpty()
-            .flatMap { it.chapters.orEmpty() }
-            .filter { !hideLocked || !it.isLocked }
-            .map { it.toSChapter() }
-    }
-
-    private fun Response.parseVolumeResponse(): List<SChapter> {
-        val result = parseAsProto<VolumeResponse>()
-        val sessionMsg = result.volumeData?.volumeList?.firstNotNullOfOrNull { it.session?.message }
-        checkSessionExpired(sessionMsg, request.url.queryParameter("secret"))
-        return result.volumeData?.volumeList.orEmpty()
-            .filter { !hideLocked || !it.isLockedVolume }
-            .map { it.toSChapter() }
-    }
-
-    private fun fetchMagazineChapters(magazineId: String, year: Int = Calendar.getInstance(jst).get(Calendar.YEAR)): Observable<List<SChapter>> {
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val secretKey = fetchSecret()
-        val url = "$apiUrl/browser/magazine_backnumbers".toHttpUrl().newBuilder()
+    private suspend fun getMagazineDetails(magazineId: String): SManga {
+        val url = "$apiUrl/v3/magazine_detail".toHttpUrl().newBuilder()
             .addQueryParameter("os", "browser")
             .addQueryParameter("magazine_id", magazineId)
-            .addQueryParameter("year", year.toString())
-            .apply { secretKey?.let { addQueryParameter("secret", it) } }
             .build()
-        val response = client.newCall(GET(url, headers)).asObservableSuccess()
-        return response.flatMap { response ->
-            val data = response.parseAsProto<MagazineResponse>().magazineData?.magazineList
-            val sessionMsg = data?.firstNotNullOfOrNull { it.session?.message }
-            checkSessionExpired(sessionMsg, response.request.url.queryParameter("secret"))
 
-            if (data.isNullOrEmpty()) {
-                Observable.just(emptyList())
-            } else {
-                fetchMagazineChapters(magazineId, year - 1).map { prev ->
-                    data.filter { !hideLocked || !it.isLockedMagazine }.map { it.toSChapter() } + prev
-                }
-            }
-        }
+        return client.get(url).parseAsProto<MagazineDetailsResponse>().details.toSManga()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val url = "$baseUrl/${chapter.url}".toHttpUrl()
-        val id = url.pathSegments.first()
-        val type = url.pathSegments.last().toInt()
-        val fragment = url.fragment
-        return when (type) {
-            0 -> "$baseUrl/title/$fragment/chapter/$id/viewer"
-            1 -> "$baseUrl/title/${fragment?.substringBefore(":")}/volume/$id/viewer"
-            else -> "$baseUrl/magazine/$id/issue/${fragment?.substringBefore(":")}/viewer"
-        }
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$baseUrl/${chapter.url}".toHttpUrl()
-        val id = url.pathSegments.first()
-        val type = url.pathSegments.last().toInt()
-        val fragment = url.fragment
+    private suspend fun getTitleChapters(titleId: String): List<SChapter> = coroutineScope {
         val secretKey = fetchSecret()
-        return when (type) {
-            0 -> {
-                val requestUrl = "$apiUrl/v3/chapter_viewer"
+
+        val volumes = async {
+            val url = "$apiUrl/browser/title_volume_list".toHttpUrl().newBuilder()
+                .addQueryParameter("os", "browser")
+                .addQueryParameter("title_id", titleId)
+                .apply { secretKey?.let { addQueryParameter("secret", it) } }
+                .build()
+
+            val result = client.get(url).parseAsProto<VolumeResponse>()
+            checkSessionExpired(result.volumeData?.volumeList?.firstNotNullOfOrNull { it.session?.message }, secretKey)
+            result.volumeData?.volumeList.orEmpty()
+                .filter { !hideLocked || !it.isLockedVolume }
+                .map { it.toSChapter() }
+        }
+
+        val chapters = async {
+            val url = "$apiUrl/v3/title_chapter_list".toHttpUrl().newBuilder()
+                .addQueryParameter("os", "browser")
+                .addQueryParameter("title_id", titleId)
+                .apply { secretKey?.let { addQueryParameter("secret", it) } }
+                .build()
+
+            val result = client.get(url).parseAsProto<ChapterResponse>()
+            val chapterList = result.chapterList.orEmpty().flatMap { it.chapters.orEmpty() }
+            checkSessionExpired(chapterList.firstNotNullOfOrNull { it.session?.message }, secretKey)
+            chapterList
+                .filter { !hideLocked || !it.isLocked }
+                .map { it.toSChapter() }
+        }
+
+        (volumes.await() + chapters.await()).reversed()
+    }
+
+    private suspend fun getMagazineChapters(magazineId: String): List<SChapter> {
+        val secretKey = fetchSecret()
+        val chapters = mutableListOf<SChapter>()
+        val latestYear = LocalDate.now(jst).year
+
+        for (year in latestYear downTo latestYear - MAGAZINE_YEARS) {
+            val url = "$apiUrl/browser/magazine_backnumbers".toHttpUrl().newBuilder()
+                .addQueryParameter("os", "browser")
+                .addQueryParameter("magazine_id", magazineId)
+                .addQueryParameter("year", year.toString())
+                .apply { secretKey?.let { addQueryParameter("secret", it) } }
+                .build()
+
+            val issues = client.get(url).parseAsProto<MagazineResponse>().magazineData?.magazineList
+            checkSessionExpired(issues?.firstNotNullOfOrNull { it.session?.message }, secretKey)
+            if (issues.isNullOrEmpty()) break
+
+            chapters += issues.filter { !hideLocked || !it.isLockedMagazine }.map { it.toSChapter() }
+        }
+
+        return chapters
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val secretKey = fetchSecret()
+        val memo = chapter.memo
+
+        val pages = when (chapter.type) {
+            TYPE_CHAPTER -> {
                 val body = FormBody.Builder() // application/x-www-form-urlencoded
                     .add("os", "browser")
-                    .add("title_id", fragment!!)
-                    .add("chapter_id", id)
+                    .add("title_id", memo["titleId"]!!.string)
+                    .add("chapter_id", chapter.url)
                     .add("type", "normal")
                     .apply { secretKey?.let { add("secret", it) } }
                     .build()
-                POST(requestUrl, headers, body)
+
+                client.post("$apiUrl/v3/chapter_viewer", body).toPageList(secretKey)
             }
 
-            1 -> {
-                val (titleId, isTrial) = fragment!!.split(":")
-                val requestUrl = "$apiUrl/v3/manga_volume_viewer".toHttpUrl().newBuilder()
+            TYPE_VOLUME -> {
+                val url = "$apiUrl/v3/manga_volume_viewer".toHttpUrl().newBuilder()
                     .addQueryParameter("os", "browser")
-                    .addQueryParameter("title_id", titleId)
-                    .addQueryParameter("volume_id", id)
+                    .addQueryParameter("title_id", memo["titleId"]!!.string)
+                    .addQueryParameter("volume_id", chapter.url)
                     .apply { secretKey?.let { addQueryParameter("secret", it) } }
-                    .addQueryParameter("is_trial", isTrial)
+                    .addQueryParameter("is_trial", chapter.isTrial)
                     .build()
-                GET(requestUrl, headers)
+
+                client.get(url).toPageList(secretKey)
             }
 
             else -> {
-                val (magazineIssueId, isTrial) = fragment!!.split(":")
-                val requestUrl = "$magazineApiUrl/browser/magazine_viewer".toHttpUrl().newBuilder()
+                val url = "$magazineApiUrl/browser/magazine_viewer".toHttpUrl().newBuilder()
                     .addQueryParameter("os", "browser")
-                    .addQueryParameter("magazine_id", id)
-                    .addQueryParameter("magazine_issue_id", magazineIssueId)
+                    .addQueryParameter("magazine_id", memo["magazineId"]!!.string)
+                    .addQueryParameter("magazine_issue_id", chapter.url)
                     .apply { secretKey?.let { addQueryParameter("secret", it) } }
-                    .addQueryParameter("is_trial", isTrial)
+                    .addQueryParameter("is_trial", chapter.isTrial)
                     .build()
-                GET(requestUrl, headers)
-            }
-        }
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val isMagazineViewer = response.request.url.pathSegments.last() == "magazine_viewer"
-
-        return if (isMagazineViewer) {
-            val result = response.parseAsProto<MagazineViewerImages>()
-            checkSessionExpired(result.session?.message, response.request.url.queryParameter("secret"))
-            result.pages?.pagesList.orEmpty().mapIndexedNotNull { i, image ->
-                image.page?.let { Page(i, imageUrl = "$it#key=${image.key}") }
-            }.ifEmpty { throw Exception(LOCKED) }
-        } else {
-            val result = response.parseAsProto<ViewerResponse>()
-            checkSessionExpired(result.session?.message, response.request.url.queryParameter("secret"))
-            result.images.mapIndexedNotNull { i, image ->
-                image.pages?.let { Page(i, imageUrl = "${it.page}#key=${it.key}") }
-            }.ifEmpty { throw Exception(LOCKED) }
-        }
-    }
-
-    private fun getLatestDay(): String {
-        val calendar = Calendar.getInstance(jst)
-        val days = arrayOf("sun", "mon", "tue", "wed", "thu", "fri", "sat")
-        return days[calendar.get(Calendar.DAY_OF_WEEK) - 1]
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    @Synchronized
-    private fun fetchSecret(): String? {
-        if (secret != null) return secret
-
-        val latch = CountDownLatch(1)
-        var token: String? = null
-
-        Handler(Looper.getMainLooper()).post {
-            val webView = WebView(Injekt.get<Application>())
-            with(webView.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
-            }
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    view.evaluateJavascript("window.localStorage.getItem('device_secret_key')") { value ->
-                        token = value?.trim('"')
-                        if (token == "null" || token.isNullOrBlank()) token = null
-
-                        latch.countDown()
-                        view.stopLoading()
-                        view.destroy()
-                    }
+                val result = client.get(url).parseAsProto<MagazineViewerImages>()
+                checkSessionExpired(result.session?.message, secretKey)
+                result.pages?.pagesList.orEmpty().mapIndexedNotNull { i, image ->
+                    image.page?.let { Page(i, imageUrl = "$it#key=${image.key}") }
                 }
             }
-            webView.loadDataWithBaseURL("$baseUrl/", " ", "text/html", "utf-8", null)
         }
 
-        latch.await(10, TimeUnit.SECONDS)
-
-        secret = token
-        return secret
+        return pages.ifEmpty { throw Exception(LOCKED) }
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    @Synchronized
-    private fun flushSecret(target: String?) {
-        Handler(Looper.getMainLooper()).post {
-            val webView = WebView(Injekt.get<Application>())
-            with(webView.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
+    private suspend fun Response.toPageList(secretKey: String?): List<Page> {
+        val result = parseAsProto<ViewerResponse>()
+        checkSessionExpired(result.session?.message, secretKey)
+        return result.images.mapIndexedNotNull { i, image ->
+            image.pages?.let { Page(i, imageUrl = "${it.page}#key=${it.key}") }
+        }
+    }
+
+    override fun getMangaUrl(manga: SManga): String = if (manga.isMagazine) {
+        "$baseUrl/magazine/${manga.url}/detail"
+    } else {
+        "$baseUrl/title/${manga.url}"
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val memo = chapter.memo
+        return when (chapter.type) {
+            TYPE_CHAPTER -> "$baseUrl/title/${memo["titleId"]!!.string}/chapter/${chapter.url}/viewer"
+            TYPE_VOLUME -> "$baseUrl/title/${memo["titleId"]!!.string}/volume/${chapter.url}/viewer"
+            else -> "$baseUrl/magazine/${memo["magazineId"]!!.string}/issue/${chapter.url}/viewer"
+        }
+    }
+
+    private val SManga.isMagazine: Boolean get() = memo["type"]?.string == TYPE_MAGAZINE
+    private val SChapter.type: String get() = memo["type"]?.string ?: TYPE_CHAPTER
+    private val SChapter.isTrial: String get() = if (memo["trial"]?.boolean == true) "1" else "0"
+
+    private val currentDayInJapan: String
+        get() = WEEKDAYS[LocalDate.now(jst).dayOfWeek.value - 1]
+
+    private suspend fun fetchSecret(): String? {
+        secret?.let { return it }
+
+        return secretMutex.withLock {
+            secret ?: getLocalStorage("$baseUrl/", SECRET_STORAGE_KEY)
+                ?.takeUnless { it.isBlank() }
+                ?.also { secret = it }
+        }
+    }
+
+    private suspend fun flushSecret(target: String?) {
+        val key = SECRET_STORAGE_KEY.toJsonString()
+        val script = "if(localStorage.getItem($key)===${target.toJsonString()}){localStorage.removeItem($key)}"
+
+        runWebView(timeout = 10.seconds) {
+            onPageFinished {
+                evaluateJs(script) { resolve(Unit) }
             }
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    val script = "if(window.localStorage.getItem('device_secret_key')==='$target'){window.localStorage.removeItem('device_secret_key');}"
-                    view.evaluateJavascript(script) {
-                        view.stopLoading()
-                        view.destroy()
-                    }
-                }
-            }
-            webView.loadDataWithBaseURL("$baseUrl/", " ", "text/html", "utf-8", null)
+            loadData("$baseUrl/", "")
         }
     }
 
@@ -418,14 +360,14 @@ abstract class Zebrack :
         false
     }
 
-    private fun checkSessionExpired(sessionMsg: String?, failedSecret: String?) {
+    private suspend fun checkSessionExpired(sessionMsg: String?, failedSecret: String?) {
         if (sessionMsg == SESSION_EXPIRED) {
+            clearSecretIfCurrent(failedSecret)
             flushSecret(failedSecret)
             throw Exception(LOCKED)
         }
     }
 
-    @Synchronized
     private fun clearSecretIfCurrent(value: String?) {
         if (secret == value) secret = null
     }
@@ -438,15 +380,17 @@ abstract class Zebrack :
         }.also(screen::addPreference)
     }
 
-    override fun getFilterList() = FilterList(CategoryFilter())
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        CategoryFilter(),
+    )
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val SECRET_STORAGE_KEY = "device_secret_key"
         private const val SESSION_EXPIRED = "ログイン期限切れ"
         private const val LOCKED = "Log in via WebView and purchase this product to read."
-    }
+        private const val MAGAZINE_YEARS = 30
 
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+        private val WEEKDAYS = listOf("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+    }
 }

@@ -99,6 +99,7 @@ val languages = listOf(
     "Japanese" to "ja",
     "Indonesian" to "id",
     "Chinese" to "zh",
+    "Chinese (Traditional)" to "zh_hk",
     "Abkhazian" to "ab",
     "Afrikaans" to "af",
     "Armenian" to "hy",

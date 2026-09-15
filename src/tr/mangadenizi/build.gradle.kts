@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "MangaDenizi"
-    versionCode = 7
-    contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    versionCode = 8
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
+
+    deeplink {
+        path("/manga/..*")
+    }
 
     source {
         lang = "tr"
-        baseUrl = "https://www.mangadenizi.net"
+        baseUrl = "https://mangadenizi.net"
     }
 }
