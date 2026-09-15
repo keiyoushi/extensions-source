@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -24,17 +25,24 @@ import org.jsoup.nodes.Document
  * - Details /comic.php?id={id} carries two identical chapter lists (desktop all-chapter-grid and
  *   mobile mobile-chapter-grid), newest first; the mobile one is parsed
  * - Pages are img[src] inside section.reader-images of /chapter.php?id={id}, already absolute URLs
- * - The newest chapter is sometimes served without any reader-images block: the app gets it, the
- *   web does not, so it is fetched from the app API instead, see [GuaziAppApi]
+ * - A freshly published chapter is served to an Android / Dalvik UA as an app-download page with
+ *   no reader-images block; a desktop UA gets the real pages, so one is sent with every request
+ * - Should the web reader still return no pages, the chapter is fetched from the app API instead,
+ *   see [GuaziAppApi]
  * - The "download the app" prompt shown after a few chapters is rendered client-side from
  *   localStorage and the server does not gate image requests, so it needs no handling here
- * - User-Agent is irrelevant: desktop, mobile and Dalvik UAs return byte-identical responses,
- *   so no custom User-Agent is set
  *
  * name / lang / id / baseUrl are injected from the keiyoushi block in build.gradle.kts.
  */
 @Source
 abstract class Guazimanhua : KeiSource() {
+
+    // A freshly published chapter is withheld from Android and Dalvik UAs: the response carries no
+    // reader-images, only a "download the app" prompt. A desktop UA is served the real pages.
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    )
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
