@@ -22,29 +22,28 @@ abstract class Mangitto : HttpSource() {
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/manga/trends?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/manga/populer?skip=${(page - 1) * PAGE_SIZE}&take=$PAGE_SIZE", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<MangttoResponse<MangttoTrendsData>>().data
+        val data = response.parseAs<MangttoPopularData>()
         val mangas = data.mangas.map { it.toSManga() }
+        val skip = response.request.url.queryParameter("skip")?.toIntOrNull() ?: 0
 
-        return MangasPage(mangas, mangas.isNotEmpty())
+        return MangasPage(mangas, skip + data.mangas.size < data.total)
     }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/manga/last-added?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/manga/latest?skip=${(page - 1) * PAGE_SIZE}&take=$PAGE_SIZE", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<MangttoResponse<MangttoLatestData>>().data
+        val data = response.parseAs<MangttoLatestData>()
 
         // The API returns a list of chapters, so we distinct by slug to avoid duplicates.
-        val mangas = data.chapters.distinctBy { it.slug }.map { it.toSManga() }
-        val hasNextPage = response.request.url.queryParameter("page")?.toIntOrNull()?.let {
-            it < data.pages
-        } ?: false
+        val mangas = data.chapters.map { it.manga }.distinctBy { it.slug }.map { it.toSManga() }
+        val skip = response.request.url.queryParameter("skip")?.toIntOrNull() ?: 0
 
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, skip + data.chapters.size < data.total)
     }
 
     // ============================== Search ===============================
@@ -54,34 +53,35 @@ abstract class Mangitto : HttpSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("q", query)
 
-        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
-        if (genreFilter != null) {
-            url.addQueryParameter("genre", genreFilter.getQuery())
+        filters.firstInstanceOrNull<GenreFilter>()?.getQuery()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { url.addQueryParameter("genres", it) }
+
+        if (filters.firstInstanceOrNull<AdultFilter>()?.state == true) {
+            url.addQueryParameter("isAdult", "true")
         }
 
-        val adultFilter = filters.firstInstanceOrNull<AdultFilter>()
-        url.addQueryParameter("isAdult", adultFilter?.state?.toString() ?: "false")
-
-        val completedFilter = filters.firstInstanceOrNull<CompletedFilter>()
-        if (completedFilter?.state == true) {
+        if (filters.firstInstanceOrNull<CompletedFilter>()?.state == true) {
             url.addQueryParameter("isFinished", "true")
         }
 
-        val scoreFilter = filters.firstInstanceOrNull<ScoreFilter>()
-        url.addQueryParameter("meanScore", scoreFilter?.state?.takeIf { it.isNotEmpty() } ?: "0")
+        filters.firstInstanceOrNull<ScoreFilter>()?.state
+            ?.takeIf { it.isNotBlank() }
+            ?.let { url.addQueryParameter("meanScore", it.trim()) }
 
-        val dateFilter = filters.firstInstanceOrNull<DateFilter>()
-        url.addQueryParameter("releaseDate", dateFilter?.state?.takeIf { it.isNotEmpty() } ?: "0")
+        filters.firstInstanceOrNull<DateFilter>()?.state
+            ?.takeIf { it.isNotBlank() }
+            ?.let { url.addQueryParameter("releaseDate", it.trim()) }
 
         return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<MangttoResponse<MangttoSearchData>>().data
-        val mangas = data.hits.map { it.toSManga() }
+        val data = response.parseAs<MangttoSearchData>()
+        val mangas = data.hits.map { it.document.toSManga() }
 
         val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val hasNextPage = (currentPage * data.limit) < data.estimatedTotalHits
+        val hasNextPage = (currentPage * SEARCH_PAGE_SIZE) < data.estimatedTotalHits
 
         return MangasPage(mangas, hasNextPage)
     }
@@ -92,27 +92,26 @@ abstract class Mangitto : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangttoResponse<MangttoDetailData>>().data.toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangttoDetailData>().toSManga()
 
     // ============================= Chapters ==============================
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val allChapters = mutableListOf<SChapter>()
-        var page = 1
-        var hasNextPage = true
+        var skip = 0
 
-        while (hasNextPage) {
-            val request = GET("$baseUrl/api/manga/${manga.url}/chapters?page=$page", headers)
-            val response = client.newCall(request).execute()
-            val data = response.parseAs<MangttoResponse<MangttoChapterPageData>>().data
+        while (true) {
+            val request = GET("$baseUrl/api/manga/${manga.url}/chapters?skip=$skip&take=$PAGE_SIZE", headers)
+            val data = client.newCall(request).execute().parseAs<MangttoChapterPageData>()
 
             allChapters.addAll(data.chapters.map { it.toSChapter(manga.url) })
+            skip += data.chapters.size
 
-            hasNextPage = page < data.pages
-            page++
+            if (data.chapters.isEmpty() || skip >= data.total) break
         }
 
-        allChapters
+        // The API returns chapters in ascending order.
+        allChapters.reversed()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/${chapter.url}"
@@ -124,14 +123,14 @@ abstract class Mangitto : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/api/manga/${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<MangttoResponse<MangttoPageData>>().data
-        val staticInfo = data.chapter.static.firstOrNull() ?: return emptyList()
+        val data = response.parseAs<MangttoPageData>()
+        val upload = data.uploads.firstOrNull() ?: return emptyList()
         val pathSegments = response.request.url.pathSegments
         val mangaSlug = pathSegments[pathSegments.size - 2]
-        val chapterStr = data.chapter.chapter.toString().removeSuffix(".0")
+        val chapterStr = pathSegments.last()
 
-        return (1..staticInfo.fileSize).mapIndexed { index, pageNum ->
-            Page(index, imageUrl = "https://cdn.zukrein.com/$mangaSlug/$chapterStr/$pageNum-${staticInfo.fansubId}.jpeg")
+        return (1..upload.fileLength).map { pageNum ->
+            Page(pageNum - 1, imageUrl = "${data.cdn}/manga/$mangaSlug/$chapterStr/$pageNum-${upload.fansubId}.webp")
         }
     }
 
@@ -146,4 +145,9 @@ abstract class Mangitto : HttpSource() {
         ScoreFilter(),
         DateFilter(),
     )
+
+    companion object {
+        private const val PAGE_SIZE = 50
+        private const val SEARCH_PAGE_SIZE = 42
+    }
 }
