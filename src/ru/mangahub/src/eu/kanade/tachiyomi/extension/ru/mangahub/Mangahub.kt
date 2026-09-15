@@ -174,7 +174,7 @@ abstract class Mangahub : KeiSource() {
 
     private fun Document.getAttrValues(vararg attrNames: String): String? = attrNames.flatMap { name ->
         select(".attr-name:contains($name) + .attr-value a").map {
-            it.text().trim().removeSuffix(",")
+            it.text().removeSuffix(",")
         }
     }
         .filter(String::isNotEmpty)
@@ -222,7 +222,7 @@ abstract class Mangahub : KeiSource() {
             country = data.getFilter("country"),
             sort = data.select(".select-menu-list .select-menu-item").mapNotNull { element ->
                 val value = element.selectFirst("input")?.attr("value")?.trim() ?: return@mapNotNull null
-                val label = element.ownText().trim()
+                val label = element.ownText()
                 label to value
             },
         ).toJsonElement()
