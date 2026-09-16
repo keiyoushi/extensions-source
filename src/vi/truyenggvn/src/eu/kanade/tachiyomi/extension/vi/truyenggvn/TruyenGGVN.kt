@@ -220,11 +220,7 @@ abstract class TruyenGGVN : KeiSource() {
             StatusFilter(),
             ChapterCountFilter(),
             SortByFilter(),
-            if (genres.isNullOrEmpty()) {
-                Filter.Header("Nhấn 'Đặt lại' để tải thể loại")
-            } else {
-                GenreList(genres.map { Genre(it.name, it.id) })
-            },
+            GenreList(genres.orEmpty().map { Genre(it.name, it.id) }),
         )
     }
 
