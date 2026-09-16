@@ -37,8 +37,8 @@ class SeriesDetailsResponse(val series: SeriesDetailsDto)
 
 @Serializable
 class SeriesDetailsDto(
-    val id: String,
-    val slug: String,
+    private val id: String,
+    private val slug: String,
     private val title: String,
     private val coverImageUrl: String? = null,
     private val description: String? = null,
@@ -49,6 +49,7 @@ class SeriesDetailsDto(
 ) {
     fun toSManga() = SManga.create().apply {
         url = slug
+        memo = buildJsonObject { put("id", id) }
         title = this@SeriesDetailsDto.title
         thumbnail_url = coverImageUrl
         genre = buildList {

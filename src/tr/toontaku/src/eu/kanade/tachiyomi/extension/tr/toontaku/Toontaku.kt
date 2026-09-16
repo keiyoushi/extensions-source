@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getBoolean
 import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -30,18 +31,21 @@ abstract class Toontaku : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = seriesPage(page, sort = "totalViews,desc")
 
-    // /api/chapters/new is cursor-paginated, so remember the cursor each page hands out for the next one
-    private val latestCursors = mutableMapOf<Int, String>()
+    // /api/chapters/new is cursor-paginated, so remember the cursor the previous page handed out
+    private var latestCursor: String? = null
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page == 1) {
+            latestCursor = null
+        }
         val url = "$apiUrl/chapters/new".toHttpUrl().newBuilder().apply {
             addQueryParameter("limit", LATEST_PAGE_SIZE.toString())
             if (page > 1) {
-                addQueryParameter("cursor", latestCursors[page] ?: throw Exception("Sayfa bulunamadı, listeyi yenileyin"))
+                addQueryParameter("cursor", latestCursor ?: throw Exception("Sayfa bulunamadı, listeyi yenileyin"))
             }
         }.build()
         val data = client.get(url).parseAs<ApiResponse<LatestChaptersDto>>().data
-        data.nextCursor?.let { latestCursors[page + 1] = it }
+        latestCursor = data.nextCursor
         val mangas = data.items.filter { it.contentKind == "IMAGE_CHAPTER" }.map { it.toSManga() }
         return MangasPage(mangas, !data.isEnd)
     }
@@ -97,19 +101,23 @@ abstract class Toontaku : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        // the chapter endpoint needs the internal series id, which only the details response has
-        val details = fetchDetails(manga.url)
+        // the chapter endpoint needs the internal series id, which only the details response has, so it is kept in memo
+        val updatedManga = if (fetchDetails || manga.memo.getStringOrNull("id") == null) {
+            fetchDetails(manga.url).toSManga()
+        } else {
+            manga
+        }
         val chapterList = if (fetchChapters) {
-            val url = "$apiUrl/chapters/series/${details.id}".toHttpUrl().newBuilder()
+            val url = "$apiUrl/chapters/series/${updatedManga.memo.getString("id")}".toHttpUrl().newBuilder()
                 .addQueryParameter("limit", CHAPTER_LIMIT.toString())
                 .addQueryParameter("sortBy", "chapterNumber")
                 .addQueryParameter("sortOrder", "desc")
                 .build()
-            client.get(url).parseAs<ApiResponse<ChapterListDto>>().data.chapters.map { it.toSChapter(details.slug) }
+            client.get(url).parseAs<ApiResponse<ChapterListDto>>().data.chapters.map { it.toSChapter(manga.url) }
         } else {
             chapters
         }
-        return SMangaUpdate(details.toSManga(), chapterList)
+        return SMangaUpdate(updatedManga, chapterList)
     }
 
     private suspend fun fetchDetails(slug: String): SeriesDetailsDto = client.get("$apiUrl/series/slug/$slug").parseAs<ApiResponse<SeriesDetailsResponse>>().data.series
