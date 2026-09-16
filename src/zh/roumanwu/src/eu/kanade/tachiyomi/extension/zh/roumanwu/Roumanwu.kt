@@ -12,7 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
-import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
@@ -82,22 +81,18 @@ abstract class Roumanwu : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val rscHeaders = headers.newBuilder().add("rsc", "1").build()
-        val response = client.get(getChapterUrl(chapter), rscHeaders)
-        val contentType = response.header("Content-Type").orEmpty()
-        val body = response.use { it.body.string() }
+        val body = client.get(getChapterUrl(chapter)).use { it.body.string() }
 
-        val fromNextJs = if ("text/x-component" in contentType) {
-            body.extractNextJsRsc<ChapterPages>()
-        } else {
-            body.asJsoup(baseUrl).extractNextJs<ChapterPages>()
-        }
-        if (fromNextJs != null) return fromNextJs.toPageList()
+        val fromNextJs = body.asJsoup(baseUrl).extractNextJs<ChapterPages>()?.toPageList().orEmpty()
+        if (fromNextJs.isNotEmpty()) return fromNextJs
 
-        // 当前站点 hydration 是 TanStack ($_TSR)，没有 __next_f
-        val imagePaths = IMAGE_PATHS_REGEX.find(body)?.groupValues?.get(1)?.parseAs<List<String>>()
-            ?: return emptyList()
-        return imagePaths.mapIndexed { index, url -> Page(index, imageUrl = url) }
+        // TanStack hydration: imagePaths:$R[n]=["https://...", ...]
+        val marker = body.indexOf("imagePaths:")
+        val arrayStart = if (marker >= 0) body.indexOf("=[", marker) + 1 else -1
+        val arrayEnd = if (arrayStart > 0) body.indexOf(']', arrayStart) else -1
+        if (arrayEnd < 0) return emptyList()
+        return body.substring(arrayStart, arrayEnd + 1).parseAs<List<String>>()
+            .mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -197,6 +192,5 @@ abstract class Roumanwu : KeiSource() {
 
     companion object {
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yyyy")
-        private val IMAGE_PATHS_REGEX = Regex("""imagePaths:${'$'}R\[\d+]=(\[[^\]]+])""")
     }
 }
