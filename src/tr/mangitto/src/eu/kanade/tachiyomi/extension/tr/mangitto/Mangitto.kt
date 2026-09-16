@@ -1,55 +1,53 @@
 package eu.kanade.tachiyomi.extension.tr.mangitto
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import okhttp3.OkHttpClient
 
 @Source
-abstract class Mangitto : HttpSource() {
+abstract class Mangitto : KeiSource() {
 
-    override val supportsLatest = true
+    private val apiUrl get() = "$baseUrl/api/manga"
 
-    // ============================== Popular ==============================
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/manga/populer?skip=${(page - 1) * PAGE_SIZE}&take=$PAGE_SIZE", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<MangttoPopularData>()
-        val mangas = data.mangas.map { it.toSManga() }
-        val skip = response.request.url.queryParameter("skip")?.toIntOrNull() ?: 0
-
-        return MangasPage(mangas, skip + data.mangas.size < data.total)
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(2)
     }
 
-    // ============================== Latest ===============================
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val skip = (page - 1) * PAGE_SIZE
+        val data = client.get("$apiUrl/populer?skip=$skip&take=$PAGE_SIZE").parseAs<MangttoPopularData>()
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/manga/latest?skip=${(page - 1) * PAGE_SIZE}&take=$PAGE_SIZE", headers)
+        return MangasPage(data.mangas.map { it.toSManga() }, skip + data.mangas.size < data.total)
+    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<MangttoLatestData>()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val skip = (page - 1) * PAGE_SIZE
+        val data = client.get("$apiUrl/latest?skip=$skip&take=$PAGE_SIZE").parseAs<MangttoLatestData>()
 
         // The API returns a list of chapters, so we distinct by slug to avoid duplicates.
         val mangas = data.chapters.map { it.manga }.distinctBy { it.slug }.map { it.toSManga() }
-        val skip = response.request.url.queryParameter("skip")?.toIntOrNull() ?: 0
 
         return MangasPage(mangas, skip + data.chapters.size < data.total)
     }
 
-    // ============================== Search ===============================
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/manga/search".toHttpUrl().newBuilder()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("q", query)
 
@@ -73,78 +71,85 @@ abstract class Mangitto : HttpSource() {
             ?.takeIf { it.isNotBlank() }
             ?.let { url.addQueryParameter("releaseDate", it.trim()) }
 
-        return GET(url.build(), headers)
+        val data = client.get(url.build()).parseAs<MangttoSearchData>()
+
+        return MangasPage(data.hits.map { it.document.toSManga() }, page * SEARCH_PAGE_SIZE < data.estimatedTotalHits)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<MangttoSearchData>()
-        val mangas = data.hits.map { it.document.toSManga() }
+    override val supportsFilterFetching = true
 
-        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val hasNextPage = (currentPage * SEARCH_PAGE_SIZE) < data.estimatedTotalHits
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs()
 
-        return MangasPage(mangas, hasNextPage)
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<MangttoGenres>()?.genres.orEmpty()
+        return FilterList(
+            buildList {
+                if (genres.isNotEmpty()) {
+                    add(GenreFilter(genres))
+                }
+                add(AdultFilter())
+                add(CompletedFilter())
+                add(ScoreFilter())
+                add(DateFilter())
+            },
+        )
     }
 
-    // ============================== Details ==============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") {
+            return null
+        }
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/api/manga/${manga.url}", headers)
+        return client.get("$apiUrl/$slug").parseAs<MangttoDetailData>().toSManga().apply { initialized = true }
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangttoDetailData>().toSManga()
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/${chapter.memo.getString("mangaSlug")}/${chapter.url}"
 
-    // ============================= Chapters ==============================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (fetchDetails) client.get("$apiUrl/${manga.url}").parseAs<MangttoDetailData>().toSManga() else manga
+        }
+        val chapterList = async {
+            if (fetchChapters) fetchAllChapters(manga.url) else chapters
+        }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        SMangaUpdate(details.await(), chapterList.await())
+    }
+
+    private suspend fun fetchAllChapters(slug: String): List<SChapter> {
         val allChapters = mutableListOf<SChapter>()
         var skip = 0
 
         while (true) {
-            val request = GET("$baseUrl/api/manga/${manga.url}/chapters?skip=$skip&take=$PAGE_SIZE", headers)
-            val data = client.newCall(request).execute().parseAs<MangttoChapterPageData>()
+            val data = client.get("$apiUrl/$slug/chapters?skip=$skip&take=$PAGE_SIZE").parseAs<MangttoChapterPageData>()
 
-            allChapters.addAll(data.chapters.map { it.toSChapter(manga.url) })
+            allChapters.addAll(data.chapters.map { it.toSChapter(slug) })
             skip += data.chapters.size
 
             if (data.chapters.isEmpty() || skip >= data.total) break
         }
 
         // The API returns chapters in ascending order.
-        allChapters.reversed()
+        return allChapters.reversed()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/${chapter.url}"
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    // =============================== Pages ===============================
-
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/api/manga/${chapter.url}", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<MangttoPageData>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val slug = chapter.memo.getString("mangaSlug")
+        val data = client.get("$apiUrl/$slug/${chapter.url}").parseAs<MangttoPageData>()
         val upload = data.uploads.firstOrNull() ?: return emptyList()
-        val pathSegments = response.request.url.pathSegments
-        val mangaSlug = pathSegments[pathSegments.size - 2]
-        val chapterStr = pathSegments.last()
 
         return (1..upload.fileLength).map { pageNum ->
-            Page(pageNum - 1, imageUrl = "${data.cdn}/manga/$mangaSlug/$chapterStr/$pageNum-${upload.fansubId}.webp")
+            Page(pageNum - 1, imageUrl = "${data.cdn}/manga/$slug/${chapter.url}/$pageNum-${upload.fansubId}.webp")
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Filters ==============================
-
-    override fun getFilterList() = FilterList(
-        GenreFilter(),
-        AdultFilter(),
-        CompletedFilter(),
-        ScoreFilter(),
-        DateFilter(),
-    )
 
     companion object {
         private const val PAGE_SIZE = 50
