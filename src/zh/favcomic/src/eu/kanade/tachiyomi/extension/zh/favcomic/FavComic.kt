@@ -59,19 +59,12 @@ abstract class FavComic :
             .set("Referer", "$baseUrl/login")
             .build()
 
-        val response = client.post("$baseUrl/login", headers = headers, body = formBody)
-        val dto = runCatching { response.parseAs<LoginResultDto>() }.getOrNull()
-
-        if (dto != null) {
-            if (dto.result == "success") {
-                return true
-            }
-            if (!dto.msg.isNullOrBlank()) {
-                throw Exception("自动登录失败: ${dto.msg}")
-            }
+        val dto = client.post("$baseUrl/login", headers = headers, body = formBody).parseAs<LoginResultDto>()
+        if (dto.result == "success") {
+            return true
         }
-        if (!response.isSuccessful) {
-            throw Exception("自动登录失败: HTTP ${response.code}")
+        if (!dto.msg.isNullOrBlank()) {
+            throw Exception("自动登录失败: ${dto.msg}")
         }
         return false
     }
