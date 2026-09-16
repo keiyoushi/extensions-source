@@ -1,13 +1,15 @@
 package eu.kanade.tachiyomi.extension.ja.linemanga
 
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Serializable
@@ -17,9 +19,14 @@ class EntryResponse(
 
 @Serializable
 class Result(
-    @JsonNames("rows") val items: List<Item>,
-    val pager: Pager?,
-)
+    @JsonNames("rows") private val items: List<Item>,
+    private val pager: Pager?,
+) {
+    fun toMangasPage(): MangasPage {
+        val mangas = items.filter { it.isLightNovel != true }.map { it.toSManga() }
+        return MangasPage(mangas, pager?.hasNext == true)
+    }
+}
 
 @Serializable
 class Item(
@@ -31,7 +38,7 @@ class Item(
     fun toSManga(): SManga = SManga.create().apply {
         url = id
         title = name
-        thumbnail_url = thumbnail?.toHttpUrl()?.newBuilder()?.removePathSegment(1)?.build().toString()
+        thumbnail_url = thumbnail?.toThumbnail()
     }
 }
 
@@ -63,11 +70,12 @@ class Product(
     private val caption: String?,
     private val name: String,
     private val explanation: String?,
+    private val conclusion: Boolean?,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = seriesName ?: name
-        thumbnail_url = thumbnail?.toHttpUrl()?.newBuilder()?.removePathSegment(1)?.build().toString()
-        author = this@Product.authors?.joinToString { it.name }
+        thumbnail_url = thumbnail?.toThumbnail()
+        author = authors?.joinToString { it.name }
         description = buildString {
             if (!caption.isNullOrBlank()) {
                 append("$caption\n\n")
@@ -86,6 +94,11 @@ class Product(
             }
         }
         genre = genreName
+        status = when (conclusion) {
+            true -> SManga.COMPLETED
+            false -> SManga.ONGOING
+            null -> SManga.UNKNOWN
+        }
     }
 }
 
@@ -117,9 +130,13 @@ class Rows(
         val chapterName = if (seriesName != null) this@Rows.name.replace(seriesName, "").trim() else this@Rows.name
         url = id
         name = lock + chapterName
-        chapter_number = volume.toFloat()
-        date_upload = dateFormat.tryParse(permitStart)
+        // The site counts volumes from zero.
+        chapter_number = volume + 1f
+        date_upload = dateFormat.tryParseDate(permitStart, JST)
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ROOT)
+private fun String.toThumbnail(): String = this.toHttpUrl().newBuilder().removePathSegment(1).build().toString()
+
+val JST: ZoneId = ZoneId.of("Asia/Tokyo")
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.ROOT)
