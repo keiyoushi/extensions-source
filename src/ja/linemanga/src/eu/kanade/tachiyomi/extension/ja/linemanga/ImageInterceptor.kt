@@ -10,7 +10,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 
-class PortalPageMetadata(
+private class PortalPageMetadata(
     val hc: Int, // horizontal block count
     val bwd: Int, // block width/height in px
     val m: List<String>, // scramble map (base-35 encoded values)

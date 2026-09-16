@@ -146,6 +146,8 @@ abstract class LineManga :
         return if (options.isPortal) parsePortalPages(options.portalPages) else parseImgPages(options.imgs)
     }
 
+    // A portal chapter inlines several MB of scramble data in one <script> that Jsoup would buffer whole.
+    // The statements are emitted in reading order, one per line, so the body can be scanned as it downloads.
     private fun Response.parseViewer(): ViewerOptions = use { response ->
         val options = ViewerOptions()
         var inPortalPage = false
