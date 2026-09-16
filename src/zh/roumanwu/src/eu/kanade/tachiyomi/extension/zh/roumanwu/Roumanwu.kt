@@ -197,6 +197,6 @@ abstract class Roumanwu : KeiSource() {
 
     companion object {
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yyyy")
-        private val IMAGE_PATHS_REGEX = Regex("""imagePaths:\$R\[\d+]=(\[[^\]]+])""")
+        private val IMAGE_PATHS_REGEX = Regex("""imagePaths:${'$'}R\[\d+]=(\[[^\]]+])""")
     }
 }
