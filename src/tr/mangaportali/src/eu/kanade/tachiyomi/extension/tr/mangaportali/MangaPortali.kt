@@ -93,8 +93,12 @@ abstract class MangaPortali : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get("$baseUrl/api/series/${manga.url}").parseAs<SeriesDto>()
-        return SMangaUpdate(details.toSManga(), if (fetchChapters) fetchChapters(manga.url) else chapters)
+        val details = if (fetchDetails) {
+            client.get("$baseUrl/api/series/${manga.url}").parseAs<SeriesDto>().toSManga()
+        } else {
+            manga
+        }
+        return SMangaUpdate(details, if (fetchChapters) fetchChapters(manga.url) else chapters)
     }
 
     private suspend fun fetchChapters(slug: String): List<SChapter> = buildList {
