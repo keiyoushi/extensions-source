@@ -11,7 +11,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -30,10 +29,6 @@ abstract class AComics : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addCookie { listOf("ageRestrict" to "18") }
-    }
-
-    init {
-        applicationContext.cacheDir.resolve("source_$id").deleteRecursively()
     }
 
     // ============================== Popular ===============================
