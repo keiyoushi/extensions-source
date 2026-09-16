@@ -112,7 +112,13 @@ abstract class ScanReader : KeiSource() {
 
         parseMangaDetails(document, manga)
 
-        return SMangaUpdate(manga, fetchChapterList(document, mangaUrl))
+        val chapterList = if (fetchChapters) {
+            fetchChapterList(document, mangaUrl)
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(manga, chapterList)
     }
 
     private fun parseMangaDetails(document: Document, manga: SManga) {
