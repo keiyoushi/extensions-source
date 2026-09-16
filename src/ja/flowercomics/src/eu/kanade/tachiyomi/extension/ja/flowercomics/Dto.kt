@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
