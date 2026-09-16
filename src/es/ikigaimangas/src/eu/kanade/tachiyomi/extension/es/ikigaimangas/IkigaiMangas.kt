@@ -262,7 +262,7 @@ abstract class IkigaiMangas :
     ): SMangaUpdate {
         fetchDomainUrl()
 
-        val document = client.get("$baseUrl/series/${manga.url}/", headers).asJsoup()
+        val document = client.get("$baseUrl/series/${manga.url}/").asJsoup()
         val mainContent = document.selectFirst("main")!!
         val updatedManga = SManga.create().apply {
             title = mainContent.selectFirst(".card-body .card-title")!!.text()
