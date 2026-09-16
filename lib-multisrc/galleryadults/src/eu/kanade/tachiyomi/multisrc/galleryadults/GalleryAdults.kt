@@ -91,7 +91,7 @@ abstract class GalleryAdults :
     }
 
     protected open fun parsePopularManga(document: Document): MangasPage {
-        val mangas = document.select(popularMangaSelector()).map { element ->
+        val mangas = document.select(popularMangaSelector()).mapNotNull { element ->
             popularMangaFromElement(element)
         }
         val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) != null } ?: false
@@ -100,10 +100,14 @@ abstract class GalleryAdults :
 
     protected open fun popularMangaSelector() = "div.thumb"
 
-    protected open fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.mangaTitle()!!
-        setUrlWithoutDomain(element.mangaUrl()!!)
-        thumbnail_url = element.mangaThumbnail()
+    protected open fun popularMangaFromElement(element: Element): SManga? {
+        val t = element.mangaTitle() ?: return null
+        val u = element.mangaUrl() ?: return null
+        return SManga.create().apply {
+            title = t
+            setUrlWithoutDomain(u)
+            thumbnail_url = element.mangaThumbnail()
+        }
     }
 
     protected open fun popularMangaNextPageSelector(): String? = ".pagination li.active + li:not(.disabled)"
@@ -120,7 +124,7 @@ abstract class GalleryAdults :
     }
 
     protected open fun parseLatestUpdates(document: Document): MangasPage {
-        val mangas = document.select(latestUpdatesSelector()).map { element ->
+        val mangas = document.select(latestUpdatesSelector()).mapNotNull { element ->
             latestUpdatesFromElement(element)
         }
         val hasNextPage = latestUpdatesNextPageSelector()?.let { document.selectFirst(it) != null } ?: false
@@ -129,7 +133,7 @@ abstract class GalleryAdults :
 
     protected open fun latestUpdatesSelector() = popularMangaSelector()
 
-    protected open fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    protected open fun latestUpdatesFromElement(element: Element): SManga? = popularMangaFromElement(element)
 
     protected open fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
