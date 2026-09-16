@@ -8,7 +8,7 @@ keiyoushi {
     name = "The Blank"
     versionCode = 54
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "pam"
 
     source {
