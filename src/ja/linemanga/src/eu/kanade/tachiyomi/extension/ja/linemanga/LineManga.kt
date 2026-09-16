@@ -22,6 +22,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
 import java.time.LocalDate
+import java.time.temporal.WeekFields
 
 @Source
 abstract class LineManga :
@@ -58,7 +59,7 @@ abstract class LineManga :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val weekDay = LocalDate.now(JST).dayOfWeek.value % 7 + 1
+        val weekDay = LocalDate.now(JST).get(WeekFields.SUNDAY_START.dayOfWeek())
         val url = "$apiUrl/$DAILY_LIST".toHttpUrl().newBuilder()
             .addQueryParameter("week_day", weekDay.toString())
             .addQueryParameter("page", page.toString())
