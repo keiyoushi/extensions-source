@@ -11,7 +11,10 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -80,10 +83,21 @@ abstract class Roumanwu : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val rscHeaders = headers.newBuilder().add("rsc", "1").build()
-        val html = client.get(getChapterUrl(chapter), rscHeaders).use { it.body.string() }
-        return IMAGE_URL_REGEX.findAll(html).mapIndexed { index, match ->
-            Page(index, imageUrl = match.groupValues[1])
-        }.toList()
+        val response = client.get(getChapterUrl(chapter), rscHeaders)
+        val contentType = response.header("Content-Type").orEmpty()
+        val body = response.use { it.body.string() }
+
+        val fromNextJs = if ("text/x-component" in contentType) {
+            body.extractNextJsRsc<ChapterPages>()
+        } else {
+            body.asJsoup(baseUrl).extractNextJs<ChapterPages>()
+        }
+        if (fromNextJs != null) return fromNextJs.toPageList()
+
+        // 当前站点 hydration 是 TanStack ($_TSR)，没有 __next_f
+        val imagePaths = IMAGE_PATHS_REGEX.find(body)?.groupValues?.get(1)?.parseAs<List<String>>()
+            ?: return emptyList()
+        return imagePaths.mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -183,6 +197,6 @@ abstract class Roumanwu : KeiSource() {
 
     companion object {
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yyyy")
-        private val IMAGE_URL_REGEX = Regex(""""imageUrl":"([^"]+)""")
+        private val IMAGE_PATHS_REGEX = Regex("""imagePaths:\$R\[\d+]=(\[[^\]]+])""")
     }
 }
