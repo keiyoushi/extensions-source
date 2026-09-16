@@ -78,8 +78,6 @@ abstract class IkigaiMangas :
 
     private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
 
-    override val supportsLatest: Boolean = true
-
     private fun nsfwCookieInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         return request.header(ENABLE_NSFW_HEADER)?.let { value ->
