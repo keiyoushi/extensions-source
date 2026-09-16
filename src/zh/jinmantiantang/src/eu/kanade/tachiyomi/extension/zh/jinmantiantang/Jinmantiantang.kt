@@ -216,24 +216,27 @@ abstract class Jinmantiantang :
         return MangasPage(mangas, hasNextPage)
     }
 
-    // 登录守卫：站点对未登录请求返回登录页，直接解析会得到空标题/空章节并写回书架，
-    // 因此详情与章节请求在未登录时必须阻断。
-    private val lastLoginNoticeAt = AtomicLong(0)
+    // 无权限的请求会返回登录页，解析出的空数据写回会清空书架条目
+    private val lastBlockNoticeAt = AtomicLong(0)
 
     private fun Document.isLoggedIn(): Boolean = selectFirst("#Comic_Top_Nav")?.selectFirst("a[href*='favorite'], a[href*='logout']") != null
 
-    private fun requireLoggedIn(document: Document) {
-        if (document.isLoggedIn()) return
-        notifyLoginBlocked()
-        throw Exception("未登录或登录已过期，已阻断请求以保护书架数据")
+    private fun blockInvalidData(document: Document): Nothing {
+        val message = if (document.isLoggedIn()) {
+            "无法获取漫画数据，已阻断请求以保护书架"
+        } else {
+            "未登录，该内容无法加载，已阻断请求"
+        }
+        notifyBlocked(message)
+        throw Exception(message)
     }
 
-    private fun notifyLoginBlocked() {
+    private fun notifyBlocked(message: String) {
         val now = System.currentTimeMillis()
-        val last = lastLoginNoticeAt.get()
-        if (now - last < LOGIN_NOTICE_INTERVAL) return
-        if (!lastLoginNoticeAt.compareAndSet(last, now)) return
-        showToast("未登录，已阻断与站点的连接")
+        val last = lastBlockNoticeAt.get()
+        if (now - last < BLOCK_NOTICE_INTERVAL) return
+        if (!lastBlockNoticeAt.compareAndSet(last, now)) return
+        showToast(message)
     }
 
     private fun favoriteMangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -363,8 +366,11 @@ abstract class Jinmantiantang :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = mangaDetailsResolve(response)
-        requireLoggedIn(document)
-        return mangaDetailsParse(document)
+        val manga = mangaDetailsParse(document)
+        if (manga.title.isBlank()) {
+            blockInvalidData(document)
+        }
+        return manga
     }
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
@@ -428,12 +434,15 @@ abstract class Jinmantiantang :
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = mangaDetailsResolve(response)
-        requireLoggedIn(document)
         val elements = document.select("div[id=episode-block] a[href^=/photo/]")
         if (elements.isEmpty()) {
+            val singleUrl = document.selectFirst("#album_photo_cover > div.thumb-overlay > a")?.attr("href")
+            if (singleUrl.isNullOrBlank()) {
+                blockInvalidData(document)
+            }
             val singleChapter = SChapter.create().apply {
                 name = "单章节"
-                url = document.selectFirst("#album_photo_cover > div.thumb-overlay > a")?.attr("href") ?: ""
+                url = singleUrl
                 date_upload = dateFormat.tryParse(document.select("[itemprop=datePublished]").last()?.attr("content"))
             }
             return listOf(singleChapter)
@@ -654,7 +663,7 @@ abstract class Jinmantiantang :
         private const val FAVORITE_MANGA_SELECTOR = "div[id^='favorites_album_']"
         private const val CHECKIN_PREF = "auto_checkin"
         private const val CHECKIN_DATE_PREF = "last_checkin_date"
-        private const val LOGIN_NOTICE_INTERVAL = 5_000L
+        private const val BLOCK_NOTICE_INTERVAL = 5_000L
 
         private val USERNAME_EXTRACTION_JS = """
             (function() {
