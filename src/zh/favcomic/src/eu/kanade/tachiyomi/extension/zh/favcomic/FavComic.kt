@@ -93,7 +93,7 @@ abstract class FavComic :
             .build()
         val mangas = client.get(url).asJsoup().select(".rank_item > a").map { a ->
             val img = a.selectFirst(".cover > img")!!
-            val authors = a.select(".author a").joinToString(", ") { it.text() }
+            val authors = a.select(".author a").joinToString { it.text() }
                 .ifEmpty { a.selectFirst(".author")?.text().orEmpty() }
             SManga.create().apply {
                 setUrlWithoutDomain(a.absUrl("href"))
@@ -144,7 +144,7 @@ abstract class FavComic :
         val img = doc.selectFirst(".comic_cover_box > .flex_box > img")!!
         val note = doc.selectFirst(".translation_agency_box")?.text()
         val baseIntro = doc.selectFirst(".intro_box > .txt")!!.text().substringAfter("作品介绍：")
-        val authors = doc.selectFirst(".author")?.select("a")?.joinToString(", ") { it.text() }
+        val authors = doc.selectFirst(".author")?.select("a")?.joinToString { it.text() }
             ?.ifEmpty { null } ?: doc.selectFirst(".author")?.text().orEmpty()
 
         val sManga = SManga.create().apply {
