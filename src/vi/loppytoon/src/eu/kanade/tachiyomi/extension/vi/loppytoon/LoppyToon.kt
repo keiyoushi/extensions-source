@@ -281,7 +281,7 @@ abstract class LoppyToon : KeiSource() {
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val groups = runCatching { data?.parseAs<List<FilterGroupData>>() }.getOrNull()
+        val groups = data?.parseAs<List<FilterGroupData>>()
         return getFilters(groups)
     }
 
