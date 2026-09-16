@@ -94,20 +94,26 @@ class MangaResponse(
 
 @Serializable
 class PageListResponse(
+    val component: String,
+    val version: String,
     val props: Props,
 ) {
     @Serializable
     class Props(
         @SerialName("page_count")
-        val pageCount: Int,
+        val pageCount: Int = 0,
         @SerialName("chapter_token")
-        val chapterToken: String,
+        val chapterToken: String? = null,
         @SerialName("server_pubkey")
         val serverPubkey: String,
+        @SerialName("reader_v2")
+        val readerV2: Boolean = false,
+        val attestation: Attestation? = null,
         val data: Data,
     ) {
         @Serializable
         class Data(
+            val uid: String,
             val slug: String,
             val serie: Serie,
         )
@@ -116,3 +122,55 @@ class PageListResponse(
         class Serie(val slug: String)
     }
 }
+
+@Serializable
+class Attestation(
+    val challenge: String,
+    @SerialName("webgl_seed")
+    val webglSeed: String,
+)
+
+/** Partial Inertia reload, asking only for the freshly minted token and challenge. */
+@Serializable
+class AttestationReload(
+    val props: Props,
+) {
+    @Serializable
+    class Props(
+        @SerialName("chapter_token")
+        val chapterToken: String? = null,
+        val attestation: Attestation? = null,
+    )
+}
+
+@Serializable
+class AttestationResponse(
+    val ct: String? = null,
+)
+
+@Serializable
+class ManifestResponse(
+    val base: String,
+    val hint: String,
+    val count: Int,
+    val variants: List<Int> = emptyList(),
+)
+
+@Serializable
+class AttestationRequest(
+    val c: String,
+    val v: String,
+    val sp: String,
+    val d: String,
+    val pk: String,
+)
+
+@Serializable
+class ManifestRequest(
+    val v: Int,
+    val c: String,
+    val t: String,
+    val ts: Long,
+    val n: String,
+    val s: String,
+)
