@@ -1,43 +1,39 @@
 package eu.kanade.tachiyomi.extension.ja.linemanga
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.utils.asJsoup
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
-import java.util.Calendar
-import java.util.TimeZone
+import java.time.LocalDate
+import java.time.temporal.WeekFields
 
 @Source
 abstract class LineManga :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
+    private val apiUrl get() = "$baseUrl/api"
+    private val preferences by getPreferencesLazy()
 
-    private val apiUrl = "$baseUrl/api"
-    private val jst = TimeZone.getTimeZone("Asia/Tokyo")
-    private val preferences: SharedPreferences by getPreferencesLazy()
-    private val timestamp: String
-        get() = System.currentTimeMillis().toString()
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
-        .addInterceptor {
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ImageInterceptor())
+        addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
             if (response.code == 412) {
@@ -48,186 +44,147 @@ abstract class LineManga :
             }
             response
         }
-        .build()
+    }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        // .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
-        // Requires either desktop UA or this header with random string because of "Your request may be JSON hijacking" error.
-        .add("X-Requested-With", "XMLHttpRequest")
+    // Requires either desktop UA or X-Requested-With.
+    override fun Headers.Builder.configureHeaders() = set("X-Requested-With", "XMLHttpRequest")
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/periodic/gender_ranking".toHttpUrl().newBuilder()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$apiUrl/$GENDER_RANKING".toHttpUrl().newBuilder()
             .addQueryParameter("gender", "0")
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("_", timestamp)
             .build()
-        return GET(url, headers)
+
+        return client.get(url).parseAs<EntryResponse>().result.toMangasPage()
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<EntryResponse>().result
-        val mangas = result.items.filter { it.isLightNovel != true }.map { it.toSManga() }
-        val hasNextPage = result.pager?.hasNext == true
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        val calendar = Calendar.getInstance(jst)
-        val weekday = calendar.get(Calendar.DAY_OF_WEEK)
-        val url = "$apiUrl/daily_list".toHttpUrl().newBuilder()
-            .addQueryParameter("week_day", weekday.toString())
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val weekDay = LocalDate.now(JST).get(WeekFields.SUNDAY_START.dayOfWeek())
+        val url = "$apiUrl/$DAILY_LIST".toHttpUrl().newBuilder()
+            .addQueryParameter("week_day", weekDay.toString())
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("_", timestamp)
             .build()
-        return GET(url, headers)
+
+        return client.get(url).parseAs<Result>().toMangasPage()
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<Result>()
-        val mangas = result.items.filter { it.isLightNovel != true }.map { it.toSManga() }
-        val hasNextPage = result.pager?.hasNext == true
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = "$apiUrl/search_product/list".toHttpUrl().newBuilder()
                 .addQueryParameter("word", query)
                 .addQueryParameter("page", page.toString())
-                .addQueryParameter("_", timestamp)
                 .build()
-            return GET(url, headers)
+
+            return client.get(url).parseAs<EntryResponse>().result.toMangasPage()
         }
 
-        val filters = filters.firstInstance<CategoryFilter>()
-        val url = "$apiUrl/${filters.type}".toHttpUrl().newBuilder()
+        val filter = filters.firstInstance<CategoryFilter>()
+        val url = "$apiUrl/${filter.type}".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("_", timestamp)
             .apply {
-                if (filters.type == "daily_list") {
-                    addQueryParameter("week_day", filters.value)
-                }
-                if (filters.type.contains("gender_ranking")) {
-                    addQueryParameter("gender", filters.value)
-                }
-                if (filters.type == "genre_list") {
-                    addQueryParameter("genre_id", filters.value)
+                when (filter.type) {
+                    DAILY_LIST -> addQueryParameter("week_day", filter.value)
+                    GENRE_LIST -> addQueryParameter("genre_id", filter.value)
+                    else -> addQueryParameter("gender", filter.value)
                 }
             }
-        return GET(url.build(), headers).newBuilder().tag(filters.type).build()
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val tag = response.request.tag()
-        return if (tag == "daily_list" || tag == "genre_list") latestUpdatesParse(response) else popularMangaParse(response)
-    }
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        // E -> fully bundled episodes/volumes
-        if (manga.url.startsWith("E")) {
-            val url = "$apiUrl/book/product_list".toHttpUrl().newBuilder()
-                .addQueryParameter("product_id", manga.url)
-                .build()
-            return GET(url, headers)
-        }
-
-        // S or Z -> episodes in parts
-        val url = "$apiUrl/book/product_list".toHttpUrl().newBuilder()
-            .addQueryParameter("need_read_info", "1")
-            .addQueryParameter("rows", "1000")
-            .addQueryParameter("is_periodic", "1")
-            .addQueryParameter("product_id", manga.url)
             .build()
-        return GET(url, headers)
+
+        val response = client.get(url)
+        return if (filter.type == GENDER_RANKING) {
+            response.parseAs<EntryResponse>().result
+        } else {
+            response.parseAs<Result>()
+        }.toMangasPage()
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<EntryDetails>().result.product.toSManga()
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        CategoryFilter(),
+    )
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/product/periodic?id=${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        // E -> fully bundled episodes/volumes, S or Z -> episodes in parts
+        val isBundled = manga.url.startsWith("E")
+        val url = "$apiUrl/book/product_list".toHttpUrl().newBuilder()
+            .addQueryParameter("product_id", manga.url)
+            .apply {
+                if (!isBundled) {
+                    addQueryParameter("need_read_info", "1")
+                    addQueryParameter("rows", "1000")
+                    addQueryParameter("is_periodic", "1")
+                }
+            }
+            .build()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+        val result = client.get(url).parseAs<EntryDetails>().result
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val id = response.request.url.queryParameter("product_id")!!
-        val chapters = response.parseAs<EntryDetails>().result.rows.filter { !hideLocked || !it.isLocked }.map { it.toSChapter() }
-        return if (id.startsWith("E")) chapters else chapters.reversed()
+        val chapterList = result.rows
+            .filter { !hideLocked || !it.isLocked }
+            .map { it.toSChapter() }
+
+        return SMangaUpdate(
+            result.product.toSManga(),
+            if (isBundled) chapterList else chapterList.asReversed(),
+        )
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/book/viewer?id=${chapter.url}", headers)
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/book/viewer?id=${chapter.url}"
 
     // TODO: Check entries for maybe Publus?:  mediado_token: '', mediado_contents_url: '', mediado_contents_file: 'configuration_pack.json',
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(var OPTION)")!!.data()
-        val isPortal = IS_PORTAL.find(script)?.groupValues?.get(1) == "true"
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = "$baseUrl/book/viewer".toHttpUrl().newBuilder()
+            .addQueryParameter("id", chapter.url)
+            .build()
 
-        return if (isPortal) parsePortalPages(script) else parseImgPages(script)
+        val options = client.get(url).parseViewer()
+        return if (options.isPortal) parsePortalPages(options.portalPages) else parseImgPages(options.imgs)
     }
 
-    private fun parseImgPages(script: String): List<Page> = IMG_PAGES
-        .findAll(script)
-        .sortedBy { it.groupValues[1].toInt() }
-        .mapIndexed { i, page ->
-            Page(i, imageUrl = page.groupValues[2])
-        }
-        .filter { !it.imageUrl!!.contains("inline_ads_banner") }
-        .toList()
+    // A portal chapter inlines several MB of scramble data in one <script> that Jsoup would buffer whole.
+    // The statements are emitted in reading order, one per line, so the body can be scanned as it downloads.
+    private fun Response.parseViewer(): ViewerOptions = use { response ->
+        val options = ViewerOptions()
+        var inPortalPage = false
 
-    private fun parsePortalPages(script: String): List<Page> {
-        val pageIndices = INDICES
-            .findAll(script)
-            .map { it.groupValues[1].toInt() }
-            .toSortedSet()
+        val source = response.body.source()
+        while (true) {
+            val line = source.readUtf8Line()?.trimStart() ?: break
 
-        if (pageIndices.isEmpty()) return emptyList()
-
-        val urlMap = URL_MAP
-            .findAll(script)
-            .associate { it.groupValues[1].toInt() to it.groupValues[2] }
-
-        val hcMap = HC_MAP
-            .findAll(script)
-            .associate { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
-
-        val bwdMap = BWD_MAP
-            .findAll(script)
-            .associate { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
-
-        // m entries: portal_pages[N].metadata.m[M] = 'base35value';
-        val mMap = mutableMapOf<Int, MutableMap<Int, String>>()
-        M_MAP
-            .findAll(script)
-            .forEach { match ->
-                val pageIdx = match.groupValues[1].toInt()
-                val mIdx = match.groupValues[2].toInt()
-                val value = match.groupValues[3]
-                mMap.getOrPut(pageIdx) { mutableMapOf() }[mIdx] = value
-            }
-
-        return pageIndices.mapIndexed { i, page ->
-            val url = urlMap[page] ?: throw Exception("Missing url for portal_pages[$page]")
-            val mEntries = mMap[page]
-
-            val imgUrl = if (!mEntries.isNullOrEmpty()) {
-                val hc = hcMap[page] ?: throw Exception("Missing hc for portal_pages[$page]")
-                val bwd = bwdMap[page] ?: throw Exception("Missing bwd for portal_pages[$page]")
-                val m = (0 until mEntries.size).map { i ->
-                    mEntries[i] ?: throw Exception("Missing m[$i] for portal_pages[$page]")
+            when {
+                line.startsWith("imgs[") -> inPortalPage = false
+                line.startsWith("portal_pages[") -> {
+                    if (line.contains(".metadata.m[")) options.portalPages.last().m += line.quotedValue() else inPortalPage = true
                 }
-                url.toHttpUrl().newBuilder()
-                    .fragment("$hc:$bwd:${m.joinToString(",")}")
-                    .build()
-                    .toString()
-            } else {
-                url
+                line.startsWith("'url'") -> {
+                    val imageUrl = line.quotedValue()
+                    if (inPortalPage) options.portalPages += PortalPage(imageUrl) else options.imgs += imageUrl
+                }
+                line.startsWith("'hc'") -> options.portalPages.last().hc = line.numberValue()
+                line.startsWith("'bwd'") -> options.portalPages.last().bwd = line.numberValue()
+                line.startsWith("isPortal") -> options.isPortal = line.contains("true")
             }
-            Page(i, imageUrl = imgUrl)
         }
+        options
     }
 
-    override fun getFilterList() = FilterList(CategoryFilter())
+    private fun parseImgPages(imgs: List<String>): List<Page> = imgs
+        .filterNot { it.contains("inline_ads_banner") }
+        .mapIndexed { index, url -> Page(index, imageUrl = url) }
+
+    private fun parsePortalPages(pages: List<PortalPage>): List<Page> = pages.mapIndexed { index, page ->
+        Page(index, imageUrl = "${page.url}#${page.hc}:${page.bwd}:${page.m.joinToString(":")}")
+    }
+
+    private fun String.quotedValue(): String = QUOTED_VALUE.find(this)!!.groupValues[1]
+
+    private fun String.numberValue(): Int = NUMBER_VALUE.find(this)!!.groupValues[1].toInt()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -237,16 +194,21 @@ abstract class LineManga :
         }.also(screen::addPreference)
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     companion object {
-        private val IS_PORTAL = Regex("""isPortal\s*:\s*(true|false)""")
-        private val IMG_PAGES = Regex("""imgs\[(\d+)][^{]*\{[^{]*'url'\s*:\s*'([^']+)'""")
-        private val INDICES = Regex("""portal_pages\[(\d+)]\s*=\s*\{""")
-        private val URL_MAP = Regex("""portal_pages\[(\d+)]\s*=\s*\{[^{]*'url'\s*:\s*'([^']+)'""")
-        private val HC_MAP = Regex("""portal_pages\[(\d+)]\s*=\s*\{.*?'hc'\s*:\s*(\d+)""", RegexOption.DOT_MATCHES_ALL)
-        private val BWD_MAP = Regex("""portal_pages\[(\d+)]\s*=\s*\{.*?'bwd'\s*:\s*(\d+)""", RegexOption.DOT_MATCHES_ALL)
-        private val M_MAP = Regex("""portal_pages\[(\d+)]\.metadata\.m\[(\d+)]\s*=\s*'([^']+)'""")
+        private val QUOTED_VALUE = Regex("""'([^']*)'\s*[,;]?\s*$""")
+        private val NUMBER_VALUE = Regex("""(\d+)\s*,?\s*$""")
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
     }
+}
+
+private class ViewerOptions {
+    var isPortal = false
+    val imgs = mutableListOf<String>()
+    val portalPages = mutableListOf<PortalPage>()
+}
+
+private class PortalPage(val url: String) {
+    var hc = 0 // horizontal block count
+    var bwd = 0 // block width/height in px
+    val m = mutableListOf<String>() // scramble map (base-35 encoded values)
 }
