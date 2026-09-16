@@ -6,43 +6,58 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
+import org.jsoup.nodes.Document
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
-import java.util.Locale
 
 @Source
-abstract class Komiku : HttpSource() {
+abstract class Komiku : KeiSource() {
 
     private val apiUrl = "https://api.komiku.org"
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(::headersInterceptor)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::headersInterceptor)
         .rateLimit(2)
-        .build()
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request = GET(mangaApiUrlBuilder(page).addQueryParameter("orderby", "meta_value_num").build(), headers)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = if (page > 1) {
+            "$apiUrl/other/hot/page/$page/".toHttpUrl()
+        } else {
+            "$apiUrl/other/hot/".toHttpUrl()
+        }.newBuilder()
+            .addQueryParameter("orderby", "meta_value_num")
+            .build()
 
-    override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
+        return mangaListParse(client.get(url).asJsoup())
+    }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = GET(mangaApiUrlBuilder(page).addQueryParameter("orderby", "modified").build(), headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = mangaApiUrlBuilder(page).addQueryParameter("orderby", "modified").build()
+        return mangaListParse(client.get(url).asJsoup())
+    }
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = mangaApiUrlBuilder(page).apply {
             if (query.isNotEmpty()) {
                 addQueryParameter("s", query)
@@ -53,7 +68,19 @@ abstract class Komiku : HttpSource() {
             }
         }.build()
 
-        return GET(url, headers)
+        return mangaListParse(client.get(url).asJsoup())
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.pathSegments.firstOrNull() != "manga") return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+        val targetUrl = "$baseUrl/manga/$slug/".toHttpUrl()
+        val document = client.get(targetUrl).asJsoup()
+        val manga = SManga.create().apply {
+            setUrlWithoutDomain(targetUrl.toString())
+        }
+        return parseDetails(document, manga)
     }
 
     private fun mangaApiUrlBuilder(page: Int) = apiUrl.toHttpUrl().newBuilder().apply {
@@ -63,88 +90,92 @@ abstract class Komiku : HttpSource() {
         }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.code == 404) return MangasPage(emptyList(), false)
-        return mangaListParse(response)
+    // ======================= Details and Chapters ==========================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+        return SMangaUpdate(
+            manga = parseDetails(document, manga),
+            chapters = parseChapters(document),
+        )
     }
 
-    // =========================== Manga Details ============================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
+    private fun parseDetails(document: Document, manga: SManga): SManga = manga.apply {
+        description = buildString {
+            append(document.select("#Sinopsis > p, p.desc[itemprop=description]").text())
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            description = buildString {
-                append(document.select("#Sinopsis > p").text())
-
-                document.selectFirst("table.inftable tr:contains(Judul Indonesia) td + td")?.text()?.let {
-                    if (it.isNotEmpty()) {
-                        if (isNotEmpty()) append("\n\n")
-                        append("Judul Indonesia: $it")
-                    }
-                }
-            }
-
-            author = document.selectFirst("table.inftable td:contains(Pengarang)+td, table.inftable td:contains(Komikus)+td")?.text()
-            genre = document.select("ul.genre li.genre a span").joinToString { it.text() }.takeIf { it.isNotEmpty() }
-            status = parseStatus(document.selectFirst("table.inftable tr > td:contains(Status) + td")?.text())
-            thumbnail_url = document.selectFirst("div.ims > img")?.absUrl("src")?.removeQuery()
-        }
-    }
-
-    private fun parseStatus(status: String?) = when {
-        status == null -> SManga.UNKNOWN
-        status.contains("Ongoing", true) || status.contains("On Going", true) -> SManga.ONGOING
-        status.contains("End", true) || status.contains("Completed", true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
-
-    // ============================= Chapters ===============================
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("#Daftar_Chapter tr:has(td.judulseries)").map { element ->
-            SChapter.create().apply {
-                val a = element.selectFirst("a")!!
-                setUrlWithoutDomain(a.absUrl("href"))
-                name = a.text()
-
-                val timeStamp = element.selectFirst("td.tanggalseries")?.text().orEmpty()
-                date_upload = if (timeStamp.contains("lalu")) {
-                    parseRelativeDate(timeStamp)
-                } else {
-                    dateFormat.tryParse(timeStamp)
+            document.selectFirst("table.inftable tr:contains(Judul Indonesia) td + td, table.inftable tr:contains(Judul Alternatif) td + td")?.text()?.let {
+                if (it.isNotEmpty()) {
+                    if (isNotEmpty()) append("\n\n")
+                    append("Judul Alternatif: $it")
                 }
             }
         }
+
+        author = document.selectFirst("table.inftable td:contains(Pengarang)+td, table.inftable td:contains(Komikus)+td, table.inftable td:contains(Author)+td")?.text()
+        genre = document.select("ul.genre li.genre a span").joinToString { it.text() }.takeIf { it.isNotEmpty() }
+        status = parseStatus(document.selectFirst("table.inftable tr > td:contains(Status) + td")?.text())
+        thumbnail_url = document.selectFirst("div.ims > img, img[itemprop=image]")?.absUrl("src")?.removeQuery()
     }
 
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+    private fun parseStatus(status: String?): Int {
+        val s = status?.lowercase() ?: return SManga.UNKNOWN
+        return when {
+            "ongoing" in s || "on going" in s -> SManga.ONGOING
+            "end" in s || "completed" in s || "tamat" in s -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+    }
 
-    // Used Google translate here
+    private fun parseChapters(document: Document): List<SChapter> = document.select("#Daftar_Chapter tr:has(td.judulseries)").map { element ->
+        SChapter.create().apply {
+            val a = element.selectFirst("a")!!
+            setUrlWithoutDomain(a.absUrl("href"))
+            name = a.text()
+
+            val timeStamp = element.selectFirst("td.tanggalseries")?.text().orEmpty()
+            date_upload = if (timeStamp.contains("lalu")) {
+                parseRelativeDate(timeStamp)
+            } else {
+                dateFormat.tryParseDate(timeStamp, ZoneId.of("Asia/Jakarta"))
+            }
+        }
+    }
+
+    private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+
     private fun parseRelativeDate(date: String): Long {
-        val trimmedDate = date.substringBefore(" lalu").removeSuffix("s").split(" ")
+        val trimmedDate = date.substringBefore(" lalu").trim().split(" ")
+        if (trimmedDate.size < 2) return 0L
+        val amount = trimmedDate[0].toIntOrNull() ?: return 0L
 
         val calendar = Calendar.getInstance()
         when (trimmedDate[1]) {
-            "jam" -> calendar.add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt())
-            "menit" -> calendar.add(Calendar.MINUTE, -trimmedDate[0].toInt())
-            "detik" -> calendar.add(Calendar.SECOND, 0)
+            "detik" -> calendar.add(Calendar.SECOND, -amount)
+            "menit" -> calendar.add(Calendar.MINUTE, -amount)
+            "jam" -> calendar.add(Calendar.HOUR_OF_DAY, -amount)
+            "hari" -> calendar.add(Calendar.DAY_OF_YEAR, -amount)
+            "minggu" -> calendar.add(Calendar.WEEK_OF_YEAR, -amount)
+            "bulan" -> calendar.add(Calendar.MONTH, -amount)
+            "tahun" -> calendar.add(Calendar.YEAR, -amount)
         }
 
         return calendar.timeInMillis
     }
 
     // =============================== Pages ================================
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val url = response.request.url.toString()
-        return document.select("#Baca_Komik img").mapIndexed { i, element ->
-            Page(i, url, element.attr("abs:src"))
-        }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = baseUrl + chapter.url
+        val document = client.get(chapterUrl).asJsoup()
+        return document.select("#Baca_Komik img")
+            .filterNot { it.attr("src").contains("komiku-promosi") }
+            .mapIndexed { i, element ->
+                Page(i, chapterUrl, imageUrl = element.attr("abs:src"))
+            }
     }
 
     override fun imageRequest(page: Page): Request {
@@ -154,9 +185,7 @@ abstract class Komiku : HttpSource() {
         return GET(page.imageUrl!!, headers)
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Type(),
         Order(),
         Genre1(),
@@ -170,12 +199,12 @@ abstract class Komiku : HttpSource() {
         val url = request.url
         val urlString = url.toString()
 
-        if (urlString.contains("komiku.org") || urlString.contains("komikid.org")) {
+        if (urlString.contains("komiku.org") || urlString.contains("komikid.org") || urlString.contains("komiku.to")) {
             val newHeaders = request.headers.newBuilder().apply {
                 removeAll("X-Requested-With")
                 set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
 
-                if (url.host.contains("img") || url.host.contains("thumbnail") || url.host.contains("update")) {
+                if (url.host.contains("img") || url.host.contains("thumbnail") || url.host.contains("update") || url.host.contains("image")) {
                     val referer = request.header("Referer")
                     if (referer == null || !referer.contains(baseUrl)) {
                         set("Referer", "$baseUrl/")
@@ -197,8 +226,7 @@ abstract class Komiku : HttpSource() {
         return chain.proceed(request)
     }
 
-    private fun mangaListParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun mangaListParse(document: Document): MangasPage {
         val mangas = document.select("div.bge").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("h3")!!.text()
@@ -210,5 +238,5 @@ abstract class Komiku : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun String.removeQuery() = if (isEmpty()) this else toHttpUrl().newBuilder().query(null).build().toString()
+    private fun String.removeQuery() = toHttpUrlOrNull()?.newBuilder()?.query(null)?.build()?.toString() ?: this
 }

@@ -6,10 +6,10 @@ plugins {
 
 keiyoushi {
     name = "XXX Yaoi"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "madara"
 
     source {
         lang = "pt-BR"

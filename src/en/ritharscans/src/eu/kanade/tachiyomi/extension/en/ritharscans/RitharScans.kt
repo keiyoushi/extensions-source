@@ -35,31 +35,65 @@ abstract class RitharScans : Keyoapp() {
     override val statusSelector = "[alt=Status]"
     override val typeSelector = "[alt=Type]"
 
-    override fun pageListParse(document: Document): List<Page> {
-        val data = document.selectFirst("script[type=\"application/ld+json\"]")!!.data().parseAs<ChapterLD>()
-        val chapterID = data.url.substringAfterLast('/')
-        val seriesID = data.isPartOf.url.substringAfterLast('/')
+    override val paidChapterSelector = "img[alt~=Coin], img[src*=star-circle]"
 
-        return (1..data.numberOfPages).mapIndexed { i, page ->
-            Page(
-                i,
-                url = document.location(),
-                imageUrl = "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
-            )
+    override fun pageListParse(document: Document): List<Page> {
+        val xData = document.selectFirst("[x-data*=immersiveReader]")?.attr("x-data")
+            ?: return super.pageListParse(document)
+
+        val canRead = CAN_READ_REGEX.find(xData)?.groupValues?.get(1)?.toBooleanStrictOrNull() ?: false
+        if (!canRead) {
+            throw Exception("This chapter is locked. Log in via WebView and unlock this chapter to read.")
+        }
+
+        val baseLink = BASE_LINK_REGEX.find(xData)?.groupValues?.get(1) ?: "$baseUrl/storage/"
+        val pagesJson = extractPagesJson(xData)
+            ?: throw Exception("Failed to parse chapter pages")
+
+        val pages = pagesJson.parseAs<List<PageDto>>()
+        if (pages.isEmpty()) {
+            throw Exception("This chapter is locked. Log in via WebView and unlock this chapter to read.")
+        }
+
+        return pages.mapIndexed { i, page ->
+            val imageUrl = if (page.path.startsWith("http://") || page.path.startsWith("https://")) {
+                page.path
+            } else {
+                "${baseLink.trimEnd('/')}/${page.path.trimStart('/')}"
+            }
+            Page(i, document.location(), imageUrl)
         }
     }
 
+    private fun extractPagesJson(xData: String): String? {
+        val startIndex = xData.indexOf("pages:").takeIf { it != -1 } ?: return null
+        val afterPages = xData.substring(startIndex + 6).trimStart()
+        if (!afterPages.startsWith("[")) return null
+
+        var depth = 0
+        for (i in afterPages.indices) {
+            when (afterPages[i]) {
+                '[' -> depth++
+                ']' -> {
+                    depth--
+                    if (depth == 0) {
+                        return afterPages.substring(0, i + 1)
+                    }
+                }
+            }
+        }
+        return null
+    }
+
     override fun getTypeList() = emptyMap<String, String>()
+
+    companion object {
+        private val CAN_READ_REGEX = """canRead\s*:\s*(true|false)""".toRegex()
+        private val BASE_LINK_REGEX = """baseLink\s*:\s*['"]([^'"]+)['"]""".toRegex()
+    }
 }
 
 @Serializable
-internal class ChapterLD(
-    val isPartOf: SeriesLD,
-    val numberOfPages: Int,
-    val url: String,
-)
-
-@Serializable
-internal class SeriesLD(
-    val url: String,
+class PageDto(
+    val path: String,
 )
