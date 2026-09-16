@@ -35,21 +35,6 @@ abstract class Shinigami : KeiSource() {
             .build()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val headers = request.headers.newBuilder().apply {
-                removeAll("X-Requested-With")
-            }.build()
-
-            chain.proceed(request.newBuilder().headers(headers).build())
-        }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("X-Requested-With", randomString((1..20).random()))
-
-    private fun randomString(length: Int) = buildString {
-        val charPool = ('a'..'z') + ('A'..'Z')
-        repeat(length) { append(charPool.random()) }
-    }
 
     // ====================== Popular ======================
 
