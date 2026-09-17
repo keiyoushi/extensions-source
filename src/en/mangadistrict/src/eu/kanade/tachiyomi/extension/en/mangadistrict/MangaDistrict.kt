@@ -22,15 +22,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Source
 abstract class MangaDistrict :
@@ -99,24 +98,17 @@ abstract class MangaDistrict :
         }
     }
 
-    private val pageListDate = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-
-    override val pageListParseSelector = "div.page-break img:not(#image-99999)"
+    override val pageListParseSelector = "div.page-break img:not(noscript img):not(#image-99999)"
 
     override fun pageListParse(document: Document): List<Page> {
-        try {
-            pageListDate.parse(
-                document.selectFirst("meta[property=og:updated_time]")!!
-                    .attr("content").substringBeforeLast("+"),
-            )!!.time.also {
-                val dates = preferences.dates
-                val urlKey = document.location().urlKey()
-                dates[urlKey] = it
-                preferences.dates = dates
-            }
-        } catch (_: Exception) {}
+        val pageDate = Instant.tryParse(
+            document.selectFirst("meta[property=og:updated_time]")!!
+                .attr("content"),
+        )
+        val dates = preferences.dates
+        val urlKey = document.location().urlKey()
+        dates[urlKey] = pageDate
+        preferences.dates = dates
 
         return super.pageListParse(document)
     }
