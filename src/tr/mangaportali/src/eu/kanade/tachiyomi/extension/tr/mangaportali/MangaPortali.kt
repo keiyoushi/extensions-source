@@ -13,6 +13,8 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -92,13 +94,18 @@ abstract class MangaPortali : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val details = if (fetchDetails) {
-            client.get("$baseUrl/api/series/${manga.url}").parseAs<SeriesDto>().toSManga()
-        } else {
-            manga
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (fetchDetails) {
+                client.get("$baseUrl/api/series/${manga.url}").parseAs<SeriesDto>().toSManga()
+            } else {
+                manga
+            }
         }
-        return SMangaUpdate(details, if (fetchChapters) fetchChapters(manga.url) else chapters)
+        val chapterList = async {
+            if (fetchChapters) fetchChapters(manga.url) else chapters
+        }
+        SMangaUpdate(details.await(), chapterList.await())
     }
 
     private suspend fun fetchChapters(slug: String): List<SChapter> = buildList {
