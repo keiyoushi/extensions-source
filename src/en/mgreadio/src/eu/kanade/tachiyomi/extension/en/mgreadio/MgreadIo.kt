@@ -7,10 +7,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -181,8 +181,8 @@ abstract class MgreadIo : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
         val chapterUrl = document.location()
-        return document.select("#chapter-content img[data-original-src]").mapIndexed { index, element ->
-            Page(index, url = chapterUrl, imageUrl = element.absUrl("data-original-src"))
+        return document.select("#chapter-content img[data-original-src], #chapter-content img[src]").mapIndexed { index, element ->
+            Page(index, url = chapterUrl, imageUrl = element.absUrl("data-original-src").ifEmpty { element.absUrl("src") })
         }
     }
 

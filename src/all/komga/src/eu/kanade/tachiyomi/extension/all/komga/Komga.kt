@@ -82,6 +82,8 @@ class Komga(
 
     override val supportsLatest = true
 
+    override val supportsFilterFetching = true
+
     override val baseUrl
         get() = preferences.getString(PREF_ADDRESS, "")!!.removeSuffix("/")
 

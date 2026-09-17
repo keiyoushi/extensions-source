@@ -47,21 +47,7 @@ class SeriesDetails(
     val status: String? = null,
     val description: String? = null,
     @SerialName("tag_series") val tags: List<TagWrapper>? = emptyList(),
-)
-
-@Serializable
-class TagWrapper(
-    val tag: Tag,
-)
-
-@Serializable
-class Tag(
-    val name: String,
-)
-
-@Serializable
-class ChapterList(
-    @SerialName("Season") val seasons: List<Chapters>,
+    @SerialName("Season") val seasons: List<Chapters>? = emptyList(),
 ) {
     @Serializable
     class Chapters(
@@ -81,6 +67,16 @@ class ChapterList(
         }
     }
 }
+
+@Serializable
+class TagWrapper(
+    val tag: Tag,
+)
+
+@Serializable
+class Tag(
+    val name: String,
+)
 
 @Serializable
 class PagesList(

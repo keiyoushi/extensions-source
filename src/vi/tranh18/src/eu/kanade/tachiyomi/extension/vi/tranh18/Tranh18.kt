@@ -7,12 +7,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -24,6 +27,10 @@ abstract class Tranh18 : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
+    }
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        removeAll("Origin")
     }
 
     // ============================== Popular ===============================
@@ -56,9 +63,9 @@ abstract class Tranh18 : KeiSource() {
                 addPathSegment("comics")
                 filters.forEach {
                     when (it) {
-                        is KeywordList -> addQueryParameter("tag", it.values[it.state].genre)
-                        is StatusList -> addQueryParameter("end", it.values[it.state].genre)
-                        is GenreList -> addQueryParameter("area", it.values[it.state].genre)
+                        is TagList -> addQueryParameter("tag", it.values[it.state].value)
+                        is StatusList -> addQueryParameter("end", it.values[it.state].value)
+                        is GenreList -> addQueryParameter("area", it.values[it.state].value)
                         else -> {}
                     }
                 }
@@ -158,7 +165,7 @@ abstract class Tranh18 : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).use { response ->
         val document = response.asJsoup()
-        document.select("img.lazy").mapIndexed { index, it ->
+        document.select(".comicpage img").mapIndexed { index, it ->
             val url = it.absUrl("data-original")
             val finalUrl = if (url.startsWith("https://external-content.duckduckgo.com/iu/")) {
                 url.toHttpUrl().queryParameter("u")
@@ -171,12 +178,34 @@ abstract class Tranh18 : KeiSource() {
 
     // ============================== Filters ===============================
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        Filter.Header("Không dùng chung với tìm kiếm bằng từ khóa."),
-        GenreList(),
-        StatusList(),
-        KeywordList(getGenreList()),
-    )
+    override val supportsFilterFetching: Boolean get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/comics").asJsoup()
+
+        val tags = document.select("#tags dd").map {
+            FilterOption(it.text(), it.attr("data-val"))
+        }
+        val areas = document.select("#areas dd").map {
+            FilterOption(it.text(), it.attr("data-val"))
+        }
+        val end = document.select("#end dd").map {
+            FilterOption(it.text(), it.attr("data-val"))
+        }
+
+        return FilterData(tags, areas, end).toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterData>() ?: return FilterList()
+
+        return FilterList(
+            Filter.Header("Không dùng chung với tìm kiếm bằng từ khóa."),
+            TagList(filterData.tags.toTypedArray()),
+            GenreList(filterData.areas.toTypedArray()),
+            StatusList(filterData.end.toTypedArray()),
+        )
+    }
 
     companion object {
         private val CHAPTER_NUMBER_REGEX = Regex("""(\d+(?:\.\d+)*)""")

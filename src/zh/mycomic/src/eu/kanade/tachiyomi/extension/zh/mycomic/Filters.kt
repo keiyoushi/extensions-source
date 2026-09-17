@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 open class UriPartFilter(
     val key: String,
     name: String,
-    private val pairs: List<Pair<String, String>>,
+    private val pairs: List<Pair<String, String?>>,
     state: Int = 0,
 ) : Filter.Select<String>(name, pairs.map { it.first }.toTypedArray(), state) {
     val selected
@@ -17,7 +17,7 @@ class SortFilter(state: Int) :
         "sort",
         "排序",
         listOf(
-            "最新上架" to "",
+            "最新上架" to null,
             "最近更新" to "-update",
             "最高人气" to "-views",
             "日排行" to RANK_PREFIX,
@@ -28,6 +28,8 @@ class SortFilter(state: Int) :
         state,
     ) {
     companion object {
+        val LATEST = SortFilter(1)
+        val POPULAR = SortFilter(2)
         const val RANK_PREFIX = "rank|"
     }
 }
@@ -37,7 +39,7 @@ class RegionFilter :
         "filter[country]",
         "作品地区",
         listOf(
-            "所有" to "",
+            "所有" to null,
             "日本" to "japan",
             "港台" to "hongkong",
             "歐美" to "europe",
@@ -52,7 +54,7 @@ class TagFilter :
         "filter[tag]",
         "作品类型",
         listOf(
-            "所有" to "",
+            "所有" to null,
             "魔幻" to "mohuan",
             "魔法" to "mofa",
             "熱血" to "rexue",
@@ -99,7 +101,7 @@ class AudienceFilter :
         "filter[audience]",
         "适合受众",
         listOf(
-            "所有" to "",
+            "所有" to null,
             "少女" to "shaonv",
             "少年" to "shaonian",
             "青年" to "qingnian",
@@ -113,7 +115,8 @@ class YearFilter :
         "filter[year]",
         "出品年份",
         listOf(
-            "所有" to "",
+            "所有" to null,
+            "2026" to "2026",
             "2025" to "2025",
             "2024" to "2024",
             "2023" to "2023",
@@ -142,7 +145,7 @@ class StatusFilter :
         "filter[end]",
         "目前进度",
         listOf(
-            "所有" to "",
+            "所有" to null,
             "連載中" to "0",
             "已完結" to "1",
         ),

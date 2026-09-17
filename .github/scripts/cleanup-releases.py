@@ -102,6 +102,27 @@ def cleanup_releases(referenced: set[str]) -> tuple[int, int]:
 
     for release in releases:
         assets = get_pages(f"repos/{REPO_NAME}/releases/{release['id']}/assets")
+
+        # Fast path: every asset is unreferenced -> delete the release in one call,
+        # which takes the assets with it.
+        if assets and not any(
+            asset["browser_download_url"] in referenced for asset in assets
+        ):
+            print(
+                f"Deleting release {release['tag_name']} "
+                f"({len(assets)} unreferenced assets)"
+            )
+            run_gh(
+                "api",
+                "--method",
+                "DELETE",
+                f"repos/{REPO_NAME}/releases/{release['id']}",
+            )
+            deleted_assets += len(assets)
+            deleted_releases += 1
+            time.sleep(DELETE_INTERVAL)
+            continue
+
         remaining = len(assets)
         for asset in assets:
             if asset["browser_download_url"] in referenced:

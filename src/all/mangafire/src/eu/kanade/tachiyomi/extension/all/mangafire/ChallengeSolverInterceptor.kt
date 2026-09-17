@@ -25,6 +25,8 @@ class ChallengeSolverInterceptor(
 
     private fun clearance(url: HttpUrl) = cookieJar.loadForRequest(url).find { it.name == "waf_pass" }?.value
 
+    private var clientHintsHeaders: Map<String, String> = mapOf()
+
     @Serializable
     private data class ErrorResponse(
         val error: String?,
@@ -37,7 +39,12 @@ class ChallengeSolverInterceptor(
 
         val oldClearance = lock.readLock().withLock {
             // We can't just check cookies first because we might need to bypass Cloudflare
-            val response = chain.proceed(request)
+            val response = chain.proceed(
+                request
+                    .newBuilder()
+                    .apply { clientHintsHeaders.forEach { header(it.key, it.value) } }
+                    .build(),
+            )
             if (
                 response.code != 403 ||
                 try {
@@ -76,6 +83,13 @@ class ChallengeSolverInterceptor(
             }
 
             runWebViewBlocking(call) {
+                userAgent = request.header("User-Agent").orEmpty()
+                interceptRequest { webResourceRequest ->
+                    clientHintsHeaders = webResourceRequest
+                        .requestHeaders
+                        .filterKeys { it.startsWith("sec-ch-ua", ignoreCase = true) }
+                    null
+                }
                 jsBridge("bridge") { resolve(it == "true") }
                 loadData("https://${url.host}/@waf/solver", html)
             }
@@ -85,6 +99,11 @@ class ChallengeSolverInterceptor(
             throw IOException("Failed to solve shape-selecting captcha. Open in WebView to solve manually.")
         }
 
-        return chain.proceed(request)
+        return chain.proceed(
+            request
+                .newBuilder()
+                .apply { clientHintsHeaders.forEach { header(it.key, it.value) } }
+                .build(),
+        )
     }
 }

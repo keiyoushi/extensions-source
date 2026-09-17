@@ -5,5 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class RavenScans : MangaThemesia() {
-    override val mangaUrlDirectory = "/series"
+    override val mangaUrlDirectory = "/manga"
 }

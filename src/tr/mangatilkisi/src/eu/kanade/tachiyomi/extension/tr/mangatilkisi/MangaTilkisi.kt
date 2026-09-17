@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.tr.mangatilkisi
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.post
+import keiyoushi.utils.asJsoup
 import okhttp3.FormBody
 import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter

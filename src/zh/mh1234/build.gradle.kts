@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MH1234"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -14,5 +14,9 @@ keiyoushi {
         name = "漫画1234"
         lang = "zh"
         baseUrl = "https://m.wmh1234.com"
+    }
+
+    deeplink {
+        path("/comic/..*.html")
     }
 }

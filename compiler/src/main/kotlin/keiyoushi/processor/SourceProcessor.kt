@@ -67,6 +67,11 @@ data class SourceDef(
 private const val HTTP_SOURCE = "eu.kanade.tachiyomi.source.online.HttpSource"
 private const val KEI_SOURCE = "keiyoushi.source.KeiSource"
 
+// Fixed entry point FQN referenced by the generated manifest; independent of the module
+// directory, the @Source class's package, and the pkgName override.
+private const val GENERATED_CLASS_PACKAGE = "keiyoushi.source"
+private const val GENERATED_CLASS_NAME = "Generated"
+
 private fun KSClassDeclaration.derivesFromHttpSource(): Boolean =
     getAllSuperTypes().any { it.declaration.qualifiedName?.asString() == HTTP_SOURCE }
 
@@ -142,7 +147,6 @@ class SourceProcessor(
             return emptyList()
         }
 
-        val pkg = annotated.packageName.asString()
         val annotatedClass = annotated.toClassName()
         val superTypeNames = annotated.getAllSuperTypes()
             .mapNotNull { it.declaration.qualifiedName?.asString() }
@@ -174,7 +178,7 @@ class SourceProcessor(
             buildSourceFactoryClass(annotatedClass, sources, isConfigurable, isKeiSource, overridden, annotated, fileProps)
         }
 
-        FileSpec.builder(pkg, "ExtensionGenerated")
+        FileSpec.builder(GENERATED_CLASS_PACKAGE, GENERATED_CLASS_NAME)
             .apply { fileProps.forEach(::addProperty) }
             .addType(generatedClass)
             .build()
@@ -191,7 +195,7 @@ class SourceProcessor(
         overridden: Set<String>,
         node: KSClassDeclaration,
         fileProps: MutableList<PropertySpec>,
-    ): TypeSpec = TypeSpec.classBuilder("ExtensionGenerated")
+    ): TypeSpec = TypeSpec.classBuilder(GENERATED_CLASS_NAME)
         .addModifiers(KModifier.INTERNAL)
         .superclass(annotatedClass)
         .applySourceMembers(source, "", fileProps, isConfigurable, isKeiSource, overridden, node)
@@ -243,7 +247,7 @@ class SourceProcessor(
             .add(")")
             .build()
 
-        return TypeSpec.classBuilder("ExtensionGenerated")
+        return TypeSpec.classBuilder(GENERATED_CLASS_NAME)
             .addModifiers(KModifier.INTERNAL)
             .addSuperinterface(sourceFactoryType)
             .addFunction(

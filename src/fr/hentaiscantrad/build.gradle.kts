@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Hentai-Scantrad"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "fr"
-        baseUrl = "https://hentai.scantrad-vf.cc"
+        baseUrl = "https://hentai-scantrad.org"
     }
 }

@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -373,7 +373,8 @@ abstract class InitManga : HttpSource() {
         return if (trimmed.startsWith("<")) {
             val doc = Jsoup.parseBodyFragment(trimmed, baseUrl)
             doc.select("img").mapIndexedNotNull { i, img ->
-                val finalSrc = img.absUrl("data-src")
+                val finalSrc = img.absUrl("data-original-src")
+                    .ifEmpty { img.absUrl("data-src") }
                     .ifEmpty { img.absUrl("src") }
                     .ifEmpty { img.absUrl("data-lazy-src") }
 

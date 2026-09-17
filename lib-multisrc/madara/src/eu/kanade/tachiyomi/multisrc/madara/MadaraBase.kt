@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -191,7 +191,7 @@ abstract class MadaraBase : KeiSource() {
 
     protected open fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = SManga.create().apply {
         url = preserveUrl?.takeIf { !it.all(Char::isDigit) } ?: id
-        title = document.selectFirst(mangaDetailsSelectorTitle)!!.text()
+        title = document.selectFirst(mangaDetailsSelectorTitle)!!.ownText()
         author = document.select(mangaDetailsSelectorAuthor).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         artist = document.select(mangaDetailsSelectorArtist).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         description = document.selectFirst(mangaDetailsSelectorDescription)?.let { element ->
@@ -516,13 +516,13 @@ abstract class MadaraBase : KeiSource() {
         val amount = NUMBER_REGEX.find(normalized)?.value?.toLongOrNull()
         if (amount != null) {
             val unit = when {
-                YEAR_WORDS.any { it in normalized } -> ChronoUnit.YEARS
-                MONTH_WORDS.any { it in normalized } -> ChronoUnit.MONTHS
-                WEEK_WORDS.any { it in normalized } -> ChronoUnit.WEEKS
-                DAY_WORDS.any { it in normalized } -> ChronoUnit.DAYS
-                HOUR_WORDS.any { it in normalized } -> ChronoUnit.HOURS
-                MINUTE_WORDS.any { it in normalized } -> ChronoUnit.MINUTES
-                SECOND_WORDS.any { it in normalized } -> ChronoUnit.SECONDS
+                YEAR_WORDS.containsMatchIn(normalized) -> ChronoUnit.YEARS
+                MONTH_WORDS.containsMatchIn(normalized) -> ChronoUnit.MONTHS
+                WEEK_WORDS.containsMatchIn(normalized) -> ChronoUnit.WEEKS
+                DAY_WORDS.containsMatchIn(normalized) -> ChronoUnit.DAYS
+                HOUR_WORDS.containsMatchIn(normalized) -> ChronoUnit.HOURS
+                MINUTE_WORDS.containsMatchIn(normalized) -> ChronoUnit.MINUTES
+                SECOND_WORDS.containsMatchIn(normalized) -> ChronoUnit.SECONDS
                 else -> null
             }
             if (unit != null) return ZonedDateTime.now(ZoneOffset.UTC).minus(amount, unit).toInstant().toEpochMilli()
@@ -540,13 +540,16 @@ abstract class MadaraBase : KeiSource() {
         private val WHITESPACE_REGEX = Regex("""\s+""")
         private val IMAGE_DESCRIPTOR_REGEX = Regex("""^(\d+|\d+\.\d+)[wx]$""")
         private val NUMBER_REGEX = Regex("\\d+")
-        private val YEAR_WORDS = arrayOf("year", "año", "ano", "năm", "yıl", "سنة", "سنوات")
-        private val MONTH_WORDS = arrayOf("month", "mes", "tháng", "ay", "شهر", "أشهر", "شهور")
-        private val WEEK_WORDS = arrayOf("week", "semana", "tuần", "hafta", "أسبوع", "أسابيع")
-        private val DAY_WORDS = arrayOf("day", "día", "dia", "jour", "hari", "gün", "ngày", "giorni", "أيام", "天")
-        private val HOUR_WORDS = arrayOf("hour", "hora", "heure", "jam", "saat", "giờ", "ore", "ساعة", "ساعات", "小时")
-        private val MINUTE_WORDS = arrayOf("minute", "minuto", "min", "menit", "dakika", "phút", "دقيقة", "دقائق")
-        private val SECOND_WORDS = arrayOf("second", "segundo", "sec", "detik", "giây", "ثانية", "ثوان")
+
+        // Keywords must not be preceded by a letter, otherwise "ay" matches inside "mayıs", "may" and "days"
+        private fun wordRegex(vararg words: String) = Regex("""(?<!\p{L})(?:${words.joinToString("|") { Regex.escape(it) }})""")
+        private val YEAR_WORDS = wordRegex("year", "año", "ano", "năm", "yıl", "سنة", "سنوات")
+        private val MONTH_WORDS = wordRegex("month", "mes", "tháng", "ay", "شهر", "أشهر", "شهور")
+        private val WEEK_WORDS = wordRegex("week", "semana", "tuần", "hafta", "أسبوع", "أسابيع")
+        private val DAY_WORDS = wordRegex("day", "día", "dia", "jour", "hari", "gün", "ngày", "giorni", "أيام", "天")
+        private val HOUR_WORDS = wordRegex("hour", "hora", "heure", "jam", "saat", "giờ", "ore", "ساعة", "ساعات", "小时")
+        private val MINUTE_WORDS = wordRegex("minute", "minuto", "min", "menit", "dakika", "phút", "دقيقة", "دقائق")
+        private val SECOND_WORDS = wordRegex("second", "segundo", "sec", "detik", "giây", "ثانية", "ثوان")
         private fun String.hexBytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
     }
 }

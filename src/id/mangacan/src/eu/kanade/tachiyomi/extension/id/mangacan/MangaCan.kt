@@ -1,25 +1,20 @@
 package eu.kanade.tachiyomi.extension.id.mangacan
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
-import rx.Observable
 
 @Source
 abstract class MangaCan : MangaThemesia() {
-    override val mangaUrlDirectory = "/"
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override val mangaUrlDirectory = ""
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     override val supportsLatest = false
 
@@ -27,59 +22,29 @@ abstract class MangaCan : MangaThemesia() {
 
     override val pageSelector = "div.images img"
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .removeHeader("Referer")
-        .addHeader("Referer", "$baseUrl/")
-        .build()
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList) = baseUrl.toHttpUrl().newBuilder().apply {
+        val selected = filters.filterIsInstance<GenreFilter>()
+            .firstOrNull { it.selectedValue().isNotBlank() }?.selectedValue().orEmpty()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(URL_SEARCH_PREFIX).not()) return super.fetchSearchManga(page, query, filters)
-        val url = query.substringAfter(URL_SEARCH_PREFIX)
-        return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(url) })
-            .map {
-                it.apply { setUrlWithoutDomain(url) }
-                MangasPage(listOf(it), false)
-            }
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var selected = ""
-        with(filters.filterIsInstance<GenreFilter>()) {
-            selected = when {
-                isNotEmpty() -> firstOrNull { it.selectedValue().isNotBlank() }?.selectedValue() ?: ""
-                else -> ""
-            }
-        }
-
-        if (query.isBlank() && selected.isBlank()) {
-            return super.searchMangaRequest(page, query, filters)
-        }
-
-        val url = if (query.isNotBlank()) {
-            baseUrl.toHttpUrl().newBuilder()
-                .addPathSegment("cari")
-                .addPathSegment(query.trim().replace(SPACES_REGEX, "-").lowercase())
-                .addPathSegment("$page.html")
-                .build()
+        if (query.isNotBlank()) {
+            addPathSegment("cari")
+            addPathSegment(query.trim().replace(SPACES_REGEX, "-").lowercase())
+            addPathSegment("$page.html")
         } else {
-            "$baseUrl$selected".toHttpUrl()
+            addPathSegments(selected)
         }
-
-        return GET(url, headers)
     }
 
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<GenreData>>()
+
         val filters = mutableListOf<Filter<*>>()
-        if (!genrelist.isNullOrEmpty()) {
+        if (!genres.isNullOrEmpty()) {
             filters.addAll(
                 listOf(
                     Filter.Header(intl["genre_exclusion_warning"]),
-                    GenreFilter(intl["genre_filter_title"], genrelist?.map { it.name to it.value }!!.toTypedArray()),
+                    GenreFilter(intl["genre_filter_title"], genres.map { it.name to it.value }.toTypedArray()),
                 ),
-            )
-        } else {
-            filters.add(
-                Filter.Header(intl["genre_missing_warning"]),
             )
         }
         return FilterList(filters)

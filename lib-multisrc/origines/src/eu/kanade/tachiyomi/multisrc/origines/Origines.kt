@@ -6,10 +6,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -223,7 +223,7 @@ abstract class Origines : KeiSource() {
             SChapter.create().apply {
                 url = link.attr("href").toChapterSlug()
                 name = element.selectFirst("span.ori-chl-nom")?.text() ?: link.text()
-                date_upload = parseChapterDate(element.selectFirst("span.ori-chl-date")?.text())
+                date_upload = parseChapterDate(element.selectFirst("span.ori-chl-date")?.attr("title"))
             }
         }
     }
@@ -273,7 +273,7 @@ abstract class Origines : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl/$mangaPath/${chapter.url.toChapterSlug()}/").asJsoup()
+        val document = client.get("$baseUrl/$mangaPath/${chapter.url.toChapterSlug()}/?style=list").asJsoup()
 
         return document.select("div.reading-content img.wp-manga-chapter-img").mapIndexed { index, img ->
             val image = when {

@@ -103,4 +103,35 @@ class NextJsTest {
         assertEquals("Newest", full.chapters[0].title) // resolved via $0:preview:0
         assertEquals("Oldest", full.chapters[1].title)
     }
+
+    @Serializable
+    data class AsyncList(val mangaTitle: String, val chapters: List<Chapter>)
+
+    @Test
+    fun realFlightPromiseRefsFixture() {
+        // A Promise in the model is outlined into its own row and referenced as $@1;
+        // the row is emitted once it settles. Without resolving it, `chapters` stays
+        // the literal string "$@1" and never deserializes into a list.
+        val a = fixture("promises").extractNextJsRsc<AsyncList>()
+        assertNotNull(a)
+        a!!
+        assertEquals("Async Manga", a.mangaTitle)
+        assertEquals(listOf(2, 1), a.chapters.map { it.number })
+        assertEquals("Second", a.chapters[0].title)
+    }
+
+    @Serializable
+    data class LazySection(val mangaTitle: String, val children: List<String>)
+
+    @Test
+    fun realFlightLazyRefsFixture() {
+        // Async Server Components can't finish synchronously, so React flushes the parent
+        // element right away with $L1/$L2 placeholders in its children slot and emits the
+        // resolved subtrees as later rows. Both children only exist after resolution.
+        val s = fixture("lazyrefs").extractNextJsRsc<LazySection>()
+        assertNotNull(s)
+        s!!
+        assertEquals("Lazy Manga", s.mangaTitle)
+        assertEquals(listOf("Deferred Title", "42 chapters"), s.children)
+    }
 }
