@@ -142,7 +142,7 @@ abstract class BigSolo : HttpSource() {
 
             val baseName = if (multipleChapters) {
                 buildString {
-                    if (volumeNumber.isNotBlank()) append("Vol. $volumeNumber ")
+                    if (!volumeNumber.isNullOrBlank()) append("Vol. $volumeNumber ")
                     append("Ch. $chapterNumber")
                     if (title.isNotBlank()) append(" – $title")
                 }
