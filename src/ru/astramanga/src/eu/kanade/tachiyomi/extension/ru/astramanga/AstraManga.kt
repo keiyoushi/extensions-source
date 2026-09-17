@@ -11,6 +11,9 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -103,25 +106,23 @@ abstract class AstraManga : KeiSource() {
 
         val chaptersNew = if (fetchChapters) {
             val titleId = mangaData.data.id
-            val newChapters = mutableListOf<SChapter>()
-
             val branches = client.get("$apiUrl/titles/$titleId/branches")
                 .parseAs<BranchesResponse>().data.branches
 
-            branches.forEach { branch ->
-                val pageSize = branch.countChapters?.takeIf { it > 0 } ?: CHAPTERS_PAGE_SIZE
-                var page = 1
-                do {
-                    val data = client.get("$apiUrl/branches/${branch.id}/chapters?page=$page&page_size=$pageSize")
-                        .parseAs<ChaptersResponse>().data
-                    newChapters.addAll(data.items.map { it.toSChapter(slug, branch.name) })
-                    page++
-                } while (data.size * data.page < data.total)
-            }
+            coroutineScope {
+                branches.map { branch ->
+                    async {
+                        val pageSize = branch.countChapters?.takeIf { it > 0 } ?: CHAPTERS_PAGE_SIZE
+                        val url = "$apiUrl/branches/${branch.id}/chapters?page=1&page_size=$pageSize"
 
-            newChapters.sortedWith(
-                compareByDescending<SChapter> { it.chapter_number }.thenByDescending { it.date_upload },
-            )
+                        client.get(url, headers)
+                            .parseAs<ChaptersResponse>().data.items
+                            .map { it.toSChapter(slug, branch.name) }
+                    }
+                }.awaitAll().flatten().sortedWith(
+                    compareByDescending<SChapter> { it.chapter_number }.thenByDescending { it.date_upload },
+                )
+            }
         } else {
             chapters
         }
