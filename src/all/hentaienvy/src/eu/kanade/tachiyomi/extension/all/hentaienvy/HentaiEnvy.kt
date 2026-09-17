@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.hentaienvy
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
 import kotlinx.serialization.json.JsonElement
