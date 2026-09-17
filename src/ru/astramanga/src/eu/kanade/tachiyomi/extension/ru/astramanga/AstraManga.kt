@@ -19,6 +19,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import kotlin.collections.forEach
+import kotlin.math.ceil
 
 @Source
 abstract class AstraManga : KeiSource() {
@@ -112,12 +113,15 @@ abstract class AstraManga : KeiSource() {
             coroutineScope {
                 branches.map { branch ->
                     async {
-                        val pageSize = branch.countChapters?.takeIf { it > 0 } ?: CHAPTERS_PAGE_SIZE
-                        val url = "$apiUrl/branches/${branch.id}/chapters?page=1&page_size=$pageSize"
+                        val pageSize = branch.countChapters?.takeIf { it > 0 } ?: 0
+                        val totalPages = ceil((pageSize / CHAPTERS_PAGE_SIZE).toDouble()).toInt().coerceAtLeast(1)
 
-                        client.get(url, headers)
-                            .parseAs<ChaptersResponse>().data.items
-                            .map { it.toSChapter(slug, branch.name) }
+                        (1..totalPages).map { page ->
+                            async {
+                                val url = "$apiUrl/branches/${branch.id}/chapters?page=$page&page_size=$CHAPTERS_PAGE_SIZE"
+                                client.get(url, headers).parseAs<ChaptersResponse>().data.items
+                            }
+                        }.awaitAll().flatten().map { it.toSChapter(slug, branch.name) }
                     }
                 }.awaitAll().flatten().sortedWith(
                     compareByDescending<SChapter> { it.chapter_number }.thenByDescending { it.date_upload },
