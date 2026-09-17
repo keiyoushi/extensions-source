@@ -76,6 +76,7 @@ class SearchComicDto(
 
 @Serializable
 class ComicDetailsDto(
+    @SerialName("real_id") private val slug: String,
     @SerialName("name_esp") private val title: String,
     @SerialName("_sinopsis") private val description: String? = null,
     @SerialName("_status") private val status: String,
@@ -85,6 +86,7 @@ class ComicDetailsDto(
     @SerialName("_extras") private val extras: ComicDetailsExtrasDto,
 ) {
     fun toSManga() = SManga.create().apply {
+        url = "manhwa/$slug"
         title = this@ComicDetailsDto.title
         thumbnail_url = thumbnail
         description = this@ComicDetailsDto.description
