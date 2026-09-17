@@ -30,14 +30,17 @@ class UnificationTitle(
     fun toSManga() = SManga.create().apply {
         url = unificationTitleId
         title = unificationTitleName
-        thumbnail_url = unificationTitleImage?.firstOrNull()?.coverImagefile?.toThumbnail()
+        thumbnail_url = unificationTitleImage?.firstNotNullOfOrNull { it.url }
     }
 }
 
 @Serializable
 class CoverImage(
-    val coverImagefile: String?,
-)
+    private val coverImagefile: String?,
+    private val coverImagePathType: Int?,
+) {
+    val url get() = coverUrl(coverImagePathType, coverImagefile)
+}
 
 @Serializable
 class LatestResponse(
@@ -94,9 +97,11 @@ class LastPublication(
 
 @Serializable
 class DetailResponse(
-    val title: DetailTitle,
-    val serialStory: SerialStory?,
-)
+    private val title: DetailTitle?,
+    val serialStory: SerialStoryDetail?,
+) {
+    fun toSManga() = title?.toSManga() ?: serialStory!!.toSManga()
+}
 
 @Serializable
 class DetailTitle(
@@ -120,6 +125,43 @@ class DetailTitle(
         thumbnail_url = lastPublication?.goods?.imageFileName?.toThumbnail()
     }
 }
+
+@Serializable
+class SerialStoryDetail(
+    val serialStoryId: String,
+    private val title: TitleRef,
+    private val summary: String?,
+    private val author: Author?,
+    private val publisher: Publisher?,
+    private val editorTags: List<EditorTag>?,
+    private val storiesSummary: StoriesSummary,
+    private val manualCoverImagePathType: Int?,
+    private val manualCoverImageName: String?,
+    private val automaticCoverImageName: String?,
+) {
+    private val cover get() = when {
+        !manualCoverImageName.isNullOrEmpty() -> coverUrl(manualCoverImagePathType, manualCoverImageName)
+        !automaticCoverImageName.isNullOrEmpty() -> automaticCoverImageName.toThumbnail()
+        else -> "$STORY_URL/thumb/${serialStoryId}_s.jpg"
+    }
+
+    fun toSManga() = SManga.create().apply {
+        title = this@SerialStoryDetail.title.name
+        author = this@SerialStoryDetail.author?.name
+        description = buildString {
+            summary?.let { append(it) }
+            publisher?.let { append("\n\nPublisher: ", it.name) }
+        }
+        genre = editorTags?.joinToString { it.name }
+        status = if (storiesSummary.isCompleteSerialStory) SManga.COMPLETED else SManga.ONGOING
+        thumbnail_url = cover
+    }
+}
+
+@Serializable
+class StoriesSummary(
+    val isCompleteSerialStory: Boolean,
+)
 
 @Serializable
 class SerialStory(
@@ -179,7 +221,7 @@ class StoryGoods(
 
 @Serializable
 class PublicationListResponse(
-    val publications: List<Publication>,
+    val publications: List<Publication>?,
 )
 
 @Serializable
@@ -255,6 +297,16 @@ const val TYPE_FREE = "free"
 private const val TYPE_TRIAL = "trial"
 private const val TYPE_STORY = "story"
 private const val TYPE_PURCHASED = "purchased"
+private const val SERIES_COVER = 1
+private const val VOLUME_COVER = 2
+private const val VERTICAL_COVER = 3
+private const val STORY_URL = "https://prod-contents-story-banner.akamaized.net/contents/story"
 private val REFLOWABLE_FORMATS = setOf("2", "6", "8")
-// TODO fix thumbnails
 private fun String.toThumbnail() = "https://cache2-ebookjapan.akamaized.net/contents/thumb/l/$this"
+private fun coverUrl(pathType: Int?, fileName: String?) = when {
+    fileName.isNullOrEmpty() -> null
+    pathType == SERIES_COVER -> "$STORY_URL/kanban/$fileName"
+    pathType == VOLUME_COVER -> fileName.toThumbnail()
+    pathType == VERTICAL_COVER -> "$STORY_URL/thumb/$fileName"
+    else -> null
+}

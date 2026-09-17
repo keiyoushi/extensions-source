@@ -91,7 +91,6 @@ abstract class EbookJapan :
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/books/${manga.url}/"
 
-    // TODO https://ebookjapan.yahoo.co.jp/books/996222/
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -114,7 +113,7 @@ abstract class EbookJapan :
         }
 
         SMangaUpdate(
-            detail.await().title.toSManga(),
+            detail.await().toSManga(),
             chapterList.await(),
         )
     }
@@ -138,7 +137,7 @@ abstract class EbookJapan :
             .addQueryParameter("titleId", titleId)
             .build()
 
-        return client.get(url).parseAs<PublicationListResponse>().publications
+        return client.get(url).parseAs<PublicationListResponse>().publications.orEmpty()
             .filter { !hideLocked || !it.isLocked }
             .reversed()
             .map { it.toSChapter() }
@@ -159,7 +158,7 @@ abstract class EbookJapan :
             light = false,
         ).toJsonRequestBody()
 
-        val session = client.post("$viewerUrl/open_book", headers, body).parseAs<OpenBookResponse>()
+        val session = client.post("$viewerUrl/open_book", body).parseAs<OpenBookResponse>()
         val drmUrl = "$viewerUrl/get_drm".toHttpUrl().newBuilder()
             .addQueryParameter("session_id", session.sessionId)
             .build()
