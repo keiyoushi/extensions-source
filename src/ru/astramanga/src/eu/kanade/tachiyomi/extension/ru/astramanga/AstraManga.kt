@@ -119,7 +119,7 @@ abstract class AstraManga : KeiSource() {
                         (1..totalPages).map { page ->
                             async {
                                 val url = "$apiUrl/branches/${branch.id}/chapters?page=$page&page_size=$CHAPTERS_PAGE_SIZE"
-                                client.get(url, headers).parseAs<ChaptersResponse>().data.items
+                                client.get(url).parseAs<ChaptersResponse>().data.items
                             }
                         }.awaitAll().flatten().map { it.toSChapter(slug, branch.name) }
                     }
