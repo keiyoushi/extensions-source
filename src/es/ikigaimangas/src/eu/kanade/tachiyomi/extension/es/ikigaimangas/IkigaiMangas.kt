@@ -197,12 +197,12 @@ abstract class IkigaiMangas :
 
         searchUrl.addQueryParameter("pagina", page.toString())
 
-        val document = client.get(searchUrl.build().toString(), headers).asJsoup()
+        val document = client.get(searchUrl.build()).asJsoup()
 
         val mangaList = document.select("section[aria-labelledby=archive-heading] > ul.grid a.card").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-                title = element.selectFirst(".card-body .card-title")!!.text()
+                title = element.selectFirst("h3")!!.text()
                 url = element.attr("href").substringAfterLast("/series/").substringBefore("/")
             }
         }
