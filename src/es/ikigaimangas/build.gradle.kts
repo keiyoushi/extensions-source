@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Ikigai Mangas"
-    versionCode = 36
+    versionCode = 37
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "es"
