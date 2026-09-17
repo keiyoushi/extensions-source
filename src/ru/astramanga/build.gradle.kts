@@ -14,4 +14,8 @@ keiyoushi {
         lang = "ru"
         baseUrl = "https://astramanga.org"
     }
+
+    deeplink {
+        path("/manga/..*")
+    }
 }

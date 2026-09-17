@@ -12,6 +12,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import kotlin.collections.forEach
@@ -72,6 +73,19 @@ abstract class AstraManga : KeiSource() {
             val mangas = data.titles.map { it.toSManga(mediaUrl) }
             MangasPage(mangas, data.currentPage < data.totalPages)
         }
+    }
+
+    // =========================== Deeplink ============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == domain && url.pathSegments[0] == "manga" && url.pathSegments[1].length > 1) {
+            val tmpManga = SManga.create().apply {
+                this.url = url.pathSegments[1]
+            }
+
+            return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }
+
+        return null
     }
 
     // ============================== Details ===============================
