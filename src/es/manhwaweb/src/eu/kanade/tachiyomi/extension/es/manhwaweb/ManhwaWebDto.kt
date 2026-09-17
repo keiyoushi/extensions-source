@@ -119,9 +119,19 @@ class PayloadChapterDto(
 @Serializable
 class ChapterDto(
     @SerialName("chapter") val number: Float,
-    @SerialName("link") val espUrl: String? = null,
     @SerialName("link_raw") val rawUrl: String? = null,
-    @SerialName("create") val createdAt: Long?,
+    private val link: String? = null,
+    private val create: Long?,
+    private val versions: List<ChapterVersionDto>? = null,
+) {
+    val espUrl get() = link ?: versions?.firstOrNull()?.link
+    val createdAt get() = create ?: versions?.firstOrNull()?.create
+}
+
+@Serializable
+class ChapterVersionDto(
+    val link: String? = null,
+    val create: Long? = null,
 )
 
 @Serializable
