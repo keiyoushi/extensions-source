@@ -114,7 +114,7 @@ abstract class AstraManga : KeiSource() {
                 branches.map { branch ->
                     async {
                         val pageSize = branch.countChapters?.takeIf { it > 0 } ?: 0
-                        val totalPages = ceil((pageSize / CHAPTERS_PAGE_SIZE).toDouble()).toInt().coerceAtLeast(1)
+                        val totalPages = ceil(pageSize.toDouble() / CHAPTERS_PAGE_SIZE).toInt().coerceAtLeast(1)
 
                         (1..totalPages).map { page ->
                             async {
