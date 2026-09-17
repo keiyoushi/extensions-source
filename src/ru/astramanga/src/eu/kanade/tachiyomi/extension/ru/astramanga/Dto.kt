@@ -99,9 +99,6 @@ class ChaptersResponse(val data: ChaptersData)
 @Serializable
 class ChaptersData(
     val items: List<ChapterDto> = emptyList(),
-    val total: Int,
-    val page: Int,
-    @SerialName("page_size") val size: Int,
 )
 
 @Serializable
