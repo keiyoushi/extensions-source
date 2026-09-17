@@ -6,20 +6,26 @@ plugins {
 
 keiyoushi {
     name = "Roumanwu"
-    versionCode = 20
+    versionCode = 21
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "肉漫屋"
         lang = "zh"
 
-        // 地址: https://rou.pub/dizhi or https://rdz3.xyz/dizhi
+        // 地址: https://rou.pub/dizhi or https://rdz4.xyz/dizhi
         baseUrl {
             mirrors(
                 "https://rouman5.com",
-                "https://roum27.xyz",
+                "https://roum29.xyz",
             )
         }
+    }
+
+    deeplink {
+        host("rouman5.com")
+        host("roum29.xyz")
+        path("/books/..*")
     }
 }
