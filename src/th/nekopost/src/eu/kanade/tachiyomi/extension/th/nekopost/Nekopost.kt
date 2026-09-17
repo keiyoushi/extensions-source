@@ -21,14 +21,14 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Source
 abstract class Nekopost : HttpSource() {
@@ -37,8 +37,6 @@ abstract class Nekopost : HttpSource() {
 
     private val projectDataEndpoint = "$baseUrl/api/project/detail2"
     private val fileHost = "https://www.osemocphoto.com"
-
-    private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th")) }
 
     private val apiHeaders by lazy {
         headersBuilder()
@@ -72,6 +70,8 @@ abstract class Nekopost : HttpSource() {
         Json.encodeToString(body).toRequestBody(),
     )
 
+    private val idRegex = Regex("""nekopost\.net/(manga|editor)/(\d+)""")
+
     override fun fetchSearchManga(
         page: Int,
         query: String,
@@ -79,13 +79,11 @@ abstract class Nekopost : HttpSource() {
     ): Observable<MangasPage> {
         val cleanQuery = query.trim()
 
-        val projectMatch = Regex("""nekopost\.net/manga/(\d+)""").find(cleanQuery)
+        val match = idRegex.find(cleanQuery)
 
-        val editorMatch = Regex("""nekopost\.net/editor/(\d+)""").find(cleanQuery)
-
-        return when {
-            projectMatch != null -> {
-                val projectId = projectMatch.groupValues[1]
+        return when (match?.groupValues?.get(1)) {
+            "manga" -> {
+                val projectId = match.groupValues[2]
                 val body = ProjectRequestBody(projectId.toInt()).toJsonRequestBody()
                 client.newCall(POST(projectDataEndpoint, headers, body))
                     .asObservableSuccess()
@@ -110,8 +108,8 @@ abstract class Nekopost : HttpSource() {
                     }
             }
 
-            editorMatch != null -> {
-                val editorId = editorMatch.groupValues[1]
+            "editor" -> {
+                val editorId = match.groupValues[2]
 
                 client.newCall(
                     GET(
@@ -259,7 +257,7 @@ abstract class Nekopost : HttpSource() {
                 url = "$projectId/${it.chapterId}/${projectId}_${it.chapterId}.json"
                 name = it.chapterName
                 chapter_number = it.chapterNo.toFloat()
-                date_upload = dateFormat.parse(it.publishDate.value)?.time ?: 0L
+                date_upload = Instant.tryParse(it.publishDate.value)
                 scanlator = it.providerName
             }
         }
