@@ -22,7 +22,7 @@ class Book(
     // WASM func 184 (get_page_name)
     fun pageName(index: Int): String {
         val hash = "nf:$fileId/${index}_ebj".sha256().toHexString()
-        return "${fileId.take(2)}/$fileId/$prefix/$hash.jpg"
+        return "${fileId.take(2)}/$fileId/$prefix/$hash.webp"
     }
 
     fun scramble(index: Int): Scramble {

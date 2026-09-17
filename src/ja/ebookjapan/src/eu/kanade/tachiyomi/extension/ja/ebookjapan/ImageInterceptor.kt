@@ -25,7 +25,7 @@ class ImageInterceptor : Interceptor {
         val result = scramble.unscramble(bitmap)
         bitmap.recycle()
         val buffer = Buffer()
-        result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+        result.compress(Bitmap.CompressFormat.WEBP, 100, buffer.outputStream())
         result.recycle()
 
         return response.newBuilder()
@@ -34,7 +34,7 @@ class ImageInterceptor : Interceptor {
     }
 
     companion object {
-        private val MEDIA_TYPE = "image/jpeg".toMediaType()
+        private val MEDIA_TYPE = "image/webp".toMediaType()
     }
 }
 
