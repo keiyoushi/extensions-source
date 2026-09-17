@@ -2,6 +2,13 @@ package eu.kanade.tachiyomi.extension.vi.moetruyen
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.serialization.Serializable
+
+@Serializable
+class GenreOption(
+    val name: String,
+    val id: String,
+)
 
 fun getFilters(genres: List<GenreOption>?): FilterList {
     val filters = mutableListOf<Filter<*>>(
