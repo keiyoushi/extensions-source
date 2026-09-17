@@ -12,16 +12,16 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -117,7 +117,7 @@ abstract class LectorJpg : HttpSource() {
             title = document.selectFirst("div.grid > h1")!!.text()
             thumbnail_url = document.selectFirst("div.bg_main.bg-cover")?.imageFromStyle()
             description = document.select("div.grid > div.container > p").text()
-            status = document.selectFirst("div.grid:has(>div.flex:has(>span:contains(Status))) > div:last-child").parseStatus()
+            status = document.selectFirst("div.grid:has(span:contains(Status)) > button").parseStatus()
             genre = document.select("a[href*=/series?genres] > span").joinToString { it.text() }
         }
     }
@@ -148,19 +148,20 @@ abstract class LectorJpg : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private val cursorDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val cursorDateFormat = DateTimeFormatter
+        .ofPattern("yyyy-MM-dd HH:mm:ss")
+        .withZone(ZoneOffset.UTC)
 
     private fun createLatestCursor(): String {
-        val now: String? = cursorDateFormat.format(Date())
+        val now: String? = cursorDateFormat.format(Instant.now())
         val json = """{"last_update_at":"$now","id":0,"_pointsToNextItems":true}"""
         return Base64.encodeToString(json.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
     }
 
-    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
-        "on-going" -> SManga.ONGOING
-        "end" -> SManga.COMPLETED
+    private fun Element?.parseStatus(): Int = when (this?.text()) {
+        "En emisión" -> SManga.ONGOING
+        "Completado" -> SManga.COMPLETED
+        "En pausa" -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 
@@ -169,7 +170,8 @@ abstract class LectorJpg : HttpSource() {
         return style.substringAfterLast("url(").substringBefore(")").removeSurrounding("\"")
     }
 
-    private val chapterDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
+    private val chapterDateFormat =
+        DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.forLanguageTag("es"))
 
     private fun parseChapterDate(date: String): Long {
         if (date.contains("hace")) {
@@ -209,7 +211,7 @@ abstract class LectorJpg : HttpSource() {
             return calendar.timeInMillis
         }
 
-        return chapterDateFormat.tryParse(date)
+        return chapterDateFormat.tryParseDate(date)
     }
 
     private fun getGenreList() = listOf(
