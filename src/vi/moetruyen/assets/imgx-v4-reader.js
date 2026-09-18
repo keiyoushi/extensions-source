@@ -139,9 +139,60 @@
         }
         return payload;
     };
+    const unwrapDecodeKey = (grant, storageKey) => {
+        if (grant.wrappedDecodeKey) {
+            return unwrapGrantKey(grant, storageKey, "wrappedDecodeKey");
+        }
+        if (grant.decodeKey) {
+            return decodeBase64Url(grant.decodeKey);
+        }
+        throw new Error("IMGX decode key missing");
+    };
+    const seedFromKey = (key) => {
+        const seed = readUint32(key, 0) >>> 0;
+        return seed === 0 ? 2654435769 : seed;
+    };
+    const unshuffleBytes = (data, key) => {
+        const indices = new Uint32Array(data.length);
+        let seed = seedFromKey(key);
+        for (let i = data.length - 1; i >= 1; i--) {
+            seed = xorshift32(seed);
+            indices[i] = seed % (i + 1);
+        }
+        for (let i = 1; i < data.length; i++) {
+            const j = indices[i];
+            if (i !== j) {
+                const tmp = data[i];
+                data[i] = data[j];
+                data[j] = tmp;
+            }
+        }
+    };
+    const xorDecryptBytes = (data, key) => {
+        for (let i = 0; i < data.length; i++) {
+            data[i] ^= key[i % key.length];
+        }
+    };
+    const decodeImgxV2 = (encrypted, grant, storageKey) => {
+        if (encrypted.byteLength <= 13 || encrypted[4] !== 2) {
+            throw new Error("IMGX v2 payload invalid");
+        }
+        const payload = encrypted.slice(13);
+        const key = unwrapDecodeKey(grant, storageKey);
+        try {
+            unshuffleBytes(payload, key);
+            xorDecryptBytes(payload, key);
+            return payload;
+        } finally {
+            key.fill(0);
+        }
+    };
     const decodeProtectedPage = async (encrypted, grant, storageKey, decodeImgxV4) => {
         const context = { imageId: grant.imageId, storageKey };
         const version = encrypted[4];
+        if (version === 2) {
+            return decodeImgxV2(encrypted, grant, storageKey);
+        }
         if (version === 4) {
             const key = unwrapGrantKey(grant, storageKey, "wrappedV4Key");
             try {
@@ -222,7 +273,11 @@
 
         for (let order = 0; order < pageIndexes.length; order++) {
             const page = pages.get(pageIndexes[order]);
-            if (!page?.downloadUrl || (!page?.grant?.wrappedV4Key && !page?.grant?.wrappedContentKey)) {
+            if (
+                !page?.downloadUrl ||
+                !(page.grant?.wrappedV4Key || page.grant?.wrappedContentKey ||
+                    page.grant?.wrappedDecodeKey || page.grant?.decodeKey)
+            ) {
                 throw new Error(`IMGX grant missing for page ${order + 1}`);
             }
             const encryptedResponse = await fetch(page.downloadUrl);
