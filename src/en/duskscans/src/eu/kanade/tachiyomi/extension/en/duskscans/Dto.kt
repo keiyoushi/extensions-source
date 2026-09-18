@@ -56,7 +56,18 @@ class ChapterDto(
             put("slug", slug)
             put("number", numberStr)
         }
-        val chapterName = title.ifBlank { "Chapter $numberStr" }
+        val chapterName = buildString {
+            if (title.isBlank() || title.equals(numberStr, ignoreCase = true)) {
+                append("Chapter $numberStr")
+            } else if (title.startsWith("Chapter", ignoreCase = true) ||
+                title.startsWith("Episode", ignoreCase = true) ||
+                title.startsWith("Ch.", ignoreCase = true)
+            ) {
+                append(title)
+            } else {
+                append("Chapter $numberStr - $title")
+            }
+        }
         name = if (isLocked) "🔒 $chapterName" else chapterName
         chapter_number = number
         date_upload = Instant.tryParse(releaseDate)
