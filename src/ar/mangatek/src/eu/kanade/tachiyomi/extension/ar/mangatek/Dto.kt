@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.time.Instant
 
 @Serializable
@@ -65,6 +66,12 @@ class Chapter(
 @Serializable
 class Tag(
     val name: String,
+    val counter: Int = 0,
+)
+
+@Serializable
+class TagsResponse(
+    val data: List<Tag> = emptyList(),
 )
 
 @Serializable
@@ -80,21 +87,48 @@ class OverlayPage(
 
 @Serializable
 class Bubble(
-    val text: String,
-    val x: Float,
-    val y: Float,
-    val w: Float,
-    val h: Float,
+    val text: String = "",
+    val x: Float = 0f,
+    val y: Float = 0f,
+    val w: Float = 0f,
+    val h: Float = 0f,
     val angle: Float = 0f,
+    val rotate: Float? = null,
     val color: String = "#000000",
     @SerialName("stroke_color") val strokeColor: String = "#ffffff",
     @SerialName("font_size_px") val fontSizePx: Float = 37.3f,
     @SerialName("line_height") val lineHeight: Float = 1.1f,
     @SerialName("stroke_width_px") val strokeWidthPx: Float = 3f,
-)
+) {
+    val actualAngle: Float get() = rotate ?: angle
+}
 
 @Serializable
 class ChapterProps(
-    val imageUrls: List<String>,
-    val overlayBlob: String?,
-)
+    val imageUrls: List<String> = emptyList(),
+    val textMode: String? = null,
+    val overlayBlob: String? = null,
+    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = 0,
+    @SerialName("pageOffset") val pageOffset: Int? = null,
+    val chapterId: JsonPrimitive? = null,
+    @SerialName("chapter_id") val chapterIdSnake: JsonPrimitive? = null,
+    val unlockToken: String? = null,
+    @SerialName("token") val tokenAlt: String? = null,
+) {
+    val actualChapterId: JsonPrimitive? get() = chapterId ?: chapterIdSnake
+    val actualUnlockToken: String? get() = unlockToken ?: tokenAlt
+    val actualOffset: Int? get() = overlayPageOffset ?: pageOffset
+}
+
+@Serializable
+class UnlockResponse(
+    val success: Boolean = false,
+    @SerialName("needs_challenge") val needsChallenge: Boolean = false,
+    val overlay: String? = null,
+    val key: String? = null,
+    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
+    @SerialName("pageOffset") val pageOffset: Int? = null,
+    @SerialName("page_offset") val pageOffsetSnake: Int? = null,
+) {
+    val actualOffset: Int? get() = overlayPageOffset ?: pageOffset ?: pageOffsetSnake
+}
