@@ -48,7 +48,7 @@ class LastChapter(
 @Serializable
 class Chapter(
     val title: String,
-    val volume: String = "",
+    val volume: String? = null,
     val timestamp: Int,
     val teams: List<String>,
     @SerialName("licensed")
