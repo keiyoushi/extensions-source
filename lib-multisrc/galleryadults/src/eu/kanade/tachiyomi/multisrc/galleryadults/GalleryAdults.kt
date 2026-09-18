@@ -106,7 +106,7 @@ abstract class GalleryAdults :
         thumbnail_url = element.mangaThumbnail()
     }
 
-    protected open fun popularMangaNextPageSelector(): String? = ".pagination li.active + li:not(.disabled)"
+    protected open fun popularMangaNextPageSelector(): String? = ".pagination li.active + li:not(.disabled), a[rel='next']"
 
     /* Latest */
     protected open val latestUpdatesUrl get() = buildString {
@@ -521,22 +521,24 @@ abstract class GalleryAdults :
                     ?.let { "**$tag**: $it" }
             } +
             listOfNotNull(
-                getInfoPages(document),
-                getInfoAlternativeTitle(),
-                getInfoFullTitle(),
+                getInfoPages(document)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { "**Pages**: $it" },
+                getInfoAlternativeTitle()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { "**Alternative title**: $it" },
+                getInfoFullTitle()
+                    ?.takeIf { preferences.shortTitle && it.isNotBlank() }
+                    ?.let { "**Full title**: $it" },
             )
         )
         .joinToString("\n\n")
 
-    protected open fun Element.getInfoPages(document: Document? = null): String? = document?.inputIdValueOf(totalPagesSelector)
-        ?.takeIf { it.isNotBlank() }
-        ?.let { "**Pages**: $it" }
+    protected open fun Element.getInfoPages(document: Document? = null) = document?.totalPages()
 
-    protected open fun Element.getInfoAlternativeTitle(): String? = selectFirst("h1 + h2, .subtitle")?.ownText()
-        .takeIf { !it.isNullOrBlank() }
-        ?.let { "**Alternative title**: $it" }
+    protected open fun Element.getInfoAlternativeTitle() = selectFirst("h1 + h2, .subtitle")?.ownText()
 
-    protected open fun Element.getInfoFullTitle(): String? = if (preferences.shortTitle) "**Full title**: ${mangaFullTitle("h1")}" else null
+    protected open fun Element.getInfoFullTitle() = mangaFullTitle("h1")
 
     protected open fun Element.getTime(): Long = selectFirst(".uploaded")
         ?.ownText()
@@ -554,6 +556,11 @@ abstract class GalleryAdults :
     )
 
     /* Pages */
+
+    protected open fun Element.totalPages() = inputIdValueOf(totalPagesSelector)
+
+    protected open fun Element.galleryId() = inputIdValueOf(galleryIdSelector)
+
     protected open fun Element.inputIdValueOf(string: String): String = select("input[id=$string]").attr("value")
 
     protected open val pagesRequest = "inc/thumbs_loader.php"
@@ -568,7 +575,7 @@ abstract class GalleryAdults :
         val serverNumber = document.serverNumber()
 
         return FormBody.Builder()
-            .add("u_id", document.inputIdValueOf(galleryIdSelector))
+            .add("u_id", document.galleryId())
             .add("g_id", document.inputIdValueOf(loadIdSelector))
             .add("img_dir", document.inputIdValueOf(loadDirSelector))
             .add("visible_pages", loadedPages.toString())
@@ -615,7 +622,7 @@ abstract class GalleryAdults :
         if (json != null) {
             val loadDir = document.inputIdValueOf(loadDirSelector)
             val loadId = document.inputIdValueOf(loadIdSelector)
-            val galleryId = document.inputIdValueOf(galleryIdSelector)
+            val galleryId = document.galleryId()
             val pageUrl = "$baseUrl/$pageUri/$galleryId"
 
             val server = document.getServer()
@@ -671,49 +678,42 @@ abstract class GalleryAdults :
      *   which will then request one by one to parse for page's image's URL using [imageUrlParse].
      */
     protected open suspend fun pageListParseAlternative(document: Document): List<Page> {
-        val totalPages = document.inputIdValueOf(totalPagesSelector)
-        val galleryId = document.inputIdValueOf(galleryIdSelector)
+        val totalPages = document.totalPages()
+        val galleryId = document.galleryId()
+
         val pageUrl = "$baseUrl/$pageUri/$galleryId"
 
-        val pages = document.select("$thumbnailSelector a")
-            .mapNotNull {
-                if (parsingImagePageByPage) {
-                    it.absUrl("href")
-                } else {
+        return if (parsingImagePageByPage) {
+            (
+                1..totalPages.toInt()
+                ).map { idx -> Page(idx, url = "$pageUrl/$idx/") }
+        } else {
+            val pages = document.select("$thumbnailSelector a")
+                .mapNotNull {
                     it.selectFirst("img")?.imgAttr() ?: return@mapNotNull null
                 }
-            }
-            .toMutableList()
+                .toMutableList()
 
-        if (totalPages.isNotBlank() && totalPages.toInt() > pages.size) {
-            val form = pageRequestForm(document, totalPages, pages.size)
+            if (totalPages.isNotEmpty() && totalPages.toInt() > pages.size) {
+                val form = pageRequestForm(document, totalPages, pages.size)
 
-            val morePages = client.post("$baseUrl/$pagesRequest", xhrHeaders, form).use { it ->
-                it.asJsoup()
-                    .select("a")
-                    .mapNotNull {
-                        if (parsingImagePageByPage) {
-                            it.absUrl("href")
-                        } else {
+                val morePages = client.post("$baseUrl/$pagesRequest", xhrHeaders, form).use { it ->
+                    it.asJsoup()
+                        .select("a")
+                        .mapNotNull {
                             it.selectFirst("img")?.imgAttr() ?: return@mapNotNull null
                         }
-                    }
+                }
+                if (morePages.isNotEmpty()) {
+                    pages.addAll(morePages)
+                } else {
+                    return pageListParseDummy(document)
+                }
             }
-            if (morePages.isNotEmpty()) {
-                pages.addAll(morePages)
-            } else {
-                return pageListParseDummy(document)
-            }
-        }
-
-        return pages.mapIndexed { idx, url ->
-            if (parsingImagePageByPage) {
-                Page(idx, url)
-            } else {
+            pages.mapIndexed { idx, url ->
                 Page(
                     index = idx,
                     imageUrl = url.thumbnailToFull(),
-                    url = "$pageUrl/$idx/",
                 )
             }
         }
@@ -726,7 +726,7 @@ abstract class GalleryAdults :
     protected open fun pageListParseDummy(document: Document): List<Page> {
         val loadDir = document.inputIdValueOf(loadDirSelector)
         val loadId = document.inputIdValueOf(loadIdSelector)
-        val galleryId = document.inputIdValueOf(galleryIdSelector)
+        val galleryId = document.galleryId()
         val pageUrl = "$baseUrl/$pageUri/$galleryId"
 
         val server = document.getServer()
@@ -735,7 +735,7 @@ abstract class GalleryAdults :
         val images = document.select("$thumbnailSelector img")
         val thumbUrls = images.map { it.imgAttr() }.toMutableList()
 
-        val totalPages = document.inputIdValueOf(totalPagesSelector)
+        val totalPages = document.totalPages()
 
         if (totalPages.isNotBlank() && totalPages.toInt() > thumbUrls.size) {
             val imagesExt = images.first()?.imgAttr()!!
@@ -751,14 +751,13 @@ abstract class GalleryAdults :
             Page(
                 index = idx,
                 imageUrl = url.thumbnailToFull(),
-                url = "$pageUrl/$idx/",
             )
         }
     }
 
     override suspend fun getImageUrl(page: Page): String = imageUrlParse(client.get(page.url).asJsoup())
 
-    protected open fun imageUrlParse(document: Document): String = document.selectFirst("img#gimg, img#fimg")?.imgAttr() ?: ""
+    protected open fun imageUrlParse(document: Document): String = document.selectFirst("img#gimg, img#fimg, img#readerImg")?.imgAttr() ?: ""
 
     /* Filters */
 
