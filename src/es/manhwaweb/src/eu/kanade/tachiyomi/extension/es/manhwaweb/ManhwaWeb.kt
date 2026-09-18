@@ -50,7 +50,7 @@ abstract class ManhwaWeb : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.lastOrNull { it.isNotEmpty() } ?: return null
-        return parseMangaDetails(getMangaBySlug(slug))
+        return getDetailsBySlug(slug).toSManga()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -103,23 +103,17 @@ abstract class ManhwaWeb : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.removeSuffix("/").substringAfterLast("/")
-        val json = getMangaBySlug(slug)
+        val dto = getDetailsBySlug(slug)
 
-        return SMangaUpdate(parseMangaDetails(json), parseChapterList(json))
+        return SMangaUpdate(dto.toSManga(), parseChapterList(dto))
     }
 
-    private suspend fun getMangaBySlug(slug: String) = client.get("$apiUrl/manhwa/see/$slug").body.string()
+    private suspend fun getDetailsBySlug(slug: String) = client.get("$apiUrl/manhwa/see/$slug").parseAs<ComicDetailsDto>()
 
-    private fun parseMangaDetails(json: String): SManga = json.parseAs<ComicDetailsDto>().toSManga()
-
-    private fun parseChapterList(json: String): List<SChapter> {
-        val result = json.parseAs<PayloadChapterDto>()
-        val chapters = result.chapters.filterNot {
-            it.createdAt == null || (it.espUrl == null && it.rawUrl == null)
-        }.map { it.toSChapter(result.id, result.realId) }
-
-        return chapters.sortedByDescending { it.chapter_number }
-    }
+    private fun parseChapterList(comic: ComicDetailsDto) = comic.chapters.filterNot {
+        it.createdAt == null || (it.espUrl == null && it.rawUrl == null)
+    }.map { it.toSChapter(comic.id, comic.slug) }
+        .sortedByDescending { it.chapter_number }
 
     private fun ChapterDto.toSChapter(id: String, realId: String) = SChapter.create().apply {
         name = "Capítulo ${number.toString().removeSuffix(".0")}"

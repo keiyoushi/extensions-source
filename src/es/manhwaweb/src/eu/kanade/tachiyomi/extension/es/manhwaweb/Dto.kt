@@ -76,7 +76,8 @@ class SearchComicDto(
 
 @Serializable
 class ComicDetailsDto(
-    @SerialName("real_id") private val slug: String,
+    @SerialName("_id") val id: String,
+    @SerialName("real_id") val slug: String,
     @SerialName("name_esp") private val title: String,
     @SerialName("_sinopsis") private val description: String? = null,
     @SerialName("_status") private val status: String,
@@ -84,6 +85,7 @@ class ComicDetailsDto(
     @SerialName("_imagen") private val thumbnail: String,
     @SerialName("_categoris") private val genres: List<Map<Int, String>>,
     @SerialName("_extras") private val extras: ComicDetailsExtrasDto,
+    val chapters: List<ChapterDto>,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "manhwa/$slug"
@@ -109,13 +111,6 @@ class ComicDetailsDto(
 @Serializable
 class ComicDetailsExtrasDto(
     @SerialName("autores") val authors: List<String>,
-)
-
-@Serializable
-class PayloadChapterDto(
-    @SerialName("_id") val id: String,
-    @SerialName("real_id") val realId: String,
-    val chapters: List<ChapterDto>,
 )
 
 @Serializable
