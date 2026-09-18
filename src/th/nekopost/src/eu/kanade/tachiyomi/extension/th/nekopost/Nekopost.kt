@@ -20,7 +20,7 @@ import kotlin.time.Instant
 @Source
 abstract class Nekopost : KeiSource() {
 
-    private val projectDataEndpoint = "$baseUrl/api/project/detail2"
+    private val projectDataEndpoint get() = "$baseUrl/api/project/detail2"
     private val fileHost = "https://www.osemocphoto.com"
 
     private val apiHeaders get() = headersBuilder()
@@ -211,17 +211,17 @@ abstract class Nekopost : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val body = ProjectRequestBody(manga.url.toInt()).toJsonRequestBody()
-        val json = client.post(projectDataEndpoint, apiHeaders, body).body.string()
+        val projectInfo = client.post(projectDataEndpoint, apiHeaders, body).parseAs<RawProjectInfo>()
         return SMangaUpdate(
-            manga = mangaFromProjectInfo(json.parseAs()),
-            chapters = chapterListParse(json),
+            manga = mangaFromProjectInfo(projectInfo),
+            chapters = chapterListParse(projectInfo),
         )
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    private fun chapterListParse(json: String): List<SChapter> {
-        val info = json.parseAs<RawProjectInfo>().info!!
+    private fun chapterListParse(projectInfo: RawProjectInfo): List<SChapter> {
+        val info = projectInfo.info!!
 
         if (getStatus(info.project.status) == SManga.LICENSED) {
             throw Exception("Licensed")
