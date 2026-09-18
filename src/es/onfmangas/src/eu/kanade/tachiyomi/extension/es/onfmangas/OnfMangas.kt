@@ -72,9 +72,7 @@ abstract class OnfMangas : KeiSource() {
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         .set("Accept-Language", "en-US,en;q=0.9")
 
-    private val dateFormat by lazy {
-        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
-    }
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 
     // ============================== Popular ===============================
 
@@ -163,17 +161,7 @@ abstract class OnfMangas : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get("$baseUrl${manga.url}").asJsoup()
-        val mangaDetails = if (fetchDetails) {
-            parseMangaDetails(document)
-        } else {
-            manga
-        }
-        val chapterList = if (fetchChapters) {
-            parseChapterList(document)
-        } else {
-            chapters
-        }
-        return SMangaUpdate(mangaDetails, chapterList)
+        return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
