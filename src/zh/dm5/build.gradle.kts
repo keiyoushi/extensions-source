@@ -26,7 +26,6 @@ keiyoushi {
         host("www.dm5.com")
         host("www.dm5.cn")
         host("m.dm5.com")
-        host("m.dm5.cn")
         path("/manhua-.*")
     }
 }
