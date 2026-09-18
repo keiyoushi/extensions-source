@@ -11,22 +11,24 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.secretstream.SecretStream
 import keiyoushi.lib.secretstream.State
 import keiyoushi.lib.secretstream.X25519
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
@@ -40,7 +42,7 @@ import java.net.URLDecoder
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
@@ -51,7 +53,7 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Duration.Companion.seconds
 
 abstract class Pam :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     protected val baseHttpUrl = baseUrl.toHttpUrl()
@@ -67,14 +69,11 @@ abstract class Pam :
         classLoader = this::class.java.classLoader!!,
     )
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::imageInterceptor)
-        .rateLimit(1, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", "https://${baseHttpUrl.host}")
-        .set("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder {
+        addInterceptor(::imageInterceptor)
+        rateLimit(1, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
+        return this
+    }
 
     private var version: String? = null
     private var csrfToken: String? = null
@@ -137,25 +136,61 @@ abstract class Pam :
         }
     }
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", popularFilters)
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", latestFilters)
-
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchManga(page, "", latestFilters)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchManga(page, "", popularFilters)
 
     protected abstract val popularFilters: FilterList
     protected abstract val latestFilters: FilterList
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val request: Request
         if (query.isNotEmpty()) {
             val url = baseHttpUrl.newBuilder().apply {
                 addPathSegments("api/v1/search/series")
                 addQueryParameter("q", query)
             }.build()
 
-            return apiRequest(
+            request = apiRequest(
+                url,
+                includeXSRFToken = true,
+                includeCSRFToken = false,
+                includeVersion = false,
+            )
+        } else {
+            val url = baseHttpUrl.newBuilder().apply {
+                addPathSegment("library")
+                if (page > 1) {
+                    addQueryParameter("page", page.toString())
+                }
+
+                filters.filterIsInstance<TriStateGroupFilter>().forEach { group ->
+                    when (group.name) {
+                        "Genres", "Genres/Thèmes" -> {
+                            group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_genres", it.joinToString(",")) }
+                            group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_genres", it.joinToString(",")) }
+                        }
+
+                        "Types" -> {
+                            group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_types", it.joinToString(",")) }
+                            group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_types", it.joinToString(",")) }
+                        }
+                    }
+                }
+
+                filters.firstInstanceOrNull<CheckBoxGroup>()?.also { status ->
+                    if (status.checked.isNotEmpty()) {
+                        addQueryParameter("status", status.checked.joinToString(","))
+                    }
+                }
+                filters.firstInstanceOrNull<SortFilter>()?.also { sort ->
+                    addQueryParameter("orderby", sort.sort)
+                    if (sort.ascending) {
+                        addQueryParameter("order", "asc")
+                    }
+                }
+            }.build()
+
+            request = apiRequest(
                 url,
                 includeXSRFToken = true,
                 includeCSRFToken = false,
@@ -163,47 +198,8 @@ abstract class Pam :
             )
         }
 
-        val url = baseHttpUrl.newBuilder().apply {
-            addPathSegment("library")
-            if (page > 1) {
-                addQueryParameter("page", page.toString())
-            }
+        val response = client.newCall(request).execute()
 
-            filters.filterIsInstance<TriStateGroupFilter>().forEach { group ->
-                when (group.name) {
-                    "Genres", "Genres/Thèmes" -> {
-                        group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_genres", it.joinToString(",")) }
-                        group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_genres", it.joinToString(",")) }
-                    }
-                    "Types" -> {
-                        group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_types", it.joinToString(",")) }
-                        group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_types", it.joinToString(",")) }
-                    }
-                }
-            }
-
-            filters.firstInstanceOrNull<CheckBoxGroup>()?.also { status ->
-                if (status.checked.isNotEmpty()) {
-                    addQueryParameter("status", status.checked.joinToString(","))
-                }
-            }
-            filters.firstInstanceOrNull<SortFilter>()?.also { sort ->
-                addQueryParameter("orderby", sort.sort)
-                if (sort.ascending) {
-                    addQueryParameter("order", "asc")
-                }
-            }
-        }.build()
-
-        return apiRequest(
-            url,
-            includeXSRFToken = true,
-            includeCSRFToken = false,
-            includeVersion = false,
-        )
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.queryParameter("q") != null) {
             val data = response.parseAs<SearchResponse>().data
 
@@ -221,23 +217,26 @@ abstract class Pam :
         }
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$baseUrl/serie/${manga.url}".toHttpUrl()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
-        return apiRequest(
-            url,
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val request = apiRequest(
+            getMangaUrl(manga).toHttpUrl(),
             includeXSRFToken = true,
             includeCSRFToken = false,
             includeVersion = true,
         )
-    }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
-
-    override fun mangaDetailsParse(response: Response): SManga {
+        val response = client.newCall(request).execute()
         val data = response.parseAs<MangaResponse>().props.serie
 
-        return SManga.create().apply {
+        val manga = SManga.create().apply {
             url = data.slug
             title = data.title
             thumbnail_url = createThumbnailUrl(data.image)
@@ -266,6 +265,24 @@ abstract class Pam :
                 else -> SManga.UNKNOWN
             }
         }
+
+        val hidePremium = preferences.getBoolean(HIDE_PREMIUM_PREF, false)
+        val chapters = data.chapters.filter { !(it.isPremium && hidePremium) }.map {
+            SChapter.create().apply {
+                url = "/serie/${data.slug}/chapter/${it.slug}"
+                name = buildString {
+                    if (it.isPremium) {
+                        append("\uD83D\uDD12 ")
+                    }
+                    append(it.title)
+                }
+                date_upload = it.createdAt.substringBefore(".").let { dateStr ->
+                    dateFormat.tryParseDateTime(dateStr)
+                }
+            }
+        }.asReversed()
+
+        return SMangaUpdate(manga, chapters)
     }
 
     protected open fun createThumbnailUrl(imagePath: String?): String? {
@@ -273,33 +290,7 @@ abstract class Pam :
         return "$baseUrl$imagePath#$THUMBNAIL_FRAGMENT"
     }
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<MangaResponse>().props.serie
-        val hidePremium = preferences.getBoolean(HIDE_PREMIUM_PREF, false)
-
-        return data.chapters
-            .filter { !(it.isPremium && hidePremium) }
-            .map {
-                SChapter.create().apply {
-                    url = "/serie/${data.slug}/chapter/${it.slug}"
-                    name = buildString {
-                        if (it.isPremium) {
-                            append("\uD83D\uDD12 ")
-                        }
-                        append(it.title)
-                    }
-                    date_upload = it.createdAt.substringBefore(".").let { dateStr ->
-                        dateFormat.tryParse(dateStr)
-                    }
-                }
-            }.asReversed()
-    }
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.US).withZone(TimeZone.getTimeZone("UTC").toZoneId())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -309,15 +300,41 @@ abstract class Pam :
         }.also(screen::addPreference)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$baseUrl${chapter.url}".toHttpUrl()
 
-        return apiRequest(
+        val request = apiRequest(
             url,
             includeXSRFToken = true,
             includeCSRFToken = false,
             includeVersion = true,
         )
+
+        val response = client.newCall(request).execute()
+
+        val body = response.parseAs<PageListResponse>()
+        val props = body.props
+        val id = sessionKey(props.data.serie.slug, props.data.slug)
+        val state = openChapter(body)
+        sessions[id] = state.session
+
+        val manifest = state.manifest ?: return (1..props.pageCount).map { idx ->
+            Page(
+                index = idx - 1,
+                url = "$id#$idx",
+                imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
+            )
+        }
+
+        val variant = manifest.variants.maxOrNull()?.let { "-$it" }.orEmpty()
+
+        return (1..manifest.count).map { idx ->
+            Page(
+                index = idx - 1,
+                url = "$id#$idx",
+                imageUrl = "$baseUrl${manifest.base}$idx$variant.ece#$id",
+            )
+        }
     }
 
     /**
@@ -531,33 +548,6 @@ abstract class Pam :
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val body = response.parseAs<PageListResponse>()
-        val props = body.props
-        val id = sessionKey(props.data.serie.slug, props.data.slug)
-        val state = openChapter(body)
-        sessions[id] = state.session
-
-        val manifest = state.manifest
-            ?: return (1..props.pageCount).map { idx ->
-                Page(
-                    index = idx - 1,
-                    url = "$id#$idx",
-                    imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
-                )
-            }
-
-        val variant = manifest.variants.maxOrNull()?.let { "-$it" }.orEmpty()
-
-        return (1..manifest.count).map { idx ->
-            Page(
-                index = idx - 1,
-                url = "$id#$idx",
-                imageUrl = "$baseUrl${manifest.base}$idx$variant.ece#$id",
-            )
-        }
-    }
-
     private fun hexNonce(byteCount: Int = 16): String {
         val b = ByteArray(byteCount).also(secureRandom::nextBytes)
         return b.joinToString("") { "%02x".format(it) }
@@ -624,12 +614,9 @@ abstract class Pam :
         if (session.contentKey != null) {
             if (!response.isSuccessful) return response
 
-            return response.newBuilder()
-                .body(
-                    decryptEce(response.body.bytes(), session.contentKey)
-                        .toResponseBody("image/webp".toMediaType()),
-                )
-                .build()
+            return response.newBuilder().body(
+                decryptEce(response.body.bytes(), session.contentKey).toResponseBody("image/webp".toMediaType()),
+            ).build()
         }
 
         val pageNameRaw = response.header("X-Page-Name") ?: return response
@@ -756,8 +743,6 @@ abstract class Pam :
             update(1)
         }.doFinal().copyOf(length)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
