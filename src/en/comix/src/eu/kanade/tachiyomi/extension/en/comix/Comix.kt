@@ -995,7 +995,7 @@ abstract class Comix :
             key = PREF_SHOW_EXTRA_INFO
             title = "Show extra info in description"
             summary = "Append publication year, language, content rating, rank, " +
-                "ratings count, and follower count to the manga description."
+                "ratings count, follower count, and tracker links to the manga description."
             setDefaultValue(true)
         }.let(screen::addPreference)
 
