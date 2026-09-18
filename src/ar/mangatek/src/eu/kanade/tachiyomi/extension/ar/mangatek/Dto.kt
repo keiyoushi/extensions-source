@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonPrimitive
 import kotlin.time.Instant
 
 @Serializable
@@ -106,29 +105,15 @@ class Bubble(
 @Serializable
 class ChapterProps(
     val imageUrls: List<String> = emptyList(),
-    val textMode: String? = null,
     val overlayBlob: String? = null,
-    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = 0,
-    @SerialName("pageOffset") val pageOffset: Int? = null,
-    val chapterId: JsonPrimitive? = null,
-    @SerialName("chapter_id") val chapterIdSnake: JsonPrimitive? = null,
+    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
+    val chapterId: Long? = null,
     val unlockToken: String? = null,
-    @SerialName("token") val tokenAlt: String? = null,
-) {
-    val actualChapterId: JsonPrimitive? get() = chapterId ?: chapterIdSnake
-    val actualUnlockToken: String? get() = unlockToken ?: tokenAlt
-    val actualOffset: Int? get() = overlayPageOffset ?: pageOffset
-}
+)
 
 @Serializable
 class UnlockResponse(
-    val success: Boolean = false,
-    @SerialName("needs_challenge") val needsChallenge: Boolean = false,
     val overlay: String? = null,
     val key: String? = null,
     @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
-    @SerialName("pageOffset") val pageOffset: Int? = null,
-    @SerialName("page_offset") val pageOffsetSnake: Int? = null,
-) {
-    val actualOffset: Int? get() = overlayPageOffset ?: pageOffset ?: pageOffsetSnake
-}
+)

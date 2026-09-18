@@ -95,13 +95,12 @@ abstract class MangaTek : KeiSource() {
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val tags = data?.runCatching {
-            parseAs<TagsResponse>().data
-                .filter { it.counter > 0 }
-                .map { it.name }
-                .distinct()
-                .sorted()
-        }?.getOrNull()?.takeIf { it.isNotEmpty() } ?: DEFAULT_TAGS
+        val tags = data?.parseAs<TagsResponse>()?.data
+            .orEmpty()
+            .filter { it.counter > 0 }
+            .map { it.name }
+            .distinct()
+            .sorted()
 
         return FilterList(
             SortFilter(),
@@ -163,13 +162,18 @@ abstract class MangaTek : KeiSource() {
         val props: ChapterProps = document.extractAstroProp("imageUrls")
 
         val (overlayData, apiOffset) = props.overlayBlob?.let { blob ->
-            runCatching { decrypt(blob) to props.actualOffset }.getOrNull()
-        } ?: props.actualUnlockToken?.let { token ->
-            val chapterId = props.actualChapterId?.content ?: chapter.url.trimEnd('/').substringAfterLast("/")
-            unlockOverlay(chapterId, token)
+            decrypt(blob) to props.overlayPageOffset
+        } ?: run {
+            val chapterId = props.chapterId
+            val unlockToken = props.unlockToken
+            if (chapterId != null && unlockToken != null) {
+                unlockOverlay(chapterId, unlockToken)
+            } else {
+                null
+            }
         } ?: (null to null)
 
-        val offset = apiOffset ?: props.actualOffset ?: 0
+        val offset = apiOffset ?: props.overlayPageOffset ?: 0
         val overlaysByPageNumber: Map<Int, OverlayPage> = overlayData?.pages
             ?.associateBy { it.pageNumber } ?: emptyMap()
 
@@ -194,28 +198,23 @@ abstract class MangaTek : KeiSource() {
         }
     }
 
-    private suspend fun unlockOverlay(chapterId: String, unlockToken: String): Pair<OverlayData, Int?>? = runCatching {
+    private suspend fun unlockOverlay(chapterId: Long, unlockToken: String): Pair<OverlayData, Int?>? {
         val proof = "$UNLOCK_PROOF_SALT|$unlockToken|$chapterId".sha256Hex()
         val payload = buildJsonObject {
-            chapterId.toLongOrNull()?.let { put("chapterId", it) } ?: put("chapterId", chapterId)
+            put("chapterId", chapterId)
             put("token", unlockToken)
             put("proof", proof)
         }
-        val unlockHeaders = headers.newBuilder()
-            .set("Origin", baseUrl)
-            .set("Referer", "$baseUrl/")
-            .build()
         val response = client.post(
             url = UNLOCK_API_URL,
-            headers = unlockHeaders,
             body = payload.toJsonRequestBody(),
         )
         val unlockResponse = response.parseAs<UnlockResponse>()
-        if (!unlockResponse.success || unlockResponse.overlay == null) return null
+        val overlay = unlockResponse.overlay ?: return null
         val key = unlockResponse.key ?: KEY
-        val overlayData = decrypt(unlockResponse.overlay, key)
-        overlayData to unlockResponse.actualOffset
-    }.getOrNull()
+        val overlayData = decrypt(overlay, key)
+        return overlayData to unlockResponse.overlayPageOffset
+    }
 
     private fun String.sha256Hex(): String = MessageDigest.getInstance("SHA-256")
         .digest(toByteArray(Charsets.UTF_8))
@@ -240,7 +239,7 @@ abstract class MangaTek : KeiSource() {
         }
     }
 
-    fun decrypt(blob: String, keyHex: String = KEY): OverlayData {
+    private fun decrypt(blob: String, keyHex: String = KEY): OverlayData {
         val (ivHex, ctHex, tagHex) = blob.split(":").also {
             require(it.size == 3) { "unexpected overlayBlob format" }
         }
@@ -266,48 +265,5 @@ abstract class MangaTek : KeiSource() {
         private const val UNLOCK_PROOF_SALT = "322c4e08571941fa05abf1a6a2b45c9a9bf7bcc94af61b66"
         private const val API_BASE = "https://api.mangatek.com"
         private const val UNLOCK_API_URL = "$API_BASE/api/reader/unlock"
-
-        private val DEFAULT_TAGS = listOf(
-            "أكشن",
-            "إثارة",
-            "إنتقام",
-            "إيسيكاي",
-            "اعادة احياء",
-            "الحياة اليومية",
-            "السفر عبر الزمن",
-            "بطل غير اعتيادي",
-            "تاريخي",
-            "تشويق",
-            "تناسخ",
-            "جوسيه",
-            "حديث",
-            "حياة مدرسية",
-            "خارق للطبيعة",
-            "خيال",
-            "دراما",
-            "دموي",
-            "رعب",
-            "رومانسى",
-            "رومانسي",
-            "سحر",
-            "سينين",
-            "شوجو",
-            "شونين",
-            "شياطين",
-            "صقل",
-            "غموض",
-            "فانتازيا",
-            "فنون قتال",
-            "قوة خارقة",
-            "كوميدي",
-            "مانجا",
-            "مانهوا",
-            "مغامرة",
-            "موريم",
-            "نظام",
-            "نفسي",
-            "وحوش",
-            "ويب تون",
-        )
     }
 }

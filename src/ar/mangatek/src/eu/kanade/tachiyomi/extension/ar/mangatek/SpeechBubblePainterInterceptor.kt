@@ -175,6 +175,6 @@ class SpeechBubblePainterInterceptor : Interceptor {
     }
 
     companion object {
-        val mediaType = "image/png".toMediaType()
+        private val mediaType = "image/png".toMediaType()
     }
 }
