@@ -5,14 +5,17 @@ plugins {
 }
 
 keiyoushi {
-    name = "Eva Scans"
-    versionCode = 4
+    name = "Manga Portalı"
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "mangathemesia"
 
     source {
-        lang = "en"
-        baseUrl = "https://evascans.net"
+        baseUrl = "https://www.mangaportali.com"
+        lang = "tr"
+    }
+
+    deeplink {
+        path("/series/..*")
     }
 }
