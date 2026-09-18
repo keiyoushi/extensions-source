@@ -58,8 +58,14 @@ abstract class AstraManga : KeiSource() {
                         ?.let { addQueryParameter("status", it) }
 
                     is SortFilter -> addQueryParameter("sort", filter.selected)
-                    is GenreFilter -> filter.state.filter { it.state }
-                        .forEach { addQueryParameter("genres", it.id) }
+                    is GenreFilter -> {
+                        filter.included?.forEach { addQueryParameter("genres", it) }
+                        filter.excluded?.forEach { addQueryParameter("exclude_genres", it) }
+                    }
+                    is TagsFilter -> {
+                        filter.included?.forEach { addQueryParameter("tags", it) }
+                        filter.excluded?.forEach { addQueryParameter("exclude_tags", it) }
+                    }
 
                     else -> {}
                 }
@@ -159,10 +165,11 @@ abstract class AstraManga : KeiSource() {
     // ============================== Filters ===============================
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        TypeFilter(),
-        StatusFilter(),
         SortFilter(),
         GenreFilter(),
+        TagsFilter(),
+        TypeFilter(),
+        StatusFilter(),
     )
 
     companion object {
