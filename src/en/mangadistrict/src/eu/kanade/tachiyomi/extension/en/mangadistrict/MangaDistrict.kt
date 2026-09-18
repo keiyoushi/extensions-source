@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangadistrict
 
-import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.text.Editable
 import android.text.TextWatcher
@@ -12,20 +11,14 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
-import keiyoushi.utils.tryParse
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.time.Instant
 
 @Source
 abstract class MangaDistrict :
@@ -57,38 +50,7 @@ abstract class MangaDistrict :
 
     override val chapterDateSelector = ".chapter-release-date .timediff"
 
-    override fun chapterFromElement(element: Element, mangaPath: String) = super.chapterFromElement(element, mangaPath)?.apply {
-        val urlKey = getChapterUrl(this).urlKey()
-        val dates = preferences.dates
-        dates[urlKey]?.also {
-            if (date_upload == 0L) {
-                // If date_upload is not set (due to NEW tag), try to get it from the page lists
-                date_upload = it
-            } else {
-                dates.remove(urlKey)
-                preferences.dates = dates
-            }
-        }
-    }
-
     override val pageListParseSelector = "div.page-break img:not(noscript img):not(#image-99999)"
-
-    override fun parsePages(document: Document): List<Page> {
-        val pageDate = Instant.tryParse(
-            document.selectFirst("meta[property=og:updated_time]")!!
-                .attr("content"),
-        )
-        val dates = preferences.dates
-        val urlKey = document.location().urlKey()
-        dates[urlKey] = pageDate
-        preferences.dates = dates
-
-        return super.parsePages(document)
-    }
-
-    private fun String.urlKey(): String = toHttpUrl().pathSegments.let { path ->
-        "${path[1]}/${path[2]}"
-    }
 
     private fun SManga.cleanTitleIfNeeded() = apply {
         title = title.let { originalTitle ->
@@ -109,18 +71,6 @@ abstract class MangaDistrict :
     private fun customRemoveTitle(): String = preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
     private fun noCleanTitlesWhileBrowsing(): Boolean = preferences.getBoolean(NO_REMOVE_TITLE_BROWSING_PREF, false)
     private fun getImgRes() = preferences.getString(IMG_RES_PREF, IMG_RES_DEFAULT)!!
-
-    private var SharedPreferences.dates: MutableMap<String, Long>
-        get() = try {
-            getString(DATE_MAP, "{}")!!.parseAs<MutableMap<String, Long>>()
-        } catch (_: Exception) {
-            mutableMapOf()
-        }
-
-        @SuppressLint("ApplySharedPref")
-        set(newVal) {
-            edit().putString(DATE_MAP, newVal.toJsonString()).commit()
-        }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val noRemoveTitleBrowsingPref = CheckBoxPreference(screen.context).apply {
@@ -221,7 +171,5 @@ abstract class MangaDistrict :
         private const val IMG_RES_HIGH = "high"
         private const val IMG_RES_FULL = "full"
         private const val IMG_RES_DEFAULT = IMG_RES_ALL
-
-        private const val DATE_MAP = "date_saved"
     }
 }
