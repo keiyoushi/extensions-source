@@ -10,7 +10,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 
-class PortalPageMetadata(
+private class PortalPageMetadata(
     val hc: Int, // horizontal block count
     val bwd: Int, // block width/height in px
     val m: List<String>, // scramble map (base-35 encoded values)
@@ -22,16 +22,14 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val fragment = request.url.fragment
 
-        if (!response.isSuccessful || fragment.isNullOrEmpty() || !fragment.contains(":")) {
-            return response
-        }
+        if (!response.isSuccessful || fragment.isNullOrEmpty() || !fragment.contains(":")) return response
 
-        val parts = fragment.split(":")
-        val hc = parts[0].toInt()
-        val bwd = parts[1].toInt()
-        val mEntries = parts[2]
-        val m = mEntries.split(",")
-        val metadata = PortalPageMetadata(hc, bwd, m)
+        val parts = fragment.split(':')
+        val metadata = PortalPageMetadata(
+            hc = parts[0].toInt(),
+            bwd = parts[1].toInt(),
+            m = parts.subList(2, parts.size),
+        )
 
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
         val result = unscramble(bitmap, metadata)
@@ -55,7 +53,17 @@ class ImageInterceptor : Interceptor {
         val srcRect = Rect()
         val dstRect = Rect()
 
-        canvas.drawBitmap(image, 0f, 0f, null)
+        val gridWidth = metadata.hc * metadata.bwd
+        val gridHeight = metadata.m.size / metadata.hc * metadata.bwd
+
+        if (gridWidth < width) {
+            srcRect.set(gridWidth, 0, width, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+        if (gridHeight < height) {
+            srcRect.set(0, gridHeight, gridWidth, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
 
         //   m[i] decoded from base-35 gives the source block index.
         //   Block i in reading order is the destination.

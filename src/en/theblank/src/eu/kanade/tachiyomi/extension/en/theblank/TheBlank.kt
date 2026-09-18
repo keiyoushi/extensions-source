@@ -7,9 +7,23 @@ import eu.kanade.tachiyomi.multisrc.pam.TriStateGroupFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
+import okio.ByteString.Companion.decodeHex
 
 @Source
 abstract class TheBlank : Pam() {
+
+    override val readerSecret =
+        "3eb4f283204c2786a6b00bef43808861eaed6aa99aeeb0c62ad170700b7fa272".decodeHex().toByteArray()
+
+    override val kdfDomain = "4pkdsu71"
+
+    override fun signedPayload(payload: ByteArray) = payload + readerSecret
+
+    override fun manifestPayload(uid: String, version: Int, ts: Long, nonce: String) = "$uid|$ts|$nonce|$version"
+
+    override fun contentKeyMaterial(sharedSecret: ByteArray, info: ByteArray) = listOf(info, readerSecret, sharedSecret)
+
+    override val contentKeyRounds = 4
 
     override val popularFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(3, false)))
     override val latestFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(2, false)))
