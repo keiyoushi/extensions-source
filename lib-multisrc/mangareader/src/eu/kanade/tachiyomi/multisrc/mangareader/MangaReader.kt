@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mangareader
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -78,8 +77,6 @@ abstract class MangaReader : KeiSource() {
         addPage(page, this)
     }.build()
 
-    open fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(searchMangaUrl(page, query, filters), headers)
-
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val response = client.get(searchMangaUrl(page, query, filters))
         return searchMangaParse(response)
@@ -131,18 +128,8 @@ abstract class MangaReader : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-
-        if (fetchDetails) {
-            parseMangaDetails(document, manga)
-        }
-
-        val chapterList = if (fetchChapters) {
-            parseChapterList(document)
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(manga, chapterList)
+        parseMangaDetails(document, manga)
+        return SMangaUpdate(manga, parseChapterList(document))
     }
 
     open fun parseMangaDetails(document: Document, manga: SManga) {
@@ -265,14 +252,15 @@ abstract class MangaReader : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        val imageUrl = page.imageUrl!!
-        val imageHeaders = headers.newBuilder()
-            .removeAll("Origin")
-            .set("Referer", imageUrl)
-            .build()
-        return GET(imageUrl, imageHeaders)
-    }
+    override fun imageRequest(page: Page): Request = Request.Builder()
+        .url(page.imageUrl!!)
+        .headers(
+            headers.newBuilder()
+                .removeAll("Origin")
+                .set("Referer", page.imageUrl!!)
+                .build(),
+        )
+        .build()
 
     // ============================= Utilities ==============================
 
