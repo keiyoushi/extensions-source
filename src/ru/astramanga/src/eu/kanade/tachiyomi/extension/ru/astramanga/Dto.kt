@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
 @Serializable
@@ -22,7 +24,7 @@ class TitleDetailResponse(val data: TitleDto)
 
 @Serializable
 class TitleDto(
-    val id: Int,
+    private val id: Int,
     private val slug: String,
     private val name: String,
     @SerialName("secondary_name") private val secondaryName: String? = null,
@@ -47,6 +49,9 @@ class TitleDto(
         url = slug
         title = name
         thumbnail_url = coverUrl(mediaUrl)
+        memo = buildJsonObject {
+            put("id", id)
+        }
     }
 
     fun toSMangaDetails(mediaUrl: String): SManga = SManga.create().apply {
@@ -68,6 +73,9 @@ class TitleDto(
             tags?.mapNotNull { it.name }?.let { addAll(it) }
         }.filter { it.isNotBlank() }.distinct().joinToString()
         status = parseStatus(this@TitleDto.status)
+        memo = buildJsonObject {
+            put("id", id)
+        }
     }
 }
 

@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -101,12 +102,15 @@ abstract class AstraManga : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url
-        val mangaData = client.get("$apiUrl/titles/${manga.url}").parseAs<TitleDetailResponse>()
 
-        val mangaNew = mangaData.data.toSMangaDetails(mediaUrl)
+        val mangaNew = if (fetchDetails || manga.memo["id"]?.string.isNullOrBlank()) {
+            client.get("$apiUrl/titles/$slug").parseAs<TitleDetailResponse>().data.toSMangaDetails(mediaUrl)
+        } else {
+            manga
+        }
 
         val chaptersNew = if (fetchChapters) {
-            val titleId = mangaData.data.id
+            val titleId = mangaNew.memo["id"]!!.string
             val branches = client.get("$apiUrl/titles/$titleId/branches")
                 .parseAs<BranchesResponse>().data.branches
 
