@@ -196,6 +196,8 @@ abstract class ComiciViewer :
         }.also(screen::addPreference)
     }
 
+    protected open val extraFilterOptions: List<Pair<String, String>> = emptyList()
+
     protected open fun getFilterOptions(): List<Pair<String, String>> = listOf(
         "ランキング" to RANKING_PATH,
         "更新順" to "/series/list/up",
@@ -210,7 +212,7 @@ abstract class ComiciViewer :
         "土曜日" to "/category/manga/day/6",
         "日曜日" to "/category/manga/day/7",
         "その他" to "/category/manga/day/8",
-    )
+    ) + extraFilterOptions
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         CategoryFilter(getFilterOptions()),
