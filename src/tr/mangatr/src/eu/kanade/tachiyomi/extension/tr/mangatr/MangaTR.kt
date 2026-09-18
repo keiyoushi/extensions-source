@@ -221,7 +221,10 @@ abstract class MangaTR : KeiSource() {
                 .apply { offset?.let { add("offset", it.toString()) } }
                 .build()
             val response = client.post("$baseUrl/cek/fetch_pages_manga.php", ajaxHeaders, form)
-            val elements = response.asJsoup().select("article.bento-ep-card")
+            // the chapter hrefs are relative, but this endpoint lives under /cek/
+            val elements = response.asJsoup()
+                .also { it.setBaseUri("$baseUrl/") }
+                .select("article.bento-ep-card")
             if (elements.isEmpty()) break
 
             elements.mapTo(chapters, ::chapterFromElement)
@@ -235,8 +238,7 @@ abstract class MangaTR : KeiSource() {
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val link = element.selectFirst("a.bento-ep-title-link")!!
-        // hrefs are relative and the AJAX endpoint lives under /cek/, so resolve against the root
-        setUrlWithoutDomain("$baseUrl/${link.attr("href").removePrefix("/")}")
+        setUrlWithoutDomain(link.absUrl("href"))
 
         val number = link.selectFirst(".bento-ep-chapter-num")?.text()?.removeSuffix(".")
         val subtitle = element.selectFirst(".bento-ep-subtitle")?.textOrNull()
@@ -398,7 +400,7 @@ abstract class MangaTR : KeiSource() {
     companion object {
         private val NUMBER_REGEX = Regex("""\d+""")
         private val CHALLENGE_REGEX = Regex("""challenge:\s*"([^"]+)"""")
-        private val CHAPTER_KEY_REGEX = Regex("""initialChapterListKey\s*=\s*'([^']+)'""")
+        private val CHAPTER_KEY_REGEX = Regex("""listKey:\s*'([^']+)'""")
         private val GATE_PATH_REGEX = Regex("""_fpx\s*=\s*"([^"]+)"""")
         private val HEX_KEY_REGEX = Regex("""[0-9a-f]{32}""")
     }
