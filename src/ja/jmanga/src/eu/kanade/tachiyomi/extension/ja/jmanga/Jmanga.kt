@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
@@ -26,6 +27,10 @@ abstract class Jmanga : MangaReader() {
         }.build()
 
         return GET(url, headers)
+    }
+
+    override fun addPage(page: Int, builder: HttpUrl.Builder) {
+        builder.addQueryParameter("p", page.toString())
     }
 
     // ============================== Chapters ==============================
