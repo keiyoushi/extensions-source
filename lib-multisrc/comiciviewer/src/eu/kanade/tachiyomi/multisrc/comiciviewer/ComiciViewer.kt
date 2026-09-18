@@ -103,12 +103,13 @@ abstract class ComiciViewer :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
+        val hash = manga.url.substringAfter("/series/") // for old url compatibility
         val seriesAsync = async {
-            client.get(seriesApiUrl("episodes", manga.url), CacheControl.FORCE_NETWORK)
+            client.get(seriesApiUrl("episodes", hash), CacheControl.FORCE_NETWORK)
                 .parseAs<ApiResponse>().series
         }
         val accessAsync = async {
-            client.get(seriesApiUrl("series/access", manga.url), CacheControl.FORCE_NETWORK)
+            client.get(seriesApiUrl("series/access", hash), CacheControl.FORCE_NETWORK)
                 .parseAs<AccessApiResponse>().seriesAccess.episodeAccesses.associateBy { it.episodeId }
         }
 
@@ -133,7 +134,7 @@ abstract class ComiciViewer :
         )
     }
 
-    private fun seriesApiUrl(path: String, seriesHash: String) = "$apiUrl/$path".toHttpUrl().newBuilder()
+    protected open fun seriesApiUrl(path: String, seriesHash: String) = "$apiUrl/$path".toHttpUrl().newBuilder()
         .addQueryParameter("seriesHash", seriesHash)
         .addQueryParameter("episodeFrom", "1")
         .addQueryParameter("episodeTo", "9999")
@@ -196,19 +197,19 @@ abstract class ComiciViewer :
     }
 
     protected open fun getFilterOptions(): List<Pair<String, String>> = listOf(
-        Pair("ランキング", RANKING_PATH),
-        Pair("更新順", "/series/list/up"),
-        Pair("新作順", "/series/list/new"),
-        Pair("読み切り", "/category/manga/oneShot"),
-        Pair("完結", "/category/manga/complete"),
-        Pair("月曜日", "/category/manga/day/1"),
-        Pair("火曜日", "/category/manga/day/2"),
-        Pair("水曜日", "/category/manga/day/3"),
-        Pair("木曜日", "/category/manga/day/4"),
-        Pair("金曜日", "/category/manga/day/5"),
-        Pair("土曜日", "/category/manga/day/6"),
-        Pair("日曜日", "/category/manga/day/7"),
-        Pair("その他", "/category/manga/day/8"),
+        "ランキング" to RANKING_PATH,
+        "更新順" to "/series/list/up",
+        "新作順" to "/series/list/new",
+        "読み切り" to "/category/manga/oneShot",
+        "完結" to "/category/manga/complete",
+        "月曜日" to "/category/manga/day/1",
+        "火曜日" to "/category/manga/day/2",
+        "水曜日" to "/category/manga/day/3",
+        "木曜日" to "/category/manga/day/4",
+        "金曜日" to "/category/manga/day/5",
+        "土曜日" to "/category/manga/day/6",
+        "日曜日" to "/category/manga/day/7",
+        "その他" to "/category/manga/day/8",
     )
 
     override fun getFilterList(data: JsonElement?) = FilterList(
