@@ -37,14 +37,8 @@ abstract class LectorJpg : KeiSource() {
         it.host == baseUrl.toHttpUrl().host
     }
 
-    class LimitedCache<K, V> : LinkedHashMap<K, V>() {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>): Boolean = size > 8
-    }
-
-    data class SearchKey(val page: Int, val query: String, val filters: String?)
-
-    private val latestMangaCursor = LimitedCache<Int, String?>()
-    private val searchMangaCursor = LimitedCache<SearchKey, String?>()
+    private var latestMangaCursor: String? = null
+    private var searchMangaCursor: String? = null
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val result = client.get("$apiUrl/home/trending").parseAs<SeriesQueryDto>()
@@ -53,14 +47,15 @@ abstract class LectorJpg : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val cursor = latestMangaCursor[page - 1] ?: createLatestCursor()
+        if (page == 1) latestMangaCursor = null
+        val cursor = latestMangaCursor ?: createLatestCursor()
         val url = "$apiUrl/home/lastest-updates".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
 
         val response = client.get(url.build())
 
         val result = response.parseAs<SeriesQueryDto>()
-        latestMangaCursor[page] = result.nextCursor
+        latestMangaCursor = result.nextCursor
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, result.hasNextPage())
     }
@@ -75,35 +70,29 @@ abstract class LectorJpg : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (page == 1) searchMangaCursor = null
+
         val genresParam = filters
             .filterIsInstance<GenreFilter>()
             .flatMap { filter -> filter.state.filter { it.state }.map { it.key } }
             .takeIf { it.isNotEmpty() }
             ?.joinToString(",")
 
-        val searchKey = SearchKey(page - 1, query, genresParam)
-
-        val cursor = searchMangaCursor[searchKey] ?: ""
+        val cursor = searchMangaCursor ?: ""
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
             .addQueryParameter("name", query)
-            .fragment(page.toString())
 
         if (genresParam != null) {
             url.addQueryParameter("genres", genresParam)
         }
 
-        return parseSearchManga(client.get(url.build()), page)
+        return parseSearchManga(client.get(url.build()))
     }
 
-    private fun parseSearchManga(response: Response, page: Int): MangasPage {
-        val query = response.request.url.queryParameter("name") ?: ""
-        val genresParam = response.request.url.queryParameter("genres")
-
-        val searchKey = SearchKey(page, query, genresParam)
-
+    private fun parseSearchManga(response: Response): MangasPage {
         val result = response.parseAs<SeriesQueryDto>()
-        searchMangaCursor[searchKey] = result.nextCursor
+        searchMangaCursor = result.nextCursor
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, result.hasNextPage())
     }
@@ -139,8 +128,7 @@ abstract class LectorJpg : KeiSource() {
     private val pagesRegex = """images:(\[.*?])""".toRegex()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
-        val document = response.asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val scripts = document.select("script:containsData(svelteKit)").joinToString("\n") { it.data() }
         val match = pagesRegex.find(scripts) ?: return emptyList()
         val pagesJson = match.groupValues[1]
