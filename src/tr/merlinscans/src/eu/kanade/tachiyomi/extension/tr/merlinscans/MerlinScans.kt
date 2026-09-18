@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.tr.merlinscans
 
 import eu.kanade.tachiyomi.multisrc.initmanga.InitManga
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
@@ -88,13 +87,6 @@ abstract class MerlinScans : InitManga() {
         } while (page <= result.totalPages)
 
         return chapters
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        if (document.selectFirst("div#chapter-content div.lock-card") != null) {
-            throw Exception("Kilitli bölüm, okumak için siteye giriş yapmanız gerekiyor")
-        }
-        return super.pageListParse(document)
     }
 
     companion object {
