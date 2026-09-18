@@ -64,8 +64,7 @@ abstract class ComiciViewer :
             return MangasPage(mangas, hasNextPage)
         }
 
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val path = filterList.firstInstance<CategoryFilter>().value
+        val path = filters.firstInstance<CategoryFilter>().value
 
         if (path == RANKING_PATH) {
             return getPopularManga(page)
