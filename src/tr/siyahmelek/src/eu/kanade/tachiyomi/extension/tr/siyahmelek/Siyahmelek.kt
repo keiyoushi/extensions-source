@@ -8,5 +8,5 @@ abstract class Siyahmelek : InitManga() {
 
     override val latestUrlSlug = "recently-updated"
 
-    override val popularUrlSlug = "trending-manga"
+    override val popularUrlSlug = "manga-ranking"
 }
