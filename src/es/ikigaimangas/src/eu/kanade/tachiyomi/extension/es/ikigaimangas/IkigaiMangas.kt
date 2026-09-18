@@ -112,7 +112,6 @@ abstract class IkigaiMangas :
         set("Sec-Fetch-Dest", "document")
         set("Sec-Fetch-Mode", "navigate")
         set("Sec-Fetch-Site", "cross-site")
-        set("Sec-Fetch-User", "?1")
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH)
@@ -197,12 +196,12 @@ abstract class IkigaiMangas :
 
         searchUrl.addQueryParameter("pagina", page.toString())
 
-        val document = client.get(searchUrl.build().toString(), headers).asJsoup()
+        val document = client.get(searchUrl.build(), headers).asJsoup()
 
         val mangaList = document.select("section[aria-labelledby=archive-heading] > ul.grid a.card").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-                title = element.selectFirst(".card-body .card-title")!!.text()
+                title = element.selectFirst("h3")!!.text()
                 url = element.attr("href").substringAfterLast("/series/").substringBefore("/")
             }
         }
