@@ -65,6 +65,12 @@ class Chapter(
 @Serializable
 class Tag(
     val name: String,
+    val counter: Int = 0,
+)
+
+@Serializable
+class TagsResponse(
+    val data: List<Tag> = emptyList(),
 )
 
 @Serializable
@@ -80,21 +86,34 @@ class OverlayPage(
 
 @Serializable
 class Bubble(
-    val text: String,
-    val x: Float,
-    val y: Float,
-    val w: Float,
-    val h: Float,
+    val text: String = "",
+    val x: Float = 0f,
+    val y: Float = 0f,
+    val w: Float = 0f,
+    val h: Float = 0f,
     val angle: Float = 0f,
+    val rotate: Float? = null,
     val color: String = "#000000",
     @SerialName("stroke_color") val strokeColor: String = "#ffffff",
     @SerialName("font_size_px") val fontSizePx: Float = 37.3f,
     @SerialName("line_height") val lineHeight: Float = 1.1f,
     @SerialName("stroke_width_px") val strokeWidthPx: Float = 3f,
-)
+) {
+    val actualAngle: Float get() = rotate ?: angle
+}
 
 @Serializable
 class ChapterProps(
-    val imageUrls: List<String>,
-    val overlayBlob: String?,
+    val imageUrls: List<String> = emptyList(),
+    val overlayBlob: String? = null,
+    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
+    val chapterId: Long? = null,
+    val unlockToken: String? = null,
+)
+
+@Serializable
+class UnlockResponse(
+    val overlay: String? = null,
+    val key: String? = null,
+    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
 )
