@@ -48,7 +48,7 @@ abstract class MadaraNoAjax : MadaraBase() {
             if (query.isNotBlank()) addQueryParameter("s", query)
         }.build()
         val document = client.get(url).asJsoup()
-        return MangasPage(parseArchive(document), document.selectFirst("div.nav-previous, a.nextpostslink") != null)
+        return MangasPage(parseArchive(document), document.selectFirst(nextPageSelector()) != null)
     }
 
     private suspend fun htmlSearch(page: Int, query: String): MangasPage {
