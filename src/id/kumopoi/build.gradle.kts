@@ -11,7 +11,6 @@ keiyoushi {
     libVersion = "1.6"
 
     source {
-        name = "KumoPoi"
         lang = "id"
         baseUrl {
             custom("https://beta.kumopoi.com")
@@ -19,6 +18,10 @@ keiyoushi {
     }
 
     deeplink {
+        host("beta.kumopoi.com")
+        host("kumopoi.com")
+        host("kumopoi.org")
         path("/comic/..*")
+        path("/manga/..*")
     }
 }

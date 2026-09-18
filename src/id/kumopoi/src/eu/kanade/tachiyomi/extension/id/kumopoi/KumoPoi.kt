@@ -99,13 +99,17 @@ abstract class KumoPoi : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        // Single API endpoint returns both manga details and chapter list unconditionally
-        val response = client.get("$API_BASE/comics/${manga.url}").parseAs<ComicDetailsResponse>()
+        val slug = getComicSlug(manga.url)
+        val response = client.get("$API_BASE/comics/$slug").parseAs<ComicDetailsResponse>()
         return SMangaUpdate(response.data.toSManga(), response.data.toSChapterList())
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = chapter.url.substringAfterLast("#")
+        val chapterId = if (chapter.url.contains("#")) {
+            chapter.url.substringAfterLast("#")
+        } else {
+            resolveChapterId(chapter)
+        }
         val path = "/api/v1/chapters/$chapterId/pages"
         val timestamp = (System.currentTimeMillis() / 1000).toString()
         val nonce = generateNonce(16)
@@ -129,6 +133,16 @@ abstract class KumoPoi : KeiSource() {
         }
     }
 
+    private suspend fun resolveChapterId(chapter: SChapter): String {
+        val segments = chapter.url.trim('/').split('/')
+        val slug = if (segments.size >= 2 && segments[0] == "comic") segments[1] else segments.firstOrNull().orEmpty()
+        val response = client.get("$API_BASE/comics/$slug").parseAs<ComicDetailsResponse>()
+        val target = response.data.chapters.firstOrNull {
+            it.number.trim().toFloatOrNull() == chapter.chapter_number
+        } ?: response.data.chapters.firstOrNull()
+        return target?.id ?: throw Exception("Chapter ID not found")
+    }
+
     override fun imageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
             .set("Referer", "$baseUrl/")
@@ -139,17 +153,22 @@ abstract class KumoPoi : KeiSource() {
             .build()
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = getComicSlug(manga.url)
+        return "$baseUrl/comic/$slug"
+    }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url.substringBeforeLast("#")}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
-        if (url.pathSegments.getOrNull(0) != "comic") return null
+        val segment = url.pathSegments.getOrNull(0) ?: return null
+        if (segment != "comic" && segment != "manga") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
-        val manga = SManga.create().apply { this.url = slug }
+        val manga = SManga.create().apply { this.url = "/comic/$slug" }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
+
+    private fun getComicSlug(url: String): String = url.trimEnd('/').substringAfterLast('/')
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         SortFilter(),
