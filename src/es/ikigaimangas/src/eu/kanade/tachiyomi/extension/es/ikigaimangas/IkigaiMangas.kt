@@ -112,7 +112,6 @@ abstract class IkigaiMangas :
         set("Sec-Fetch-Dest", "document")
         set("Sec-Fetch-Mode", "navigate")
         set("Sec-Fetch-Site", "cross-site")
-        set("Sec-Fetch-User", "?1")
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH)
