@@ -43,11 +43,14 @@ abstract class Jinmantiantang :
 
     private val updateUrlInterceptor = UpdateUrlInterceptor(preferences)
 
+    private val loginInterceptor = LoginInterceptor(baseUrl, headers, preferences, network.client)
+
     // 处理URL请求
     override val client: OkHttpClient = network.client
         .newBuilder()
         .apply { interceptors().add(0, updateUrlInterceptor) }
         .addInterceptor(ScrambledImageInterceptor)
+        .addInterceptor(loginInterceptor)
         // Add rate limit to fix manga thumbnail load failure
         .rateLimit(
             preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_PREF_DEFAULT)!!.toInt(),
