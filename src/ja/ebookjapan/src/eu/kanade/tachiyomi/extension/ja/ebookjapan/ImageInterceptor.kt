@@ -11,7 +11,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -19,15 +18,11 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val fragment = request.url.fragment
 
-        if (fragment.isNullOrEmpty() || !fragment.startsWith("data=") || !response.isSuccessful) {
-            return response
-        }
-
-        val params = runCatching { decodeFragment(fragment.substringAfter("data=")) }
-            .getOrNull() ?: return response
+        if (fragment.isNullOrEmpty() || !response.isSuccessful) return response
 
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
-        val result = unscrambleImage(bitmap, params)
+        val scramble = Scramble.decode(fragment)
+        val result = scramble.unscramble(bitmap)
         bitmap.recycle()
         val buffer = Buffer()
         result.compress(Bitmap.CompressFormat.WEBP, 100, buffer.outputStream())
@@ -38,183 +33,142 @@ class ImageInterceptor : Interceptor {
             .build()
     }
 
-    // WASM func 208
-    private fun unscrambleImage(src: Bitmap, p: Params): Bitmap {
-        val cellW = src.width / p.gridDim
-        val cellH = src.height / p.gridDim
-        val tileW = cellW - 2 * p.margin
-        val tileH = cellH - 2 * p.margin
-        if (tileW <= 0 || tileH <= 0) return src
+    companion object {
+        private val MEDIA_TYPE = "image/webp".toMediaType()
+    }
+}
 
-        val visCols = (p.pageWidth + tileW - 1) / tileW
-        val visRows = (p.pageHeight + tileH - 1) / tileH
-        val table = selectTable(src, p, cellW, cellH, tileW, tileH, visCols, visRows)
+// WASM func 211 (shuffle)
+class Scramble(
+    private val width: Int,
+    private val height: Int,
+    private val margin: Int,
+    private val unit: Int,
+    private val generated: Boolean,
+    private val table: ByteArray,
+) {
+    fun encode(): String {
+        val buffer = ByteBuffer.allocate(HEADER_SIZE + table.size)
+            .putShort(width.toShort())
+            .putShort(height.toShort())
+            .put(margin.toByte())
+            .put(unit.toByte())
+            .put(if (generated) 1.toByte() else 0.toByte())
+            .put(table)
 
-        val result = Bitmap.createBitmap(p.pageWidth, p.pageHeight, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
-        val srcRect = Rect()
-        val dstRect = Rect()
-
-        for (visIdx in 0 until visCols * visRows) {
-            if (visIdx >= table.size) break
-            val srcIdx = table[visIdx].toInt() and 0xFF
-            val sx = p.margin + (srcIdx % p.gridDim) * cellW
-            val sy = p.margin + (srcIdx / p.gridDim) * cellH
-            val dx = (visIdx % visCols) * tileW
-            val dy = (visIdx / visCols) * tileH
-            val pw = minOf(tileW, p.pageWidth - dx, src.width - sx)
-            val ph = minOf(tileH, p.pageHeight - dy, src.height - sy)
-            if (pw <= 0 || ph <= 0) continue
-
-            srcRect.set(sx, sy, sx + pw, sy + ph)
-            dstRect.set(dx, dy, dx + pw, dy + ph)
-            canvas.drawBitmap(src, srcRect, dstRect, null)
-        }
-        return result
+        return Base64.encodeToString(buffer.array(), BASE64_FLAGS)
     }
 
-    private fun selectTable(
-        src: Bitmap,
-        p: Params,
-        cellW: Int,
-        cellH: Int,
-        tileW: Int,
-        tileH: Int,
-        visCols: Int,
-        visRows: Int,
-    ): ByteArray {
-        if (p.tables.size <= 1) return p.tables.first()
+    fun unscramble(source: Bitmap): Bitmap {
+        val page = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(page)
 
-        val rowStride = (visRows / 4).coerceAtLeast(1)
-        val colStride = (visCols / 4).coerceAtLeast(1)
-        val ySampleStep = (tileH / 8).coerceAtLeast(1)
-        val xSampleStep = (tileW / 8).coerceAtLeast(1)
-
-        var bestTable = p.tables.first()
-        var bestScore = Long.MAX_VALUE
-
-        for (table in p.tables) {
-            if (table.size < visCols * visRows) continue
-            var score = 0L
-
-            // Horizontal: right edge of tile[r,c] vs left edge of tile[r,c+1]
-            var r = 0
-            while (r < visRows) {
-                var c = 0
-                while (c < visCols - 1) {
-                    score += seamDiff(
-                        src, table, p, cellW, cellH, tileW, tileH,
-                        destA = r * visCols + c,
-                        destB = r * visCols + c + 1,
-                        horizontal = true,
-                        step = ySampleStep,
-                    )
-                    c += colStride
-                }
-                r += rowStride
-            }
-
-            // Vertical: bottom edge of tile[r,c] vs top edge of tile[r+1,c]
-            r = 0
-            while (r < visRows - 1) {
-                var c = 0
-                while (c < visCols) {
-                    score += seamDiff(
-                        src, table, p, cellW, cellH, tileW, tileH,
-                        destA = r * visCols + c,
-                        destB = (r + 1) * visCols + c,
-                        horizontal = false,
-                        step = xSampleStep,
-                    )
-                    c += colStride
-                }
-                r += rowStride
-            }
-
-            if (score < bestScore) {
-                bestScore = score
-                bestTable = table
-            }
-        }
-        return bestTable
-    }
-
-    private fun seamDiff(
-        src: Bitmap,
-        table: ByteArray,
-        p: Params,
-        cellW: Int,
-        cellH: Int,
-        tileW: Int,
-        tileH: Int,
-        destA: Int,
-        destB: Int,
-        horizontal: Boolean,
-        step: Int,
-    ): Long {
-        val sA = table[destA].toInt() and 0xFF
-        val sB = table[destB].toInt() and 0xFF
-        val axBase = p.margin + (sA % p.gridDim) * cellW
-        val ayBase = p.margin + (sA / p.gridDim) * cellH
-        val bxBase = p.margin + (sB % p.gridDim) * cellW
-        val byBase = p.margin + (sB / p.gridDim) * cellH
-
-        var diff = 0L
-        if (horizontal) {
-            val ax = axBase + tileW - 1
-            if (ax >= src.width || bxBase >= src.width) return 0L
-            var y = 0
-            while (y < tileH) {
-                val ay = ayBase + y
-                val by = byBase + y
-                if (ay >= src.height || by >= src.height) break
-                diff += colorDiff(src.getPixel(ax, ay), src.getPixel(bxBase, by))
-                y += step
-            }
+        if (generated) {
+            drawGenerated(canvas, source)
         } else {
-            val ay = ayBase + tileH - 1
-            if (ay >= src.height || byBase >= src.height) return 0L
-            var x = 0
-            while (x < tileW) {
-                val ax = axBase + x
-                val bx = bxBase + x
-                if (ax >= src.width || bx >= src.width) break
-                diff += colorDiff(src.getPixel(ax, ay), src.getPixel(bx, byBase))
-                x += step
+            drawTable(canvas, source)
+        }
+
+        return page
+    }
+
+    // newer books: walk a shrinking list of cells, turning every tile a quarter further than the last
+    private fun drawGenerated(canvas: Canvas, source: Bitmap) {
+        val columns = width.ceilDiv(unit)
+        val total = columns * height.ceilDiv(unit)
+        val cell = unit + margin * 2
+
+        // the first five bytes seed the stride, the last five the starting cell, all ten the turns
+        val head = (0 until 5).sumOf { table[it].toInt() and 0xFF }
+        val sum = head + (5 until 10).sumOf { table[it].toInt() and 0xFF }
+        val stride = 2 + head % (total - 3)
+        val start = 2 + (sum - head) % (total - 3)
+        val turn = if (sum and 8 != 0) 1 else 3
+        var rotation = (sum shr 1) and 3
+
+        val cells = IntArray(total) { it }
+        var left = total
+        val src = Rect()
+        val dst = Rect()
+        var x = 0
+        var y = 0
+
+        for (index in 0 until total) {
+            val position = (index * stride + start) % left
+            val origin = cells[position]
+            left--
+            System.arraycopy(cells, position + 1, cells, position, left - position)
+
+            val sx = origin % columns * cell + margin
+            val sy = origin / columns * cell + margin
+            src.set(sx, sy, sx + unit, sy + unit)
+            dst.set(x, y, x + unit, y + unit)
+            canvas.save()
+            canvas.rotate(rotation * 90f, dst.exactCenterX(), dst.exactCenterY())
+            canvas.drawBitmap(source, src, dst, null)
+            canvas.restore()
+
+            rotation = (rotation + turn) and 3
+            x += unit
+            if (x >= width) {
+                x = 0
+                y += unit
             }
         }
-        return diff
     }
 
-    private fun colorDiff(c1: Int, c2: Int): Long {
-        val dr = ((c1 shr 16) and 0xFF) - ((c2 shr 16) and 0xFF)
-        val dg = ((c1 shr 8) and 0xFF) - ((c2 shr 8) and 0xFF)
-        val db = (c1 and 0xFF) - (c2 and 0xFF)
-        return (dr * dr + dg * dg + db * db).toLong()
+    // older books: one lookup byte per tile, never turned
+    private fun drawTable(canvas: Canvas, source: Bitmap) {
+        val twice = margin * 2
+        val tileWidth = width.ceilDiv(unit).roundUpCell(twice)
+        val tileHeight = height.ceilDiv(unit).roundUpCell(twice)
+        val cellWidth = tileWidth + twice
+        val cellHeight = tileHeight + twice
+        val src = Rect()
+        val dst = Rect()
+        var x = 0
+        var y = 0
+
+        for (entry in table) {
+            if (x < width && y < height) {
+                val origin = entry.toInt() and 0xFF
+                val sx = origin % unit * cellWidth + margin
+                val sy = origin / unit * cellHeight + margin
+                val visibleWidth = minOf(tileWidth, width - x)
+                val visibleHeight = minOf(tileHeight, height - y)
+                src.set(sx, sy, sx + visibleWidth, sy + visibleHeight)
+                dst.set(x, y, x + visibleWidth, y + visibleHeight)
+                canvas.drawBitmap(source, src, dst, null)
+            }
+
+            x += tileWidth
+            if (x >= width) {
+                x = 0
+                y += tileHeight
+            }
+        }
     }
 
-    private class Params(
-        val pageWidth: Int,
-        val pageHeight: Int,
-        val margin: Int,
-        val gridDim: Int,
-        val tables: List<ByteArray>,
-    )
+    private fun Int.ceilDiv(divisor: Int) = (this + divisor - 1) / divisor
 
-    private fun decodeFragment(encoded: String): Params {
-        val raw = Base64.decode(encoded, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
-        val buf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN)
-        val w = buf.short.toInt() and 0xFFFF
-        val h = buf.short.toInt() and 0xFFFF
-        val margin = buf.get().toInt() and 0xFF
-        val gridDim = buf.get().toInt() and 0xFF
-        val numTables = buf.get().toInt() and 0xFF
-        val tileBytes = gridDim * gridDim
-        val tables = List(numTables) { ByteArray(tileBytes).also(buf::get) }
-        return Params(w, h, margin, gridDim, tables)
+    private fun Int.roundUpCell(twice: Int): Int {
+        val remainder = (this + twice) and 7
+        return if (remainder == 0) this else this - remainder + 8
     }
 
     companion object {
-        private val MEDIA_TYPE = "image/webp".toMediaType()
+        private const val HEADER_SIZE = 7
+        private const val BASE64_FLAGS = Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+
+        fun decode(fragment: String): Scramble {
+            val buffer = ByteBuffer.wrap(Base64.decode(fragment, BASE64_FLAGS))
+            val width = buffer.short.toInt() and 0xFFFF
+            val height = buffer.short.toInt() and 0xFFFF
+            val margin = buffer.get().toInt() and 0xFF
+            val unit = buffer.get().toInt() and 0xFF
+            val generated = buffer.get().toInt() != 0
+            val table = ByteArray(buffer.remaining()).also(buffer::get)
+            return Scramble(width, height, margin, unit, generated, table)
+        }
     }
 }
