@@ -181,13 +181,13 @@ class SeriesAccess(
 class EpisodeAccess(
     val episodeId: String,
     private val hasAccess: Boolean,
-    private val isCampaign: Boolean,
+    private val accessType: String,
 ) {
     val isLocked: Boolean
         get() = !hasAccess
 
     val needsLogin: Boolean
-        get() = isLocked && isCampaign
+        get() = isLocked && accessType == "memberOnlyFree"
 }
 
 @Serializable
