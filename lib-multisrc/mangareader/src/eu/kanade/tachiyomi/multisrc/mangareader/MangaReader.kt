@@ -265,6 +265,15 @@ abstract class MangaReader : KeiSource() {
         }
     }
 
+    override fun imageRequest(page: Page): Request {
+        val imageUrl = page.imageUrl!!
+        val imageHeaders = headers.newBuilder()
+            .removeAll("Origin")
+            .set("Referer", imageUrl)
+            .build()
+        return GET(imageUrl, imageHeaders)
+    }
+
     // ============================= Utilities ==============================
 
     open fun Element.imgAttr(): String = when {
@@ -272,7 +281,7 @@ abstract class MangaReader : KeiSource() {
         hasAttr("data-src") -> attr("abs:data-src")
         hasAttr("data-url") -> attr("abs:data-url")
         else -> attr("abs:src")
-    }
+    }.trim()
 
     open fun Response.parseHtmlProperty(): Document {
         val html = parseAs<AjaxResponse>().html
