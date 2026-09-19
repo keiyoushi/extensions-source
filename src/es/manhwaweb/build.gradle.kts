@@ -16,6 +16,6 @@ keiyoushi {
     }
 
     deeplink {
-        path("/..*")
+        path("/manhwa/..*")
     }
 }
