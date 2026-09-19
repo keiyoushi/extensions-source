@@ -112,9 +112,9 @@ abstract class ArgosComics : KeiSource() {
     }
 
     companion object {
-        private const val SEARCH_TOKEN = "409ae74984efeccf922164e02e3bcd60d8b0107638"
-        private const val CHAPTERS_TOKEN = "606c13e60309ce062fade63ac2f1cc68bbc5dc25f4"
-        private const val DETAILS_TOKEN = "60e89cb5963d6bb1b61383872fbfb4cc2726925dd8"
-        private const val PAGES_TOKEN = "6062e8559136ee33cc337e5520fb09950c3dced65e"
+        private const val SEARCH_TOKEN = "409aa31216b3daf285280f5fdf194b3f9faf3c9fad"
+        private const val CHAPTERS_TOKEN = "608f3b6ab87910841f18a42e1aabea1f699ee9ac17"
+        private const val DETAILS_TOKEN = "60e21b1872a4ad76c9a416982cc7a90114cce9a8f7"
+        private const val PAGES_TOKEN = "607c009c888b38bb98359a6971528b1ede7891f01b"
     }
 }

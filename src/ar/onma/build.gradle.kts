@@ -14,6 +14,6 @@ keiyoushi {
     source {
         name = "مانجا اون لاين"
         lang = "ar"
-        baseUrl = "https://onma.me"
+        baseUrl = "https://onma.top"
     }
 }
