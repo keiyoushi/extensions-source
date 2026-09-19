@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.randomua.UserAgentType
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -18,6 +20,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -29,6 +32,11 @@ import kotlin.time.Duration.Companion.seconds
 abstract class TeamX : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(10, 1.seconds)
+    }
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        setRandomUserAgent(UserAgentType.MOBILE, filterInclude = listOf("Chrome"))
+        set("Accept-Language", "ar,en;q=0.9")
     }
 
     private val nextPageSelector = "a[rel=next]"

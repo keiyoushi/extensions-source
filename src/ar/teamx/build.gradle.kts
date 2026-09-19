@@ -4,9 +4,13 @@ plugins {
     alias(kei.plugins.extension)
 }
 
+dependencies {
+    implementation(project(":lib:randomua"))
+}
+
 keiyoushi {
     name = "Team X"
-    versionCode = 33
+    versionCode = 35
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
