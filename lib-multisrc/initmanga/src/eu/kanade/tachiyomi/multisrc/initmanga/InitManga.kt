@@ -254,9 +254,10 @@ abstract class InitManga : HttpSource() {
             else -> SManga.UNKNOWN
         }
 
-        thumbnail_url = document.selectFirst("div.story-cover-wrap img")?.absUrl("src")
-            ?: document.selectFirst("div.single-thumb img")?.absUrl("src")
-            ?: document.selectFirst("a.story-cover img")?.absUrl("src")
+        // LiteSpeed lazy-load puts a data: placeholder in src and the real url in data-src
+        thumbnail_url = document.selectFirst("div.story-cover-wrap img, div.single-thumb img, a.story-cover img")?.let { img ->
+            img.absUrl("data-src").ifEmpty { img.absUrl("src") }
+        }
 
         val siteTitle = document.selectFirst("h1")?.text()
         val mangaTitle = document.selectFirst("h2.uk-h3")?.text()
@@ -304,6 +305,9 @@ abstract class InitManga : HttpSource() {
         if (name.isBlank()) {
             name = rawName
         }
+        if (element.selectFirst("span[uk-icon*=lock]") != null) {
+            name = "🔒 $name"
+        }
 
         val dateStr = element.select("time").attr("datetime")
         date_upload = fallbackDateFormatter.tryParse(dateStr)
@@ -315,6 +319,10 @@ abstract class InitManga : HttpSource() {
     }
 
     open fun pageListParse(document: Document): List<Page> {
+        if (document.selectFirst("div#chapter-content div.lock-card") != null) {
+            throw Exception("Locked chapter, log in via WebView to read it")
+        }
+
         val encryptedData = document.selectFirst("script[src*=dmFyIElua]")?.attr("src")
             ?.substringAfter("base64,")
             ?.substringBeforeLast("\"")
@@ -372,11 +380,16 @@ abstract class InitManga : HttpSource() {
 
         return if (trimmed.startsWith("<")) {
             val doc = Jsoup.parseBodyFragment(trimmed, baseUrl)
-            doc.select("img").mapIndexedNotNull { i, img ->
-                val finalSrc = img.absUrl("data-original-src")
-                    .ifEmpty { img.absUrl("data-src") }
-                    .ifEmpty { img.absUrl("src") }
-                    .ifEmpty { img.absUrl("data-lazy-src") }
+            doc.select("img, canvas[data-enc]").mapIndexedNotNull { i, img ->
+                val finalSrc = if (img.hasAttr("data-enc")) {
+                    // "protected canvas" pages: url is base64 of the reversed string (initMangaResolveImgSrc)
+                    String(Base64.decode(img.attr("data-enc"), Base64.DEFAULT), Charsets.UTF_8).reversed()
+                } else {
+                    img.absUrl("data-original-src")
+                        .ifEmpty { img.absUrl("data-src") }
+                        .ifEmpty { img.absUrl("src") }
+                        .ifEmpty { img.absUrl("data-lazy-src") }
+                }
 
                 if (finalSrc.isBlank()) null else Page(i, imageUrl = finalSrc)
             }
