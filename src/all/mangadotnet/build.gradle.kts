@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MangaDot"
-    versionCode = 21
+    versionCode = 22
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     pkgName = "en.mangadotnet"
@@ -64,7 +64,7 @@ keiyoushi {
     }
 
     val newLangs = listOf(
-        "zu", "yo", "uz", "ur", "tk", "to", "ti", "te", "ta", "tg", "ss", "sw",
+        "zu", "zh-tw", "yo", "uz", "ur", "tk", "to", "ti", "te", "ta", "tg", "ss", "sw",
         "so", "sl", "sk", "si", "sd", "sn", "st", "sh", "sr", "sm", "rm",
         "ps", "ny", "ne", "mo", "mr", "mi", "mt", "ml", "mg", "mk", "lb", "lv", "lo",
         "ky", "ku", "kk", "kn", "jv", "ga", "ig", "is", "ha", "ht", "gu", "gn", "gl",
