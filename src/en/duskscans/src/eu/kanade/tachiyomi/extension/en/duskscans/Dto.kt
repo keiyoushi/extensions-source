@@ -56,17 +56,13 @@ class ChapterDto(
             put("slug", slug)
             put("number", numberStr)
         }
-        val chapterName = buildString {
-            if (title.isBlank() || title.equals(numberStr, ignoreCase = true)) {
-                append("Chapter $numberStr")
-            } else if (title.startsWith("Chapter", ignoreCase = true) ||
-                title.startsWith("Episode", ignoreCase = true) ||
-                title.startsWith("Ch.", ignoreCase = true)
-            ) {
-                append(title)
-            } else {
-                append("Chapter $numberStr - $title")
-            }
+        val cleanTitle = title.trim()
+        val chapterName = when {
+            cleanTitle.isBlank() || cleanTitle.equals(numberStr, ignoreCase = true) -> "Chapter $numberStr"
+            cleanTitle.startsWith("Chapter", ignoreCase = true) -> cleanTitle
+            cleanTitle.startsWith("Episode", ignoreCase = true) -> cleanTitle
+            cleanTitle.startsWith("Ch.", ignoreCase = true) -> cleanTitle
+            else -> "Chapter $numberStr - $cleanTitle"
         }
         name = if (isLocked) "🔒 $chapterName" else chapterName
         chapter_number = number
