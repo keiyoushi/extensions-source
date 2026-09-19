@@ -1,245 +1,559 @@
 package eu.kanade.tachiyomi.extension.es.mangacrab
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
-import keiyoushi.network.rateLimit
-import keiyoushi.utils.asJsoup
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
-import java.io.InterruptedIOException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MangaCrab :
-    Madara(),
+    KeiSource(),
     ConfigurableSource {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
 
-    override val client = super.client.newBuilder()
-        .rateLimit(5, 1.seconds)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .setRandomUserAgent()
-
-    override val mangaSubString = "series"
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-
-    override fun popularMangaSelector() = ".mv-rank-panel[data-panel=monthly] .mv-rank-item"
-    override fun searchMangaSelector() = ".catalog-card, .mv-recent-card, .manga-row, .manga__item"
-    override fun latestUpdatesSelector() = ".manga-row"
-
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/$page/", headers)
-    override fun searchMangaRequest(page: Int, query: String, filters: eu.kanade.tachiyomi.source.model.FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("page")
-            .addPathSegment(page.toString())
-            .addQueryParameter("s", query)
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun popularMangaNextPageSelector(): String? = null
-    override fun latestUpdatesNextPageSelector() = "a.next.page-numbers, .mv-page-link a.next"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst(".mv-rank-title")?.text() ?: link.text()
-        element.selectFirst("img")?.let {
-            thumbnail_url = imageFromElement(it)
-        }
-    }
-
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a.manga-row-cover")!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst("h5")?.text() ?: link.text()
-        element.selectFirst("img")?.let {
-            thumbnail_url = imageFromElement(it)
-        }
-    }
-
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a.mv-recent-link, a.manga-row-cover, a")!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst("strong.mv-recent-name, h5, h2")?.text() ?: link.text()
-        element.selectFirst("img")?.let {
-            thumbnail_url = imageFromElement(it)
-        }
-    }
-
-    override fun chapterListSelector() = "article.chapter-item > div > a, #mv-chapter-list a"
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }.distinctBy { it.url }
-        val hasNextPage = latestUpdatesNextPageSelector()?.let { document.selectFirst(it) } != null
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = mutableListOf<SChapter>()
-
-        val htmlStr = document.outerHtml()
-
-        val mangaId = document.selectFirst("#mv-chapter-list[data-manga-id]")?.attr("data-manga-id")
-            ?: MANGA_ID_REGEX.find(htmlStr)?.groupValues?.get(1)
-
-        if (mangaId == null) {
-            return document.select(chapterListSelector()).map { chapterFromElement(it) }
-        }
-
-        val nonce = NONCE_MVTHEME_REGEX.find(htmlStr)?.groupValues?.get(1)
-            ?: NONCE_FALLBACK_REGEX.find(htmlStr)?.groupValues?.get(1)
-        if (nonce == null) {
-            return document.select(chapterListSelector()).map { chapterFromElement(it) }
-        }
-
-        var page = 1
-        var hasMore = true
-        while (hasMore) {
-            val form = FormBody.Builder()
-                .add("action", "mv_get_chapters")
-                .add("nonce", nonce)
-                .add("manga_id", mangaId)
-                .add("page", page.toString())
-                .add("search", "")
-                .add("_ts", System.currentTimeMillis().toString())
-                .build()
-
-            val request = POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
-            try {
-                client.newCall(request).execute().use { res ->
-                    val data = res.parseAs<MvChaptersDto>()
-
-                    if (data.isSuccess) {
-                        val listHtml = data.data?.list ?: ""
-                        val listDoc = Jsoup.parseBodyFragment(listHtml, baseUrl)
-                        val elements = listDoc.select(chapterListSelector())
-                        if (elements.isEmpty()) {
-                            hasMore = false
-                        } else {
-                            val newChapters = elements.map { chapterFromElement(it) }
-                            val existingUrls = chapters.mapTo(HashSet()) { it.url }
-                            val filtered = newChapters.filterNot { it.url in existingUrls }
-
-                            if (filtered.isEmpty()) {
-                                hasMore = false
-                            } else {
-                                chapters.addAll(filtered)
-                                page++
-                            }
-                        }
-                    } else {
-                        hasMore = false
-                    }
-                }
-            } catch (e: InterruptedIOException) {
-                throw e
-            } catch (_: Exception) {
-                hasMore = false
-            }
-        }
-
-        if (chapters.isEmpty()) {
-            return document.select(chapterListSelector()).map { chapterFromElement(it) }
-        }
-        return chapters
-    }
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = super.chapterFromElement(element)
-        if (element.tagName() == "a") {
-            chapter.url = element.attr("href").substringAfter(baseUrl)
-            chapter.name = element.text()
-        }
-        return chapter
-    }
-
-    override val mangaDetailsSelectorTitle = "h1.mb-2, h1.post-title, .post-title h1"
-    override val mangaDetailsSelectorDescription = "div.mv-synopsis, div.c-page__content div.modal-contenido"
-
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+    private val dateFormat = SimpleDateFormat(
+        "yyyy-MM-dd HH:mm:ss",
+        Locale.US,
+    )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addRandomUAPreference()
     }
 
-    override val pageListParseSelector = "img.mv-secure-img, div.page-break:not([style*='display:none']) img:not([src]), div.reader-body img, #mv-reader-body img"
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val htmlStr = document.outerHtml()
+    private suspend fun getMangasPage(
+        page: Int,
+        query: String = "",
+        genres: String = "",
+        feed: String = "discover",
+        ranking: String = "",
+        status: String = "",
+        origin: String = "",
+    ): MangasPage {
+        val url = "$baseUrl/api/mv/mangas"
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("per_page", PER_PAGE.toString())
+            .addQueryParameter("search", query)
+            .addQueryParameter("genres", genres)
+            .addQueryParameter("status", status)
+            .addQueryParameter("origin", origin)
+            .addQueryParameter("ranking", ranking)
+            .addQueryParameter("feed", feed)
+            .addQueryParameter("nsfw", "false")
+            .addQueryParameter("nsfw_only", "false")
+            .build()
 
-        // Extract security token for image requests
-        val imgHeader = IMG_HEADER_REGEX.find(htmlStr)?.groupValues?.get(1).orEmpty()
+        val dto = client
+            .get(url)
+            .parseAs<MangaCrabMangasDto>()
 
-        val pages = mutableListOf<Page>()
-        document.select(pageListParseSelector).forEachIndexed { i, img: Element ->
-            val rawUrl = imageFromElement(img)
-            if (!rawUrl.isNullOrEmpty()) {
-                val finalUrl = if (imgHeader.isNotEmpty()) "$rawUrl#nodeHeader=$imgHeader" else rawUrl
-                pages.add(Page(i, imageUrl = finalUrl))
-            }
-        }
-        return pages
+        return MangasPage(
+            mangas = dto.items.map { it.asSManga() },
+            hasNextPage = dto.pagination.has_next,
+        )
     }
 
-    // Inject the "Node" security header required by the image CDN
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangasPage(
+        page = page,
+        feed = "discover",
+    )
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangasPage(
+        page = page,
+        feed = "updated",
+    )
+
+    override suspend fun getSearchMangaList(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): MangasPage {
+        val genres = filters
+            .filterIsInstance<GenreFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            .orEmpty()
+
+        val feed = filters
+            .filterIsInstance<FeedFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            ?: "discover"
+
+        val ranking = filters
+            .filterIsInstance<RankingFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            .orEmpty()
+
+        val status = filters
+            .filterIsInstance<StatusFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            .orEmpty()
+
+        val origin = filters
+            .filterIsInstance<OriginFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            .orEmpty()
+
+        return getMangasPage(
+            page = page,
+            query = query,
+            genres = genres,
+            feed = feed,
+            ranking = ranking,
+            status = status,
+            origin = origin,
+        )
+    }
+
+    override fun getFilterList(
+        data: kotlinx.serialization.json.JsonElement?,
+    ) = FilterList(
+        Filter.Header("Usa los filtros para limitar el catálogo"),
+        Filter.Separator(),
+        GenreFilter(),
+        FeedFilter(),
+        RankingFilter(),
+        StatusFilter(),
+        OriginFilter(),
+    )
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val slug = manga.url
+            .removePrefix("/series/")
+            .removeSuffix("/")
+            .substringBefore("/")
+
+        val detailsDto = client
+            .get("$baseUrl/api/mv/mangas/by-slug/$slug")
+            .parseAs<MangaCrabMangaDto>()
+
+        val chaptersDto = client
+            .get(
+                "$baseUrl/api/mv/mangas/${detailsDto.id}/chapters?per_page=$CHAPTERS_PER_PAGE",
+            )
+            .parseAs<MangaCrabChaptersDto>()
+
+        return SMangaUpdate(
+            manga = detailsDto.asSManga(),
+            chapters = chaptersDto.items.map { chapter ->
+                chapter.asSChapter(detailsDto.id)
+            },
+        )
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val fragment = chapter.url.substringAfter("#", "")
+
+        val mangaId = fragment
+            .substringAfter("mangaId=", "")
+            .substringBefore("&")
+
+        val chapterIndex = fragment
+            .substringAfter("capIndex=", "")
+            .substringBefore("&")
+
+        if (mangaId.isBlank() || chapterIndex.isBlank()) {
+            throw Exception("No se pudo obtener la información del capítulo")
+        }
+
+        val chapterDto = client
+            .get(
+                "$baseUrl/api/mv/mangas/$mangaId/chapter?cap_index=$chapterIndex",
+            )
+            .parseAs<MangaCrabChapterDto>()
+
+        if (chapterDto.is_locked || chapterDto.is_vip_chapter || !chapterDto.can_download) {
+            throw Exception("Este capítulo está bloqueado o requiere VIP")
+        }
+
+        val securityHeader = chapterDto.security
+            ?.takeIf { it.enabled == 1 }
+            ?.header
+            .orEmpty()
+
+        return chapterDto.content
+            ?.pages
+            ?.mapIndexed { index, imageUrl ->
+                val imageUrlWithHeader = if (securityHeader.isBlank()) {
+                    imageUrl
+                } else {
+                    "$imageUrl#nodeHeader=$securityHeader"
+                }
+
+                Page(
+                    index = index,
+                    imageUrl = imageUrlWithHeader,
+                )
+            }
+            .orEmpty()
+    }
+
     override fun imageRequest(page: Page): Request {
-        val url = page.imageUrl!!
-        if (url.contains("#nodeHeader=")) {
-            val pureUrl = url.substringBefore("#nodeHeader=")
-            val nodeHeader = url.substringAfter("#nodeHeader=")
-            return GET(pureUrl, headersBuilder().add("Node", nodeHeader).build())
-        }
-        return super.imageRequest(page)
+        val pageUrl = page.imageUrl.orEmpty()
+        val imageUrl = pageUrl.substringBefore("#nodeHeader=")
+        val securityHeader = pageUrl.substringAfter("#nodeHeader=", "")
+
+        return GET(
+            imageUrl,
+            headersBuilder()
+                .add("Referer", "$baseUrl/")
+                .add("Origin", baseUrl)
+                .add("Accept", "*/*")
+                .apply {
+                    if (securityHeader.isNotBlank()) {
+                        add("fansy", securityHeader)
+                    }
+                }
+                .build(),
+        )
     }
 
-    override fun imageFromElement(element: Element): String? {
-        val url = element.attributes()
-            .firstNotNullOfOrNull { attr ->
-                element.absUrl(attr.key).toHttpUrlOrNull()
-                    ?.takeIf { it.encodedQuery.toString().contains("wp-content") }
-            }
+    private fun MangaCrabMangaDto.asSManga(): SManga = SManga.create().apply {
+        title = this@asSManga.title
+        setUrlWithoutDomain(this@asSManga.permalink)
+        thumbnail_url = this@asSManga.cover
 
-        return when {
-            element.hasAttr("data-sec-src") -> element.attr("abs:data-sec-src")
-            url != null -> url.toString()
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ").trim()
-            element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
-            element.hasAttr("data-src-base64") -> element.attr("abs:data-src-base64")
-            else -> element.attr("abs:src")
+        description = this@asSManga.description
+            .replace("\r\n", "\n")
+            .replace("&quot;", "\"")
+
+        genre = this@asSManga.genres
+            .joinToString(", ") { it.name }
+
+        status = when (this@asSManga.status?.raw) {
+            "on-going", "en curso" -> SManga.ONGOING
+            "end", "finalizado" -> SManga.COMPLETED
+            "canceled" -> SManga.CANCELLED
+            "on-hold", "hiato" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    private fun MangaCrabChapterDto.asSChapter(mangaId: Long): SChapter {
+        val chapterUrl = "$link#mangaId=$mangaId&capIndex=$index"
+
+        return SChapter.create().apply {
+            name = buildString {
+                if (is_locked || is_vip_chapter || !can_download) {
+                    append("🔒 ")
+                }
+                append(title.ifBlank { label })
+            }
+            setUrlWithoutDomain(chapterUrl)
+            date_upload = dateFormat.parse(date)?.time ?: 0L
+        }
+    }
+
+    private class FeedFilter :
+        Filter.Select<String>(
+            name = "Orden",
+            values = arrayOf(
+                "Descubre",
+                "Nuevos",
+                "Actualizados",
+            ),
+        ) {
+        val selectedValue: String
+            get() = when (state) {
+                1 -> "new"
+                2 -> "updated"
+                else -> "discover"
+            }
+    }
+
+    private class RankingFilter :
+        Filter.Select<String>(
+            name = "Ranking",
+            values = arrayOf(
+                "Sin ranking",
+                "Vistas diarias",
+                "Vistas semanales",
+                "Vistas mensuales",
+            ),
+        ) {
+        val selectedValue: String
+            get() = when (state) {
+                1 -> "daily"
+                2 -> "weekly"
+                3 -> "monthly"
+                else -> ""
+            }
+    }
+
+    private class StatusFilter :
+        Filter.Select<String>(
+            name = "Estado",
+            values = arrayOf(
+                "Todos",
+                "En curso",
+                "Finalizado",
+                "Cancelado",
+                "Hiato",
+                "Próximo",
+            ),
+        ) {
+        val selectedValue: String
+            get() = when (state) {
+                1 -> "on-going"
+                2 -> "end"
+                3 -> "canceled"
+                4 -> "on-hold"
+                5 -> "upcoming"
+                else -> ""
+            }
+    }
+
+    private class OriginFilter :
+        Filter.Select<String>(
+            name = "Origen",
+            values = arrayOf(
+                "Todos",
+                "Manga",
+                "Manhua",
+                "Manhwa",
+            ),
+        ) {
+        val selectedValue: String
+            get() = when (state) {
+                1 -> "manga"
+                2 -> "manhua"
+                3 -> "manhwa"
+                else -> ""
+            }
+    }
+
+    private class GenreFilter :
+        Filter.Select<String>(
+            name = "Género",
+            values = GENRES.map { it.first }.toTypedArray(),
+        ) {
+
+        val selectedValue: String
+            get() = GENRES[state].second
+
+        private companion object {
+            val GENRES = arrayOf(
+                "Todos" to "",
+                "+15" to "15",
+                "Academia" to "academia",
+                "acccion" to "acccion",
+                "Acción" to "accion",
+                "Action" to "action",
+                "Adventure" to "adventure",
+                "Aliado" to "aliado",
+                "Amor" to "amor",
+                "Ángeles" to "angeles",
+                "Animación" to "animacion",
+                "Anti-heroe" to "anti-heroe",
+                "Apocalipsis" to "apocalipsis",
+                "Apocalíptico" to "apocaliptico",
+                "Apocalipto" to "apocalipto",
+                "Artes marcial" to "artes-marcial",
+                "Artes Marciales" to "artes-marciales",
+                "Aventura" to "aventura",
+                "Aventura Drama" to "aventura-drama",
+                "Bestias invocadas" to "bestias-invocadas",
+                "Caballeros" to "caballeros",
+                "Cartoon" to "cartoon",
+                "Cash" to "cash",
+                "Cazador" to "cazador",
+                "Ciencia Ficción" to "ciencia-ficcion",
+                "Combate" to "combate",
+                "Comedia" to "comedia",
+                "Comedy" to "comedy",
+                "Comida" to "comida",
+                "Conspiracion" to "conspiracion",
+                "Contrato" to "contrato",
+                "Corrupción" to "corrupcion",
+                "Creador de ciudades" to "creador-de-ciudades",
+                "Crimen" to "crimen",
+                "Cultivación" to "cultivacion",
+                "Cultivo" to "cultivo",
+                "Delincuentes" to "delincuentes",
+                "Demonio" to "demonio",
+                "Demonios" to "demonios",
+                "Deporte" to "deporte",
+                "Detective" to "detective",
+                "Dinastía Joseon" to "dinastia-joseon",
+                "Dioses" to "dioses",
+                "Domador de bestias" to "domador-de-bestias",
+                "Drama" to "drama",
+                "Ecchi" to "ecchi",
+                "Erotico" to "erotico",
+                "Escolar" to "escolar",
+                "Espíritus" to "espiritus",
+                "estrategia" to "estrategia",
+                "Evolución" to "evolucion",
+                "Exclusivo" to "exclusivo",
+                "Familia" to "familia",
+                "Familia Real" to "familia-real",
+                "Fantansía" to "fantansia",
+                "Fantasia" to "fantasia",
+                "Fantasía moderna" to "fantasia-moderna",
+                "Fantasy" to "fantasy",
+                "Favoritos" to "favoritos",
+                "Game" to "game",
+                "Género Bender" to "genero-bender",
+                "Gore" to "gore",
+                "Guerra" to "guerra",
+                "Habilidades" to "habilidades",
+                "Harem" to "harem",
+                "Harem Inverso" to "harem-inverso",
+                "Haren" to "haren",
+                "Hentai" to "hentai",
+                "Hermes" to "hermes",
+                "Heroe" to "heroe",
+                "Heroe Villano" to "heroe-villano",
+                "Historia" to "historia",
+                "Historical" to "historical",
+                "Historico" to "historico",
+                "Horror" to "horror",
+                "Inmersión" to "inmersion",
+                "Intriga" to "intriga",
+                "Inversiones" to "inversiones",
+                "Invocación" to "invocacion",
+                "Isekai" to "isekai",
+                "Juego" to "juego",
+                "Juego en Linea" to "juego-en-linea",
+                "Ladies" to "ladies",
+                "Madrastra" to "madrastra",
+                "Magia" to "magia",
+                "Magnate" to "magnate",
+                "Maldad" to "maldad",
+                "Manga" to "manga",
+                "Manhua" to "manhua",
+                "Manhwa" to "manhwa",
+                "Martial Arts" to "martial-arts",
+                "Mature" to "mature",
+                "Mazmorras" to "mazmorras",
+                "MC" to "mc",
+                "mc chambeador" to "mc-chambeador",
+                "MC inteligente" to "mc-inteligente",
+                "mc medico" to "mc-medico",
+                "MC OP" to "mc-op",
+                "Mecha" to "mecha",
+                "Medicina" to "medicina",
+                "Medieval" to "medieval",
+                "Meian" to "meian",
+                "Milf" to "milf",
+                "Militar" to "militar",
+                "Misterio" to "misterio",
+                "Monstruo" to "monstruo",
+                "Monstruos" to "monstruos",
+                "Muchas Waifus" to "muchas-waifus",
+                "Mujer casada" to "mujer-casada",
+                "Mujer mayor" to "mujer-mayor",
+                "Murim" to "murim",
+                "Música" to "musica",
+                "Mystery" to "mystery",
+                "Nigromante" to "nigromante",
+                "No Princeso" to "no-princeso",
+                "Novela" to "novela",
+                "Novela Ligera" to "novela-ligera",
+                "NTR" to "ntr",
+                "Nuevo" to "nuevo",
+                "OP" to "op",
+                "Original" to "original",
+                "Otra oportunidad" to "otra-oportunidad",
+                "Paladines" to "paladines",
+                "Pareja casada" to "pareja-casada",
+                "Parodia" to "parodia",
+                "Peleas" to "peleas",
+                "Poderes sobrenaturales" to "poderes-sobrenaturales",
+                "Posible Harem" to "posible-harem",
+                "Post-apocalíptico" to "post-apocaliptico",
+                "Postapocalíptico" to "postapocaliptico",
+                "Prota" to "prota",
+                "Prota Badas" to "prota-badas",
+                "Prota OP" to "prota-op",
+                "Próximamente" to "proximamente",
+                "Psicologico" to "psicologico",
+                "Puto-Amo" to "puto-amo",
+                "Realidad" to "realidad",
+                "Realidad Virtual" to "realidad-virtual",
+                "Recomendado" to "recomendado",
+                "Recuentos de la vida" to "recuentos-de-la-vida",
+                "Recuerdo de la vida" to "recuerdo-de-la-vida",
+                "Reencarnación" to "reencarnacion",
+                "reencarnacion" to "reencarnacion-2",
+                "Reencarnado" to "reencarnado",
+                "Regresión" to "regresion",
+                "Reincarnation" to "reincarnation",
+                "Relacion secreta" to "relacion-secreta",
+                "Renacimiento" to "renacimiento",
+                "Retornado" to "retornado",
+                "Retorno" to "retorno",
+                "Rey Demonio" to "rey-demonio",
+                "Romance" to "romance",
+                "Romance? Quien sabe" to "romance-quien-sabe",
+                "RPG" to "rpg",
+                "Samurai" to "samurai",
+                "Sci-fi" to "sci-fi",
+                "Seinen" to "seinen",
+                "Shonen" to "shonen",
+                "Shoujo" to "shoujo",
+                "Shounen" to "shounen",
+                "Sistema" to "sistema",
+                "Sistema de Niveles" to "sistema-de-niveles",
+                "Sistemas" to "sistemas",
+                "sistemas de trucos" to "sistemas-de-trucos",
+                "Slice of Life" to "slice-of-life",
+                "Sobrenatural" to "sobrenatural",
+                "Super poderes" to "super-poderes",
+                "Supernatural" to "supernatural",
+                "Superpoderes" to "superpoderes",
+                "Supervivencia" to "supervivencia",
+                "Suspenso" to "suspenso",
+                "Telenovela" to "telenovela",
+                "Thriller" to "thriller",
+                "Tragedia" to "tragedia",
+                "Tragico" to "tragico",
+                "Transmigración" to "transmigracion",
+                "Transmigración entre mundos" to "transmigracion-entre-mundos",
+                "Urbano" to "urbano",
+                "Vampiros" to "vampiros",
+                "Venganza" to "venganza",
+                "viaje en el tiempo" to "viaje-en-el-tiempo",
+                "Vida Cotidiana" to "vida-cotidiana",
+                "Vida Escolar" to "vida-escolar",
+                "video juegos" to "video-juegos",
+                "Villano" to "villano",
+                "waifus" to "waifus",
+                "Web Comic" to "web-comic",
+                "Webtoon" to "webtoon",
+                "Zombies" to "zombies",
+            )
         }
     }
 
     companion object {
-        private val MANGA_ID_REGEX = Regex(""""manga_id"\s*:\s*"?(\d+)""")
-        private val NONCE_MVTHEME_REGEX = Regex("""var\s+mvTheme\s*=\s*\{[^}]*"nonce"\s*:\s*"([^"]+)""")
-        private val NONCE_FALLBACK_REGEX = Regex(""""nonce"\s*:\s*"([^"]+)""")
-        private val IMG_HEADER_REGEX = Regex(""""imgHeader"\s*:\s*"([^"]+)""")
+        private const val PER_PAGE = 24
+        private const val CHAPTERS_PER_PAGE = 5000
     }
 }
