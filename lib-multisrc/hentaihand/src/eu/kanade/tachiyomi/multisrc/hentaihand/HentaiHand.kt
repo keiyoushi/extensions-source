@@ -41,6 +41,10 @@ abstract class HentaiHand :
 
     override val supportsLatest = true
 
+    private val queryIdCache = object : LinkedHashMap<String, Pair<String, Int>?>(30, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<String, Int>?>?) = size > 20
+    }
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
@@ -111,20 +115,21 @@ abstract class HentaiHand :
         val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
-        val effectiveFilters = if (filters.isEmpty()) getFilterList() else filters
-        val hasLookupState = effectiveFilters.any { it is LookupFilter && it.state.isNotBlank() }
+        val hasLookupState = filters.any { it is LookupFilter && it.state.isNotBlank() }
 
-        // A plain text `q` search without any id filter returns HTTP 500 on some sites,
-        // which breaks tapping a genre tag (the app searches for the tag name as text).
-        // Resolve the query to a tag/artist/character id when possible and search by id instead.
-        var queryFilter: Pair<String, Int>? = null
         val trimmedQuery = query.trim()
-        if (trimmedQuery.isNotEmpty() && !hasLookupState) {
-            for (uri in QUERY_LOOKUP_URIS) {
-                val id = runCatching { lookupFilterId(trimmedQuery, uri, exactMatchOnly = true) }.getOrNull() ?: continue
-                queryFilter = uri to id
-                break
+        val queryFilter: Pair<String, Int>? = if (trimmedQuery.isNotEmpty() && !hasLookupState) {
+            queryIdCache.getOrPut(trimmedQuery.lowercase()) {
+                var resolved: Pair<String, Int>? = null
+                for (uri in QUERY_LOOKUP_URIS) {
+                    val id = runCatching { lookupFilterId(trimmedQuery, uri, exactMatchOnly = true) }.getOrNull() ?: continue
+                    resolved = uri to id
+                    break
+                }
+                resolved
             }
+        } else {
+            null
         }
 
         if (queryFilter != null) {
@@ -137,7 +142,7 @@ abstract class HentaiHand :
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
 
-        effectiveFilters.forEach { filter ->
+        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
                 is SortFilter -> url.addQueryParameter("sort", getSortPairs()[filter.state].second)
 
