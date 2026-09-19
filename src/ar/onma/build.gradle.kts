@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Onma"
-    versionCode = 4
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mmrcms"
