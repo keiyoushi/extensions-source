@@ -56,7 +56,7 @@ abstract class MangaMeets : KeiSource() {
 
     private fun Response.toMangasPage(): MangasPage {
         val result = this.parseAs<SeriesResponse>()
-        val mangas = result.getComics().map { it.toSManga() }
+        val mangas = result.toSMangaList()
         return MangasPage(mangas, result.data.attributes.hasNextPage())
     }
 
