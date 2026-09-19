@@ -8,7 +8,7 @@ keiyoushi {
     name = "Comick (Unoriginal)"
     versionCode = 5
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
@@ -18,5 +18,8 @@ keiyoushi {
                 "https://comick.art",
             )
         }
+    }
+    deeplink {
+        path("/comic/..*")
     }
 }
