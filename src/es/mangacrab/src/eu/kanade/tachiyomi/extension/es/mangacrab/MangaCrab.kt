@@ -21,14 +21,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-class MangaCrab(
-    override val lang: String,
-    override val id: Long,
-) : KeiSource(),
+abstract class MangaCrab :
+    KeiSource(),
     ConfigurableSource {
-
-    override val name = "Manga Crab"
-    override val baseUrl = "https://es.mangacrab.org"
 
     private val dateFormat = SimpleDateFormat(
         "yyyy-MM-dd HH:mm:ss",
