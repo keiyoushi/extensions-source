@@ -21,7 +21,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -57,14 +56,14 @@ abstract class InitManga :
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("Referer", "$baseUrl/")
 
-    protected open fun Element.imgAttr(): String? = when {
-        hasAttr("data-original-src") && !attr("abs:data-original-src").startsWith("data:") -> attr("abs:data-original-src")
-        hasAttr("data-src") && !attr("abs:data-src").startsWith("data:") -> attr("abs:data-src")
-        hasAttr("data-lazy-src") && !attr("abs:data-lazy-src").startsWith("data:") -> attr("abs:data-lazy-src")
-        hasAttr("data-cfsrc") && !attr("abs:data-cfsrc").startsWith("data:") -> attr("abs:data-cfsrc")
-        hasAttr("data-original") && !attr("abs:data-original").startsWith("data:") -> attr("abs:data-original")
-        hasAttr("src") && !attr("abs:src").startsWith("data:") -> attr("abs:src")
-        else -> null
+    protected open fun Element.imgAttr(): String? {
+        fun getUrl(attr: String): String? = absUrl(attr).takeIf { it.isNotBlank() && !it.startsWith("data:") }
+        return getUrl("data-original-src")
+            ?: getUrl("data-src")
+            ?: getUrl("data-lazy-src")
+            ?: getUrl("data-cfsrc")
+            ?: getUrl("data-original")
+            ?: getUrl("src")
     }
 
     // ============================== Popular ===============================
@@ -92,7 +91,8 @@ abstract class InitManga :
             ?: element.selectFirst("a")
 
         title = element.selectFirst("h2 a, h3 a, div.manga-overlay-title, h2, h3")?.text()
-            ?: element.select("a").clone().apply { select("span, small").remove() }.text()
+            ?: element.selectFirst("a")?.ownText()?.takeIf { it.isNotBlank() }
+            ?: element.selectFirst("a")?.text().orEmpty()
         setUrlWithoutDomain(linkElement!!.absUrl("href"))
         thumbnail_url = element.selectFirst("img")?.imgAttr()
     }
@@ -224,10 +224,10 @@ abstract class InitManga :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
-        val updatedManga = if (fetchDetails) parseMangaDetails(document) else manga
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val updatedManga = parseMangaDetails(document)
         val updatedChapters = if (fetchChapters) {
-            parseChapterList(document, "$baseUrl${manga.url}".toHttpUrl())
+            parseChapterList(document, getMangaUrl(manga).toHttpUrl())
         } else {
             chapters
         }
@@ -342,7 +342,7 @@ abstract class InitManga :
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return pageListParse(document)
     }
 
@@ -351,49 +351,24 @@ abstract class InitManga :
             throw Exception("Kilitli bölüm, okumak için siteye giriş yapmanız gerekiyor")
         }
 
-        val encryptedScript = document.select("script[src*=base64]").firstNotNullOfOrNull { script ->
+        val encryptedJson = document.select("script[src*=base64]").firstNotNullOfOrNull { script ->
             val src = script.attr("src")
             val b64 = src.substringAfter("base64,").substringBeforeLast("\"").trimEnd('\'', '"')
             runCatching {
                 val decoded = String(Base64.decode(b64, Base64.DEFAULT), Charsets.UTF_8)
-                if (decoded.contains("InitMangaEncryptedChapter")) decoded else null
+                ENCRYPTED_CHAPTER_REGEX.find(decoded)?.groupValues?.get(1)
+                    ?: decoded.substringAfter("InitMangaEncryptedChapter=").substringBeforeLast(";").takeIf { it.isNotBlank() }
             }.getOrNull()
-        }
+        } ?: AesDecrypt.REGEX_ENCRYPTED_DATA.find(document.html())?.groupValues?.get(1)
+            ?: return fallbackPages(document)
 
-        if (encryptedScript != null) {
-            runCatching {
-                val regex = Regex("""InitMangaEncryptedChapter\s*=\s*(\{.*?\})""", RegexOption.DOT_MATCHES_ALL)
-                val jsonString = regex.find(encryptedScript)?.groupValues?.get(1)
-                    ?: encryptedScript.substringAfter("InitMangaEncryptedChapter=").substringBeforeLast(";")
-                val encryptedObject = jsonString.parseAs<JsonObject>()
+        val payload = runCatching { encryptedJson.parseAs<EncryptedPayloadDto>() }.getOrNull()
+            ?: return fallbackPages(document)
 
-                val ciphertext = encryptedObject["ciphertext"]!!.jsonPrimitive.content
-                val ivHex = encryptedObject["iv"]!!.jsonPrimitive.content
-                val saltHex = encryptedObject["salt"]!!.jsonPrimitive.content
-                val decryptedContent = AesDecrypt.decryptLayered(document, ciphertext, ivHex, saltHex)
+        val decryptedContent = AesDecrypt.decryptLayered(document, payload.ciphertext, payload.iv, payload.salt)
+            ?: return fallbackPages(document)
 
-                if (!decryptedContent.isNullOrEmpty()) {
-                    return parseDecryptedPages(decryptedContent)
-                }
-            }
-        }
-
-        val inlineEncrypted = AesDecrypt.REGEX_ENCRYPTED_DATA.find(document.html())?.groupValues?.get(1)
-        if (inlineEncrypted != null) {
-            runCatching {
-                val encryptedObject = inlineEncrypted.parseAs<JsonObject>()
-                val ciphertext = encryptedObject["ciphertext"]!!.jsonPrimitive.content
-                val ivHex = encryptedObject["iv"]!!.jsonPrimitive.content
-                val saltHex = encryptedObject["salt"]!!.jsonPrimitive.content
-                val decryptedContent = AesDecrypt.decryptLayered(document, ciphertext, ivHex, saltHex)
-
-                if (!decryptedContent.isNullOrEmpty()) {
-                    return parseDecryptedPages(decryptedContent)
-                }
-            }
-        }
-
-        return fallbackPages(document)
+        return parseDecryptedPages(decryptedContent)
     }
 
     private fun parseDecryptedPages(content: String): List<Page> {
@@ -478,5 +453,6 @@ abstract class InitManga :
     companion object {
         private const val PREF_HIDE_LOCKED_KEY = "pref_hide_locked_chapters"
         private const val PREF_HIDE_LOCKED_DEFAULT = false
+        private val ENCRYPTED_CHAPTER_REGEX = Regex("""InitMangaEncryptedChapter\s*=\s*(\{.*?\})""", RegexOption.DOT_MATCHES_ALL)
     }
 }

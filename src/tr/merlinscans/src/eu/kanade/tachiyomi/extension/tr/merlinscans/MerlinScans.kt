@@ -30,7 +30,7 @@ abstract class MerlinScans : InitManga() {
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (fetchDetails) {
-                val document = client.get("$baseUrl${manga.url}").asJsoup()
+                val document = client.get(getMangaUrl(manga)).asJsoup()
                 parseMangaDetails(document)
             } else {
                 manga

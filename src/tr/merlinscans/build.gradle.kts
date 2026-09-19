@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Merlin Scans"
-    versionCode = 33
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "initmanga"
