@@ -31,13 +31,11 @@ abstract class LanorTrad : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchSeries().map { it.toSManga(baseUrl) }, false)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
         val series = fetchSeries().sortedByDescending { it.lastUpdate }
         return MangasPage(series.map { it.toSManga(baseUrl) }, false)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
         val series = fetchSeries()
         val filtered = if (query.isBlank()) {
             series
