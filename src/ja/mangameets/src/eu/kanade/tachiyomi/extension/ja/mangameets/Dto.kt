@@ -5,8 +5,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
 
 @Serializable
 class SeriesResponse(
@@ -134,14 +135,15 @@ class EpisodeAttributes(
 ) {
     fun toSChapter(dirName: String) = SChapter.create().apply {
         val chapterTitle = if (!title.isNullOrEmpty()) " - $title" else ""
-        url = "$dirName/$sortVolume"
+        url = sortVolume.toString()
         name = "Chapter $volume$chapterTitle"
-        date_upload = dateFormat.tryParse(publishedAt)
+        date_upload = Instant.tryParse(publishedAt)
         chapter_number = sortVolume.toFloat()
+        memo = buildJsonObject {
+            put("uuid", dirName)
+        }
     }
 }
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ", Locale.ROOT)
 
 @Serializable
 class ViewerResponse(
