@@ -29,39 +29,48 @@ import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.brotli.BrotliInterceptor
 import okhttp3.internal.closeQuietly
 import okio.IOException
 import org.jsoup.Jsoup
+import java.lang.Thread.sleep
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Comick :
     HttpSource(),
     ConfigurableSource {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
     private val preferences = getPreferences()
 
     override val client = network.client.newBuilder()
-        // Referer in interceptor due to domain change preference
-        .addNetworkInterceptor { chain ->
+        .addInterceptor { chain ->
             val request = chain.request().newBuilder()
                 .header("Referer", "$baseUrl/")
                 .build()
 
-            chain.proceed(request)
+            var retryCount = 0
+
+            var response = chain.proceed(request)
+            var retries = 0
+
+            while (response.code == 429 && retries++ < 10) {
+                response.close()
+                sleep(500)
+
+                response = chain.proceed(
+                    request.newBuilder()
+                        .url(request.url.newBuilder().fragment("retry").build())
+                        .build(),
+                )
+            }
+            response
         }
-        // fix disk cache
-        .apply {
-            val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
-            if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
+        .rateLimit(1) {
+            it.fragment != "retry" && "covers" !in it.pathSegments
         }
-        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun popularMangaRequest(page: Int): Request {
