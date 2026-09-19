@@ -215,6 +215,7 @@ abstract class LoneSeal : KeiSource() {
 
 private fun <T> List<List<T>>.interleave(): List<T> {
     val lists = this
+    if (lists.isEmpty()) return emptyList()
     return buildList {
         repeat(lists.maxOf { it.size }) { index ->
             lists.forEach { list -> list.getOrNull(index)?.let(::add) }
