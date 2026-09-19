@@ -341,7 +341,7 @@ abstract class Atsumaru :
                 page.image.startsWith("//") -> "https:${page.image}"
                 else -> "$baseUrl/static/${page.image.removePrefix("/").removePrefix("static/")}"
             }
-            Page(index, imageUrl = imageUrl.replaceFirst(PROTOCOL_REGEX, "https://"))
+            Page(index, imageUrl = imageUrl.replaceFirst(PROTOCOL_REGEX, "https://cdn."))
         }
     }
 

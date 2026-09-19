@@ -50,6 +50,11 @@ private fun <T> extractValueNextJs(
  *   ([ReactFlightNumber] parses it to the real `Double`; JSON itself has no Infinity/NaN).
  * - `$Q<id>` -> Map, the outlined model at `<id>` is an array of `[key, value]` entries.
  * - `$W<id>` -> Set, the outlined model at `<id>` is an array of values.
+ * - `$L<id>` -> Lazy chunk ([ReactFlightServer]'s `serializeLazyID`), emitted for a subtree that
+ *   didn't finish rendering synchronously (an async Server Component). React wraps the row at
+ *   `<id>` in a `React.lazy`; we flatten it to the row's value.
+ * - `$@<id>` -> Promise (`serializePromiseID`); the row at `<id>` carries the settled value.
+ *   Both are always a bare hex id, never a `:<path>`.
  * - `$<id>` / `$<id>:<path>` -> Outlined model reference ([ReactFlightServer]'s `getOutlinedModel`).
  *   `<id>` is looked up in the ByteText [chunkCache] then the [modelCache]; any `:`-separated
  *   `<path>` segments walk into the model by object key or array index.
@@ -81,6 +86,7 @@ private fun resolveNextJsRefs(
                 str[1] == 'Q' -> resolveMapRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 str[1] == 'W' -> resolveSetRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 str[1] == 'L' -> resolveModelRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
+                str[1] == '@' -> resolveModelRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 // RSC reference (`$<id>` or `$<id>:<path>`) -> resolve via chunk/model cache.
                 else -> resolveModelRef(str.substring(1), chunkCache, modelCache, resolving) ?: element
             }
