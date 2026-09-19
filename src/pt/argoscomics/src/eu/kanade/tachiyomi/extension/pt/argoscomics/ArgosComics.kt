@@ -82,8 +82,8 @@ abstract class ArgosComics : KeiSource() {
 
     // ======================== Details + Chapters =============================
 
-    private suspend fun getChapterToken(scriptUrl: String? = null): String? = tokenManager.chapter?.value
-        ?: findToken(scriptUrl!!, CHAPTER_TOKEN_REGEX, tokenManager.chapter) { value, url ->
+    private suspend fun getChapterToken(scriptUrl: String): String? = tokenManager.chapter?.value
+        ?: findToken(scriptUrl, CHAPTER_TOKEN_REGEX, tokenManager.chapter) { value, url ->
             tokenManager.chapter = Token(value, url)
         }
 
@@ -192,7 +192,6 @@ abstract class ArgosComics : KeiSource() {
         val value: String,
         val url: String? = null,
         val updatedAt: Long = System.currentTimeMillis(),
-
     ) {
         fun isExpired() = updatedAt + TTL < System.currentTimeMillis()
 
