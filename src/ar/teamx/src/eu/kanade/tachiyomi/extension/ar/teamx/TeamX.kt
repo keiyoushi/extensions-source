@@ -18,6 +18,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -29,6 +30,11 @@ import kotlin.time.Duration.Companion.seconds
 abstract class TeamX : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(10, 1.seconds)
+    }
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        set("User-Agent", BROWSER_USER_AGENT)
+        set("Accept-Language", "ar,en;q=0.9")
     }
 
     private val nextPageSelector = "a[rel=next]"
@@ -272,3 +278,6 @@ abstract class TeamX : KeiSource() {
         else -> SManga.UNKNOWN
     }
 }
+
+private const val BROWSER_USER_AGENT =
+    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36"
