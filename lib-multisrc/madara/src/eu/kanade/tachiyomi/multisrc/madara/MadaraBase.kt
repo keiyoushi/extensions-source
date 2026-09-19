@@ -112,6 +112,7 @@ abstract class MadaraBase : KeiSource() {
     protected open val mangaDetailsSelectorThumbnail = "div.summary_image img"
     protected open val mangaDetailsSelectorGenre = "div.genres-content a"
     protected open val mangaDetailsSelectorTag = "div.tags-content a"
+    protected open fun nextPageSelector() = "div.nav-previous, a.nextpostslink"
     protected open val seriesTypeSelector = ".post-content_item:contains(Type) .summary-content"
     protected open val altNameSelector = ".post-content_item:contains(Alt) .summary-content"
     protected open val updatingRegex = "Updating|Atualizando".toRegex(RegexOption.IGNORE_CASE)
@@ -501,7 +502,7 @@ abstract class MadaraBase : KeiSource() {
         else -> SManga.UNKNOWN
     }
 
-    protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.ENGLISH)
+    protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
     protected open fun parseChapterDate(date: String?): Long {
         val value = date ?: return 0
