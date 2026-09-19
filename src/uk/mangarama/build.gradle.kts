@@ -5,19 +5,19 @@ plugins {
 }
 
 keiyoushi {
-    name = "PureSkill"
-    versionCode = 1
+    name = "Mangarama"
+    pkgName = "uk.pureskill"
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
+    theme = "madara"
 
     source {
-        name = "PureSkill"
         lang = "uk"
-        baseUrl = "https://pure-skill.pages.dev"
+        baseUrl = "https://mangarama.com.ua"
     }
 
     deeplink {
-        path("/chapters..*")
-        path("/reader..*")
+        path("/manga/..*")
     }
 }
