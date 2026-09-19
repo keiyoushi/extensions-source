@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.multisrc.initmanga
 
+import android.content.SharedPreferences
 import android.util.Base64
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +16,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonArray
@@ -29,7 +34,11 @@ import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-abstract class InitManga : KeiSource() {
+abstract class InitManga :
+    KeiSource(),
+    ConfigurableSource {
+
+    protected val preferences: SharedPreferences by getPreferencesLazy()
 
     protected open val mangaUrlDirectory: String = "seri"
 
@@ -274,6 +283,7 @@ abstract class InitManga : KeiSource() {
     }
 
     protected open suspend fun parseChapterList(initialDocument: Document, mangaUrl: HttpUrl): List<SChapter> {
+        val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED_KEY, PREF_HIDE_LOCKED_DEFAULT)
         val chapters = mutableListOf<SChapter>()
         var document = initialDocument
         var page = 2
@@ -282,7 +292,12 @@ abstract class InitManga : KeiSource() {
             val items = document.select(chapterListSelector())
             if (items.isEmpty()) break
 
-            chapters.addAll(items.map(::chapterFromElement))
+            chapters.addAll(
+                items.mapNotNull { element ->
+                    if (hideLocked && isLocked(element)) return@mapNotNull null
+                    chapterFromElement(element).takeUnless { hideLocked && it.name.startsWith("🔒") }
+                },
+            )
 
             val nextUrl = mangaUrl.newBuilder()
                 .addPathSegment(chapterPagePathSegment)
@@ -304,6 +319,9 @@ abstract class InitManga : KeiSource() {
 
     open fun chapterListSelector() = "div.chapter-item"
 
+    protected open fun isLocked(element: Element): Boolean = element.selectFirst("[uk-icon*=lock], span.uk-text-danger, span.chapter-lock, div.lock-card, i.fa-lock") != null ||
+        element.html().contains("icon: lock")
+
     open fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
 
@@ -314,8 +332,7 @@ abstract class InitManga : KeiSource() {
             parsedName = rawName
         }
 
-        val isLocked = element.selectFirst("[uk-icon*=lock], span.uk-text-danger, span.chapter-lock, div.lock-card, i.fa-lock") != null ||
-            element.html().contains("icon: lock")
+        val isLocked = isLocked(element)
         name = if (isLocked && !parsedName.startsWith("🔒")) "🔒 $parsedName" else parsedName
 
         val dateStr = element.select("time").attr("datetime")
@@ -445,5 +462,21 @@ abstract class InitManga : KeiSource() {
         if (sortFilterOptions.isNotEmpty()) filters.add(SortFilter())
 
         return FilterList(filters)
+    }
+
+    // ============================== Preferences ==============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HIDE_LOCKED_KEY
+            title = "Hide locked chapters"
+            summary = "Hide chapters that require coins to read"
+            setDefaultValue(PREF_HIDE_LOCKED_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val PREF_HIDE_LOCKED_KEY = "pref_hide_locked_chapters"
+        private const val PREF_HIDE_LOCKED_DEFAULT = false
     }
 }
