@@ -104,24 +104,35 @@ abstract class Comick :
         )
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/chapters/latest?order=new&page=$page", headers)
+    private var latestNextCursor: String? = null
+    private var searchNextCursor: String? = null
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        if (page == 1) latestNextCursor = null
+
+        val url = "$baseUrl/api/chapters/latest".toHttpUrl().newBuilder().apply {
+            addQueryParameter("order", "new")
+            addQueryParameter("page", page.toString())
+            if (page > 1) addQueryParameter("cursor", latestNextCursor)
+        }
+
+        return GET(url.build(), headers)
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<Data<List<BrowseComic>>>()
+        val data = response.parseAs<SearchResponse>()
+
+        latestNextCursor = data.cursor
 
         return MangasPage(
             mangas = data.data.map(BrowseComic::toSManga),
-            hasNextPage = data.data.size == 100,
+            hasNextPage = data.cursor != null,
         )
     }
 
-    private var nextCursor: String? = null
-
     private val spaceSlashRegex = Regex("[ /]")
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (page == 1) {
-            nextCursor = null
-        }
+        if (page == 1) searchNextCursor = null
 
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
             filters.firstInstance<SortFilter>().let {
@@ -192,7 +203,7 @@ abstract class Comick :
             }
             addQueryParameter("type", "comic")
             if (page > 1) {
-                addQueryParameter("cursor", nextCursor)
+                addQueryParameter("cursor", searchNextCursor)
             }
         }.build()
 
@@ -202,7 +213,7 @@ abstract class Comick :
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<SearchResponse>()
 
-        nextCursor = data.cursor
+        searchNextCursor = data.cursor
 
         return MangasPage(
             mangas = data.data.map(BrowseComic::toSManga),
