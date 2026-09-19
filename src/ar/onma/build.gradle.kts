@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Onma"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mmrcms"
@@ -14,6 +14,6 @@ keiyoushi {
     source {
         name = "مانجا اون لاين"
         lang = "ar"
-        baseUrl = "https://onma.me"
+        baseUrl = "https://onma.top"
     }
 }
