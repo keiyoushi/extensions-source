@@ -12,7 +12,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 
@@ -20,8 +19,9 @@ import org.jsoup.nodes.Element
 abstract class JumpRookie : KeiSource() {
     private var nextPageKey: String? = null
 
-    // Requires desktop UA to load entries, mobile version has different selectors.
-    override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
+    private val desktopHeaders get() = headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
+        .build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSeriesList(page, null)
 
@@ -30,7 +30,7 @@ abstract class JumpRookie : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, desktopHeaders).asJsoup()
         val mangas = document.select("section.series-contents").map { it.toSManga() }
         val hasNextPage = document.selectFirst(".button-next") != null
         return MangasPage(mangas, hasNextPage)
