@@ -74,13 +74,12 @@ abstract class Mangarama :
 
     private fun chapterFromElement(element: Element, mangaPath: String, data: ChapterDatesDto?, hideLocked: Boolean): SChapter? {
         val chapter = super.chapterFromElement(element, mangaPath) ?: return null
-        val chapterSlug: String = chapter.url.substringAfterLast("/")
 
-        data?.chapterDates?.get(chapterSlug)?.let { dateStr ->
+        data?.chapterDates?.get(chapter.url)?.let { dateStr ->
             chapter.date_upload = parseChapterDate(dateStr)
         }
 
-        val isLocked = data?.chapterAccess?.get(chapterSlug)?.locked == true
+        val isLocked = data?.chapterAccess?.get(chapter.url)?.locked == true
         if (isLocked) {
             if (hideLocked) return null
 
@@ -95,7 +94,7 @@ abstract class Mangarama :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (chapter.memo["locked"]?.string == "true") throw Exception("Ця глава доступна лише з преміум підпискою. Авторизуйтесь на сайті та придбайте преміум.")
+        if (chapter.memo["locked"]?.string == "true") throw Exception("Цей розділ доступний лише з Преміум.")
 
         val chapterUrl = getChapterUrl(chapter)
         val data = client.get(chapterUrl).asJsoup()
