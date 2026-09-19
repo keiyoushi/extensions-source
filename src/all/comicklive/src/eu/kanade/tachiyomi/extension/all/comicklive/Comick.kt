@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.comicklive
 
 import android.util.Log
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -33,8 +33,7 @@ import okhttp3.internal.closeQuietly
 import okio.IOException
 import org.jsoup.Jsoup
 import java.lang.Thread.sleep
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Source
 abstract class Comick :
@@ -247,7 +246,7 @@ abstract class Comick :
             GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_CACHE),
         ).await()
 
-        val getTags = preferences.getBoolean(GET_TAGS, true)
+        val getTags = false
 
         val textTags: List<Filter<*>> = listOf(
             Filter.Separator(),
@@ -376,7 +375,7 @@ abstract class Comick :
         }
     }
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/comics/${manga.url}/chapter-list?lang=$lang", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/comics/${manga.url}/chapter-list", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         var data = response.parseAs<ChapterList>()
@@ -396,7 +395,7 @@ abstract class Comick :
 
         val mangaSlug = response.request.url.pathSegments[2]
 
-        return chapters.map {
+        return chapters.filter { it.lang in languageWhitelist }.map {
             SChapter.create().apply {
                 url = "/comic/$mangaSlug/${it.hid}-chapter-${it.chap}-${it.lang}"
                 name = buildString {
@@ -408,13 +407,11 @@ abstract class Comick :
                         append(": ", it.title)
                     }
                 }
-                date_upload = dateFormat.tryParse(it.createdAt)
+                date_upload = Instant.tryParse(it.createdAt)
                 scanlator = it.groups.joinToString()
             }
         }
     }
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ENGLISH)
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.asJsoup()
@@ -428,15 +425,42 @@ abstract class Comick :
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    private val languageWhitelist: Set<String>
+        get() = preferences.getStringSet(LANGUAGE_WHITELIST, setOf("en")).orEmpty()
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = GET_TAGS
-            title = "Tags Input Type"
-            summaryOn = "Tags will be in a form of scrollable list"
-            summaryOff = "Tags will need to be inputted manually"
-            setDefaultValue(true)
+        val languages = arrayOf(
+            "English" to "en",
+            "Russian" to "ru",
+            "Vietnamese" to "vi",
+            "French" to "fr",
+            "Polish" to "pl",
+            "Indonesian" to "id",
+            "Turkish" to "tr",
+            "Italian" to "it",
+            "Spanish" to "es",
+            "Ukrainian" to "uk",
+            "German" to "de",
+            "Korean" to "ko",
+            "Thai" to "th",
+            "Romanian" to "ro",
+            "Malay" to "ms",
+            "Japanese" to "ja",
+            "Swedish" to "sv",
+            "Norwegian" to "no",
+        )
+
+        MultiSelectListPreference(screen.context).apply {
+            key = LANGUAGE_WHITELIST
+            title = "Chapter Language Whitelist"
+            summary = "Leave empty for All"
+            entries = languages.map { it.first }.toTypedArray()
+            entryValues = languages.map { it.second }.toTypedArray()
+            setDefaultValue(setOf("en"))
         }.also(screen::addPreference)
     }
-}
 
-private const val GET_TAGS = "get_tags"
+    private companion object {
+        const val LANGUAGE_WHITELIST = "language_whitelist"
+    }
+}
