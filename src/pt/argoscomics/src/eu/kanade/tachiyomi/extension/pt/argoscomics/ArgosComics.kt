@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.argoscomics
 
+import android.content.SharedPreferences
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,12 +15,18 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -39,6 +46,10 @@ abstract class ArgosComics : KeiSource() {
             .build()
     }
 
+    private val preferences by getPreferencesLazy()
+
+    private val tokenManager by lazy { TokenManager(preferences) }
+
     // ======================== Popular =============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -55,10 +66,10 @@ abstract class ArgosComics : KeiSource() {
 
     // ======================== Search =============================
 
-    private var searchToken: String? = null
-    private suspend fun getSearchToken(url: String): String? = searchToken ?: findToken(url, SEARCH_TOKEN_REGEX) {
-        searchToken = it
-    }
+    private suspend fun getSearchToken(url: String): String? = tokenManager.search?.value
+        ?: findToken(url, SEARCH_TOKEN_REGEX, tokenManager.search) { value, url ->
+            tokenManager.search = Token(value, url)
+        }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchHeaders = headers.newBuilder()
@@ -70,17 +81,38 @@ abstract class ArgosComics : KeiSource() {
     }
 
     // ======================== Details + Chapters =============================
-    private var chapterToken: String? = null
-    private suspend fun getChapterToken(scriptUrl: String? = null): String? = chapterToken ?: findToken(scriptUrl!!, CHAPTER_TOKEN_REGEX) {
-        chapterToken = it
+
+    private suspend fun getChapterToken(scriptUrl: String? = null): String? = tokenManager.chapter?.value
+        ?: findToken(scriptUrl!!, CHAPTER_TOKEN_REGEX, tokenManager.chapter) { value, url ->
+            tokenManager.chapter = Token(value, url)
+        }
+
+    private suspend fun getDetailsToken(url: String): String? = tokenManager.details?.value
+        ?: findToken(url, DETAILS_TOKEN_REGEX, tokenManager.details) { value, url ->
+            tokenManager.details = Token(value, url)
+        }
+
+    private suspend fun findToken(url: String, regex: Regex, latest: Token?, build: (String, String) -> Unit): String? {
+        if (latest != null) {
+            regex.find(customClient.get(url).body.string())?.groupValues?.last()
+                ?.also {
+                    build(it, latest.url.toString())
+                    return it
+                }
+        }
+
+        val urls = getNextJSChunks(url)
+
+        for (url in urls) {
+            val token = regex.find(customClient.get(url).body.string())
+                ?.groupValues?.last()
+                ?.also { build(it, url.toString()) }
+            if (!token.isNullOrBlank()) return token
+        }
+        return null
     }
 
-    private var detailsToken: String? = null
-    private suspend fun getDetailsToken(url: String): String? = detailsToken ?: findToken(url, DETAILS_TOKEN_REGEX) {
-        detailsToken = it
-    }
-
-    private suspend fun findToken(url: String, regex: Regex, build: (String) -> Unit): String? {
+    private suspend fun getNextJSChunks(url: String): List<HttpUrl> {
         val document = customClient.get(url, ensureSuccess = false).asJsoup()
         val chunksElement = document.select("script[src*=chunks]:not([nomodule]):not([id])")
             .map { it.absUrl("src") }
@@ -93,12 +125,7 @@ abstract class ArgosComics : KeiSource() {
         val urls = (chunksElement + chunksLazyLoad)
             .mapNotNull { it.toHttpUrlOrNull() }
             .distinct()
-
-        for (url in urls) {
-            val token = regex.find(customClient.get(url).body.string())?.groupValues?.last()?.also { build(it) }
-            if (!token.isNullOrBlank()) return token
-        }
-        return null
+        return urls
     }
 
     override suspend fun fetchMangaUpdate(
@@ -140,10 +167,10 @@ abstract class ArgosComics : KeiSource() {
 
     // ======================== Pages =============================
 
-    private var pagesToken: String? = null
-    private suspend fun getPagesToken(url: String): String? = pagesToken ?: findToken(url, PAGES_TOKEN_REGEX) {
-        pagesToken = it
-    }
+    private suspend fun getPagesToken(url: String): String? = tokenManager.page?.value
+        ?: findToken(url, PAGES_TOKEN_REGEX, tokenManager.page) { value, url ->
+            tokenManager.page = Token(value, url)
+        }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = getChapterUrl(chapter)
@@ -158,6 +185,66 @@ abstract class ArgosComics : KeiSource() {
         val dto = body.extractNextJsRsc<MangaDetailsDto>()
         if (dto?.isUpcoming == true) error("Capítulo em desenvolvimento")
         return body.extractNextJsRsc<PagesDto>()!!.toPageList()
+    }
+
+    @Serializable
+    class Token(
+        val value: String,
+        val url: String? = null,
+        val updatedAt: Long = System.currentTimeMillis(),
+
+    ) {
+        fun isExpired() = updatedAt + TTL < System.currentTimeMillis()
+
+        companion object {
+            val TTL = 1.days.inWholeMilliseconds
+        }
+    }
+
+    private class TokenManager(
+        private val preferences: SharedPreferences,
+    ) {
+
+        private fun get(key: String): Token? = preferences.getString(key, null)
+            ?.parseAs<Token>()
+            ?.takeUnless(Token::isExpired)
+
+        private fun set(key: String, value: Token) {
+            preferences.edit()
+                .putString(key, value.toJsonString())
+                .apply()
+        }
+
+        var search: Token?
+            get() = get(SEARCH_TOKEN_PREF)
+            set(value) {
+                set(SEARCH_TOKEN_PREF, value!!)
+            }
+
+        var details: Token?
+            get() = get(DETAILS_TOKEN_PREF)
+            set(value) {
+                set(DETAILS_TOKEN_PREF, value!!)
+            }
+
+        var chapter: Token?
+            get() = get(CHAPTER_TOKEN_PREF)
+            set(value) {
+                set(CHAPTER_TOKEN_PREF, value!!)
+            }
+
+        var page: Token?
+            get() = get(PAGES_TOKEN_PREF)
+            set(value) {
+                set(PAGES_TOKEN_PREF, value!!)
+            }
+
+        companion object {
+            private const val SEARCH_TOKEN_PREF = "searchTokenPref"
+            private const val CHAPTER_TOKEN_PREF = "chapterTokenPref"
+            private const val DETAILS_TOKEN_PREF = "detailsTokenPref"
+            private const val PAGES_TOKEN_PREF = "pagesTokenPref"
+        }
     }
 
     companion object {
