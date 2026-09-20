@@ -50,7 +50,7 @@ abstract class Akaya : KeiSource() {
     }.rateLimit(1, 1.seconds)
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
         client.get(
-            "$baseUrl/collection/bd90cb43-9bf2-4759-b8cc-c9e66a526bc6?page=$page",
+            "$baseUrl/collection/6aadb3142d515?page=$page",
         ),
     )
 
@@ -242,34 +242,20 @@ abstract class Akaya : KeiSource() {
         val document = Jsoup.parse(html, baseUrl)
 
         val mangas = document
-            .select("div[role=link]:has(a[href*=\"/serie/\"])")
-            .mapNotNull { card ->
-                val link = card.selectFirst("a[href*=\"/serie/\"]")
-                    ?: return@mapNotNull null
-                val image = card.selectFirst("img")
+            .select("a[href*=\"/serie/\"]")
+            .mapNotNull { link ->
+                val card = link.closest("div[role=link]") ?: link
+                val image = card.selectFirst("img") ?: link.selectFirst("img")
 
-                val titleCandidates = listOf(
+                val title = sequenceOf(
+                    link.selectFirst("div[data-flux-text]")?.text(),
                     card.selectFirst("h1, h2, h3, h4")?.text(),
-                    card.selectFirst("[class*=\"title\"], [class*=\"name\"]")?.text(),
-                    link.attr("aria-label"),
-                    link.attr("title"),
-                    link.text(),
                     image?.attr("alt"),
                 )
-
-                val title = titleCandidates
-                    .asSequence()
-                    .flatMap { value ->
-                        value
-                            .orEmpty()
-                            .split("\n")
-                            .asSequence()
-                    }
-                    .map { it.trim() }
-                    .firstOrNull { candidate ->
-                        candidate.isNotBlank() &&
-                            !candidate.equals("Leer", ignoreCase = true) &&
-                            !candidate.equals("card image", ignoreCase = true)
+                    .map { it.orEmpty().trim() }
+                    .firstOrNull {
+                        it.isNotBlank() &&
+                            !it.equals("Card Image", ignoreCase = true)
                     }
                     .orEmpty()
 
@@ -277,17 +263,9 @@ abstract class Akaya : KeiSource() {
                     return@mapNotNull null
                 }
 
-                val cleanTitle = title
-                    .replace(Regex("\\s+series\\s*$", RegexOption.IGNORE_CASE), "")
-                    .trim()
-
-                if (cleanTitle.isBlank()) {
-                    return@mapNotNull null
-                }
-
                 SManga.create().apply {
                     setUrlWithoutDomain(link.attr("href"))
-                    this.title = cleanTitle
+                    this.title = title
                     thumbnail_url = image?.absUrl("src")
                 }
             }
