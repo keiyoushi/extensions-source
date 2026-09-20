@@ -18,6 +18,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -49,10 +50,6 @@ abstract class InitManga :
 
     protected open val latestUrlSlug: String = "son-guncellemeler"
 
-    override val supportsLatest = true
-
-    protected var genrelist: List<GenreData>? = null
-
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("Referer", "$baseUrl/")
 
@@ -72,9 +69,6 @@ abstract class InitManga :
         val path = if (page == 1) "" else "page/$page/"
         val response = client.get("$baseUrl/$popularUrlSlug/$path")
         val document = response.asJsoup()
-        if (genrelist == null) {
-            genrelist = parseGenres(document)
-        }
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = popularMangaNextPageSelector().let { document.selectFirst(it) != null }
         return MangasPage(mangas, hasNextPage)
@@ -110,9 +104,6 @@ abstract class InitManga :
         val path = if (page == 1) "" else "page/$page/"
         val response = client.get("$baseUrl/$latestUrlSlug/$path")
         val document = response.asJsoup()
-        if (genrelist == null) {
-            genrelist = parseGenres(document)
-        }
         val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }
         val hasNextPage = latestUpdatesNextPageSelector().let { document.selectFirst(it) != null }
         return MangasPage(mangas, hasNextPage)
@@ -138,9 +129,6 @@ abstract class InitManga :
 
             if (peek.startsWith("<")) {
                 val document = response.asJsoup()
-                if (genrelist == null) {
-                    genrelist = parseGenres(document)
-                }
                 val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
                 val hasNextPage = document.selectFirst("ul.uk-pagination li:not(#prev-link) a:not(:matchesOwn(\\S))[href^=http]") != null
                 return MangasPage(mangas, hasNextPage)
@@ -172,9 +160,6 @@ abstract class InitManga :
 
             val response = client.get(finalUrl)
             val document = response.asJsoup()
-            if (genrelist == null) {
-                genrelist = parseGenres(document)
-            }
             val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
             val hasNextPage = document.selectFirst("ul.uk-pagination li:not(#prev-link) a:not(:matchesOwn(\\S))[href^=http]") != null
             return MangasPage(mangas, hasNextPage)
@@ -192,9 +177,6 @@ abstract class InitManga :
 
         val response = client.get(urlBuilder.build())
         val document = response.asJsoup()
-        if (genrelist == null) {
-            genrelist = parseGenres(document)
-        }
         val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
         val hasNextPage = popularMangaNextPageSelector().let { document.selectFirst(it) != null }
         return MangasPage(mangas, hasNextPage)
@@ -405,7 +387,14 @@ abstract class InitManga :
 
     // ============================== Filters ===============================
 
-    protected open fun parseGenres(document: Document): List<GenreData>? = document.selectFirst("ul.uk-list.uk-text-small, div#uk-tab-3, form.sidebar-manga-filter select[name='genre[]']")
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/$mangaUrlDirectory").asJsoup()
+        return parseGenres(document).toJsonElement()
+    }
+
+    protected open fun parseGenres(document: Document): List<GenreData> = document.selectFirst("ul.uk-list.uk-text-small, div#uk-tab-3, form.sidebar-manga-filter select[name='genre[]']")
         ?.select("li a, a, option")
         ?.mapNotNull { element ->
             val name = element.text().trim()
@@ -416,19 +405,15 @@ abstract class InitManga :
                 GenreData(name = name, url = url)
             }
         }
-
-    protected open fun getGenreList(): List<Genre> = genrelist?.map { Genre(it.name, it.url) }.orEmpty()
+        .orEmpty()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>()
 
-        if (!genrelist.isNullOrEmpty()) {
+        val genres = data?.parseAs<List<GenreData>>().orEmpty()
+        if (genres.isNotEmpty()) {
             filters.add(
-                GenreListFilter("Kategoriler", getGenreList()),
-            )
-        } else {
-            filters.add(
-                Filter.Header("Kategorileri yüklemek için sıfırlaya basın"),
+                GenreListFilter("Kategoriler", genres.map { Genre(it.name, it.url) }),
             )
         }
 

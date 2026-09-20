@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.multisrc.initmanga
 
 import eu.kanade.tachiyomi.source.model.Filter
+import kotlinx.serialization.Serializable
 
+@Serializable
 class GenreData(
     val name: String,
     val url: String,
