@@ -16,17 +16,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.CustomUrlPreferences
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
-import keiyoushi.utils.runWebView
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +32,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -52,26 +49,21 @@ abstract class Jinmantiantang :
     KeiSource(),
     ConfigurableSource {
 
-    private val preferences = getPreferences { preferenceMigration() }
+    private val preferences = getPreferences()
 
-    override val baseUrl: String = "https://" + preferences.baseUrl
+    private val customUrl = CustomUrlPreferences(
+        preferences,
+        DEFAULT_BASE_URL,
+        "自定义域名",
+        "默认域名无法访问时，可在此填写其他可用域名",
+    )
 
-    private val updateUrlInterceptor = UpdateUrlInterceptor(preferences)
+    override val baseUrl: String get() = customUrl.baseUrl
 
-    // 处理URL请求
     override fun OkHttpClient.Builder.configureClient() = apply {
-        interceptors().add(0, updateUrlInterceptor)
         addInterceptor(ScrambledImageInterceptor)
         // Add rate limit to fix manga thumbnail load failure
-        rateLimit(
-            preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_PREF_DEFAULT)!!.toInt(),
-            preferences.getString(MAINSITE_RATELIMIT_PERIOD, MAINSITE_RATELIMIT_PERIOD_DEFAULT)!!.toLong().seconds,
-        ) { it.host == baseUrl.toHttpUrl().host }
-    }
-
-    // 添加额外的header增加规避Cloudflare可能性
-    override fun Headers.Builder.configureHeaders() = apply {
-        setRandomUserAgent()
+        rateLimit(3, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
     }
 
     // 点击量排序(人气)
@@ -93,11 +85,10 @@ abstract class Jinmantiantang :
     }
 
     private fun List<SManga>.filterGenre(): List<SManga> {
-        val removedGenres = preferences.getString(BLOCK_PREF, "")!!.substringBefore("//").trim()
-        if (removedGenres.isEmpty()) return this
-        val removedList = removedGenres.lowercase().split(' ')
+        val removedGenres = preferences.blockList
+        if (removedGenres.all { it.isBlank() }) return this
         return this.filterNot { manga ->
-            manga.genre.orEmpty().lowercase().split(", ").any { removedList.contains(it) }
+            manga.genre.orEmpty().lowercase().split(", ").any { it in removedGenres }
         }
     }
 
@@ -111,8 +102,8 @@ abstract class Jinmantiantang :
             if (img != null) {
                 thumbnail_url = img.extractThumbnailUrl().substringBeforeLast('?')
             }
-            author = children[2].select("a").joinToString(", ") { it.text() }
-            genre = children[3].select("a").joinToString(", ") { it.text() }
+            author = children[2].select("a").joinToString { it.text() }
+            genre = children[3].select("a").joinToString { it.text() }
         }
     }
 
@@ -121,47 +112,52 @@ abstract class Jinmantiantang :
             return fetchFavorites(page)
         }
 
-        if (query.startsWith(PREFIX_ID_SEARCH_NO_COLON, true) || query.toIntOrNull() != null) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH_NO_COLON).removePrefix(":")
-            val manga = mangaDetailsParse(mangaDetailsResolve(client.get("$baseUrl/album/$id"))).apply {
-                url = "/album/$id/"
-            }
-            return MangasPage(listOf(manga), hasNextPage = false)
-        }
-
         return mangaListParse(client.get(searchUrl(page, query, filters)))
     }
 
     // 禁漫天堂特有搜索方式: A +B --> A and B, A B --> A or B
-    private fun searchUrl(page: Int, query: String, filters: FilterList): String {
-        var params = filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
+    private fun searchUrl(page: Int, query: String, filters: FilterList): HttpUrl {
+        val params = filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
 
-        return if (query.isNotEmpty() && !query.contains("-")) {
-            var newQuery = query.replace("+", "%2B").replace(" ", "+")
-            // remove illegal param
-            params = params.substringAfter("?")
-            if (params.contains("search_query")) {
-                val keyword = params.substringBefore("&").substringAfter("=")
-                newQuery = "$newQuery+%2B$keyword"
-                params = params.substringAfter("&")
+        if (query.isNotEmpty() && !query.contains("-")) {
+            var keyword = query
+            var rest = params.substringAfter("?")
+            if (rest.contains("search_query")) {
+                // 分类本身就是一个搜索词, 两个关键词之间用 + 连接表示 AND
+                keyword = "$keyword+" + rest.substringBefore("&").substringAfter("=")
+                rest = rest.substringAfter("&")
             }
-            "$baseUrl/search/photos?search_query=$newQuery&page=$page&$params"
-        } else {
-            params = if (params.isEmpty()) "/albums?" else params
-            if (query.isEmpty()) {
-                "$baseUrl$params&page=$page"
-            } else {
-                // 在搜索栏的关键词前添加-号来实现对筛选结果的过滤, 像 "-YAOI -扶他 -毛絨絨 -獵奇", 注意此时搜索功能不可用.
-                val removedGenres = query.split(" ").filter { it.startsWith("-") }.joinToString("+") { it.removePrefix("-") }
-                "$baseUrl$params&page=$page&screen=$removedGenres"
-            }
+            return buildUrl("/search/photos?$rest", mapOf("search_query" to keyword, "page" to "$page"))
         }
+
+        val path = if (params.isEmpty()) "/albums?" else params
+        return if (query.isEmpty()) {
+            buildUrl(path, mapOf("page" to "$page"))
+        } else {
+            // 在搜索栏的关键词前添加-号来实现对筛选结果的过滤, 像 "-YAOI -扶他 -毛絨絨 -獵奇", 注意此时搜索功能不可用.
+            val removedGenres = query.split(" ").filter { it.startsWith("-") }.joinToString("+") { it.removePrefix("-") }
+            buildUrl(path, mapOf("page" to "$page", "screen" to removedGenres))
+        }
+    }
+
+    private fun buildUrl(pathAndQuery: String, extra: Map<String, String>): HttpUrl {
+        val path = pathAndQuery.substringBefore("?")
+
+        return "$baseUrl$path".toHttpUrl().newBuilder()
+            .apply {
+                pathAndQuery.substringAfter("?", "")
+                    .split("&")
+                    .filter { "=" in it }
+                    .forEach { addQueryParameter(it.substringBefore("="), it.substringAfter("=")) }
+                extra.forEach { (key, value) -> addQueryParameter(key, value) }
+            }
+            .build()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val id = url.pathSegments.getOrNull(1) ?: return null
-        return mangaDetailsParse(mangaDetailsResolve(client.get("$baseUrl/album/$id"))).apply {
+        return mangaDetailsParse(mangaDetailsResolve(client.get(url))).apply {
             this.url = "/album/$id/"
         }
     }
@@ -173,20 +169,14 @@ abstract class Jinmantiantang :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) return SMangaUpdate(manga, chapters)
-
         val document = mangaDetailsResolve(client.get("$baseUrl${manga.url}"))
 
-        val updatedManga = if (fetchDetails) mangaDetailsParse(document).apply { url = manga.url } else manga
-
-        // 无权限的请求会返回登录页，解析出的空数据写回会清空书架条目
-        if (fetchDetails && updatedManga.title.isBlank()) {
+        val updatedManga = mangaDetailsParse(document).apply { url = manga.url }
+        if (updatedManga.title.isBlank()) {
             blockInvalidData(document)
         }
 
-        val updatedChapters = if (fetchChapters) chapterListParse(document) else chapters
-
-        return SMangaUpdate(updatedManga, updatedChapters)
+        return SMangaUpdate(updatedManga, chapterListParse(document))
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -216,11 +206,11 @@ abstract class Jinmantiantang :
     // 收藏夹
     private suspend fun fetchFavorites(page: Int): MangasPage {
         val username = getUsername().ifBlank {
-            val detected = detectUsername()
-            if (detected.isNotBlank()) {
-                preferences.edit().putString(USERNAME_PREF, detected).apply()
+            detectUsername().also { detected ->
+                if (detected.isNotBlank()) {
+                    preferences.edit().putString(USERNAME_PREF, detected).apply()
+                }
             }
-            detected
         }
 
         if (username.isBlank()) {
@@ -255,6 +245,14 @@ abstract class Jinmantiantang :
 
     private fun Document.isLoggedIn(): Boolean = selectFirst("#Comic_Top_Nav")?.selectFirst("a[href*='favorite'], a[href*='logout']") != null
 
+    private suspend fun detectUsername(): String {
+        val nav = client.get(baseUrl).asJsoup().selectFirst("#Comic_Top_Nav") ?: return ""
+        return nav.select("a[href*='favorite']")
+            .map { it.attr("href").substringAfter("/user/", "").substringBefore("/") }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
+    }
+
     private fun blockInvalidData(document: Document): Nothing = throw Exception(
         if (document.isLoggedIn()) {
             "无法获取漫画数据，已阻断请求以保护书架"
@@ -262,33 +260,6 @@ abstract class Jinmantiantang :
             "未登录，该内容无法加载，已阻断请求"
         },
     )
-
-    private suspend fun detectUsername(): String = runWebView {
-        onPageFinished { url ->
-            evaluateJs(USERNAME_EXTRACTION_JS) { value ->
-                val detected = parseJsString(value)
-                if (detected != null) {
-                    resolve(detected)
-                } else if (!url.contains("challenge", ignoreCase = true)) {
-                    // Cloudflare 验证页会让出等待，超时后返回空
-                    resolve("")
-                }
-            }
-        }
-        loadUrl(baseUrl)
-    }
-
-    private fun parseJsString(value: String): String? {
-        val trimmed = value.trim()
-        if (trimmed.isEmpty() || trimmed == "null") return null
-        return if (trimmed.length >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-            trimmed.substring(1, trimmed.length - 1)
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-        } else {
-            trimmed
-        }
-    }
 
     // 漫画详情
     private fun mangaDetailsResolve(response: Response): Document {
@@ -440,12 +411,8 @@ abstract class Jinmantiantang :
             .add("oldStep", (oldStep + 1).toString())
             .build()
 
-        val response = client.post("$baseUrl/ajax/user_daily_sign", body = body)
-        if (!response.isSuccessful) {
-            throw Exception("签到请求失败")
-        }
+        val signJson = client.post("$baseUrl/ajax/user_daily_sign", body = body).body.string()
 
-        val signJson = response.body.string()
         if (extractJsonString(signJson, "error") == "finished") {
             throw AlreadyCheckedInException()
         }
@@ -523,6 +490,8 @@ abstract class Jinmantiantang :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context = screen.context
 
+        customUrl.setupPreferenceScreen(screen)
+
         EditTextPreference(context).apply {
             key = USERNAME_PREF
             title = "用户名（用于收藏夹）"
@@ -558,36 +527,15 @@ abstract class Jinmantiantang :
             }
         }.let(screen::addPreference)
 
-        getPreferenceList(context, preferences, updateUrlInterceptor.isUpdated).forEach(screen::addPreference)
-        screen.addRandomUAPreference()
+        getPreferenceList(context).forEach(screen::addPreference)
     }
 
     companion object {
-        private const val PREFIX_ID_SEARCH_NO_COLON = "JM"
-        const val PREFIX_ID_SEARCH = "$PREFIX_ID_SEARCH_NO_COLON:"
+        private const val DEFAULT_BASE_URL = "https://18comic.vip"
 
         private const val USERNAME_PREF = "username"
         private const val FAVORITE_MANGA_SELECTOR = "div[id^='favorites_album_']"
         private const val CHECKIN_PREF = "auto_checkin"
         private const val CHECKIN_DATE_PREF = "last_checkin_date"
-
-        // 登录后顶栏的账号链接形如 https://{domain}/user/{username}/favorite/albums#
-        private val USERNAME_EXTRACTION_JS = """
-            (function() {
-                function extract(scope) {
-                    var links = scope.querySelectorAll('a[href*="favorite"]');
-                    for (var i = 0; i < links.length; i++) {
-                        var href = links[i].getAttribute('href') || '';
-                        var parts = href.split('/');
-                        var ui = parts.indexOf('user');
-                        if (ui >= 0 && parts[ui + 1] && parts[ui + 1].length > 0) return parts[ui + 1];
-                    }
-                    return null;
-                }
-                var nav = document.querySelector('#Comic_Top_Nav');
-                if (nav) { var u = extract(nav); if (u) return u; }
-                return extract(document);
-            })()
-        """.trimIndent()
     }
 }

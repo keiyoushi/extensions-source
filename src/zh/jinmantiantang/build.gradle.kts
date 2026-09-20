@@ -24,8 +24,3 @@ keiyoushi {
         path("/album/..*")
     }
 }
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
-}
