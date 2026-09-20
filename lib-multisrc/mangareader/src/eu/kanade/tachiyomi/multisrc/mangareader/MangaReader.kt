@@ -68,8 +68,7 @@ abstract class MangaReader : KeiSource() {
         } else {
             addPathSegment("filter")
             addPathSegment("")
-            val filterList = filters.ifEmpty { getFilterList() }
-            filterList.filterIsInstance<UriFilter>().forEach {
+            filters.filterIsInstance<UriFilter>().forEach {
                 it.addToUri(this)
             }
         }
