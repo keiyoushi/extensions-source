@@ -44,7 +44,7 @@ class ComicDto(
     private val artist: String? = null,
     private val status: String? = null,
     private val genres: List<GenreDto> = emptyList(),
-    val chapters: List<ChapterDto> = emptyList(),
+    private val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         url = "/comic/$slug"
@@ -72,8 +72,8 @@ class GenreDto(
 
 @Serializable
 class ChapterDto(
-    val id: String,
-    val number: String,
+    private val id: String,
+    private val number: String,
     private val title: String? = null,
     private val isLocked: Boolean = false,
     private val publishedAt: String? = null,

@@ -15,7 +15,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.net.URLEncoder
 import java.util.Random
 import javax.crypto.Mac
@@ -105,11 +104,10 @@ abstract class KumoPoi : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = if (chapter.url.contains("#")) {
-            chapter.url.substringAfterLast("#")
-        } else {
-            resolveChapterId(chapter)
+        if (!chapter.url.contains("#")) {
+            throw Exception("Please refresh chapter list")
         }
+        val chapterId = chapter.url.substringAfterLast("#")
         val path = "/api/v1/chapters/$chapterId/pages"
         val timestamp = (System.currentTimeMillis() / 1000).toString()
         val nonce = generateNonce(16)
@@ -131,26 +129,6 @@ abstract class KumoPoi : KeiSource() {
                 URLEncoder.encode(pageItem.token, "UTF-8")
             Page(index, imageUrl = deliverUrl)
         }
-    }
-
-    private suspend fun resolveChapterId(chapter: SChapter): String {
-        val segments = chapter.url.trim('/').split('/')
-        val slug = if (segments.size >= 2 && segments[0] == "comic") segments[1] else segments.firstOrNull().orEmpty()
-        val response = client.get("$API_BASE/comics/$slug").parseAs<ComicDetailsResponse>()
-        val target = response.data.chapters.firstOrNull {
-            it.number.trim().toFloatOrNull() == chapter.chapter_number
-        } ?: response.data.chapters.firstOrNull()
-        return target?.id ?: throw Exception("Chapter ID not found")
-    }
-
-    override fun imageRequest(page: Page): Request {
-        val imageHeaders = headers.newBuilder()
-            .set("Referer", "$baseUrl/")
-            .build()
-        return Request.Builder()
-            .url(page.imageUrl!!)
-            .headers(imageHeaders)
-            .build()
     }
 
     override fun getMangaUrl(manga: SManga): String {
