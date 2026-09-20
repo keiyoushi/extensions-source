@@ -15,11 +15,9 @@ keiyoushi {
         lang = "zh"
 
         // 地址: https://rou.pub/dizhi or https://rdz4.xyz/dizhi
+        // 使用自定义域名：用户可在扩展设置中填写任意可用域名（如原镜像 rouman5.com / roum29.xyz）
         baseUrl {
-            mirrors(
-                "https://rouman5.com",
-                "https://roum29.xyz",
-            )
+            custom("https://rouman5.com")
         }
     }
 

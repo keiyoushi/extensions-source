@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.zh.roumanwu
 
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +17,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -25,7 +30,9 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Source
-abstract class Roumanwu : KeiSource() {
+abstract class Roumanwu :
+    KeiSource(),
+    ConfigurableSource {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ScrambledImageInterceptor())
 
@@ -190,7 +197,36 @@ abstract class Roumanwu : KeiSource() {
 
     private class StatusFilter : Filter.Select<String>("狀態", arrayOf("全部", "連載中", "已完結"))
 
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        // 额外保留原镜像站点的快捷选择。必须使用独立 key，选中时把值同步写入
+        // CustomUrlPreferences 的 overrideBaseUrl 以改变 baseUrl；若与自定义基础 URL 共用同一 key，
+        // AndroidX 会按 key 复用对话框 fragment，把 EditTextPreference 当 ListPreference 强转导致崩溃。
+        val currentBaseUrl = preferences.getString(CUSTOM_BASE_URL_KEY, null) ?: "https://rouman5.com"
+        ListPreference(screen.context).apply {
+            key = MIRROR_KEY
+            title = "常用镜像站点"
+            entries = arrayOf("肉漫屋 1 (rouman5.com)", "肉漫屋 2 (roum29.xyz)")
+            entryValues = arrayOf("https://rouman5.com", "https://roum29.xyz")
+            summary = "%s"
+            setDefaultValue("https://rouman5.com")
+            value = (entryValues.firstOrNull { it.toString() == currentBaseUrl }?.toString())
+                ?: "https://rouman5.com"
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString(CUSTOM_BASE_URL_KEY, newValue as String).apply()
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
     companion object {
+        // keiyoushi.source.CustomUrlPreferences 内部的 baseUrl key
+        private const val CUSTOM_BASE_URL_KEY = "overrideBaseUrl"
+
+        // 本扩展镜像下拉使用的独立 key（不可与上面相同，否则会崩溃）
+        private const val MIRROR_KEY = "roumanwu_mirror"
+
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yyyy")
     }
 }
