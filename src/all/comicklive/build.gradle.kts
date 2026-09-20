@@ -11,13 +11,14 @@ keiyoushi {
     libVersion = "1.6"
 
     source {
-        lang = "en"
+        lang = "all"
         baseUrl {
             mirrors(
                 "https://comick.live",
                 "https://comick.art",
             )
         }
+        id = 4972933717624256217
     }
     deeplink {
         path("/comic/..*")
