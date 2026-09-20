@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Ikigai Mangas"
-    versionCode = 38
+    versionCode = 39
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -17,4 +17,8 @@ keiyoushi {
         }
         versionId = 2
     }
+}
+
+dependencies {
+    implementation(project(":lib:browsersession"))
 }

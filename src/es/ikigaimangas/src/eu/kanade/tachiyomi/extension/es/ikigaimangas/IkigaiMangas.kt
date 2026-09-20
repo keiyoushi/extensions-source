@@ -14,6 +14,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.browsersession.ChallengeSolverInterceptor
+import keiyoushi.lib.browsersession.ClientHintsInterceptor
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -47,8 +49,13 @@ abstract class IkigaiMangas :
     KeiSource(),
     ConfigurableSource {
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(::nsfwCookieInterceptor)
-        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" }
+        addInterceptor(ClientHintsInterceptor())
+        addInterceptor(ChallengeSolverInterceptor())
+        addNetworkInterceptor(::nsfwCookieInterceptor)
+        rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+    }
 
     private val domainMutex = Mutex()
     private var domainFetched = false
@@ -59,7 +66,7 @@ abstract class IkigaiMangas :
             if (domainFetched || !preferences.fetchDomainPref()) return
 
             try {
-                val initClient = network.client
+                val initClient = client
                 val headers = super.headersBuilder().build()
                 val document = initClient.get("https://ikigaimangas.com", headers).asJsoup()
                 val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
@@ -339,10 +346,23 @@ abstract class IkigaiMangas :
                 .build()
             document = client.newCall(newRequest).awaitSuccess().asJsoup()
         }
-        return document.select("section div > img").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
-        }
+        return document.select("section div > img")
+            .map { it.attr("abs:src") }
+            .filter { src ->
+                src.isNotBlank() &&
+                    !src.contains("banner", ignoreCase = true) &&
+                    !src.contains("/posts/misc/", ignoreCase = true)
+            }
+            .mapIndexed { i, imageUrl ->
+                Page(i, imageUrl = imageUrl)
+            }
     }
+
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Sec-Fetch-Dest", "image")
+        .header("Sec-Fetch-Mode", "no-cors")
+        .header("Sec-Fetch-Site", "cross-site")
+        .build()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Nota: Los filtros son ignorados si se realiza una búsqueda por texto."),
