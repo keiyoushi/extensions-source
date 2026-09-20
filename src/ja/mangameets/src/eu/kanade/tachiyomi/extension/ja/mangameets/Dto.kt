@@ -145,6 +145,7 @@ class EpisodeEntry(
 
 @Serializable
 class EpisodeAttributes(
+    private val key: String,
     private val title: String?,
     private val volume: String,
     @SerialName("sort_volume") private val sortVolume: Int,
@@ -152,12 +153,13 @@ class EpisodeAttributes(
 ) {
     fun toSChapter(dirName: String) = SChapter.create().apply {
         val chapterTitle = if (!title.isNullOrEmpty()) " - $title" else ""
-        url = sortVolume.toString()
+        url = key // chapter uuid
         name = "Chapter $volume$chapterTitle"
         date_upload = Instant.tryParse(publishedAt)
         chapter_number = sortVolume.toFloat()
         memo = buildJsonObject {
             put("uuid", dirName)
+            put("chapter", sortVolume)
         }
     }
 }

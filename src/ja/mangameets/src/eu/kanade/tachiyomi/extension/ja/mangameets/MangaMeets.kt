@@ -86,10 +86,10 @@ abstract class MangaMeets : KeiSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comics/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/comics/${chapter.memo["uuid"]!!.string}/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/comics/${chapter.memo["uuid"]!!.string}/${chapter.memo["chapter"]!!.string}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get("$apiUrl/comics/${chapter.memo["uuid"]!!.string}/episodes/${chapter.url}/viewer.json").parseAs<ViewerResponse>()
+        val result = client.get("$apiUrl/comics/${chapter.memo["uuid"]!!.string}/episodes/${chapter.memo["chapter"]!!.string}/viewer.json").parseAs<ViewerResponse>()
         return result.episodePages.map {
             Page(it.orderIndex, imageUrl = it.image.originalUrl)
         }
