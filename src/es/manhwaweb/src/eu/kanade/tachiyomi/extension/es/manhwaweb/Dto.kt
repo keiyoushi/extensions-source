@@ -99,6 +99,7 @@ class ComicDetailsDto(
         status = parseStatus(this@ComicDetailsDto.status)
         genre = genres.joinToString { it.values.first() }
         author = extras.authors.joinToString()
+        initialized = true
     }
 
     private fun parseStatus(status: String) = when (status) {
