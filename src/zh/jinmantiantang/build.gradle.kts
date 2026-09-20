@@ -8,7 +8,7 @@ keiyoushi {
     name = "Jinman Tiantang"
     versionCode = 58
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "禁漫天堂"
