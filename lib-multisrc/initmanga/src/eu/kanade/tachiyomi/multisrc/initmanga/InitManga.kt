@@ -320,7 +320,7 @@ abstract class InitManga : HttpSource() {
 
     open fun pageListParse(document: Document): List<Page> {
         if (document.selectFirst("div#chapter-content div.lock-card") != null) {
-            throw Exception("Locked chapter, log in via WebView to read it")
+            throw Exception("Kilitli bölüm, okumak için siteye giriş yapmanız gerekiyor")
         }
 
         val encryptedData = document.selectFirst("script[src*=dmFyIElua]")?.attr("src")
