@@ -28,9 +28,9 @@ class MangaDto(
     val updatedAt: Long = 0,
     val isDraft: Boolean = false,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
-        val mangaUrl = "$baseUrl/detail".toHttpUrl().newBuilder().addQueryParameter("slug", slug).build()
-        url = mangaUrl.encodedPath + "?" + mangaUrl.encodedQuery
+    fun toSManga() = SManga.create().apply {
+        // Store only the slug; "/detail?slug=" and Blogger-path URLs still resolve (see extractSlug).
+        url = "/$slug"
         title = this@MangaDto.title
         thumbnail_url = (cover.ifBlank { img }).takeIf { it.isNotBlank() && it != "-" }?.let {
             if (it.startsWith("http")) it else MikoRoku.RAW_URL + it.removePrefix("/")
@@ -39,7 +39,7 @@ class MangaDto(
         artist = this@MangaDto.artist
         genre = genres.joinToString()
         description = buildString {
-            append(Jsoup.parseBodyFragment(desc, baseUrl).text())
+            append(Jsoup.parseBodyFragment(desc).text())
             if (altTitle.isNotBlank()) append("\n\nAlternative titles: ").append(altTitle)
         }
         status = when (this@MangaDto.status.lowercase()) {

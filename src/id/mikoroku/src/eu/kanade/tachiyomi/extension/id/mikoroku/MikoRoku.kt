@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.mikoroku
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -38,7 +39,7 @@ abstract class MikoRoku : KeiSource() {
             client.get("${STORE_URL}meta/mangaSummary", ensureSuccess = false).use { response ->
                 // The site's Firestore quota can run out while GitHub and Blogger remain available.
                 if (response.code == 429) return@use emptyList()
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                if (!response.isSuccessful) throw HttpException(response.code)
                 response.parseAs<FirestoreDocument<SummaryFields>>().fields.list.values
             }
         }
@@ -46,14 +47,26 @@ abstract class MikoRoku : KeiSource() {
     }
 
     private fun List<MangaDto>.toPage(page: Int): MangasPage = MangasPage(
-        drop((page - 1) * PAGE_SIZE).take(PAGE_SIZE).map { it.toSManga(baseUrl) },
+        drop((page - 1) * PAGE_SIZE).take(PAGE_SIZE).map { it.toSManga() },
         page.toLong() * PAGE_SIZE < size,
     )
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host) return null
-        val slug = url.queryParameter("slug") ?: return null
-        return getCatalog().find { it.slug == slug }?.toSManga(baseUrl)
+        val slug = url.queryParameter("slug")
+            ?: url.pathSegments.lastOrNull()?.takeIf { it.isNotBlank() && it != "detail" && it != "detail.html" }
+            ?: return null
+        return getCatalog().find { it.slug == slug }?.toSManga()
+    }
+
+    private fun extractSlug(storedUrl: String): String? {
+        // Previous format "/detail?slug=<slug>" (relative or absolute); current format stores only "/<slug>".
+        if ("/detail" in storedUrl.substringBefore("?")) {
+            val absolute = if (storedUrl.startsWith("http")) storedUrl else baseUrl + storedUrl
+            return runCatching { absolute.toHttpUrl().queryParameter("slug") }.getOrNull()
+        }
+        // Old Blogger-path library entries contain slashes; resolve those by title instead.
+        return storedUrl.trimStart('/').substringBefore('?').takeIf { '/' !in it }?.ifBlank { null }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -62,13 +75,14 @@ abstract class MikoRoku : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val slug = (baseUrl + manga.url).toHttpUrl().queryParameter("slug")
+        val slug = extractSlug(manga.url)
         // Old library entries still have Blogger paths; the catalog supplies their new slug.
+        // This is also the old-to-new extension migration path: entries keep working after update.
         val entry = getCatalog().first {
             if (slug != null) it.slug == slug else it.title.normalizeTitle() == manga.title.normalizeTitle()
         }
         val details = async {
-            if (fetchDetails) getDetails(entry).toSManga(baseUrl).apply { url = manga.url } else manga
+            if (fetchDetails) getDetails(entry).toSManga().apply { url = manga.url } else manga
         }
         val updatedChapters = async {
             if (fetchChapters) getChapters(entry) else chapters
@@ -81,7 +95,7 @@ abstract class MikoRoku : KeiSource() {
         DETAIL_FIELDS.forEach { url.addQueryParameter("mask.fieldPaths", it) }
         return client.get(url.build(), ensureSuccess = false).use { response ->
             if (response.code == 404 || response.code == 429) return@use entry
-            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+            if (!response.isSuccessful) throw HttpException(response.code)
             val fields = response.parseAs<FirestoreDocument<MangaFields>>().fields
             check(!fields.isDraft) { "Manga is not published" }
             fields.toManga(entry.slug, entry)
@@ -89,7 +103,10 @@ abstract class MikoRoku : KeiSource() {
     }
 
     private suspend fun getChapters(entry: MangaDto): List<SChapter> {
+        // Single-source chapter lists: Firestore first, Blogger mirrors only as a fallback.
+        // This avoids mixing two different chapter sets for the same manga.
         val firestore = getFirestoreChapters(entry.slug)
+        if (firestore.isNotEmpty()) return firestore.sortedByDescending { it.chapter_number }
         var bloggerError: IOException? = null
         val blogger = listOf(MIRROR_URL, BLOGGER_URL).firstNotNullOfOrNull { host ->
             try {
@@ -99,12 +116,8 @@ abstract class MikoRoku : KeiSource() {
                 null
             }
         }
-        if (firestore.isEmpty() && blogger == null) {
-            bloggerError?.let { throw it }
-        }
-        return (firestore + blogger.orEmpty()).distinctBy {
-            if (it.chapter_number >= 0) it.chapter_number.toString() else it.url
-        }.sortedByDescending { it.chapter_number }
+        return blogger?.sortedByDescending { it.chapter_number }
+            ?: throw bloggerError ?: IOException("No chapters found")
     }
 
     private suspend fun getFirestoreChapters(slug: String): List<SChapter> {
@@ -117,7 +130,7 @@ abstract class MikoRoku : KeiSource() {
             pageToken?.let { url.addQueryParameter("pageToken", it) }
             val result = client.get(url.build(), ensureSuccess = false).use { response ->
                 if (response.code == 429) return emptyList()
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                if (!response.isSuccessful) throw HttpException(response.code)
                 response.parseAs<FirestoreList<ChapterFields>>()
             }
             chapters += result.documents.filterNot { it.fields.isDraft }.map { it.toSChapter(slug, baseUrl) }
@@ -157,7 +170,7 @@ abstract class MikoRoku : KeiSource() {
                         throw IOException("HTTP ${response.code}: Blogger fallback unavailable")
                     }
                 }
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                if (!response.isSuccessful) throw HttpException(response.code)
                 val fields = response.parseAs<FirestoreDocument<ChapterFields>>().fields
                 if (fields.isDraft) return emptyList()
                 fields.pageUrls(baseUrl)

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MikoRoku"
-    versionCode = 21
+    versionCode = 22
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -14,6 +14,7 @@ keiyoushi {
         lang = "id"
         baseUrl = "https://mikoroku.com"
         id = 8593493873810750465L
+        versionId = 2
     }
 
     deeplink {
