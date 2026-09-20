@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Roseveil"
-    versionCode = 47
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
+    theme = "loneseal"
 
     source {
         lang = "id"
