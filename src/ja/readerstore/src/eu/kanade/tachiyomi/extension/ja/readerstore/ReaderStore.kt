@@ -20,6 +20,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -119,16 +120,29 @@ abstract class ReaderStore :
         )
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/item/${chapter.url}/"
-
-    override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
-        val viewerUrl = "$API_URL/viewer/".toHttpUrl().newBuilder()
+    private suspend fun tokenResponse(chapter: SChapter): TokenResponse {
+        val url = "$API_URL/viewer/".toHttpUrl().newBuilder()
             .addQueryParameter("aid", chapter.url)
             .addQueryParameter("isSample", chapter.memo["isSample"]!!.boolean.toString())
             .addQueryParameter("redirectPathForReadEnd", "")
             .build()
 
-        val token = client.get(viewerUrl).parseAs<TokenResponse>().token
+        return client.get(url).parseAs<TokenResponse>()
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val token = runBlocking { tokenResponse(chapter).token }
+
+        return "$VIEWER_URL/open".toHttpUrl().newBuilder()
+            .addQueryParameter("uuid", token.uuid)
+            .addQueryParameter("iid", token.browserContentsId)
+            .addQueryParameter("auth_token", token.authToken)
+            .build()
+            .toString()
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
+        val token = tokenResponse(chapter).token
         val nmr = randomUUID().toString()
         val viewerHeaders = headersBuilder()
             .set(HEADER_NMR, nmr)
