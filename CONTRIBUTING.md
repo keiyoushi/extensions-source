@@ -934,6 +934,20 @@ val request = graphQLPost(
 val data = response.parseGraphQLAs<MyResponseDto>()
 ```
 
+Inside a `KeiSource`, build the payload with `graphQLBody` and send it with
+[`client.post`](#http-requests---okhttpclientget--post--put--head):
+
+```kotlin
+val data = client.post(
+    url = "$baseUrl/graphql",
+    body = graphQLBody(
+        operationName = "SearchManga",
+        query = SEARCH_QUERY,
+        variables = variables,
+    ),
+).parseGraphQLAs<MyResponseDto>()
+```
+
 ##### GraphQL GET requests - `graphQLGet`
 
 For sources that send GraphQL over HTTP GET instead of POST, use `graphQLGet` with the same signature as `graphQLPost`:
@@ -953,6 +967,20 @@ val request = graphQLGet(
     """,
     variables = variables
 )
+```
+
+Inside a `KeiSource`, use the suspend `OkHttpClient` overload instead: it sends the request and
+returns the `Response`, taking the source's own `headers` when none are passed. `ensureSuccess`
+behaves as in [HTTP requests](#http-requests---okhttpclientget--post--put--head), and it
+additionally takes a `cacheControl`, defaulting to a 10-minute max-age.
+
+```kotlin
+val data = client.graphQLGet(
+    url = "$baseUrl/graphql",
+    operationName = "SearchManga",
+    query = SEARCH_QUERY,
+    variables = variables,
+).parseGraphQLAs<MyResponseDto>()
 ```
 
 For sources that use [Automatic Persisted Queries (APQ)](https://www.apollographql.com/docs/kotlin/advanced/persisted-queries/), pass the result of `persistedQueryExtension(sha256Hash)` as the `extensions` parameter and omit `query`. This works for both `graphQLPost` and `graphQLGet`.

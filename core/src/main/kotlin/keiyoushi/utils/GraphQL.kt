@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.DEFAULT_CACHE_CONTROL
 import keiyoushi.network.get
-import keiyoushi.network.post
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -54,7 +53,7 @@ private class PersistedQueryExtension(
 /**
  * Intercepts HTTP responses and throws [GraphQLException] if the body contains GraphQL errors.
  *
- * Runs before the `ensureSuccess` check of the suspend [graphQLPost] and [graphQLGet].
+ * Runs before the `ensureSuccess` check of the suspend [graphQLGet] and `client.post`.
  */
 class GraphQLErrorInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -276,106 +275,6 @@ inline fun <reified V : Any> graphQLGet(
     cache: CacheControl? = null,
     json: Json = jsonInstance,
 ): Request = graphQLGet(url, headers, query, operationName, variables.toJsonElement(json), extensions, cache, json)
-
-/**
- * Executes a GraphQL POST request asynchronously and returns the response.
- *
- * @param url The endpoint URL.
- * @param headers The HTTP request headers.
- * @param query The GraphQL query string.
- * @param operationName The GraphQL operation name.
- * @param variables Variables pre-encoded as a [JsonElement].
- * @param extensions Optional protocol extensions.
- * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
- * @param json [Json] instance for serialization. Defaults to [jsonInstance].
- * @see persistedQueryExtension
- */
-suspend fun OkHttpClient.graphQLPost(
-    url: String,
-    headers: Headers,
-    query: String? = null,
-    operationName: String? = null,
-    variables: JsonElement? = null,
-    extensions: JsonElement? = null,
-    ensureSuccess: Boolean = true,
-    json: Json = jsonInstance,
-): Response = post(url, headers, graphQLBody(query, operationName, variables, extensions, json), ensureSuccess)
-
-/**
- * Typed-variables overload of [graphQLPost].
- *
- * Executes a GraphQL POST request asynchronously and returns the response.
- *
- * @param url The endpoint URL.
- * @param headers The HTTP request headers.
- * @param query The GraphQL query string.
- * @param operationName The GraphQL operation name.
- * @param variables Variables to serialize as [JsonElement] and embed in the request body.
- * @param extensions Optional protocol extensions.
- * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
- * @param json [Json] instance for serialization. Defaults to [jsonInstance].
- * @see persistedQueryExtension
- */
-suspend inline fun <reified V : Any> OkHttpClient.graphQLPost(
-    url: String,
-    headers: Headers,
-    query: String? = null,
-    operationName: String? = null,
-    variables: V,
-    extensions: JsonElement? = null,
-    ensureSuccess: Boolean = true,
-    json: Json = jsonInstance,
-): Response = graphQLPost(url, headers, query, operationName, variables.toJsonElement(json), extensions, ensureSuccess, json)
-
-/**
- * Executes a GraphQL POST request asynchronously and returns the response, using the headers of
- * the [HttpSource] it is called from.
- *
- * @param url The endpoint URL.
- * @param query The GraphQL query string.
- * @param operationName The GraphQL operation name.
- * @param variables Variables pre-encoded as a [JsonElement].
- * @param extensions Optional protocol extensions.
- * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
- * @param json [Json] instance for serialization. Defaults to [jsonInstance].
- * @see persistedQueryExtension
- */
-context(source: HttpSource)
-suspend fun OkHttpClient.graphQLPost(
-    url: String,
-    query: String? = null,
-    operationName: String? = null,
-    variables: JsonElement? = null,
-    extensions: JsonElement? = null,
-    ensureSuccess: Boolean = true,
-    json: Json = jsonInstance,
-): Response = graphQLPost(url, source.headers, query, operationName, variables, extensions, ensureSuccess, json)
-
-/**
- * Typed-variables overload of [graphQLPost].
- *
- * Executes a GraphQL POST request asynchronously and returns the response, using the headers of
- * the [HttpSource] it is called from.
- *
- * @param url The endpoint URL.
- * @param query The GraphQL query string.
- * @param operationName The GraphQL operation name.
- * @param variables Variables to serialize as [JsonElement] and embed in the request body.
- * @param extensions Optional protocol extensions.
- * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
- * @param json [Json] instance for serialization. Defaults to [jsonInstance].
- * @see persistedQueryExtension
- */
-context(source: HttpSource)
-suspend inline fun <reified V : Any> OkHttpClient.graphQLPost(
-    url: String,
-    query: String? = null,
-    operationName: String? = null,
-    variables: V,
-    extensions: JsonElement? = null,
-    ensureSuccess: Boolean = true,
-    json: Json = jsonInstance,
-): Response = graphQLPost(url, source.headers, query, operationName, variables.toJsonElement(json), extensions, ensureSuccess, json)
 
 /**
  * Executes a GraphQL GET request asynchronously, with the GraphQL parameters encoded as URL query
