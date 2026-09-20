@@ -40,12 +40,6 @@ abstract class ArgosComics : KeiSource() {
     private val rscHeaders
         get() = headersBuilder().set("rsc", "1").build()
 
-    private val customClient: OkHttpClient by lazy {
-        client.newBuilder()
-            .followRedirects(true)
-            .build()
-    }
-
     private val preferences by getPreferencesLazy()
 
     private val tokenManager by lazy { TokenManager(preferences) }
@@ -94,7 +88,7 @@ abstract class ArgosComics : KeiSource() {
 
     private suspend fun findToken(url: String, regex: Regex, latest: Token?, build: (String, String) -> Unit): String? {
         if (latest != null) {
-            regex.find(customClient.get(url).body.string())?.groupValues?.last()
+            regex.find(client.get(url).body.string())?.groupValues?.last()
                 ?.also {
                     build(it, latest.url.toString())
                     return it
@@ -104,7 +98,7 @@ abstract class ArgosComics : KeiSource() {
         val urls = getNextJSChunks(url)
 
         for (url in urls) {
-            val token = regex.find(customClient.get(url).body.string())
+            val token = regex.find(client.get(url).body.string())
                 ?.groupValues?.last()
                 ?.also { build(it, url.toString()) }
             if (!token.isNullOrBlank()) return token
@@ -113,7 +107,7 @@ abstract class ArgosComics : KeiSource() {
     }
 
     private suspend fun getNextJSChunks(url: String): List<HttpUrl> {
-        val document = customClient.get(url, ensureSuccess = false).asJsoup()
+        val document = client.get(url, ensureSuccess = false).asJsoup()
         val chunksElement = document.select("script[src*=chunks]:not([nomodule]):not([id])")
             .map { it.absUrl("src") }
             .reversed()
