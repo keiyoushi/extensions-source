@@ -76,6 +76,8 @@ class SearchComicDto(
 
 @Serializable
 class ComicDetailsDto(
+    @SerialName("_id") val id: String,
+    @SerialName("real_id") val slug: String,
     @SerialName("name_esp") private val title: String,
     @SerialName("_sinopsis") private val description: String? = null,
     @SerialName("_status") private val status: String,
@@ -83,8 +85,10 @@ class ComicDetailsDto(
     @SerialName("_imagen") private val thumbnail: String,
     @SerialName("_categoris") private val genres: List<Map<Int, String>>,
     @SerialName("_extras") private val extras: ComicDetailsExtrasDto,
+    val chapters: List<ChapterDto>,
 ) {
     fun toSManga() = SManga.create().apply {
+        url = "manhwa/$slug"
         title = this@ComicDetailsDto.title
         thumbnail_url = thumbnail
         description = this@ComicDetailsDto.description
@@ -95,6 +99,7 @@ class ComicDetailsDto(
         status = parseStatus(this@ComicDetailsDto.status)
         genre = genres.joinToString { it.values.first() }
         author = extras.authors.joinToString()
+        initialized = true
     }
 
     private fun parseStatus(status: String) = when (status) {
@@ -110,18 +115,21 @@ class ComicDetailsExtrasDto(
 )
 
 @Serializable
-class PayloadChapterDto(
-    @SerialName("_id") val id: String,
-    @SerialName("real_id") val realId: String,
-    val chapters: List<ChapterDto>,
-)
-
-@Serializable
 class ChapterDto(
     @SerialName("chapter") val number: Float,
-    @SerialName("link") val espUrl: String? = null,
     @SerialName("link_raw") val rawUrl: String? = null,
-    @SerialName("create") val createdAt: Long?,
+    private val link: String? = null,
+    private val create: Long?,
+    private val versions: List<ChapterVersionDto>? = null,
+) {
+    val espUrl get() = link ?: versions?.firstOrNull()?.link
+    val createdAt get() = create ?: versions?.firstOrNull()?.create
+}
+
+@Serializable
+class ChapterVersionDto(
+    val link: String? = null,
+    val create: Long? = null,
 )
 
 @Serializable
