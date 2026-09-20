@@ -45,13 +45,12 @@ or fix them directly by submitting a Pull Request.
         - [WebView execution - `runWebView` / `getLocalStorage`](#webview-execution---runwebview--getlocalstorage)
         - [Filter helpers - `firstInstance` / `firstInstanceOrNull`](#filter-helpers---firstinstance--firstinstanceornull)
         - [SharedPreferences - `getPreferences` / `getPreferencesLazy`](#sharedpreferences---getpreferences--getpreferenceslazy)
-        - [Application Context - `applicationContext`](#application-context---applicationcontext)
         - [Next.js data extraction - `extractNextJs` / `extractNextJsRsc`](#nextjs-data-extraction---extractnextjs--extractnextjsrsc)
         - [Extracting URLs - `setUrlWithoutDomain` + `absUrl`](#extracting-urls---seturlwithoutdomain--absurl)
-        - [GraphQL Requests - `graphQLPost` / `parseGraphQLAs`](#graphql-requests---graphqlpost--parsegraphqlas)
+        - [GraphQL Requests - `graphQLBody` / `parseGraphQLAs`](#graphql-requests---graphqlbody--parsegraphqlas)
         - [GraphQL GET requests - `graphQLGet`](#graphql-get-requests---graphqlget)
         - [JsonElement accessor helpers](#jsonelement-accessor-helpers)
-        - [ZIP streaming - `zipDirectory` / `zipDirectoryAsync`](#zip-streaming---zipdirectory--zipdirectoryasync)
+        - [ZIP streaming - `zipDirectoryAsync` / `readZipEntry`](#zip-streaming---zipdirectoryasync--readzipentry)
         - [Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`](#jsoup-helpers---asjsoup--attrornull--textornull)
         - [Cryptography - `decodeHex` / `rc4`](#cryptography---decodehex--rc4)
         - [Binary endian helpers](#binary-endian-helpers)
@@ -419,7 +418,7 @@ keiyoushi {
 | `id`          | Explicit source ID. Optional; auto-computed from `name + lang + versionId` if omitted. Set this explicitly in the `source {}` block (never in the source class) when renaming a source to preserve users' libraries.                                                                                                    |
 | `versionId`   | Integer used as a seed for auto-computing `id`. Defaults to `1`. Only bump this if the source's URL structure fundamentally changes and old entries can no longer be redirected.                                                                                                                                                                         |
 
-A source class may compute `name` and/or `baseUrl` itself by declaring `override val name` / `override val baseUrl`; codegen detects the override and skips generating that property (the DSL value is then used only for metadata such as the repo index and deeplink hosts). **This is discouraged** — prefer letting the DSL own `name` and `baseUrl`, and only override them in the source class when you have a very specific reason. `baseUrl` may only be overridden when the DSL declares a plain static `baseUrl` — the `mirrors`/`custom` modes generate preference infrastructure and cannot be hand-overridden. `id`, `lang`, `versionId`, and `filterFetchHint` are strictly owned by the DSL/codegen; overriding them in the source class throws a fatal KSP compiler error.
+A source class may compute `name` and/or `baseUrl` itself by declaring `override val name` / `override val baseUrl`; codegen detects the override and skips generating that property (the DSL value is then used only for metadata such as the repo index and deeplink hosts). **This is discouraged** — prefer letting the DSL own `name` and `baseUrl`, and only override them in the source class when you have a very specific reason. `baseUrl` may only be overridden when the DSL declares a plain static `baseUrl` — the `mirrors`/`custom` modes generate preference infrastructure and cannot be hand-overridden. `id`, `lang`, and `versionId` are strictly owned by the DSL/codegen; overriding them in the source class throws a fatal KSP compiler error.
 
 #### baseUrl modes
 
@@ -916,16 +915,6 @@ private val preferences by getPreferencesLazy {
 > [!NOTE]
 > `getPreferences()` and `getPreferencesLazy()` are extension functions on `HttpSource`. If you need to access preferences from a context without a source receiver (e.g. inside a helper class), use the top-level `getPreferences(sourceId)` function instead.
 
-##### Application Context - `applicationContext`
-
-For components that need an Android `Context` or `Application` instance without a source receiver (e.g. accessing cache directories or system services), use top-level `applicationContext`:
-
-```kotlin
-import keiyoushi.utils.applicationContext
-
-val cacheDir = applicationContext.cacheDir
-```
-
 ##### Next.js data extraction - `extractNextJs` / `extractNextJsRsc`
 
 If the site is built with Next.js, use `keiyoushi.utils.extractNextJs` on a `Document` or `Response`,
@@ -958,7 +947,7 @@ setUrlWithoutDomain(element.attr("href"))
 setUrlWithoutDomain(element.absUrl("href"))
 ```
 
-##### GraphQL Requests - `graphQLPost` / `parseGraphQLAs`
+##### GraphQL Requests - `graphQLBody` / `parseGraphQLAs`
 
 If a source uses a GraphQL API, use the dedicated `keiyoushi.utils` helpers to build requests and
 parse responses. These utilities automatically serialize variables, encode payload structures, and
@@ -966,17 +955,13 @@ throw a `GraphQLException` if the response contains GraphQL errors.
 
 ```kotlin
 import keiyoushi.utils.graphQLBody
-import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
 
 // Define your variables as a @Serializable class
 val variables = MyVariablesDto(page = 1)
 
-// Building an OkHttp Request for POST:
-val request = graphQLPost(
-    url = "$baseUrl/graphql",
-    headers = headers,
-    operationName = "SearchManga",
+// Build the POST RequestBody:
+val body = graphQLBody(
     query = $$"""
     query SearchManga($page: Int!) {
       mangas(page: $page) {
@@ -984,12 +969,6 @@ val request = graphQLPost(
       }
     }
     """,
-    variables = variables
-)
-
-// Alternatively, build just the POST RequestBody directly:
-val body = graphQLBody(
-    query = SEARCH_QUERY,
     operationName = "SearchManga",
     variables = variables, // supports @Serializable types or JsonElement
 )
@@ -1015,7 +994,7 @@ val data = client.post(
 
 ##### GraphQL GET requests - `graphQLGet`
 
-For sources that send GraphQL over HTTP GET instead of POST, use `graphQLGet` with the same signature as `graphQLPost`:
+For sources that send GraphQL over HTTP GET instead of POST, use `graphQLGet`:
 
 ```kotlin
 import keiyoushi.utils.graphQLGet
@@ -1048,18 +1027,18 @@ val data = client.graphQLGet(
 ).parseGraphQLAs<MyResponseDto>()
 ```
 
-For sources that use [Automatic Persisted Queries (APQ)](https://www.apollographql.com/docs/kotlin/advanced/persisted-queries/), pass the result of `persistedQueryExtension(sha256Hash)` as the `extensions` parameter and omit `query`. This works for both `graphQLPost` and `graphQLGet`.
+For sources that use [Automatic Persisted Queries (APQ)](https://www.apollographql.com/docs/kotlin/advanced/persisted-queries/), pass the result of `persistedQueryExtension(sha256Hash)` as the `extensions` parameter and omit `query`:
 
 ```kotlin
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.persistedQueryExtension
 
-val request = graphQLPost(
-    url = "$baseUrl/graphql",
-    headers = headers,
+val body = graphQLBody(
     operationName = "SearchManga",
     variables = variables,
     extensions = persistedQueryExtension("abc123sha256...")
 )
+val response = client.post("$baseUrl/graphql", headers, body)
 ```
 
 Add `GraphQLErrorInterceptor` to the `OkHttpClient` to also convert a non-2xx response carrying a GraphQL error payload into a `GraphQLException` instead of a generic HTTP error. It only inspects non-2xx responses - a 200 OK response whose body contains a GraphQL `errors` array is not covered by the interceptor, so you still need `parseGraphQLAs`/`response.parseGraphQLAs<T>()` to catch that common case:
@@ -1116,20 +1095,16 @@ val meta = root["data"]!!.obj.getObject("metadata")    // or getObjectOrNull
 
 Prefer these over writing `element.jsonObject["key"]?.jsonPrimitive?.content` manually.
 
-##### ZIP streaming - `zipDirectory` / `zipDirectoryAsync`
+##### ZIP streaming - `zipDirectoryAsync` / `readZipEntry`
 
 For sources that serve manga pages as remote ZIP archives, the `keiyoushi.zip` package lets you read the central directory and individual entries using HTTP Range requests - no need to download the entire file. Import from `keiyoushi.zip`:
 
 ```kotlin
 import keiyoushi.zip.readZipEntry
-import keiyoushi.zip.zipDirectory
 import keiyoushi.zip.zipDirectoryAsync
 import okio.buffer
 
-// 1. Fetch the ZIP central directory synchronously:
-val directory = client.zipDirectory(zipUrl, headers)
-
-// Or asynchronously inside coroutines:
+// 1. Fetch the ZIP central directory asynchronously:
 val directory = client.zipDirectoryAsync(zipUrl, headers)
 
 // 2. Find an entry by name and read its decompressed bytes:
@@ -1137,7 +1112,7 @@ val entry = directory.entries.first { it.name == "001.jpg" }
 val imageBytes = client.readZipEntry(zipUrl, entry, headers).buffer().readByteArray()
 ```
 
-`client.zipDirectory(...)` and `client.zipDirectoryAsync(...)` are the public `OkHttpClient` extension methods that perform HTTP range requests to fetch and parse the ZIP central directory without downloading the entire file. They automatically resolve total archive size from the `Content-Range` header and handle ZIP64 archives. `readZipDirectory` is a low-level internal helper that can be used directly when the raw bytes or size have already been obtained. `client.readZipEntry` streams and decompresses only the bytes required for that one entry. Use this instead of downloading the full ZIP into a `ZipInputStream`, which forces the entire archive into memory.
+`client.zipDirectoryAsync(...)` is the public `OkHttpClient` extension method that performs HTTP range requests to fetch and parse the ZIP central directory without downloading the entire file. It automatically resolves total archive size from the `Content-Range` header and handles ZIP64 archives. `readZipDirectory` is a low-level internal helper that can be used directly when the raw bytes or size have already been obtained. `client.readZipEntry` streams and decompresses only the bytes required for that one entry. Use this instead of downloading the full ZIP into a `ZipInputStream`, which forces the entire archive into memory.
 
 ##### Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`
 
@@ -1338,18 +1313,17 @@ Behavior `KeiSource` gives you for free:
 
 > [!IMPORTANT]
 > Since `source {}` blocks are required, these fields are generated and injected automatically by KSP.
-> `id`, `lang`, `versionId`, and `filterFetchHint` are strictly owned by the DSL/codegen; overriding or declaring any of them in a `KeiSource` class throws fatal KSP compiler errors.
-> `id`, `lang`, and `versionId` must be configured in the `source { ... }` block in `build.gradle.kts`, while `filterFetchHint` is generated automatically from core/translations for the source's language.
+> `id`, `lang`, and `versionId` are strictly owned by the DSL/codegen; overriding or declaring any of them in a `KeiSource` class throws fatal KSP compiler errors.
+> `id`, `lang`, and `versionId` must be configured in the `source { ... }` block in `build.gradle.kts`.
 > You can access `name`, `baseUrl`, `lang`, and `id` within your class (as they are part of the `HttpSource` contract), but **you must not declare or override them manually**.
 
-| Field             | Description                                                                                                                                                     |
-|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `name`            | Name displayed in the "Sources" tab in the app. Configured in `source { name = ... }`.                                                                         |
-| `baseUrl`         | Base URL of the source without any trailing slashes. Configured in `source { baseUrl = ... }`.                                                                |
-| `lang`            | An ISO 639-1 compliant language code. Configured in `source { lang = ... }`. Strictly owned by DSL; do not declare or override.                                |
-| `id`              | Identifier of your source. Owned by the `source {}` DSL - derived via a hash of `name + lang + versionId` unless set explicitly there. Only set it explicitly in the `source {}` block (never in the source class) when renaming a source or preserving an existing autogenerated ID - see [Renaming existing sources](#renaming-existing-sources). |
-| `versionId`       | Version salt used for generating source ID. Owned by `source { versionId = ... }` in `build.gradle.kts`. Do not declare or override in the source class.     |
-| `filterFetchHint` | Hint text displayed while filters are loading. Generated automatically from core/translations. Do not declare or override in the source class.                  |
+| Field       | Description                                                                                                                                                     |
+|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`      | Name displayed in the "Sources" tab in the app. Configured in `source { name = ... }`.                                                                         |
+| `baseUrl`   | Base URL of the source without any trailing slashes. Configured in `source { baseUrl = ... }`.                                                                |
+| `lang`      | An ISO 639-1 compliant language code. Configured in `source { lang = ... }`. Strictly owned by DSL; do not declare or override.                                |
+| `id`        | Identifier of your source. Owned by the `source {}` DSL - derived via a hash of `name + lang + versionId` unless set explicitly there. Only set it explicitly in the `source {}` block (never in the source class) when renaming a source or preserving an existing autogenerated ID - see [Renaming existing sources](#renaming-existing-sources). |
+| `versionId` | Version salt used for generating source ID. Owned by `source { versionId = ... }` in `build.gradle.kts`. Do not declare or override in the source class.     |
 
 ### HTML and Image Processing
 
@@ -1633,38 +1607,6 @@ override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
 > [!NOTE]
 > Avoid checking for hardcoded host strings (e.g., `url.host == "site.com"`). Prefer dynamically comparing against the source's `baseUrl` to maintain mirror and custom URL support.
 
-<details><summary>Legacy (HttpSource / libVersion = "1.4") URL search</summary>
-
-For legacy sources extending `HttpSource` directly, `fetchSearchManga` was overridden manually using RxJava:
-
-```kotlin
-override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-    if (query.startsWith("https://")) {
-        val url = query.toHttpUrlOrNull()
-        if (url != null && url.host == baseUrl.toHttpUrl().host) {
-            val typeIndex = url.pathSegments.indexOfFirst { it == "detail" || it == "view" }
-            if (typeIndex != -1 && typeIndex + 1 < url.pathSize) {
-                val id = url.pathSegments[typeIndex + 1]
-                val manga = SManga.create().apply {
-                    this@apply.url = "/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id"
-                    initialized = true
-                }
-                return fetchMangaDetails(manga)
-                    .map {
-                        it.url = manga.url
-                        it.initialized = true
-                        MangasPage(listOf(it), false)
-                    }
-            }
-
-            throw Exception("Unsupported url")
-        }
-    }
-    // normal search flow...
-}
-```
-
-</details>
 
 To test whether the URL intent filter is working as expected, use the `adb` command below:
 
