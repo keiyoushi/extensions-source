@@ -19,7 +19,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import keiyoushi.source.CustomUrlPreferences
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
@@ -50,15 +49,6 @@ abstract class Jinmantiantang :
     ConfigurableSource {
 
     private val preferences = getPreferences()
-
-    private val customUrl = CustomUrlPreferences(
-        preferences,
-        DEFAULT_BASE_URL,
-        "自定义域名",
-        "默认域名无法访问时，可在此填写其他可用域名",
-    )
-
-    override val baseUrl: String get() = customUrl.baseUrl
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(ScrambledImageInterceptor)
@@ -110,6 +100,15 @@ abstract class Jinmantiantang :
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (filters.firstInstanceOrNull<FavoritesFilter>()?.isEnabled() == true) {
             return fetchFavorites(page)
+        }
+
+        // JM号搜索: JM123 / 123 直接打开对应作品
+        if (query.startsWith(PREFIX_ID_SEARCH_NO_COLON, ignoreCase = true) || query.toIntOrNull() != null) {
+            val id = query.removePrefix(PREFIX_ID_SEARCH_NO_COLON).removePrefix(":").trim()
+            val manga = mangaDetailsParse(mangaDetailsResolve(client.get("$baseUrl/album/$id"))).apply {
+                url = "/album/$id/"
+            }
+            return MangasPage(listOf(manga), hasNextPage = false)
         }
 
         return mangaListParse(client.get(searchUrl(page, query, filters)))
@@ -490,8 +489,6 @@ abstract class Jinmantiantang :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context = screen.context
 
-        customUrl.setupPreferenceScreen(screen)
-
         EditTextPreference(context).apply {
             key = USERNAME_PREF
             title = "用户名（用于收藏夹）"
@@ -531,7 +528,7 @@ abstract class Jinmantiantang :
     }
 
     companion object {
-        private const val DEFAULT_BASE_URL = "https://18comic.vip"
+        private const val PREFIX_ID_SEARCH_NO_COLON = "JM"
 
         private const val USERNAME_PREF = "username"
         private const val FAVORITE_MANGA_SELECTOR = "div[id^='favorites_album_']"
