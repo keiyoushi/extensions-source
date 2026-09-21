@@ -45,7 +45,9 @@ abstract class Mangatown : KeiSource() {
 
     private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select("li:has(a.manga_cover)").map { mangaFromElement(it) }
-        val hasNextPage = document.selectFirst("a.next:not([href^=javascript])") != null
+        val hasNextPage = document.selectFirst(
+            "div.next-page a.next:not([href^=javascript]), .page-nav a:contains(next):not([href^=javascript])",
+        ) != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -72,14 +74,14 @@ abstract class Mangatown : KeiSource() {
 
         return SManga.create().apply {
             title = infoElement.selectFirst("h1")!!.text()
-            author = infoElement.select("li:has(b:containsOwn(author)) a").textOrNull()
-            artist = infoElement.select("li:has(b:containsOwn(artist)) a").textOrNull()
+            author = infoElement.select("li:has(b:containsOwn(author)) a").joinToString { it.text() }.ifEmpty { null }
+            artist = infoElement.select("li:has(b:containsOwn(artist)) a").joinToString { it.text() }.ifEmpty { null }
             status = if (infoElement.selectFirst("div.chapter_content:contains(has been licensed)") != null) {
                 SManga.LICENSED
             } else {
                 parseStatus(infoElement.selectFirst("li:has(b:containsOwn(status))")?.textOrNull())
             }
-            genre = infoElement.select("li:has(b:containsOwn(genre)) a").joinToString { it.text() }
+            genre = infoElement.select("li:has(b:containsOwn(genre)) a").joinToString { it.text() }.ifEmpty { null }
             description = document.selectFirst("span#show")?.textOrNull()?.removeSuffix("HIDE")
             thumbnail_url = document.selectFirst("div.detail_info img")?.absUrl("src")
         }
