@@ -165,13 +165,7 @@ abstract class ScanManga :
             }
         }
 
-        return super.fetchSearchManga(page, query, filters).flatMap { result ->
-            if (result.mangas.isNotEmpty()) {
-                Observable.just(result)
-            } else {
-                Observable.fromCallable { searchMangaWithWebView(query) }
-            }
-        }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -209,41 +203,6 @@ abstract class ScanManga :
         } ?: emptyList(),
         false,
     )
-
-    private fun searchMangaWithWebView(query: String): MangasPage {
-        val searchUrl = "$baseUrl/scanlation/liste_series.html"
-            .toHttpUrl()
-            .newBuilder()
-            .addQueryParameter("q", query)
-            .build()
-            .toString()
-        val json = runWebViewProbe(
-            url = searchUrl,
-            script =
-            """
-                (function() {
-                    const container = document.querySelector('#contenu_lettre_id');
-                    if (!container?.querySelector('.raw_resrc')) return 'WAIT';
-
-                    const mangas = Array.from(container.querySelectorAll('a.texte_manga[href]')).map(link => ({
-                        title: link.querySelector('.hover_text_manga')?.firstChild?.textContent.trim()
-                            || link.textContent.trim(),
-                        url: link.href
-                    }));
-                    return 'DONE:' + btoa(unescape(encodeURIComponent(JSON.stringify(mangas))));
-                })();
-            """.trimIndent(),
-            timeoutSeconds = SEARCH_WEBVIEW_TIMEOUT_SECONDS,
-        ) ?: error("Timed out while searching Scan-Manga in the WebView")
-
-        val mangas = json.parseAs<List<WebViewMangaDto>>().map { item ->
-            SManga.create().apply {
-                title = item.title
-                setUrlWithoutDomain(item.url)
-            }
-        }
-        return MangasPage(mangas, false)
-    }
 
     // Details
     override fun mangaDetailsParse(response: Response): SManga {
@@ -761,7 +720,6 @@ abstract class ScanManga :
         private const val WARMUP_SETTLE_MS = 200L
         private const val WARMUP_TIMEOUT_SECONDS = 8L
         private const val WEBVIEW_POLL_INTERVAL_MS = 500L
-        private const val SEARCH_WEBVIEW_TIMEOUT_SECONDS = 30L
         private const val CHAPTER_WEBVIEW_TIMEOUT_SECONDS = 30L
     }
 }
