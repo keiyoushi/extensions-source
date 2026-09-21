@@ -6,14 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Cerise Scan"
-    versionCode = 11
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    versionCode = 64
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://loverstoon.com"
+        baseUrl = "https://loverstoon.net"
         versionId = 3
+    }
+
+    deeplink {
+        path("/..*")
     }
 }
