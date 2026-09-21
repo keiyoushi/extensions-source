@@ -201,8 +201,7 @@ abstract class XCOMIC :
 
         val mangas = flattened.map { (titleId, cid, p) ->
             val t = titles.first { it.id == titleId }
-            val multi = flattened.count { it.first == titleId } > 1
-            p.toBrowseSManga(baseUrl, titleId, cid, t, extLang, multi, ::cleanTitleIfNeeded)
+            p.toBrowseSManga(baseUrl, titleId, cid, t, extLang, ::cleanTitleIfNeeded)
         }
 
         return MangasPage(mangas, titles.size >= BROWSE_PAGE_SIZE)
@@ -521,7 +520,6 @@ abstract class XCOMIC :
         comicId: String,
         t: TitleBrowseNode,
         extLang: String?,
-        multi: Boolean,
         cleanTitle: (String) -> String,
     ): SManga = SManga.create().apply {
         url = "$titleId:$comicId"
@@ -707,7 +705,6 @@ abstract class XCOMIC :
     private fun isDeduplicateChapters(): Boolean = preferences.getBoolean(DEDUPLICATE_CHAPTERS_PREF, true)
 
     // ========================= Helpers =========================
-
     private fun String.toTagCase(): String = this.replace("_", " ").split(" ").joinToString(" ") { word ->
         word.lowercase().replaceFirstChar {
             if (it.isLowerCase()) it.titlecase() else it.toString()
