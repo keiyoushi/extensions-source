@@ -15,7 +15,3 @@ keiyoushi {
         baseUrl = "https://es.mangacrab.org"
     }
 }
-
-dependencies {
-    implementation(project(":lib:randomua"))
-}
