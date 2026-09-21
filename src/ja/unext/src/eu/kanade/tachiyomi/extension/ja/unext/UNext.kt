@@ -179,6 +179,7 @@ abstract class UNext :
         val playlist = playlistResult.playlist ?: throw Exception(
             when (playlistResult.errorCode) {
                 "BKE0004103" -> "This product can only be read in the U-NEXT app."
+                "BKE0000467" -> "This service can only be used from Japan."
                 else -> "Log in via WebView and rent or purchase this product to read."
             },
         )
