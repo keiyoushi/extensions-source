@@ -17,13 +17,11 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -36,7 +34,6 @@ abstract class Bbato : KeiSource() {
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         removeAll("Origin")
-        set("Referer", "$baseUrl/")
     }
 
     private suspend fun getDocument(url: String): Document {
@@ -47,7 +44,7 @@ abstract class Bbato : KeiSource() {
             jsBridge("bridge") { rawHtml ->
                 resolve(rawHtml)
             }
-            poll(500.milliseconds) {
+            onPageFinished {
                 evaluateJs(
                     """
                     (function() {
@@ -140,6 +137,7 @@ abstract class Bbato : KeiSource() {
             genre = document.select(".meta div:has(span:contains(Genres)) a").joinToString { it.text() }
             status = document.selectFirst(".info > p")?.text().toStatus()
             thumbnail_url = document.selectFirst(".poster img")?.getImageUrl()
+            initialized = true
         }
     }
 
@@ -147,34 +145,26 @@ abstract class Bbato : KeiSource() {
 
     private val dateTimeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
-    private suspend fun getChapterJson(mangaUrl: String, slug: String): String = runWebView<String>(timeout = 30.seconds) {
-        loadWithOverviewMode = true
-        useWideViewPort = true
-
+    private suspend fun getChapterJson(slug: String): String = runWebView<String>(timeout = 30.seconds) {
         jsBridge("bridge") { json ->
             resolve(json)
         }
-        poll(500.milliseconds) {
+        onPageFinished {
             evaluateJs(
                 """
-                    (function() {
-                        if (!window._fetchingChapters && document.querySelector("h1[itemprop=name], footer")) {
-                            window._fetchingChapters = true;
-                            fetch('$baseUrl/get-chapter-list?slug=$slug', {
-                                headers: {
-                                    'Accept': 'application/json, text/javascript, */*; q=0.01',
-                                    'X-Requested-With': 'XMLHttpRequest'
-                                }
-                            })
-                            .then(function(r) { return r.text(); })
-                            .then(function(t) { window.bridge.post(t); })
-                            .catch(function(e) { window.bridge.post('{"data":[]}'); });
-                        }
-                    })()
+                fetch('$baseUrl/get-chapter-list?slug=$slug', {
+                    headers: {
+                        'Accept': 'application/json, text/javascript, */*; q=0.01',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(function(r) { return r.text(); })
+                .then(function(t) { window.bridge.post(t); })
+                .catch(function(e) { window.bridge.post('{"data":[]}'); });
                 """.trimIndent(),
             )
         }
-        loadUrl(baseUrl + mangaUrl)
+        loadData(baseUrl, "")
     }
 
     override suspend fun fetchMangaUpdate(
@@ -184,7 +174,7 @@ abstract class Bbato : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val updatedManga = if (fetchDetails) {
-            val document = getDocument(baseUrl + manga.url)
+            val document = getDocument(getMangaUrl(manga))
             SManga.create().apply {
                 title = document.selectFirst("h1[itemprop=name]")?.text() ?: throw Exception("Missing title")
                 author = document.select(".meta div:has(span:contains(Author)) a").joinToString { it.text() }
@@ -192,6 +182,7 @@ abstract class Bbato : KeiSource() {
                 genre = document.select(".meta div:has(span:contains(Genres)) a").joinToString { it.text() }
                 status = document.selectFirst(".info > p")?.text().toStatus()
                 thumbnail_url = document.selectFirst(".poster img")?.getImageUrl()
+                initialized = true
             }
         } else {
             manga
@@ -199,7 +190,7 @@ abstract class Bbato : KeiSource() {
 
         val updatedChapters = if (fetchChapters) {
             val slug = manga.url.substringAfterLast("/")
-            val json = getChapterJson(manga.url, slug)
+            val json = getChapterJson(slug)
             val responseDto = json.parseAs<ChapterListResponse>()
             responseDto.toSChapterList(slug, dateTimeFormat)
         } else {
@@ -220,22 +211,12 @@ abstract class Bbato : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = getDocument(baseUrl + chapter.url)
+        val document = getDocument(getChapterUrl(chapter))
 
         return document.select(".pages .page:not(.notice-page) img").mapIndexedNotNull { index, img ->
             img.getImageUrl()?.let { Page(index, imageUrl = it) }
         }
     }
-
-    override fun imageRequest(page: Page): Request = Request.Builder()
-        .url(page.imageUrl!!)
-        .headers(
-            headers.newBuilder()
-                .removeAll("Origin")
-                .set("Referer", "$baseUrl/")
-                .build(),
-        )
-        .build()
 
     // ============================== Filters ==============================
 
