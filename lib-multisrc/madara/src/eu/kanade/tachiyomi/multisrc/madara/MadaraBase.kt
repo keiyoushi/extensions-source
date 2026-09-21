@@ -63,7 +63,7 @@ abstract class MadaraBase : KeiSource() {
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en", "pt-BR", "es"),
+        availableLanguages = setOf("en", "pt-BR", "es", "uk"),
         classLoader = this::class.java.classLoader!!,
     )
 
@@ -482,7 +482,7 @@ abstract class MadaraBase : KeiSource() {
         "en cours", "ativo", "lançando", "đang tiến hành", "còn nữa", "devam ediyor",
         "in corso", "in arrivo", "مستمرة", "مستمر", "en curso", "emision", "curso",
         "en marcha", "publicandose", "publicándose", "en emision", "连载中", "đang làm",
-        "em postagem", "devam eden", "em progresso", "atualizações semanais",
+        "em postagem", "devam eden", "em progresso", "atualizações semanais", "виходить",
     )
     protected open val hiatusStatus = arrayOf(
         "on hold", "hiatus", "pausado", "en espera", "durduruldu", "beklemede",
@@ -501,7 +501,7 @@ abstract class MadaraBase : KeiSource() {
         else -> SManga.UNKNOWN
     }
 
-    protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.ENGLISH)
+    protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
     protected open fun parseChapterDate(date: String?): Long {
         val value = date ?: return 0

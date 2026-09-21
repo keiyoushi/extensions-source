@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Dm5"
-    versionCode = 10
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "zh"
@@ -20,6 +20,13 @@ keiyoushi {
                 "https://www.dm5.cn",
             )
         }
+    }
+
+    deeplink {
+        host("www.dm5.com")
+        host("www.dm5.cn")
+        host("m.dm5.com")
+        path("/manhua-..*")
     }
 }
 

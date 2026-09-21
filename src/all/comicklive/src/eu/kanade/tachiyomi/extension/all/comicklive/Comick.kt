@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.comicklive
 
-import android.util.Log
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -12,59 +10,62 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import okhttp3.CacheControl
-import okhttp3.Call
-import okhttp3.Callback
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.brotli.BrotliInterceptor
-import okhttp3.internal.closeQuietly
-import okio.IOException
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
+import java.lang.Thread.sleep
+import kotlin.time.Instant
 
 @Source
 abstract class Comick :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val supportsLatest = true
 
     private val preferences = getPreferences()
 
-    override val client = network.client.newBuilder()
-        // Referer in interceptor due to domain change preference
-        .addNetworkInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .header("Referer", "$baseUrl/")
-                .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor { chain ->
+            val request = chain.request()
 
-            chain.proceed(request)
-        }
-        // fix disk cache
-        .apply {
-            val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
-            if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
-        }
-        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
-        .build()
+            var response = chain.proceed(request)
+            var retries = 0
 
-    override fun popularMangaRequest(page: Int): Request {
+            while (response.code == 429 && retries++ < 10) {
+                response.close()
+                sleep(500)
+
+                response = chain.proceed(
+                    request.newBuilder()
+                        .url(request.url.newBuilder().fragment("retry").build())
+                        .build(),
+                )
+            }
+            response
+        }
+        rateLimit(2) {
+            it.fragment != "retry" && "covers" !in it.pathSegments
+        }
+    }
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/comics/top".toHttpUrl().newBuilder().apply {
             val days = when (page) {
                 1, 4 -> 7
@@ -79,15 +80,9 @@ abstract class Comick :
             }
             addQueryParameter("days", days.toString())
             addQueryParameter("type", type)
-            fragment(page.toString())
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<Data<List<BrowseComic>>>()
-        val page = response.request.url.fragment!!.toInt()
+        val data = client.get(url).parseAs<Data<List<BrowseComic>>>()
 
         return MangasPage(
             mangas = data.data.map(BrowseComic::toSManga),
@@ -95,24 +90,33 @@ abstract class Comick :
         )
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/chapters/latest?order=new&page=$page", headers)
+    private var latestNextCursor: String? = null
+    private var searchNextCursor: String? = null
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<Data<List<BrowseComic>>>()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page == 1) latestNextCursor = null
+
+        val url = "$baseUrl/api/chapters/latest".toHttpUrl().newBuilder().apply {
+            addQueryParameter("order", "new")
+            addQueryParameter("page", page.toString())
+            if (page > 1) addQueryParameter("cursor", latestNextCursor)
+        }.build()
+
+        val data = client.get(url).parseAs<SearchResponse>()
+
+        latestNextCursor = data.cursor
 
         return MangasPage(
             mangas = data.data.map(BrowseComic::toSManga),
-            hasNextPage = data.data.size == 100,
+            hasNextPage = data.cursor != null,
         )
     }
 
-    private var nextCursor: String? = null
+    override suspend fun getMangaByUrl(url: HttpUrl) = parseDetails(client.get(url))
 
     private val spaceSlashRegex = Regex("[ /]")
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (page == 1) {
-            nextCursor = null
-        }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (page == 1) searchNextCursor = null
 
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
             filters.firstInstance<SortFilter>().let {
@@ -136,12 +140,14 @@ abstract class Comick :
                     )
                 }
             }
-            filters.firstInstanceOrNull<TagFilter>()?.let { tag ->
-                tag.included.forEach {
-                    addQueryParameter("tags", it)
-                }
-                tag.excluded.forEach {
-                    addQueryParameter("excluded_tags", it)
+            filters.firstInstanceOrNull<TagFilters>()?.let { tags ->
+                tags.state.forEach { letter ->
+                    letter.included.forEach {
+                        addQueryParameter("tags", it)
+                    }
+                    letter.excluded.forEach {
+                        addQueryParameter("excluded_tags", it)
+                    }
                 }
             }
             filters.firstInstance<DemographicFilter>().checked.forEach {
@@ -183,17 +189,13 @@ abstract class Comick :
             }
             addQueryParameter("type", "comic")
             if (page > 1) {
-                addQueryParameter("cursor", nextCursor)
+                addQueryParameter("cursor", searchNextCursor)
             }
         }.build()
 
-        return GET(url, headers)
-    }
+        val data = client.get(url).parseAs<SearchResponse>()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<SearchResponse>()
-
-        nextCursor = data.cursor
+        searchNextCursor = data.cursor
 
         return MangasPage(
             mangas = data.data.map(BrowseComic::toSManga),
@@ -201,114 +203,26 @@ abstract class Comick :
         )
     }
 
-    private val metadataClient = client.newBuilder()
-        .addNetworkInterceptor { chain ->
-            chain.proceed(chain.request()).newBuilder()
-                .header("Cache-Control", "max-age=${24 * 60 * 60}")
-                .removeHeader("Pragma")
-                .removeHeader("Expires")
-                .build()
-        }.build()
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/comic/${manga.url}"
 
-    override fun getFilterList(): FilterList = runBlocking(Dispatchers.IO) {
-        val filters: MutableList<Filter<*>> = mutableListOf(
-            SortFilter(),
-            DemographicFilter(),
-            TypeFilter(),
-            CreatedAtFilter(),
-            MinimumChaptersFilter(),
-            StatusFilter(),
-            ContentRatingFilter(),
-            ReleaseFrom(),
-            ReleaseTo(),
-        )
-
-        val response = metadataClient.newCall(
-            GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_CACHE),
-        ).await()
-
-        val getTags = preferences.getBoolean(GET_TAGS, true)
-
-        val textTags: List<Filter<*>> = listOf(
-            Filter.Separator(),
-            Filter.Header("Separate tags with commas (,)"),
-            Filter.Header("Prepend with dash (-) to exclude"),
-            TagFilterText(),
-            Filter.Separator(),
-        )
-
-        if (!response.isSuccessful) {
-            metadataClient.newCall(
-                GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_NETWORK),
-            ).enqueue(
-                object : Callback {
-                    override fun onResponse(call: Call, response: Response) {
-                        response.closeQuietly()
-                    }
-                    override fun onFailure(call: Call, e: IOException) {
-                        Log.e(name, "Unable to fetch filters", e)
-                    }
-                },
-            )
-
-            if (!getTags) {
-                filters.addAll(
-                    index = 2,
-                    textTags,
-                )
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val detailsDeferred = async {
+            if (fetchDetails) {
+                parseDetails(client.get(getMangaUrl(manga)))
+            } else {
+                manga
             }
-            filters.addAll(
-                index = 0,
-                listOf(
-                    Filter.Header("Press 'reset' to load genres ${if (getTags) "and tags" else ""}"),
-                    Filter.Separator(),
-                ),
-            )
-            return@runBlocking FilterList(filters)
         }
-
-        val data = try {
-            response.parseAs<Metadata>()
-        } catch (e: Throwable) {
-            Log.e(name, "Unable to parse filters", e)
-
-            if (!getTags) {
-                filters.addAll(
-                    index = 2,
-                    textTags,
-                )
-            }
-            filters.addAll(
-                index = 0,
-                listOf(
-                    Filter.Header("Failed to parse genres ${if (getTags) "and tags" else ""}"),
-                    Filter.Separator(),
-                ),
-            )
-            return@runBlocking FilterList(filters)
-        }
-
-        filters.add(
-            index = 3,
-            GenreFilter(data.genres),
-        )
-        if (!getTags) {
-            filters.addAll(
-                index = 4,
-                textTags,
-            )
-        } else {
-            filters.add(
-                index = 4,
-                TagFilter(data.tags),
-            )
-        }
-        return@runBlocking FilterList(filters)
+        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
+        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
     }
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/comic/${manga.url}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
+    private fun parseDetails(response: Response): SManga {
         val data = response.asJsoup()
             .selectFirst("#comic-data")!!.data()
             .parseAs<ComicData>()
@@ -356,29 +270,28 @@ abstract class Comick :
         }
     }
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/comics/${manga.url}/chapter-list?lang=$lang", headers)
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
+        val langParam = languageWhitelist.takeIf { it.size == 1 }?.first()?.let { "?lang=$it" }.orEmpty()
+        val url = "$baseUrl/api/comics/${manga.url}/chapter-list$langParam"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        var data = response.parseAs<ChapterList>()
-        var page = 2
+        val data = client.get(url).parseAs<ChapterList>()
         val chapters = data.data.toMutableList()
 
-        while (data.hasNextPage()) {
-            val url = response.request.url.newBuilder()
-                .addQueryParameter("page", page.toString())
-                .build()
+        coroutineScope {
+            (2..data.pagination.lastPage).map {
+                async {
+                    val pageUrl = url.toHttpUrl().newBuilder()
+                        .addQueryParameter("page", it.toString())
+                        .build()
 
-            data = client.newCall(GET(url, headers)).execute()
-                .parseAs()
-            chapters += data.data
-            page++
+                    client.get(pageUrl).parseAs<ChapterList>().data
+                }
+            }.awaitAll().forEach(chapters::addAll)
         }
 
-        val mangaSlug = response.request.url.pathSegments[2]
-
-        return chapters.map {
+        return chapters.filter { languageWhitelist.isEmpty() || it.lang in languageWhitelist }.map {
             SChapter.create().apply {
-                url = "/comic/$mangaSlug/${it.hid}-chapter-${it.chap}-${it.lang}"
+                this.url = "/comic/${manga.url}/${it.hid}-chapter-${it.chap}-${it.lang}"
                 name = buildString {
                     if (!it.vol.isNullOrBlank()) {
                         append("Vol. ", it.vol, " ")
@@ -388,16 +301,14 @@ abstract class Comick :
                         append(": ", it.title)
                     }
                 }
-                date_upload = dateFormat.tryParse(it.createdAt)
+                date_upload = Instant.tryParse(it.createdAt)
                 scanlator = it.groups.joinToString()
             }
         }
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ENGLISH)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get(getChapterUrl(chapter)).asJsoup()
             .selectFirst("#sv-data")!!.data()
             .parseAs<PageListData>()
 
@@ -406,17 +317,75 @@ abstract class Comick :
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData() = client.get("$baseUrl/api/metadata").parseAs<Metadata>().toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = mutableListOf(
+            SortFilter(),
+            DemographicFilter(),
+            TypeFilter(),
+        )
+
+        val metadata = data?.parseAs<Metadata>()
+        metadata?.genres?.takeIf { it.isNotEmpty() }?.let { filters.add(GenreFilter(it)) }
+        metadata?.tags?.takeIf { it.isNotEmpty() }?.let { filters.add(TagFilters(it)) }
+
+        filters.addAll(
+            listOf(
+                Filter.Separator(),
+                Filter.Header("Separate tags with commas (,)"),
+                Filter.Header("Prepend with dash (-) to exclude"),
+                TagFilterText(),
+                Filter.Separator(),
+                CreatedAtFilter(),
+                MinimumChaptersFilter(),
+                StatusFilter(),
+                ContentRatingFilter(),
+                ReleaseFrom(),
+                ReleaseTo(),
+            ),
+        )
+
+        return FilterList(filters)
+    }
+
+    private val languageWhitelist: Set<String>
+        get() = preferences.getStringSet(LANGUAGE_WHITELIST, setOf("en")).orEmpty()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = GET_TAGS
-            title = "Tags Input Type"
-            summaryOn = "Tags will be in a form of scrollable list"
-            summaryOff = "Tags will need to be inputted manually"
-            setDefaultValue(true)
+        MultiSelectListPreference(screen.context).apply {
+            key = LANGUAGE_WHITELIST
+            title = "Chapter Languages"
+            summary = "Leave empty for All"
+            entries = LANGUAGES.map { it.first }.toTypedArray()
+            entryValues = LANGUAGES.map { it.second }.toTypedArray()
+            setDefaultValue(setOf("en"))
         }.also(screen::addPreference)
     }
-}
 
-private const val GET_TAGS = "get_tags"
+    private companion object {
+        private const val LANGUAGE_WHITELIST = "language_whitelist"
+        private val LANGUAGES = arrayOf(
+            "English" to "en",
+            "Russian" to "ru",
+            "Vietnamese" to "vi",
+            "French" to "fr",
+            "Polish" to "pl",
+            "Indonesian" to "id",
+            "Turkish" to "tr",
+            "Italian" to "it",
+            "Spanish" to "es",
+            "Ukrainian" to "uk",
+            "German" to "de",
+            "Korean" to "ko",
+            "Thai" to "th",
+            "Romanian" to "ro",
+            "Malay" to "ms",
+            "Japanese" to "ja",
+            "Swedish" to "sv",
+            "Norwegian" to "no",
+        )
+    }
+}

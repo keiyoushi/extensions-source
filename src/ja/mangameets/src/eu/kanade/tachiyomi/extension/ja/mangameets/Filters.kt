@@ -29,10 +29,10 @@ class TagGenreFilter(entries: List<Pair<String, String>>) :
     )
 
 internal fun Builder.addTagGenreFilter(filters: FilterList) {
-    filters.firstInstanceOrNull<TagGenreFilter>()?.value?.takeIf { it.isNotBlank() }?.let {
+    filters.firstInstanceOrNull<TagGenreFilter>()?.value?.takeIf { it.isNotEmpty() }?.let {
         val (param, name) = it.split(":", limit = 2)
         addQueryParameter(param, name)
     }
 }
 
-internal fun Builder.addFilter(param: String, filter: SelectFilter) = filter.value.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
+internal fun Builder.addFilter(param: String, filter: SelectFilter) = filter.value.takeIf { it.isNotEmpty() }?.let { addQueryParameter(param, it) }
