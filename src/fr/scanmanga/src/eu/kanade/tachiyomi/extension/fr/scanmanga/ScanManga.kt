@@ -157,7 +157,11 @@ abstract class ScanManga :
         val url = query.trim().toHttpUrlOrNull()
         if (url?.topPrivateDomain() == domain && MANGA_PATH_REGEX.matches(url.encodedPath)) {
             val manga = SManga.create().apply { this.url = url.encodedPath }
-            return fetchMangaDetails(manga).map { MangasPage(listOf(it), false) }
+            return fetchMangaDetails(manga).map {
+                it.url = manga.url
+                it.initialized = true
+                MangasPage(listOf(it), false)
+            }
         }
 
         return super.fetchSearchManga(page, query, filters)
@@ -171,6 +175,7 @@ abstract class ScanManga :
             .toString()
 
         val newHeaders = headers.newBuilder()
+            .set("User-Agent", MOBILE_USER_AGENT)
             .add("Content-type", "application/json; charset=UTF-8")
             .build()
 
@@ -572,6 +577,8 @@ abstract class ScanManga :
     }
 
     companion object {
+        private const val MOBILE_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         private val MANGA_PATH_REGEX = Regex("""/\d+(?:-\d+)?/[^/]+\.html""")
         private val HUNTER_OBFUSCATION_REGEX = Regex(
             """eval\s*\(\s*(?:/\*.*?\*/\s*)?function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""",
