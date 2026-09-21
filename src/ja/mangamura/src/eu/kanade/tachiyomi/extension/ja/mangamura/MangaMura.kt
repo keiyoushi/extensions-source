@@ -3,11 +3,16 @@ package eu.kanade.tachiyomi.extension.ja.mangamura
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 
 @Source
 abstract class MangaMura : MangaReader() {
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
+
     override val chapterIdSelect = "ja-chaps"
 
     override fun addPage(page: Int, builder: HttpUrl.Builder) {
@@ -19,20 +24,7 @@ abstract class MangaMura : MangaReader() {
     override val searchPathSegment = ""
     override val searchKeyword = "q"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val request = super.searchMangaRequest(page, query, filters)
-
-        // avoid 302
-        val newUrl = request.url.newBuilder()
-            .addPathSegment("")
-            .build()
-
-        return request.newBuilder()
-            .url(newUrl)
-            .build()
-    }
-
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Note,
         TypeFilter(),
         StatusFilter(),

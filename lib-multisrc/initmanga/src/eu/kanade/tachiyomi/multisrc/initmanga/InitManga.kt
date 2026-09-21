@@ -373,7 +373,8 @@ abstract class InitManga : HttpSource() {
         return if (trimmed.startsWith("<")) {
             val doc = Jsoup.parseBodyFragment(trimmed, baseUrl)
             doc.select("img").mapIndexedNotNull { i, img ->
-                val finalSrc = img.absUrl("data-src")
+                val finalSrc = img.absUrl("data-original-src")
+                    .ifEmpty { img.absUrl("data-src") }
                     .ifEmpty { img.absUrl("src") }
                     .ifEmpty { img.absUrl("data-lazy-src") }
 

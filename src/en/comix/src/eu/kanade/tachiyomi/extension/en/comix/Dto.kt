@@ -59,6 +59,7 @@ class Manga(
     private val rank: Int = 0,
     private val year: Int? = null,
     private val originalLanguage: String? = null,
+    private val links: Map<String, String?>? = null,
     private val url: String? = null,
 ) {
     @Serializable
@@ -124,8 +125,8 @@ class Manga(
             val actualAltTitles = altTitles.ifEmpty { altTitlesOld }
             if (altTitlesInDesc && actualAltTitles.isNotEmpty()) {
                 append("\n\n")
-                append("Alternative Names:\n")
-                append(actualAltTitles.joinToString("\n"))
+                append("**Alternative Names**:\n")
+                append(actualAltTitles.joinToString("\n") { "- $it" })
             }
 
             if (showExtraInfo) {
@@ -133,6 +134,13 @@ class Manga(
                 if (extras.isNotEmpty()) {
                     if (isNotEmpty()) append("\n\n")
                     append(extras.joinToString("\n"))
+                }
+
+                val trackerLinks = getTrackerLinks()
+                if (trackerLinks.isNotEmpty()) {
+                    if (isNotEmpty()) append("\n\n")
+                    append("**Trackers**:\n")
+                    append(trackerLinks.joinToString("\n") { "- $it" })
                 }
             }
 
@@ -163,14 +171,35 @@ class Manga(
     }
 
     private fun buildExtraInfo(): List<String> = buildList {
-        year?.takeIf { it > 0 }?.let { add("Year: $it") }
-        originalLanguage?.takeIf { it.isNotBlank() }?.let { add("Language: ${it.uppercase()}") }
+        year?.takeIf { it > 0 }?.let { add("**Year**: $it") }
+        originalLanguage?.takeIf { it.isNotBlank() }?.let { add("**Language**: ${it.uppercase()}") }
         contentRating.takeIf { it.isNotBlank() }?.let {
-            add("Content rating: ${it.replaceFirstChar(Char::uppercase)}")
+            add("**Content rating**: ${it.replaceFirstChar(Char::uppercase)}")
         }
-        rank.takeIf { it > 0 }?.let { add("Rank: #$it") }
-        ratedCount.takeIf { it > 0 }?.let { add("Rated by: $it") }
-        followsTotal.takeIf { it > 0 }?.let { add("Followed by: $it") }
+        rank.takeIf { it > 0 }?.let { add("**Rank**: #$it") }
+        ratedCount.takeIf { it > 0 }?.let { add("**Rated by**: $it") }
+        followsTotal.takeIf { it > 0 }?.let { add("**Followed by**: $it") }
+    }
+
+    private fun getTrackerLinks(): List<String> {
+        val linkMap = links ?: return emptyList()
+        val siteNames = listOf(
+            "al" to "AniList",
+            "mal" to "MyAnimeList",
+            "mu" to "MangaUpdates",
+            "md" to "MangaDex",
+            "mb" to "MangaBaka",
+        )
+        val knownLinks = siteNames.mapNotNull { (key, name) ->
+            val url = linkMap[key]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            "[$name]($url)"
+        }
+        val unknownLinks = linkMap.filterKeys { k -> siteNames.none { it.first == k } }
+            .mapNotNull { (key, url) ->
+                val validUrl = url?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
+                "[${key.uppercase()}]($validUrl)"
+            }
+        return knownLinks + unknownLinks
     }
 
     // Tags are separate from the curated genres in the site's detail UI.
