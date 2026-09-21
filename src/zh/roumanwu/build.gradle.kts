@@ -15,12 +15,8 @@ keiyoushi {
         lang = "zh"
 
         // 地址: https://rou.pub/dizhi or https://rdz4.xyz/dizhi
-        // 官方公布的内置域名（常用镜像站点）如下，二选一：
-        //   - https://rouman5.com
-        //   - https://roum29.xyz
-        // custom(...) 仅用于保留 baseUrl 字段（使 DSL 不报错）；
-        // 实际内置域名下拉与「使用自定义域名」开关由 Roumanwu.kt 自建，
-        // 最终选中的域名会写入 overrideBaseUrl 供 baseUrl 读取。
+        // 默认内置域名；扩展设置中的「自定义基础 URL」留空即使用此默认域名，
+        // 填写其它可用域名则可切换。
         baseUrl {
             custom("https://rouman5.com")
         }

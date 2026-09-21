@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.roumanwu
 
 import android.content.SharedPreferences
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -201,113 +200,17 @@ abstract class Roumanwu :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        // 框架生成类会在调用本方法【之前】通过 CustomUrlPreferences 在 screen 上添加一个
-        // 「自定义基础 URL」输入框（key = overrideBaseUrl，baseUrl 始终读取该值）。
-        // 由于 extensions-lib 的 PreferenceScreen 是精简版，无法隐藏该输入框，
-        // 因此我们把「内置镜像站点下拉」「使用自定义域名开关」「框架自定义输入框」三者统一到
-        // 同一个 overrideBaseUrl 上：
-        //   - 开关关：baseUrl = 内置镜像下拉选中的域名
-        //   - 开关开：baseUrl = 用户在「自定义基础 URL」输入框填写的域名
-        // 每次打开设置页同步一次，确保状态一致。
-        val useCustom = preferences.getBoolean(USE_CUSTOM_KEY, false)
-        val mirrorIndex = getMirrorIndex(preferences)
-        syncBaseUrl(useCustom, mirrorIndex)
-
-        // 内置镜像站点下拉：官方公布的两个内置域名，二选一。
-        // 精简版 PreferenceScreen 不支持 isEnabled/findPreference，
-        // 因此在「使用自定义域名」开启时仅以 summary 提示「已禁用」，并在变更回调中忽略修改。
-        val mirrorPref = ListPreference(screen.context).apply {
-            key = MIRROR_INDEX_KEY
-            title = "常用镜像站点"
-            summary = if (useCustom) MIRROR_DISABLED_SUMMARY else BUILTIN_MIRRORS[mirrorIndex]
-            entries = BUILTIN_MIRRORS.toTypedArray()
-            entryValues = BUILTIN_MIRRORS.indices.map { it.toString() }.toTypedArray()
-            setDefaultValue(DEFAULT_MIRROR_INDEX.toString())
-            setOnPreferenceChangeListener { preference, newValue ->
-                if (preferences.getBoolean(USE_CUSTOM_KEY, false)) {
-                    // 自定义模式：本下拉不生效，恢复原 summary 并不写入
-                    (preference as ListPreference).summary = MIRROR_DISABLED_SUMMARY
-                    return@setOnPreferenceChangeListener true
-                }
-                val index = (newValue as String).toIntOrNull() ?: DEFAULT_MIRROR_INDEX
-                (preference as ListPreference).summary = BUILTIN_MIRRORS[index]
-                putMirrorIndex(preferences, index)
-                syncBaseUrl(false, index)
-                true
-            }
-        }
-        screen.addPreference(mirrorPref)
-
-        // 开关：是否使用自定义域名。关闭时回退到内置镜像，开启后「自定义基础 URL」输入框生效。
+        // 框架生成类已在调用本方法【之前】通过 CustomUrlPreferences 添加了「自定义基础 URL」输入框
+        // （key = overrideBaseUrl，留空即使用内置默认域名，填写则覆盖）。这里仅补一条【禁用】的提示项，
+        // 说明留空时的默认域名，避免框架默认 dialogMessage 未带具体域名。
         SwitchPreferenceCompat(screen.context).apply {
-            key = USE_CUSTOM_KEY
-            title = "使用自定义域名"
-            summary = buildSwitchSummary(useCustom)
-            setDefaultValue(false)
-            setOnPreferenceChangeListener { preference, newValue ->
-                val enabled = newValue as Boolean
-                // 开关切换时更新镜像下拉的可选状态提示，并把选中结果写入 overrideBaseUrl
-                val idx = getMirrorIndex(preferences)
-                mirrorPref.summary = if (enabled) MIRROR_DISABLED_SUMMARY else BUILTIN_MIRRORS[idx]
-                syncBaseUrl(enabled, idx)
-                (preference as SwitchPreferenceCompat).summary = buildSwitchSummary(enabled)
-                true
-            }
+            setEnabled(false)
+            title = "自定义基础 URL 说明"
+            summary = "留空则使用默认域名 $DEFAULT_BASE_URL；如需切换到其它可用域名，在此填入完整地址（含 https://）。"
         }.also(screen::addPreference)
     }
 
-    // 把当前最终生效的域名写入 overrideBaseUrl，供框架 baseUrl 读取。
-    private fun syncBaseUrl(useCustom: Boolean, mirrorIndex: Int) {
-        val url = if (useCustom) {
-            preferences.getString(CUSTOM_BASE_URL_KEY, DEFAULT_BASE_URL)
-                ?.takeIf { it.isNotBlank() } ?: DEFAULT_BASE_URL
-        } else {
-            BUILTIN_MIRRORS[mirrorIndex]
-        }
-        preferences.edit().putString(CUSTOM_BASE_URL_KEY, url).apply()
-    }
-
-    private fun buildSwitchSummary(useCustom: Boolean): String {
-        val currentBaseUrl = preferences.getString(CUSTOM_BASE_URL_KEY, DEFAULT_BASE_URL)
-            ?.takeIf { it.isNotBlank() } ?: DEFAULT_BASE_URL
-        return if (useCustom) {
-            "已开启：当前使用自定义域名 $currentBaseUrl（在下方「自定义基础 URL」输入框修改）"
-        } else {
-            val mirrorIndex = getMirrorIndex(preferences)
-            "已关闭：当前使用内置域名 ${BUILTIN_MIRRORS[mirrorIndex]}"
-        }
-    }
-
     companion object {
-        // keiyoushi.source.CustomUrlPreferences 内部的 baseUrl key
-        private const val CUSTOM_BASE_URL_KEY = "overrideBaseUrl"
-
-        // 本扩展「是否使用自定义域名」开关的独立 key
-        private const val USE_CUSTOM_KEY = "roumanwu_use_custom"
-
-        // 内置镜像下拉选中索引 key（存字符串，避免与旧版本残留的 String/Int 类型冲突导致崩溃）
-        private const val MIRROR_INDEX_KEY = "roumanwu_mirror_index_v2"
-
-        // 从 SharedPreferences 安全读取镜像索引：先以 String 读取，toIntOrNull 兜底，杜绝类型不匹配崩溃
-        private fun getMirrorIndex(prefs: SharedPreferences): Int {
-            val raw = prefs.getString(MIRROR_INDEX_KEY, null)
-            return raw?.toIntOrNull() ?: DEFAULT_MIRROR_INDEX
-        }
-
-        private fun putMirrorIndex(prefs: SharedPreferences, index: Int) {
-            prefs.edit().putString(MIRROR_INDEX_KEY, index.toString()).apply()
-        }
-
-        // 官方公布的内置域名（常用镜像站点），需与 deeplink host 保持一致
-        private val BUILTIN_MIRRORS = listOf(
-            "https://rouman5.com",
-            "https://roum29.xyz",
-        )
-        private const val DEFAULT_MIRROR_INDEX = 0
-
-        // 「使用自定义域名」开启时，镜像下拉的提示文案
-        private const val MIRROR_DISABLED_SUMMARY = "（已禁用：当前使用自定义域名）"
-
         // 内置默认域名（与 build.gradle.kts 中 baseUrl.custom(...) 保持一致）
         private const val DEFAULT_BASE_URL = "https://rouman5.com"
 
