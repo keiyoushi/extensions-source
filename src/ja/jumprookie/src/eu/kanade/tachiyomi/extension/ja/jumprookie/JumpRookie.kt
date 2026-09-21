@@ -1,149 +1,116 @@
 package eu.kanade.tachiyomi.extension.ja.jumprookie
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Element
 
 @Source
-abstract class JumpRookie : HttpSource() {
-    override val supportsLatest = true
-
+abstract class JumpRookie : KeiSource() {
     private var nextPageKey: String? = null
 
-    // Requires desktop UA to load entries, mobile version has different selectors.
-    override fun headersBuilder() = super.headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+    private val desktopHeaders get() = headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
+        .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        if (page == 1) nextPageKey = null
-        return searchMangaRequest(page, "", FilterList())
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = getSeriesList(page, null)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val nextUrlHeader = response.header("Tky-Link-Rel-Next")
-        nextPageKey = (baseUrl + nextUrlHeader).toHttpUrlOrNull()?.queryParameter("key")
-        val document = response.asJsoup()
-        val mangas = document.select("section.series-contents").map(::mangaFromElement)
-        return MangasPage(mangas, nextPageKey != null)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/categories/general/recent".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
-    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(".series-box-list > li").map(::mangaFromElement)
+        val document = client.get(url, desktopHeaders).asJsoup()
+        val mangas = document.select("section.series-contents").map { it.toSManga() }
         val hasNextPage = document.selectFirst(".button-next") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("query", query)
                 .build()
-            return GET(url, headers)
+
+            val document = client.get(url).asJsoup()
+            val mangas = document.select("#search-series section.series-contents").map { it.toSManga() }
+            return MangasPage(mangas, false)
         }
 
-        val filter = filters.firstInstanceOrNull<GenreFilter>()
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.value
+        return getSeriesList(page, genre)
+    }
+
+    private suspend fun getSeriesList(page: Int, category: String?): MangasPage {
         if (page == 1) nextPageKey = null
         val url = "$baseUrl/api/media/series_list".toHttpUrl().newBuilder().apply {
             addQueryParameter("type", "popular")
-            if (filter?.value?.isNotEmpty() == true) {
-                addQueryParameter("category", filter.value)
-            }
-            if (page > 1 && nextPageKey != null) {
-                addQueryParameter("key", nextPageKey)
-            }
-            fragment("filters")
+            if (!category.isNullOrEmpty()) addQueryParameter("category", category)
+            nextPageKey?.let { addQueryParameter("key", it) }
         }.build()
-        return GET(url, headers)
+
+        val response = client.get(url)
+        nextPageKey = response.header("Tky-Link-Rel-Next")
+            ?.let { baseUrl.toHttpUrl().resolve(it) }
+            ?.queryParameter("key")
+
+        val mangas = response.asJsoup().select("section.series-contents").map { it.toSManga() }
+        val hasNextPage = nextPageKey != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.fragment == "filters") {
-            return popularMangaParse(response)
-        }
-
-        val document = response.asJsoup()
-        val mangas = document.select("#search-series .series-box-list > li").map(::mangaFromElement)
-        return MangasPage(mangas, false)
+    private fun Element.toSManga(): SManga = SManga.create().apply {
+        setUrlWithoutDomain(selectFirst("a")!!.absUrl("href"))
+        title = selectFirst(".series-title")!!.text()
+        thumbnail_url = selectFirst(".cover-image")?.absUrl("src")
     }
 
-    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        title = element.selectFirst(".series-title")!!.text()
-        thumbnail_url = element.selectFirst(".cover-image")?.absUrl("src")
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val details = SManga.create().apply {
             title = document.selectFirst(".series-title")!!.text()
             author = document.selectFirst(".user-name")?.text()
             description = document.selectFirst(".series-description")?.text()
             genre = document.select(".series-category").joinToString { it.text() }
             thumbnail_url = document.selectFirst(".cover-image")?.absUrl("src")
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("#episode-list > li").map {
+        val chapterList = document.select("#episode-list > li").map {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.selectFirst("a.episode-content")!!.absUrl("href"))
                 name = it.selectFirst(".episode-title")!!.text()
             }
         }.reversed()
+
+        return SMangaUpdate(
+            details,
+            chapterList,
+        )
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".js-page-image").mapIndexed { i, element ->
             Page(i, imageUrl = element.absUrl("src"))
         }
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         GenreFilter(),
     )
-
-    private class GenreFilter :
-        SelectFilter(
-            "Genres",
-            arrayOf(
-                Pair("TOP", ""),
-                Pair("バトル", "1"),
-                Pair("ファンタジー", "2"),
-                Pair("学園・スポーツ", "3"),
-                Pair("ラブコメ", "4"),
-                Pair("コメディ・ギャグ", "6"),
-                Pair("ミステリー・ホラー", "7"),
-                Pair("その他", "8"),
-            ),
-        )
-
-    private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        val value: String
-            get() = vals[state].second
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

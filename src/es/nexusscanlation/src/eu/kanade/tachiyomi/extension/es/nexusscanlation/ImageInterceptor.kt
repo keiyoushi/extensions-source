@@ -22,16 +22,14 @@ class ImageInterceptor : Interceptor {
             return response
         }
 
-        val (cols, rows, seed) = fragment
+        val parts = fragment
             .removePrefix("scramble=")
             .split(',')
-            .let {
-                Triple(
-                    it[0].toInt(),
-                    it[1].toInt(),
-                    it[2].toUInt(),
-                )
-            }
+
+        val cols = parts[0].toInt()
+        val rows = parts[1].toInt()
+        val seed = parts[2].toUInt()
+        val version = parts.getOrNull(3)?.toIntOrNull() ?: 1
 
         val body = response.body
 
@@ -42,6 +40,7 @@ class ImageInterceptor : Interceptor {
             cols = cols,
             rows = rows,
             seed = seed,
+            version = version,
         )
         bitmap.recycle()
 
@@ -64,16 +63,30 @@ class ImageInterceptor : Interceptor {
         cols: Int,
         rows: Int,
         seed: UInt,
+        version: Int,
     ): Bitmap {
         val tileWidth = bitmap.width / cols
         val tileHeight = bitmap.height / rows
 
         val count = cols * rows
 
-        val permutation = shuffledIndices(
-            count = count,
-            seed = seed,
-        )
+        val rng = Mulberry32(seed)
+
+        val permutation = IntArray(count) { it }
+        for (i in count - 1 downTo 1) {
+            val j = (rng.nextDouble() * (i + 1)).toInt()
+            val tmp = permutation[i]
+            permutation[i] = permutation[j]
+            permutation[j] = tmp
+        }
+
+        val flips = if (version >= 2) {
+            IntArray(count) {
+                (rng.nextDouble() * 4).toInt()
+            }
+        } else {
+            null
+        }
 
         val result = Bitmap.createBitmap(
             tileWidth * cols,
@@ -85,6 +98,7 @@ class ImageInterceptor : Interceptor {
 
         val srcRect = Rect()
         val dstRect = Rect()
+        val tileRect = Rect(0, 0, tileWidth, tileHeight)
 
         for (srcIndex in 0 until count) {
             val srcX = (srcIndex % cols) * tileWidth
@@ -102,38 +116,40 @@ class ImageInterceptor : Interceptor {
                 srcY + tileHeight,
             )
 
-            dstRect.set(
-                dstX,
-                dstY,
-                dstX + tileWidth,
-                dstY + tileHeight,
-            )
+            val flip = flips?.get(srcIndex) ?: 0
+            if (flip == 0) {
+                dstRect.set(
+                    dstX,
+                    dstY,
+                    dstX + tileWidth,
+                    dstY + tileHeight,
+                )
+                canvas.drawBitmap(
+                    bitmap,
+                    srcRect,
+                    dstRect,
+                    null,
+                )
+            } else {
+                val flipH = (flip and 1) != 0
+                val flipV = (flip and 2) != 0
 
-            canvas.drawBitmap(
-                bitmap,
-                srcRect,
-                dstRect,
-                null,
-            )
-        }
+                val transX = if (flipH) (dstX + tileWidth).toFloat() else dstX.toFloat()
+                val transY = if (flipV) (dstY + tileHeight).toFloat() else dstY.toFloat()
+                val scaleX = if (flipH) -1f else 1f
+                val scaleY = if (flipV) -1f else 1f
 
-        return result
-    }
-
-    private fun shuffledIndices(
-        count: Int,
-        seed: UInt,
-    ): IntArray {
-        val result = IntArray(count) { it }
-
-        val rng = Mulberry32(seed)
-
-        for (i in count - 1 downTo 1) {
-            val j = (rng.nextDouble() * (i + 1)).toInt()
-
-            val tmp = result[i]
-            result[i] = result[j]
-            result[j] = tmp
+                canvas.save()
+                canvas.translate(transX, transY)
+                canvas.scale(scaleX, scaleY)
+                canvas.drawBitmap(
+                    bitmap,
+                    srcRect,
+                    tileRect,
+                    null,
+                )
+                canvas.restore()
+            }
         }
 
         return result

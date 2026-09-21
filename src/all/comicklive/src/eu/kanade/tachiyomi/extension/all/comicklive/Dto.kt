@@ -97,10 +97,8 @@ object TitleTransform : JsonTransformingSerializer<List<ComicData.Title>>(
 @Serializable
 class ChapterList(
     val data: List<Chapter>,
-    private val pagination: Pagination,
+    val pagination: Pagination,
 ) {
-    fun hasNextPage() = pagination.page < pagination.lastPage
-
     @Serializable
     class Chapter(
         val hid: String,

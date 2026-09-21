@@ -68,6 +68,7 @@ class MangaDetailDto(
             "end", "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
+        initialized = true
     }
 }
 

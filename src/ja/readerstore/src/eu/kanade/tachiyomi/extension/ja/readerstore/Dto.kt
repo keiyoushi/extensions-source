@@ -2,13 +2,15 @@ package eu.kanade.tachiyomi.extension.ja.readerstore
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Serializable
 class SearchResponse(
@@ -38,11 +40,9 @@ class Doc(
             raw.substringBefore(",") + SIZES.firstOrNull { it in raw }
         }
     }
-
-    companion object {
-        private val SIZES = listOf("XLARGE.jpg", "LARGE.jpg", "MIDDLE.jpg", "SMALL.jpg")
-    }
 }
+
+private val SIZES = listOf("XLARGE.jpg", "LARGE.jpg", "MIDDLE.jpg", "SMALL.jpg")
 
 @Serializable
 class MangaResponseItem(
@@ -77,16 +77,17 @@ class MangaResponseItem(
     fun toSChapter(): SChapter = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
         val preview = if (isPreview) "🔒 (Preview) " else ""
-        url = detail.paidVersionAid ?: if (isPreview) "$aid#1" else aid
+        url = aid
         name = lock + preview + detail.contentsNm
-        date_upload = dateFormat.tryParse(detail.originalPublicDt)
+        date_upload = dateFormat.tryParseDateTime(detail.originalPublicDt)
         chapter_number = title.titleIndexSeqNo?.toFloat() ?: -1f
+        memo = buildJsonObject {
+            put("isSample", isPreview)
+        }
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
-}
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).withZone(ZoneId.of("Asia/Tokyo"))
 
 @Serializable
 class Detail(
@@ -155,11 +156,11 @@ class MetaResponse(
 @Serializable
 class MetaData(
     val type: String,
-    val page: Page,
+    val page: MetaPage,
 )
 
 @Serializable
-class Page(
+class MetaPage(
     val all: Int?,
 )
 

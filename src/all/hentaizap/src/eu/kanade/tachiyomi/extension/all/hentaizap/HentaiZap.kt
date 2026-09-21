@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.hentaizap
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
-import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import org.jsoup.nodes.Document
@@ -27,7 +26,6 @@ abstract class HentaiZap : GalleryAdults() {
     override val supportSpeechless = true
     override val useIntermediateSearch = true
 
-    override fun popularMangaNextPageSelector() = "a[rel='next']"
     override fun Element.mangaThumbnail() = selectFirst(".hz-gallery-card__media.thumb img")?.imgAttr()
     override fun popularMangaSelector() = ".hz-gallery-card"
 
@@ -45,31 +43,21 @@ abstract class HentaiZap : GalleryAdults() {
 
     override fun Element.getCover() = selectFirst(".hz-gallery-cover img")?.imgAttr()
 
-    override fun Element.getInfoPages(document: Document?) = document?.selectFirst(".hz-gallery-pages")?.ownText()
-
-    override fun getInfoSelector(tag: String) = "div.hz-gallery-entity-group:has(span.hz-gallery-entity-label:contains($tag:)) a.hz-gallery-tag"
+    override fun getInfoSelector(tag: String) = "div.hz-gallery-entity-group:has(:contains($tag:)) a.hz-gallery-tag"
 
     override fun Element.infoTagName() = selectFirst(".hz-gallery-tag__name")?.text() ?: ownText()
 
     // pages
-    override suspend fun pageListParse(document: Document): List<Page> {
-        val totalPages = "data-total-pages"
-        val total = document.select("[$totalPages]").attr("$totalPages").toIntOrNull() ?: 0
-        val galleryId = document.location().trim('/').substringAfterLast('/')
+    override fun Element.galleryId() = select("[data-gallery-id]").attr("data-gallery-id")
+    override fun Element.totalPages() = select("[data-total-pages]").attr("data-total-pages")
 
-        return (1..total).map { idx ->
-            Page(idx, "$baseUrl/$pageUri/$galleryId/$idx")
-        }
-    }
-
-    override fun imageUrlParse(document: Document) = document.selectFirst("#readerImg")?.imgAttr().orEmpty()
+    override val parsingImagePageByPage = true
 
     // tags
     override fun tagsParser(document: Document) = document.select("ul.hz-legacy-taxonomy__items a")
         .associate {
-            it.ownText() to it.attr("href").removeSuffix("/").substringAfterLast('/')
+            it.select(".hz-legacy-taxonomy-item__name").text() to it.attr("href").removeSuffix("/").substringAfterLast('/')
         }
 
-    override val supportsFilterFetching = false
     override val supportRelatedMangasBySearch = true
 }

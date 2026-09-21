@@ -1,95 +1,70 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Source
-abstract class Shinigami : HttpSource() {
+abstract class Shinigami : KeiSource() {
     private val apiUrl = "https://api.shngm.io"
 
-    override val supportsLatest = true
+    private val apiHeaders: Headers
+        get() = headersBuilder()
+            .add("Accept", "application/json")
+            .add("DNT", "1")
+            .add("Sec-GPC", "1")
+            .build()
 
-    private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val headers = request.headers.newBuilder().apply {
-                removeAll("X-Requested-With")
-            }.build()
+    // ====================== Popular ======================
 
-            chain.proceed(request.newBuilder().headers(headers).build())
-        }
-        .rateLimit(3)
-        .build()
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
-
-    private fun randomString(length: Int) = buildString {
-        val charPool = ('a'..'z') + ('A'..'Z')
-        repeat(length) { append(charPool.random()) }
-    }
-
-    private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
-        .add("Accept", "application/json")
-        .add("DNT", "1")
-        .add("Origin", baseUrl)
-        .add("Sec-GPC", "1")
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "30")
             .addQueryParameter("sort", "popularity")
             .build()
 
-        return GET(url, apiHeaders)
+        val response = client.get(url, apiHeaders)
+        return parseMangaList(response)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val rootObject = response.parseAs<ShinigamiBrowseDto>()
-        val projectList = rootObject.data.map(::popularMangaFromObject)
+    // ====================== Latest ======================
 
-        val hasNextPage = rootObject.meta.totalPage?.let { rootObject.meta.page < it } ?: false
-
-        return MangasPage(projectList, hasNextPage)
-    }
-
-    private fun popularMangaFromObject(obj: ShinigamiBrowseDataDto): SManga = SManga.create().apply {
-        title = obj.title!!
-        thumbnail_url = obj.thumbnail
-        url = obj.mangaId!!
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "30")
             .addQueryParameter("sort", "latest")
             .build()
 
-        return GET(url, apiHeaders)
+        val response = client.get(url, apiHeaders)
+        return parseMangaList(response)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    // ====================== Search ======================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "30")
@@ -102,92 +77,96 @@ abstract class Shinigami : HttpSource() {
             it.addToUri(url)
         }
 
-        return GET(url.build(), apiHeaders)
+        val response = client.get(url.build(), apiHeaders)
+        return parseMangaList(response)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun parseMangaList(response: Response): MangasPage {
+        val rootObject = response.parseAs<ShinigamiBrowseDto>()
+        val projectList = rootObject.data.map(::popularMangaFromObject)
+        val hasNextPage = rootObject.meta.totalPage?.let { rootObject.meta.page < it } ?: false
+        return MangasPage(projectList, hasNextPage)
+    }
 
-    override fun getFilterList(): FilterList = FilterList(
+    private fun popularMangaFromObject(obj: ShinigamiBrowseDataDto): SManga = SManga.create().apply {
+        title = obj.title.orEmpty()
+        thumbnail_url = obj.thumbnail
+        url = obj.mangaId.orEmpty()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         SortFilter(),
         SortOrderFilter(),
         StatusFilter(),
         FormatFilter(),
         TypeFilter(),
-        GenreFilter(getGenres()),
+        GenreFilter(),
     )
 
-    private fun getGenres(): Array<Pair<String, String>> = arrayOf(
-        Pair("Action", "action"),
-        Pair("Adaptation", "adaptation"),
-        Pair("Adult", "adult"),
-        Pair("Adventure", "adventure"),
-        Pair("Comedy", "comedy"),
-        Pair("Cooking", "cooking"),
-        Pair("Crime", "crime"),
-        Pair("Demon", "demon"),
-        Pair("Demons", "demons"),
-        Pair("Dra", "dra-genre"),
-        Pair("Drama", "drama"),
-        Pair("Ecchi", "ecchi"),
-        Pair("Fantasy", "fantasy"),
-        Pair("Fight", "fight"),
-        Pair("Game", "game"),
-        Pair("Gender Bender", "gender-bender"),
-        Pair("Harem", "harem"),
-        Pair("Historical", "historical"),
-        Pair("Horror", "horror"),
-        Pair("Isekai", "isekai"),
-        Pair("Josei", "josei-genre"),
-        Pair("Latest", "latest"),
-        Pair("Love", "love"),
-        Pair("Magic", "magic"),
-        Pair("Martial Arts", "martial-arts"),
-        Pair("Mature", "mature"),
-        Pair("Mecha", "mecha"),
-        Pair("Medical", "medical"),
-        Pair("Murim", "murim"),
-        Pair("Mystery", "mystery"),
-        Pair("Philosophical", "philosophical"),
-        Pair("Psychological", "psychological"),
-        Pair("Regression", "regression"),
-        Pair("Revenge", "revenge"),
-        Pair("Romance", "romance"),
-        Pair("School Life", "school-life"),
-        Pair("Sci-fi", "sci-fi"),
-        Pair("Seinen", "seinen"),
-        Pair("Shoujo", "shoujo"),
-        Pair("Shounen", "shounen"),
-        Pair("Slice of Life", "slice-of-life"),
-        Pair("Smut", "smut"),
-        Pair("Sports", "sports"),
-        Pair("Supernatural", "supernatural"),
-        Pair("Supranatural", "supranatural"),
-        Pair("Thriller", "thriller"),
-        Pair("Tragedy", "tragedy"),
-        Pair("Violence", "violence"),
-        Pair("Wuxia", "wuxia"),
-    )
+    // ====================== Manga Details & Chapters ======================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        // Migration from old web urls to the new api based
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != "shinigami.asia" && !url.host.endsWith(".shinigami.asia")) return null
+        val firstSegment = url.pathSegments.firstOrNull()
+        if (firstSegment != "series") return null
+        val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
+
+        val manga = SManga.create().apply {
+            this.url = id
+        }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
         if (manga.url.startsWith("/series/")) {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
 
-        return GET("$apiUrl/v1/manga/detail/${manga.url}", apiHeaders)
+        val detailsDeferred = if (fetchDetails) {
+            async { fetchMangaDetails(manga) }
+        } else {
+            null
+        }
+
+        val chaptersDeferred = if (fetchChapters) {
+            async { fetchChapterList(manga) }
+        } else {
+            null
+        }
+
+        val updatedManga = detailsDeferred?.await() ?: manga
+        val updatedChapters = chaptersDeferred?.await() ?: chapters
+
+        SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val response = client.get("$apiUrl/v1/manga/detail/${manga.url}", apiHeaders)
         val mangaDetailsResponse = response.parseAs<ShinigamiMangaDetailDto>()
         val mangaDetails = mangaDetailsResponse.data
 
-        return SManga.create().apply {
+        return manga.apply {
+            mangaDetails.title?.takeIf { it.isNotBlank() }?.let { title = it }
+            (mangaDetails.coverPortraitUrl ?: mangaDetails.coverImageUrl)?.takeIf { it.isNotBlank() }?.let {
+                thumbnail_url = it
+            }
             author = mangaDetails.taxonomy["Author"]?.joinToString { it.name }.orEmpty()
             artist = mangaDetails.taxonomy["Artist"]?.joinToString { it.name }.orEmpty()
             status = mangaDetails.status.toStatus()
-            description = mangaDetails.description
+            description = buildString {
+                append(mangaDetails.description)
+                mangaDetails.altTitle?.takeIf { it.isNotBlank() }?.let {
+                    if (isNotEmpty()) append("\n\n")
+                    append("Alternative Title: ").append(it)
+                }
+            }
 
             val genres = mangaDetails.taxonomy["Genre"]?.joinToString { it.name }.orEmpty()
             val type = mangaDetails.taxonomy["Format"]?.joinToString { it.name }.orEmpty()
@@ -202,52 +181,46 @@ abstract class Shinigami : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val response = client.get("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders)
         val result = response.parseAs<ShinigamiChapterListDto>()
-
         return result.chapterList.map(::chapterFromObject)
     }
 
     private fun chapterFromObject(obj: ShinigamiChapterListDataDto): SChapter = SChapter.create().apply {
-        date_upload = dateFormat.tryParse(obj.date)
-        name = "Chapter ${obj.name.toString().replace(".0","")} ${obj.title}"
+        date_upload = Instant.tryParse(obj.date)
+        name = "Chapter ${obj.name.toString().removeSuffix(".0")} ${obj.title}".trim()
+        chapter_number = obj.name.toFloat()
         url = obj.chapterId
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        // Migration from old web urls to the new api based
+    // ====================== Page List ======================
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.startsWith("/series/")) {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
 
-        return GET("$apiUrl/v1/chapter/detail/${chapter.url}", apiHeaders)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
+        val response = client.get("$apiUrl/v1/chapter/detail/${chapter.url}", apiHeaders)
         val result = response.parseAs<ShinigamiPageListDto>()
 
         return result.pageList.chapterPage.pages.mapIndexed { index, imageName ->
-            Page(index = index, imageUrl = "${result.pageList.baseUrl}${result.pageList.chapterPage.path}$imageName")
+            Page(index, imageUrl = "${result.pageList.baseUrl}${result.pageList.chapterPage.path}$imageName")
         }
     }
 
-    override fun imageUrlParse(response: Response): String = ""
-
     override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
+        val imageHeaders = headersBuilder()
             .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .add("DNT", "1")
-            .add("referer", "$baseUrl/")
             .add("sec-fetch-dest", "empty")
             .add("Sec-GPC", "1")
             .build()
 
-        return GET(page.imageUrl!!, newHeaders)
-    }
-
-    companion object {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
+        return Request.Builder()
+            .url(page.imageUrl!!)
+            .headers(imageHeaders)
+            .get()
+            .build()
     }
 }

@@ -56,7 +56,14 @@ class ChapterDto(
             put("slug", slug)
             put("number", numberStr)
         }
-        val chapterName = title.ifBlank { "Chapter $numberStr" }
+        val cleanTitle = title.trim()
+        val chapterName = when {
+            cleanTitle.isBlank() || cleanTitle.equals(numberStr, ignoreCase = true) -> "Chapter $numberStr"
+            cleanTitle.startsWith("Chapter", ignoreCase = true) -> cleanTitle
+            cleanTitle.startsWith("Episode", ignoreCase = true) -> cleanTitle
+            cleanTitle.startsWith("Ch.", ignoreCase = true) -> cleanTitle
+            else -> "Chapter $numberStr - $cleanTitle"
+        }
         name = if (isLocked) "🔒 $chapterName" else chapterName
         chapter_number = number
         date_upload = Instant.tryParse(releaseDate)

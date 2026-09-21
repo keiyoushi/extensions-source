@@ -41,15 +41,8 @@ abstract class AsmHentai : GalleryAdults() {
 
     override fun Element.getInfoPages(document: Document?) = selectFirst(".book_page .pages h3")?.ownText()
         ?.substringAfter(": ")
-        ?.takeIf { it.isNotBlank() }
-        ?.let { "**Pages**: $it" }
 
     override val mangaDetailInfoSelector = ".book_page"
-
-    /**
-     * [totalPagesSelector] only exists if pages > 10
-     */
-    override val totalPagesSelector = "t_pages"
 
     override val galleryIdSelector = "load_id"
     override val thumbnailSelector = ".preview_thumb"
