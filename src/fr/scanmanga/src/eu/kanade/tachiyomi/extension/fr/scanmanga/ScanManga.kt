@@ -39,6 +39,7 @@ import rx.Observable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.Inflater
 
 @Source
@@ -164,13 +165,20 @@ abstract class ScanManga :
             }
         }
 
-        return super.fetchSearchManga(page, query, filters)
+        return super.fetchSearchManga(page, query, filters).flatMap { result ->
+            if (result.mangas.isNotEmpty()) {
+                Observable.just(result)
+            } else {
+                Observable.fromCallable { searchMangaWithWebView(query) }
+            }
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseSearchUrl
             .toHttpUrl().newBuilder()
             .addQueryParameter("term", query)
+            .addQueryParameter("16", null)
             .build()
             .toString()
 
@@ -183,21 +191,62 @@ abstract class ScanManga :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val json = response.body.string()
-        if (json == "[]") {
+        val json = response.body.string().trimStart()
+        if (json == "[]" || json.startsWith("<")) {
             return MangasPage(emptyList(), false)
         }
 
-        return MangasPage(
-            json.parseAs<MangaSearchDto>().title?.map {
-                SManga.create().apply {
-                    title = it.nom_match
-                    setUrlWithoutDomain(it.url)
-                    thumbnail_url = "$baseImageUrl/${it.image}"
-                }
-            } ?: emptyList(),
-            false,
-        )
+        return json.parseAs<MangaSearchDto>().toMangasPage()
+    }
+
+    private fun MangaSearchDto.toMangasPage() = MangasPage(
+        title?.map {
+            SManga.create().apply {
+                title = it.nom_match
+                setUrlWithoutDomain(it.url)
+                thumbnail_url = "$baseImageUrl/${it.image}"
+            }
+        } ?: emptyList(),
+        false,
+    )
+
+    private fun searchMangaWithWebView(query: String): MangasPage {
+        val encodedQuery = Base64.encodeToString(query.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+        val json = runWebViewProbe(
+            url = "$baseUrl/",
+            script =
+            """
+                (function() {
+                    if (!document.querySelector('input.result[type="search"]')) return 'WAIT';
+
+                    const key = '__scanMangaExtensionSearch';
+                    if (!window[key]) {
+                        const query = decodeURIComponent(escape(atob('$encodedQuery')));
+                        window[key] = { done: false };
+                        fetch('https://bqj.$domain/search/quick.json?term=' + encodeURIComponent(query) + '&16', {
+                            method: 'GET',
+                            credentials: 'omit',
+                            headers: { 'Content-type': 'application/json; charset=UTF-8' }
+                        })
+                            .then(response => {
+                                if (!response.ok) throw new Error('HTTP ' + response.status);
+                                return response.json();
+                            })
+                            .then(data => window[key] = { done: true, data })
+                            .catch(error => window[key] = { done: true, error: String(error) });
+                        return 'WAIT';
+                    }
+
+                    const state = window[key];
+                    if (!state.done) return 'WAIT';
+                    if (state.error) return 'ERROR:' + btoa(state.error);
+                    return 'DONE:' + btoa(unescape(encodeURIComponent(JSON.stringify(state.data))));
+                })();
+            """.trimIndent(),
+            timeoutSeconds = SEARCH_WEBVIEW_TIMEOUT_SECONDS,
+        ) ?: error("Timed out while searching Scan-Manga in the WebView")
+
+        return json.parseAs<MangaSearchDto>().toMangasPage()
     }
 
     // Details
@@ -259,6 +308,127 @@ abstract class ScanManga :
                     setUrlWithoutDomain(link.absUrl("href"))
                 }
             }
+        }
+    }
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = super.fetchChapterList(manga).flatMap { chapters ->
+        if (chapters.isNotEmpty()) {
+            Observable.just(chapters)
+        } else {
+            Observable.fromCallable { chapterListWithWebView(manga) }
+        }
+    }
+
+    private fun chapterListWithWebView(manga: SManga): List<SChapter> {
+        val json = runWebViewProbe(
+            url = "$baseUrl${manga.url}",
+            script =
+            """
+                (function() {
+                    const mobile = Array.from(document.querySelectorAll('div.chapt_m'));
+                    const chapters = mobile.length > 0
+                        ? mobile.map(element => {
+                            const link = element.querySelector('td.publimg span.i a');
+                            const extra = element.querySelector('td.publititle')?.textContent.trim();
+                            const name = link?.textContent.trim() || '';
+                            return link ? { name: extra ? name + ' - ' + extra : name, url: link.href } : null;
+                        }).filter(Boolean)
+                        : Array.from(document.querySelectorAll('li.chapitre')).map(element => {
+                            const link = element.querySelector('div.chapitre_nom a[href]');
+                            return link ? { name: link.textContent.trim(), url: link.href } : null;
+                        }).filter(Boolean);
+
+                    if (chapters.length === 0) return 'WAIT';
+                    return 'DONE:' + btoa(unescape(encodeURIComponent(JSON.stringify(chapters))));
+                })();
+            """.trimIndent(),
+            timeoutSeconds = CHAPTER_WEBVIEW_TIMEOUT_SECONDS,
+        ) ?: error("Timed out while loading Scan-Manga chapters in the WebView")
+
+        return json.parseAs<List<WebViewChapterDto>>().map { chapter ->
+            SChapter.create().apply {
+                name = chapter.name
+                setUrlWithoutDomain(chapter.url)
+            }
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun runWebViewProbe(url: String, script: String, timeoutSeconds: Long): String? {
+        val latch = CountDownLatch(1)
+        val result = AtomicReference<String?>()
+        val webViewReference = AtomicReference<WebView?>()
+        val completed = AtomicBoolean(false)
+        val pollStarted = AtomicBoolean(false)
+        val mainHandler = Handler(Looper.getMainLooper())
+
+        mainHandler.post {
+            runCatching {
+                val webView = WebView(applicationContext).also { webViewReference.set(it) }
+                webView.settings.javaScriptEnabled = true
+                webView.settings.domStorageEnabled = true
+
+                lateinit var poll: Runnable
+                poll = Runnable {
+                    if (completed.get()) return@Runnable
+
+                    // Suwayomi's Chromium adapter only returns multiline scripts when they
+                    // contain an explicit return. Keeping this as a single expression works
+                    // in both Suwayomi and Android WebView.
+                    webView.evaluateJavascript(script.replace("\n", " ")) { rawValue ->
+                        if (completed.get()) return@evaluateJavascript
+
+                        val value = rawValue?.trim()?.removeSurrounding("\"").orEmpty()
+                        when {
+                            value.startsWith("DONE:") -> {
+                                val decoded = String(Base64.decode(value.removePrefix("DONE:"), Base64.DEFAULT), Charsets.UTF_8)
+                                result.set(decoded)
+                                completed.set(true)
+                                latch.countDown()
+                            }
+                            value.startsWith("ERROR:") -> {
+                                val decoded = String(Base64.decode(value.removePrefix("ERROR:"), Base64.DEFAULT), Charsets.UTF_8)
+                                result.set("ERROR:$decoded")
+                                completed.set(true)
+                                latch.countDown()
+                            }
+                            else -> mainHandler.postDelayed(poll, WEBVIEW_POLL_INTERVAL_MS)
+                        }
+                    }
+                }
+
+                webView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        if (pollStarted.compareAndSet(false, true)) {
+                            poll.run()
+                        }
+                    }
+                }
+                webView.loadUrl(url)
+            }.onFailure {
+                completed.set(true)
+                latch.countDown()
+            }
+        }
+
+        try {
+            latch.await(timeoutSeconds, TimeUnit.SECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        } finally {
+            completed.set(true)
+            mainHandler.post {
+                runCatching {
+                    webViewReference.getAndSet(null)?.apply {
+                        stopLoading()
+                        destroy()
+                    }
+                }
+            }
+        }
+
+        return result.get()?.also {
+            if (it.startsWith("ERROR:")) error(it.removePrefix("ERROR:"))
         }
     }
 
@@ -594,5 +764,8 @@ abstract class ScanManga :
         private const val CF_MAX_POLLS = 15
         private const val WARMUP_SETTLE_MS = 200L
         private const val WARMUP_TIMEOUT_SECONDS = 8L
+        private const val WEBVIEW_POLL_INTERVAL_MS = 500L
+        private const val SEARCH_WEBVIEW_TIMEOUT_SECONDS = 30L
+        private const val CHAPTER_WEBVIEW_TIMEOUT_SECONDS = 30L
     }
 }
