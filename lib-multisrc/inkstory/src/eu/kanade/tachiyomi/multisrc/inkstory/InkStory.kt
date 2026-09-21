@@ -35,8 +35,12 @@ abstract class InkStory :
     KeiSource(),
     ConfigurableSource {
 
-    private val domain: String get() = baseUrl.toHttpUrl().topPrivateDomain() ?: baseUrl.toHttpUrl().host
-    private val apiUrl: String get() = "https://api.$domain/v2"
+    protected open val domain: String get() = baseUrl.toHttpUrl().topPrivateDomain() ?: baseUrl.toHttpUrl().host
+    protected open val apiUrl: String get() = "https://api.inuko.me/v2"
+    protected open val serviceName: String get() = when (domain) {
+        "inkstory.net" -> "inkstory"
+        else -> domain
+    }
 
     private val preferences by getPreferencesLazy {
         val keysToRemove = listOf(
@@ -55,6 +59,7 @@ abstract class InkStory :
         // User Agent required by source. Don't change
         set("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
         set("Accept", "application/json, text/plain, */*")
+        set("X-Service-Name", serviceName)
     }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
@@ -150,6 +155,7 @@ abstract class InkStory :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("chapter-update-feed")
+            .addQueryParameter("serviceName", serviceName)
             .addQueryParameter("onlyBorderChapters", "true")
             .addQueryParameter("page", (page - 1).coerceAtLeast(0).toString())
             .addQueryParameter("size", PAGE_SIZE.toString())
@@ -166,6 +172,7 @@ abstract class InkStory :
     // ============================== Search Utilities ===============================
     protected open suspend fun makeCatalogRequest(sortBy: String, page: Int, query: String? = null, filters: FilterList? = null): MangasPage {
         val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
+            addQueryParameter("serviceName", serviceName)
             var sort = sortBy
             var order = "desc"
 
@@ -249,12 +256,19 @@ abstract class InkStory :
         }
         val chaptersAsync = async {
             if (fetchChapters) {
-                val branches = client.get("$apiUrl/branches?bookId=${manga.memo["id"]!!.string}&moderationStatus=APPROVED")
+                val bookId = manga.memo["id"]?.string
+                    ?: if (fetchDetails) {
+                        mangaAsync.await().memo["id"]?.string
+                    } else {
+                        client.get("$apiUrl/books/${manga.url}").parseAs<MangaFullDto>().toSManga().memo["id"]?.string
+                    }
+                    ?: return@async chapters
+                val branches = client.get("$apiUrl/branches?bookId=$bookId&moderationStatus=APPROVED")
                     .parseAs<List<BranchDto>>()
                     .associate { it.id to it.publisherName() }
                 val branchType = prefBranch()
                 val branchQuery = prefBranchQuery()
-                val url = "$apiUrl/chapters?bookId=${manga.memo["id"]!!.string}&moderationStatus=APPROVED"
+                val url = "$apiUrl/chapters?bookId=$bookId&moderationStatus=APPROVED"
                 val data = client.get(url).parseAs<List<ChapterDto>>().map { it.toSChapter(branches, manga.url) }
                 when (branchType) {
                     "all" -> data
@@ -277,7 +291,7 @@ abstract class InkStory :
     }
 
     // ============================== Chapters ===============================
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/content/${chapter.memo["slug"]!!.string}/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["slug"]?.string?.let { "$baseUrl/content/$it/${chapter.url}" } ?: "$baseUrl/${chapter.url}"
 
     private fun deduplicateChapters(chaptersList: List<SChapter>): List<SChapter> {
         val latestMap = mutableMapOf<Float, SChapter>()
