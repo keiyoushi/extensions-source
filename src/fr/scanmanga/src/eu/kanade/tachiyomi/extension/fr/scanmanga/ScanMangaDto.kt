@@ -45,3 +45,9 @@ class WebViewChapterDto(
     val name: String,
     val url: String,
 )
+
+@Serializable
+class WebViewMangaDto(
+    val title: String,
+    val url: String,
+)

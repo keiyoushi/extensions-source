@@ -211,42 +211,38 @@ abstract class ScanManga :
     )
 
     private fun searchMangaWithWebView(query: String): MangasPage {
-        val encodedQuery = Base64.encodeToString(query.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+        val searchUrl = "$baseUrl/scanlation/liste_series.html"
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("q", query)
+            .build()
+            .toString()
         val json = runWebViewProbe(
-            url = "$baseUrl/",
+            url = searchUrl,
             script =
             """
                 (function() {
-                    if (!document.querySelector('input.result[type="search"]')) return 'WAIT';
+                    const container = document.querySelector('#contenu_lettre_id');
+                    if (!container?.querySelector('.raw_resrc')) return 'WAIT';
 
-                    const key = '__scanMangaExtensionSearch';
-                    if (!window[key]) {
-                        const query = decodeURIComponent(escape(atob('$encodedQuery')));
-                        window[key] = { done: false };
-                        fetch('https://bqj.$domain/search/quick.json?term=' + encodeURIComponent(query) + '&16', {
-                            method: 'GET',
-                            credentials: 'omit',
-                            headers: { 'Content-type': 'application/json; charset=UTF-8' }
-                        })
-                            .then(response => {
-                                if (!response.ok) throw new Error('HTTP ' + response.status);
-                                return response.json();
-                            })
-                            .then(data => window[key] = { done: true, data })
-                            .catch(error => window[key] = { done: true, error: String(error) });
-                        return 'WAIT';
-                    }
-
-                    const state = window[key];
-                    if (!state.done) return 'WAIT';
-                    if (state.error) return 'ERROR:' + btoa(state.error);
-                    return 'DONE:' + btoa(unescape(encodeURIComponent(JSON.stringify(state.data))));
+                    const mangas = Array.from(container.querySelectorAll('a.texte_manga[href]')).map(link => ({
+                        title: link.querySelector('.hover_text_manga')?.firstChild?.textContent.trim()
+                            || link.textContent.trim(),
+                        url: link.href
+                    }));
+                    return 'DONE:' + btoa(unescape(encodeURIComponent(JSON.stringify(mangas))));
                 })();
             """.trimIndent(),
             timeoutSeconds = SEARCH_WEBVIEW_TIMEOUT_SECONDS,
         ) ?: error("Timed out while searching Scan-Manga in the WebView")
 
-        return json.parseAs<MangaSearchDto>().toMangasPage()
+        val mangas = json.parseAs<List<WebViewMangaDto>>().map { item ->
+            SManga.create().apply {
+                title = item.title
+                setUrlWithoutDomain(item.url)
+            }
+        }
+        return MangasPage(mangas, false)
     }
 
     // Details
