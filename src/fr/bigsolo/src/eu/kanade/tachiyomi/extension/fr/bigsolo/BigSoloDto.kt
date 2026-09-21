@@ -42,7 +42,7 @@ class Source(
 
 @Serializable
 class LastChapter(
-    val timestamp: Int,
+    val timestamp: Int = 0,
 )
 
 @Serializable
