@@ -6,13 +6,16 @@ plugins {
 
 keiyoushi {
     name = "MangaWT"
-    versionCode = 3
+    versionCode = 56
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
 
     source {
         lang = "tr"
         baseUrl = "https://mangawt.com"
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

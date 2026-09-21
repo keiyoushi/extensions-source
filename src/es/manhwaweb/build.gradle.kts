@@ -8,10 +8,14 @@ keiyoushi {
     name = "ManhwaWeb"
     versionCode = 13
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "es"
         baseUrl = "https://manhwaweb.com"
+    }
+
+    deeplink {
+        path("/manhwa/..*")
     }
 }

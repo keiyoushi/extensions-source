@@ -21,6 +21,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,17 +31,22 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import okio.Timeout
 import okio.buffer
 import java.io.IOException
+import java.net.URLDecoder
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
+import javax.crypto.Cipher
 import javax.crypto.Mac
+import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Duration.Companion.seconds
 
@@ -82,7 +88,7 @@ abstract class Pam :
         includeVersion: Boolean,
     ): Request {
         var xsrfToken = client.cookieJar.loadForRequest(baseHttpUrl)
-            .firstOrNull { it.name == "XSRF-TOKEN" }?.value
+            .firstOrNull { it.name == "XSRF-TOKEN" }?.let { URLDecoder.decode(it.value, "UTF-8") }
 
         if (
             (includeXSRFToken && xsrfToken == null) ||
@@ -106,7 +112,7 @@ abstract class Pam :
                 .attr("content")
 
             xsrfToken = client.cookieJar.loadForRequest(baseHttpUrl)
-                .first { it.name == "XSRF-TOKEN" }.value
+                .first { it.name == "XSRF-TOKEN" }.let { URLDecoder.decode(it.value, "UTF-8") }
         }
 
         val headers = headersBuilder().apply {
@@ -314,12 +320,41 @@ abstract class Pam :
         )
     }
 
+    /**
+     * Baked into the reader's WASM signer, and rebuilt per site: the attestation endpoint
+     * answers a wrong secret with an endless `refresh` rather than an error, so a site whose
+     * values are not known here can never mint a chapter token. See IMPLEMENT.md for how to
+     * recover them from a site's signer.
+     */
+    protected abstract val readerSecret: ByteArray
+
+    protected abstract val kdfDomain: String
+
+    /** Where [readerSecret] sits relative to the bytes signed by the attestation and manifest HMACs. */
+    protected abstract fun signedPayload(payload: ByteArray): ByteArray
+
+    /** Field order of the manifest signature payload. */
+    protected abstract fun manifestPayload(uid: String, version: Int, ts: Long, nonce: String): String
+
+    /** Order in which [readerSecret], the ECDH secret and the KDF info feed each page-key round. */
+    protected abstract fun contentKeyMaterial(sharedSecret: ByteArray, info: ByteArray): List<ByteArray>
+
+    /** How many times the page-key digest is folded over itself before unmasking the hint. */
+    protected abstract val contentKeyRounds: Int
+
     private val secureRandom = SecureRandom()
 
     private class ChapterSession(
         val chapterToken: String,
         val sharedSecret: ByteArray,
         val clientPubkeyB64: String,
+        /** Reader v2 only: input keying material for this chapter's encrypted pages. */
+        val contentKey: ByteArray? = null,
+    )
+
+    private class ChapterState(
+        val session: ChapterSession,
+        val manifest: ManifestResponse?,
     )
 
     private val sessions = ConcurrentHashMap<String, ChapterSession>()
@@ -327,7 +362,8 @@ abstract class Pam :
 
     private fun sessionKey(serieSlug: String, chapterSlug: String) = "${name.take(3).lowercase()}-$serieSlug--$chapterSlug"
 
-    private fun handshakeFrom(props: PageListResponse.Props): ChapterSession {
+    private fun openChapter(body: PageListResponse): ChapterState {
+        val props = body.props
         val serverPub = Base64.decode(props.serverPubkey, Base64.DEFAULT)
         require(serverPub.size == 32) { "server pubkey must be 32 bytes" }
 
@@ -335,12 +371,134 @@ abstract class Pam :
         val clientPub = X25519.publicKey(priv)
         val shared = X25519.scalarMult(priv, serverPub)
         priv.fill(0)
+        val clientPubkeyB64 = Base64.encodeToString(clientPub, Base64.NO_WRAP)
 
-        return ChapterSession(
-            chapterToken = props.chapterToken,
-            sharedSecret = shared,
-            clientPubkeyB64 = Base64.encodeToString(clientPub, Base64.NO_WRAP),
+        if (!props.readerV2) {
+            val token = props.chapterToken ?: throw IOException("Chapter token missing")
+            return ChapterState(ChapterSession(token, shared, clientPubkeyB64), null)
+        }
+
+        val token = attest(body, clientPubkeyB64)
+        val manifest = requestManifest(props.data.uid, token, clientPubkeyB64)
+
+        return ChapterState(
+            ChapterSession(token, shared, clientPubkeyB64, contentKey(manifest, shared)),
+            manifest,
         )
+    }
+
+    /**
+     * Reader v2 mints the chapter token from an attestation exchange instead of shipping it
+     * in the page props. The first exchange is always answered with `refresh`, which retires
+     * the challenge embedded in the page: only the challenge handed back by the partial
+     * reload gets a token.
+     */
+    private fun attest(body: PageListResponse, clientPubkeyB64: String): String {
+        val attestation = body.props.attestation ?: throw IOException("Missing attestation challenge")
+        val device = deviceReport(attestation.webglSeed)
+        var challenge = attestation.challenge
+
+        repeat(ATTESTATION_ATTEMPTS) {
+            val request = AttestationRequest(
+                c = challenge,
+                v = hmacSha256Hex(device, challenge.toByteArray()),
+                sp = hmacSha256Hex(challenge, signedPayload("$device\u0000$clientPubkeyB64".toByteArray())),
+                d = device,
+                pk = clientPubkeyB64,
+            )
+            val minted = client.newCall(
+                apiRequest(
+                    "$baseUrl/api/v1/t".toHttpUrl(),
+                    request.toJsonRequestBody(),
+                    includeXSRFToken = true,
+                    includeCSRFToken = false,
+                    includeVersion = false,
+                ),
+            ).execute().parseAs<AttestationResponse>().ct
+
+            if (minted != null) return minted
+
+            val reloaded = client.newCall(attestationReloadRequest(body)).execute()
+                .parseAs<AttestationReload>().props
+            reloaded.chapterToken?.also { return it }
+            challenge = reloaded.attestation?.challenge ?: throw IOException("Attestation refused")
+        }
+
+        throw IOException("Attestation refused")
+    }
+
+    private fun attestationReloadRequest(body: PageListResponse): Request {
+        val url = "$baseUrl/serie/${body.props.data.serie.slug}/chapter/${body.props.data.slug}".toHttpUrl()
+        val headers = headersBuilder()
+            .set("X-Requested-With", "XMLHttpRequest")
+            .set("X-Inertia", "true")
+            .set("X-Inertia-Version", body.version)
+            .set("X-Inertia-Partial-Component", body.component)
+            .set("X-Inertia-Partial-Data", "chapter_token,attestation")
+            .build()
+
+        return GET(url, headers)
+    }
+
+    /**
+     * Stands in for the browser fingerprint the site collects through canvas and WebGL. The
+     * server only checks that it matches the HMAC we send alongside it, so a fixed plausible
+     * report is enough.
+     */
+    private fun deviceReport(webglSeed: String): String = """{"webdriver":false,"webgl_vendor":"Qualcomm","webgl_renderer":"Adreno (TM) 730",""" +
+        """"webgl_proof":"${sha256Hex("webgl_proof")}","gl_sig":"8192|1|1|23",""" +
+        """"device_memory":null,"hardware_concurrency":8,"effective_type":null,"save_data":false,""" +
+        """"screen_width":1080,"screen_height":2340,"viewport_width":1080,"viewport_height":2130,""" +
+        """"device_pixel_ratio":2.75,"max_touch_points":5,"has_touch":true,""" +
+        """"locale":"en-US","timezone":"America/New_York","platform":"Linux armv8l",""" +
+        """"canvas_hash":"${sha256Hex(webglSeed)}"}"""
+
+    private fun requestManifest(uid: String, chapterToken: String, clientPubkeyB64: String): ManifestResponse {
+        val ts = System.currentTimeMillis() / 1000
+        val nonce = hexNonce()
+        val request = ManifestRequest(
+            v = MANIFEST_VERSION,
+            c = uid,
+            t = chapterToken,
+            ts = ts,
+            n = nonce,
+            s = hmacSha256Hex(
+                chapterToken,
+                signedPayload(manifestPayload(uid, MANIFEST_VERSION, ts, nonce).toByteArray()),
+            ),
+        )
+
+        val call = apiRequest(
+            "$baseUrl/api/v1/m".toHttpUrl(),
+            request.toJsonRequestBody(),
+            includeXSRFToken = true,
+            includeCSRFToken = false,
+            includeVersion = false,
+        ).newBuilder().header("X-Client-Pubkey", clientPubkeyB64).build()
+
+        return client.newCall(call).execute().parseAs<ManifestResponse>()
+    }
+
+    /**
+     * The manifest hint is the page key masked with a digest chain over the ECDH secret, so
+     * it is worthless to any other session.
+     */
+    private fun contentKey(manifest: ManifestResponse, sharedSecret: ByteArray): ByteArray {
+        val segments = manifest.base.split('/').filter(String::isNotEmpty)
+        require(segments.size >= 4 && segments[0] == "p") { "unexpected manifest base: ${manifest.base}" }
+
+        val info = "$kdfDomain|${segments[1]}|${segments[2]}".toByteArray()
+        val digest = MessageDigest.getInstance("SHA-256")
+        var folded = ByteArray(0)
+        val material = contentKeyMaterial(sharedSecret, info)
+        repeat(contentKeyRounds) {
+            digest.update(folded)
+            material.forEach(digest::update)
+            folded = digest.digest()
+        }
+
+        val hint = Base64.decode(manifest.hint, Base64.DEFAULT)
+        return ByteArray(32) { i -> (folded[i].toInt() xor hint[i].toInt()).toByte() }
     }
 
     private fun ensureSession(serieSlug: String, chapterSlug: String): ChapterSession {
@@ -360,30 +518,42 @@ abstract class Pam :
                 includeCSRFToken = false,
                 includeVersion = true,
             )
-            val props = client.newCall(req).execute().use { resp ->
+            val body = client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) {
                     throw IOException("Could not rebuild chapter session: HTTP ${resp.code}")
                 }
-                resp.parseAs<PageListResponse>().props
+                resp.parseAs<PageListResponse>()
             }
 
-            val sess = handshakeFrom(props)
+            val sess = openChapter(body).session
             sessions[id] = sess
             return sess
         }
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val props = response.parseAs<PageListResponse>().props
-        val sess = handshakeFrom(props)
+        val body = response.parseAs<PageListResponse>()
+        val props = body.props
         val id = sessionKey(props.data.serie.slug, props.data.slug)
-        sessions[id] = sess
+        val state = openChapter(body)
+        sessions[id] = state.session
 
-        return (1..props.pageCount).map { idx ->
+        val manifest = state.manifest
+            ?: return (1..props.pageCount).map { idx ->
+                Page(
+                    index = idx - 1,
+                    url = "$id#$idx",
+                    imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
+                )
+            }
+
+        val variant = manifest.variants.maxOrNull()?.let { "-$it" }.orEmpty()
+
+        return (1..manifest.count).map { idx ->
             Page(
                 index = idx - 1,
                 url = "$id#$idx",
-                imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
+                imageUrl = "$baseUrl${manifest.base}$idx$variant.ece#$id",
             )
         }
     }
@@ -393,16 +563,24 @@ abstract class Pam :
         return b.joinToString("") { "%02x".format(it) }
     }
 
-    private fun hmacSha256Hex(key: String, msg: String): String {
+    private fun hmacSha256Hex(key: String, msg: String): String = hmacSha256Hex(key, msg.toByteArray(Charsets.US_ASCII))
+
+    private fun hmacSha256Hex(key: String, msg: ByteArray): String {
         val mac = Mac.getInstance("HmacSHA256").apply {
-            init(SecretKeySpec(key.toByteArray(Charsets.US_ASCII), "HmacSHA256"))
+            init(SecretKeySpec(key.toByteArray(), "HmacSHA256"))
         }
-        return mac.doFinal(msg.toByteArray(Charsets.US_ASCII))
-            .joinToString("") { "%02x".format(it) }
+        return mac.doFinal(msg).joinToString("") { "%02x".format(it) }
     }
+
+    private fun sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
+        .joinToString("") { "%02x".format(it) }
 
     override fun imageRequest(page: Page): Request {
         val parsed = page.imageUrl!!.toHttpUrl()
+        if (parsed.encodedPath.endsWith(".ece")) {
+            return GET(parsed, headers)
+        }
+
         val seg = parsed.pathSegments
         require(seg.size >= 6 && seg[0] == "serie" && seg[2] == "chapter" && seg[4] == "page") {
             "unexpected page URL shape: ${parsed.encodedPath}"
@@ -442,6 +620,17 @@ abstract class Pam :
 
         val sessionId = request.url.fragment ?: return response
         val session = sessions[sessionId] ?: return response
+
+        if (session.contentKey != null) {
+            if (!response.isSuccessful) return response
+
+            return response.newBuilder()
+                .body(
+                    decryptEce(response.body.bytes(), session.contentKey)
+                        .toResponseBody("image/webp".toMediaType()),
+                )
+                .build()
+        }
 
         val pageNameRaw = response.header("X-Page-Name") ?: return response
         val keyHintB64 = response.header("X-Key-Hint") ?: return response
@@ -509,10 +698,73 @@ abstract class Pam :
             .build()
     }
 
+    /** RFC 8188 `aes128gcm`, the container reader v2 serves its pages in. */
+    private fun decryptEce(payload: ByteArray, ikm: ByteArray): ByteArray {
+        require(payload.size >= 21) { "ece: payload shorter than the header" }
+
+        val salt = payload.copyOfRange(0, 16)
+        val recordSize = ByteBuffer.wrap(payload, 16, 4).int
+        var pos = 21 + (payload[20].toInt() and 0xFF)
+        require(recordSize >= 18 && pos < payload.size) { "ece: malformed header" }
+
+        val key = SecretKeySpec(hkdf(ikm, salt, ECE_KEY_INFO, 16), "AES")
+        val nonce = hkdf(ikm, salt, ECE_NONCE_INFO, 12)
+        val out = Buffer()
+        var sequence = 0
+
+        while (pos < payload.size) {
+            val record = payload.copyOfRange(pos, minOf(pos + recordSize, payload.size))
+            pos += record.size
+            require(record.size >= 18) { "ece: record $sequence too short" }
+
+            val iv = nonce.copyOf()
+            var counter = sequence
+            for (i in 11 downTo 0) {
+                if (counter == 0) break
+                iv[i] = (iv[i].toInt() xor (counter and 0xFF)).toByte()
+                counter = counter ushr 8
+            }
+
+            val plain = Cipher.getInstance("AES/GCM/NoPadding").run {
+                init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+                doFinal(record)
+            }
+
+            // Records are zero-padded up to a delimiter byte: 2 on the last one, 1 elsewhere.
+            var last = plain.size - 1
+            while (last >= 0 && plain[last].toInt() == 0) last--
+            val isFinal = pos >= payload.size
+            require(last >= 0 && plain[last].toInt() == if (isFinal) 2 else 1) {
+                "ece: record $sequence has the wrong delimiter"
+            }
+
+            out.write(plain, 0, last)
+            sequence++
+        }
+
+        return out.readByteArray()
+    }
+
+    private fun hkdf(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
+        val prk = Mac.getInstance("HmacSHA256").apply {
+            init(SecretKeySpec(salt, "HmacSHA256"))
+        }.doFinal(ikm)
+
+        return Mac.getInstance("HmacSHA256").apply {
+            init(SecretKeySpec(prk, "HmacSHA256"))
+            update(info)
+            update(1)
+        }.doFinal().copyOf(length)
+    }
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
+private const val ATTESTATION_ATTEMPTS = 3
+private const val MANIFEST_VERSION = 2
+private val ECE_KEY_INFO = "Content-Encoding: aes128gcm\u0000".toByteArray()
+private val ECE_NONCE_INFO = "Content-Encoding: nonce\u0000".toByteArray()
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
 private const val CHUNK_SIZE = 65536 + 17 // libsodium secretstream chunk + ABYTES
 private const val PREFIX_LENGTH = 192

@@ -1,0 +1,34 @@
+package eu.kanade.tachiyomi.extension.ja.mechacomic
+
+import keiyoushi.utils.decodeHex
+import okhttp3.Interceptor
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
+import okio.cipherSource
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
+
+class ImageInterceptor : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        val fragment = request.url.fragment
+
+        if (fragment == null || !fragment.startsWith("key=") || !response.isSuccessful) return response
+
+        val key = fragment.substringAfter("key=")
+        val source = response.body.source()
+        val iv = source.readByteArray(16)
+        val secretKey = SecretKeySpec(key.decodeHex(), "AES")
+        val ivSpec = IvParameterSpec(iv)
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
+        val body = source.cipherSource(cipher).buffer().asResponseBody(response.body.contentType())
+
+        return response.newBuilder()
+            .body(body)
+            .build()
+    }
+}

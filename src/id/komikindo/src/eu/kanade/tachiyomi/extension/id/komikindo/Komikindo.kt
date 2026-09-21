@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.komikindo
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
@@ -13,8 +12,6 @@ import org.jsoup.nodes.Document
 abstract class Komikindo : MangaThemesia() {
     // Some covers fail to load with no Accept header + no resize parameter.
     // Hence the workarounds:
-
-    private val cdnHeaders = imageRequest(Page(0, "$baseUrl/", baseUrl)).headers
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(acceptHeaderInterceptor())

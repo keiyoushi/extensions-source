@@ -8,12 +8,16 @@ keiyoushi {
     name = "Mangahub"
     versionCode = 23
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         baseUrl {
             custom("https://mangahub.ru")
         }
         lang = "ru"
+    }
+
+    deeplink {
+        path("/title/..*")
     }
 }

@@ -9,13 +9,10 @@ keiyoushi {
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
+    theme = "loneseal"
 
     source {
         baseUrl = "https://v1.soulscans.org"
         lang = "id"
-    }
-
-    deeplink {
-        path("/..*")
     }
 }
