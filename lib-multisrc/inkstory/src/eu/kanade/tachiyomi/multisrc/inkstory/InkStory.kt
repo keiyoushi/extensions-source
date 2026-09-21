@@ -35,12 +35,7 @@ abstract class InkStory :
     KeiSource(),
     ConfigurableSource {
 
-    protected open val domain: String get() = baseUrl.toHttpUrl().topPrivateDomain() ?: baseUrl.toHttpUrl().host
-    protected open val apiUrl: String get() = "https://api.inuko.me/v2"
-    protected open val serviceName: String get() = when (domain) {
-        "inkstory.net" -> "inkstory"
-        else -> domain
-    }
+    abstract val serviceName: String
 
     private val preferences by getPreferencesLazy {
         val keysToRemove = listOf(
@@ -153,7 +148,7 @@ abstract class InkStory :
 
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = apiUrl.toHttpUrl().newBuilder()
+        val url = API_URL.toHttpUrl().newBuilder()
             .addPathSegment("chapter-update-feed")
             .addQueryParameter("serviceName", serviceName)
             .addQueryParameter("onlyBorderChapters", "true")
@@ -171,7 +166,7 @@ abstract class InkStory :
 
     // ============================== Search Utilities ===============================
     protected open suspend fun makeCatalogRequest(sortBy: String, page: Int, query: String? = null, filters: FilterList? = null): MangasPage {
-        val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
+        val url = "$API_URL/books".toHttpUrl().newBuilder().apply {
             addQueryParameter("serviceName", serviceName)
             var sort = sortBy
             var order = "desc"
@@ -248,7 +243,7 @@ abstract class InkStory :
     ): SMangaUpdate = coroutineScope {
         val mangaAsync = async {
             if (fetchDetails) {
-                val url = "$apiUrl/books/${manga.url}"
+                val url = "$API_URL/books/${manga.url}"
                 client.get(url).parseAs<MangaFullDto>().toSManga()
             } else {
                 manga
@@ -256,19 +251,13 @@ abstract class InkStory :
         }
         val chaptersAsync = async {
             if (fetchChapters) {
-                val bookId = manga.memo["id"]?.string
-                    ?: if (fetchDetails) {
-                        mangaAsync.await().memo["id"]?.string
-                    } else {
-                        client.get("$apiUrl/books/${manga.url}").parseAs<MangaFullDto>().toSManga().memo["id"]?.string
-                    }
-                    ?: return@async chapters
-                val branches = client.get("$apiUrl/branches?bookId=$bookId&moderationStatus=APPROVED")
+                val bookId = manga.memo["id"]!!.string
+                val branches = client.get("$API_URL/branches?bookId=$bookId&moderationStatus=APPROVED")
                     .parseAs<List<BranchDto>>()
                     .associate { it.id to it.publisherName() }
                 val branchType = prefBranch()
                 val branchQuery = prefBranchQuery()
-                val url = "$apiUrl/chapters?bookId=$bookId&moderationStatus=APPROVED"
+                val url = "$API_URL/chapters?bookId=$bookId&moderationStatus=APPROVED"
                 val data = client.get(url).parseAs<List<ChapterDto>>().map { it.toSChapter(branches, manga.url) }
                 when (branchType) {
                     "all" -> data
@@ -291,7 +280,7 @@ abstract class InkStory :
     }
 
     // ============================== Chapters ===============================
-    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["slug"]?.string?.let { "$baseUrl/content/$it/${chapter.url}" } ?: "$baseUrl/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/content/${chapter.memo["slug"]!!.string}/${chapter.url}"
 
     private fun deduplicateChapters(chaptersList: List<SChapter>): List<SChapter> {
         val latestMap = mutableMapOf<Float, SChapter>()
@@ -320,7 +309,7 @@ abstract class InkStory :
 
     // ============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = "$apiUrl/chapters/${chapter.url}"
+        val url = "$API_URL/chapters/${chapter.url}"
         val chapter = client.get(url).parseAs<PagesDto>()
 
         return chapter.pages
@@ -365,7 +354,7 @@ abstract class InkStory :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val genres = client.get("$apiUrl/labels")
+        val genres = client.get("$API_URL/labels")
             .parseAs<List<GenresDto>>()
             .filter { it.kind == "GENRE" }
             .map { it.name to it.slug }
@@ -442,6 +431,7 @@ abstract class InkStory :
     }
 
     companion object {
+        private const val API_URL = "https://api.inuko.me/v2"
         private const val PAGE_SIZE = 30
         private const val IMAGE_NAME_LENGTH = 36
         private const val IMAGE_MODE_INDEX = 14
