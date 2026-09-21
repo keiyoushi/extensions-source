@@ -27,6 +27,7 @@ import keiyoushi.utils.parseAs
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -45,7 +46,7 @@ abstract class ScanManga :
     HttpSource(),
     ConfigurableSource {
 
-    private val domain = baseUrl.toHttpUrl().host
+    private val domain = baseUrl.toHttpUrl().topPrivateDomain()!!
     private val baseImageUrl = "https://static.$domain/img/manga"
     private val baseSearchUrl = "https://bqj.$domain/search/quick.json"
 
@@ -90,13 +91,28 @@ abstract class ScanManga :
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-45.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.asJsoup().select("#carouselTOPContainer > div.top").map { element ->
-            SManga.create().apply {
-                val titleElement = element.selectFirst("a.atop")!!
+        val document = response.asJsoup()
+        val mobileElements = document.select("#carouselTOPContainer div.top")
+        val mangas = if (mobileElements.isNotEmpty()) {
+            mobileElements.map { element ->
+                SManga.create().apply {
+                    val link = element.selectFirst("a.atop")!!
 
-                title = titleElement.text()
-                setUrlWithoutDomain(titleElement.attr("href"))
-                thumbnail_url = element.selectFirst("img")?.attr("data-original")
+                    title = link.text()
+                    setUrlWithoutDomain(link.absUrl("href"))
+                    thumbnail_url = element.selectFirst("img")?.absUrl("data-original")
+                }
+            }
+        } else {
+            document.select("div.image_manga.image_listing").map { element ->
+                SManga.create().apply {
+                    val link = element.selectFirst("a[href]")!!
+                    val img = element.selectFirst("img")
+
+                    setUrlWithoutDomain(link.absUrl("href"))
+                    title = img?.attr("title")?.takeIf { it.isNotEmpty() } ?: link.text()
+                    thumbnail_url = img?.absUrl("data-original")
+                }
             }
         }
 
@@ -104,19 +120,32 @@ abstract class ScanManga :
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?po", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
+        val mobileElements = document.select("#content_news .publi")
+        val mangas = if (mobileElements.isNotEmpty()) {
+            mobileElements.map { element ->
+                SManga.create().apply {
+                    val link = element.selectFirst("a.l_manga")!!
 
-        val mangas = document.select("#content_news .publi").map { element ->
-            SManga.create().apply {
-                val mangaElement = element.selectFirst("a.l_manga")!!
+                    title = link.text()
+                    setUrlWithoutDomain(link.absUrl("href"))
+                    thumbnail_url = element.selectFirst("img")?.absUrl("src")
+                }
+            }
+        } else {
+            document.select("div.listing:has(a.nom_manga)").map { element ->
+                SManga.create().apply {
+                    val link = element.selectFirst("a.nom_manga")!!
+                    val img = element.selectFirst("div.logo_manga img")
 
-                title = mangaElement.text()
-                setUrlWithoutDomain(mangaElement.attr("href"))
-
-                thumbnail_url = element.selectFirst("img")?.attr("src")
+                    title = link.text()
+                    setUrlWithoutDomain(link.absUrl("href"))
+                    thumbnail_url = img?.absUrl("data-original")?.takeIf { it.isNotEmpty() }
+                        ?: img?.absUrl("src")
+                }
             }
         }
 
@@ -124,6 +153,16 @@ abstract class ScanManga :
     }
 
     // Search
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val url = query.trim().toHttpUrlOrNull()
+        if (url?.topPrivateDomain() == domain && MANGA_PATH_REGEX.matches(url.encodedPath)) {
+            val manga = SManga.create().apply { this.url = url.encodedPath }
+            return fetchMangaDetails(manga).map { MangasPage(listOf(it), false) }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseSearchUrl
             .toHttpUrl().newBuilder()
@@ -161,35 +200,59 @@ abstract class ScanManga :
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.select("h1.main_title[itemprop=name]").text()
-            author = document.select("div[itemprop=author]").text()
-            description = document.selectFirst("div.titres_desc[itemprop=description]")?.text()
-            genre = document.selectFirst("div.titres_souspart span[itemprop=genre]")?.text()
+            title = document.selectFirst("h1.main_title[itemprop=name]")?.text()?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("[itemprop=name][content]")?.attr("content")?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("h1")!!.text()
+            author = document.selectFirst("div[itemprop=author]")?.parent()?.ownText()?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("li[itemprop=author]")?.text()
+            description = document.selectFirst("div.titres_desc[itemprop=description]")?.text()?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("p[itemprop=description]")?.text()
+            genre = document.selectFirst("div.titres_souspart span[itemprop=genre]")?.text()?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("li[itemprop=genre]")?.text()
 
-            val statutText = document.selectFirst("div.titres_souspart")?.ownText()
+            val statutText = document.select("div.titres_souspart")
+                .firstOrNull {
+                    it.ownText().contains("En cours", ignoreCase = true) ||
+                        it.ownText().contains("Termin", ignoreCase = true)
+                }
+                ?.ownText()
+                ?: document.select("div.titre_volume_manga span").text()
             status = when {
-                statutText?.contains("En cours", ignoreCase = true) == true -> SManga.ONGOING
-                statutText?.contains("Terminé", ignoreCase = true) == true -> SManga.COMPLETED
+                statutText.contains("En cours", ignoreCase = true) -> SManga.ONGOING
+                statutText.contains("Termin", ignoreCase = true) -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
 
-            thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").attr("src")
+            thumbnail_url = document.selectFirst("div.full_img_serie img[itemprop=image]")
+                ?.absUrl("src")
+                ?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("meta[itemprop=image]")?.absUrl("content")
         }
     }
 
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("div.chapt_m").map { element ->
-            val linkEl = element.selectFirst("td.publimg span.i a")!!
-            val titleEl = element.selectFirst("td.publititle")
+        val mobileElements = document.select("div.chapt_m")
+        return if (mobileElements.isNotEmpty()) {
+            mobileElements.map { element ->
+                val link = element.selectFirst("td.publimg span.i a")!!
+                val chapterName = link.text()
+                val extraTitle = element.selectFirst("td.publititle")?.text()
 
-            val chapterName = linkEl.text()
-            val extraTitle = titleEl?.text()
+                SChapter.create().apply {
+                    name = if (!extraTitle.isNullOrEmpty()) "$chapterName - $extraTitle" else chapterName
+                    setUrlWithoutDomain(link.absUrl("href"))
+                }
+            }
+        } else {
+            document.select("li.chapitre").map { element ->
+                val link = element.selectFirst("div.chapitre_nom a[href]")!!
 
-            SChapter.create().apply {
-                name = if (!extraTitle.isNullOrEmpty()) "$chapterName - $extraTitle" else chapterName
-                setUrlWithoutDomain(linkEl.absUrl("href"))
+                SChapter.create().apply {
+                    name = link.text()
+                    setUrlWithoutDomain(link.absUrl("href"))
+                }
             }
         }
     }
@@ -364,7 +427,10 @@ abstract class ScanManga :
     override fun pageListParse(response: Response): List<Page> = parsePageList(response.asJsoup())
 
     private fun parsePageList(document: org.jsoup.nodes.Document): List<Page> {
-        val packedScript = document.selectFirst(PACKED_SCRIPT_SELECTOR)!!.data()
+        val packedScript = document.select("script")
+            .map { it.data() }
+            .firstOrNull { HUNTER_OBFUSCATION_REGEX.containsMatchIn(it) }
+            ?: error("Failed to find packed reader script.")
         val unpackedScript = decodeHunter(packedScript)
 
         val (sml) = SML_PARAM_REGEX.find(unpackedScript)?.destructured
@@ -373,7 +439,7 @@ abstract class ScanManga :
         val (sme) = SME_PARAM_REGEX.find(unpackedScript)?.destructured
             ?: error("Failed to extract sme parameter.")
 
-        val (chapterId) = CHAPTER_INFO_REGEX.find(packedScript)?.destructured
+        val (chapterId) = CHAPTER_INFO_REGEX.find(document.html())?.destructured
             ?: error("Failed to extract chapter ID.")
 
         val availableVariables = mapOf(
@@ -506,8 +572,11 @@ abstract class ScanManga :
     }
 
     companion object {
-        private const val PACKED_SCRIPT_SELECTOR = "script:containsData(eval\\(function \\()"
-        private val HUNTER_OBFUSCATION_REGEX = Regex("""eval\s*\(\s*function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""")
+        private val MANGA_PATH_REGEX = Regex("""/\d+(?:-\d+)?/[^/]+\.html""")
+        private val HUNTER_OBFUSCATION_REGEX = Regex(
+            """eval\s*\(\s*(?:/\*.*?\*/\s*)?function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
         private val SML_PARAM_REGEX = Regex("""sml\s*=\s*'([^']+)'""")
         private val SME_PARAM_REGEX = Regex("""sme\s*=\s*'([^']+)'""")
         private val CHAPTER_INFO_REGEX = Regex("""const idc = (\d+)""")
