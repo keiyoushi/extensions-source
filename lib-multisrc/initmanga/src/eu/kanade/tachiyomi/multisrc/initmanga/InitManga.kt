@@ -120,7 +120,7 @@ abstract class InitManga :
             urlBuilder.addQueryParameter("page", page.toString())
 
             val response = client.get(urlBuilder.build())
-            val peek = response.peekBody(10).string().trimStart()
+            val peek = response.peekBody(1024).string().trimStart()
             if (peek.isEmpty()) throw IOException("Empty response body")
 
             if (peek.startsWith("<")) {
@@ -185,13 +185,17 @@ abstract class InitManga :
     // ============================== Details & Chapters ====================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val pathSegments = url.pathSegments.filter { it.isNotEmpty() }
         if (pathSegments.size < 2) return null
+        val dir = pathSegments[0]
+        if (dir != mangaUrlDirectory && dir != "seri" && dir != "manga") return null
         val slug = pathSegments[1]
         val manga = SManga.create().apply {
             this.url = "/$mangaUrlDirectory/$slug/"
         }
         return fetchMangaUpdate(manga, emptyList(), true, false).manga.apply {
+            this.url = manga.url
             initialized = true
         }
     }
@@ -203,7 +207,9 @@ abstract class InitManga :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        val updatedManga = parseMangaDetails(document)
+        val updatedManga = parseMangaDetails(document).apply {
+            url = manga.url
+        }
         val updatedChapters = if (fetchChapters) {
             parseChapterList(document, getMangaUrl(manga).toHttpUrl())
         } else {

@@ -31,7 +31,9 @@ abstract class MerlinScans : InitManga() {
         val details = async {
             if (fetchDetails) {
                 val document = client.get(getMangaUrl(manga)).asJsoup()
-                parseMangaDetails(document)
+                parseMangaDetails(document).apply {
+                    url = manga.url
+                }
             } else {
                 manga
             }
@@ -52,7 +54,7 @@ abstract class MerlinScans : InitManga() {
             .addQueryParameter("slug", slug)
             .addQueryParameter("_fields", "id,link")
             .build()
-        val mangaResult = client.get(mangaUrl).parseAs<List<MangaIdDto>>().first()
+        val mangaResult = client.get(mangaUrl).parseAs<List<MangaIdDto>>().firstOrNull() ?: return emptyList()
         val chapters = mutableListOf<SChapter>()
         var page = 1
 

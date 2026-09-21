@@ -6,6 +6,8 @@ import keiyoushi.annotation.Source
 @Source
 abstract class Siyahmelek : InitManga() {
 
+    override val mangaUrlDirectory = "manga"
+
     override val latestUrlSlug = "recently-updated"
 
     override val popularUrlSlug = "manga-ranking"
