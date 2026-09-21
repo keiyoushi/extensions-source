@@ -23,7 +23,6 @@ import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -49,9 +48,6 @@ abstract class InitManga :
     protected open val popularUrlSlug: String = mangaUrlDirectory
 
     protected open val latestUrlSlug: String = "son-guncellemeler"
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = this
-        .set("Referer", "$baseUrl/")
 
     protected open fun Element.imgAttr(): String? {
         fun getUrl(attr: String): String? = absUrl(attr).takeIf { it.isNotBlank() && !it.startsWith("data:") }
