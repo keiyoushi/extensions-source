@@ -12,14 +12,13 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
 
 /**
  * 漫画160 runs the "qingtiancms" (qTcms) reader: each chapter page embeds a base64 string of
@@ -29,36 +28,41 @@ import java.net.URLEncoder
 @Source
 abstract class Mh160 : KeiSource() {
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", USER_AGENT)
-
     // ------------------------------------------------------------------ listings
 
     // Full catalogue, 12 titles per page: /kanmanhua/all/, /kanmanhua/all/2.html, ...
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get(listUrl("all", page), headers).asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get(listUrl("all", page)).asJsoup())
 
     // Single page of recent updates.
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/kanmanhua/zaixian_recent.html", headers).asJsoup()
+        val document = client.get("$baseUrl/kanmanhua/zaixian_recent.html").asJsoup()
         return MangasPage(parseMangaList(document).mangas, hasNextPage = false)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = if (query.isNotBlank()) {
-            "$baseUrl/statics/searchelxt1e1.aspx".toHttpUrl().newBuilder()
+            baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments("statics/searchelxt1e1.aspx")
                 .addQueryParameter("key", query.trim())
                 .addQueryParameter("page", page.toString())
                 .build()
-                .toString()
         } else {
             // The site cannot combine region and genre, so region wins.
             val region = filters.firstInstanceOrNull<RegionFilter>()?.selected
             val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected
             listUrl(region ?: genre ?: "all", page)
         }
-        return parseMangaList(client.get(url, headers).asJsoup())
+        return parseMangaList(client.get(url).asJsoup())
     }
 
-    private fun listUrl(slug: String, page: Int): String = if (page <= 1) "$baseUrl/kanmanhua/$slug/" else "$baseUrl/kanmanhua/$slug/$page.html"
+    private fun listUrl(slug: String, page: Int): HttpUrl = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegment("kanmanhua")
+        .apply {
+            // The site links to /kanmanhua/all/ but that URL 404s; the first page is all/1.html.
+            val firstPage = if (slug == "all") "$slug/1.html" else "$slug/"
+            addPathSegments(if (page <= 1) firstPage else "$slug/$page.html")
+        }
+        .build()
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("ul.mh-search-list > li").mapNotNull(::mangaFromElement)
@@ -70,7 +74,7 @@ abstract class Mh160 : KeiSource() {
         val link = element.selectFirst(".mh-works-title h4 a") ?: return null
         return SManga.create().apply {
             setUrlWithoutDomain(link.absUrl("href"))
-            title = link.attr("title").ifBlank { link.text() }
+            title = link.attrOrNull("title") ?: link.text()
             thumbnail_url = element.selectFirst(".mh-nlook-w img")?.absUrl("src")
             description = element.selectFirst(".mh-works-decs")?.text()
         }
@@ -82,7 +86,7 @@ abstract class Mh160 : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val match = MANGA_URL_REGEX.find(url.encodedPath) ?: return null
         val mangaUrl = "/kanmanhua/${match.groupValues[1]}/"
-        val document = client.get(baseUrl + mangaUrl, headers).asJsoup()
+        val document = client.get(baseUrl + mangaUrl).asJsoup()
         return parseDetails(document).apply { this.url = mangaUrl }
     }
 
@@ -93,7 +97,7 @@ abstract class Mh160 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url, headers).asJsoup()
+        val document = client.get(baseUrl + manga.url).asJsoup()
         return SMangaUpdate(
             manga = parseDetails(document),
             chapters = parseChapters(document),
@@ -125,7 +129,7 @@ abstract class Mh160 : KeiSource() {
     // --------------------------------------------------------------------- pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val html = client.get(baseUrl + chapter.url, headers).use { it.body.string() }
+        val html = client.get(baseUrl + chapter.url).use { it.body.string() }
         val encoded = MURL_REGEX.find(html)?.groupValues?.get(1)
             ?: throw Exception("找不到图片列表，页面结构可能已更改")
         val decoded = String(Base64.decode(encoded, Base64.DEFAULT), Charsets.UTF_8)
@@ -133,7 +137,9 @@ abstract class Mh160 : KeiSource() {
             throw Exception("该章节已下架")
         }
         val chapterId = PID_REGEX.find(html)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
-        // Mirrors f_qTcms_Pic_curUrl_realpic() in the site's show.js.
+        // Mirrors f_qTcms_Pic_curUrl_realpic() in the site's show.js. The site picks a new host
+        // randomly per request; a stable modulo selection spreads load the same way without
+        // re-randomising on every app retry.
         val host = if (chapterId > 542724) IMAGE_HOSTS[(chapterId % IMAGE_HOSTS.size).toInt()] else LEGACY_IMAGE_HOST
 
         return decoded.split(PATH_SEPARATOR)
@@ -141,16 +147,15 @@ abstract class Mh160 : KeiSource() {
             .mapIndexed { index, path ->
                 val imageUrl = when {
                     path.startsWith("http") -> path
-                    path.startsWith("/") -> host + encodePath(path)
-                    else -> "$baseUrl/statics/pic/?p=" + URLEncoder.encode(path, "UTF-8")
+                    path.startsWith("/") -> host.toHttpUrl().newBuilder().addEncodedPathSegments(path.trimStart('/')).build().toString()
+                    else -> baseUrl.toHttpUrl().newBuilder()
+                        .addPathSegments("statics/pic/")
+                        .addQueryParameter("p", path)
+                        .build()
+                        .toString()
                 }
                 Page(index, imageUrl = imageUrl)
             }
-    }
-
-    /** Percent-encodes each path segment (the paths contain Chinese characters). */
-    private fun encodePath(path: String): String = path.split("/").joinToString("/") { segment ->
-        URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
     }
 
     // ------------------------------------------------------------------- filters
@@ -161,57 +166,7 @@ abstract class Mh160 : KeiSource() {
         GenreFilter(),
     )
 
-    private open class UrlSelectFilter(name: String, private val options: List<Pair<String, String?>>) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
-        val selected: String? get() = options[state].second
-    }
-
-    private class RegionFilter :
-        UrlSelectFilter(
-            "地区",
-            listOf(
-                "不限" to null,
-                "日韩" to "zaixian_rhmh",
-                "内地" to "zaixian_dlmh",
-                "港台" to "zaixian_gtmh",
-            ),
-        )
-
-    private class GenreFilter :
-        UrlSelectFilter(
-            "题材",
-            listOf(
-                "全部" to null,
-                "热血" to "rexue",
-                "格斗" to "gedou",
-                "科幻" to "kehuan",
-                "竞技" to "jingji",
-                "搞笑" to "gaoxiao",
-                "推理" to "tuili",
-                "恐怖" to "kongbu",
-                "耽美" to "danmei",
-                "少女" to "shaonv",
-                "恋爱" to "lianai",
-                "生活" to "shenghuo",
-                "战争" to "zhanzheng",
-                "故事" to "gushi",
-                "冒险" to "maoxian",
-                "魔幻" to "mohuan",
-                "玄幻" to "xuanhuan",
-                "校园" to "xiaoyuan",
-                "悬疑" to "xuanyi",
-                "萌系" to "mengxi",
-                "穿越" to "chuanyue",
-                "后宫" to "hougong",
-                "都市" to "dushi",
-                "武侠" to "wuxia",
-                "历史" to "lishi",
-                "同人" to "tongren",
-            ),
-        )
-
     companion object {
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         private const val PATH_SEPARATOR = "\$qingtiandy\$"
         private const val LEGACY_IMAGE_HOST = "https://mhpic6.tgmhfc.uk"
         private val IMAGE_HOSTS = listOf(
