@@ -26,8 +26,8 @@ import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import keiyoushi.zip.Entry
-import keiyoushi.zip.readZipEntryAsync
-import keiyoushi.zip.zipDirectoryAsync
+import keiyoushi.zip.coroutines.readZipEntry
+import keiyoushi.zip.coroutines.zipDirectory
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import okhttp3.CacheControl.Companion.FORCE_NETWORK
@@ -155,33 +155,40 @@ abstract class UNext :
             ?: throw Exception("This product is not available yet.")
 
         val userId = async {
-            client.graphQLGet(
-                apiUrl,
-                apiHeaders,
-                operationName = "cosmo_getCacheBusterUserId",
-                extensions = persistedQueryExtension(USER_ID_QUERY_HASH),
-            ).parseAs<UserResponse>().userId
+            try {
+                client.graphQLGet(
+                    apiUrl,
+                    apiHeaders,
+                    operationName = "cosmo_getCacheBusterUserId",
+                    extensions = persistedQueryExtension(USER_ID_QUERY_HASH),
+                ).parseGraphQLAs<UserResponse>().unextUser.id
+            } catch (_: GraphQLException) {
+                ""
+            }
         }
 
-        val playlist = try {
-            client.graphQLGet(
-                apiUrl,
-                apiHeaders,
-                operationName = "cosmo_getBookPlaylistUrl",
-                variables = PageListVariables(bookFileCode),
-                extensions = persistedQueryExtension(PLAYLIST_QUERY_HASH),
-                cacheControl = FORCE_NETWORK,
-            ).parseGraphQLAs<PlaylistResponse>().playlist
-        } catch (_: GraphQLException) {
-            throw Exception("Log in via WebView and rent or purchase this chapter to read.")
-        }
+        val playlistResult = client.graphQLGet(
+            apiUrl,
+            apiHeaders,
+            operationName = "cosmo_getBookPlaylistUrl",
+            variables = PageListVariables(bookFileCode),
+            extensions = persistedQueryExtension(PLAYLIST_QUERY_HASH),
+            cacheControl = FORCE_NETWORK,
+        ).parseAs<PlaylistResponse>()
+
+        val playlist = playlistResult.playlist ?: throw Exception(
+            when (playlistResult.errorCode) {
+                "BKE0004103" -> "This product can only be read in the U-NEXT app."
+                else -> "Log in via WebView and rent or purchase this product to read."
+            },
+        )
 
         val contentKeys = async { getContentKeys(playlist, bookFileCode, userId.await()) }
 
         val zipUrl = playlist.zipUrl
-        val entries = client.zipDirectoryAsync(zipUrl).entries.associateBy(Entry::name)
-        val index = async { client.readZipEntryAsync(zipUrl, entries.getValue("index.json")).buffer().parseAs<UBookIndex>() }
-        val drm = async { client.readZipEntryAsync(zipUrl, entries.getValue("drm.json")).buffer().parseAs<UBookDrm>() }
+        val entries = client.zipDirectory(zipUrl).entries.associateBy(Entry::name)
+        val index = async { client.readZipEntry(zipUrl, entries.getValue("index.json")).buffer().parseAs<UBookIndex>() }
+        val drm = async { client.readZipEntry(zipUrl, entries.getValue("drm.json")).buffer().parseAs<UBookDrm>() }
 
         val encryptedFiles = drm.await().encryptedFileList
         val keys = contentKeys.await()

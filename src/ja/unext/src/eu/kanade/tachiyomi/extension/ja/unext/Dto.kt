@@ -179,6 +179,7 @@ class Book(
     private val publicStartDateTime: String?,
     private val isFree: Boolean?,
     private val isPurchased: Boolean?,
+    private val bookNo: Int?,
     private val rightsExpirationDatetime: String?,
     val credits: List<Credit>?,
     private val bookContent: BookContent?,
@@ -190,6 +191,7 @@ class Book(
         url = code
         name = (if (isLocked) "🔒 " else "") + this@Book.name
         date_upload = Instant.tryParse(publicStartDateTime)
+        chapter_number = bookNo?.toFloat() ?: -1f
         memo = buildJsonObject {
             put("sakuhinCode", sakuhinCode)
             bookContent?.mainBookFile?.let {
@@ -222,24 +224,36 @@ class BookFile(
 
 @Serializable
 class UserResponse(
-    private val data: UserData?,
-) {
-    val userId get() = data?.unextUser?.id.orEmpty()
-}
-
-@Serializable
-class UserData(
-    val unextUser: UnextUser?,
+    val unextUser: UnextUser,
 )
 
 @Serializable
 class UnextUser(
-    val id: String?,
+    val id: String,
 )
 
 @Serializable
 class PlaylistResponse(
-    @SerialName("webfront_bookPlaylistUrl") val playlist: Playlist,
+    private val data: PlaylistData?,
+    private val errors: List<ApiError>?,
+) {
+    val playlist get() = data?.playlist
+    val errorCode get() = errors?.firstOrNull()?.extensions?.code
+}
+
+@Serializable
+class PlaylistData(
+    @SerialName("webfront_bookPlaylistUrl") val playlist: Playlist?,
+)
+
+@Serializable
+class ApiError(
+    val extensions: ApiErrorExtensions?,
+)
+
+@Serializable
+class ApiErrorExtensions(
+    val code: String?,
 )
 
 @Serializable
