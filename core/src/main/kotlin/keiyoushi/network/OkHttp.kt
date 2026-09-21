@@ -16,7 +16,7 @@ import kotlin.time.Duration.Companion.minutes
 /**
  * Default cache control.
  */
-private val DEFAULT_CACHE_CONTROL = CacheControl.Builder().maxAge(10.minutes).build()
+val DEFAULT_CACHE_CONTROL: CacheControl = CacheControl.Builder().maxAge(10.minutes).build()
 
 /**
  * Executes a GET request asynchronously and returns the response.

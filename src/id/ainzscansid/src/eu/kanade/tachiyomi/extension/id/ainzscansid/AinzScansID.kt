@@ -1,113 +1,65 @@
 package eu.kanade.tachiyomi.extension.id.ainzscansid
 
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.multisrc.loneseal.ChapterPagesResponseDto
+import eu.kanade.tachiyomi.multisrc.loneseal.LoneSeal
+import eu.kanade.tachiyomi.multisrc.loneseal.UrlLayout
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.get
-import keiyoushi.network.rateLimit
-import keiyoushi.source.KeiSource
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonElement
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+
+private val adDomainRegex = """^999(?:-\d+)?\.jpe?g$""".toRegex()
+private val adDonationRegex = """^997(?:-\d+)?\.jpe?g$""".toRegex()
+private val adVotePreRegex = """^00\.0\.jpg$""".toRegex()
+private val adReadOnRegex = """^00\.1\.jpg$""".toRegex()
+private val adVotePostRegex = """^995\.jpg$""".toRegex()
 
 @Source
-abstract class AinzScansID : KeiSource() {
+abstract class AinzScansID : LoneSeal() {
+    override val urlLayout = UrlLayout.LEGACY_COMIC
+    override val includeProjectOnlyFilter = true
+    override val overloadedGenres = super.overloadedGenres + setOf("adventure")
 
-    private val apiUrl = "https://api.ainzscans01.com/api"
+    override fun toPageList(dto: ChapterPagesResponseDto) = buildList {
+        val pages = dto.chapter.pages
+        pages.forEachIndexed { i, page ->
+            val url = page.imageUrl.cleanUp()
+            val filename = url.toHttpUrlOrNull()?.pathSegments?.lastOrNull()
 
-    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
+            val isAd = when (i) {
+                pages.lastIndex -> filename?.matches(adDomainRegex) == true
+                pages.lastIndex - 2 -> filename?.matches(adDonationRegex) == true || filename?.matches(adVotePostRegex) == true
+                0 -> filename?.matches(adVotePreRegex) == true
+                1 -> filename?.matches(adReadOnRegex) == true
+                else -> false
+            }
 
-    // ============================== Popular ===============================
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$apiUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "COMIC")
-            .addQueryParameter("sort", "views")
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("limit", "20")
-            .addQueryParameter("page", page.toString())
-            .build()
-        return client.get(url).parseAs<SearchResponseDto>().toMangasPage(page)
+            if (!isAd) {
+                add(Page(i, imageUrl = url))
+            }
+        }
     }
 
-    // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$apiUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "COMIC")
-            .addQueryParameter("sort", "latest")
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("limit", "20")
-            .addQueryParameter("page", page.toString())
-            .build()
-        return client.get(url).parseAs<SearchResponseDto>().toMangasPage(page)
-    }
+    private fun String.cleanUp(): String {
+        var url = if (startsWith("http")) this else "https://api.ainzscans01.com$this"
 
-    // =============================== Search ===============================
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$apiUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "COMIC")
-            .addQueryParameter("limit", "20")
-            .addQueryParameter("page", page.toString())
+        // Fix for older chapters using Blogger/Googleusercontent compressed images
+        if (url.contains("googleusercontent.com") || url.contains("bp.blogspot.com")) {
+            url = url.replace(Regex("""=[swh]\d+[^/?]*($|\?)""", RegexOption.IGNORE_CASE), "=s0$1")
+                .replace(Regex("""/[swh]\d+[^/]*/""", RegexOption.IGNORE_CASE), "/s0/")
+        }
 
-        url.addQueryParameter("q", query)
-
-        filters.forEach { filter ->
-            when (filter) {
-                is SortFilter -> url.addQueryParameter("sort", filter.selectedValue())
-                is OrderFilter -> url.addQueryParameter("order", filter.selectedValue())
-                is StatusFilter -> url.addQueryParameter("status", filter.selectedValue())
-                is GenreFilter -> url.addQueryParameter("genre", filter.selectedValue())
-                is TypeFilter -> url.addQueryParameter("comic_type", filter.selectedValue())
-                is ColorFilter -> url.addQueryParameter("color_format", filter.selectedValue())
-                is ReadingFilter -> url.addQueryParameter("reading_format", filter.selectedValue())
-                is TextFilter -> url.addQueryParameter(filter.queryKey, filter.state)
-                else -> {}
+        // Clean up common CMS resizing query parameters
+        url.toHttpUrlOrNull()?.let { httpUrl ->
+            if (httpUrl.queryParameterNames.any { it == "w" || it == "width" || it == "resize" }) {
+                url = httpUrl.newBuilder()
+                    .removeAllQueryParameters("w")
+                    .removeAllQueryParameters("width")
+                    .removeAllQueryParameters("resize")
+                    .build()
+                    .toString()
             }
         }
 
-        return client.get(url.build()).parseAs<SearchResponseDto>().toMangasPage(page)
-    }
-
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${getNormalizedMangaUrl(manga)}"
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
-
-    // ======================= Details and Chapters ==========================
-    override suspend fun fetchMangaUpdate(
-        manga: SManga,
-        chapters: List<SChapter>,
-        fetchDetails: Boolean,
-        fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val dto = client.get("$apiUrl/series${getNormalizedMangaUrl(manga)}").parseAs<SeriesDetailDto>()
-        val comicSlug = dto.toSManga().url.substringAfterLast("/")
-        return SMangaUpdate(dto.toSManga(), dto.units.map { it.toSChapter(comicSlug) })
-    }
-
-    // =============================== Pages ================================
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/series${chapter.url}").parseAs<ChapterDetailDto>().toPageList()
-
-    // =============================== Filters ===============================
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        SortFilter(),
-        OrderFilter(),
-        StatusFilter(),
-        GenreFilter(),
-        TypeFilter(),
-        ColorFilter(),
-        ReadingFilter(),
-        TextFilter("Author", "author"),
-        TextFilter("Artist", "artist"),
-        TextFilter("Publisher", "publisher"),
-    )
-
-    private fun getNormalizedMangaUrl(manga: SManga): String = if (manga.url.startsWith("/series/")) {
-        "/comic/${manga.url.substringAfter("/series/").removeSuffix("/")}"
-    } else {
-        manga.url
+        return url
     }
 }

@@ -5,28 +5,45 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
 
 @Serializable
 class SeriesResponse(
     val data: SeriesData,
     private val included: List<IncludedItem>,
 ) {
-    fun getComics(): List<ComicEntry> {
-        val comics = included.filter { it.type == "comic" }
-        val images = included.filter { it.type == "image" }
+    fun toSMangaList(): List<SManga> {
+        val itemsById = included.associateBy { it.id }
 
-        return comics.mapIndexed { index, comic ->
-            ComicEntry(comic.attributes, images[index].attributes)
-        }
+        return data.relationships.entries.map { ref ->
+            val item = itemsById.getValue(ref.id)
+            val comic = item.relationships?.comic?.data?.let { itemsById.getValue(it.id) } ?: item
+            val thumbnail = item.relationships?.thumbnailImage?.data?.let { itemsById.getValue(it.id) }
+
+            SManga.create().apply {
+                url = comic.attributes.dirName!!
+                title = comic.attributes.title!!
+                thumbnail_url = thumbnail?.attributes?.url
+            }
+        }.distinctBy { it.url }
     }
 }
 
 @Serializable
 class SeriesData(
     val attributes: SeriesAttributes,
+    val relationships: SeriesRelationships,
 )
+
+@Serializable
+class SeriesRelationships(
+    private val comics: RelationListWrapper?,
+    private val episodes: RelationListWrapper?,
+) {
+    val entries get() = (comics ?: episodes!!).data
+}
 
 @Serializable
 class SeriesAttributes(
@@ -41,6 +58,7 @@ class IncludedItem(
     val id: String,
     val type: String,
     val attributes: IncludedAttributes,
+    val relationships: IncludedRelationships?,
 )
 
 @Serializable
@@ -52,20 +70,20 @@ class IncludedAttributes(
 )
 
 @Serializable
+class IncludedRelationships(
+    val comic: RelationWrapper?,
+    @SerialName("thumbnail_image") val thumbnailImage: RelationWrapper?,
+)
+
+@Serializable
+class RelationListWrapper(
+    val data: List<RelationData>,
+)
+
+@Serializable
 class RelationData(
     val id: String,
 )
-
-class ComicEntry(
-    private val comic: IncludedAttributes,
-    private val image: IncludedAttributes,
-) {
-    fun toSManga() = SManga.create().apply {
-        url = comic.dirName!!
-        title = comic.title!!
-        thumbnail_url = image.url
-    }
-}
 
 @Serializable
 class DetailsResponse(
@@ -127,6 +145,7 @@ class EpisodeEntry(
 
 @Serializable
 class EpisodeAttributes(
+    private val key: String,
     private val title: String?,
     private val volume: String,
     @SerialName("sort_volume") private val sortVolume: Int,
@@ -134,14 +153,16 @@ class EpisodeAttributes(
 ) {
     fun toSChapter(dirName: String) = SChapter.create().apply {
         val chapterTitle = if (!title.isNullOrEmpty()) " - $title" else ""
-        url = "$dirName/$sortVolume"
+        url = key // chapter uuid
         name = "Chapter $volume$chapterTitle"
-        date_upload = dateFormat.tryParse(publishedAt)
+        date_upload = Instant.tryParse(publishedAt)
         chapter_number = sortVolume.toFloat()
+        memo = buildJsonObject {
+            put("uuid", dirName)
+            put("chapter", sortVolume)
+        }
     }
 }
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ", Locale.ROOT)
 
 @Serializable
 class ViewerResponse(

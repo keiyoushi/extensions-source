@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ja.readerstore
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,35 +9,39 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.boolean
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import java.io.IOException
 import java.util.UUID.randomUUID
 
 @Source
 abstract class ReaderStore :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
-
     private val preferences by getPreferencesLazy()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
-        .addCookie(
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ImageInterceptor())
+        addCookie(
             listOf(
                 "safeSearch" to """{"safeAdultGenreFlg":false,"safeNonCherryFlg":false,"safeBLGenreFlg":false,"safeTLGenreFlg":false,"safeBikiniGenreFlg":false}""",
                 "agelimit_auth" to "true",
             ),
         )
-        .addInterceptor {
+        addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
             if (response.code == 500 && request.url.encodedPath == "/front-api/viewer/") {
@@ -46,17 +49,13 @@ abstract class ReaderStore :
             }
             response
         }
-        .build()
+    }
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 1 }))
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList(SortFilter().apply { state = 1 }))
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", FilterList(SortFilter().apply { state = 2 }))
 
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 2 }))
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$API_URL/search/detail/".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query)
             addQueryParameter("page", page.toString())
@@ -71,11 +70,13 @@ abstract class ReaderStore :
             addFilter("priceMin", filters.firstInstanceOrNull<PriceMinFilter>())
             addFilter("priceMax", filters.firstInstanceOrNull<PriceMaxFilter>())
         }.build()
-        return GET(url, headers)
+
+        val result = client.get(url).parseAs<SearchResponse>().response
+        val mangas = result.docs.map { it.toSManga() }
+        return MangasPage(mangas, result.hasNextPage())
     }
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("Note: Search and active filters are applied together"),
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Note: Novels are not supported!"),
         SortFilter(),
         GenreFilter(),
@@ -88,95 +89,84 @@ abstract class ReaderStore :
         PriceMaxFilter(),
     )
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SearchResponse>().response
-        val mangas = result.docs.map { it.toSManga() }
-        return MangasPage(mangas, result.hasNextPage())
-    }
-
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/title/${manga.url}/"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$API_URL/contents/title/${manga.url}/".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "desc")
-            .addQueryParameter("page", "1")
-            .addQueryParameter("count", "1000")
-            .addQueryParameter("fields", "detail")
-            .addQueryParameter("fields", "title")
-            .addQueryParameter("fields", "authors")
-            .addQueryParameter("fields", "floor")
-            .addQueryParameter("fields", "price")
-            .addQueryParameter("fields", "point")
-            .addQueryParameter("fields", "browserView")
-            .build()
-        return GET(url, headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val url = "$API_URL/contents/title/${manga.url}/".toHttpUrl().newBuilder().apply {
+            addQueryParameter("sort", "desc")
+            addQueryParameter("page", "1")
+            addQueryParameter("count", "1000")
+            addQueryParameter("fields", "detail")
+            addQueryParameter("fields", "title")
+            addQueryParameter("fields", "authors")
+            addQueryParameter("fields", "floor")
+            addQueryParameter("fields", "price")
+            addQueryParameter("fields", "point")
+            addQueryParameter("fields", "browserView")
+        }.build()
+
+        val items = client.get(url).parseAs<List<MangaResponseItem>>()
+
+        return SMangaUpdate(
+            items.last().toSManga(baseUrl),
+            items.filter { !hideLocked || (!it.isLocked && !it.isPreview) }
+                .map { it.toSChapter() },
+        )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<List<MangaResponseItem>>().last().toSManga(baseUrl)
+    private suspend fun tokenResponse(chapter: SChapter): TokenResponse {
+        val url = "$API_URL/viewer/".toHttpUrl().newBuilder()
+            .addQueryParameter("aid", chapter.url)
+            .addQueryParameter("isSample", chapter.memo["isSample"]!!.boolean.toString())
+            .addQueryParameter("redirectPathForReadEnd", "")
+            .build()
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        return response.parseAs<List<MangaResponseItem>>()
-            .filter { !hideLocked || (!it.isLocked && !it.isPreview) }
-            .map { it.toSChapter() }
+        return client.get(url).parseAs<TokenResponse>()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val parts = "$baseUrl/${chapter.url}".toHttpUrl()
-        val sample = if (parts.fragment == "1") "true" else "false"
-        val chapterId = parts.pathSegments.first()
-        val url = "$API_URL/viewer/".toHttpUrl().newBuilder()
-            .addQueryParameter("aid", chapterId)
-            .addQueryParameter("isSample", sample)
-            .addQueryParameter("redirectPathForReadEnd", "")
-            .build()
-        val response = client.newCall(GET(url, headers)).execute().parseAs<TokenResponse>().token
-        val chapterUrl = "$VIEWER_URL/open".toHttpUrl().newBuilder()
-            .addQueryParameter("uuid", response.uuid)
-            .addQueryParameter("iid", response.browserContentsId)
-            .addQueryParameter("auth_token", response.authToken)
+        val token = runBlocking { tokenResponse(chapter).token }
+
+        return "$VIEWER_URL/open".toHttpUrl().newBuilder()
+            .addQueryParameter("uuid", token.uuid)
+            .addQueryParameter("iid", token.browserContentsId)
+            .addQueryParameter("auth_token", token.authToken)
             .build()
             .toString()
-        return chapterUrl
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val parts = "$baseUrl/${chapter.url}".toHttpUrl()
-        val sample = if (parts.fragment == "1") "true" else "false"
-        val chapterId = parts.pathSegments.first()
-        val url = "$API_URL/viewer/".toHttpUrl().newBuilder()
-            .addQueryParameter("aid", chapterId)
-            .addQueryParameter("isSample", sample)
-            .addQueryParameter("redirectPathForReadEnd", "")
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<TokenResponse>().token
+    override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
+        val token = tokenResponse(chapter).token
         val nmr = randomUUID().toString()
-        val newHeaders = headersBuilder()
+        val viewerHeaders = headersBuilder()
             .set(HEADER_NMR, nmr)
-            .set(HEADER_TOKEN, result.authToken)
+            .set(HEADER_TOKEN, token.authToken)
             .set(HEADER_USE_CACHE, "false")
-            .set(HEADER_UUID, result.uuid)
+            .set(HEADER_UUID, token.uuid)
             .build()
 
-        val base = "$VIEWER_URL/${result.browserContentsId}"
-        val metaData = client.newCall(GET("$base/meta".toHttpUrl(), newHeaders)).execute().parseAs<MetaResponse>().data
-        val maxIndex = metaData.page.all?.minus(1) ?: throw Exception("Novels are not supported!")
-        val cipherKey = extractCipherKey(client.newCall(GET("$base/decrypt", newHeaders)).execute().body.string())
+        val base = "$VIEWER_URL/${token.browserContentsId}"
+        val metaData = async { client.get("$base/meta", viewerHeaders).parseAs<MetaResponse>().data }
+        val cipherKey = async { extractCipherKey(client.get("$base/decrypt", viewerHeaders).use { it.body.string() }) }
 
-        return (0..maxIndex).map {
+        val meta = metaData.await()
+        val maxIndex = meta.page.all?.minus(1) ?: throw Exception("Novels are not supported!")
+        val key = cipherKey.await()
+
+        (0..maxIndex).map { index ->
             val url = "$base/$PATH_IMAGE_URL".toHttpUrl().newBuilder()
-                .addQueryParameter(PARAM_INDICES, it.toString())
+                .addQueryParameter(PARAM_INDICES, index.toString())
                 .addQueryParameter(PARAM_CODE, QUALITY_HIGH)
                 .addQueryParameter(PARAM_ACCEPT, ACCEPT_FORMATS)
-                .fragment("$it;$nmr;${result.authToken};${result.uuid};$maxIndex;$cipherKey;${metaData.type}")
+                .fragment("$nmr;${token.authToken};${token.uuid};$maxIndex;$key;${meta.type}")
                 .build()
-            Page(it, imageUrl = url.toString())
+            Page(index, imageUrl = url.toString())
         }
     }
 
@@ -205,6 +195,4 @@ abstract class ReaderStore :
         private val NUMBER = Regex("""\d+""")
         private val IV_DIGITS = listOf("0", "1", "2", "3")
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
