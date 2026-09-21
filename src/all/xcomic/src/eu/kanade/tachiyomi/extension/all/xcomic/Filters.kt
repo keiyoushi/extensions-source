@@ -32,24 +32,14 @@ abstract class TriStateGroupFilter(
         get() = state.filter { it.isExcluded() }.map { it.value }
 }
 
-class LetterFilter :
-    SelectFilter(
-        name = "Letter matching mode (Slow)",
-        options = listOf("Disabled" to "disabled", "Enabled" to "enabled"),
-    )
-
 class SortFilter(
     options: List<Pair<String, String>> = sortOptions,
     defaultIndex: Int = 0,
 ) : SelectFilter(name = "Order by", options = options, default = defaultIndex)
 
 class OriginalStatusFilter(
-    options: List<Pair<String, String>> = uploadStatus,
+    options: List<Pair<String, String>> = statusOptions,
 ) : SelectFilter(name = "Original Work Status", options = options)
-
-class UploadStatusFilter(
-    options: List<Pair<String, String>> = uploadStatus,
-) : SelectFilter(name = "Upload Status", options = options)
 
 class ChapterCountFilter(
     options: List<Pair<String, String>> = chapterCountOptions,
@@ -189,27 +179,45 @@ val languages = listOf(
 )
 
 val formatOptions = listOf(
+    "1-Koma" to "1_koma",
+    "2-Koma" to "2_koma",
+    "3-Koma" to "3_koma",
     "4 Koma" to "4_koma",
     "Adaptation" to "adaptation",
     "Anthology" to "anthology",
+    "Artbook" to "artbook",
     "Award Winning" to "award_winning",
     "Doujinshi" to "doujinshi",
     "Fan Colored" to "fan_colored",
+    "Fanbook" to "fanbook",
+    "Fanwork" to "fanwork",
     "Full Color" to "full_color",
+    "Guidebook" to "guidebook",
+    "Illustbook" to "illustbook",
+    "Illustration Book" to "illustration_book",
+    "Japanese Novel" to "japanese_novel",
+    "Light Novel" to "light_novel",
     "Long Strip" to "long_strip",
+    "Longstrip" to "longstrip",
+    "Novels" to "novels",
     "Official Colored" to "official_colored",
     "Oneshot" to "oneshot",
+    "Original Doujinshi" to "original_doujinshi",
+    "Partially Colored" to "partially_colored",
+    "Partially Colored Webtoon" to "partially_colored_webtoon",
     "Web Comic" to "web_comic",
+    "Web Novel" to "web_novel",
     "Webtoon" to "webtoon",
 )
 
-val uploadStatus = listOf(
+val statusOptions = listOf(
     "All" to "",
-    "Pending" to "pending",
-    "Ongoing" to "ongoing",
+    "Releasing" to "releasing",
     "Completed" to "completed",
     "Hiatus" to "hiatus",
     "Cancelled" to "cancelled",
+    "Upcoming" to "upcoming",
+    "Unknown" to "unknown",
 )
 
 val chapterCountOptions = listOf(
@@ -222,15 +230,42 @@ val chapterCountOptions = listOf(
 )
 
 val sortOptions = listOf(
-    "Rating Score" to "field_score", "Latest Update" to "field_update", "Recently Added" to "field_create",
-    "Name A-Z" to "field_name_asc", "Name Z-A" to "field_name_desc", "Most Chapters" to "field_chapter",
-    "Most Follows" to "field_follow", "Most Reviews" to "field_review", "Most Comments" to "field_comment",
-    "Most Views (Total)" to "views_d000", "Most Views (360 days)" to "views_d360",
-    "Most Views (180 days)" to "views_d180", "Most Views (90 days)" to "views_d090",
-    "Most Views (30 days)" to "views_d030", "Most Views (7 days)" to "views_d007",
-    "Most Views (24 hours)" to "views_h024", "Most Views (12 hours)" to "views_h012",
-    "Most Views (6 hours)" to "views_h006", "Most Views (1 hour)" to "views_h001",
-    "User Status (Plan to Read)" to "status_wish", "User Status (Reading)" to "status_doing",
-    "User Status (Completed)" to "status_completed", "User Status (On Hold)" to "status_on_hold",
-    "User Status (Dropped)" to "status_dropped", "User Status (Re-reading)" to "status_repeat",
+    "Rating Score" to "field_score",
+    "Latest Update" to "field_update",
+    "Recently Added" to "field_create",
+    "Name A-Z" to "field_name_asc",
+    "Name Z-A" to "field_name_desc",
+    "Most Follows" to "field_follow",
+    "Most Reviews" to "field_review",
+    "Most Comments" to "field_comment",
+    "Most Chapters" to "field_chapter",
 )
+
+// Flag emoji shown on a title's source cards -> language code. Flags reused by
+// several languages (e.g. 🇪🇸 for es/eu/gl) map to a set of candidates; those
+// sources are resolved with an API probe instead of the flag alone.
+val languageFlags = listOf(
+    "🇬🇧" to "en", "🇫🇷" to "fr", "🇪🇸" to "es", "🇲🇽" to "es_419", "🇵🇹" to "pt",
+    "🇧🇷" to "pt_br", "🇮🇩" to "id", "🇬🇪" to "ab", "🇿🇦" to "af", "🇦🇱" to "sq",
+    "🇸🇦" to "ar", "🇦🇲" to "hy", "🇦🇿" to "az", "🇧🇾" to "be", "🇧🇩" to "bn",
+    "🇧🇦" to "bs", "🇧🇬" to "bg", "🇲🇲" to "my", "🇰🇭" to "km", "🇦🇩" to "ca",
+    "🇵🇭" to "ceb", "🇨🇳" to "zh", "🇭🇰" to "zh_hk", "🇭🇷" to "hr", "🇨🇿" to "cs",
+    "🇷🇺" to "cv", "🇩🇰" to "da", "🇳🇱" to "nl", "🏳️" to "eo", "🇪🇪" to "et",
+    "🇪🇸" to "eu", "🇵🇭" to "fil", "🇫🇮" to "fi", "🇬🇪" to "ka", "🇩🇪" to "de",
+    "🇬🇷" to "el", "🇵🇾" to "gn", "🇮🇳" to "gu", "🇭🇹" to "ht", "🇮🇱" to "he",
+    "🇮🇳" to "hi", "🇭🇺" to "hu", "🇮🇸" to "is", "🇳🇬" to "ig", "🇮🇪" to "ga",
+    "🇪🇸" to "gl", "🇮🇹" to "it", "🇯🇵" to "ja", "🇮🇩" to "jv", "🇰🇿" to "kk",
+    "🇰🇷" to "ko", "🇮🇶" to "ku", "🇰🇬" to "ky", "🇻🇦" to "la", "🇱🇦" to "lo",
+    "🇱🇻" to "lv", "🇱🇹" to "lt", "🇲🇬" to "mg", "🇲🇾" to "ms", "🇮🇳" to "ml",
+    "🇲🇹" to "mt", "🇳🇿" to "mi", "🇮🇳" to "mr", "🇲🇩" to "mo", "🇲🇳" to "mn",
+    "🇳🇵" to "ne", "🇳🇴" to "no", "🇲🇼" to "ny", "🇦🇫" to "ps", "🇮🇷" to "fa",
+    "🇵🇱" to "pl", "🇷🇴" to "ro", "🇷🇺" to "ru", "🇷🇸" to "sr", "🇷🇸" to "sh",
+    "🇸🇿" to "ss", "🇱🇸" to "st", "🇱🇰" to "si", "🇸🇰" to "sk", "🇸🇮" to "sl",
+    "🇸🇴" to "so", "🇸🇪" to "sv", "🇱🇰" to "ta", "🇮🇳" to "te", "🇹🇭" to "th",
+    "🇪🇷" to "ti", "🇹🇴" to "to", "🇹🇷" to "tr", "🇹🇲" to "tk", "🇺🇦" to "uk",
+    "🇵🇰" to "ur", "🇺🇿" to "uz", "🇻🇳" to "vi", "🇳🇬" to "yo", "🇿🇦" to "zu",
+    "🏳️‍🌈" to "_t",
+)
+
+val flagLanguageCandidates: Map<String, Set<String>> =
+    languageFlags.groupBy({ it.first }, { it.second }).mapValues { (_, codes) -> codes.toSet() }
