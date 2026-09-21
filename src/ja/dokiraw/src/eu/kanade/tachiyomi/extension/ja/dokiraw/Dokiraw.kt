@@ -121,10 +121,11 @@ abstract class Dokiraw : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
-        val updatedManga = if (fetchDetails) mangaDetailsParse(document, manga) else manga
-        val updatedChapters = if (fetchChapters) chapterListParse(document) else chapters
-        return SMangaUpdate(updatedManga, updatedChapters)
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            manga = mangaDetailsParse(document, manga),
+            chapters = chapterListParse(document),
+        )
     }
 
     private fun mangaDetailsParse(document: Document, manga: SManga): SManga = manga.apply {
@@ -140,6 +141,8 @@ abstract class Dokiraw : KeiSource() {
 
         thumbnail_url = document.selectFirst("img[src*=cover]")?.absUrl("src")
             ?: manga.thumbnail_url
+
+        initialized = true
     }
 
     private fun chapterListParse(document: Document): List<SChapter> = document.select("a:has(div[class*=manga-detail_chapter])").map { chapterFromElement(it) }
@@ -160,7 +163,7 @@ abstract class Dokiraw : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("div.page-chapter img").mapIndexed { index, element ->
             val finalUrl = element.absUrl("data-cdn")
                 .ifEmpty { element.absUrl("data-original") }
