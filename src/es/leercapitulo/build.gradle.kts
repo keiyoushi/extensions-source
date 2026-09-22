@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "LeerCapitulo"
-    versionCode = 17
+    versionCode = 18
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
