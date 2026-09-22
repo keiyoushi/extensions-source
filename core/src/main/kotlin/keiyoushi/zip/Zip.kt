@@ -1,7 +1,6 @@
 package keiyoushi.zip
 
 import eu.kanade.tachiyomi.network.GET
-import keiyoushi.network.get
 import keiyoushi.utils.readLongLittleEndian
 import keiyoushi.utils.readUIntLittleEndian
 import keiyoushi.utils.readUShortLittleEndian
@@ -212,23 +211,47 @@ fun readZipDirectory(totalSize: Long, fetch: (LongRange) -> BufferedSource): Zip
  * @throws IllegalStateException if [tail] holds no valid EOCD record
  */
 fun readZipDirectory(tail: ByteArray, totalSize: Long, fetch: (LongRange) -> BufferedSource): ZipDirectory {
+    val location = locateCentralDirectory(tail, totalSize)
+    val cd = location.bytes ?: fetch(location.range).use { it.readByteArray() }
+    return location.parse(cd)
+}
+
+/**
+ * Where an archive's central directory lives, resolved from its tail by [locateCentralDirectory].
+ *
+ * @property bytes the directory bytes when the tail already contained them, else null
+ * @property range the range to fetch when [bytes] is null
+ */
+internal class CentralDirectory(
+    val bytes: ByteArray?,
+    val range: LongRange,
+    private val zipStart: Long,
+    private val cdOffset: Long,
+) {
+    /** Parses [cd] into a [ZipDirectory] with absolute offsets. */
+    fun parse(cd: ByteArray): ZipDirectory {
+        val entries = parseCentralDirectory(cd).let { list ->
+            if (zipStart == 0L) list else list.map { Entry(it.name, it.method, it.compressedSize, zipStart + it.localHeaderOffset) }
+        }
+        return ZipDirectory(entries, zipStart + cdOffset)
+    }
+}
+
+internal fun locateCentralDirectory(tail: ByteArray, totalSize: Long): CentralDirectory {
     val tailStart = totalSize - tail.size
     val eocd = findEocd(tail)
 
     val zipStart = tailStart + eocd.recordOffset - eocd.cdSize - eocd.cdOffset
     val cdWithinTail = eocd.recordOffset - eocd.cdSize
-    val cd = if (cdWithinTail >= 0) {
+    val bytes = if (cdWithinTail >= 0) {
         val from = cdWithinTail.toInt()
         tail.copyOfRange(from, from + eocd.cdSize.toInt())
     } else {
-        val cdStart = zipStart + eocd.cdOffset
-        fetch(cdStart..<cdStart + eocd.cdSize).use { it.readByteArray() }
+        null
     }
 
-    val entries = parseCentralDirectory(cd).let { list ->
-        if (zipStart == 0L) list else list.map { Entry(it.name, it.method, it.compressedSize, zipStart + it.localHeaderOffset) }
-    }
-    return ZipDirectory(entries, zipStart + eocd.cdOffset)
+    val cdStart = zipStart + eocd.cdOffset
+    return CentralDirectory(bytes, cdStart..<cdStart + eocd.cdSize, zipStart, eocd.cdOffset)
 }
 
 /**
@@ -315,17 +338,6 @@ fun Request.Builder.range(range: LongRange): Request.Builder = header("Range", "
  */
 fun OkHttpClient.zipDirectory(url: String, headers: Headers): ZipDirectory {
     val response = newCall(GET(url, headers).newBuilder().header("Range", "bytes=-$MAX_EOCD_SEARCH").build()).execute()
-    val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
-    return readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
-}
-
-/**
- * Fetches and parses a remote ZIP's central directory over HTTP range requests.
- * (Suspend equivalent)
- */
-suspend fun OkHttpClient.zipDirectoryAsync(url: String, headers: Headers): ZipDirectory {
-    val rangeHeaders = headers.newBuilder().set("Range", "bytes=-$MAX_EOCD_SEARCH").build()
-    val response = this.get(url, rangeHeaders)
     val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
     return readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
 }
