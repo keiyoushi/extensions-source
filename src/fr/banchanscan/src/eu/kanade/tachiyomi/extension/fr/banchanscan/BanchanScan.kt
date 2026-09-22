@@ -130,7 +130,9 @@ abstract class BanchanScan : KeiSource() {
         ).parseAs<List<ChapterDto>>()
 
         val showSeason = chapters.mapNotNull { it.seasonOrNull }.distinct().size > 1
-        return chapters.map { it.toSChapter(slug, showSeason) }.sortedByDescending { it.chapter_number }
+        return chapters
+            .sortedWith(compareByDescending<ChapterDto> { it.seasonNumber }.thenByDescending { it.chapterNumberValue })
+            .map { it.toSChapter(slug, showSeason) }
     }
 
     private fun List<WebtoonDto>.toMangasPage(page: Int): MangasPage {

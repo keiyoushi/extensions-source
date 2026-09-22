@@ -81,6 +81,12 @@ class ChapterDto(
     // shows the "Saison N ·" prefix in that case, even when every chapter's season is set.
     val seasonOrNull: String? get() = season.takeIf { it.isNotBlank() }
 
+    // A few series reset or overlap chapter_number between seasons (e.g. season 4 runs up to
+    // 137 while season 5 only reaches 133), so sorting by chapter_number alone can rank an
+    // earlier season above a later one - season must be the primary sort key.
+    val seasonNumber: Int get() = season.toIntOrNull() ?: 0
+    val chapterNumberValue: Float get() = chapterNumber.toFloatOrNull() ?: -1f
+
     fun toSChapter(mangaSlug: String, showSeason: Boolean): SChapter = SChapter.create().apply {
         url = "/webtoon/$mangaSlug/chapitre_$chapterNumber"
         val meta = parseTitleMetadata(chapterTitle)
