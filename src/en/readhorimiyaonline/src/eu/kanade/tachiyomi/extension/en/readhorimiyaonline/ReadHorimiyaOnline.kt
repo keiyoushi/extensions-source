@@ -62,14 +62,13 @@ abstract class ReadHorimiyaOnline : KeiSource() {
         )
     }
 
-    private fun parseChapterList(document: Document): List<SChapter> =
-        document.select("div#chapter-list a.chapter-list-item").map { element ->
-            SChapter.create().apply {
-                name = element.selectFirst("span.chapter-name")?.text() ?: element.text()
-                date_upload = element.selectFirst("span.chapter-date")?.text()?.let { parseDate(it) } ?: 0L
-                setUrlWithoutDomain(element.absUrl("href"))
-            }
+    private fun parseChapterList(document: Document): List<SChapter> = document.select("div#chapter-list a.chapter-list-item").map { element ->
+        SChapter.create().apply {
+            name = element.selectFirst("span.chapter-name")?.text() ?: element.text()
+            date_upload = element.selectFirst("span.chapter-date")?.text()?.let { parseDate(it) } ?: 0L
+            setUrlWithoutDomain(element.absUrl("href"))
         }
+    }
 
     private fun parseDate(date: String): Long = runCatching {
         synchronized(DATE_FORMAT) { DATE_FORMAT.parse(date)?.time }
@@ -81,10 +80,9 @@ abstract class ReadHorimiyaOnline : KeiSource() {
         return parsePageList(response.asJsoup())
     }
 
-    private fun parsePageList(document: Document): List<Page> =
-        document.select("div.images-container img").mapIndexed { i, img ->
-            Page(i, "", img.absUrl("src"))
-        }
+    private fun parsePageList(document: Document): List<Page> = document.select("div.images-container img").mapIndexed { i, img ->
+        Page(i, "", img.absUrl("src"))
+    }
 
     // ========================= Helpers =========================
     private fun parseManga(doc: Document): SManga = SManga.create().apply {
