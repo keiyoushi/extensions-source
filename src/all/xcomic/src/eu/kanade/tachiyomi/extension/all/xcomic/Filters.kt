@@ -39,7 +39,7 @@ class SortFilter(
 
 class OriginalStatusFilter(
     options: List<Pair<String, String>> = statusOptions,
-) : SelectFilter(name = "Original Work Status", options = options)
+) : CheckboxGroupFilter(name = "Original Work Status", options = options)
 
 class ChapterCountFilter(
     options: List<Pair<String, String>> = chapterCountOptions,
@@ -211,7 +211,6 @@ val formatOptions = listOf(
 )
 
 val statusOptions = listOf(
-    "All" to "",
     "Releasing" to "releasing",
     "Completed" to "completed",
     "Hiatus" to "hiatus",

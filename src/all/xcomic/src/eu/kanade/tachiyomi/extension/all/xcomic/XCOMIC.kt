@@ -107,7 +107,7 @@ abstract class XCOMIC :
                         incTLangs = filter.selected
                     }
                 }
-                is OriginalStatusFilter -> origStatus = filter.selected.takeIf { it.isNotEmpty() }?.let { listOf(it) } ?: emptyList()
+                is OriginalStatusFilter -> origStatus = filter.selected
                 is SortFilter -> sort = filter.selected
                 is ChapterCountFilter -> chapCount = filter.selected
                 else -> {}

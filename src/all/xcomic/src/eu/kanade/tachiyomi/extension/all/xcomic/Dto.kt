@@ -158,6 +158,8 @@ class TitleNode(
     private val id: String,
     private val title: String,
     @SerialName("alt_titles") private val altTitles: List<String>? = null,
+    @SerialName("native_title") private val nativeTitle: String? = null,
+    @SerialName("romanized_title") private val romanizedTitle: String? = null,
     private val authors: List<String>? = null,
     private val artists: List<String>? = null,
     private val year: Int? = null,
@@ -177,7 +179,8 @@ class TitleNode(
     @SerialName("total_reviews") private val totalReviews: Int? = null,
     @SerialName("total_comments") private val totalComments: Int? = null,
     @SerialName("vote_val") private val scoreVal: Float? = null,
-    @SerialName("chap_last_public_at") private val chapLastPublicAt: Long? = null,
+    @SerialName("vote_users") private val voteUsers: Int? = null,
+    @SerialName("chap_last_public_at") val chapLastPublicAt: Long? = null,
     @SerialName("is_merged") private val isMerged: Boolean? = null,
     @SerialName("merged_to") private val mergedTo: String? = null,
     @SerialName("comic_ids") internal val comicIds: List<String>? = null,
@@ -233,7 +236,7 @@ class TitleNode(
                 comic?.originalPubFrom?.let { from ->
                     val till = comic.originalPubTill?.toString() ?: "Ongoing"
                     add("**Publication**: $from - $till")
-                }
+                } ?: year?.takeIf { it > 0 }?.let { add("**Released**: $it") }
                 comic?.originalPubZone?.takeIf { it.isNotEmpty() }?.let { add("**Region**: $it") }
 
                 comic?.readDirection?.let { dir ->
@@ -259,6 +262,7 @@ class TitleNode(
 
             val stats = buildList {
                 scoreVal?.takeIf { it > 0 }?.let { add("**Score**: %.1f".format(it)) }
+                voteUsers?.takeIf { it > 0 }?.let { add("**Votes**: $it") }
                 totalFollows?.takeIf { it > 0 }?.let { add("**Follows**: $it") }
                 totalReviews?.takeIf { it > 0 }?.let { add("**Reviews**: $it") }
                 totalComments?.takeIf { it > 0 }?.let { add("**Comments**: $it") }
@@ -308,10 +312,17 @@ class TitleNode(
                 append(extras.joinToString("\n\n"))
             }
 
-            if (!altTitles.isNullOrEmpty()) {
+            val alternativeTitles = buildList {
+                nativeTitle?.takeIf { it.isNotBlank() && it != title }?.let { add(it) }
+                romanizedTitle?.takeIf { it.isNotBlank() && it != title }?.let { add(it) }
+                altTitles.orEmpty().forEach { alt ->
+                    if (alt.isNotBlank() && alt !in this) add(alt)
+                }
+            }
+            if (alternativeTitles.isNotEmpty()) {
                 if (isNotEmpty()) append("\n\n")
                 append("**Alternative Titles**:\n")
-                append(altTitles.joinToString("\n") { "- $it" })
+                append(alternativeTitles.joinToString("\n") { "- $it" })
             }
 
             val extraInfoText = comic?.extraInfo?.text

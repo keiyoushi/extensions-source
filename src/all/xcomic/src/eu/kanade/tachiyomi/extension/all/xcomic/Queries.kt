@@ -66,6 +66,8 @@ val TITLE_NODE_QUERY = $$"""
                 id
                 title
                 alt_titles
+                native_title
+                romanized_title
                 authors
                 artists
                 year
@@ -85,6 +87,7 @@ val TITLE_NODE_QUERY = $$"""
                 total_reviews
                 total_comments
                 vote_val
+                vote_users
                 chap_last_public_at
                 is_merged
                 merged_to
@@ -169,6 +172,8 @@ val COMIC_NODE_QUERY = $$"""
                         id
                         title
                         alt_titles
+                        native_title
+                        romanized_title
                         authors
                         artists
                         year
@@ -188,6 +193,7 @@ val COMIC_NODE_QUERY = $$"""
                         total_reviews
                         total_comments
                         vote_val
+                        vote_users
                         tracking_sites {
                             mangaupdates
                             myanimelist
