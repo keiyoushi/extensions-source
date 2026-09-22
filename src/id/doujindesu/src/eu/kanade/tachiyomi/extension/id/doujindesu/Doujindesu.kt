@@ -120,19 +120,19 @@ abstract class Doujindesu : KeiSource() {
                 is StatusList -> {
                     if (filter.state in filter.values.indices) {
                         filter.values[filter.state].key.takeIf { it.isNotBlank() }
-                            ?.let { builder.addQueryParameter("status", it) }
+                            ?.let { builder.setQueryParameter("status", it) }
                     }
                 }
                 is CategoryNames -> {
                     if (filter.state in filter.values.indices) {
                         filter.values[filter.state].key.takeIf { it.isNotBlank() }
-                            ?.let { builder.addQueryParameter("type", it) }
+                            ?.let { builder.setQueryParameter("type", it) }
                     }
                 }
                 is OrderBy -> {
                     if (filter.state in filter.values.indices) {
-                        filter.values[filter.state].key.takeIf { it.isNotBlank() }
-                            ?.let { builder.addQueryParameter("sort", it) }
+                        val sort = filter.values[filter.state].key.ifBlank { "latest_chapter" }
+                        builder.setQueryParameter("sort", sort)
                     }
                 }
                 is GenreList -> {

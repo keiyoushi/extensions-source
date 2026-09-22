@@ -8,12 +8,14 @@ keiyoushi {
     name = "Jinman Tiantang"
     versionCode = 58
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "禁漫天堂"
         lang = "zh"
-        baseUrl = "https://18comic.vip"
+        baseUrl {
+            custom("https://18comic.vip")
+        }
     }
 
     deeplink {
@@ -23,9 +25,4 @@ keiyoushi {
         host("jmcomic-zzz.org")
         path("/album/..*")
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
 }

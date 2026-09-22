@@ -501,7 +501,7 @@ abstract class MadaraBase : KeiSource() {
         else -> SManga.UNKNOWN
     }
 
-    protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.ENGLISH)
+    protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
     protected open fun parseChapterDate(date: String?): Long {
         val value = date ?: return 0
