@@ -57,6 +57,10 @@ abstract class UNext :
         .set("Apollographql-Client-Name", "cosmo")
         .build()
 
+    private val keyPair by lazy {
+        KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+    }
+
     // Paid chapters redirect to the app on mobile UA, but are readable with desktop UA
     override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
 
@@ -217,7 +221,6 @@ abstract class UNext :
         bookFileCode: String,
         userId: String,
     ): Map<String, ByteArray> {
-        val keyPair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
         val challenge = ChallengeRequest(
             version = 1,
             playToken = playlist.playToken,
