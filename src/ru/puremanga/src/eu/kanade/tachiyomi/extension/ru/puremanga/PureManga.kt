@@ -4,4 +4,6 @@ import eu.kanade.tachiyomi.multisrc.inkstory.InkStory
 import keiyoushi.annotation.Source
 
 @Source
-abstract class PureManga : InkStory()
+abstract class PureManga : InkStory() {
+    override val serviceName = "puremanga.me"
+}
