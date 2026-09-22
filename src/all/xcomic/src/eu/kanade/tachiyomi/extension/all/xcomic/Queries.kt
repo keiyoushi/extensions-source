@@ -4,7 +4,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // ============================= Variables =============================
-
 /** Title browse — search / popular / latest. */
 @Serializable
 class ApiTitleBrowseVariables(

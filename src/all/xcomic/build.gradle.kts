@@ -39,6 +39,7 @@ keiyoushi {
         host("xcomic.net")
         host("comik.to")
         host("yona.to")
+        path("/title/..*")
         path("/source/..*")
     }
 }

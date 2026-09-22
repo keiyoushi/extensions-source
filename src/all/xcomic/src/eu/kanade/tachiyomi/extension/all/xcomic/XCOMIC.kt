@@ -33,8 +33,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
+import org.jsoup.parser.Parser
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -61,7 +61,21 @@ abstract class XCOMIC :
         val idMatch = idQueryRegex.matchEntire(query.trim())
         if (idMatch != null) {
             val id = idMatch.groupValues[1].substringBefore("-")
-            return MangasPage(listOf(getMangaDetails(SManga.create().apply { url = id })), false)
+            val extLang = if (lang == "all") null else mapLangCode(lang)
+
+            val node = fetchTitleNode(id)
+            if (node != null) {
+                val browseNode = node.toBrowseNode()
+                val rows = flattenTitle(browseNode, extLang, forceFresh = true)
+                if (rows.isNotEmpty()) {
+                    val mangas = rows.map { (tid, cid, p) ->
+                        p.toBrowseSManga(baseUrl, tid, cid, browseNode, extLang, ::cleanTitleIfNeeded)
+                    }
+                    return MangasPage(mangas, false)
+                }
+            }
+            return runCatching { MangasPage(listOf(legacyComicDetails(id)), false) }
+                .getOrElse { MangasPage(emptyList(), false) }
         }
 
         var sort: String? = null
@@ -161,41 +175,9 @@ abstract class XCOMIC :
         if (titles.isEmpty()) return MangasPage(emptyList(), false)
         val extLang = if (lang == "all") null else mapLangCode(lang)
 
-        suspend fun probeTitle(t: TitleBrowseNode): List<Triple<String, String, ComicProbeData>> {
-            val titleId = t.id?.takeIf { it.isNotBlank() } ?: return emptyList()
-            val ids = t.data?.comicIds.orEmpty().filter { it.isNotBlank() }
-            if (ids.isEmpty()) return emptyList()
-
-            val nowPublic = t.data?.chapLastPublicAt ?: 0L
-            val unchanged = nowPublic in 1..(titleFreshness[titleId] ?: 0L)
-
-            // Use cached results
-            if (unchanged && ids.all { probeCache.containsKey(it) }) {
-                return ids.mapNotNull { cid ->
-                    probeCache[cid]?.takeIf {
-                        it.isLive() && (extLang == null || it.translatedLanguage == extLang)
-                    }?.let { Triple(titleId, cid, it) }
-                }.sortedByDescending { it.third.chapsNormal ?: 0 }
-            }
-
-            val probes = mutableMapOf<String, ComicProbeData>()
-            coroutineScope {
-                ids.chunked(COMIC_PROBES_PER_TITLE).flatMap { chunk ->
-                    chunk.map { cid ->
-                        async { fetchComicProbe(cid)?.let { probes[cid] = it } }
-                    }.awaitAll()
-                }
-            }
-            if (nowPublic > 0) titleFreshness[titleId] = nowPublic
-            return probes.entries
-                .filter { it.value.isLive() && (extLang == null || it.value.translatedLanguage == extLang) }
-                .map { (cid, p) -> Triple(titleId, cid, p) }
-                .sortedByDescending { it.third.chapsNormal ?: 0 }
-        }
-
         val flattened = coroutineScope {
             titles.chunked(TITLES_IN_FLIGHT).flatMap { batch ->
-                batch.map { t -> async { probeTitle(t) } }.awaitAll()
+                batch.map { t -> async { flattenTitle(t, extLang) } }.awaitAll()
             }
         }.flatten()
 
@@ -205,6 +187,41 @@ abstract class XCOMIC :
         }
 
         return MangasPage(mangas, titles.size >= BROWSE_PAGE_SIZE)
+    }
+
+    private suspend fun flattenTitle(
+        t: TitleBrowseNode,
+        extLang: String?,
+        forceFresh: Boolean = false,
+    ): List<Triple<String, String, ComicProbeData>> {
+        val titleId = t.id?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val ids = t.data?.comicIds.orEmpty().filter { it.isNotBlank() }
+        if (ids.isEmpty()) return emptyList()
+
+        val nowPublic = t.data?.chapLastPublicAt ?: 0L
+        val unchanged = !forceFresh && nowPublic in 1..(titleFreshness[titleId] ?: 0L)
+
+        if (unchanged && ids.all { probeCache.containsKey(it) }) {
+            return ids.mapNotNull { cid ->
+                probeCache[cid]?.takeIf {
+                    it.isLive() && (extLang == null || it.translatedLanguage == extLang)
+                }?.let { Triple(titleId, cid, it) }
+            }.sortedByDescending { it.third.chapsNormal ?: 0 }
+        }
+
+        val probes = mutableMapOf<String, ComicProbeData>()
+        coroutineScope {
+            ids.chunked(COMIC_PROBES_PER_TITLE).flatMap { chunk ->
+                chunk.map { cid ->
+                    async { fetchComicProbe(cid)?.let { probes[cid] = it } }
+                }.awaitAll()
+            }
+        }
+        if (nowPublic > 0) titleFreshness[titleId] = nowPublic
+        return probes.entries
+            .filter { it.value.isLive() && (extLang == null || it.value.translatedLanguage == extLang) }
+            .map { (cid, p) -> Triple(titleId, cid, p) }
+            .sortedByDescending { it.third.chapsNormal ?: 0 }
     }
 
     // ============================== Filters ==============================
@@ -294,12 +311,16 @@ abstract class XCOMIC :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = if (fetchDetails) getMangaDetails(manga) else manga
-
-        // The details pass (same call) stamps 'skipChapterRefresh' when its
-        // update-gate determined the chapter list is still current.
-        val gate = details.memo["skipChapterRefresh"]?.string?.toBoolean() == true
-
+        val details: SManga
+        val gate: Boolean
+        if (fetchDetails) {
+            val (d, g) = getMangaDetails(manga)
+            details = d
+            gate = g
+        } else {
+            details = manga
+            gate = false
+        }
         val chapterList = if (fetchChapters && !gate) getChapterList(manga) else chapters
         return SMangaUpdate(details, chapterList)
     }
@@ -329,12 +350,12 @@ abstract class XCOMIC :
      * Unpinned (legacy/id:) URLs fall back to pick-over-comic_ids,
      * then to the legacy comic path.
      */
-    private suspend fun getMangaDetails(manga: SManga): SManga {
+    private suspend fun getMangaDetails(manga: SManga): Pair<SManga, Boolean> {
         val extLang = if (lang == "all") null else mapLangCode(lang)
         val (titleId, pinned) = splitMangaUrl(manga.url)
 
         val title = fetchTitleNode(titleId)
-            ?: return legacyComicDetails(manga.url).apply { url = manga.url }
+            ?: return legacyComicDetails(manga.url).apply { url = manga.url } to false
         val resolved = if (title.isMerged == true && !title.mergedTo.isNullOrBlank() && title.mergedTo != titleId) {
             fetchTitleNode(title.mergedTo) ?: title
         } else {
@@ -369,9 +390,8 @@ abstract class XCOMIC :
                 put(MEMO_FETCHED_AT, System.currentTimeMillis().toString())
                 put(MEMO_LAST_PUBLIC, (title.chapLastPublicAt ?: 0L).toString())
             }
-            put("skipChapterRefresh", chaptersCurrent.toString())
         }
-        return base
+        return base to chaptersCurrent
     }
 
     /** Probes comic_ids (COMIC_PROBES_PER_TITLE at a time); full nodes. */
@@ -398,11 +418,10 @@ abstract class XCOMIC :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
         val seg = url.pathSegments
         val id = seg.takeIf { it.size >= 2 }?.get(1)?.substringBefore("-") ?: return null
         return when (seg[0]) {
-            "title" -> runCatching { getMangaDetails(SManga.create().apply { this.url = id }) }.getOrNull()
+            "title" -> runCatching { getMangaDetails(SManga.create().apply { this.url = id }).first }.getOrNull()
             "source" -> runCatching { legacyComicDetails(id) }.getOrNull()
             else -> null
         }
@@ -626,6 +645,23 @@ abstract class XCOMIC :
         }
     }
 
+    /** Converts a title node into the browse-node shape flattenTitle consumes. */
+    private fun TitleNodeData.toBrowseNode(): TitleBrowseNode = TitleBrowseNode(
+        id = id,
+        data = TitleBrowseItem(
+            title = title,
+            nativeTitle = nativeTitle,
+            romanizedTitle = romanizedTitle,
+            originalLanguage = originalLanguage,
+            translatedLanguages = translatedLanguages,
+            type = type,
+            chapLastPublicAt = chapLastPublicAt,
+            coverLocalUrl = coverLocalUrl,
+            coverUrl = coverUrl,
+            comicIds = comicIds,
+        ),
+    )
+
     // ============================ Title cleaning ============================
     private fun cleanTitleIfNeeded(title: String): String {
         var tempTitle = title
@@ -713,13 +749,7 @@ abstract class XCOMIC :
 
     private fun langDisplayName(code: String): String = languages.firstOrNull { it.second == code }?.first ?: code.uppercase()
 
-    private fun String.unescapeHtml(): String = this
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'").replace("&#039;", "'").replace("&apos;", "'")
-        .replace("&bull;", "•")
-        .replace("&amp;", "&")
-        .replace("&ntilde;", "ñ")
-        .replace("&lt;", "<").replace("&gt;", ">")
+    private fun String.unescapeHtml(): String = Parser.unescapeEntities(this, false)
 
     private class DefaultSortFilter(val sort: String) : Filter.Header("")
 
