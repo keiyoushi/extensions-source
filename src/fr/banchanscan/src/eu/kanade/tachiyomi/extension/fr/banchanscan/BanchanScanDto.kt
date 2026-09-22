@@ -76,6 +76,7 @@ class ChapterDto(
     @SerialName("chapter_title") private val chapterTitle: String?,
     @SerialName("published_at") private val publishedAt: String?,
     @SerialName("created_at") private val createdAt: String,
+    @SerialName("uploader_name") private val uploaderName: String?,
 ) {
     // Used to detect whether a webtoon actually spans more than one season - the site only
     // shows the "Saison N ·" prefix in that case, even when every chapter's season is set.
@@ -103,6 +104,7 @@ class ChapterDto(
         }
         chapter_number = chapterNumber.toFloatOrNull() ?: -1f
         date_upload = Instant.tryParse(publishedAt ?: createdAt)
+        scanlator = uploaderName
         memo = buildJsonObject { put("id", id) }
     }
 

@@ -145,6 +145,6 @@ abstract class BanchanScan : KeiSource() {
     companion object {
         private const val PAGE_SIZE = 20
         private const val CHAPTER_FIELDS =
-            "id,webtoon_id,chapter_number,season,chapter_title,published_at,created_at"
+            "id,webtoon_id,chapter_number,season,chapter_title,published_at,created_at,uploader_name"
     }
 }
