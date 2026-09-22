@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.zh.cartoon18
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -46,22 +45,23 @@ abstract class Cartoon18 :
     override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().resolve(chapter.url)!!.toString()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val baseHost = baseUrl.toHttpUrl().host
-        if (url.host != baseHost && url.host != "cartoon18.com") return null
+        val baseHost = baseUrl.toHttpUrl().host.removePrefix("www.")
+        if (url.host.removePrefix("www.") != baseHost) return null
         val path = url.encodedPath
-        if (!path.contains("/v/")) return null
-        return SManga.create().apply {
+        if (!path.startsWith("/v/") && !path.startsWith("/zh-hans/v/")) return null
+        val manga = SManga.create().apply {
             this.url = path
         }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.newCall(GET("$baseUrlWithLang?sort=hits&page=$page", headers)).awaitSuccess()
+        val response = client.get("$baseUrlWithLang?sort=hits&page=$page", headers)
         return mangaParse(response)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.newCall(GET("$baseUrlWithLang?sort=created&page=$page", headers)).awaitSuccess()
+        val response = client.get("$baseUrlWithLang?sort=created&page=$page", headers)
         return mangaParse(response)
     }
 
@@ -81,7 +81,7 @@ abstract class Cartoon18 :
             }
         }.build()
 
-        val response = client.newCall(GET(url, headers)).awaitSuccess()
+        val response = client.get(url, headers)
         return mangaParse(response)
     }
 
@@ -92,11 +92,12 @@ abstract class Cartoon18 :
             val titleText = link.text().trim()
             if (titleText.isEmpty()) return@mapNotNull null
 
+            val img = card.selectFirst(".embed-responsive img, img")
             SManga.create().apply {
                 url = link.attr("href")
                 title = titleText
-                thumbnail_url = card.selectFirst("img.lazyimage")?.attr("abs:data-src")?.ifEmpty {
-                    card.selectFirst("img")?.attr("abs:src")
+                thumbnail_url = img?.let { el ->
+                    el.attr("abs:data-src").ifEmpty { el.attr("abs:src") }
                 }
                 val genres = card.select(".card-body div a.badge")
                     .map { it.text().trim() }
@@ -118,7 +119,7 @@ abstract class Cartoon18 :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.newCall(GET(getMangaUrl(manga), headers)).awaitSuccess().asJsoup()
+        val document = client.get(getMangaUrl(manga), headers).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document, manga),
             chapters = chapterListParse(document),
@@ -158,16 +159,18 @@ abstract class Cartoon18 :
 
     private fun chapterListParse(document: Document): List<SChapter> {
         val chapters = document.select("div.content h1.title + div a")
-        return chapters.map { el ->
+        return chapters.mapNotNull { el ->
+            val nameText = el.text().trim()
+            if (nameText.isEmpty()) return@mapNotNull null
             SChapter.create().apply {
                 url = el.attr("href")
-                name = el.text().trim().ifEmpty { "Chapter 1" }
+                name = nameText
             }
         }.reversed()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess().asJsoup()
+        val document = client.get(getChapterUrl(chapter), headers).asJsoup()
         val images = document.select("div#app > div > a img, div#app img")
         return images.mapIndexed { index, image ->
             val url = image.attr("abs:src").ifEmpty { image.attr("abs:data-src") }
@@ -178,7 +181,7 @@ abstract class Cartoon18 :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.newCall(GET("$baseUrlWithLang/category", headers)).awaitSuccess().asJsoup()
+        val document = client.get("$baseUrlWithLang/category", headers).asJsoup()
         val items = document.select("div.content a.btn")
         val keywords = items.mapNotNull { btn ->
             val href = btn.attr("href")
