@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.narasininja
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -45,16 +46,21 @@ abstract class NarasiNinja : KeiSource() {
     private suspend fun filterHeaders(): Headers = headersBuilder()
         .add("X-CSRF-TOKEN", getCsrfToken())
         .add("X-Requested-With", "XMLHttpRequest")
-        .add("Referer", "$baseUrl/komik")
+        .set("Referer", "$baseUrl/komik")
         .build()
 
     private suspend fun postFilter(page: Int, body: FormBody): FilterResponse {
         val url = "$baseUrl/komik/filter?page=$page"
-        val response = runCatching {
-            client.post(url, filterHeaders(), body)
-        }.getOrElse {
+        var response = client.post(url, filterHeaders(), body, ensureSuccess = false)
+        if (response.code == 419) {
+            response.close()
             csrfToken = null
-            client.post(url, filterHeaders(), body)
+            response = client.post(url, filterHeaders(), body, ensureSuccess = false)
+        }
+        if (!response.isSuccessful) {
+            val code = response.code
+            response.close()
+            throw HttpException(code)
         }
         return response.parseAs<FilterResponse>()
     }
