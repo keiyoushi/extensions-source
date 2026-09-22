@@ -41,6 +41,8 @@ abstract class ReadHorimiyaOnline : KeiSource() {
 
     // ========================= Details =========================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val baseHost = baseUrl.substringAfter("://").substringBefore("/")
+        if (url.host != baseHost) return null
         val response = client.get(baseUrl)
         return parseManga(response.asJsoup())
     }
@@ -55,21 +57,22 @@ abstract class ReadHorimiyaOnline : KeiSource() {
         val response = client.get(baseUrl)
         val document = response.asJsoup()
         return SMangaUpdate(
-            manga = parseManga(document),
-            chapters = parseChapterList(document),
+            manga = if (fetchDetails) parseManga(document) else manga,
+            chapters = if (fetchChapters) parseChapterList(document) else chapters,
         )
     }
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select("div#chapter-list a.chapter-list-item").map { element ->
-        SChapter.create().apply {
-            name = element.selectFirst("span.chapter-name")?.text() ?: element.text()
-            date_upload = element.selectFirst("span.chapter-date")?.text()?.let { parseDate(it) } ?: 0L
-            setUrlWithoutDomain(element.attr("href"))
+    private fun parseChapterList(document: Document): List<SChapter> =
+        document.select("div#chapter-list a.chapter-list-item").map { element ->
+            SChapter.create().apply {
+                name = element.selectFirst("span.chapter-name")?.text() ?: element.text()
+                date_upload = element.selectFirst("span.chapter-date")?.text()?.let { parseDate(it) } ?: 0L
+                setUrlWithoutDomain(element.absUrl("href"))
+            }
         }
-    }
 
     private fun parseDate(date: String): Long = runCatching {
-        DATE_FORMAT.parse(date)?.time
+        synchronized(DATE_FORMAT) { DATE_FORMAT.parse(date)?.time }
     }.getOrNull() ?: 0L
 
     // ========================= Pages =========================
@@ -78,9 +81,10 @@ abstract class ReadHorimiyaOnline : KeiSource() {
         return parsePageList(response.asJsoup())
     }
 
-    private fun parsePageList(document: Document): List<Page> = document.select("div.images-container img").mapIndexed { i, img ->
-        Page(i, "", img.absUrl("src"))
-    }
+    private fun parsePageList(document: Document): List<Page> =
+        document.select("div.images-container img").mapIndexed { i, img ->
+            Page(i, "", img.absUrl("src"))
+        }
 
     // ========================= Helpers =========================
     private fun parseManga(doc: Document): SManga = SManga.create().apply {
