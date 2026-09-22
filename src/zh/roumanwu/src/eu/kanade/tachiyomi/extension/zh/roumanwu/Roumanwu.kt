@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.roumanwu
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,7 +15,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -197,23 +194,12 @@ abstract class Roumanwu :
 
     private class StatusFilter : Filter.Select<String>("狀態", arrayOf("全部", "連載中", "已完結"))
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        // 框架生成类已在调用本方法【之前】通过 CustomUrlPreferences 添加了「自定义基础 URL」输入框
-        // （key = overrideBaseUrl，留空即使用内置默认域名，填写则覆盖）。这里仅补一条【禁用】的提示项，
-        // 说明留空时的默认域名，避免框架默认 dialogMessage 未带具体域名。
-        SwitchPreferenceCompat(screen.context).apply {
-            setEnabled(false)
-            title = "自定义基础 URL 说明"
-            summary = "留空则使用默认域名 $DEFAULT_BASE_URL；如需切换到其它可用域名，在此填入完整地址（含 https://）。"
-        }.also(screen::addPreference)
+        // 「自定义基础 URL」输入框由框架 CustomUrlPreferences 提供（留空=默认域名，填写=自定义）。
+        // 此处不添加额外 UI。
     }
 
     companion object {
-        // 内置默认域名（与 build.gradle.kts 中 baseUrl.custom(...) 保持一致）
-        private const val DEFAULT_BASE_URL = "https://rouman5.com"
-
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yyyy")
     }
 }
