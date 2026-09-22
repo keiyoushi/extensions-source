@@ -44,15 +44,12 @@ abstract class Webtoons :
 
     private val mobileUrl = "https://m.webtoons.com"
 
-    // headersBuilder() sets Origin to the desktop baseUrl; the mobile API is a different host
-    // and has never been sent one.
     private val mobileHeaders: Headers
         get() = headersBuilder()
             .set("Referer", "$mobileUrl/")
             .removeAll("Origin")
             .build()
 
-    // 1.4's HttpSource defaulted this on; KeiSource defaults it off.
     override val supportRelatedMangasBySearch = true
 
     override fun OkHttpClient.Builder.configureClient() = apply {
@@ -149,9 +146,7 @@ abstract class Webtoons :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val titleNo = url.queryParameter("title_no")
-            ?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
-            ?: return null
+        val titleNo = url.queryParameter("title_no")?.toIntOrNull() ?: return null
         val path = url.pathSegments
         if (path.size < 3) return null
 
@@ -178,21 +173,14 @@ abstract class Webtoons :
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         // details and the episode list are on different hosts
-        val detailsAsync = async {
-            if (fetchDetails) {
-                parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup(), manga)
-            } else {
-                manga
-            }
-        }
-        val chaptersAsync = async {
-            if (fetchChapters) fetchChapterList(manga) else chapters
-        }
+        val detailsAsync = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val chaptersAsync = async { if (fetchChapters) fetchChapterList(manga) else chapters }
 
         SMangaUpdate(manga = detailsAsync.await(), chapters = chaptersAsync.await())
     }
 
-    private fun parseMangaDetails(document: Document, oldManga: SManga): SManga {
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val detailElement = document.selectFirst(".detail_header .info")
         val infoElement = document.selectFirst("#_asideDetail")
 
@@ -218,7 +206,7 @@ abstract class Webtoons :
                     ?.toHttpUrl()
                     ?.pathSegments
                     ?.lastOrNull()
-                val oldThumbFile = oldManga.thumbnail_url
+                val oldThumbFile = manga.thumbnail_url
                     ?.toHttpUrl()
                     ?.pathSegments
                     ?.lastOrNull()
@@ -227,7 +215,7 @@ abstract class Webtoons :
 
                 // replace banner image for toons in library
                 if (oldThumbFile != null && oldThumbFile != bannerFile) {
-                    oldManga.thumbnail_url
+                    manga.thumbnail_url
                 } else {
                     thumbnail
                 }
