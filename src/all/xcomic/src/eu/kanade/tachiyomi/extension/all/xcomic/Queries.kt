@@ -114,6 +114,8 @@ val COMIC_PROBE_QUERY = $$"""
             id
             data {
                 id
+                name
+                subName
                 translatedLanguage
                 dbStatus
                 isPublic
@@ -130,6 +132,7 @@ val COMIC_NODE_QUERY = $$"""
             data {
                 id
                 name
+                subName
                 translatedLanguage
                 readDirection
                 originalPubFrom { y m d }
@@ -246,7 +249,6 @@ val CHAPTER_LIST_QUERY = $$"""
                 id
                 data {
                     id
-                    comicId
                     dbStatus
                     isFinal
                     volume
@@ -295,7 +297,6 @@ val CHAPTER_UNIQ_LIST_QUERY = $$"""
                 id
                 data {
                     id
-                    comicId
                     dbStatus
                     isFinal
                     volume

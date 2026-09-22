@@ -252,12 +252,48 @@ abstract class XCOMIC :
         // resolving them directly through the comic node API.
         val legacyComic = fetchComicNode(manga.url)
         if (legacyComic != null) {
+            val source = legacyComic.toChapterEdition(manga.url, manga.title)
+            val includeSources = getIncludeSources().sorted().joinToString(",")
+            val deduplicate = isDeduplicateChapters()
+            val lastPublicAt = legacyComic.titleNode?.chapLastPublicAt
+            val prevFetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull() ?: 0L
+            val prevLastPublic = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull() ?: 0L
+            val prevSourcesFilter = manga.memo[MEMO_SOURCES_FILTER]?.string.orEmpty()
+            val prevChapterDataVersion = manga.memo[MEMO_CHAPTER_DATA_VERSION]?.string?.toIntOrNull() ?: 0
+            val prevDeduplicate = manga.memo[MEMO_DEDUPLICATE]?.string
+            val chaptersCurrent = prevFetchedAt > 0L &&
+                prevChapterDataVersion == CHAPTER_DATA_VERSION &&
+                prevDeduplicate == deduplicate.toString() &&
+                (lastPublicAt ?: 0L) <= prevLastPublic &&
+                prevSourcesFilter == includeSources
+            val chapterList = if (!fetchChapters) {
+                chapters
+            } else if (chaptersCurrent) {
+                postProcessChapters(chapters)
+            } else {
+                fetchAllChapters(listOf(source))
+            }
             val details = if (fetchDetails) {
-                legacyComic.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded, url = manga.url, comic = legacyComic) ?: manga
+                legacyComic.titleNode?.toSManga(
+                    baseUrl,
+                    ::cleanTitleIfNeeded,
+                    url = manga.url,
+                    comic = legacyComic,
+                    sources = if (fetchChapters) chapterList.mapNotNull { it.uploader() }.distinct() else null,
+                ) ?: manga
             } else {
                 manga
             }
-            val chapterList = if (fetchChapters) fetchAllChapters(listOf(manga.url)) else chapters
+            if (fetchChapters) {
+                val fetchedAt = if (chaptersCurrent) prevFetchedAt else System.currentTimeMillis()
+                val updatedAt = if (chaptersCurrent) prevLastPublic.takeIf { it > 0L } else lastPublicAt
+                details.attachChapterMemo(
+                    fetchedAt,
+                    updatedAt,
+                    includeSources,
+                    deduplicate,
+                )
+            }
             return SMangaUpdate(details, chapterList)
         }
 
@@ -267,22 +303,26 @@ abstract class XCOMIC :
 
         val comicIds = titleNode.comicIds.orEmpty().filter { it.isNotBlank() }
 
-        // skip the chapter fan-out when the title has not changed since the
-        // last chapter fetch and the source filter has not been touched
-        val includeSources = getIncludeSources()
+        // Skip the chapter fan-out when neither the title nor chapter settings changed.
+        val includeSources = getIncludeSources().sorted().joinToString(",")
+        val deduplicate = isDeduplicateChapters()
         val prevFetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull() ?: 0L
         val prevLastPublic = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull() ?: 0L
         val prevSourcesFilter = manga.memo[MEMO_SOURCES_FILTER]?.string.orEmpty()
+        val prevChapterDataVersion = manga.memo[MEMO_CHAPTER_DATA_VERSION]?.string?.toIntOrNull() ?: 0
+        val prevDeduplicate = manga.memo[MEMO_DEDUPLICATE]?.string
         val chaptersCurrent = prevFetchedAt > 0L &&
+            prevChapterDataVersion == CHAPTER_DATA_VERSION &&
+            prevDeduplicate == deduplicate.toString() &&
             (titleNode.chapLastPublicAt ?: 0L) <= prevLastPublic &&
-            prevSourcesFilter == includeSources.joinToString(",")
+            prevSourcesFilter == includeSources
 
-        val targets = if (fetchChapters && !chaptersCurrent) resolveTargetComics(comicIds) else null
+        val targets = if (fetchChapters && !chaptersCurrent) resolveTargetComics(comicIds, manga.title) else null
 
         val chapterList = if (fetchChapters) {
             when {
                 chaptersCurrent -> postProcessChapters(chapters)
-                targets != null && targets.comicIds.isNotEmpty() -> fetchAllChapters(targets.comicIds)
+                targets != null && targets.sources.isNotEmpty() -> fetchAllChapters(targets.sources)
                 else -> emptyList()
             }
         } else {
@@ -296,7 +336,7 @@ abstract class XCOMIC :
                 baseUrl,
                 ::cleanTitleIfNeeded,
                 comic = comic,
-                sources = if (fetchChapters) chapterList.mapNotNull { it.scanlator }.distinct() else null,
+                sources = if (fetchChapters) chapterList.mapNotNull { it.uploader() }.distinct() else null,
             )
         } else {
             manga
@@ -308,7 +348,7 @@ abstract class XCOMIC :
             } else {
                 System.currentTimeMillis() to titleNode.chapLastPublicAt
             }
-            details.attachChapterMemo(fetchedAt, lastPublic, includeSources.joinToString(","))
+            details.attachChapterMemo(fetchedAt, lastPublic, includeSources, deduplicate)
         }
 
         return SMangaUpdate(details, chapterList)
@@ -332,26 +372,46 @@ abstract class XCOMIC :
         return response.parseGraphQLAs<ComicProbeDataEnvelope>().response?.data
     }
 
-    private class TitleTargets(val comicIds: List<String>, val bestComicId: String?)
+    private class TitleTargets(val sources: List<ChapterEdition>, val bestComicId: String?)
 
-    private suspend fun resolveTargetComics(comicIds: List<String>): TitleTargets {
-        if (lang == "all") {
-            return TitleTargets(comicIds, comicIds.firstOrNull())
-        }
-
-        val mapped = mapLangCode(lang)
+    private suspend fun resolveTargetComics(comicIds: List<String>, fallbackName: String): TitleTargets {
         val probed = coroutineScope {
             comicIds.chunked(PROBE_BATCH).flatMap { batch ->
                 batch.map { comicId -> async { comicId to fetchComicProbe(comicId) } }.awaitAll()
             }
-        }.filterNotNull().filter { (_, probe) -> probe != null }
-            .map { (comicId, probe) -> comicId to probe!! }
+        }.mapNotNull { (comicId, probe) -> probe?.let { comicId to it } }
 
-        val matching = probed.filter { (_, probe) ->
-            probe.isLive() && probe.translatedLanguage == mapped
+        val matching = if (lang == "all") {
+            emptyList()
+        } else {
+            val mapped = mapLangCode(lang)
+            probed.filter { (_, probe) -> probe.isLive() && probe.translatedLanguage == mapped }
         }
-        val best = matching.maxByOrNull { (_, probe) -> probe.chapsNormal ?: 0 }?.first
-        return TitleTargets(matching.map { it.first }, best)
+        val sourceIds = if (lang == "all") comicIds else matching.map { it.first }
+        val probesById = probed.toMap()
+        val sources = sourceIds.map { comicId ->
+            probesById[comicId]?.toChapterEdition(comicId, fallbackName)
+                ?: ChapterEdition(comicId, fallbackName)
+        }
+
+        val best = if (lang == "all") {
+            sourceIds.firstOrNull()
+        } else {
+            matching.maxByOrNull { (_, probe) -> probe.chapsNormal ?: 0 }?.first
+        }
+        return TitleTargets(disambiguateChapterEditionLabels(sources), best)
+    }
+
+    private fun disambiguateChapterEditionLabels(sources: List<ChapterEdition>): List<ChapterEdition> {
+        val labelCounts = sources.groupingBy { it.label.trim().lowercase() }.eachCount()
+        return sources.map { source ->
+            val label = if (labelCounts[source.label.trim().lowercase()]!! > 1) {
+                "${source.label} [${source.id.takeLast(6)}]"
+            } else {
+                source.label
+            }
+            ChapterEdition(source.id, label)
+        }
     }
 
     private suspend fun resolveIdLookup(id: String): SManga? {
@@ -364,14 +424,20 @@ abstract class XCOMIC :
         return comicNode.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded, comic = comicNode)
     }
 
-    private fun SManga.attachChapterMemo(fetchedAt: Long?, lastPublicAt: Long?, sourcesFilter: String?) {
-        if (fetchedAt == null && lastPublicAt == null && sourcesFilter == null) return
+    private fun SManga.attachChapterMemo(
+        fetchedAt: Long?,
+        lastPublicAt: Long?,
+        sourcesFilter: String?,
+        deduplicate: Boolean,
+    ) {
         val existing = memo.jsonObject
         memo = buildJsonObject {
             existing.forEach { (key, value) -> put(key, value) }
             fetchedAt?.let { put(MEMO_FETCHED_AT, it.toString()) }
             lastPublicAt?.let { put(MEMO_LAST_PUBLIC, it.toString()) }
             sourcesFilter?.let { put(MEMO_SOURCES_FILTER, it) }
+            put(MEMO_CHAPTER_DATA_VERSION, CHAPTER_DATA_VERSION.toString())
+            put(MEMO_DEDUPLICATE, deduplicate.toString())
         }
     }
 
@@ -399,9 +465,9 @@ abstract class XCOMIC :
     }
 
     // ============================= Chapters ==============================
-    private suspend fun fetchAllChapters(comicIds: List<String>): List<SChapter> = coroutineScope {
+    private suspend fun fetchAllChapters(sources: List<ChapterEdition>): List<SChapter> = coroutineScope {
         val deduplicate = isDeduplicateChapters()
-        comicIds.map { comicId -> async { fetchChapterListPaged(comicId, deduplicate) } }
+        sources.map { source -> async { fetchChapterListPaged(source, deduplicate) } }
             .awaitAll()
             .flatten()
             .let { postProcessChapters(it) }
@@ -412,21 +478,30 @@ abstract class XCOMIC :
         val filtered = if (include.isEmpty()) {
             chapters
         } else {
-            chapters.filter { it.scanlator?.lowercase() in include }
+            chapters.filter { it.uploader()?.lowercase() in include }
         }
-        return if (isGroupBySource()) {
-            filtered.sortedWith(
-                compareBy<SChapter> { it.scanlator.orEmpty() }.thenByDescending { it.chapter_number },
+        val groupByEdition = isGroupByEdition()
+        val groupByUploader = isGroupBySource()
+        return when {
+            groupByEdition && groupByUploader -> filtered.sortedWith(
+                compareBy<SChapter> { it.comicId().orEmpty() }
+                    .thenBy { it.uploader().orEmpty() }
+                    .thenByDescending { it.chapter_number },
             )
-        } else {
-            filtered.sortedByDescending { it.chapter_number }
+            groupByEdition -> filtered.sortedWith(
+                compareBy<SChapter> { it.comicId().orEmpty() }.thenByDescending { it.chapter_number },
+            )
+            groupByUploader -> filtered.sortedWith(
+                compareBy<SChapter> { it.uploader().orEmpty() }.thenByDescending { it.chapter_number },
+            )
+            else -> filtered.sortedByDescending { it.chapter_number }
         }
     }
 
-    private suspend fun fetchChapterListPaged(comicId: String, deduplicate: Boolean): List<SChapter> {
+    private suspend fun fetchChapterListPaged(source: ChapterEdition, deduplicate: Boolean): List<SChapter> {
         val pageSize = if (deduplicate) 1000 else 100
 
-        val firstPage = fetchChapterListPage(comicId, 1, deduplicate, pageSize)
+        val firstPage = fetchChapterListPage(source, 1, deduplicate, pageSize)
         val allChapters = firstPage.chapters.toMutableList()
         val totalItems = firstPage.total ?: 0
 
@@ -437,7 +512,7 @@ abstract class XCOMIC :
                 allChapters.addAll(
                     coroutineScope {
                         batch.map { pageNum ->
-                            async { fetchChapterListPage(comicId, pageNum, deduplicate, pageSize).chapters }
+                            async { fetchChapterListPage(source, pageNum, deduplicate, pageSize).chapters }
                         }.awaitAll().flatten()
                     },
                 )
@@ -447,9 +522,14 @@ abstract class XCOMIC :
         return allChapters
     }
 
-    private suspend fun fetchChapterListPage(comicId: String, page: Int, deduplicate: Boolean, pageSize: Int): ChapterListPage {
+    private suspend fun fetchChapterListPage(
+        source: ChapterEdition,
+        page: Int,
+        deduplicate: Boolean,
+        pageSize: Int,
+    ): ChapterListPage {
         val select = ApiChapterListSelect(
-            comicId = comicId,
+            comicId = source.id,
             page = page,
             size = pageSize,
         )
@@ -468,7 +548,7 @@ abstract class XCOMIC :
         }
 
         return ChapterListPage(
-            chapters = data.items.map { it.data.toSChapter() },
+            chapters = data.items.map { it.data.toSChapter(source.id, source.label) },
             total = data.paging.total,
             hasNextPage = data.paging.hasNextPage(),
         )
@@ -563,25 +643,32 @@ abstract class XCOMIC :
         SwitchPreferenceCompat(screen.context).apply {
             key = DEDUPLICATE_CHAPTERS_PREF
             title = "Deduplicate Chapter List"
-            summary = "Use a deduplicated chapter list from server side.\nNote: May hide other scanlator uploads."
+            summary = "Use the server's deduplicated list within each edition. Chapters from different editions remain separate."
             setDefaultValue(true)
         }.also(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
             key = SOURCE_INCLUDE_PREF
-            title = "Chapter Sources To Include"
-            summary = includeSourcesSummary()
+            title = "Chapter Uploaders To Include"
+            summary = includeUploadersSummary()
             setDefaultValue("")
             setOnPreferenceChangeListener { _, newValue ->
-                summary = includeSourcesSummary(newValue as String)
+                summary = includeUploadersSummary(newValue as String)
                 true
             }
         }.also(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
             key = GROUP_BY_SOURCE_PREF
-            title = "Group Chapters By Source"
-            summary = "Sort the merged chapter list by source, then chapter number."
+            title = "Group Chapters By Uploader"
+            summary = "Sort chapters by uploader, then chapter number."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = GROUP_BY_EDITION_PREF
+            title = "Group Chapters By Edition"
+            summary = "Sort chapters by source edition, then chapter number."
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
@@ -591,13 +678,14 @@ abstract class XCOMIC :
     private fun isIgnoreGenreBlocklist(): Boolean = preferences.getBoolean(IGNORE_GENRE_BLOCKLIST_PREF, false)
     private fun isDeduplicateChapters(): Boolean = preferences.getBoolean(DEDUPLICATE_CHAPTERS_PREF, true)
     private fun isGroupBySource(): Boolean = preferences.getBoolean(GROUP_BY_SOURCE_PREF, false)
+    private fun isGroupByEdition(): Boolean = preferences.getBoolean(GROUP_BY_EDITION_PREF, false)
     private fun getIncludeSources(): Set<String> = preferences.getString(SOURCE_INCLUDE_PREF, "")!!
         .split(',')
         .map { it.trim().lowercase() }
         .filter { it.isNotEmpty() }
         .toSet()
 
-    private fun includeSourcesSummary(value: String = preferences.getString(SOURCE_INCLUDE_PREF, "")!!): String = "Comma-separated source names; chapters from other sources are hidden. Current: ${value.ifBlank { "(all sources)" }}"
+    private fun includeUploadersSummary(value: String = preferences.getString(SOURCE_INCLUDE_PREF, "")!!): String = "Comma-separated uploader names; chapters from other uploaders are hidden. Current: ${value.ifBlank { "(all uploaders)" }}"
 
     private class DefaultSortFilter(val sort: String) : Filter.Header("")
 
@@ -616,6 +704,7 @@ abstract class XCOMIC :
         private const val DEDUPLICATE_CHAPTERS_PREF = "DEDUPLICATE_CHAPTERS"
         private const val SOURCE_INCLUDE_PREF = "SOURCE_INCLUDE"
         private const val GROUP_BY_SOURCE_PREF = "GROUP_BY_SOURCE"
+        private const val GROUP_BY_EDITION_PREF = "GROUP_BY_EDITION"
 
         private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9-_]+)\\s*$", RegexOption.IGNORE_CASE)
 
@@ -626,6 +715,9 @@ abstract class XCOMIC :
         private const val MEMO_FETCHED_AT = "chaptersFetchedAt" // when we last pulled the chapter lists
         private const val MEMO_LAST_PUBLIC = "lastPublicAt" // title chap_last_public_at at that time
         private const val MEMO_SOURCES_FILTER = "sourcesFilter" // include list at that time
+        private const val MEMO_CHAPTER_DATA_VERSION = "chapterDataVersion"
+        private const val MEMO_DEDUPLICATE = "chapterDeduplicate"
+        private const val CHAPTER_DATA_VERSION = 2
 
         private val filterValueRegex = Regex("""^[a-z0-9][a-z0-9_]*$""")
 

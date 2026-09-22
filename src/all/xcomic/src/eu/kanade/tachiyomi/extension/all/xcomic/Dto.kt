@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.xcomic
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.stringOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -88,6 +89,7 @@ class BrowsePagerData(
 class ComicNode(
     val id: String? = null,
     private val name: String? = null,
+    private val subName: String? = null,
     private val slug: String? = null,
     val translatedLanguage: String? = null,
     internal val readDirection: String? = null,
@@ -111,6 +113,8 @@ class ComicNode(
 ) {
     val titleNode: TitleNode?
         get() = titleNodeWrapper?.data
+
+    fun toChapterEdition(id: String, fallbackName: String): ChapterEdition = ChapterEdition(id, chapterSourceLabel(subName, name, fallbackName))
 }
 
 @Serializable
@@ -122,13 +126,24 @@ class ComicNodeData(
 // Slim edition lookup used for language resolution.
 @Serializable
 class ComicProbeData(
+    private val name: String? = null,
+    private val subName: String? = null,
     val translatedLanguage: String? = null,
     private val dbStatus: String? = null,
     private val isPublic: Boolean? = null,
     @SerialName("chaps_normal") val chapsNormal: Int? = null,
 ) {
     fun isLive() = isPublic != false && (dbStatus == null || dbStatus == "normal")
+
+    fun toChapterEdition(id: String, fallbackName: String): ChapterEdition = ChapterEdition(id, chapterSourceLabel(subName, name, fallbackName))
 }
+
+class ChapterEdition(
+    val id: String,
+    val label: String,
+)
+
+private fun chapterSourceLabel(subName: String?, name: String?, fallbackName: String): String = subName?.takeIf { it.isNotBlank() } ?: name?.takeIf { it.isNotBlank() } ?: fallbackName
 
 @Serializable
 class ComicProbeDataEnvelope(
@@ -387,7 +402,6 @@ class ApiChapterWrapper(
 @Serializable
 class ChapterData(
     private val id: String,
-    private val comicId: String? = null,
     private val dbStatus: String? = null,
     private val isFinal: Boolean? = null,
     private val volume: JsonElement? = null,
@@ -426,8 +440,12 @@ class ChapterData(
     private val viewsGuest: Int? = null,
     private val profileNodes: List<XComicData<XComicName?>?>? = null,
 ) {
-    fun toSChapter(): SChapter = SChapter.create().apply {
+    fun toSChapter(comicId: String, sourceLabel: String): SChapter = SChapter.create().apply {
         url = id
+        val uploader = srcName?.takeIf { it.isNotEmpty() }?.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase() else it.toString()
+        } ?: profileNodes?.mapNotNull { it?.data?.name }?.joinToString().takeIf { !it.isNullOrEmpty() }
+
         name = buildString {
             val number = (chaNum ?: serial)?.toString()?.removeSuffix(".0")
             if (number != null && !displayName.contains(number)) {
@@ -441,20 +459,28 @@ class ChapterData(
                 if (isNotEmpty()) append(": ")
                 append(title)
             }
+            uploader?.let { append(" [", it, "]") }
         }
 
         memo = buildJsonObject {
             urlPath?.let { put("urlPath", it) }
+            put(CHAPTER_COMIC_ID_MEMO, comicId)
+            uploader?.let { put(CHAPTER_UPLOADER_MEMO, it) }
         }
 
         (chaNum ?: serial)?.let { chapter_number = it }
         date_upload = dateModify ?: dateCreate ?: datePublic ?: 0L
 
-        scanlator = srcName?.takeIf { it.isNotEmpty() }?.replaceFirstChar {
-            if (it.isLowerCase()) it.titlecase() else it.toString()
-        } ?: profileNodes?.mapNotNull { it?.data?.name }?.joinToString().takeIf { !it.isNullOrEmpty() }
+        scanlator = sourceLabel
     }
 }
+
+internal const val CHAPTER_COMIC_ID_MEMO = "comicId"
+internal const val CHAPTER_UPLOADER_MEMO = "uploader"
+
+internal fun SChapter.comicId(): String? = memo[CHAPTER_COMIC_ID_MEMO]?.stringOrNull
+
+internal fun SChapter.uploader(): String? = memo[CHAPTER_UPLOADER_MEMO]?.stringOrNull
 
 // ========================= Chapter Pages ============================
 
