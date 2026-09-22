@@ -13,6 +13,7 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -55,7 +56,7 @@ abstract class MikuDoujin : KeiSource() {
             return mangaListParse(document)
         }
 
-        val genre = filters.filterIsInstance<GenreFilter>().firstOrNull()?.toUriPart()
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart()
         if (!genre.isNullOrEmpty()) {
             val document = client.get("$baseUrl/$genre/?page=$page").asJsoup()
             return mangaListParse(document)
@@ -69,7 +70,7 @@ abstract class MikuDoujin : KeiSource() {
             val a = element.selectFirst("a") ?: return@mapNotNull null
             SManga.create().apply {
                 setUrlWithoutDomain(a.attr("href"))
-                title = a.selectFirst("div.inz-title")?.text().orEmpty()
+                title = a.selectFirst("div.inz-title")?.text() ?: throw Exception("Missing title")
                 thumbnail_url = a.selectFirst("img")?.attr("abs:src")
             }
         }
@@ -89,7 +90,7 @@ abstract class MikuDoujin : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(
-            mangaDetailsParse(document),
+            mangaDetailsParse(document).apply { url = manga.url },
             chapterListParse(document, manga.url),
         )
     }
@@ -98,8 +99,7 @@ abstract class MikuDoujin : KeiSource() {
         if (!url.host.equals(baseUrl.toHttpUrl().host, ignoreCase = true)) return null
 
         val slug = url.pathSegments.firstOrNull().orEmpty()
-        val excluded = listOf("genre", "category", "member", "controller", "assets", "uploads", "search", "api")
-        if (slug.isEmpty() || slug in excluded) return null
+        if (slug.isEmpty() || slug in EXCLUDED_PATHS) return null
 
         val document = client.get(url).asJsoup()
         if (document.selectFirst("div.sr-card-body") == null) return null
@@ -111,9 +111,9 @@ abstract class MikuDoujin : KeiSource() {
     }
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val infoElement = document.selectFirst("div.sr-card-body") ?: return SManga.create()
+        val infoElement = document.selectFirst("div.sr-card-body") ?: throw Exception("Details not found")
 
-        title = document.title()
+        title = document.title().ifEmpty { throw Exception("Missing title") }
         author = infoElement.select("div.col-md-8 p a.badge-secondary").getOrNull(2)?.ownText()
         artist = author
         genre = infoElement.select("div.col-md-8 div.tags a").joinToString { it.text() }
@@ -178,4 +178,8 @@ abstract class MikuDoujin : KeiSource() {
         Filter.Header("Text search ignores filters"),
         GenreFilter(),
     )
+
+    companion object {
+        private val EXCLUDED_PATHS = setOf("genre", "category", "member", "controller", "assets", "uploads", "search", "api")
+    }
 }
