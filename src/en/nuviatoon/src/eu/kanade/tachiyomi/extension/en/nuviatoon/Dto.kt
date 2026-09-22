@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
 @Serializable
-class PaginatedResponse<T>(
+internal class PaginatedResponse<T>(
     val data: List<T>,
     private val meta: Meta,
 ) {
@@ -16,14 +16,13 @@ class PaginatedResponse<T>(
 }
 
 @Serializable
-class Meta(
+internal class Meta(
     @SerialName("current_page") val currentPage: Int,
     @SerialName("last_page") val lastPage: Int,
 )
 
 @Serializable
 class SeriesDto(
-    val id: String,
     private val title: String,
     private val slug: String,
     @SerialName("cover_url") private val coverUrl: String? = null,
@@ -65,7 +64,7 @@ class ChapterDto(
         name = title ?: "Chapter $numberString".trim()
         url = "$slug/chapter/$numberString?id=$id"
         chapter_number = number ?: -1f
-        date_upload = Instant.tryParse(createdAt?.substringBefore(".")?.plus("Z"))
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 

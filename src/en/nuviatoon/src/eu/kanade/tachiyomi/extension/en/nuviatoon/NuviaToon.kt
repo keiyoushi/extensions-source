@@ -11,6 +11,8 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -22,19 +24,15 @@ abstract class NuviaToon : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = add("Accept", "application/json")
 
-    // ============================== Popular ==============================
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$baseUrl/nuvia-api/series?per_page=18&page=$page&sort=views&dir=desc")
+        return parseMangasPage(response)
+    }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(
-        client.get("$baseUrl/nuvia-api/series?per_page=18&page=$page&sort=views&dir=desc"),
-    )
-
-    // ============================== Latest ===============================
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(
-        client.get("$baseUrl/nuvia-api/series?per_page=18&page=$page&sort=created_at&dir=desc"),
-    )
-
-    // ============================== Search ===============================
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val response = client.get("$baseUrl/nuvia-api/series?per_page=18&page=$page&sort=created_at&dir=desc")
+        return parseMangasPage(response)
+    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/nuvia-api/series".toHttpUrl().newBuilder().apply {
@@ -66,7 +64,8 @@ abstract class NuviaToon : KeiSource() {
             }
         }.build()
 
-        return parseMangasPage(client.get(url))
+        val response = client.get(url)
+        return parseMangasPage(response)
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -74,41 +73,38 @@ abstract class NuviaToon : KeiSource() {
         return MangasPage(dto.data.map { it.toSManga() }, dto.hasNextPage)
     }
 
-    // ============================== Details ==============================
-
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
 
-        return fetchMangaDetails(SManga.create().apply { this.url = slug }).apply {
+        return fetchMangaDetails(slug).apply {
             initialized = true
         }
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    // ============================= Chapters ==============================
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.url.substringBefore("?")}"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = SMangaUpdate(
-        manga = if (fetchDetails) fetchMangaDetails(manga) else manga,
-        chapters = if (fetchChapters) fetchChapterList(manga) else chapters,
-    )
+    ): SMangaUpdate = coroutineScope {
+        val mangaDeferred = async { if (fetchDetails) fetchMangaDetails(manga.url) else manga }
+        val chaptersDeferred = async { if (fetchChapters) fetchChapterList(manga.url) else chapters }
+        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+    }
 
-    private suspend fun fetchMangaDetails(manga: SManga): SManga = client.get("$baseUrl/nuvia-api/series/${manga.url}").parseAs<SeriesDto>().toSManga()
+    private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$baseUrl/nuvia-api/series/$slug")
+        .parseAs<SeriesDto>()
+        .toSManga()
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.url.substringBefore("?")}"
-
-    private suspend fun fetchChapterList(manga: SManga): List<SChapter> = client.get("$baseUrl/nuvia-api/series/${manga.url}/chapters")
+    private suspend fun fetchChapterList(slug: String): List<SChapter> = client.get("$baseUrl/nuvia-api/series/$slug/chapters")
         .parseAs<List<ChapterDto>>()
-        .map { it.toSChapter(manga.url) }
+        .map { it.toSChapter(slug) }
         .reversed()
-
-    // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.url.substringAfter("id=")
@@ -116,8 +112,6 @@ abstract class NuviaToon : KeiSource() {
             .parseAs<List<PageDto>>()
             .mapIndexed { index, dto -> Page(index, imageUrl = dto.imageUrl) }
     }
-
-    // ============================== Filters ==============================
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         StatusFilter(),
