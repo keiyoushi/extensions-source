@@ -21,14 +21,14 @@ class Term(
 
 @Serializable
 class TaxonomyMangas(
-    @SerialName("manga_list") val mangaList: List<MangaItem>,
+    val mangaList: List<MangaItem>,
     val pagination: Pagination,
 )
 
 @Serializable
 class Pagination(
     val page: Int,
-    @SerialName("total_pages") val totalPages: Int,
+    val totalPages: Int,
 )
 
 @Serializable
@@ -86,6 +86,7 @@ class MangaItem(
         status = when {
             this@MangaItem.status.lowercase() in listOf("ongoing", "publishing") -> SManga.ONGOING
             isCompleted() -> SManga.COMPLETED
+            this@MangaItem.status.lowercase() == "hiatus" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
 

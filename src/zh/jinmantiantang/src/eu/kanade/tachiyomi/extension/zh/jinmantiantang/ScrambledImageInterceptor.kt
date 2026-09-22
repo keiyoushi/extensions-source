@@ -20,6 +20,7 @@ object ScrambledImageInterceptor : Interceptor {
         val url = request.url
         val response = chain.proceed(request)
         if (!url.toString().contains("media/photos", ignoreCase = true)) return response // 对非漫画图片连接直接放行
+        if (url.toString().contains("_3x4.jpg", ignoreCase = true)) return response // 封面缩略图不参与分割处理
         val pathSegments = url.pathSegments
         val aid = pathSegments[pathSegments.size - 2].toInt()
         if (aid < SCRAMBLE_ID) return response // 对在漫画章节ID为220980之前的图片未进行图片分割,直接放行
