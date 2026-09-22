@@ -194,6 +194,7 @@ class TitleNode(
         cleanTitle: (String) -> String,
         url: String? = null,
         comic: ComicNode? = null,
+        sources: List<String>? = null,
     ): SManga = SManga.create().apply {
         this.url = url ?: id
         title = cleanTitle(this@TitleNode.title)
@@ -300,6 +301,8 @@ class TitleNode(
             }
 
             val extras = buildList {
+                sources?.takeIf { it.isNotEmpty() }?.let { add("**Sources**: ${it.joinToString()}") }
+
                 val pubList = comic?.publisherNodes?.mapNotNull { it.data?.name }
                     ?.takeIf { it.isNotEmpty() } ?: comic?.publishers
                 pubList?.takeIf { it.isNotEmpty() }?.let { add("**Publishers**: ${it.joinToString()}") }

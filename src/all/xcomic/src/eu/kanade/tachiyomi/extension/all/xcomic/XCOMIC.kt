@@ -268,30 +268,38 @@ abstract class XCOMIC :
         val comicIds = titleNode.comicIds.orEmpty().filter { it.isNotBlank() }
 
         // skip the chapter fan-out when the title has not changed since the
-        // last chapter fetch
+        // last chapter fetch and the source filter has not been touched
+        val includeSources = getIncludeSources()
         val prevFetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull() ?: 0L
         val prevLastPublic = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull() ?: 0L
+        val prevSourcesFilter = manga.memo[MEMO_SOURCES_FILTER]?.string.orEmpty()
         val chaptersCurrent = prevFetchedAt > 0L &&
-            (titleNode.chapLastPublicAt ?: 0L) <= prevLastPublic
+            (titleNode.chapLastPublicAt ?: 0L) <= prevLastPublic &&
+            prevSourcesFilter == includeSources.joinToString(",")
 
         val targets = if (fetchChapters && !chaptersCurrent) resolveTargetComics(comicIds) else null
 
-        val details = if (fetchDetails) {
-            val detailsComicId = targets?.bestComicId ?: comicIds.firstOrNull()
-            val comic = detailsComicId?.let { fetchComicNode(it) }
-            titleNode.toSManga(baseUrl, ::cleanTitleIfNeeded, comic = comic)
-        } else {
-            manga
-        }
-
         val chapterList = if (fetchChapters) {
             when {
-                chaptersCurrent -> chapters
+                chaptersCurrent -> postProcessChapters(chapters)
                 targets != null && targets.comicIds.isNotEmpty() -> fetchAllChapters(targets.comicIds)
                 else -> emptyList()
             }
         } else {
             chapters
+        }
+
+        val details = if (fetchDetails) {
+            val detailsComicId = targets?.bestComicId ?: comicIds.firstOrNull()
+            val comic = detailsComicId?.let { fetchComicNode(it) }
+            titleNode.toSManga(
+                baseUrl,
+                ::cleanTitleIfNeeded,
+                comic = comic,
+                sources = if (fetchChapters) chapterList.mapNotNull { it.scanlator }.distinct() else null,
+            )
+        } else {
+            manga
         }
 
         if (fetchChapters) {
@@ -300,7 +308,7 @@ abstract class XCOMIC :
             } else {
                 System.currentTimeMillis() to titleNode.chapLastPublicAt
             }
-            details.attachChapterMemo(fetchedAt, lastPublic)
+            details.attachChapterMemo(fetchedAt, lastPublic, includeSources.joinToString(","))
         }
 
         return SMangaUpdate(details, chapterList)
@@ -356,13 +364,14 @@ abstract class XCOMIC :
         return comicNode.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded, comic = comicNode)
     }
 
-    private fun SManga.attachChapterMemo(fetchedAt: Long?, lastPublicAt: Long?) {
-        if (fetchedAt == null && lastPublicAt == null) return
+    private fun SManga.attachChapterMemo(fetchedAt: Long?, lastPublicAt: Long?, sourcesFilter: String?) {
+        if (fetchedAt == null && lastPublicAt == null && sourcesFilter == null) return
         val existing = memo.jsonObject
         memo = buildJsonObject {
             existing.forEach { (key, value) -> put(key, value) }
             fetchedAt?.let { put(MEMO_FETCHED_AT, it.toString()) }
             lastPublicAt?.let { put(MEMO_LAST_PUBLIC, it.toString()) }
+            sourcesFilter?.let { put(MEMO_SOURCES_FILTER, it) }
         }
     }
 
@@ -395,7 +404,23 @@ abstract class XCOMIC :
         comicIds.map { comicId -> async { fetchChapterListPaged(comicId, deduplicate) } }
             .awaitAll()
             .flatten()
-            .sortedByDescending { it.chapter_number }
+            .let { postProcessChapters(it) }
+    }
+
+    private fun postProcessChapters(chapters: List<SChapter>): List<SChapter> {
+        val include = getIncludeSources()
+        val filtered = if (include.isEmpty()) {
+            chapters
+        } else {
+            chapters.filter { it.scanlator?.lowercase() in include }
+        }
+        return if (isGroupBySource()) {
+            filtered.sortedWith(
+                compareBy<SChapter> { it.scanlator.orEmpty() }.thenByDescending { it.chapter_number },
+            )
+        } else {
+            filtered.sortedByDescending { it.chapter_number }
+        }
     }
 
     private suspend fun fetchChapterListPaged(comicId: String, deduplicate: Boolean): List<SChapter> {
@@ -541,12 +566,38 @@ abstract class XCOMIC :
             summary = "Use a deduplicated chapter list from server side.\nNote: May hide other scanlator uploads."
             setDefaultValue(true)
         }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = SOURCE_INCLUDE_PREF
+            title = "Chapter Sources To Include"
+            summary = includeSourcesSummary()
+            setDefaultValue("")
+            setOnPreferenceChangeListener { _, newValue ->
+                summary = includeSourcesSummary(newValue as String)
+                true
+            }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = GROUP_BY_SOURCE_PREF
+            title = "Group Chapters By Source"
+            summary = "Sort the merged chapter list by source, then chapter number."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     private fun isRemoveTitleVersion(): Boolean = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
     private fun customRemoveTitle(): String = preferences.getString(REMOVE_TITLE_CUSTOM_PREF, "")!!
     private fun isIgnoreGenreBlocklist(): Boolean = preferences.getBoolean(IGNORE_GENRE_BLOCKLIST_PREF, false)
     private fun isDeduplicateChapters(): Boolean = preferences.getBoolean(DEDUPLICATE_CHAPTERS_PREF, true)
+    private fun isGroupBySource(): Boolean = preferences.getBoolean(GROUP_BY_SOURCE_PREF, false)
+    private fun getIncludeSources(): Set<String> = preferences.getString(SOURCE_INCLUDE_PREF, "")!!
+        .split(',')
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+        .toSet()
+
+    private fun includeSourcesSummary(value: String = preferences.getString(SOURCE_INCLUDE_PREF, "")!!): String = "Comma-separated source names; chapters from other sources are hidden. Current: ${value.ifBlank { "(all sources)" }}"
 
     private class DefaultSortFilter(val sort: String) : Filter.Header("")
 
@@ -563,6 +614,8 @@ abstract class XCOMIC :
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
         private const val IGNORE_GENRE_BLOCKLIST_PREF = "IGNORE_GENRE_BLOCKLIST"
         private const val DEDUPLICATE_CHAPTERS_PREF = "DEDUPLICATE_CHAPTERS"
+        private const val SOURCE_INCLUDE_PREF = "SOURCE_INCLUDE"
+        private const val GROUP_BY_SOURCE_PREF = "GROUP_BY_SOURCE"
 
         private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9-_]+)\\s*$", RegexOption.IGNORE_CASE)
 
@@ -572,6 +625,7 @@ abstract class XCOMIC :
 
         private const val MEMO_FETCHED_AT = "chaptersFetchedAt" // when we last pulled the chapter lists
         private const val MEMO_LAST_PUBLIC = "lastPublicAt" // title chap_last_public_at at that time
+        private const val MEMO_SOURCES_FILTER = "sourcesFilter" // include list at that time
 
         private val filterValueRegex = Regex("""^[a-z0-9][a-z0-9_]*$""")
 
