@@ -126,6 +126,6 @@ abstract class Mangatown : KeiSource() {
 
     override suspend fun getImageUrl(page: Page): String {
         val document = client.get(page.url).asJsoup()
-        return document.selectFirst("div#viewer img")?.absUrl("src").orEmpty()
+        return document.selectFirst("div#viewer img")!!.absUrl("src")
     }
 }
