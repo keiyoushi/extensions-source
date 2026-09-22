@@ -17,7 +17,7 @@ class ChapterListResponse(
 class ChapterDto(
     @SerialName("chapter_name") private val chapterName: String,
     @SerialName("chapter_slug") private val chapterSlug: String,
-    @SerialName("updated_at") private val updatedAt: String,
+    @SerialName("updated_at") private val updatedAt: String? = null,
 ) {
     fun toSChapter(mangaSlug: String, dateTimeFormatter: DateTimeFormatter) = SChapter.create().apply {
         url = "/read/$mangaSlug/$chapterSlug"
