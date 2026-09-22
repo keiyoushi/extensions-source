@@ -23,10 +23,10 @@ import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
@@ -42,18 +42,15 @@ abstract class Webtoons :
     private val langCode: String get() = if (lang == "zh-Hant") "zh-hant" else lang
     private val localeForCookie: String get() = if (lang == "zh-Hant") "zh_TW" else lang
 
-    private val mobileUrlHost by lazy { mobileUrl.toHttpUrl().host }
-
     private val mobileUrl = "https://m.webtoons.com"
 
     // headersBuilder() sets Origin to the desktop baseUrl; the mobile API is a different host
     // and has never been sent one.
-    private val mobileHeaders by lazy {
-        headersBuilder()
+    private val mobileHeaders: Headers
+        get() = headersBuilder()
             .set("Referer", "$mobileUrl/")
             .removeAll("Origin")
             .build()
-    }
 
     // 1.4's HttpSource defaulted this on; KeiSource defaults it off.
     override val supportRelatedMangasBySearch = true
@@ -78,7 +75,7 @@ abstract class Webtoons :
             }
         }
         addInterceptor(TextInterceptor())
-        rateLimit(1) { it.host == mobileUrlHost }
+        rateLimit(1) { it.host == mobileUrl.toHttpUrl().host }
     }
 
     private val preferences by getPreferencesLazy()
@@ -129,10 +126,6 @@ abstract class Webtoons :
     )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (query.startsWith(ID_SEARCH_PREFIX)) {
-            return searchById(query.removePrefix(ID_SEARCH_PREFIX))
-        }
-
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             var searchTypeAdded = false
             addPathSegment(langCode)
@@ -156,42 +149,27 @@ abstract class Webtoons :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val titleNo = url.queryParameter("title_no")?.takeIf(::isTitleNo) ?: return null
+        val titleNo = url.queryParameter("title_no")
+            ?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
+            ?: return null
         val path = url.pathSegments
         if (path.size < 3) return null
 
         // Every language ships as its own source; only the matching one resolves the link.
         if (path[0] != langCode) return null
 
-        return resolve(mangaFor(path[1], titleNo))
-    }
-
-    /**
-     * "id:<type>:<lang>:<titleNo>", kept from 1.4 so anything already relying on it still
-     * resolves. 1.4 threw on a malformed one; this returns no results instead.
-     */
-    private suspend fun searchById(rest: String): MangasPage {
-        val parts = rest.split(":")
-        if (parts.size != 3) return MangasPage(emptyList(), false)
-        val (type, lang, titleNo) = parts
-        if (lang != langCode || !isTitleNo(titleNo)) return MangasPage(emptyList(), false)
-
-        return MangasPage(listOf(resolve(mangaFor(type, titleNo))), false)
-    }
-
-    private fun isTitleNo(value: String) = value.isNotEmpty() && value.all(Char::isDigit)
-
-    private fun mangaFor(type: String, titleNo: String) = SManga.create().apply {
-        url = buildString {
-            if (type == "canvas") {
-                append("/challenge")
+        val manga = SManga.create().apply {
+            this.url = buildString {
+                if (path[1] == "canvas") {
+                    append("/challenge")
+                }
+                append("/episodeList?titleNo=")
+                append(titleNo)
             }
-            append("/episodeList?titleNo=")
-            append(titleNo)
         }
-    }
 
-    private suspend fun resolve(manga: SManga) = getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -298,11 +276,7 @@ abstract class Webtoons :
             }
         }.build()
 
-        return parseChapterList(client.get(url, mobileHeaders))
-    }
-
-    private fun parseChapterList(response: Response): List<SChapter> {
-        val result = response.parseAs<EpisodeListResponse>()
+        val result = client.get(url, mobileHeaders).parseAs<EpisodeListResponse>()
 
         var recognized = 0
         var unrecognized = 0
@@ -360,7 +334,7 @@ abstract class Webtoons :
         val numberFormatter = DecimalFormat("#.##")
         return chapters.map { episode ->
             SChapter.create().apply {
-                url = episode.viewerLink
+                this.url = episode.viewerLink
                 name = buildString {
                     append(Parser.unescapeEntities(episode.episodeTitle, false))
                     append(" (ch. ", numberFormatter.format(episode.chapterNumber), ")")
@@ -465,8 +439,6 @@ abstract class Webtoons :
         }.also(screen::addPreference)
     }
 }
-
-private const val ID_SEARCH_PREFIX = "id:"
 
 private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
 private const val USE_MAX_QUALITY_KEY = "useMaxQuality"
