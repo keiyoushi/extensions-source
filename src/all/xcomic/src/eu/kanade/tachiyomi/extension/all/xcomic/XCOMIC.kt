@@ -252,7 +252,7 @@ abstract class XCOMIC :
         val legacyComic = fetchComicNode(manga.url)
         if (legacyComic != null) {
             val details = if (fetchDetails) {
-                legacyComic.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded, url = manga.url) ?: manga
+                legacyComic.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded, url = manga.url, comic = legacyComic) ?: manga
             } else {
                 manga
             }
@@ -268,7 +268,7 @@ abstract class XCOMIC :
         val details = if (fetchDetails) {
             val comicNode = targets?.probeComic
                 ?: fetchComicNode(targets?.comicIds?.firstOrNull() ?: sources.first().comicId)
-            comicNode?.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded) ?: manga
+            comicNode?.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded, comic = comicNode) ?: manga
         } else {
             manga
         }
@@ -340,12 +340,14 @@ abstract class XCOMIC :
             else -> null
         }
         if (comicId != null) {
-            return fetchComicNode(comicId)?.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded)
+            val comicNode = fetchComicNode(comicId) ?: return null
+            return comicNode.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded, comic = comicNode)
         }
         if (segments.size >= 2 && segments[0] == "title") {
             val sources = fetchTitleSources(segments[1].substringBefore("-"))
             val first = sources.firstOrNull() ?: return null
-            return fetchComicNode(first.comicId)?.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded)
+            val comicNode = fetchComicNode(first.comicId) ?: return null
+            return comicNode.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded, comic = comicNode)
         }
         return null
     }

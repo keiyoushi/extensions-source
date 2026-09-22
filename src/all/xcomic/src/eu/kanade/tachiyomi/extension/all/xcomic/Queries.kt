@@ -60,7 +60,39 @@ val COMIC_NODE_QUERY = $$"""
             id
             data {
                 id
+                name
+                slug
                 translatedLanguage
+                readDirection
+                originalPubFrom { y m d }
+                originalPubTill { y m d }
+                originalPubZone
+                chaps_normal
+                uploadStatus
+                summary { code html text }
+                extraInfo { code html text }
+                authorNodes {
+                    id
+                    data {
+                        id
+                        name
+                    }
+                }
+                artistNodes {
+                    id
+                    data {
+                        id
+                        name
+                    }
+                }
+                publishers
+                publisherNodes {
+                    id
+                    data {
+                        id
+                        name
+                    }
+                }
                 title_titleNode {
                     id
                     data {
@@ -82,6 +114,19 @@ val COMIC_NODE_QUERY = $$"""
                         cover_local_url
                         urlPath
                         total_chapters
+                        total_follows
+                        total_reviews
+                        total_comments
+                        vote_val
+                        tracking_sites {
+                            mangaupdates
+                            myanimelist
+                            animeplanet
+                            anilist
+                            kitsu
+                            mangabaka
+                            shikimori
+                        }
                     }
                 }
             }
@@ -125,16 +170,38 @@ val CHAPTER_LIST_QUERY = $$"""
                 id
                 data {
                     id
-                    chaNum
-                    volNum
+                    comicId
+                    dbStatus
+                    isFinal
+                    volume
                     serial
                     dname
                     title
                     urlPath
+                    sfw_result
+                    chaDuplications
                     dateCreate
                     datePublic
                     dateModify
+                    chaNum
+                    volNum
+                    volIdx
+                    count_images
+                    is_new
                     srcName
+                    srcTitle
+                    srcColor
+                    comments_topic
+                    comments_total
+                    views_login
+                    views_guest
+                    profileNodes {
+                        id
+                        data {
+                            id
+                            name
+                        }
+                    }
                 }
             }
         }
