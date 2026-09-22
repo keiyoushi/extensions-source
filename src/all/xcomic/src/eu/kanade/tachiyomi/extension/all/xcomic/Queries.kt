@@ -7,6 +7,9 @@ import kotlinx.serialization.Serializable
 class ApiComicNodeVariables(val id: String)
 
 @Serializable
+class ApiTitleNodeVariables(val id: String)
+
+@Serializable
 class ApiChapterNodeVariables(val id: String)
 
 @Serializable
@@ -53,7 +56,70 @@ class ApiChapterListWrapper(val select: ApiChapterListSelect)
 // ============================= Queries ==============================
 
 // The site split works into titles (the work) and comics (per-language editions).
-// A comic node carries its title's full data, so it doubles as the details endpoint.
+// The title node carries the shared work metadata plus comic_ids, which are
+// probed to resolve a language to its editions.
+val TITLE_NODE_QUERY = $$"""
+    query get_title_titleNode($id: ID!) {
+        get_title_titleNode(id: $id) {
+            id
+            data {
+                id
+                title
+                alt_titles
+                authors
+                artists
+                year
+                status
+                description
+                original_language
+                content_rating_id
+                type_id
+                demographic_ids
+                genre_ids
+                format_ids
+                cover_url
+                cover_local_url
+                urlPath
+                total_chapters
+                total_follows
+                total_reviews
+                total_comments
+                vote_val
+                chap_last_public_at
+                is_merged
+                merged_to
+                comic_ids
+                tracking_sites {
+                    mangaupdates
+                    myanimelist
+                    animeplanet
+                    anilist
+                    kitsu
+                    mangabaka
+                    shikimori
+                }
+            }
+        }
+    }
+"""
+
+// Slim edition lookup used to map languages to comic ids; a full node is
+// only fetched for the edition the details screen is built from.
+val COMIC_PROBE_QUERY = $$"""
+    query get_comicNode($id: ID!) {
+        get_comicNode(id: $id) {
+            id
+            data {
+                id
+                translatedLanguage
+                dbStatus
+                isPublic
+                chaps_normal
+            }
+        }
+    }
+"""
+
 val COMIC_NODE_QUERY = $$"""
     query get_comicNode($id: ID!) {
         get_comicNode(id: $id) {
@@ -61,7 +127,6 @@ val COMIC_NODE_QUERY = $$"""
             data {
                 id
                 name
-                slug
                 translatedLanguage
                 readDirection
                 originalPubFrom { y m d }
@@ -69,6 +134,11 @@ val COMIC_NODE_QUERY = $$"""
                 originalPubZone
                 chaps_normal
                 uploadStatus
+                dbStatus
+                isPublic
+                is_hot
+                is_new
+                tags
                 summary { code html text }
                 extraInfo { code html text }
                 authorNodes {
@@ -162,6 +232,55 @@ val TITLE_PAGER_QUERY = $$"""
 val CHAPTER_LIST_QUERY = $$"""
     query get_comic_chapterList_fullList($select: Select_Comic_ChapterList) {
         get_comic_chapterList_fullList(select: $select) {
+            paging {
+                next
+                total
+            }
+            items {
+                id
+                data {
+                    id
+                    comicId
+                    dbStatus
+                    isFinal
+                    volume
+                    serial
+                    dname
+                    title
+                    urlPath
+                    sfw_result
+                    chaDuplications
+                    dateCreate
+                    datePublic
+                    dateModify
+                    chaNum
+                    volNum
+                    volIdx
+                    count_images
+                    is_new
+                    srcName
+                    srcTitle
+                    srcColor
+                    comments_topic
+                    comments_total
+                    views_login
+                    views_guest
+                    profileNodes {
+                        id
+                        data {
+                            id
+                            name
+                        }
+                    }
+                }
+            }
+        }
+    }
+"""
+
+val CHAPTER_UNIQ_LIST_QUERY = $$"""
+    query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList) {
+        get_comic_chapterList_uniqList(select: $select) {
             paging {
                 next
                 total

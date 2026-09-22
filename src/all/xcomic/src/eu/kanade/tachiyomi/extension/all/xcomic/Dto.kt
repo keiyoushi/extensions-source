@@ -7,6 +7,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.Instant
+import java.time.ZoneOffset
 
 @Serializable
 class XComicData<T>(
@@ -94,6 +96,11 @@ class ComicNode(
     internal val originalPubZone: String? = null,
     @SerialName("chaps_normal") private val chapsNormal: Int? = null,
     val uploadStatus: String? = null,
+    private val dbStatus: String? = null,
+    private val isPublic: Boolean? = null,
+    @SerialName("is_hot") internal val isHot: Boolean? = null,
+    @SerialName("is_new") internal val isNew: Boolean? = null,
+    internal val tags: List<String>? = null,
     internal val summary: XComicStrings? = null,
     internal val extraInfo: XComicStrings? = null,
     internal val authorNodes: List<XComicData<XComicName?>>? = null,
@@ -110,6 +117,29 @@ class ComicNode(
 class ComicNodeData(
     @SerialName("get_comicNode")
     val response: XComicData<ComicNode>? = null,
+)
+
+// Slim edition lookup used for language resolution.
+@Serializable
+class ComicProbeData(
+    val translatedLanguage: String? = null,
+    private val dbStatus: String? = null,
+    private val isPublic: Boolean? = null,
+    @SerialName("chaps_normal") val chapsNormal: Int? = null,
+) {
+    fun isLive() = isPublic != false && (dbStatus == null || dbStatus == "normal")
+}
+
+@Serializable
+class ComicProbeDataEnvelope(
+    @SerialName("get_comicNode")
+    val response: XComicData<ComicProbeData>? = null,
+)
+
+@Serializable
+class TitleNodeEnvelope(
+    @SerialName("get_title_titleNode")
+    val response: XComicData<TitleNode>? = null,
 )
 
 @Serializable
@@ -147,8 +177,15 @@ class TitleNode(
     @SerialName("total_reviews") private val totalReviews: Int? = null,
     @SerialName("total_comments") private val totalComments: Int? = null,
     @SerialName("vote_val") private val scoreVal: Float? = null,
+    @SerialName("chap_last_public_at") private val chapLastPublicAt: Long? = null,
+    @SerialName("is_merged") private val isMerged: Boolean? = null,
+    @SerialName("merged_to") private val mergedTo: String? = null,
+    @SerialName("comic_ids") internal val comicIds: List<String>? = null,
     @SerialName("tracking_sites") private val trackingSites: TitleTrackingSites? = null,
 ) {
+    val mergedTitleId: String?
+        get() = if (isMerged == true && !mergedTo.isNullOrBlank() && mergedTo != id) mergedTo else null
+
     fun toSManga(
         baseUrl: String,
         cleanTitle: (String) -> String,
@@ -180,6 +217,10 @@ class TitleNode(
         thumbnail_url = (coverLocalUrl ?: coverUrl)?.toAbsoluteUrl(baseUrl)
 
         description = buildString {
+            if (comic?.isHot == true) append("🔥 HOT ")
+            if (comic?.isNew == true) append("✨ NEW")
+            if (comic?.isHot == true || comic?.isNew == true) append("\n\n")
+
             val metadata = buildList {
                 originalLanguage?.let { ol ->
                     val label = languages.firstOrNull { it.second == ol }?.first ?: ol
@@ -203,6 +244,11 @@ class TitleNode(
                     )
                     val label = directionValues.firstOrNull { it.first == dir }?.second ?: dir
                     add("**Read Direction**: $label")
+                }
+
+                chapLastPublicAt?.takeIf { it > 0 }?.let {
+                    val date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                    add("**Updated**: $date")
                 }
             }
 
@@ -234,13 +280,13 @@ class TitleNode(
             }
 
             val links = buildList {
-                trackingSites?.mangaUpdates?.let { add("[MangaUpdates](https://www.mangaupdates.com/series.html?id=$it)") }
+                trackingSites?.mangaUpdates?.let { add("[MangaUpdates](https://www.mangaupdates.com/series/$it)") }
                 trackingSites?.myAnimeList?.let { add("[MyAnimeList](https://myanimelist.net/manga/$it)") }
                 trackingSites?.animePlanet?.let { add("[Anime-Planet](https://www.anime-planet.com/manga/$it)") }
                 trackingSites?.aniList?.let { add("[AniList](https://anilist.co/manga/$it)") }
                 trackingSites?.kitsu?.let { add("[Kitsu](https://kitsu.app/manga/$it)") }
                 trackingSites?.mangabaka?.let { add("[Mangabaka](https://mangabaka.org/$it)") }
-                trackingSites?.shikimori?.let { add("[Shikimori](https://shikimori.one/mangas/$it)") }
+                trackingSites?.shikimori?.let { add("[Shikimori](https://shikimori.io/mangas/$it)") }
             }
 
             if (links.isNotEmpty()) {
@@ -253,6 +299,8 @@ class TitleNode(
                 val pubList = comic?.publisherNodes?.mapNotNull { it.data?.name }
                     ?.takeIf { it.isNotEmpty() } ?: comic?.publishers
                 pubList?.takeIf { it.isNotEmpty() }?.let { add("**Publishers**: ${it.joinToString()}") }
+
+                comic?.tags?.takeIf { it.isNotEmpty() }?.let { add("**Tags**: ${it.joinToString()}") }
             }
 
             if (extras.isNotEmpty()) {
@@ -305,6 +353,12 @@ class ChapterListData(
 )
 
 @Serializable
+class ChapterListUniqData(
+    @SerialName("get_comic_chapterList_uniqList")
+    val response: ChapterListItems,
+)
+
+@Serializable
 class ChapterListItems(
     val paging: XComicPaging,
     val items: List<ApiChapterWrapper>,
@@ -328,10 +382,11 @@ class ChapterData(
     private val displayName: String = "",
     private val title: String? = null,
     private val urlPath: String? = null,
+    // the API returns arbitrary JSON shapes for these depending on the chapter
     @SerialName("sfw_result")
-    private val sfwResult: String? = null,
+    private val sfwResult: JsonElement? = null,
     @SerialName("chaDuplications")
-    private val chaDuplications: String? = null,
+    private val chaDuplications: JsonElement? = null,
     private val dateCreate: Long? = null,
     private val datePublic: Long? = null,
     private val dateModify: Long? = null,

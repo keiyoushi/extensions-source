@@ -240,32 +240,3 @@ val sortOptions = listOf(
     "Most Comments" to "field_comment",
     "Most Chapters" to "field_chapter",
 )
-
-// Flag emoji shown on a title's source cards -> language code. Flags reused by
-// several languages (e.g. 🇪🇸 for es/eu/gl) map to a set of candidates; those
-// sources are resolved with an API probe instead of the flag alone.
-val languageFlags = listOf(
-    "🇬🇧" to "en", "🇫🇷" to "fr", "🇪🇸" to "es", "🇲🇽" to "es_419", "🇵🇹" to "pt",
-    "🇧🇷" to "pt_br", "🇮🇩" to "id", "🇬🇪" to "ab", "🇿🇦" to "af", "🇦🇱" to "sq",
-    "🇸🇦" to "ar", "🇦🇲" to "hy", "🇦🇿" to "az", "🇧🇾" to "be", "🇧🇩" to "bn",
-    "🇧🇦" to "bs", "🇧🇬" to "bg", "🇲🇲" to "my", "🇰🇭" to "km", "🇦🇩" to "ca",
-    "🇵🇭" to "ceb", "🇨🇳" to "zh", "🇭🇰" to "zh_hk", "🇭🇷" to "hr", "🇨🇿" to "cs",
-    "🇷🇺" to "cv", "🇩🇰" to "da", "🇳🇱" to "nl", "🏳️" to "eo", "🇪🇪" to "et",
-    "🇪🇸" to "eu", "🇵🇭" to "fil", "🇫🇮" to "fi", "🇬🇪" to "ka", "🇩🇪" to "de",
-    "🇬🇷" to "el", "🇵🇾" to "gn", "🇮🇳" to "gu", "🇭🇹" to "ht", "🇮🇱" to "he",
-    "🇮🇳" to "hi", "🇭🇺" to "hu", "🇮🇸" to "is", "🇳🇬" to "ig", "🇮🇪" to "ga",
-    "🇪🇸" to "gl", "🇮🇹" to "it", "🇯🇵" to "ja", "🇮🇩" to "jv", "🇰🇿" to "kk",
-    "🇰🇷" to "ko", "🇮🇶" to "ku", "🇰🇬" to "ky", "🇻🇦" to "la", "🇱🇦" to "lo",
-    "🇱🇻" to "lv", "🇱🇹" to "lt", "🇲🇬" to "mg", "🇲🇾" to "ms", "🇮🇳" to "ml",
-    "🇲🇹" to "mt", "🇳🇿" to "mi", "🇮🇳" to "mr", "🇲🇩" to "mo", "🇲🇳" to "mn",
-    "🇳🇵" to "ne", "🇳🇴" to "no", "🇲🇼" to "ny", "🇦🇫" to "ps", "🇮🇷" to "fa",
-    "🇵🇱" to "pl", "🇷🇴" to "ro", "🇷🇺" to "ru", "🇷🇸" to "sr", "🇷🇸" to "sh",
-    "🇸🇿" to "ss", "🇱🇸" to "st", "🇱🇰" to "si", "🇸🇰" to "sk", "🇸🇮" to "sl",
-    "🇸🇴" to "so", "🇸🇪" to "sv", "🇱🇰" to "ta", "🇮🇳" to "te", "🇹🇭" to "th",
-    "🇪🇷" to "ti", "🇹🇴" to "to", "🇹🇷" to "tr", "🇹🇲" to "tk", "🇺🇦" to "uk",
-    "🇵🇰" to "ur", "🇺🇿" to "uz", "🇻🇳" to "vi", "🇳🇬" to "yo", "🇿🇦" to "zu",
-    "🏳️‍🌈" to "_t",
-)
-
-val flagLanguageCandidates: Map<String, Set<String>> =
-    languageFlags.groupBy({ it.first }, { it.second }).mapValues { (_, codes) -> codes.toSet() }
