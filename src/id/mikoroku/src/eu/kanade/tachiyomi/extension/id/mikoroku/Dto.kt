@@ -29,8 +29,7 @@ class MangaDto(
     val isDraft: Boolean = false,
 ) {
     fun toSManga() = SManga.create().apply {
-        // Store only the slug; "/detail?slug=" and Blogger-path URLs still resolve (see extractSlug).
-        url = "/$slug"
+        url = slug
         title = this@MangaDto.title
         thumbnail_url = (cover.ifBlank { img }).takeIf { it.isNotBlank() && it != "-" }?.let {
             if (it.startsWith("http")) it else MikoRoku.RAW_URL + it.removePrefix("/")
@@ -169,40 +168,6 @@ fun FirestoreDocument<ChapterFields>.toSChapter(slug: String, baseUrl: String): 
     name = fields.title.stringValue.ifBlank { "Chapter $id" }
     chapter_number = fields.chapterNumber(id)
     date_upload = fields.dateUpload
-}
-
-@Serializable
-class BloggerResponse(val feed: BloggerFeed)
-
-@Serializable
-class BloggerFeed(val entry: List<BloggerEntry> = emptyList())
-
-@Serializable
-class BloggerText(@SerialName("\$t") val text: String)
-
-@Serializable
-class BloggerCategory(val term: String)
-
-@Serializable
-class BloggerLink(val rel: String, val href: String)
-
-@Serializable
-class BloggerEntry(
-    private val title: BloggerText,
-    private val published: BloggerText,
-    private val category: List<BloggerCategory>,
-    private val link: List<BloggerLink>,
-) {
-    fun isChapterOf(mangaTitle: String) = category.any { it.term == "Chapter" } &&
-        category.any { it.term.normalizeTitle() == mangaTitle.normalizeTitle() }
-
-    fun toSChapter(mirror: Boolean) = SChapter.create().apply {
-        val postUrl = link.first { it.rel == "alternate" }.href.toHttpUrl()
-        url = postUrl.encodedPath + if (mirror) "#sv2" else ""
-        name = title.text
-        chapter_number = title.text.chapterNumber()
-        date_upload = Instant.tryParse(published.text)
-    }
 }
 
 private val titleCharacters = Regex("[^\\p{L}\\p{N}]")
