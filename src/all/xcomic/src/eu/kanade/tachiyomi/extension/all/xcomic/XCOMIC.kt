@@ -30,6 +30,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
@@ -264,7 +267,14 @@ abstract class XCOMIC :
 
         val comicIds = titleNode.comicIds.orEmpty().filter { it.isNotBlank() }
 
-        val targets = if (fetchChapters) resolveTargetComics(comicIds) else null
+        // skip the chapter fan-out when the title has not changed since the
+        // last chapter fetch
+        val prevFetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull() ?: 0L
+        val prevLastPublic = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull() ?: 0L
+        val chaptersCurrent = prevFetchedAt > 0L &&
+            (titleNode.chapLastPublicAt ?: 0L) <= prevLastPublic
+
+        val targets = if (fetchChapters && !chaptersCurrent) resolveTargetComics(comicIds) else null
 
         val details = if (fetchDetails) {
             val detailsComicId = targets?.bestComicId ?: comicIds.firstOrNull()
@@ -275,9 +285,22 @@ abstract class XCOMIC :
         }
 
         val chapterList = if (fetchChapters) {
-            targets?.comicIds?.takeIf { it.isNotEmpty() }?.let { fetchAllChapters(it) } ?: emptyList()
+            when {
+                chaptersCurrent -> chapters
+                targets != null && targets.comicIds.isNotEmpty() -> fetchAllChapters(targets.comicIds)
+                else -> emptyList()
+            }
         } else {
             chapters
+        }
+
+        if (fetchChapters) {
+            val (fetchedAt, lastPublic) = if (chaptersCurrent) {
+                prevFetchedAt.takeIf { it > 0 } to prevLastPublic.takeIf { it > 0 }
+            } else {
+                System.currentTimeMillis() to titleNode.chapLastPublicAt
+            }
+            details.attachChapterMemo(fetchedAt, lastPublic)
         }
 
         return SMangaUpdate(details, chapterList)
@@ -331,6 +354,16 @@ abstract class XCOMIC :
         }
         val comicNode = fetchComicNode(id) ?: return null
         return comicNode.titleNode?.toSManga(baseUrl, ::cleanTitleIfNeeded, comic = comicNode)
+    }
+
+    private fun SManga.attachChapterMemo(fetchedAt: Long?, lastPublicAt: Long?) {
+        if (fetchedAt == null && lastPublicAt == null) return
+        val existing = memo.jsonObject
+        memo = buildJsonObject {
+            existing.forEach { (key, value) -> put(key, value) }
+            fetchedAt?.let { put(MEMO_FETCHED_AT, it.toString()) }
+            lastPublicAt?.let { put(MEMO_LAST_PUBLIC, it.toString()) }
+        }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -533,9 +566,12 @@ abstract class XCOMIC :
 
         private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9-_]+)\\s*$", RegexOption.IGNORE_CASE)
 
-        private const val BROWSE_PAGE_SIZE = 36
+        private const val BROWSE_PAGE_SIZE = 48
 
         private const val PROBE_BATCH = 8
+
+        private const val MEMO_FETCHED_AT = "chaptersFetchedAt" // when we last pulled the chapter lists
+        private const val MEMO_LAST_PUBLIC = "lastPublicAt" // title chap_last_public_at at that time
 
         private val filterValueRegex = Regex("""^[a-z0-9][a-z0-9_]*$""")
 
