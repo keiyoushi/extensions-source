@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Cerise Scan"
-    versionCode = 64
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

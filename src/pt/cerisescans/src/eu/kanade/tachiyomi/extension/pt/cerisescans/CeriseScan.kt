@@ -22,26 +22,36 @@ abstract class CeriseScan : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getComicList(page) { addQueryParameter("sort", "views") }
+    override suspend fun getPopularManga(page: Int): MangasPage = getComicList(page, sort = "views")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getComicList(page) { addQueryParameter("sort", "recent") }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getComicList(page, sort = "recent")
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getComicList(page) {
-        if (query.isNotBlank()) {
-            addQueryParameter("search", query)
-        }
-        filters.filterIsInstance<SelectFilter>().forEach { filter ->
-            filter.selected?.let { addQueryParameter(filter.parameter, it) }
-        }
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage =
+        getComicList(page, query = query, filters = filters)
 
-    private suspend fun getComicList(page: Int, parameters: HttpUrl.Builder.() -> Unit): MangasPage {
+    private suspend fun getComicList(
+        page: Int,
+        sort: String? = null,
+        query: String = "",
+        filters: FilterList = FilterList(),
+    ): MangasPage {
         val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", PAGE_SIZE.toString())
-            .apply(parameters)
-            .build()
-        return client.get(url).parseAs<ComicListDto>().toMangasPage(page, baseUrl)
+
+        if (sort != null) {
+            url.addQueryParameter("sort", sort)
+        }
+
+        if (query.isNotBlank()) {
+            url.addQueryParameter("search", query)
+        }
+
+        filters.filterIsInstance<SelectFilter>().forEach { filter ->
+            filter.selected?.let { url.addQueryParameter(filter.parameter, it) }
+        }
+
+        return client.get(url.build()).parseAs<ComicListDto>().toMangasPage(page, baseUrl)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
