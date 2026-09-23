@@ -80,11 +80,21 @@ val TITLE_BROWSE_QUERY = $$"""
     }
 """
 
+val TITLE_BROWSE_PAGER_QUERY = $$"""
+    query get_title_browse_pager($select: Title_Browse_Select) {
+        get_title_browse_pager(select: $select) {
+            next
+            total
+        }
+    }
+"""
+
 val TITLE_NODE_QUERY = $$"""
     query get_title_titleNode($id: ID!) {
         get_title_titleNode(id: $id) {
             id
             data {
+                id
                 title
                 alt_titles
                 native_title
@@ -169,6 +179,27 @@ val COMIC_NODE_QUERY = $$"""
                 originalPubZone
                 chaps_normal
                 dateUpload
+                authorNodes {
+                    id
+                    data {
+                        id
+                        name
+                    }
+                }
+                artistNodes {
+                    id
+                    data {
+                        id
+                        name
+                    }
+                }
+                publisherNodes {
+                    id
+                    data {
+                        id
+                        name
+                    }
+                }
                 chapterNode_up_to {
                     id
                     data {
@@ -185,6 +216,52 @@ val COMIC_NODE_QUERY = $$"""
                 readDirection
                 urlPath
                 urlCover
+                title_titleNode {
+                    id
+                    data {
+                        id
+                        title
+                        alt_titles
+                        native_title
+                        romanized_title
+                        original_language
+                        translated_languages
+                        authors
+                        artists
+                        content_rating_id
+                        type_id
+                        demographic_ids
+                        genre_ids
+                        format_ids
+                        year
+                        type
+                        status
+                        description
+                        cover_local_url
+                        cover_url
+                        urlPath
+                        total_chapters
+                        total_follows
+                        total_reviews
+                        total_comments
+                        vote_avg
+                        vote_users
+                        vote_val
+                        chap_last_public_at
+                        is_merged
+                        merged_to
+                        comic_ids
+                        tracking_sites {
+                            anilist
+                            myanimelist
+                            mangaupdates
+                            kitsu
+                            animeplanet
+                            shikimori
+                            mangabaka
+                        }
+                    }
+                }
             }
         }
     }
@@ -201,7 +278,6 @@ val CHAPTER_LIST_QUERY = $$"""
                 id
                 data {
                     id
-                    comicId
                     dbStatus
                     isFinal
                     volume
@@ -245,7 +321,6 @@ val CHAPTER_UNIQ_LIST_QUERY = $$"""
                 id
                 data {
                     id
-                    comicId
                     dbStatus
                     isFinal
                     volume
