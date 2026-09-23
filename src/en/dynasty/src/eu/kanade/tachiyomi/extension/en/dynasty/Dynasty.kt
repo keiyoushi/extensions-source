@@ -354,14 +354,14 @@ abstract class Dynasty :
     }
 
     private suspend fun mangaDetailsParse(data: MangaResponse): SManga {
-        val authors = LinkedHashSet<String>()
+        val authors = LinkedHashSet<Pair<String, String>>()
         val tags = LinkedHashSet<String>()
         val others = LinkedHashSet<Pair<String, String>>()
         val publishingStatus = LinkedHashSet<String>()
 
         data.tags.forEach { tag ->
             when (tag.type) {
-                "Author" -> authors.add(tag.name)
+                "Author" -> authors.add(tag.name to tag.permalink)
 
                 "General" -> tags.add(tag.name)
 
@@ -377,7 +377,7 @@ abstract class Dynasty :
         data.taggings.filterIsInstance<MangaChapter>().forEach { tagging ->
             tagging.tags.forEach { tag ->
                 when (tag.type) {
-                    "Author" -> authors.add(tag.name)
+                    "Author" -> authors.add(tag.name to tag.permalink)
                     "General" -> tags.add(tag.name)
                     SERIES_TYPE, DOUJIN_TYPE, ANTHOLOGY_TYPE, ISSUE_TYPE, "Scanlator" -> {}
                     else -> others.add(tag.type to tag.name)
@@ -389,9 +389,9 @@ abstract class Dynasty :
             title = data.name
             author = if (authors.size > AUTHORS_UPPER_LIMIT) {
                 authors.take(AUTHORS_UPPER_LIMIT)
-                    .joinToString(postfix = "...")
+                    .joinToString(postfix = "...") { it.first }
             } else {
-                authors.joinToString()
+                authors.joinToString { it.first }
             }
             artist = author
             description = buildString {
@@ -413,7 +413,7 @@ abstract class Dynasty :
                 append("Type: ", data.type, "\n\n")
 
                 if (authors.size > AUTHORS_UPPER_LIMIT) {
-                    others.addAll(authors.map { "Author" to it })
+                    others.addAll(authors.map { "Author" to it.first })
                 }
 
                 for ((type, values) in others.groupBy { it.first }) {
@@ -444,7 +444,7 @@ abstract class Dynasty :
             }
             thumbnail_url = resolveThumbnail(data)
             memo = buildJsonObject {
-                put("authors", data.tags.filter { it.type == "Author" }.map { it.permalink }.toJsonElement())
+                put("authors", authors.map { it.second }.toJsonElement())
             }
         }
     }
@@ -470,13 +470,13 @@ abstract class Dynasty :
     }
 
     private fun chapterDetailsParse(data: ChapterResponse): SManga {
-        val authors = LinkedHashSet<String>()
+        val authors = LinkedHashSet<Pair<String, String>>()
         val tags = LinkedHashSet<String>()
         val others = LinkedHashSet<Pair<String, String>>()
 
         data.tags.forEach { tag ->
             when (tag.type) {
-                "Author" -> authors.add(tag.name)
+                "Author" -> authors.add(tag.name to tag.permalink)
                 "General" -> tags.add(tag.name)
                 else -> others.add(tag.type to tag.name)
             }
@@ -484,7 +484,7 @@ abstract class Dynasty :
 
         return SManga.create().apply {
             title = data.title
-            author = authors.joinToString()
+            author = authors.joinToString { it.first }
             artist = author
             description = buildString {
                 append("Type: ", CHAPTER_TYPE, "\n\n")
@@ -500,7 +500,7 @@ abstract class Dynasty :
             status = SManga.COMPLETED
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             memo = buildJsonObject {
-                put("authors", data.tags.filter { it.type == "Author" }.map { it.permalink }.distinct().toJsonElement())
+                put("authors", authors.map { it.second }.toJsonElement())
             }
         }
     }
