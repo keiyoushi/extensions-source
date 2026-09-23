@@ -41,9 +41,8 @@ class OriginalStatusFilter(
     options: List<Pair<String, String>> = uploadStatus,
 ) : CheckboxGroupFilter(name = "Original Work Status", options = options)
 
-class ChapterCountFilter(
-    options: List<Pair<String, String>> = chapterCountOptions,
-) : SelectFilter(name = "Chapter Count", options = options)
+class MinChapterFilter : Filter.Text("Minimum Chapter Count")
+class MaxChapterFilter : Filter.Text("Maximum Chapter Count")
 
 class OriginalLanguageFilter(
     options: List<Pair<String, String>> = languages,
@@ -219,15 +218,6 @@ val uploadStatus = listOf(
     "Cancelled" to "cancelled",
     "Upcoming" to "upcoming",
     "Unknown" to "unknown",
-)
-
-val chapterCountOptions = listOf(
-    "Any" to "", "0" to "0", "1+" to "1", "10+" to "10", "20+" to "20", "30+" to "30",
-    "40+" to "40", "50+" to "50", "60+" to "60", "70+" to "70", "80+" to "80", "90+" to "90",
-    "100+" to "100", "200+" to "200", "300+" to "300", "1~9" to "1-9", "10~19" to "10-19",
-    "20~29" to "20-29", "30~39" to "30-39", "40~49" to "40-49", "50~59" to "50-59",
-    "60~69" to "60-69", "70~79" to "70-79", "80~89" to "80-89", "90~99" to "90-99",
-    "100~199" to "100-199", "200~299" to "200-299",
 )
 
 val sortOptions = listOf(

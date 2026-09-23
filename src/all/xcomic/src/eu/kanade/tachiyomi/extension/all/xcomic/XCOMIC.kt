@@ -91,7 +91,8 @@ abstract class XCOMIC :
         var incOLangs = emptyList<String>()
         var incTLangs = if (lang == "all") emptyList() else listOf(mapLangCode(lang))
         var origStatus = emptyList<String>()
-        var chapCount = ""
+        var chapMin = ""
+        var chapMax = ""
 
         filters.forEach { filter ->
             when (filter) {
@@ -129,11 +130,22 @@ abstract class XCOMIC :
                 }
                 is OriginalStatusFilter -> origStatus = filter.selected
                 is SortFilter -> sort = filter.selected
-                is ChapterCountFilter -> chapCount = filter.selected
+                is MinChapterFilter -> chapMin = filter.state.trim()
+                is MaxChapterFilter -> chapMax = filter.state.trim()
                 else -> {}
             }
         }
         // NOTE: no UploadStatusFilter — Title_Browse_Select has no siteStatus.
+
+        val chapMinNum = chapMin.toIntOrNull()
+        val chapMaxNum = chapMax.toIntOrNull()
+
+        val chapCount = when {
+            chapMinNum != null && chapMaxNum != null -> "${chapMinNum.coerceAtLeast(1)}-${chapMaxNum.coerceAtLeast(1)}"
+            chapMinNum != null -> "${chapMinNum.coerceAtLeast(1)}"
+            chapMaxNum != null -> "1-${chapMaxNum.coerceAtLeast(1)}"
+            else -> null
+        }
 
         val variables = ApiTitleBrowseVariables(
             page = page,
@@ -154,7 +166,7 @@ abstract class XCOMIC :
             incOLangs = incOLangs,
             incTLangs = incTLangs,
             origStatus = origStatus,
-            chapCount = chapCount.takeIf { it.isNotEmpty() },
+            chapCount = chapCount?.takeIf { it.isNotEmpty() },
             ignoreGlobalGenres = isIgnoreGenreBlocklist(),
         )
 
@@ -294,8 +306,8 @@ abstract class XCOMIC :
                 add(OriginalStatusFilter())
                 add(OriginalLanguageFilter())
                 if (lang == "all") add(TranslationLanguageFilter())
-                add(ChapterCountFilter())
-                add(Filter.Separator())
+                add(MinChapterFilter())
+                add(MaxChapterFilter())
                 add(YearFilter())
             },
         )
