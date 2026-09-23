@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.en.toonz
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
 @Serializable
@@ -32,7 +34,10 @@ class ChapterDto(
             "Chapter $cleanNum"
         }
         val cleanSlug = if (slug.startsWith("chapter-")) slug.removePrefix("chapter-") else slug
-        url = "$mangaUrl/chapter/$cleanSlug"
+        url = cleanSlug
+        memo = buildJsonObject {
+            put("mangaUrl", mangaUrl)
+        }
         date_upload = Instant.tryParse(date)
     }
 }

@@ -15,10 +15,13 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -27,8 +30,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Toonz : KeiSource() {
-
-    override val supportsLatest = true
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
         .addCookie(
@@ -76,30 +77,36 @@ abstract class Toonz : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaUrl = getMangaUrl(manga)
-        val document = client.get(mangaUrl).asJsoup()
+        val updatedManga = if (fetchDetails || manga.memo.getStringOrNull("comicId") == null) {
+            val mangaUrl = getMangaUrl(manga)
+            val document = client.get(mangaUrl).asJsoup()
+            val comicId = document.select("script").firstNotNullOfOrNull { script ->
+                COMIC_ID_REGEX.find(script.data())?.groupValues?.get(1)
+            } ?: throw Exception("Could not find comic ID for ${manga.title}")
 
-        val updatedManga = if (fetchDetails) {
             manga.apply {
-                title = document.selectFirst("h1")?.text() ?: title
-                thumbnail_url = document.selectFirst("img[data-cover]")?.absUrl("src")
-                    ?: document.selectFirst("div.group img[src]")?.absUrl("src")
-                    ?: thumbnail_url
-                description = document.selectFirst("div.prose")?.text()
-                    ?: document.selectFirst("meta[name=description]")?.attr("content")?.trim()
-                author = document.select("a[href^=/author/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
-                artist = author
-                genre = document.select("a[href^=/genre/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
-                status = parseStatus(document.selectFirst("dt:contains(Status) + dd")?.text())
+                if (fetchDetails) {
+                    title = document.selectFirst("h1")?.text() ?: title
+                    thumbnail_url = document.selectFirst("img[data-cover]")?.absUrl("src")
+                        ?: document.selectFirst("div.group img[src]")?.absUrl("src")
+                        ?: thumbnail_url
+                    description = document.selectFirst("div.prose")?.text()
+                        ?: document.selectFirst("meta[name=description]")?.attr("content")?.trim()
+                    author = document.select("a[href^=/author/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
+                    artist = author
+                    genre = document.select("a[href^=/genre/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
+                    status = parseStatus(document.selectFirst("dt:contains(Status) + dd")?.text())
+                }
+                memo = buildJsonObject {
+                    put("comicId", comicId)
+                }
             }
         } else {
             manga
         }
 
         val updatedChapters = if (fetchChapters) {
-            val comicId = document.select("script").firstNotNullOfOrNull { script ->
-                COMIC_ID_REGEX.find(script.data())?.groupValues?.get(1)
-            } ?: throw Exception("Could not find comic ID for ${manga.title}")
+            val comicId = updatedManga.memo.getString("comicId")
             val chaptersResponse = client.get("$baseUrl/api/comics/$comicId/chapters")
             val chapterListDto = chaptersResponse.parseAs<ChapterListDto>()
             chapterListDto.chapters.map { it.toSChapter(manga.url) }
@@ -110,16 +117,24 @@ abstract class Toonz : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private val rscHeaders by lazy {
-        headers.newBuilder()
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaUrl = chapter.memo.getStringOrNull("mangaUrl")
+        return if (mangaUrl != null) {
+            "$baseUrl$mangaUrl/chapter/${chapter.url}"
+        } else {
+            "$baseUrl${chapter.url}"
+        }
+    }
+
+    private val rscHeaders: Headers
+        get() = headersBuilder()
             .add("rsc", "1")
             .build()
-    }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         val images = client.get(chapterUrl, rscHeaders).extractNextJs<ChapterImagesDto>()?.images
-            ?: throw Exception("Failed to extract pages")
+            ?: return emptyList()
 
         return images.mapIndexed { index, image ->
             val filename = image.filename.removePrefix("/")
@@ -129,23 +144,14 @@ abstract class Toonz : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs<JsonElement>()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.let {
-            try {
-                jsonInstance.decodeFromJsonElement<List<GenreDto>>(it)
-                    .map { genre -> genre.name to genre.slug }
-            } catch (_: Exception) {
-                null
-            }
-        } ?: defaultGenres
+        val genres = data?.parseAs<List<GenreDto>>()
+            ?.map { it.name to it.slug }
+            .orEmpty()
 
-        val genreOptions = if (genres.firstOrNull()?.second?.isEmpty() == true) {
-            genres
-        } else {
-            listOf("None" to "") + genres
-        }
+        val genreOptions = listOf("None" to "") + genres
 
         return FilterList(
             CatalogFilter(),
@@ -161,11 +167,10 @@ abstract class Toonz : KeiSource() {
         val mangas = mutableListOf<SManga>()
 
         for (a in document.select("a[href]")) {
-            val href = a.attr("href")
-            val path = if (href.startsWith(baseUrl)) href.removePrefix(baseUrl) else href
-            val normalizedPath = if (path.startsWith("/")) path else "/$path"
-            if (!PATH_PATTERN.matches(normalizedPath) || normalizedPath in seen || normalizedPath.contains("browse")) continue
-            seen.add(normalizedPath)
+            val absUrl = a.absUrl("href")
+            val path = absUrl.removePrefix(baseUrl)
+            if (!PATH_PATTERN.matches(path) || path in seen || path.contains("browse")) continue
+            seen.add(path)
 
             val card = a.closest("div.group") ?: a
             val title = card.selectFirst("h3")?.text()
@@ -174,7 +179,7 @@ abstract class Toonz : KeiSource() {
                 ?: continue
 
             val manga = SManga.create().apply {
-                setUrlWithoutDomain(normalizedPath)
+                setUrlWithoutDomain(absUrl)
                 this.title = title
                 thumbnail_url = card.selectFirst("img[src]")?.absUrl("src")
             }
