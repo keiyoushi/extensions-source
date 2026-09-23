@@ -173,6 +173,8 @@ val languages = listOf(
     "Spanish (LA)" to "es_419",
     "Slovenian" to "sl",
     "Vietnamese" to "vi",
+    "Urdu" to "ur",
+    "Yoruba" to "yo",
     "Other" to "_t",
     "Uzbek" to "uz",
     "Zulu" to "zu",
