@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 // Variables
 @Serializable
@@ -12,42 +14,42 @@ object EmptyVariables
 @Suppress("unused")
 @Serializable
 class SearchVariables(
-    val keyword: String,
-    val after: String?,
+    private val keyword: String,
+    private val after: String?,
 )
 
 @Suppress("unused")
 @Serializable
 class DayOfWeekVariables(
-    val dayOfWeek: String,
-    val after: String?,
+    private val dayOfWeek: String,
+    private val after: String?,
 )
 
 @Suppress("unused")
 @Serializable
 class FinishedVariables(
-    val after: String?,
+    private val after: String?,
 )
 
 @Suppress("unused")
 @Serializable
 class MagazineDetailVariables(
-    val magazineIdOrAlias: String,
+    private val magazineIdOrAlias: String,
 )
 
 @Suppress("unused")
 @Serializable
 class ChapterListVariables(
-    val magazineIdOrAlias: String,
-    val first: Int,
-    val after: String?,
+    private val magazineIdOrAlias: String,
+    private val first: Int,
+    private val after: String?,
 )
 
 @Suppress("unused")
 @Serializable
 class ViewerVariables(
-    val magazineIdOrAlias: String,
-    val storyId: String,
+    private val magazineIdOrAlias: String,
+    private val storyId: String,
 )
 
 // Cursor
@@ -149,15 +151,13 @@ class DetailsResponse(
 
 @Serializable
 class Details(
-    val alias: String,
     private val title: String,
     private val authorName: String?,
     private val description: String?,
     private val isFinished: Boolean?,
     @SerialName("squareWithLogoImageURL") private val squareWithLogoImageUrl: String?,
-    private val rectangleWithLogoImageURL: String?,
+    @SerialName("rectangleWithLogoImageURL") private val rectangleWithLogoImageUrl: String?,
     private val magazineTags: List<Tags>?,
-    val isWebOnlySensitive: Boolean?,
 ) {
     fun toSManga() = SManga.create().apply {
         title = this@Details.title
@@ -165,7 +165,7 @@ class Details(
         description = this@Details.description
         genre = magazineTags?.joinToString { it.name }
         status = if (isFinished == true) SManga.COMPLETED else SManga.ONGOING
-        thumbnail_url = squareWithLogoImageUrl ?: rectangleWithLogoImageURL
+        thumbnail_url = squareWithLogoImageUrl ?: rectangleWithLogoImageUrl
     }
 }
 
@@ -203,6 +203,7 @@ class Chapters(
     private val contentsRelease: Long,
     private val isPurchased: Boolean?,
     private val contentsAccessCondition: ContentsAccessCondition?,
+    private val storyContents: StoryContents,
 ) {
     val isLocked: Boolean
         get() = isPurchased == false && (
@@ -210,14 +211,23 @@ class Chapters(
                 (contentsAccessCondition.info?.coins != null && contentsAccessCondition.info.coins != 0)
             )
 
-    fun toSChapter(slug: String) = SChapter.create().apply {
+    fun toSChapter(alias: String) = SChapter.create().apply {
         val lock = if (isLocked) "\uD83E\uDE99 " else ""
         val chapterName = if (!subtitle.isNullOrEmpty()) "$title $subtitle" else title
-        url = "$slug/$storyId"
+        url = storyId
         name = lock + chapterName
         date_upload = contentsRelease
+        memo = buildJsonObject {
+            put("alias", alias)
+            put("desktop", storyContents.typename == "StoryContents")
+        }
     }
 }
+
+@Serializable
+class StoryContents(
+    @SerialName("__typename") val typename: String,
+)
 
 @Serializable
 class ContentsAccessCondition(
