@@ -91,7 +91,7 @@ abstract class XCOMIC :
         var releaseYearMax: Int? = null
         var incOLangs = emptyList<String>()
         var incTLangs = if (lang == "all") emptyList() else listOf(mapLangCode(lang))
-        var origStatus = ""
+        var origStatus = emptyList<String>()
         var chapCount = ""
 
         filters.forEach { filter ->
@@ -155,7 +155,7 @@ abstract class XCOMIC :
             excGenresMode = excGenresMode?.takeIf { it.isNotEmpty() },
             incOLangs = incOLangs,
             incTLangs = incTLangs,
-            origStatus = origStatus.takeIf { it.isNotEmpty() },
+            origStatus = origStatus,
             chapCount = chapCount.takeIf { it.isNotEmpty() },
             ignoreGlobalGenres = isIgnoreGenreBlocklist(),
         )
@@ -773,7 +773,7 @@ abstract class XCOMIC :
         private const val BROWSE_PAGE_SIZE = 12
 
         // Fan-out shape: 3 titles concurrently, 5 comic probes each
-        private const val TITLES_IN_FLIGHT = 3
+        private const val TITLES_IN_FLIGHT = 4
         private const val COMIC_PROBES_PER_TITLE = 5
 
         private const val MEMO_FETCHED_AT = "chaptersFetchedAt" // when we last pulled the list

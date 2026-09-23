@@ -45,11 +45,7 @@ class SortFilter(
 
 class OriginalStatusFilter(
     options: List<Pair<String, String>> = uploadStatus,
-) : SelectFilter(name = "Original Work Status", options = options)
-
-class UploadStatusFilter(
-    options: List<Pair<String, String>> = uploadStatus,
-) : SelectFilter(name = "Upload Status", options = options)
+) : CheckboxGroupFilter(name = "Original Work Status", options = options)
 
 class ChapterCountFilter(
     options: List<Pair<String, String>> = chapterCountOptions,
@@ -221,12 +217,12 @@ val formatOptions = listOf(
 )
 
 val uploadStatus = listOf(
-    "All" to "",
-    "Pending" to "pending",
-    "Ongoing" to "ongoing",
+    "Releasing" to "releasing",
     "Completed" to "completed",
     "Hiatus" to "hiatus",
     "Cancelled" to "cancelled",
+    "Upcoming" to "upcoming",
+    "Unknown" to "unknown",
 )
 
 val chapterCountOptions = listOf(

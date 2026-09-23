@@ -24,7 +24,7 @@ class ApiTitleBrowseVariables(
     val excGenres: List<String> = emptyList(),
     val incGenresMode: String? = null,
     val excGenresMode: String? = null,
-    val origStatus: String? = null,
+    val origStatus: List<String> = emptyList(),
     val chapCount: String? = null,
     val ignoreGlobalGenres: Boolean = false,
     val ignoreGlobalULangs: Boolean = false,
