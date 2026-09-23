@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.os.Handler
 import android.os.Looper
-import android.text.InputType // [FIX-AI] 登录密码输入框用
+import android.text.InputType
 import android.util.Base64
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -20,7 +20,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import keiyoushi.source.CustomUrlPreferences // [FIX-AI] 手动自定义网址（官方 core 提供，含合法性校验）
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
@@ -50,33 +49,20 @@ abstract class Jinmantiantang :
     KeiSource(),
     ConfigurableSource {
 
-    // [FIX-AI] 原版: getPreferences()。修复后: 挂上旧版镜像列表迁移逻辑 preferenceMigration()。
+    // 首次加载时迁移旧版镜像列表
     private val preferences = getPreferences { preferenceMigration() }
 
-    // [FIX-AI] 原版(官方1.6): baseUrl 由 DSL `custom(...)` 生成，只有"手动输入网址"一种方式。
-    // 修复后: 双轨 baseUrl——手动输入的自定义网址优先；留空/保持默认时，回退旧版(第三方)的
-    // "内置镜像列表 + stevenyomi 自动更新"机制。build.gradle.kts 的 baseUrl 相应改回 static 以允许类内接管。
-    private val customUrlPreferences = CustomUrlPreferences(
-        preferences,
-        DEFAULT_BASE_URL,
-        "自定义网址（留空/保持默认=使用自动镜像）",
-        "手动填写后优先使用此网址；留空或保持默认时，使用下方\"使用镜像网址\"的自动更新机制。",
-    )
-
+    // baseUrl 跟随"使用镜像网址"设置
     override val baseUrl: String
-        get() = customUrlPreferences.baseUrl.takeIf { it != DEFAULT_BASE_URL }
-            ?: "https://" + preferences.mirrorBaseUrl
+        get() = "https://" + preferences.mirrorBaseUrl
 
-    private val isCustomUrlActive: Boolean get() = customUrlPreferences.baseUrl != DEFAULT_BASE_URL
-
-    // [FIX-AI] 移植旧版镜像自动更新拦截器；手动网址生效期间不启用（enabled = false）。
-    private val updateUrlInterceptor = UpdateUrlInterceptor(preferences, enabled = { !isCustomUrlActive })
+    private val updateUrlInterceptor = UpdateUrlInterceptor(preferences)
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        // [FIX-AI] 旧版"直接获取网址"：拦截器放最前，主站请求失败时自动拉取新镜像列表
+        // 拦截器放最前：主站请求失败时自动拉取新镜像列表
         interceptors().add(0, updateUrlInterceptor)
         addInterceptor(ScrambledImageInterceptor)
-        // [FIX-AI] PR#19104: 设置了账号密码时自动登录（cookie 与应用内置浏览器共享）
+        // 设置了账号密码时自动登录（cookie 与应用内置浏览器共享）
         addInterceptor(LoginInterceptor(preferences, network.client, { baseUrl }, { headers }))
         // Add rate limit to fix manga thumbnail load failure
         rateLimit(3, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
@@ -515,23 +501,20 @@ abstract class Jinmantiantang :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context = screen.context
 
-        // [FIX-AI] 手动自定义网址（优先级最高，官方 UI 组件复用）
-        customUrlPreferences.setupPreferenceScreen(screen)
-
         EditTextPreference(context).apply {
             key = USERNAME_PREF
             title = "用户名（登录账号 / 收藏夹）"
             summary = "填写用户名并设置密码后，插件会自动登录，无需再打开内置浏览器手动登录。\n" +
                 "只在网页登录的用户可不填密码：用户名留空时插件会自动识别登录状态用于收藏夹；识别失败请在此手动填写（顶栏账号即用户名）。"
             setDefaultValue("")
-            // [FIX-AI] PR#19104: 修改账号时清除会话 cookie，让新凭据立即生效
+            // 修改账号时清除会话 cookie，让新凭据立即生效
             setOnPreferenceChangeListener { _, _ ->
                 clearSessionCookies(baseUrl)
                 true
             }
         }.let(screen::addPreference)
 
-        // [FIX-AI] PR#19104: 新增密码设置项（与用户名一起构成自动登录凭据）
+        // 密码设置项（与用户名一起构成自动登录凭据）
         EditTextPreference(context).apply {
             key = PASSWORD_PREF
             title = "密码"
@@ -575,14 +558,12 @@ abstract class Jinmantiantang :
             }
         }.let(screen::addPreference)
 
-        // [FIX-AI] 原版 getPreferenceList(context)；修复后传入 preferences 与镜像更新状态，含旧版"使用镜像网址"设置项
+        // 含"使用镜像网址"设置项
         getPreferenceList(context, preferences, updateUrlInterceptor.isUpdated).forEach(screen::addPreference)
     }
 
     companion object {
         private const val PREFIX_ID_SEARCH_NO_COLON = "JM"
-
-        // [FIX-AI] USERNAME_PREF 移至 Preferences.kt（值保持 "username"，与收藏夹功能共用同一键）
 
         private const val FAVORITE_MANGA_SELECTOR = "div[id^='favorites_album_']"
         private const val CHECKIN_PREF = "auto_checkin"

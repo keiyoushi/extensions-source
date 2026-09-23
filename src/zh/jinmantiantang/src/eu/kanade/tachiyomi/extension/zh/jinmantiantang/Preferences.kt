@@ -1,7 +1,3 @@
-// [AI助手声明] 本文件由 AI 助手于 2026-09-22 修改（标记 [FIX-AI]）。
-// 修改内容: 将旧版(第三方 zip)的"镜像网址列表 + stevenyomi.github.io 自动更新"机制移植进官方 1.6 代码，
-// 与官方新增的手动自定义网址共存（手动优先、留空回退镜像，见 Jinmantiantang.kt）。
-// 修改清单见 G:\MotrixDown\sourcefix\fix\README.md；原版备份在 G:\MotrixDown\sourcefix\backup-original-base\。
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.content.Context
@@ -19,8 +15,6 @@ internal fun getPreferenceList(
     preferences: SharedPreferences,
     isUrlUpdated: Boolean,
 ) = arrayOf(
-    // [FIX-AI] 原版(官方1.6): 无此设置项，网址只能在自定义输入框手动填写。
-    // 修复后: 移植旧版"使用镜像网址"列表选择 + 自动更新逻辑，作为手动网址留空时的回退方案。
     ListPreference(context).apply {
         val urlList = preferences.urlList
         val fullList = SITE_ENTRIES_ARRAY + urlList
@@ -28,7 +22,7 @@ internal fun getPreferenceList(
         val count = fullList.size
 
         key = USE_MIRROR_URL_PREF
-        title = "使用镜像网址（未手动填写自定义网址时生效）"
+        title = "使用镜像网址"
         entries = Array(count) { "${fullDesc[it]} (${fullList[it]})" }
         entryValues = Array(count) { "$it" }
         summary = if (isUrlUpdated) "%s\n镜像列表已自动更新，请选择合适的镜像并重启应用。" else "%s\n镜像列表会自动更新。重启后生效。"
@@ -47,9 +41,7 @@ internal fun getPreferenceList(
     },
 )
 
-// [FIX-AI] 官方1.6: 本文件仅有 blockList。以下整段镜像/登录代码移植自旧版(第三方 zip)与未合并的 PR#19104。
-
-/** 旧版镜像机制选出的域名(不含 scheme)，仅在未手动填写自定义网址时使用 */
+/** 镜像设置选出的域名(不含 scheme) */
 internal val SharedPreferences.mirrorBaseUrl: String
     get() {
         val list = SITE_ENTRIES_ARRAY
@@ -58,14 +50,12 @@ internal val SharedPreferences.mirrorBaseUrl: String
         return urlList.getOrNull(index - list.size) ?: list[0]
     }
 
-internal const val DEFAULT_BASE_URL = "https://18comic.vip"
-
 internal const val BLOCK_PREF = "BLOCK_GENRES_LIST"
 
 // 登录用户名：沿用官方 1.6 已有的 "username" 键（收藏夹自动识别功能在用），保证旧设置值直接生效
 internal const val USERNAME_PREF = "username"
 
-// 登录密码：PR#19104 新增
+// 登录密码
 internal const val PASSWORD_PREF = "password"
 
 // 仅清除登录会话 cookie（改账号/密码后强制重新登录生效）；AVS 年龄验证 cookie 有意保留
@@ -106,8 +96,6 @@ private const val URL_LIST_PREF = "baseUrlList"
 private val SharedPreferences.mirrorIndex get() = getString(USE_MIRROR_URL_PREF, "0")!!.toInt()
 private val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.split(",")
 
-// [FIX-AI] 原版(第三方旧版): 迁移时会 edit().remove("overrideBaseUrl")。
-// 修复后: 删除该行——在合并版里 overrideBaseUrl 是"手动自定义网址"的存储键，不能被镜像迁移清空。
 fun SharedPreferences.preferenceMigration() {
     if (getString(DEFAULT_LIST_PREF, "")!! != DEFAULT_LIST) {
         edit()
@@ -124,13 +112,9 @@ private fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int):
     return putString(USE_MIRROR_URL_PREF, maxIndex.toString())
 }
 
-/**
- * [FIX-AI] 旧版"直接获取网址"机制：主站请求失败时从 stevenyomi.github.io 拉取最新镜像域名列表，
- * 提示用户重启并选择镜像。移植进 1.6 后增加 enabled 开关：手动网址生效期间完全放行（手动优先级高）。
- */
+/** 主站请求失败时从 stevenyomi.github.io 拉取最新镜像域名列表，提示用户重启并选择镜像。 */
 class UpdateUrlInterceptor(
     private val preferences: SharedPreferences,
-    private val enabled: () -> Boolean,
 ) : Interceptor {
     @Volatile
     var isUpdated = false
@@ -138,7 +122,6 @@ class UpdateUrlInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (!enabled()) return chain.proceed(request)
         val baseUrl = "https://" + preferences.mirrorBaseUrl
         if (!request.url.toString().startsWith(baseUrl)) return chain.proceed(request)
 

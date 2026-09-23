@@ -1,7 +1,3 @@
-// [AI助手声明] 本文件由 AI 助手于 2026-09-22 修改（标记 [FIX-AI]）：
-// 在原 GIF 修复版（sourcefix\ScrambledImageInterceptor.kt）基础上，重新合入官方 1.6 新增的
-// "_3x4.jpg 封面缩略图不参与分割处理"逻辑；GIF 动图解码问题修复方式与旧修复版一致。
-// 修改清单见 G:\MotrixDown\sourcefix\fix\README.md；原版备份在 G:\MotrixDown\sourcefix\backup-original-base\。
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.graphics.Bitmap
@@ -13,7 +9,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import java.io.ByteArrayInputStream // [FIX-AI] GIF 修复：字节流重建解码入参
+import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
@@ -44,11 +40,8 @@ object ScrambledImageInterceptor : Interceptor {
             response.body.byteStream()
         }
 
-        // [FIX-AI] GIF 无法正常显示的修复（源自用户旧修复版）：
-        // 原版行为: 所有 media/photos 响应都走 BitmapFactory 取首帧 + JPEG 重编码 ——
-        // GIF 动图被压成静态图，且尺寸/多帧异常时直接损坏无法显示。
-        // 修复后: 先读完字节，嗅探 "GIF" 魔数；GIF 未经站点分割加密，原字节直接透传（保留动画），
-        // 非 GIF 才走原有 decodeImage 切片还原。
+        // GIF 未经站点分割加密：嗅探 "GIF" 魔数，动图原字节直接透传（保留动画）；
+        // 非 GIF 才走 decodeImage 切片还原。
         val bytes = input.use { it.readBytes() }
         val isGif = bytes.size >= 3 && bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte() && bytes[2] == 'F'.code.toByte()
 
@@ -127,6 +120,6 @@ object ScrambledImageInterceptor : Interceptor {
 
     private val jpegMediaType = "image/jpeg".toMediaType()
 
-    // [FIX-AI] GIF 透传时的媒体类型
+    // GIF 透传时的媒体类型
     private val gifMediaType = "image/gif".toMediaType()
 }

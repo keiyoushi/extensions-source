@@ -1,9 +1,6 @@
-// [AI助手声明] 本文件为 AI 助手于 2026-09-22 新增（移植自 keiyoushi/extensions-source 未合并的
-// PR #19104 "Jinman Tiantang: Add account login"，作者 WindBT47，并按官方 1.6 代码结构做了适配：
-// baseUrl/headers 改为惰性 provider，以支持"手动网址优先、镜像回退"的双轨 baseUrl）。
-// 功能: 在插件设置中填写账号密码后，缺少会话 cookie(jmc_id) 时自动用账号密码登录，
-// 登录 cookie 存入应用共享 CookieJar（与应用内置浏览器同一存储），已有的登录态不会被触碰，
-// 登录失败只记日志、请求照常继续。修改清单见 G:\MotrixDown\sourcefix\fix\README.md。
+// 填写账号密码后，缺少会话 cookie(jmc_id) 时自动登录；
+// 登录 cookie 存入应用共享 CookieJar（与内置浏览器同一存储），已有登录态不受影响；
+// 登录失败只记日志，请求照常继续。
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.content.SharedPreferences
