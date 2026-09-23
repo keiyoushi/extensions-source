@@ -6,9 +6,9 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
 
 // Variables
 @Suppress("unused")
@@ -21,13 +21,22 @@ class SeriesVariables(
 @Suppress("unused")
 @Serializable
 class SearchVariables(
-    private val input: Input,
+    private val input: SearchInput,
 )
 
+@Suppress("unused")
 @Serializable
-class Input(
-    @Suppress("unused")
+class SearchInput(
     private val keyword: String,
+    private val tagSlugGroups: List<TagGroup>,
+    private val page: Int,
+    private val limit: Int,
+)
+
+@Suppress("unused")
+@Serializable
+class TagGroup(
+    private val tagSlugs: List<String>,
 )
 
 @Suppress("unused")
@@ -53,7 +62,7 @@ class VolumeViewerVariables(
 // Responses
 @Serializable
 class SeriesResponse(
-    @JsonNames("genre") val homeSection: HomeSection,
+    val homeSection: HomeSection,
 )
 
 @Serializable
@@ -91,9 +100,12 @@ class Comic(
     private val cover: Cover?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "$comicId#$slug"
+        url = comicId
         title = this@Comic.title
         thumbnail_url = cover?.url
+        memo = buildJsonObject {
+            put("slug", slug)
+        }
     }
 }
 
@@ -108,28 +120,31 @@ class SearchResponse(
 )
 
 @Serializable
-class DetailsResponse(
-    val manga: Manga,
+class ComicDataResponse(
+    val comicVolumes: ComicVolumes,
+    val chapters: List<Chapter>,
 )
 
 @Serializable
-class Manga(
-    val comic: DeatilsComic,
+class ComicVolumes(
+    val comic: ComicDetails,
+    val volumes: List<Volume>,
 )
 
 @Serializable
-class DeatilsComic(
+class ComicDetails(
+    val slug: String,
     private val title: String,
     private val synopsis: String?,
     private val rating: Int?,
     private val creators: List<String>?,
     private val publisher: String?,
-    private val metadata: Metadata?,
+    private val completed: Boolean?,
     private val cover: Cover?,
     private val genres: List<Genre>?,
 ) {
     fun toSManga() = SManga.create().apply {
-        title = this@DeatilsComic.title
+        title = this@ComicDetails.title
         author = creators?.joinToString()
         description = buildString {
             synopsis?.let { append(it) }
@@ -142,15 +157,13 @@ class DeatilsComic(
             }
         }
         genre = genres?.joinToString { it.name }
-        status = if (metadata?.completed == true) SManga.COMPLETED else SManga.ONGOING
+        status = if (completed == true) SManga.COMPLETED else SManga.ONGOING
         thumbnail_url = cover?.url
+        memo = buildJsonObject {
+            put("slug", slug)
+        }
     }
 }
-
-@Serializable
-class Metadata(
-    val completed: Boolean?,
-)
 
 @Serializable
 class Genre(
@@ -158,20 +171,9 @@ class Genre(
 )
 
 @Serializable
-class ChapterVolumeResponse(
-    val comicVolumes: ComicVolumes,
-    val chapters: List<Chapter>,
-)
-
-@Serializable
-class ComicVolumes(
-    val volumes: List<Volume>,
-)
-
-@Serializable
 class Chapter(
     private val comicId: String,
-    private val chapterNumber: Int?,
+    private val chapterNumber: Int,
     private val name: String,
     private val purchased: Boolean?,
     private val free: Boolean?,
@@ -180,22 +182,28 @@ class Chapter(
     val isLocked: Boolean
         get() = purchased == false && free == false
 
-    fun toSChapter(slug: String) = SChapter.create().apply {
+    fun toSChapter(comicSlug: String) = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
-        url = "$comicId/chapter/$chapterNumber/$slug"
+        url = chapterNumber.toString()
         name = lock + this@Chapter.name
-        date_upload = dateFormat.tryParse(releasesAt)
-        chapter_number = chapterNumber?.toFloat() ?: -1f
+        date_upload = Instant.tryParse(releasesAt)
+        chapter_number = chapterNumber.toFloat()
+        memo = buildJsonObject {
+            put("type", "chapter")
+            put("comicId", comicId)
+            put("slug", comicSlug)
+        }
     }
 }
 
 @Serializable
 class Volume(
     private val comicId: String,
-    private val trialPage: Int?,
+    private val volumeNumber: Int,
+    private val eisbn: String?,
     private val slug: String,
-    private val volumeNumber: Int?,
     private val name: String,
+    private val trialPage: Int?,
     private val purchased: Boolean?,
     private val free: Boolean?,
     private val releasesAt: String?,
@@ -203,21 +211,23 @@ class Volume(
     val isLocked: Boolean
         get() = purchased == false && free == false
 
-    val isPreview: Boolean
+    private val isPreview: Boolean
         get() = isLocked && trialPage != null && trialPage > 0
 
-    fun toSChapter(urlSlug: String) = SChapter.create().apply {
+    fun toSChapter(comicSlug: String) = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
         val preview = if (isPreview) "(Preview) " else ""
-        url = "$comicId/volume/$volumeNumber/$urlSlug/$slug"
-        name = lock + preview + this@Volume.name
-        date_upload = dateFormat.tryParse(releasesAt)
-        chapter_number = volumeNumber?.toFloat() ?: -1f
+        url = eisbn ?: volumeNumber.toString()
+        name = lock + preview + this@Volume.name.ifEmpty { "Oneshot" }
+        date_upload = Instant.tryParse(releasesAt)
+        chapter_number = volumeNumber.toFloat()
+        memo = buildJsonObject {
+            put("type", "volume")
+            put("comicId", comicId)
+            put("slug", if (slug.isEmpty()) comicSlug else "$comicSlug-$slug")
+            put("volumeNumber", volumeNumber)
+        }
     }
-}
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
 }
 
 @Serializable
@@ -232,12 +242,12 @@ class Viewer(
 
 @Serializable
 class Contents(
-    val pages: List<Page>,
+    val pages: List<ContentPage>,
     val hash: String,
 )
 
 @Serializable
-class Page(
+class ContentPage(
     val url: String,
 )
 
