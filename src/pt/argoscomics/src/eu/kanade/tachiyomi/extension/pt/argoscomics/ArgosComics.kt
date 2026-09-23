@@ -248,7 +248,7 @@ abstract class ArgosComics : KeiSource() {
 
         private val NEXT_CHUNKS_REGEX = """/_next/static/chunks/\w+.js""".toRegex()
 
-        private const val WARNING = "Não foi possivel obter os dados"
+        private const val WARNING = "Credenciais não encontradas. Faça login na web view"
 
         private fun buildTokenRegex(ref: String) = """=.+createServerReference\)\("([^"]+)"[\s\S]*?"$ref"""".toRegex(RegexOption.IGNORE_CASE)
     }
