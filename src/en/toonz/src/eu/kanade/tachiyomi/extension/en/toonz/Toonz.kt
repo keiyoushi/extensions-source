@@ -18,6 +18,8 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getString
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -77,39 +79,20 @@ abstract class Toonz : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val updatedManga = if (fetchDetails || manga.memo.getStringOrNull("comicId") == null) {
-            val mangaUrl = getMangaUrl(manga)
-            val document = client.get(mangaUrl).asJsoup()
-            val comicId = document.select("script").firstNotNullOfOrNull { script ->
-                COMIC_ID_REGEX.find(script.data())?.groupValues?.get(1)
-            } ?: throw Exception("Could not find comic ID for ${manga.title}")
-
-            manga.apply {
-                if (fetchDetails) {
-                    title = document.selectFirst("h1")?.text() ?: title
-                    thumbnail_url = document.selectFirst("img[data-cover]")?.absUrl("src")
-                        ?: document.selectFirst("div.group img[src]")?.absUrl("src")
-                        ?: thumbnail_url
-                    description = document.selectFirst("div.prose")?.text()
-                        ?: document.selectFirst("meta[name=description]")?.attr("content")?.trim()
-                    author = document.select("a[href^=/author/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
-                    artist = author
-                    genre = document.select("a[href^=/genre/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
-                    status = parseStatus(document.selectFirst("dt:contains(Status) + dd")?.text())
-                }
-                memo = buildJsonObject {
-                    put("comicId", comicId)
-                }
+        val comicId = manga.memo.getStringOrNull("comicId")
+        if (comicId != null) {
+            val (updatedManga, updatedChapters) = coroutineScope {
+                val mangaDeferred = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+                val chaptersDeferred = async { if (fetchChapters) fetchChapters(manga, comicId) else chapters }
+                mangaDeferred.await() to chaptersDeferred.await()
             }
-        } else {
-            manga
+            return SMangaUpdate(updatedManga, updatedChapters)
         }
 
+        val updatedManga = fetchMangaDetails(manga)
+        val resolvedComicId = updatedManga.memo.getString("comicId")
         val updatedChapters = if (fetchChapters) {
-            val comicId = updatedManga.memo.getString("comicId")
-            val chaptersResponse = client.get("$baseUrl/api/comics/$comicId/chapters")
-            val chapterListDto = chaptersResponse.parseAs<ChapterListDto>()
-            chapterListDto.chapters.map { it.toSChapter(manga.url) }
+            fetchChapters(manga, resolvedComicId)
         } else {
             chapters
         }
@@ -117,14 +100,37 @@ abstract class Toonz : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val mangaUrl = chapter.memo.getStringOrNull("mangaUrl")
-        return if (mangaUrl != null) {
-            "$baseUrl$mangaUrl/chapter/${chapter.url}"
-        } else {
-            "$baseUrl${chapter.url}"
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val mangaUrl = getMangaUrl(manga)
+        val document = client.get(mangaUrl).asJsoup()
+        val comicId = manga.memo.getStringOrNull("comicId") ?: document.select("script").firstNotNullOfOrNull { script ->
+            COMIC_ID_REGEX.find(script.data())?.groupValues?.get(1)
+        } ?: throw Exception("Could not find comic ID for ${manga.title}")
+
+        return manga.apply {
+            title = document.selectFirst("h1")?.text() ?: title
+            thumbnail_url = document.selectFirst("img[data-cover]")?.absUrl("src")
+                ?: document.selectFirst("div.group img[src]")?.absUrl("src")
+                ?: thumbnail_url
+            description = document.selectFirst("div.prose")?.text()
+                ?: document.selectFirst("meta[name=description]")?.attr("content")?.trim()
+            author = document.select("a[href^=/author/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
+            artist = author
+            genre = document.select("a[href^=/genre/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
+            status = parseStatus(document.selectFirst("dt:contains(Status) + dd")?.text())
+            memo = buildJsonObject {
+                put("comicId", comicId)
+            }
         }
     }
+
+    private suspend fun fetchChapters(manga: SManga, comicId: String): List<SChapter> {
+        val chaptersResponse = client.get("$baseUrl/api/comics/$comicId/chapters")
+        val chapterListDto = chaptersResponse.parseAs<ChapterListDto>()
+        return chapterListDto.chapters.map { it.toSChapter(manga.url) }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.memo.getString("mangaUrl")}/chapter/${chapter.url}"
 
     private val rscHeaders: Headers
         get() = headersBuilder()
