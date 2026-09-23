@@ -258,14 +258,7 @@ abstract class XCOMIC :
             val lastPublicAt = legacyComic.titleNode?.chapLastPublicAt
             val prevFetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull() ?: 0L
             val prevLastPublic = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull() ?: 0L
-            val prevSourcesFilter = manga.memo[MEMO_SOURCES_FILTER]?.string.orEmpty()
-            val prevChapterDataVersion = manga.memo[MEMO_CHAPTER_DATA_VERSION]?.string?.toIntOrNull() ?: 0
-            val prevDeduplicate = manga.memo[MEMO_DEDUPLICATE]?.string
-            val chaptersCurrent = prevFetchedAt > 0L &&
-                prevChapterDataVersion == CHAPTER_DATA_VERSION &&
-                prevDeduplicate == deduplicate.toString() &&
-                (lastPublicAt ?: 0L) <= prevLastPublic &&
-                prevSourcesFilter == includeSources
+            val chaptersCurrent = isChapterCacheCurrent(manga, lastPublicAt, includeSources, deduplicate)
             val chapterList = if (!fetchChapters) {
                 chapters
             } else if (chaptersCurrent) {
@@ -279,7 +272,7 @@ abstract class XCOMIC :
                     ::cleanTitleIfNeeded,
                     url = manga.url,
                     comic = legacyComic,
-                    sources = if (fetchChapters) chapterList.mapNotNull { it.uploader() }.distinct() else null,
+                    uploaders = chapterList.mapNotNull { it.uploader() }.distinct(),
                 ) ?: manga
             } else {
                 manga
@@ -308,14 +301,7 @@ abstract class XCOMIC :
         val deduplicate = isDeduplicateChapters()
         val prevFetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull() ?: 0L
         val prevLastPublic = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull() ?: 0L
-        val prevSourcesFilter = manga.memo[MEMO_SOURCES_FILTER]?.string.orEmpty()
-        val prevChapterDataVersion = manga.memo[MEMO_CHAPTER_DATA_VERSION]?.string?.toIntOrNull() ?: 0
-        val prevDeduplicate = manga.memo[MEMO_DEDUPLICATE]?.string
-        val chaptersCurrent = prevFetchedAt > 0L &&
-            prevChapterDataVersion == CHAPTER_DATA_VERSION &&
-            prevDeduplicate == deduplicate.toString() &&
-            (titleNode.chapLastPublicAt ?: 0L) <= prevLastPublic &&
-            prevSourcesFilter == includeSources
+        val chaptersCurrent = isChapterCacheCurrent(manga, titleNode.chapLastPublicAt, includeSources, deduplicate)
 
         val targets = if (fetchChapters && !chaptersCurrent) resolveTargetComics(comicIds, manga.title) else null
 
@@ -336,7 +322,7 @@ abstract class XCOMIC :
                 baseUrl,
                 ::cleanTitleIfNeeded,
                 comic = comic,
-                sources = if (fetchChapters) chapterList.mapNotNull { it.uploader() }.distinct() else null,
+                uploaders = chapterList.mapNotNull { it.uploader() }.distinct(),
             )
         } else {
             manga
@@ -370,6 +356,23 @@ abstract class XCOMIC :
         val payload = graphQLBody(query = COMIC_PROBE_QUERY, variables = ApiComicNodeVariables(id))
         val response = client.post("$baseUrl/query/", payload)
         return response.parseGraphQLAs<ComicProbeDataEnvelope>().response?.data
+    }
+
+    private fun isChapterCacheCurrent(
+        manga: SManga,
+        lastPublicAt: Long?,
+        includeSources: String,
+        deduplicate: Boolean,
+    ): Boolean {
+        val currentLastPublicAt = lastPublicAt?.takeIf { it > 0L } ?: return false
+        val previousLastPublicAt = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull() ?: return false
+        val fetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull() ?: return false
+
+        return fetchedAt > 0L &&
+            previousLastPublicAt == currentLastPublicAt &&
+            manga.memo[MEMO_CHAPTER_DATA_VERSION]?.string?.toIntOrNull() == CHAPTER_DATA_VERSION &&
+            manga.memo[MEMO_DEDUPLICATE]?.string == deduplicate.toString() &&
+            manga.memo[MEMO_SOURCES_FILTER]?.string.orEmpty() == includeSources
     }
 
     private class TitleTargets(val sources: List<ChapterEdition>, val bestComicId: String?)
