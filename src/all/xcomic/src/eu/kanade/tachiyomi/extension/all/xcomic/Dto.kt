@@ -262,7 +262,7 @@ class ComicNode(
                 (urlPath ?: work?.urlPath)?.let { put("urlPath", it) }
             }
 
-            status = parseStatus(work?.status ?: originalStatus, uploadStatus)
+            status = parseStatus(work?.status ?: originalStatus ?: uploadStatus, uploadStatus)
             thumbnail_url = (work?.coverLocalUrl ?: work?.coverUrl ?: urlCover)?.toAbsoluteUrl(baseUrl)
 
             val descriptionParts = buildList {
@@ -317,7 +317,7 @@ class ComicNode(
                 if (stats.isNotEmpty()) add("**Statistics**\n${stats.joinToString(" · ")}")
 
                 (work?.description?.takeIf { it.isNotBlank() } ?: summary?.text?.takeIf { it.isNotBlank() })?.let {
-                    add(Parser.unescapeEntities(it, false).toMarkdownUrls())
+                    add("**Description**\n${Parser.unescapeEntities(it, false).toMarkdownUrls()}")
                 }
 
                 val links = (work?.trackingSites.toMarkdownLinks() + comicTrackingLinks()).distinct()
