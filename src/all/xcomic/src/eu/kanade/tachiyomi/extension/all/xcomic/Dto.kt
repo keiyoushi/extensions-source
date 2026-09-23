@@ -483,11 +483,12 @@ class ChapterData(
     private val viewsGuest: Int? = null,
     private val profileNodes: List<XComicData<XComicName?>?>? = null,
 ) {
-    fun toSChapter(comicId: String): SChapter = SChapter.create().apply {
+    fun toSChapter(comicId: String, editionLabel: String?): SChapter = SChapter.create().apply {
         url = id
         val uploader = srcName?.takeIf { it.isNotEmpty() }?.replaceFirstChar {
             if (it.isLowerCase()) it.titlecase() else it.toString()
         } ?: profileNodes?.mapNotNull { it?.data?.name }?.joinToString().takeIf { !it.isNullOrEmpty() }
+        val scanlatorLabel = editionLabel ?: uploader
 
         name = buildString {
             val number = (chaNum ?: serial)?.toString()?.removeSuffix(".0")
@@ -513,7 +514,7 @@ class ChapterData(
         (chaNum ?: serial)?.let { chapter_number = it }
         date_upload = dateModify ?: dateCreate ?: datePublic ?: 0L
 
-        scanlator = uploader
+        scanlator = scanlatorLabel
     }
 }
 
@@ -521,6 +522,10 @@ internal const val CHAPTER_COMIC_ID_MEMO = "comicId"
 internal const val CHAPTER_UPLOADER_MEMO = "uploader"
 
 internal fun SChapter.uploader(): String? = memo[CHAPTER_UPLOADER_MEMO]?.stringOrNull
+
+internal fun String?.normalizeEditionLabel(): String? = this
+    ?.let { Parser.unescapeEntities(it, false).trim() }
+    ?.takeIf { it.isNotEmpty() }
 
 // ================================ Helpers =================================
 
