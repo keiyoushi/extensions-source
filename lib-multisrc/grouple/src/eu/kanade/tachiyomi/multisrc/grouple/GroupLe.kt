@@ -731,7 +731,7 @@ abstract class GroupLe :
         private val SINGLE_REGEX = Regex("""\s*Сингл\s*""")
         private val FILTERS_REGEX = """window\.__FILTERS\.(\w+)\s*=\s*([{].*?[}]);""".toRegex()
         private val PAGES_REGEX = """\[['"](.*?)['"],['"](.*?)['"],['"](.*?)['"].*?]""".toRegex()
-        private val BLOCKED_ANON_REGEX = """\{[^{}]*?['"]blockedForAnonymous['"][^{}]*?\}""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        private val BLOCKED_ANON_REGEX = """\{[^{}]*?['"]blockedForAnonymous['"][^{}]*?\}""".toRegex()
         private val ALLOW_ANONYMOUS_REGEX = """enabled:\s*true""".toRegex()
         private val CHECK_JSON = """(\w+)\s*:""".toRegex()
         private val dateFormat = DateTimeFormatter.ofPattern("[dd.MM.yy][d.MM.yy]", Locale.ROOT)
