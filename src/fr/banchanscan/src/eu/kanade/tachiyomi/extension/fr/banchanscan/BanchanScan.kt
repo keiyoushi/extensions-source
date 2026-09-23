@@ -78,33 +78,36 @@ abstract class BanchanScan : KeiSource() {
         return findWebtoonBySlug(segments[1])?.toSManga()
     }
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/webtoon/${manga.title.toSlug()}"
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaSlug = chapter.memo["mangaSlug"]?.stringOrNull.orEmpty()
+        val chapterNumber = chapter.chapter_number.toString().removeSuffix(".0")
+        return "$baseUrl/webtoon/$mangaSlug/chapitre_$chapterNumber"
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val slug = manga.url.substringAfterLast("/")
-        val webtoonId = manga.memo["id"]?.stringOrNull
-            ?: findWebtoonBySlug(slug)?.id
-            ?: error("Webtoon not found: $slug")
+        val webtoonId = manga.url
+        val slug = manga.title.toSlug()
 
-        var updatedManga = manga
-        var chapterList = chapters
-
-        coroutineScope {
+        return coroutineScope {
             val detailsDeferred = if (fetchDetails) async { fetchWebtoonDetails(webtoonId) } else null
             val chaptersDeferred = if (fetchChapters) async { fetchChapterList(webtoonId, slug) } else null
 
-            detailsDeferred?.await()?.let { updatedManga = it.toSManga() }
-            chaptersDeferred?.await()?.let { chapterList = it }
+            SMangaUpdate(
+                detailsDeferred?.await()?.toSManga() ?: manga,
+                chaptersDeferred?.await() ?: chapters,
+            )
         }
-
-        return SMangaUpdate(updatedManga, chapterList)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = requireNotNull(chapter.memo["id"]?.stringOrNull)
+        val chapterId = chapter.url
         return client.get(
             "$baseUrl/api/data/chapter_pages?select=image_url,sort_order" +
                 "&chapter_id=eq.$chapterId&order=sort_order.asc",
@@ -115,7 +118,7 @@ abstract class BanchanScan : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<List<GenreDto>>()?.map { it.name }.orEmpty()
-        return FilterList(GenreFilter(genres))
+        return if (genres.isEmpty()) FilterList() else FilterList(GenreFilter(genres))
     }
 
     private suspend fun homeData(): HomeDataDto = client.get("$baseUrl/api/home-data").parseAs()

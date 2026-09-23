@@ -45,7 +45,9 @@ class WebtoonDto(
     }
 
     fun toSManga(): SManga = SManga.create().apply {
-        url = "/webtoon/${this@WebtoonDto.title.toSlug()}"
+        // Kept stable across title changes - see BanchanScan.getMangaUrl(), which rebuilds the
+        // real "/webtoon/<slug>" URL from the (always up to date) title instead of storing it here.
+        url = id
         this.title = this@WebtoonDto.title
         thumbnail_url = coverUrl
         description = this@WebtoonDto.description
@@ -63,7 +65,6 @@ class WebtoonDto(
             "Licenciée" -> SManga.LICENSED
             else -> SManga.UNKNOWN
         }
-        memo = buildJsonObject { put("id", id) }
     }
 }
 
@@ -89,7 +90,9 @@ class ChapterDto(
     val chapterNumberValue: Float get() = chapterNumber.toFloatOrNull() ?: -1f
 
     fun toSChapter(mangaSlug: String, showSeason: Boolean): SChapter = SChapter.create().apply {
-        url = "/webtoon/$mangaSlug/chapitre_$chapterNumber"
+        // Kept stable across chapter renumbering - see BanchanScan.getChapterUrl(), which rebuilds
+        // the real "/webtoon/<slug>/chapitre_<n>" URL from the manga slug stashed in memo below.
+        url = id
         val meta = parseTitleMetadata(chapterTitle)
         name = if (meta.kind == "side_story" && meta.sideStoryNumber != null) {
             "Side Story ${meta.sideStoryNumber}"
@@ -105,7 +108,7 @@ class ChapterDto(
         chapter_number = chapterNumber.toFloatOrNull() ?: -1f
         date_upload = Instant.tryParse(publishedAt ?: createdAt)
         scanlator = uploaderName
-        memo = buildJsonObject { put("id", id) }
+        memo = buildJsonObject { put("mangaSlug", mangaSlug) }
     }
 
     private fun kindBadge(kind: String?): String? = when (kind) {
