@@ -2,29 +2,54 @@ package eu.kanade.tachiyomi.extension.fr.epsilonscan
 
 import eu.kanade.tachiyomi.multisrc.pam.CheckBoxGroup
 import eu.kanade.tachiyomi.multisrc.pam.Pam
+import eu.kanade.tachiyomi.multisrc.pam.Signer
 import eu.kanade.tachiyomi.multisrc.pam.SortFilter
 import eu.kanade.tachiyomi.multisrc.pam.TriStateGroupFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
 import kotlinx.serialization.json.JsonElement
-import okio.ByteString.Companion.decodeHex
 
 @Source
 abstract class EpsilonScan : Pam() {
 
-    override val readerSecret =
-        "e8abc14766424104bd19de22a0badbb2256330415accfaacd2deb8688ca99405".decodeHex().toByteArray()
+    override val readerId = "epsilonscan"
 
-    override val kdfDomain = "2xqtlk8p"
+    override fun Signer.signAttestation(challenge: String, payload: String): String = use {
+        val c = write(challenge)
+        val p = write(payload)
+        val out = alloc(64)
+        check(call("l", c, c.size, p, p.size, out) != 0L) { "signAttestation failed" }
+        readText(out)
+    }
 
-    override fun signedPayload(payload: ByteArray) = readerSecret + payload
+    override fun Signer.signManifest(token: String, version: Int, uid: String, ts: Long, nonce: String): String = use {
+        val t = write(token)
+        val u = write(uid)
+        val n = write(nonce)
+        val out = alloc(64)
+        check(call("k", t, t.size, version, u, u.size, ts.toDouble(), n, n.size, out) != 0L) { "signManifest failed" }
+        readText(out)
+    }
 
-    override fun manifestPayload(uid: String, version: Int, ts: Long, nonce: String) = "$uid|$version|$nonce|$ts"
+    override fun Signer.deriveContentKey(
+        privateKey: ByteArray,
+        serverPubkey: ByteArray,
+        uid: String,
+        keyVersion: Int,
+        hint: ByteArray,
+    ): ByteArray = use {
+        val priv = write(privateKey)
+        val server = write(serverPubkey)
+        val clientPub = alloc(32)
+        check(call("f", priv, priv.size, server, server.size, clientPub) != 0L) { "ecdhInit failed" }
 
-    override fun contentKeyMaterial(sharedSecret: ByteArray, info: ByteArray) = listOf(readerSecret, sharedSecret, info)
-
-    override val contentKeyRounds = 1
+        val u = write(uid)
+        val h = write(hint)
+        val out = alloc(32)
+        check(call("j", u, u.size, keyVersion, h, h.size, out) != 0L) { "kdfRot failed" }
+        read(out)
+    }
 
     override val popularFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(3, false)))
     override val latestFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(2, false)))
