@@ -19,7 +19,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.safety.Safelist
-import kotlin.sequences.map
 
 @Source
 abstract class TempleScan : KeiSource() {
