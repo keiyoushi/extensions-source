@@ -5,16 +5,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+import kotlin.time.Instant
 
 @Serializable
-class PaginatedResponse<T>(
+internal class PaginatedResponse<T>(
     val data: List<T>,
     private val meta: Meta,
 ) {
@@ -22,14 +16,13 @@ class PaginatedResponse<T>(
 }
 
 @Serializable
-class Meta(
+internal class Meta(
     @SerialName("current_page") val currentPage: Int,
     @SerialName("last_page") val lastPage: Int,
 )
 
 @Serializable
 class SeriesDto(
-    val id: String,
     private val title: String,
     private val slug: String,
     @SerialName("cover_url") private val coverUrl: String? = null,
@@ -71,9 +64,7 @@ class ChapterDto(
         name = title ?: "Chapter $numberString".trim()
         url = "$slug/chapter/$numberString?id=$id"
         chapter_number = number ?: -1f
-        date_upload = createdAt?.substringBefore(".")?.plus("Z")?.let {
-            dateFormat.tryParse(it)
-        } ?: 0L
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
