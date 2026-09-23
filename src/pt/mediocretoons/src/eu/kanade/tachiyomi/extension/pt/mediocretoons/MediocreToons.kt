@@ -22,9 +22,11 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONException
 import org.json.JSONObject
 import rx.Observable
 import uy.kohesive.injekt.api.get
+import java.io.IOException
 import java.text.Normalizer
 
 @Source
@@ -33,6 +35,7 @@ abstract class MediocreToons :
     ConfigurableSource {
     override val supportsLatest = true
     private val apiUrl = "https://back2.mediocrescan.com"
+    private val apiHost = apiUrl.toHttpUrl().host
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -47,109 +50,111 @@ abstract class MediocreToons :
     private fun authIntercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
 
-        if (originalRequest.header("Authorization") != null) {
-            return chain.proceed(originalRequest)
-        }
-
-        val token = getValidToken()
-        if (token.isNullOrEmpty()) {
+        if (originalRequest.url.host != apiHost || originalRequest.header("Authorization") != null) {
             return chain.proceed(originalRequest)
         }
 
         val authenticatedRequest = originalRequest.newBuilder()
-            .header("Authorization", "Bearer $token")
+            .header("Authorization", "Bearer ${getValidToken()}")
             .build()
 
         val response = chain.proceed(authenticatedRequest)
 
         if (response.code == 401) {
-            response.body.close()
+            response.close()
             cachedToken = null
             tokenExpiryTime = 0L
-            val newToken = getValidToken()
 
-            return if (!newToken.isNullOrEmpty()) {
-                val retryRequest = originalRequest.newBuilder()
-                    .header("Authorization", "Bearer $newToken")
-                    .build()
-                chain.proceed(retryRequest)
-            } else {
-                chain.proceed(originalRequest)
-            }
+            val retryRequest = originalRequest.newBuilder()
+                .header("Authorization", "Bearer ${getValidToken()}")
+                .build()
+
+            return chain.proceed(retryRequest).throwIfVipRestricted()
         }
-        return response
+        return response.throwIfVipRestricted()
     }
 
-    private fun getValidToken(): String? {
-        val now = System.currentTimeMillis()
+    private fun Response.throwIfVipRestricted(): Response {
+        if (code == 403) {
+            close()
+            throw IOException(VIP_ONLY_ERROR)
+        }
+        return this
+    }
 
-        if (cachedToken != null && now < tokenExpiryTime) {
-            return cachedToken
+    private fun getValidToken(): String {
+        val token = cachedToken
+
+        if (token != null && System.currentTimeMillis() < tokenExpiryTime) {
+            return token
         }
 
         return fetchNewToken()
     }
 
-    private fun fetchNewToken(): String? {
-        return try {
-            val email = preferences.getString(EMAIL_PREF, "")
-            val password = preferences.getString(PASSWORD_PREF, "")
+    private fun fetchNewToken(): String {
+        val email = preferences.getString(EMAIL_PREF, "")
+        val password = preferences.getString(PASSWORD_PREF, "")
 
-            if (email.isNullOrEmpty() || password.isNullOrEmpty()) {
-                return null
-            }
-
-            return loginAndGetToken(email, password)
-        } catch (e: Exception) {
-            null
+        if (email.isNullOrEmpty() || password.isNullOrEmpty()) {
+            throw IOException(MISSING_CREDENTIALS_ERROR)
         }
+
+        return loginAndGetToken(email, password)
     }
 
-    private fun loginAndGetToken(email: String, password: String): String? {
-        return try {
-            val json = JSONObject()
-                .put("email", email.trim())
-                .put("senha", password)
-                .toString()
+    private fun loginAndGetToken(email: String, password: String): String {
+        val json = JSONObject()
+            .put("email", email.trim())
+            .put("senha", password)
+            .toString()
 
-            val body = json.toRequestBody("application/json".toMediaType())
+        val body = json.toRequestBody("application/json".toMediaType())
 
-            val request = Request.Builder()
-                .url("$apiUrl/auth/login")
-                .post(body)
-                .header("x-app-key", "toons-mediocre-app")
-                .header("Accept", "application/json")
-                .build()
+        val request = Request.Builder()
+            .url("$apiUrl/auth/login")
+            .post(body)
+            .header("x-app-key", "toons-mediocre-app")
+            .header("Accept", "application/json")
+            .build()
 
-            val response = network.client.newCall(request).execute()
+        val responseBody = network.client.newCall(request).execute().use { response ->
+            val bodyText = response.body.string()
 
-            if (response.isSuccessful) {
-                val responseBody = response.body.string()
-                val jsonResponse = JSONObject(responseBody)
+            if (!response.isSuccessful) {
+                val message = runCatching { JSONObject(bodyText).optString("message") }.getOrNull()
 
-                val token = when {
-                    jsonResponse.has("token") -> jsonResponse.getString("token")
-                    jsonResponse.has("access_token") -> jsonResponse.getString("access_token")
-                    else -> null
-                }
-
-                if (!token.isNullOrEmpty()) {
-                    val expiresIn = jsonResponse.optLong("expiresIn", 3600) * 1000
-                    cachedToken = token
-                    tokenExpiryTime = System.currentTimeMillis() + expiresIn
-
-                    return token
-                } else {
-                    return null
-                }
-            } else {
-                val errorBody = response.body.string()
-                null
+                throw IOException(
+                    buildString {
+                        append(LOGIN_FAILED_ERROR)
+                        if (!message.isNullOrBlank()) {
+                            append(" Resposta do site: ")
+                            append(message)
+                        }
+                    },
+                )
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
+
+            bodyText
         }
+
+        val jsonResponse = try {
+            JSONObject(responseBody)
+        } catch (e: JSONException) {
+            throw IOException(LOGIN_INVALID_RESPONSE_ERROR, e)
+        }
+
+        val token = jsonResponse.optString("token").ifEmpty { jsonResponse.optString("access_token") }
+
+        if (token.isEmpty()) {
+            throw IOException(LOGIN_FAILED_ERROR)
+        }
+
+        val expiresIn = jsonResponse.optLong("expiresIn", 3600) * 1000
+        cachedToken = token
+        tokenExpiryTime = System.currentTimeMillis() + expiresIn
+
+        return token
     }
 
     override fun headersBuilder() = super.headersBuilder()
@@ -444,6 +449,13 @@ abstract class MediocreToons :
         private const val POPULAR_FORMATOS = "1,4,5,8,9,13"
         private const val EMAIL_PREF = "email"
         private const val PASSWORD_PREF = "password"
+        private const val MISSING_CREDENTIALS_ERROR =
+            "Configure e-mail e senha nas preferências da extensão"
+        private const val LOGIN_FAILED_ERROR =
+            "Falha no login. Verifique o e-mail e a senha nas preferências da extensão."
+        private const val LOGIN_INVALID_RESPONSE_ERROR =
+            "Falha no login. Não foi possível ler a resposta do site."
+        private const val VIP_ONLY_ERROR = "O site restringe o acesso a assinantes VIP"
     }
 }
 
