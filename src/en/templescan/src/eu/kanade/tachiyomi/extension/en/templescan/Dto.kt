@@ -9,7 +9,7 @@ import java.util.Locale
 
 @Serializable
 class BrowseSeries(
-    val sref: String,
+    @SerialName("sref") private val slug: String,
     val title: String,
     @SerialName("alternative_names") val alternativeNames: String? = null,
     private val thumbnail: String? = null,
@@ -27,7 +27,7 @@ class BrowseSeries(
     }
 
     fun toSManga() = SManga.create().apply {
-        url = "/comic/$sref"
+        url = "/comic/$slug"
         title = this@BrowseSeries.title
         thumbnail_url = thumbnail
     }
@@ -35,7 +35,7 @@ class BrowseSeries(
 
 @Serializable
 class SeriesDetails(
-    val sref: String,
+    @SerialName("sref") val slug: String,
     val title: String,
     val thumbnail: String? = null,
     val author: String? = null,

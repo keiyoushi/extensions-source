@@ -106,7 +106,7 @@ abstract class TempleScan : KeiSource() {
         val details = client.get(baseUrl + manga.url, rscHeaders).extractNextJs<SeriesDetails>()!!
 
         val manga = SManga.create().apply {
-            url = "/comic/${details.sref}"
+            url = "/comic/${details.slug}"
             title = details.title
             thumbnail_url = details.thumbnail
             status = when (details.status) {
