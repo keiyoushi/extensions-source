@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -24,14 +25,11 @@ abstract class TempleScan : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1)
-        addInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .header("Sec-Fetch-Dest", "document")
-                .header("Sec-Fetch-Mode", "navigate")
-                .build()
+    }
 
-            chain.proceed(request)
-        }
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("Sec-Fetch-Dest", "document")
+        set("Sec-Fetch-Mode", "navigate")
     }
 
     private val rscHeaders get() = headersBuilder()
