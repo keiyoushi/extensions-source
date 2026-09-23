@@ -118,16 +118,8 @@ abstract class NarasiNinja : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        val details = if (fetchDetails) {
-            mangaDetailsParse(document).apply { url = manga.url }
-        } else {
-            manga
-        }
-        val chapterList = if (fetchChapters) {
-            chapterListParse(document)
-        } else {
-            chapters
-        }
+        val details = mangaDetailsParse(document).apply { url = manga.url }
+        val chapterList = chapterListParse(document)
 
         return SMangaUpdate(details, chapterList)
     }
