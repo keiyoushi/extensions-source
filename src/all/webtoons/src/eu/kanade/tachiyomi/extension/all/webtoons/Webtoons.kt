@@ -2,57 +2,58 @@ package eu.kanade.tachiyomi.extension.all.webtoons
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
-import rx.Observable
 import java.net.SocketException
 import java.text.DecimalFormat
 import java.util.Calendar
 
 @Source
 abstract class Webtoons :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
     // Due to lang code getting more specific for zh-Hant
     private val langCode: String get() = if (lang == "zh-Hant") "zh-hant" else lang
     private val localeForCookie: String get() = if (lang == "zh-Hant") "zh_TW" else lang
 
-    private val mobileUrlHost by lazy { mobileUrl.toHttpUrl().host }
-
     private val mobileUrl = "https://m.webtoons.com"
-    override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    private val mobileHeaders: Headers
+        get() = headersBuilder()
+            .set("Referer", "$mobileUrl/")
+            .removeAll("Origin")
+            .build()
 
-    private val mobileHeaders = super.headersBuilder()
-        .set("Referer", "$mobileUrl/")
-        .build()
+    override val supportRelatedMangasBySearch = true
 
-    override val client = network.client.newBuilder()
-        .addCookie(
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addCookie(
             domain = { "webtoons.com" },
             cookies = {
                 listOf(
@@ -62,7 +63,7 @@ abstract class Webtoons :
                 )
             },
         )
-        .addInterceptor { chain ->
+        addInterceptor { chain ->
             // m.webtoons.com throws an SSL error that can be solved by a simple retry
             try {
                 chain.proceed(chain.request())
@@ -70,13 +71,13 @@ abstract class Webtoons :
                 chain.proceed(chain.request())
             }
         }
-        .addInterceptor(TextInterceptor())
-        .rateLimit(1) { it.host == mobileUrlHost }
-        .build()
+        addInterceptor(TextInterceptor())
+        rateLimit(1) { it.host == mobileUrl.toHttpUrl().host }
+    }
 
     private val preferences by getPreferencesLazy()
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val ranking = when (page) {
             1 -> "trending"
             2 -> "popular"
@@ -85,16 +86,11 @@ abstract class Webtoons :
             else -> throw Exception("page > 4 not available")
         }
 
-        return GET("$baseUrl/$langCode/ranking/$ranking", headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get("$baseUrl/$langCode/ranking/$ranking").asJsoup()
         val entries = document.select(".webtoon_list li a")
             .map(::mangaFromElement)
-        val hasNextPage = response.request.url.pathSegments.last() != "canvas"
 
-        return MangasPage(entries, hasNextPage)
+        return MangasPage(entries, hasNextPage = ranking != "canvas")
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -103,7 +99,7 @@ abstract class Webtoons :
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val day = when (Calendar.getInstance().get(Calendar.DAY_OF_WEEK)) {
             Calendar.MONDAY -> "monday"
             Calendar.TUESDAY -> "tuesday"
@@ -115,63 +111,18 @@ abstract class Webtoons :
             else -> throw Exception("Unknown day of week")
         }
 
-        return GET("$baseUrl/$langCode/originals/$day?sortOrder=UPDATE", headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get("$baseUrl/$langCode/originals/$day?sortOrder=UPDATE").asJsoup()
         val entries = document.select(".webtoon_list li a")
             .map(::mangaFromElement)
 
-        return MangasPage(entries, false)
+        return MangasPage(entries, hasNextPage = false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val titleNo = url.queryParameter("title_no")
-                ?: throw Exception("Unsupported url")
-            val path = url.pathSegments
-            if (path.size < 3) {
-                throw Exception("Unsupported url")
-            }
-            val urlLang = path[0]
-            val type = path[1]
-            return fetchSearchManga(page, "$ID_SEARCH_PREFIX$type:$urlLang:$titleNo", filters)
-        }
-
-        if (query.startsWith(ID_SEARCH_PREFIX)) {
-            val (_, type, lang, titleNo) = query.split(":", limit = 4)
-            val tmpManga = SManga.create().apply {
-                url = buildString {
-                    if (type == "canvas") {
-                        append("/challenge")
-                    }
-                    append("/episodeList?titleNo=")
-                    append(titleNo)
-                }
-            }
-
-            return if (lang == langCode) {
-                fetchMangaDetails(tmpManga).map {
-                    MangasPage(listOf(it), false)
-                }
-            } else {
-                Observable.just(MangasPage(emptyList(), false))
-            }
-        }
-
-        return super.fetchSearchManga(page, query, filters)
-    }
-
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         SearchType(),
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             var searchTypeAdded = false
             addPathSegment(langCode)
@@ -186,24 +137,50 @@ abstract class Webtoons :
             }
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val entries = document.select(".webtoon_list li a").map(::mangaFromElement)
         val hasNextPage = document.selectFirst("a.pagination[aria-current=true] + a") != null
 
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(mangaDetailsRequest(manga))
-        .asObservableSuccess()
-        .map { mangaDetailsParse(it, manga) }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val titleNo = url.queryParameter("title_no")?.toIntOrNull() ?: return null
+        val path = url.pathSegments
+        if (path.size < 3) return null
 
-    private fun mangaDetailsParse(response: Response, oldManga: SManga): SManga {
-        val document = response.asJsoup()
+        // Every language ships as its own source; only the matching one resolves the link.
+        if (path[0] != langCode) return null
 
+        val manga = SManga.create().apply {
+            this.url = buildString {
+                if (path[1] == "canvas") {
+                    append("/challenge")
+                }
+                append("/episodeList?titleNo=")
+                append(titleNo)
+            }
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        // details and the episode list are on different hosts
+        val detailsAsync = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val chaptersAsync = async { if (fetchChapters) fetchChapterList(manga) else chapters }
+
+        SMangaUpdate(manga = detailsAsync.await(), chapters = chaptersAsync.await())
+    }
+
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val detailElement = document.selectFirst(".detail_header .info")
         val infoElement = document.selectFirst("#_asideDetail")
 
@@ -223,14 +200,13 @@ abstract class Webtoons :
                     else -> SManga.UNKNOWN
                 }
             }
-            initialized = true
             thumbnail_url = run {
                 val bannerFile = document.selectFirst(".detail_header .thmb img")
                     ?.absUrl("src")
                     ?.toHttpUrl()
                     ?.pathSegments
                     ?.lastOrNull()
-                val oldThumbFile = oldManga.thumbnail_url
+                val oldThumbFile = manga.thumbnail_url
                     ?.toHttpUrl()
                     ?.pathSegments
                     ?.lastOrNull()
@@ -239,7 +215,7 @@ abstract class Webtoons :
 
                 // replace banner image for toons in library
                 if (oldThumbFile != null && oldThumbFile != bannerFile) {
-                    oldManga.thumbnail_url
+                    manga.thumbnail_url
                 } else {
                     thumbnail
                 }
@@ -247,9 +223,7 @@ abstract class Webtoons :
         }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    override fun chapterListRequest(manga: SManga): Request {
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val webtoonUrl = getMangaUrl(manga).toHttpUrl()
         val titleId = webtoonUrl.queryParameter("title_no")
             ?: webtoonUrl.queryParameter("titleNo")
@@ -290,11 +264,7 @@ abstract class Webtoons :
             }
         }.build()
 
-        return GET(url, mobileHeaders)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<EpisodeListResponse>()
+        val result = client.get(url, mobileHeaders).parseAs<EpisodeListResponse>()
 
         var recognized = 0
         var unrecognized = 0
@@ -352,7 +322,7 @@ abstract class Webtoons :
         val numberFormatter = DecimalFormat("#.##")
         return chapters.map { episode ->
             SChapter.create().apply {
-                url = episode.viewerLink
+                this.url = episode.viewerLink
                 name = buildString {
                     append(Parser.unescapeEntities(episode.episodeTitle, false))
                     append(" (ch. ", numberFormatter.format(episode.chapterNumber), ")")
@@ -374,8 +344,8 @@ abstract class Webtoons :
         RegexOption.IGNORE_CASE,
     )
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val useMaxQuality = useMaxQualityPref()
 
         val pages = document.select("div#_imageList > img").mapIndexed { i, element ->
@@ -413,7 +383,7 @@ abstract class Webtoons :
         return pages
     }
 
-    private fun fetchMotionToonPages(document: Document): List<Page> {
+    private suspend fun fetchMotionToonPages(document: Document): List<Page> {
         val docString = document.toString()
 
         val docUrlRegex = Regex("documentURL:.*?'(.*?)'")
@@ -421,8 +391,7 @@ abstract class Webtoons :
 
         val docUrl = docUrlRegex.find(docString)!!.groupValues[1]
         val motionToonPath = motionToonPathRegex.find(docString)!!.groupValues[1]
-        val motionToonResponse = client.newCall(GET(docUrl, headers)).execute()
-        val motionToonImages = motionToonResponse.parseAs<MotionToonResponse>().assets.images
+        val motionToonImages = client.get(docUrl).parseAs<MotionToonResponse>().assets.images
 
         return motionToonImages.entries
             .filter { it.key.contains("layer") }
@@ -457,11 +426,8 @@ abstract class Webtoons :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
 private const val USE_MAX_QUALITY_KEY = "useMaxQuality"
 private const val USE_SEQUENTIAL_NUMBERING_KEY = "useSequentialNumbering"
-const val ID_SEARCH_PREFIX = "id:"
