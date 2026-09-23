@@ -782,7 +782,7 @@ abstract class XCOMIC :
         private const val BROWSE_PAGE_SIZE = 12
 
         // Fan-out shape: 3 titles concurrently, 5 comic probes each
-        private const val TITLES_IN_FLIGHT = 4
+        private const val TITLES_IN_FLIGHT = 3
         private const val COMIC_PROBES_PER_TITLE = 5
 
         private const val MEMO_FETCHED_AT = "chaptersFetchedAt" // when we last pulled the list
