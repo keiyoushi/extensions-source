@@ -2,13 +2,15 @@ package eu.kanade.tachiyomi.extension.ja.mangasaison
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 // Variables
 @Suppress("unused")
@@ -29,25 +31,18 @@ class LatestVariables(
 @Suppress("unused")
 @Serializable
 class SearchRequestBody(
-    private val requests: List<SearchRequest>,
-)
-
-@Suppress("unused")
-@Serializable
-class SearchRequest(
-    private val indexName: String,
-    private val params: String,
+    private val query: String,
+    private val page: Int,
+    private val hitsPerPage: Int,
+    private val filters: String,
+    private val attributesToRetrieve: List<String>,
+    private val attributesToHighlight: List<String>,
+    private val restrictSearchableAttributes: List<String>,
 )
 
 @Suppress("unused")
 @Serializable
 class DetailsVariables(
-    private val titleId: String,
-)
-
-@Suppress("unused")
-@Serializable
-class ChapterListVariables(
     private val titleId: Int,
     private val limit: Int,
     private val sortType: String,
@@ -89,16 +84,11 @@ class LatestResponse(
 
 @Serializable
 class SearchResponse(
-    val results: List<Result>,
-)
-
-@Serializable
-class Result(
     val hits: List<Hit>,
     private val page: Int,
     private val nbPages: Int,
 ) {
-    fun hasNextPage() = (page + 1) < nbPages
+    fun hasNextPage() = page + 1 < nbPages
 }
 
 @Serializable
@@ -117,6 +107,7 @@ class Hit(
 @Serializable
 class DetailsResponse(
     val bookTitle: BookTitle,
+    val bookContents: List<BookContent>,
 )
 
 @Serializable
@@ -166,11 +157,6 @@ class GenreName(
 )
 
 @Serializable
-class ChapterResponse(
-    val bookContents: List<BookContent>,
-)
-
-@Serializable
 class BookContent(
     private val distributionId: String,
     private val contentName: String,
@@ -191,17 +177,20 @@ class BookContent(
         get() = !isFree && !sampleDistributionId.isNullOrEmpty()
 
     fun toSChapter() = SChapter.create().apply {
-        val lock = if (isLocked) "🔒 " else ""
-        val preview = if (isPreview) "🔒 (Preview) " else ""
-        url = when {
-            isPurchased == true -> distributionId
-            limitedReadPeriodBookContent != null -> limitedReadPeriodBookContent.distributionId
-            isPreview -> sampleDistributionId!!
-            else -> distributionId
-        }
-        name = lock + preview + contentName
-        date_upload = dateFormat.tryParse(salesStartAt)
+        url = distributionId
+        name = when {
+            isLocked -> "🔒 "
+            isPreview -> "🔒 (Preview) "
+            else -> ""
+        } + contentName
+        date_upload = dateFormat.tryParseDateTime(salesStartAt)
         chapter_number = volumeNo?.toFloat() ?: -1f
+        val readableId = limitedReadPeriodBookContent?.distributionId ?: sampleDistributionId.takeIf { isPreview }
+        if (readableId != null) {
+            memo = buildJsonObject {
+                put("distributionId", readableId)
+            }
+        }
     }
 }
 
@@ -210,9 +199,7 @@ class LimitedReadPeriodBookContent(
     val distributionId: String,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
-}
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT).withZone(ZoneId.of("Asia/Tokyo"))
 
 @Serializable
 class ViewerResponse(
@@ -221,7 +208,7 @@ class ViewerResponse(
 )
 
 @Serializable
-class ContentResponse(
+class AccessResponse(
     val url: String,
     val token: String,
 )
@@ -234,4 +221,12 @@ class MdPackage(
 @Serializable
 class SpineItem(
     val href: String,
+)
+
+@Serializable
+class ImageRequestData(
+    val localHeaderOffset: Long,
+    val compressedSize: Long,
+    val method: Int,
+    val key: String,
 )
