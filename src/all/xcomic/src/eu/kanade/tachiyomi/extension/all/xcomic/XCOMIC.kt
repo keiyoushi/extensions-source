@@ -79,7 +79,6 @@ abstract class XCOMIC :
         }
 
         var sort: String? = null
-        var letterMode = false
         var contentRating = emptyList<String>()
         var types = emptyList<String>()
         var demographics = emptyList<String>()
@@ -97,7 +96,6 @@ abstract class XCOMIC :
         filters.forEach { filter ->
             when (filter) {
                 is DefaultSortFilter -> sort = filter.sort
-                is LetterFilter -> letterMode = (filter.state == 1)
                 is ContentRatingFilter -> contentRating = filter.selected
                 is TypeFilter -> types = filter.selected
                 is DemographicFilter -> demographics = filter.selected
@@ -143,7 +141,7 @@ abstract class XCOMIC :
             init = (page - 1) * BROWSE_PAGE_SIZE,
             sortby = sort,
             word = query.takeIf { it.isNotEmpty() } ?: "",
-            where = if (letterMode) "letter" else "browse",
+            where = "browse",
             releaseYearMin = releaseYearMin,
             releaseYearMax = releaseYearMax,
             incTypes = types,
@@ -299,7 +297,6 @@ abstract class XCOMIC :
                 add(ChapterCountFilter())
                 add(Filter.Separator())
                 add(YearFilter())
-                add(LetterFilter())
             },
         )
     }

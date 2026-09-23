@@ -32,12 +32,6 @@ abstract class TriStateGroupFilter(
         get() = state.filter { it.isExcluded() }.map { it.value }
 }
 
-class LetterFilter :
-    SelectFilter(
-        name = "Letter matching mode (Slow)",
-        options = listOf("Disabled" to "disabled", "Enabled" to "enabled"),
-    )
-
 class SortFilter(
     options: List<Pair<String, String>> = sortOptions,
     defaultIndex: Int = 0,
