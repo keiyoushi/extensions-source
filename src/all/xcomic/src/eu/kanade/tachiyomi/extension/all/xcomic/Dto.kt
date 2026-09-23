@@ -87,7 +87,7 @@ class TitleBrowseNode(
     val data: TitleBrowseItem? = null,
 )
 
-// ====================== Comic Probe (browse fan-out) ======================
+// ====================== Comic Probe (edition metadata) ===================
 @Serializable
 class ComicProbeEnvelope(
     @SerialName("get_comicNode")
@@ -102,6 +102,7 @@ class ComicProbeData(
     val isPublic: Boolean? = null,
     val translatedLanguage: String? = null,
     @SerialName("chaps_normal") val chapsNormal: Int? = null,
+    @SerialName("chapterNode_up_to") val chapterUpTo: ChapterUpToNode? = null,
     val urlPath: String? = null,
     @SerialName("urlCover") val urlCover: String? = null,
 ) {
@@ -351,7 +352,7 @@ class ComicNode(
                 }
             }
             description = descriptionParts.joinToString("\n\n")
-            initialized = work?.status != null || originalStatus != null
+            initialized = work?.status != null || originalStatus != null || uploadStatus != null
         }
     }
 
@@ -382,7 +383,7 @@ private fun String.unescapeHtml(): String = Parser.unescapeEntities(this, false)
 
 private fun String.toAbsoluteUrl(baseUrl: String): String = if (startsWith("http")) this else "$baseUrl$this"
 
-// ================== Comic browse (legacy path / deep links) ===============
+// ======================== Comic details for links =========================
 @Serializable
 class ComicNodeData(
     @SerialName("get_comicNode")

@@ -38,7 +38,7 @@ class ApiTitleBrowseWrapper(val select: ApiTitleBrowseVariables)
 @Serializable
 class ApiTitleNodeVariables(val id: String)
 
-/** Source node — probe + chosen-source details + legacy path. */
+/** Comic node — edition metadata and chapter details. */
 @Serializable
 class ApiComicNodeVariables(val id: String)
 
@@ -375,6 +375,11 @@ val COMIC_PROBE_QUERY = $$"""
                 isPublic
                 translatedLanguage
                 chaps_normal
+                chapterNode_up_to {
+                    data {
+                        datePublic
+                    }
+                }
                 urlPath
                 urlCover
             }
