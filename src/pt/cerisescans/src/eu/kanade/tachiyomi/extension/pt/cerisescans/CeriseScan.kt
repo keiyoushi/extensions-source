@@ -26,8 +26,7 @@ abstract class CeriseScan : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getComicList(page, sort = "recent")
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage =
-        getComicList(page, query = query, filters = filters)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getComicList(page, query = query, filters = filters)
 
     private suspend fun getComicList(
         page: Int,
