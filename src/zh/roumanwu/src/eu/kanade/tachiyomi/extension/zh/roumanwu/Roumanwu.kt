@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.roumanwu
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -27,9 +25,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Source
-abstract class Roumanwu :
-    KeiSource(),
-    ConfigurableSource {
+abstract class Roumanwu : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ScrambledImageInterceptor())
 
@@ -193,11 +189,6 @@ abstract class Roumanwu :
     }
 
     private class StatusFilter : Filter.Select<String>("狀態", arrayOf("全部", "連載中", "已完結"))
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        // 「自定义基础 URL」输入框由框架 CustomUrlPreferences 提供（留空=默认域名，填写=自定义）。
-        // 此处不添加额外 UI。
-    }
 
     companion object {
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yyyy")
