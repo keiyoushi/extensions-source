@@ -16,6 +16,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -23,9 +24,8 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Wurmz : KeiSource() {
 
-    private val rscHeaders by lazy {
-        headersBuilder().add("Rsc", "1").build()
-    }
+    private val rscHeaders: Headers
+        get() = headersBuilder().add("Rsc", "1").build()
 
     // ======================== Popular ========================
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -90,16 +90,8 @@ abstract class Wurmz : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val bodyString = client.get(getMangaUrl(manga), rscHeaders).body.string()
-        val details = if (fetchDetails) {
-            mangaDetailsParse(bodyString).apply { url = manga.url }
-        } else {
-            manga
-        }
-        val chapterList = if (fetchChapters) {
-            chapterListParse(bodyString, manga.url)
-        } else {
-            chapters
-        }
+        val details = mangaDetailsParse(bodyString).apply { url = manga.url }
+        val chapterList = chapterListParse(bodyString, manga.url)
 
         return SMangaUpdate(details, chapterList)
     }
