@@ -133,31 +133,34 @@ abstract class MangaCrab : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        if (!fetchDetails && !fetchChapters) {
-            return@coroutineScope SMangaUpdate(
-                manga = manga,
-                chapters = chapters,
-            )
-        }
-
         val slug = manga.url
             .removePrefix("/series/")
             .removeSuffix("/")
             .substringBefore("/")
 
-        val detailsDeferred = async {
-            client
-                .get("$baseUrl/api/mv/mangas/by-slug/$slug")
-                .parseAs<MangaCrabMangaDto>()
+        val savedMangaId = manga.memo["mangaId"]
+            ?.jsonPrimitive
+            ?.content
+            ?.toLongOrNull()
+
+        val detailsDeferred = if (fetchDetails || (fetchChapters && savedMangaId == null)) {
+            async {
+                client
+                    .get("$baseUrl/api/mv/mangas/by-slug/$slug")
+                    .parseAs<MangaCrabMangaDto>()
+            }
+        } else {
+            null
         }
 
-        val detailsDto = detailsDeferred.await()
+        val detailsDto = detailsDeferred?.await()
+        val mangaId = detailsDto?.id ?: savedMangaId
 
-        val chaptersDeferred = if (fetchChapters) {
+        val chaptersDeferred = if (fetchChapters && mangaId != null) {
             async {
                 client
                     .get(
-                        "$baseUrl/api/mv/mangas/${detailsDto.id}/chapters?per_page=$CHAPTERS_PER_PAGE",
+                        "$baseUrl/api/mv/mangas/$mangaId/chapters?per_page=$CHAPTERS_PER_PAGE",
                     )
                     .parseAs<MangaCrabChaptersDto>()
             }
@@ -168,8 +171,24 @@ abstract class MangaCrab : KeiSource() {
         val chaptersDto = chaptersDeferred?.await()
 
         SMangaUpdate(
-            manga = if (fetchDetails) {
-                detailsDto.asSManga()
+            manga = if (detailsDto != null) {
+                if (fetchDetails) {
+                    detailsDto.asSManga().apply {
+                        memo = JsonObject(
+                            mapOf(
+                                "mangaId" to JsonPrimitive(detailsDto.id),
+                            ),
+                        )
+                    }
+                } else {
+                    manga.apply {
+                        memo = JsonObject(
+                            mapOf(
+                                "mangaId" to JsonPrimitive(detailsDto.id),
+                            ),
+                        )
+                    }
+                }
             } else {
                 manga
             },
@@ -177,7 +196,7 @@ abstract class MangaCrab : KeiSource() {
                 chaptersDto
                     ?.items
                     ?.map { chapter ->
-                        chapter.asSChapter(detailsDto.id)
+                        chapter.asSChapter(mangaId!!)
                     }
                     .orEmpty()
             } else {
@@ -279,9 +298,10 @@ abstract class MangaCrab : KeiSource() {
                 "chapterIndex" to JsonPrimitive(index),
             ),
         )
-        date_upload = runCatching {
-            Instant.parse("${date.replace(" ", "T")}Z").toEpochMilliseconds()
-        }.getOrDefault(0L)
+        date_upload = Instant
+            .parseOrNull("${date.replace(" ", "T")}Z")
+            ?.toEpochMilliseconds()
+            ?: 0L
     }
 
     companion object {
