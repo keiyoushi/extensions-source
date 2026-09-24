@@ -89,11 +89,27 @@
                 15000,
             );
 
-            for (let index = 0; index < pageCount; index++) {
-                if (captured.has(index)) continue;
+            const releasePage = (index) => {
                 try {
                     if (typeof runtime.releasePage === "function") {
                         runtime.releasePage(index);
+                    }
+                } catch (_) {
+                }
+            };
+            for (const index of captured.keys()) {
+                releasePage(index);
+            }
+
+            const renderOne = async (index) => {
+                if (captured.has(index)) return true;
+                try {
+                    if (typeof runtime.visibleRange === "function") {
+                        runtime.visibleRange(index, [index], [index]);
+                        await new Promise((resolve) => setTimeout(resolve, 40));
+                    }
+                    if (typeof runtime.preparePage === "function") {
+                        await runtime.preparePage(index, "visible");
                     }
                     await runtime.renderPage(index);
                 } catch (_) {
@@ -101,8 +117,26 @@
                 if (!captured.has(index)) {
                     await waitFor(() => captured.has(index), 2500);
                 }
+                releasePage(index);
+                return captured.has(index);
+            };
+
+            for (let index = 0; index < pageCount; index++) {
+                await renderOne(index);
                 if (captured.size === 0 && index >= 2) {
                     throw new Error("IMGX captured 0 pages");
+                }
+            }
+
+            for (let pass = 0; pass < 5; pass++) {
+                const missingNow = [];
+                for (let index = 0; index < pageCount; index++) {
+                    if (!captured.has(index)) missingNow.push(index);
+                }
+                if (missingNow.length === 0) break;
+                for (const index of missingNow) {
+                    await new Promise((resolve) => setTimeout(resolve, 200));
+                    await renderOne(index);
                 }
             }
 
