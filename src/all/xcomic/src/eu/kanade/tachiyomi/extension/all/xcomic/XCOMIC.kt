@@ -432,6 +432,7 @@ abstract class XCOMIC :
                         put("comicId", edition.comicId)
                         put("label", edition.label.orEmpty())
                         put("lastPublicAt", edition.lastPublicAt ?: 0L)
+                        put("chapterCount", edition.chapterCount)
                         put("translatedLanguage", edition.translatedLanguage.orEmpty())
                     },
                 )
@@ -722,7 +723,7 @@ abstract class XCOMIC :
         private const val MEMO_CHAPTER_DATA_VERSION = "chapterDataVersion"
         private const val MEMO_DEDUPLICATE = "chapterDeduplicate"
         private const val MEMO_SOURCES_FILTER = "sourcesFilter"
-        private const val CHAPTER_DATA_VERSION = 4
+        private const val CHAPTER_DATA_VERSION = 1
 
         private val titleRegex: Regex =
             Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
