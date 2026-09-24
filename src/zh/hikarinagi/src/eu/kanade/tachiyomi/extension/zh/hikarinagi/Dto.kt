@@ -84,3 +84,82 @@ class ChapterItem(
         memo = buildJsonObject { put("cid", cid) }
     }
 }
+
+@Serializable
+class NovelData(
+    @SerialName("light_novel") val lightNovel: NovelItem,
+    val volumes: List<VolumeItem>,
+    private val people: JsonArray,
+    private val tags: JsonArray,
+) {
+    fun people() = people.associate {
+        with(it.obj) {
+            val role = getString("relation")
+            val value = with(getObject("person")) { getStringOrNull("trans_name").ifNotBlank() ?: getString("name") }
+            role to value
+        }
+    }.takeIf { it.isNotEmpty() }
+
+    fun tags() = tags.map { it.obj.getObject("tag").getString("name") }
+}
+
+@Serializable
+class NovelItem(
+    val id: Int,
+    val name: String,
+    @SerialName("name_cn") private val nameCn: String? = null,
+    private val covers: JsonArray,
+    @SerialName("novel_status") private val novelStatus: String? = null,
+    private val summary: String? = null,
+    @SerialName("summary_cn") private val summaryCn: String? = null,
+    private val author: NamedRef? = null,
+    private val bunko: NamedRef? = null,
+) {
+    fun toSManga(people: Map<String, String>? = null, tags: List<String>? = null) = SManga.create().apply {
+        url = Preferences.NOVEL_URL_PREFIX + id
+        title = nameCn.ifNotBlank() ?: name
+        author = people?.get("author") ?: this@NovelItem.author?.name
+        artist = people?.get("illustrator")
+        thumbnail_url = covers.firstOrNull()?.obj?.getObject("media")?.getString("src")?.let {
+            if (it.startsWith("http")) it else "${Hikarinagi.IMAGE_BASR_URL}/$it"
+        }
+        description = summaryCn.ifNotBlank() ?: summary
+        genre = tags?.joinToString() ?: this@NovelItem.bunko?.name
+        status = when (novelStatus) {
+            "SERIALIZING" -> SManga.ONGOING
+            "FINISHED" -> SManga.COMPLETED
+            "PAUSED", "ABANDONED" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+    }
+}
+
+@Serializable
+class NamedRef(val name: String)
+
+@Serializable
+class VolumeItem(
+    val id: Int,
+    private val name: String,
+    @SerialName("name_cn") private val nameCn: String? = null,
+    @SerialName("publication_date") private val publicationDate: String? = null,
+    @SerialName("online_reading_available") val readingAvailable: Boolean = false,
+) {
+    fun toSChapter() = SChapter.create().apply {
+        url = id.toString()
+        name = nameCn.ifNotBlank() ?: this@VolumeItem.name
+        date_upload = Instant.tryParse(publicationDate)
+    }
+}
+
+/** The site returns an empty string instead of null for missing translations. */
+private fun String?.ifNotBlank(): String? = this?.takeIf(String::isNotBlank)
+
+@Serializable
+class ReaderSessionRequest(@SerialName("volume_id") val volumeId: Int)
+
+@Serializable
+class ReaderSessionResponse(val data: ReaderSessionData)
+
+@Serializable
+class ReaderSessionData(val url: String)

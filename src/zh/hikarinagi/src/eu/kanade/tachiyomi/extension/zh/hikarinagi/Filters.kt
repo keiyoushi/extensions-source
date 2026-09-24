@@ -35,3 +35,50 @@ class MagazineFilter :
         "", "10659", "10752", "10678", "10702", "10855", "11315", "10860", "10724", "10673", "10786", "10754", "10687",
     )[state]
 }
+
+/** A filter that contributes a query parameter to the light novel browse request. */
+interface UrlPartFilter {
+    fun toUrlPart(): Pair<String, String>?
+}
+
+class NovelSortFilter(select: Selection? = Selection(0, false)) :
+    Filter.Sort(
+        "排序",
+        arrayOf("最近更新", "最多阅读", "最新收录", "发售日 新→旧", "发售日 旧→新"),
+        select,
+    ),
+    UrlPartFilter {
+    override fun toUrlPart() = state?.let { "sort" to SORTS[it.index] }
+
+    companion object {
+        private val SORTS = arrayOf(
+            "revised_at:desc",
+            "read_times:desc",
+            "created_at:desc",
+            "publication_date:desc",
+            "publication_date:asc",
+        )
+    }
+}
+
+class NovelStatusFilter :
+    Filter.Select<String>("状态", arrayOf("全部", "连载中", "已完结", "休刊")),
+    UrlPartFilter {
+    override fun toUrlPart() = arrayOf("", "serializing", "finished", "paused")[state]
+        .takeIf(String::isNotEmpty)
+        ?.let { "status" to it }
+}
+
+class NovelDecadeFilter :
+    Filter.Select<String>("年代", arrayOf("全部", "2020 年代", "2010 年代", "2000 年代", "更早")),
+    UrlPartFilter {
+    override fun toUrlPart() = arrayOf("", "2020s", "2010s", "2000s", "earlier")[state]
+        .takeIf(String::isNotEmpty)
+        ?.let { "decade" to it }
+}
+
+class NovelReadableFilter :
+    Filter.CheckBox("仅显示可在线阅读"),
+    UrlPartFilter {
+    override fun toUrlPart() = if (state) "readable" to "1" else null
+}
