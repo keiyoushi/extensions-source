@@ -1,56 +1,55 @@
 package eu.kanade.tachiyomi.extension.en.toonily
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
 import okhttp3.Interceptor
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class Toonily : Madara() {
-    override val dateFormat = SimpleDateFormat("MMM d, yy", Locale.US)
-    override val client = super.client.newBuilder()
-        .addCookie("toonily-mature" to "1")
-        .addInterceptor(::hdCoverInterceptor)
-        .build()
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMM d, yy", Locale.US)
+
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addCookie("toonily-mature" to "1")
+        addInterceptor(::hdCoverInterceptor)
+    }
 
     override val mangaSubString = "serie"
+    override val genreDirectory get() = "genre"
     override val filterNonMangaItems = false
-    override val useNewChapterEndpoint = true
     override val sendViewCount = false
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val chapterMode = ChapterMode.MangaAjax
 
-    override val mangaDetailsSelectorDescription: String = "div.content-area div.summary__content"
+    override val mangaDetailsSelectorDescription = "div.content-area div.summary__content"
 
-    override fun searchMangaSelector() = "div.page-item-detail.manga"
+    override fun searchCardSelector() = "div.page-item-detail.manga"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = super.searchMangaRequest(
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = super.getSearchMangaList(
         page,
         query.replace(titleSpecialCharactersRegex, " ").trim(),
         filters,
     )
 
-    override fun genresRequest(): Request = GET("$baseUrl/search/?post_type=wp-manga", headers)
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val newManga = SManga.create().apply {
-            url = manga.url.replace("/webtoon/", "/$mangaSubString/")
-        }
-        return super.mangaDetailsRequest(newManga)
-    }
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun parseChapterDate(date: String?): Long {
-        val formattedDate = if (date?.contains("UP") == true) "today" else date
-        return super.parseChapterDate(formattedDate)
-    }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ) = super.fetchMangaUpdate(
+        manga.apply {
+            url = url.replace("/webtoon/", "/$mangaSubString/")
+        },
+        chapters,
+        fetchDetails,
+        fetchChapters,
+    )
 
     private fun hdCoverInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()

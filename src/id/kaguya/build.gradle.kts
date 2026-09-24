@@ -9,8 +9,8 @@ keiyoushi {
     pkgName = "id.yubikiri"
     versionCode = 4
     contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "madara"
 
     source {
         lang = "id"

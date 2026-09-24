@@ -8,8 +8,8 @@ keiyoushi {
     name = "Hunters Scans"
     versionCode = 11
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "madara"
 
     source {
         name = "Hunters Scan"

@@ -1,115 +1,64 @@
 package eu.kanade.tachiyomi.extension.all.manhwa18cc
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.network.get
+import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class Manhwa18Cc : Madara() {
-    override val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.US)
+abstract class Manhwa18Cc : MadaraNoAjax() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.US)
 
-    override val fetchGenres = false
+    override val mangaSubString get() = when (lang) {
+        "ko" -> "raw"
+        else -> "webtoons"
+    }
 
-    override fun popularMangaSelector() = when (lang) {
+    override fun archiveSelector() = when (lang) {
         "en" -> "div.manga-item:not(:has(h3 a[title$='Raw']))"
         "ko" -> "div.manga-item:has(h3 a[title$='Raw'])"
         else -> "div.manga-item"
     }
 
-    override val popularMangaUrlSelector = "div.manga-item div.data a"
+    override val archiveUrlSelector = "div.manga-item div.data a"
 
-    override fun popularMangaNextPageSelector() = "ul.pagination li.next a"
-
-    override fun popularMangaRequest(page: Int): Request = when (lang) {
-        "ko" -> GET("$baseUrl/raw/$page", headers)
-        else -> GET("$baseUrl/webtoons/$page?orderby=trending", headers)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/webtoons/$page", headers)
-
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            val url = baseUrl.toHttpUrl().newBuilder()
-                .addPathSegment("search")
-                .addQueryParameter("q", query)
-                .addQueryParameter("page", page.toString())
-                .build()
-
-            return GET(url, headers)
+    // No postId
+    override fun Element.postId() = "dummy"
+    override fun mangaId(manga: SManga) = ""
+    override fun parseArchive(document: Document) = super.parseArchive(document)
+        .map {
+            it.apply {
+                url = memoPath(it)!!
+            }
         }
 
-        filters.firstInstanceOrNull<Manhwa18GenreFilter>()
-            ?.takeIf { it.selected != null }
-            ?.let {
-                val url = baseUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("webtoon-genre")
-                    .addPathSegment(it.selected.toString())
-                    .addPathSegment(page.toString())
-                    .build()
+    override suspend fun getPopularManga(page: Int) = archivePage(page, "trending")
 
-                return GET(url, headers)
-            }
-
-        filters.firstInstanceOrNull<Manhwa18OrderFilter>()
-            ?.takeIf { it.selected != null }
-            ?.let {
-                val url = baseUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("webtoons")
-                    .addPathSegment(page.toString())
-                    .addQueryParameter("orderby", it.selected.toString())
-                    .build()
-
-                return GET(url, headers)
-            }
-
-        filters.firstInstanceOrNull<Manhwa18StatusFilter>()
-            ?.takeIf { it.selected != null }
-            ?.let {
-                val url = baseUrl.toHttpUrl().newBuilder()
-                    .addPathSegment(it.selected.toString())
-                    .addPathSegment(page.toString())
-                    .build()
-
-                return GET(url, headers)
-            }
-
-        return popularMangaRequest(page)
+    override suspend fun archivePage(page: Int, order: String, path: String, query: String): MangasPage {
+        val url = "$baseUrl$path".toHttpUrl().newBuilder().apply {
+            if (page > 1) addPathSegment(page.toString())
+            if (order.isNotBlank()) addQueryParameter("orderby", order)
+            if (query.isNotBlank()) addQueryParameter("q", query)
+        }.build()
+        val document = client.get(url).asJsoup()
+        return MangasPage(parseArchive(document), document.selectFirst("ul.pagination li.next a") != null)
     }
-
-    override val mangaSubString = "webtoon"
 
     override val mangaDetailsSelectorDescription = "div.panel-story-description div.dsct"
 
     override fun chapterListSelector() = "li.a-h"
 
-    override fun chapterDateSelector() = "span.chapter-time"
+    override val chapterDateSelector = "span.chapter-time"
 
     override val pageListParseSelector = "div.read-content img"
 
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("Filters are ignored when using text search."),
-        Manhwa18OrderFilter(intl["order_by_filter_title"]),
-        Filter.Separator(),
-        Manhwa18GenreFilter(intl["genre_filter_title"]),
-        Filter.Separator(),
-        Manhwa18StatusFilter(intl["status_filter_title"]),
-        Filter.Separator(),
-        Filter.Header("Only one filter can be used"),
-        Filter.Header("If more than one is selected, they will be applied based on priority"),
-        Filter.Header("Priority: Genre > Order > Status"),
-    )
+    override val filterGenresSelector = ".header-bottom"
+    override val genreDirectory = "webtoon-genre"
 }

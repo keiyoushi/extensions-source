@@ -42,8 +42,6 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-private const val PAGE_SIZE = 25
-
 abstract class MadaraBase : KeiSource() {
 
     enum class ChapterMode {
@@ -103,6 +101,7 @@ abstract class MadaraBase : KeiSource() {
 
     protected open fun archiveSelector() = "div.page-item-detail, .manga__item, .c-tabs-item__content"
     protected open fun searchCardSelector() = ".c-tabs-item__content"
+    protected open val archiveTitleSelector: String? = null
     protected open val archiveUrlSelector = ".post-title a"
     protected open val mangaDetailsSelectorTitle = "div.post-title h3, div.post-title h1, #manga-title > h1"
     protected open val mangaDetailsSelectorAuthor = "div.author-content > a, div.manga-authors > a"
@@ -116,13 +115,15 @@ abstract class MadaraBase : KeiSource() {
     protected open val altNameSelector = ".post-content_item:contains(Alt) .summary-content"
     protected open val updatingRegex = "Updating|Atualizando".toRegex(RegexOption.IGNORE_CASE)
     protected open fun chapterListSelector() = "li.wp-manga-chapter"
+    protected open val chapterNameSelector: String? = null
     protected open val chapterUrlSelector = "a"
     protected open val chapterDateSelector = "span.chapter-release-date"
-    protected open val pageListParseSelector = "div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img"
+    protected open val pageListParseSelector = "div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item))"
+    protected open val filterGenresSelector = "div.genres"
 
     override suspend fun fetchFilterData(): JsonElement {
         val document = client.get("$baseUrl/$mangaSubString/").asJsoup()
-        return document.select("div.genres a[href*='/$genreDirectory/']").mapNotNull { element ->
+        return document.select(filterGenresSelector).select("a[href*='/$genreDirectory/']").mapNotNull { element ->
             val href = element.attr("abs:href").takeIf(String::isNotBlank) ?: return@mapNotNull null
             val path = href.toHttpUrl().encodedPath
             val name = element.text().takeIf(String::isNotBlank) ?: return@mapNotNull null
@@ -278,9 +279,11 @@ abstract class MadaraBase : KeiSource() {
 
     private fun chapterAjaxUrl(mangaPath: String) = "$baseUrl${mangaPath.trimEnd('/')}/ajax/chapters/"
 
+    protected open fun Element.postId() = selectFirst("[data-post-id]")?.attr("data-post-id")
+
     protected open fun parseArchive(document: Document): List<SManga> = document.select(archiveSelector()).mapNotNull { element ->
         val id = element.attr("data-post-id").takeIf(String::isNotBlank)
-            ?: element.selectFirst("[data-post-id]")?.attr("data-post-id")?.takeIf(String::isNotBlank)
+            ?: element.postId()?.takeIf(String::isNotBlank)
             ?: return@mapNotNull null
         archiveManga(element, id)
     }
@@ -290,7 +293,7 @@ abstract class MadaraBase : KeiSource() {
         val href = link.attr("abs:href").takeIf(String::isNotBlank) ?: return null
         return SManga.create().apply {
             url = id
-            title = link.text()
+            title = archiveTitleSelector?.let { element.selectFirst(it)?.text() } ?: link.text()
             thumbnail_url = element.selectFirst("img")?.let { processThumbnail(imageFromElement(it), true) }
             memo = mangaMemo(href.toHttpUrl().encodedPath, emptyList())
         }
@@ -299,7 +302,8 @@ abstract class MadaraBase : KeiSource() {
     protected open fun parseSearchCards(document: Document): List<SearchCard> = document.select(searchCardSelector()).mapNotNull { element ->
         val link = element.selectFirst(archiveUrlSelector) ?: return@mapNotNull null
         val href = link.attr("abs:href").takeIf(String::isNotBlank) ?: return@mapNotNull null
-        SearchCard(link.text(), href.toHttpUrl().encodedPath, element.selectFirst("img")?.let { processThumbnail(imageFromElement(it), true) })
+        val title = archiveTitleSelector?.let { element.selectFirst(it)?.text() } ?: link.text()
+        SearchCard(title, href.toHttpUrl().encodedPath, element.selectFirst("img")?.let { processThumbnail(imageFromElement(it), true) })
     }
 
     protected open fun parseChapterList(document: Document, mangaPath: String): List<SChapter> = document.select(chapterListSelector()).mapNotNull { chapterFromElement(it, mangaPath) }
@@ -310,7 +314,7 @@ abstract class MadaraBase : KeiSource() {
         val slug = url.toHttpUrl().encodedPath.trimEnd('/').substringAfterLast('/').takeIf(String::isNotEmpty) ?: return null
         return SChapter.create().apply {
             this.url = slug
-            name = link.text()
+            name = chapterNameSelector?.let { element.selectFirst(it)?.text() } ?: link.text()
             date_upload = parseChapterDate(
                 element.selectFirst("img:not(.thumb)")?.attr("alt")?.takeIf(String::isNotBlank)
                     ?: element.selectFirst("span a")?.attr("title")?.takeIf(String::isNotBlank)
@@ -417,6 +421,7 @@ abstract class MadaraBase : KeiSource() {
     protected open fun imageFromElement(element: Element): String? = when {
         element.hasAttr("data-src") -> element.attr("abs:data-src")
         element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
+        element.hasAttr("data-lzl-src") -> element.attr("abs:data-lzl-src")
         element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
         element.hasAttr("data-manga-src") -> element.attr("abs:data-manga-src")
         element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
@@ -455,7 +460,7 @@ abstract class MadaraBase : KeiSource() {
         return specificGenres.ifEmpty { genres }.take(3)
     }
 
-    protected fun mangaId(manga: SManga): String? = manga.url.takeIf { it.all(Char::isDigit) }
+    protected open fun mangaId(manga: SManga): String? = manga.url.takeIf { it.all(Char::isDigit) }
         ?: manga.memo["id"]?.jsonPrimitive?.content
 
     protected fun memoPath(manga: SManga): String? = manga.memo["path"]?.jsonPrimitive?.content

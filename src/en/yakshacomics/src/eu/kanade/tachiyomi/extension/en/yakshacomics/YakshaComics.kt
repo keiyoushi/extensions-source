@@ -14,14 +14,11 @@ import java.security.MessageDigest
 
 @Source
 abstract class YakshaComics : Madara() {
-    override val useNewChapterEndpoint = true
-
     // Adapted from src/en/yakshascans
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor(::jsChallengeInterceptor)
-        .rateLimit(1)
-        .build()
-
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(::jsChallengeInterceptor)
+        rateLimit(1)
+    }
     private fun jsChallengeInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
         if (response.code != 403) {
@@ -63,9 +60,6 @@ abstract class YakshaComics : Madara() {
         .getInstance("SHA-256")
         .digest(toByteArray())
         .fold("", { str, it -> str + "%02x".format(it) })
-
-    override val mangaDetailsSelectorDescription: String =
-        "div.description-summary div.summary__content h3 + p, div.description-summary div.summary__content:not(:has(h3)), div.summary_content div.post-content_item > h5 + div, div.summary_content div.manga-excerpt"
 
     companion object {
         private const val MAX_ATTEMPT = 5

@@ -41,9 +41,9 @@ abstract class MadaraNoAjax : MadaraBase() {
         return if (query.isBlank()) archivePage(page, sort) else htmlSearch(page, query)
     }
 
-    protected open fun nextPageSelector() = "div.nav-previous, a.nextpostslink"
+    protected open fun nextPageSelector() = "div.nav-previous, a.nextpostslink, #navigation-ajax"
 
-    protected suspend fun archivePage(page: Int, order: String, path: String = "/$mangaSubString/", query: String = ""): MangasPage {
+    protected open suspend fun archivePage(page: Int, order: String, path: String = "/$mangaSubString/", query: String = ""): MangasPage {
         val url = baseUrl.toHttpUrl().resolve(path)!!.newBuilder().apply {
             if (page > 1) addPathSegments("page/$page/")
             if (order.isNotBlank()) addQueryParameter("m_orderby", order)
