@@ -4,26 +4,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.protobuf.ProtoNumber
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Serializable
-class PopularResponse(
+class SeriesResponse(
     @ProtoNumber(2) val titles: List<MangaTitle>?,
 )
 
 @Serializable
 class SearchResponse(
     @ProtoNumber(1) val titles: List<MangaTitle>?,
-)
-
-@Serializable
-class HomeResponse(
-    @ProtoNumber(6) val type: String,
-    @ProtoNumber(7) val updates: List<MangaTitle>?,
-    @ProtoNumber(11) val newSeries: List<MangaTitle>?,
 )
 
 @Serializable
@@ -37,9 +32,14 @@ class MangaTitle(
     @ProtoNumber(1) private val id: Int,
     @ProtoNumber(2) private val name: String,
     @ProtoNumber(3) private val thumbnail: String?,
+    @ProtoNumber(7) val bookmarks: Int,
+    @ProtoNumber(9) private val lastUpdated: String,
 ) {
+    val updatedAt: Long
+        get() = dateFormat.tryParseDate(lastUpdated)
+
     fun toSManga(imgUrl: String) = SManga.create().apply {
-        url = "/manga/$id"
+        url = id.toString()
         title = name
         thumbnail_url = imgUrl + thumbnail
     }
@@ -58,27 +58,18 @@ class MangaDetailResponse(
     @ProtoNumber(13) val chapters: List<MangaChapter>,
 ) {
     fun toSManga(mangaId: String, imgUrl: String) = SManga.create().apply {
-        url = "/manga/$mangaId"
+        url = mangaId
         title = this@MangaDetailResponse.title
         author = this@MangaDetailResponse.author
         description = buildString {
-            this@MangaDetailResponse.description?.let {
-                append(it)
-                append("\n\n")
-            }
-            copyright?.let {
-                append(it)
-                append("\n\n")
-            }
-            schedule?.let {
-                append(it)
-                append("\n\n")
-            }
-            warning?.let { append(it) }
-        }.trim()
+            this@MangaDetailResponse.description?.takeIf { it.isNotEmpty() }?.let { append(it) }
+            copyright?.takeIf { it.isNotEmpty() }?.let { append("\n\n$it") }
+            schedule?.takeIf { it.isNotEmpty() }?.let { append("\n\n$it") }
+            warning?.takeIf { it.isNotEmpty() }?.let { append("\n\n$it") }
+        }
         genre = tags?.joinToString { it.name }
         thumbnail_url = imgUrl + thumbnail
-        status = if (chapters.any { it.status == 1 }) SManga.COMPLETED else SManga.ONGOING
+        status = if (chapters.any { it.isFinal == true }) SManga.COMPLETED else SManga.ONGOING
     }
 }
 
@@ -94,16 +85,19 @@ class MangaChapter(
     @ProtoNumber(3) private val subtitle: String?,
     @ProtoNumber(6) val price: Int?,
     @ProtoNumber(9) private val dateStr: String?,
-    @ProtoNumber(12) val status: Int?,
+    @ProtoNumber(12) val isFinal: Boolean?,
 ) {
     fun toSChapter(mangaId: String) = SChapter.create().apply {
-        url = "/manga/$mangaId/$id"
+        url = id.toString()
         var title = this@MangaChapter.name + (if (subtitle != null) " - $subtitle" else "")
-        if (status == 1) {
+        if (isFinal == true) {
             title += " [Final]"
         }
         name = if (price != null) "🔒 $title" else title
         date_upload = dateFormat.tryParseDate(dateStr)
+        memo = buildJsonObject {
+            put("titleId", mangaId)
+        }
     }
 }
 
@@ -116,6 +110,7 @@ class ViewerResponse(
 
 @Serializable
 class PageBlock(
+    @ProtoNumber(1) val chapterId: Int?,
     @ProtoNumber(3) val pages: List<MangaPage>,
 )
 
