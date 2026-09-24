@@ -54,7 +54,7 @@ abstract class XCOMIC :
         val idMatch = idQueryRegex.matchEntire(query.trim())
         if (idMatch != null) {
             val id = idMatch.groupValues[1]
-            val manga = resolveIdLookup(id) ?: throw Exception("Title id '$id' not found")
+            val manga = resolveIdLookup(id) ?: throw Exception("Entry id '$id' not found")
             return MangasPage(listOf(manga), false)
         }
 
@@ -178,6 +178,7 @@ abstract class XCOMIC :
             thumbnail_url = (item?.coverLocalUrl ?: item?.coverUrl)?.let {
                 if (it.startsWith("http")) it else "$baseUrl$it"
             }
+            memo = buildJsonObject { put(MEMO_TITLE_ID, titleId) }
         }
     }
 
@@ -201,11 +202,17 @@ abstract class XCOMIC :
             }
 
             if (category != null) {
-                val options = extractFilterOptions(details).toMutableList()
+                val options = (
+                    if (category == "genres") {
+                        extractSlugFilterOptions(details)
+                    } else {
+                        extractNamedFilterOptions(details)
+                    }
+                    ).toMutableList()
 
                 if (category == "genres") {
                     val formatsHeader = details.select("div").firstOrNull { it.ownText() == "Formats" }
-                    val formats = formatsHeader?.nextElementSibling()?.let(::extractFilterOptions).orEmpty()
+                    val formats = formatsHeader?.nextElementSibling()?.let(::extractSlugFilterOptions).orEmpty()
                     if (formats.isNotEmpty()) {
                         filterMap.getOrPut("formats") { mutableListOf() }.addAll(formats)
                         val formatValues = formats.map { it["value"] }.toSet()
@@ -217,17 +224,24 @@ abstract class XCOMIC :
             }
         }
 
-        if (filterMap["genres"].isNullOrEmpty() && filterMap["types"].isNullOrEmpty()) {
-            throw Exception("Failed to fetch filters dynamically")
-        }
-
         val cleanMap = filterMap.mapValues { it.value.distinctBy { v -> v["value"] } }
+        validateDynamicFilters(cleanMap)
         return cleanMap.toJsonElement()
     }
 
-    private fun extractFilterOptions(scope: org.jsoup.nodes.Element): List<Map<String, String>> = scope.select("div[:]").mapNotNull { div ->
+    private fun extractNamedFilterOptions(scope: org.jsoup.nodes.Element): List<Map<String, String>> = scope.select("label[data-value]").mapNotNull { label ->
+        val value = label.attr("data-value")
+        val name = label.selectFirst("span")?.text()?.trim()
+        if (value.matches(filterValueRegex) && !name.isNullOrEmpty()) {
+            mapOf("name" to name, "value" to value)
+        } else {
+            null
+        }
+    }
+
+    private fun extractSlugFilterOptions(scope: org.jsoup.nodes.Element): List<Map<String, String>> = scope.select("div[:]").mapNotNull { div ->
         val value = div.attr(":")
-        val name = div.selectFirst("span")?.text()
+        val name = div.selectFirst("span")?.text()?.trim()
         if (value.matches(filterValueRegex) && !name.isNullOrEmpty()) {
             mapOf("name" to name, "value" to value)
         } else {
@@ -236,9 +250,10 @@ abstract class XCOMIC :
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val parsed = data?.parseAs<Map<String, List<Map<String, String>>>>() ?: emptyMap()
+        val parsed = data?.parseAs<Map<String, List<Map<String, String>>>>()
+        parsed?.let(::validateDynamicFilters)
 
-        fun extractList(key: String): List<Pair<String, String>> = parsed[key]?.mapNotNull { map ->
+        fun extractList(key: String): List<Pair<String, String>> = parsed?.get(key)?.mapNotNull { map ->
             val name = map["name"]
             val value = map["value"]
             if (name != null && value != null) name to value else null
@@ -272,6 +287,18 @@ abstract class XCOMIC :
         )
     }
 
+    private fun validateDynamicFilters(filters: Map<String, List<Map<String, String>>>) {
+        val incompleteGroups = DYNAMIC_FILTER_GROUPS.filter { key ->
+            val options = filters[key]
+            options.isNullOrEmpty() || options.any { option ->
+                option["name"].isNullOrBlank() || option["value"]?.matches(filterValueRegex) != true
+            }
+        }
+        if (incompleteGroups.isNotEmpty()) {
+            throw Exception("Incomplete XCOMIC filters: ${incompleteGroups.joinToString()}")
+        }
+    }
+
     // ============================== Details ==============================
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -280,9 +307,7 @@ abstract class XCOMIC :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (!fetchDetails && !fetchChapters) return SMangaUpdate(manga, chapters)
-        if (':' in manga.url) error("Only title IDs are supported")
-
-        val title = fetchResolvedTitleNode(manga.url) ?: error("Title not found: ${manga.url}")
+        val title = resolveStoredTitleNode(manga.url) ?: error("Title not found: ${manga.url}")
         val editions = resolveTargetComics(title)
         val deduplicate = isDeduplicateChapters()
         val editionFilter = includedEditionLabels().sorted().joinToString(",")
@@ -291,7 +316,7 @@ abstract class XCOMIC :
 
         val chapterList = when {
             !fetchChapters -> chapters
-            chaptersCurrent -> postProcessChapters(chapters)
+            chaptersCurrent -> postProcessChapters(disambiguateEditionLabels(chapters))
             editions.sources.isEmpty() -> emptyList()
             else -> fetchAllChapters(editions.sources, deduplicate)
         }
@@ -303,34 +328,50 @@ abstract class XCOMIC :
         }
 
         details.url = manga.url
-        details.memo = if (fetchChapters && !chaptersCurrent && editions.sources.isNotEmpty()) {
+        val chapterMemo = if (fetchChapters && !chaptersCurrent && editions.sources.isNotEmpty()) {
             buildChapterMemo(manga.memo, title.chapLastPublicAt, editionFingerprint, editionFilter, deduplicate)
         } else {
             manga.memo
         }
+        details.memo = buildTitleMemo(chapterMemo, title)
 
         return SMangaUpdate(details, chapterList)
     }
 
-    private suspend fun fetchTitleNode(id: String): TitleNodeData? = runCatching {
+    private suspend fun fetchTitleNode(id: String): TitleNodeData? {
         val payload = graphQLBody(query = TITLE_NODE_QUERY, variables = ApiTitleNodeVariables(id))
-        client.post("$baseUrl/query/", payload).parseGraphQLAs<TitleNodeEnvelope>().response?.data
-    }.getOrNull()
+        return client.post("$baseUrl/query/", payload).parseGraphQLAs<TitleNodeEnvelope>().response?.data
+    }
 
-    private suspend fun fetchComicNode(id: String): ComicNode? = runCatching {
+    private suspend fun fetchComicNode(id: String): ComicNode? {
         val payload = graphQLBody(query = COMIC_NODE_QUERY, variables = ApiComicNodeVariables(id))
-        client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicNodeData>().response.data
-    }.getOrNull()
+        return client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicNodeData>().response.data
+    }
 
-    private suspend fun fetchComicProbe(id: String): ComicProbeData? = runCatching {
+    private suspend fun fetchComicProbe(id: String): ComicProbeData? {
         val payload = graphQLBody(query = COMIC_PROBE_QUERY, variables = ApiComicNodeVariables(id))
-        client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicProbeEnvelope>().response?.data
-    }.getOrNull()
+        return client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicProbeEnvelope>().response?.data
+    }
 
     private suspend fun fetchResolvedTitleNode(id: String): TitleNodeData? {
         val title = fetchTitleNode(id) ?: return null
         val mergedId = title.mergedTo?.takeIf { title.isMerged == true && it.isNotBlank() && it != id }
         return mergedId?.let { fetchTitleNode(it) } ?: title
+    }
+
+    private suspend fun resolveStoredTitleNode(storedUrl: String): TitleNodeData? {
+        val ids = storedUrl.split(':', limit = 2).filter { it.isNotBlank() }.distinct()
+        if (ids.isEmpty()) return null
+
+        fetchResolvedTitleNode(ids.first())?.let { return it }
+
+        for (comicId in ids) {
+            val comic = fetchComicNode(comicId) ?: continue
+            val parentTitle = comic.titleNode ?: continue
+            val parentId = parentTitle.id?.takeIf { it.isNotBlank() } ?: continue
+            return fetchResolvedTitleNode(parentId) ?: parentTitle
+        }
+        return null
     }
 
     private suspend fun resolveTargetComics(title: TitleNodeData): TitleEditions {
@@ -340,8 +381,6 @@ abstract class XCOMIC :
                 batch.map { comicId -> async { comicId to fetchComicProbe(comicId) } }.awaitAll()
             }
         }
-        val hasCompleteProbeData = probeResults.all { (_, probe) -> probe != null }
-
         val expectedLanguage = if (lang == "all") null else mapLangCode(lang)
         val sources = probeResults
             .mapNotNull { (comicId, probe) -> probe?.let { comicId to it } }
@@ -357,7 +396,7 @@ abstract class XCOMIC :
             }
             .sortedBy { it.comicId }
 
-        return TitleEditions(sources, hasCompleteProbeData)
+        return TitleEditions(sources)
     }
 
     private fun isChapterCacheCurrent(
@@ -396,6 +435,11 @@ abstract class XCOMIC :
         put(MEMO_SOURCES_FILTER, editionFilter)
     }
 
+    private fun buildTitleMemo(original: JsonElement, title: TitleNodeData) = buildJsonObject {
+        original.jsonObject.forEach { (key, value) -> put(key, value) }
+        title.id?.takeIf { it.isNotBlank() }?.let { put(MEMO_TITLE_ID, it) }
+    }
+
     private suspend fun getMangaDetails(
         manga: SManga,
         title: TitleNodeData,
@@ -418,12 +462,12 @@ abstract class XCOMIC :
         val translatedLanguage: String?,
     )
 
-    private class TitleEditions(val sources: List<ChapterEdition>, private val hasCompleteProbeData: Boolean) {
+    private class TitleEditions(val sources: List<ChapterEdition>) {
         val bestComicId: String?
             get() = sources.maxByOrNull { it.chapterCount }?.comicId
 
         val hasUsableFreshness: Boolean
-            get() = hasCompleteProbeData && sources.isNotEmpty() && sources.all { (it.lastPublicAt ?: 0L) > 0L }
+            get() = sources.isNotEmpty() && sources.all { (it.lastPublicAt ?: 0L) > 0L }
 
         fun fingerprint(): String = buildJsonArray {
             sources.sortedBy { it.comicId }.forEach { edition ->
@@ -441,9 +485,14 @@ abstract class XCOMIC :
     }
 
     private suspend fun resolveIdLookup(id: String): SManga? {
-        val title = fetchResolvedTitleNode(id) ?: return null
+        val title = resolveStoredTitleNode(id) ?: return null
+        val titleId = title.id?.takeIf { it.isNotBlank() } ?: return null
         val manga = title.toBrowseNode().toSManga(baseUrl, ::cleanTitleIfNeeded) ?: return null
-        return getMangaDetails(manga, title, resolveTargetComics(title), emptyList())
+        manga.url = titleId
+        return getMangaDetails(manga, title, resolveTargetComics(title), emptyList()).apply {
+            url = titleId
+            memo = buildTitleMemo(memo, title)
+        }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -451,16 +500,15 @@ abstract class XCOMIC :
         val id = seg.takeIf { it.size >= 2 }?.get(1)?.substringBefore("-") ?: return null
         return when (seg[0]) {
             "title" -> resolveIdLookup(id)
-            "source" -> {
-                val comic = fetchComicNode(id) ?: return null
-                val titleId = comic.titleNode?.id?.takeIf { it.isNotBlank() } ?: return null
-                resolveIdLookup(titleId)
-            }
+            "source", "comic" -> resolveIdLookup(id)
             else -> null
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/title/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        val titleId = manga.memo[MEMO_TITLE_ID]?.string?.takeIf { it.isNotBlank() } ?: manga.url.substringBefore(':')
+        return "$baseUrl/title/$titleId"
+    }
 
     // ============================= Chapters ==============================
     private suspend fun fetchAllChapters(sources: List<ChapterEdition>, deduplicate: Boolean): List<SChapter> = coroutineScope {
@@ -469,7 +517,29 @@ abstract class XCOMIC :
                 async { fetchChapterList(source.comicId, deduplicate, source.label) }
             }.awaitAll().flatten()
         }
-        postProcessChapters(chapters)
+        postProcessChapters(disambiguateEditionLabels(chapters))
+    }
+
+    private fun disambiguateEditionLabels(chapters: List<SChapter>): List<SChapter> {
+        val chapterLabels = chapters.mapNotNull { chapter ->
+            val label = chapter.scanlator.normalizeEditionLabel() ?: chapter.uploader().normalizeEditionLabel()
+            val comicId = chapter.comicId()
+            if (label == null || comicId == null) null else Triple(chapter, label, comicId)
+        }
+        val collidingEditions = chapterLabels
+            .groupBy { (_, label, _) -> label.lowercase() }
+            .mapValues { (_, entries) -> entries.map { it.third }.distinct().takeIf { it.size > 1 }.orEmpty() }
+            .filterValues { it.isNotEmpty() }
+
+        return chapters.onEach { chapter ->
+            val label = chapter.scanlator.normalizeEditionLabel() ?: chapter.uploader().normalizeEditionLabel()
+            val comicId = chapter.comicId()
+            chapter.scanlator = when {
+                label == null -> null
+                comicId != null && comicId in collidingEditions[label.lowercase()].orEmpty() -> "$label [$comicId]"
+                else -> label
+            }
+        }
     }
 
     private suspend fun fetchChapterList(comicId: String, deduplicate: Boolean, editionLabel: String?): List<SChapter> = coroutineScope {
@@ -477,19 +547,35 @@ abstract class XCOMIC :
 
         val firstPage = fetchChapterListPage(comicId, 1, deduplicate, pageSize, editionLabel)
         val allChapters = firstPage.chapters.toMutableList()
-        val totalItems = firstPage.total ?: 0
+        val totalItems = firstPage.total
 
-        if (totalItems > pageSize && firstPage.hasNextPage) {
+        if (firstPage.hasNextPage) {
+            if (totalItems == null || totalItems <= pageSize) {
+                error("Chapter pagination is incomplete for comic $comicId")
+            }
             val totalPages = (totalItems + (pageSize - 1)) / pageSize
 
             (2..totalPages).chunked(3).forEach { batch ->
-                val deferredPages = batch.map { pageNum ->
+                val pages = batch.map { pageNum ->
                     async {
-                        fetchChapterListPage(comicId, pageNum, deduplicate, pageSize, editionLabel).chapters
+                        fetchChapterListPage(comicId, pageNum, deduplicate, pageSize, editionLabel)
                     }
+                }.awaitAll()
+
+                pages.forEachIndexed { index, page ->
+                    val pageNum = batch[index]
+                    if (page.hasNextPage != (pageNum < totalPages) || page.total != totalItems) {
+                        error("Chapter pagination changed while fetching comic $comicId")
+                    }
+                    allChapters.addAll(page.chapters)
                 }
-                allChapters.addAll(deferredPages.awaitAll().flatten())
             }
+        } else if (totalItems != null && totalItems > pageSize) {
+            error("Chapter pagination ended early for comic $comicId")
+        }
+
+        if (totalItems != null && allChapters.size != totalItems) {
+            error("Expected $totalItems chapters for comic $comicId, received ${allChapters.size}")
         }
 
         allChapters
@@ -500,7 +586,10 @@ abstract class XCOMIC :
         val filtered = if (includedEditions.isEmpty()) {
             chapters
         } else {
-            chapters.filter { it.scanlator?.lowercase() in includedEditions }
+            chapters.filter { chapter ->
+                val label = chapter.scanlator.normalizeEditionLabel()?.lowercase() ?: return@filter false
+                label in includedEditions || includedEditions.any { base -> label.startsWith("$base [") }
+            }
         }
 
         return if (isGroupByEdition()) {
@@ -685,7 +774,7 @@ abstract class XCOMIC :
         .filter { it.isNotEmpty() }
         .toSet()
 
-    private fun includeEditionsSummary(value: String = preferences.getString(SOURCE_INCLUDE_PREF, "")!!): String = "Comma-separated edition labels; chapters from other editions are hidden. Current: ${value.ifBlank { "(all editions)" }}"
+    private fun includeEditionsSummary(value: String = preferences.getString(SOURCE_INCLUDE_PREF, "")!!): String = "Comma-separated edition labels; a base label includes matching editions, while a suffixed label selects one. Current: ${value.ifBlank { "(all editions)" }}"
 
     // ========================= Helpers =========================
     private fun String.unescapeHtml(): String = Parser.unescapeEntities(this, false)
@@ -708,7 +797,7 @@ abstract class XCOMIC :
         private const val SOURCE_INCLUDE_PREF = "SOURCE_INCLUDE"
         private const val GROUP_BY_SOURCE_PREF = "GROUP_BY_SOURCE"
 
-        private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9-_]+)\\s*$", RegexOption.IGNORE_CASE)
+        private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9_-]+(?::[a-zA-Z0-9_-]+)?)\\s*$", RegexOption.IGNORE_CASE)
 
         // Maximum is 48
         private const val BROWSE_PAGE_SIZE = 12
@@ -716,7 +805,9 @@ abstract class XCOMIC :
         private const val COMIC_PROBES_PER_TITLE = 5
 
         private val filterValueRegex = Regex("""^[a-z0-9][a-z0-9_]*$""")
+        private val DYNAMIC_FILTER_GROUPS = listOf("contentRatings", "types", "demographics", "genres", "formats")
 
+        private const val MEMO_TITLE_ID = "titleId"
         private const val MEMO_FETCHED_AT = "chaptersFetchedAt" // when we last pulled the list
         private const val MEMO_LAST_PUBLIC = "lastPublicAt" // title.chapLastPublicAt at that time
         private const val MEMO_EDITION_FINGERPRINT = "chapterEditions"
