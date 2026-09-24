@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Mediocre Toons"
-    versionCode = 20
+    versionCode = 21
     contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
 

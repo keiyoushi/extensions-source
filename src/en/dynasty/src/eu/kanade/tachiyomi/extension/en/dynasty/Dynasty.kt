@@ -3,9 +3,6 @@ package eu.kanade.tachiyomi.extension.en.dynasty
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,55 +10,90 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.head
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getArrayOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okio.use
 import org.jsoup.Jsoup
-import rx.Observable
+import org.jsoup.nodes.Document
 
 @Source
 abstract class Dynasty :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
 
+    override val supportsRelatedMangas = true
+
     private val preferences by getPreferencesLazy()
 
-    override val client = network.client.newBuilder()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
         .addInterceptor(::fetchCoverUrlInterceptor)
         .rateLimit(1) { it.fragment != COVER_URL_FRAGMENT }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$CHAPTERS_DIR/added.json?page=$page", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        if (page == 1) {
+            val homeHeaders = headers.newBuilder()
+                .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .build()
+            val document = client.get(baseUrl, homeHeaders).asJsoup()
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<BrowseResponse>()
+            val entries = document
+                .select("h4:contains(Most Popular of Past 7 Days) ~ ul.cover-list a.thumbnail")
+                .mapNotNull { element ->
+                    val permalink = element.absUrl("href").toHttpUrl().pathSegments.getOrNull(1)
+                        ?: return@mapNotNull null
+                    val (directory, resolvedPermalink) = resolveEntryPath(CHAPTERS_DIR, permalink)
+
+                    MangaEntry(
+                        url = "/$directory/$resolvedPermalink",
+                        title = resolvedPermalink.permalinkToTitle(),
+                        cover = getCachedCoverUrl(directory, resolvedPermalink),
+                    )
+                }
+                .distinct()
+
+            return MangasPage(entries.map(MangaEntry::toSManga), hasNextPage = true)
+        }
+
+        val data = client.get("$baseUrl/$CHAPTERS_DIR/added.json?page=${page - 1}")
+            .parseAs<BrowseResponse>()
+
+        return MangasPage(parseAddedChapters(data).map(MangaEntry::toSManga), data.hasNextPage())
+    }
+
+    private fun parseAddedChapters(data: BrowseResponse): List<MangaEntry> {
         val entries = LinkedHashSet<MangaEntry>()
 
         data.chapters.forEach { chapter ->
             var isSeries = false
 
             chapter.tags.forEach { tag ->
-                if (tag.type in listOf(SERIES_TYPE, ANTHOLOGY_TYPE, DOUJIN_TYPE, ISSUE_TYPE)) {
+                if (tag.type in MANGA_TYPES) {
                     MangaEntry(
                         url = "/${tag.directory}/${tag.permalink}",
                         title = tag.name,
@@ -84,84 +116,26 @@ abstract class Dynasty :
             }
         }
 
-        return MangasPage(
-            mangas = entries.map(MangaEntry::toSManga),
-            hasNextPage = data.hasNextPage(),
-        )
+        return entries.toList()
     }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://") || query.startsWith("deeplink:")) {
-            return deepLink(query)
-        }
-
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { searchMangaParse(it, filters) }
-    }
-
-    private fun deepLink(query: String): Observable<MangasPage> {
-        var mutableQuery = query
-
-        if (mutableQuery.startsWith("https://")) {
-            val url = mutableQuery.toHttpUrl()
-            val path = url.pathSegments
-            val host = baseUrl.toHttpUrl().host
-
-            if (url.host == host && path.size > 1) {
-                mutableQuery = "deeplink:${path[0]}:${path[1]}"
-            } else {
-                throw Exception("Invalid url")
-            }
-        }
-
-        if (mutableQuery.startsWith("deeplink:")) {
-            var (_, directory, permalink) = mutableQuery.split(":", limit = 3)
-
-            if (directory == CHAPTERS_DIR) {
-                val seriesPermalink = CHAPTER_SLUG_REGEX.find(permalink)?.groupValues?.get(1)
-
-                if (seriesPermalink != null) {
-                    directory = SERIES_DIR
-                    permalink = seriesPermalink
-                }
-            }
-
-            val entry = MangaEntry(
-                url = "/$directory/$permalink",
-                title = permalink.permalinkToTitle(),
-                cover = getCachedCoverUrl(directory, permalink),
-            ).toSManga()
-
-            return Observable.just(
-                MangasPage(
-                    mangas = listOf(entry),
-                    hasNextPage = false,
-                ),
-            )
-        }
-
-        throw Exception("Invalid url")
-    }
-
-    private val lruCache = object : LinkedHashMap<String, Int>() {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?) = size > 20
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val typeFilter = filters.firstInstance<TypeFilter>()
             .also {
                 if (it.checked.isEmpty()) {
                     throw Exception("Select at least one type")
                 }
             }
+
+        val includedSeries = typeFilter.checked.contains(SERIES_TYPE)
+        val includedChapters = typeFilter.checked.contains(CHAPTER_TYPE)
+        val includedDoujins = typeFilter.checked.contains(DOUJIN_TYPE)
 
         val authors = filters.firstInstance<AuthorFilter>().values.map { author ->
             lruCache[author]
@@ -182,11 +156,6 @@ abstract class Dynasty :
                 ?: throw Exception("Unknown Pairing: $pairing")
         }
 
-        // series and doujin results are best when chapters are included as type so keep track of this
-        var seriesSelected = false
-        var doujinSelected = false
-        var chapterSelected = false
-
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query.trim())
             filters.firstInstance<SortFilter>().also {
@@ -201,19 +170,13 @@ abstract class Dynasty :
                     addQueryParameter("sort", it.sort)
                 }
             }
-            typeFilter.also {
-                it.checked.forEach { type ->
-                    seriesSelected = seriesSelected || type == SERIES_TYPE
-                    doujinSelected = doujinSelected || type == DOUJIN_TYPE
-                    chapterSelected = chapterSelected || type == CHAPTER_TYPE
-
-                    addQueryParameter("classes[]", type)
-                }
+            typeFilter.checked.forEach { type ->
+                addQueryParameter("classes[]", type)
             }
 
             // series and doujin results are best when chapters are included
-            // they will be filtered client side in `searchMangaParse`
-            if ((seriesSelected || doujinSelected) && !chapterSelected) {
+            // they will be filtered client side below
+            if ((includedSeries || includedDoujins) && !includedChapters) {
                 addQueryParameter("classes[]", CHAPTER_TYPE)
             }
 
@@ -239,16 +202,92 @@ abstract class Dynasty :
             }
         }.build()
 
-        return GET(url, headers)
+        val document = client.get(url).asJsoup()
+
+        val parsed = parseSearchEntries(document)
+        val entries = parsed.filterNot { entry ->
+            (!includedSeries && entry.url.startsWith("/$SERIES_DIR/")) ||
+                (!includedChapters && entry.url.startsWith("/$CHAPTERS_DIR/")) ||
+                (!includedDoujins && entry.url.startsWith("/$DOUJINS_DIR/"))
+        }
+
+        // avoid "No Results found" error in case everything was filtered out from above check
+        val mangas = entries.ifEmpty { listOfNotNull(parsed.firstOrNull()) }
+
+        return MangasPage(
+            mangas = mangas.map(MangaEntry::toSManga),
+            hasNextPage = document.selectFirst(".pagination [rel=next]") != null,
+        )
     }
 
-    private fun fetchTagId(query: String, type: String): Int? {
+    private fun parseSearchEntries(document: Document): List<MangaEntry> = document.select(
+        ".chapter-list a.name[href~=/($SERIES_DIR|$ANTHOLOGIES_DIR|$CHAPTERS_DIR|$DOUJINS_DIR|$ISSUES_DIR)/], " +
+            ".chapter-list .doujin_tags a[href~=/$DOUJINS_DIR/]",
+    ).mapNotNull { element ->
+        val segments = element.absUrl("href").toHttpUrl().pathSegments
+        if (segments.size < 2) {
+            return@mapNotNull null
+        }
+
+        var (directory, permalink) = segments[0] to segments[1]
+        var title = element.ownText()
+
+        val (resolvedDirectory, resolvedPermalink) = resolveEntryPath(directory, permalink)
+        if (resolvedDirectory != directory) {
+            directory = resolvedDirectory
+            permalink = resolvedPermalink
+            title = resolvedPermalink.permalinkToTitle()
+        }
+
+        MangaEntry(
+            url = "/$directory/$permalink",
+            title = title,
+            cover = getCachedCoverUrl(directory, permalink),
+        )
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val path = url.pathSegments
+        if (url.host != baseUrl.toHttpUrl().host || path.size <= 1) {
+            return null
+        }
+
+        val (directory, permalink) = resolveEntryPath(path[0], path[1])
+
+        if (directory !in MANGA_DIRS) {
+            return null
+        }
+
+        return MangaEntry(
+            url = "/$directory/$permalink",
+            title = permalink.permalinkToTitle(),
+            cover = getCachedCoverUrl(directory, permalink),
+        ).toSManga()
+    }
+
+    // resolves a chapter url to its linked series when possible
+    private fun resolveEntryPath(directory: String, permalink: String): Pair<String, String> {
+        if (directory != CHAPTERS_DIR) {
+            return directory to permalink
+        }
+
+        val seriesPermalink = CHAPTER_SLUG_REGEX.find(permalink)?.groupValues?.get(1)
+            ?: return directory to permalink
+
+        return SERIES_DIR to seriesPermalink
+    }
+
+    private val lruCache = object : LinkedHashMap<String, Int>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?) = size > 20
+    }
+
+    private suspend fun fetchTagId(query: String, type: String): Int? {
         val url = "$baseUrl/tags/suggest"
         val body = FormBody.Builder()
             .add("query", query)
             .build()
 
-        val data = client.newCall(POST(url, headers, body)).execute()
+        val data = client.post(url, body)
             .parseAs<List<TagSuggest>>()
 
         return data.firstOrNull {
@@ -256,110 +295,73 @@ abstract class Dynasty :
         }?.id
     }
 
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    private fun searchMangaParse(response: Response, filters: FilterList): MangasPage {
-        val typeFilter = filters.firstInstance<TypeFilter>()
-        val includedSeries = typeFilter.checked.contains(SERIES_TYPE)
-        val includedChapters = typeFilter.checked.contains(CHAPTER_TYPE)
-        val includedDoujins = typeFilter.checked.contains(DOUJIN_TYPE)
-
-        val document = response.asJsoup()
-        val entries = LinkedHashSet<MangaEntry>()
-
-        // saves the first entry found
-        // returned if everything was filtered out to avoid "No Results found" error
-        var firstEntry: MangaEntry? = null
-
-        document.select(
-            ".chapter-list a.name[href~=/($SERIES_DIR|$ANTHOLOGIES_DIR|$CHAPTERS_DIR|$DOUJINS_DIR|$ISSUES_DIR)/], " +
-                ".chapter-list .doujin_tags a[href~=/$DOUJINS_DIR/]",
-        ).forEach { element ->
-            var (directory, permalink) = element.absUrl("href")
-                .toHttpUrl().pathSegments
-                .let { it[0] to it[1] }
-            var title = element.ownText()
-
-            if (directory == CHAPTERS_DIR) {
-                val seriesPermalink = CHAPTER_SLUG_REGEX.find(permalink)?.groupValues?.get(1)
-
-                if (seriesPermalink != null) {
-                    directory = SERIES_DIR
-                    permalink = seriesPermalink
-                    title = seriesPermalink.permalinkToTitle()
-                }
-            }
-
-            val entry = MangaEntry(
-                url = "/$directory/$permalink",
-                title = title,
-                cover = getCachedCoverUrl(directory, permalink),
-            )
-
-            if (firstEntry == null) {
-                firstEntry = entry
-            }
-
-            if ((!includedSeries && directory == SERIES_DIR) ||
-                (!includedChapters && directory == CHAPTERS_DIR) ||
-                (!includedDoujins && directory == DOUJINS_DIR)
-            ) {
-                return@forEach
-            }
-
-            entries.add(entry)
-        }
-
-        // avoid "No Results found" error in case everything was filtered out from above check
-        if (entries.isEmpty()) {
-            firstEntry?.also { entries.add(it) }
-        }
-
-        val hasNextPage = document.selectFirst(".pagination [rel=next]") != null
-
-        return MangasPage(
-            mangas = entries.map(MangaEntry::toSManga),
-            hasNextPage = hasNextPage,
-        )
-    }
-
     // ============================== Details ==============================
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         val mangaPath = "$baseUrl${manga.url}".toHttpUrl().pathSegments
 
         assert(
             mangaPath.size == 2 &&
-                mangaPath[0] in listOf(SERIES_DIR, ANTHOLOGIES_DIR, DOUJINS_DIR, ISSUES_DIR, CHAPTERS_DIR),
+                mangaPath[0] in MANGA_DIRS,
         ) { "Migrate to Dynasty Scans to update url" }
 
         val (directory, permalink) = mangaPath.let { it[0] to it[1] }
-
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment(directory)
             .addPathSegment("$permalink.json")
             .build()
+        val response = client.get(url)
 
-        return GET(url, headers)
-    }
+        if (directory == CHAPTERS_DIR) {
+            val data = response.parseAs<ChapterResponse>()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        if (response.request.url.pathSegments[0] == CHAPTERS_DIR) {
-            return chapterDetailsParse(response)
+            return SMangaUpdate(
+                manga = chapterDetailsParse(data),
+                chapters = listOf(individualChapterParse(data)),
+            )
         }
 
         val data = response.parseAs<MangaResponse>()
 
-        val authors = LinkedHashSet<String>()
+        val updatedChapters = if (fetchChapters) {
+            val chapterItems = data.taggings.toMutableList()
+            var page = 2
+            val limit = preferences.chapterFetchLimit
+
+            while (page <= data.totalPages && page <= limit) {
+                val pageUrl = url.newBuilder()
+                    .addQueryParameter("page", page.toString())
+                    .build()
+
+                chapterItems += client.get(pageUrl).parseAs<MangaResponse>().taggings
+                page += 1
+            }
+
+            parseChapterList(data.type, chapterItems)
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(
+            manga = mangaDetailsParse(data),
+            chapters = updatedChapters,
+        )
+    }
+
+    private suspend fun mangaDetailsParse(data: MangaResponse): SManga {
+        val authors = LinkedHashSet<Pair<String, String>>()
         val tags = LinkedHashSet<String>()
         val others = LinkedHashSet<Pair<String, String>>()
         val publishingStatus = LinkedHashSet<String>()
 
         data.tags.forEach { tag ->
             when (tag.type) {
-                "Author" -> authors.add(tag.name)
+                "Author" -> authors.add(tag.name to tag.permalink)
 
                 "General" -> tags.add(tag.name)
 
@@ -375,7 +377,7 @@ abstract class Dynasty :
         data.taggings.filterIsInstance<MangaChapter>().forEach { tagging ->
             tagging.tags.forEach { tag ->
                 when (tag.type) {
-                    "Author" -> authors.add(tag.name)
+                    "Author" -> authors.add(tag.name to tag.permalink)
                     "General" -> tags.add(tag.name)
                     SERIES_TYPE, DOUJIN_TYPE, ANTHOLOGY_TYPE, ISSUE_TYPE, "Scanlator" -> {}
                     else -> others.add(tag.type to tag.name)
@@ -387,9 +389,9 @@ abstract class Dynasty :
             title = data.name
             author = if (authors.size > AUTHORS_UPPER_LIMIT) {
                 authors.take(AUTHORS_UPPER_LIMIT)
-                    .joinToString(postfix = "...")
+                    .joinToString(postfix = "...") { it.first }
             } else {
-                authors.joinToString()
+                authors.joinToString { it.first }
             }
             artist = author
             description = buildString {
@@ -411,7 +413,7 @@ abstract class Dynasty :
                 append("Type: ", data.type, "\n\n")
 
                 if (authors.size > AUTHORS_UPPER_LIMIT) {
-                    others.addAll(authors.map { "Author" to it })
+                    others.addAll(authors.map { "Author" to it.first })
                 }
 
                 for ((type, values) in others.groupBy { it.first }) {
@@ -440,42 +442,41 @@ abstract class Dynasty :
 
                 else -> SManga.UNKNOWN
             }
-            // if new cover is same as cached cover, use cached cover
-            // to avoid making HEAD requests in `getHDCoverUrlIfAvailable`
-            thumbnail_url = run {
-                val newCover = data.cover?.let { buildCoverUrl(it) }
-                val cachedCover = getCachedCoverUrl(data.directory, data.permalink)
-
-                if (newCover == null || cachedCover == null) {
-                    newCover?.let { getHDCoverUrlIfAvailable(it) } ?: cachedCover
-                } else {
-                    val path = cachedCover.toHttpUrl().pathSegments
-                    val tmpSDCover = cachedCover.toHttpUrl().newBuilder().apply {
-                        val file = path.last().substringBeforeLast(".") + ".jpg"
-                        setPathSegment(5, "medium")
-                        setPathSegment(path.size - 1, file)
-                    }.toString()
-
-                    if (tmpSDCover == newCover) {
-                        cachedCover
-                    } else {
-                        getHDCoverUrlIfAvailable(newCover)
-                    }
-                }
+            thumbnail_url = resolveThumbnail(data)
+            memo = buildJsonObject {
+                put("authors", authors.map { it.second }.toJsonElement())
             }
         }
     }
 
-    private fun chapterDetailsParse(response: Response): SManga {
-        val data = response.parseAs<ChapterResponse>()
+    private suspend fun resolveThumbnail(data: MangaResponse): String? {
+        val newCover = data.cover?.let { buildCoverUrl(it) }
+        val cachedCover = getCachedCoverUrl(data.directory, data.permalink)
 
-        val authors = LinkedHashSet<String>()
+        if (newCover == null || cachedCover == null) {
+            return newCover?.let { getHDCoverUrlIfAvailable(it) } ?: cachedCover
+        }
+
+        // if the site's cover is the same file as the cached one, prefer the cached HD cover
+        // to avoid making HEAD requests in `getHDCoverUrlIfAvailable`
+        val path = cachedCover.toHttpUrl().pathSegments
+        val tmpSDCover = cachedCover.toHttpUrl().newBuilder().apply {
+            val file = path.last().substringBeforeLast(".") + ".jpg"
+            setPathSegment(5, "medium")
+            setPathSegment(path.size - 1, file)
+        }.toString()
+
+        return if (tmpSDCover == newCover) cachedCover else getHDCoverUrlIfAvailable(newCover)
+    }
+
+    private fun chapterDetailsParse(data: ChapterResponse): SManga {
+        val authors = LinkedHashSet<Pair<String, String>>()
         val tags = LinkedHashSet<String>()
         val others = LinkedHashSet<Pair<String, String>>()
 
         data.tags.forEach { tag ->
             when (tag.type) {
-                "Author" -> authors.add(tag.name)
+                "Author" -> authors.add(tag.name to tag.permalink)
                 "General" -> tags.add(tag.name)
                 else -> others.add(tag.type to tag.name)
             }
@@ -483,7 +484,7 @@ abstract class Dynasty :
 
         return SManga.create().apply {
             title = data.title
-            author = authors.joinToString()
+            author = authors.joinToString { it.first }
             artist = author
             description = buildString {
                 append("Type: ", CHAPTER_TYPE, "\n\n")
@@ -498,34 +499,15 @@ abstract class Dynasty :
             thumbnail_url = buildCoverUrl(data.pages.first().url)
             status = SManga.COMPLETED
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            memo = buildJsonObject {
+                put("authors", authors.map { it.second }.toJsonElement())
+            }
         }
     }
 
     // ============================= Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        if (response.request.url.pathSegments[0] == CHAPTERS_DIR) {
-            return listOf(individualChapterParse(response))
-        }
-
-        val data = response.parseAs<MangaResponse>()
-        val chapters = data.taggings.toMutableList()
-
-        var page = 2
-        val limit = preferences.chapterFetchLimit
-
-        while (page <= data.totalPages && page <= limit) {
-            val url = response.request.url.newBuilder()
-                .addQueryParameter("page", page.toString())
-                .build()
-
-            chapters += client.newCall(GET(url, headers)).execute()
-                .parseAs<MangaResponse>().taggings
-            page += 1
-        }
-
+    private fun parseChapterList(type: String, chapters: List<ChapterItem>): List<SChapter> {
         var header: String? = null
 
         val chapterList = mutableListOf<SChapter>()
@@ -538,7 +520,7 @@ abstract class Dynasty :
 
             with(item as MangaChapter) {
                 var chapterName = header?.let { "$it $title" } ?: title
-                if (data.type != SERIES_TYPE) {
+                if (type != SERIES_TYPE) {
                     chapterName += tags.filter { it.type == "Author" }
                         .joinToString(prefix = " by ", separator = " and ") { it.name }
                 }
@@ -546,34 +528,28 @@ abstract class Dynasty :
                     url = "/$CHAPTERS_DIR/$permalink"
                     name = chapterName
                     scanlator = tags.filter { it.type == "Scanlator" }.joinToString { it.name }
-                    date_upload = dateFormat.tryParse(releasedOn)
+                    date_upload = dateFormat.tryParseDate(releasedOn)
                 }.also(chapterList::add)
             }
         }
 
-        return if (data.type != DOUJIN_TYPE) {
+        return if (type != DOUJIN_TYPE) {
             chapterList.asReversed()
         } else {
             chapterList
         }
     }
 
-    private fun individualChapterParse(response: Response): SChapter {
-        val data = response.parseAs<ChapterResponse>()
-
-        return SChapter.create().apply {
-            url = "/$CHAPTERS_DIR/${data.permalink}"
-            name = "Chapter"
-            scanlator = data.tags.filter { it.type == "Scanlator" }.joinToString { it.name }
-            date_upload = dateFormat.tryParse(data.releasedOn)
-        }
+    private fun individualChapterParse(data: ChapterResponse): SChapter = SChapter.create().apply {
+        url = "/$CHAPTERS_DIR/${data.permalink}"
+        name = "Chapter"
+        scanlator = data.tags.filter { it.type == "Scanlator" }.joinToString { it.name }
+        date_upload = dateFormat.tryParseDate(data.releasedOn)
     }
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterPath = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
 
         assert(
@@ -588,25 +564,52 @@ abstract class Dynasty :
             .addPathSegment("$permalink.json")
             .build()
 
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<ChapterResponse>()
+        val data = client.get(url).parseAs<ChapterResponse>()
 
         return data.pages.mapIndexed { index, page ->
             Page(index, imageUrl = baseUrl + page.url)
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    // ============================== Related ==============================
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val authorSlug = manga.memo.getArrayOrNull("authors")
+            ?.map { it.string }
+            ?.randomOrNull()
+            ?: return emptyList()
+
+        val data = client.get("$baseUrl/authors/$authorSlug.json").parseAs<AuthorResponse>()
+        val related = LinkedHashSet<MangaEntry>()
+
+        data.taggables.forEach { taggable ->
+            related.add(
+                MangaEntry(
+                    url = "/${taggable.directory}/${taggable.permalink}",
+                    title = taggable.name,
+                    cover = getCachedCoverUrl(taggable.directory, taggable.permalink),
+                ),
+            )
+        }
+
+        data.taggings.forEach { chapter ->
+            val tag = chapter.tags.firstOrNull { it.type in MANGA_TYPES } ?: return@forEach
+            related.add(
+                MangaEntry(
+                    url = "/${tag.directory}/${tag.permalink}",
+                    title = tag.name,
+                    cover = getCachedCoverUrl(tag.directory, tag.permalink),
+                ),
+            )
+        }
+
+        return related.map { it.toSManga() }
+    }
 
     // ============================== Filters ==============================
 
-    override fun getFilterList(): FilterList {
-        val tags = requireNotNull(this::class.java.getResourceAsStream("/assets/tags.json")) {
-            "tags.json not found"
-        }.bufferedReader().use { it.readText() }.parseAs<List<Tag>>()
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val tags = this::class.java.getResourceAsStream("/assets/tags.json")!!.parseAs<List<Tag>>()
 
         return FilterList(
             SortFilter(),
@@ -651,9 +654,7 @@ abstract class Dynasty :
         }
 
     private val covers: Map<String, Map<String, String>> by lazy {
-        requireNotNull(this::class.java.getResourceAsStream("/assets/covers.json")) {
-            "covers.json not found"
-        }.bufferedReader().use { it.readText() }.parseAs()
+        this::class.java.getResourceAsStream("/assets/covers.json")!!.parseAs()
     }
 
     private fun getCachedCoverUrl(directory: String?, permalink: String): String? {
@@ -669,24 +670,19 @@ abstract class Dynasty :
         return buildCoverUrl(file)
     }
 
-    private fun getHDCoverUrlIfAvailable(coverUrl: String): String {
-        val path = coverUrl.toHttpUrl().pathSegments
+    private suspend fun getHDCoverUrlIfAvailable(coverUrl: String): String {
+        val httpUrl = coverUrl.toHttpUrl()
+        val path = httpUrl.pathSegments
 
         if (path.size == 7 && path[5] == "medium") {
-            listOf("jpg", "png", "jpeg", "webp").forEach { format ->
-                val newUrl = coverUrl.toHttpUrl().newBuilder().apply {
+            COVER_EXTENSIONS.forEach { format ->
+                val newUrl = httpUrl.newBuilder().apply {
                     val file = path.last().substringBeforeLast(".") + ".$format"
                     setPathSegment(5, "original")
                     setPathSegment(path.size - 1, file)
                 }.build()
 
-                val request = Request.Builder()
-                    .url(newUrl)
-                    .headers(headers)
-                    .head()
-                    .build()
-
-                if (client.newCall(request).execute().isSuccessful) {
+                if (client.head(newUrl, ensureSuccess = false).use { it.isSuccessful }) {
                     return newUrl.toString()
                 }
             }
@@ -722,16 +718,19 @@ abstract class Dynasty :
             return chain.proceed(request)
         }
 
-        val permalink = requireNotNull(request.url.queryParameter("permalink")) {
-            "permalink is missing"
-        }
+        val permalink = request.url.queryParameter("permalink")!!
 
         val chapterUrl = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment(CHAPTERS_DIR)
             addPathSegments("$permalink.json")
         }.build()
 
-        val page = client.newCall(GET(chapterUrl, headers)).execute()
+        val page = client.newCall(
+            Request.Builder()
+                .url(chapterUrl)
+                .headers(headers)
+                .build(),
+        ).execute()
             .parseAs<ChapterResponse>()
             .pages.first()
 

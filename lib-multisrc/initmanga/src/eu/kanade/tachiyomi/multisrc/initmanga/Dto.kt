@@ -24,3 +24,10 @@ class Dto(
         thumbnail_url = thumb
     }
 }
+
+@Serializable
+class EncryptedPayloadDto(
+    val ciphertext: String,
+    val iv: String,
+    val salt: String,
+)

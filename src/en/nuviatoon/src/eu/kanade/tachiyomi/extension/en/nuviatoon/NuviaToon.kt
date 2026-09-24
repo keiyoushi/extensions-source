@@ -1,48 +1,40 @@
 package eu.kanade.tachiyomi.extension.en.nuviatoon
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
 
 @Source
-abstract class NuviaToon : HttpSource() {
+abstract class NuviaToon : KeiSource() {
 
-    override val supportsLatest = true
+    override fun Headers.Builder.configureHeaders() = add("Accept", "application/json")
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Accept", "application/json")
-        .add("Referer", "$baseUrl/")
-
-    // ============================== Popular ==============================
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/nuvia-api/series?per_page=18&page=$page&sort=views&dir=desc", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<PaginatedResponse<SeriesDto>>()
-        return MangasPage(dto.data.map { it.toSManga() }, dto.hasNextPage)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$baseUrl/nuvia-api/series?per_page=18&page=$page&sort=views&dir=desc")
+        return parseMangasPage(response)
     }
 
-    // ============================== Latest ===============================
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val response = client.get("$baseUrl/nuvia-api/series?per_page=18&page=$page&sort=created_at&dir=desc")
+        return parseMangasPage(response)
+    }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/nuvia-api/series?per_page=18&page=$page&sort=created_at&dir=desc", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    // ============================== Search ===============================
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/nuvia-api/series".toHttpUrl().newBuilder().apply {
             addQueryParameter("per_page", "18")
             addQueryParameter("page", page.toString())
@@ -72,65 +64,56 @@ abstract class NuviaToon : HttpSource() {
             }
         }.build()
 
-        return GET(url, headers)
+        val response = client.get(url)
+        return parseMangasPage(response)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun parseMangasPage(response: Response): MangasPage {
+        val dto = response.parseAs<PaginatedResponse<SeriesDto>>()
+        return MangasPage(dto.data.map { it.toSManga() }, dto.hasNextPage)
+    }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(baseUrl)) {
-            val url = query.toHttpUrlOrNull()
-            val slug = url?.pathSegments?.getOrNull(1)
-            if (slug != null) {
-                val manga = SManga.create().apply {
-                    this.url = slug
-                }
-                return fetchMangaDetails(manga).map {
-                    it.initialized = true
-                    MangasPage(listOf(it), false)
-                }
-            }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+
+        return fetchMangaDetails(slug).apply {
+            initialized = true
         }
-        return super.fetchSearchManga(page, query, filters)
     }
-
-    // ============================== Details ==============================
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/nuvia-api/series/${manga.url}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDto>().toSManga()
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    // ============================= Chapters ==============================
-
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/nuvia-api/series/${manga.url}/chapters", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val slug = response.request.url.pathSegments.let { it[it.size - 2] }
-        return response.parseAs<List<ChapterDto>>()
-            .map { it.toSChapter(slug) }
-            .reversed()
-    }
-
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.url.substringBefore("?")}"
 
-    // =============================== Pages ===============================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaDeferred = async { if (fetchDetails) fetchMangaDetails(manga.url) else manga }
+        val chaptersDeferred = async { if (fetchChapters) fetchChapterList(manga.url) else chapters }
+        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+    }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$baseUrl/nuvia-api/series/$slug")
+        .parseAs<SeriesDto>()
+        .toSManga()
+
+    private suspend fun fetchChapterList(slug: String): List<SChapter> = client.get("$baseUrl/nuvia-api/series/$slug/chapters")
+        .parseAs<List<ChapterDto>>()
+        .map { it.toSChapter(slug) }
+        .reversed()
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.url.substringAfter("id=")
-        return GET("$baseUrl/nuvia-api/chapters/$id/pages", headers)
+        return client.get("$baseUrl/nuvia-api/chapters/$id/pages")
+            .parseAs<List<PageDto>>()
+            .mapIndexed { index, dto -> Page(index, imageUrl = dto.imageUrl) }
     }
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<List<PageDto>>().mapIndexed { index, dto ->
-        Page(index, imageUrl = dto.imageUrl)
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Filters ==============================
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         StatusFilter(),
         GenreFilter(),
         SortFilter(),

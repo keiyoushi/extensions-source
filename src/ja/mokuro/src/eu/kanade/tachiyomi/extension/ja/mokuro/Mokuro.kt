@@ -15,7 +15,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import keiyoushi.zip.zipDirectoryAsync
+import keiyoushi.zip.coroutines.zipDirectory
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -216,7 +216,7 @@ abstract class Mokuro :
                 .encodedPath(resp.request.url.encodedPath.removeSuffix(".mokuro") + ".cbz")
                 .build()
 
-            val byName = client.zipDirectoryAsync(cbzUrl.toString(), headers).entries.associateBy { it.name }
+            val byName = client.zipDirectory(cbzUrl.toString()).entries.associateBy { it.name }
 
             mokuro.pages.mapIndexed { index, page ->
                 val entry = byName[page.imgPath] ?: throw Exception("Entry not found in CBZ: ${page.imgPath}")

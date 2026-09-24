@@ -6,9 +6,15 @@ plugins {
 
 keiyoushi {
     name = "Manga-TR"
-    versionCode = 23
+    versionCode = 24
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
+
+    deeplink {
+        host("www.manga-tr.com")
+        host("manga-tr.com")
+        path("/manga-..*")
+    }
 
     source {
         lang = "tr"

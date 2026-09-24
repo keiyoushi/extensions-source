@@ -29,52 +29,26 @@ val SEARCH_QUERY = $$"""
     query Search($input: SearchInput!) {
       search(input: $input) {
         comicId
-        title
         slug
+        title
         cover {
-            url
+          url
         }
       }
     }
 """.trimIndent()
 
-val GENRE_QUERY = $$"""
-    query FetchGenre($slug: String!, $mangaAfter: String) {
-      genre(slug: $slug) {
-        mangaConn(first: 40, after: $mangaAfter) {
-          edges {
-            node {
-              comic {
-                comicId
-                slug
-                title
-                cover {
-                  url
-                }
-              }
-            }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-        }
-      }
-    }
-""".trimIndent()
-
-val DETAILS_QUERY = $$"""
-    query FetchMangaStatus($comicId: String!) {
-      manga(comicId: $comicId) {
+val COMIC_QUERY = $$"""
+    query FetchComicData($comicId: String!) {
+      comicVolumes(comicId: $comicId) {
         comic {
+          slug
           title
           synopsis
           rating
           creators
           publisher
-          metadata {
-            completed
-          }
+          completed
           cover {
             url
           }
@@ -84,20 +58,13 @@ val DETAILS_QUERY = $$"""
             }
           }
         }
-      }
-    }
-""".trimIndent()
-
-val CHAPTER_LIST_QUERY = $$"""
-    query FetchComicData($comicId: String!) {
-      comicVolumes(comicId: $comicId) {
         volumes {
           comicId
-          trialPage
-          slug
           volumeNumber
+          eisbn
+          slug
           name
-          price
+          trialPage
           purchased
           free
           releasesAt

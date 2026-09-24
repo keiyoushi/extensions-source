@@ -478,7 +478,7 @@ abstract class MangaDot :
             if (fetchDetails) {
                 val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
                 val data = client.get(url).use { it.decodeRscAs<Data<MangaData>>().data }
-                data.mangaData.manga.toSManga(baseUrl, showTagsPref())
+                data.mangaData.manga.toSManga(baseUrl, showTagsPref(), data.mangaData.volumeCount)
             } else {
                 manga
             }

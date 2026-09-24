@@ -207,11 +207,18 @@ abstract class WPComics : KeiSource() {
             } else {
                 (if (gmtOffset == null) this.substringAfterLast(" ") else "$this $gmtOffset").let {
                     // timestamp has year
-                    if (Regex("""\d+/\d+/\d\d""").find(it)?.value != null) {
+                    if (Regex("""\d+[-/.]\d+[-/.]\d\d""").containsMatchIn(it)) {
                         parseDate(it)
                     } else {
                         // MangaSum - timestamp sometimes doesn't have year (current year implied)
-                        parseDate("$it/${LocalDateTime.now().year % 100}")
+                        val delimiter = if (it.contains("-")) {
+                            "-"
+                        } else if (it.contains(".")) {
+                            "."
+                        } else {
+                            "/"
+                        }
+                        parseDate("$it$delimiter${LocalDateTime.now().year % 100}")
                     }
                 }
             }
