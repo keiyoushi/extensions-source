@@ -106,7 +106,7 @@ abstract class Klto9 : KeiSource() {
 
     private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select("div.thumb-item-flow").mapNotNull { mangaFromElement(it) }
-        val hasNextPage = document.selectFirst("ul.pagination li a:contains(»)") != null
+        val hasNextPage = document.selectFirst("ul.pagination li a[href]:contains(»)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -116,13 +116,13 @@ abstract class Klto9 : KeiSource() {
         return SManga.create().apply {
             setUrlWithoutDomain(a.absUrl("href"))
             title = a.text()
-
-            val imgContainer = element.selectFirst("div.content.img-in-ratio")
-            thumbnail_url = imgContainer?.attr("data-bg")?.takeIf { it.isNotEmpty() }
-                ?: imgContainer?.style()
+            thumbnail_url = element.selectFirst("div.content.img-in-ratio")?.backgroundUrl()
         }
     }
-
+    private fun Element.backgroundUrl(): String? = absUrl("data-bg").ifBlank {
+        val styleUrl = bgImageRegex.find(attr("style"))?.groupValues?.get(1) ?: return null
+        ownerDocument()?.baseUri()?.toHttpUrl()?.resolve(styleUrl)?.toString()
+    }
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -138,8 +138,7 @@ abstract class Klto9 : KeiSource() {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("h3[style*=font-weight:bold]")?.textOrNull()
-                ?: document.selectFirst("ol.breadcrumb li[itemprop=itemListElement]:last-child span")!!.text()
+            title = document.selectFirst("ol.breadcrumb li[itemprop=itemListElement]:last-child span")!!.text()
 
             val infoUl = document.selectFirst("ul.manga-info") ?: return this
 
@@ -154,10 +153,10 @@ abstract class Klto9 : KeiSource() {
 
                 val descDiv = document.selectFirst("div.row:has(h3:contains(Description))")
                     ?: document.selectFirst("div.row:contains(Description)")
-                val descText = descDiv?.select("p")?.text()
-                if (!descText.isNullOrEmpty()) {
-                    append(descText)
-                }
+                descDiv?.selectFirst("p")
+                    ?.textOrNull()
+                    ?.takeUnless { it == "Updating" }
+                    ?.also { append(it) }
             }
 
             genre = infoUl.select("li:contains(Genre) small a").joinToString { it.text() }.ifEmpty { null }
@@ -232,12 +231,6 @@ abstract class Klto9 : KeiSource() {
     private val bgImageRegex = Regex("""url\(['"]?([^'"]+)['"]?\)""")
     private val authorRegex = Regex("""Author\(s\)</b>:\s*<small><a[^>]*>([^<]+)""")
     private val imageLoadRegex = Regex("""load_image\((\d+)""")
-
-    private fun Element.style(): String? {
-        val style = attr("style")
-        val match = bgImageRegex.find(style)
-        return match?.groupValues?.get(1)
-    }
 
     private fun getRandomString(length: Int): String {
         val allowedChars = ('A'..'Z') + ('a'..'z') + ('0'..'9')
