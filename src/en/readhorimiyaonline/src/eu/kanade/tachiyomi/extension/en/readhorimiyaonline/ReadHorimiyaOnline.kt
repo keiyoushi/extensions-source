@@ -57,22 +57,18 @@ abstract class ReadHorimiyaOnline : KeiSource() {
         val response = client.get(baseUrl)
         val document = response.asJsoup()
         return SMangaUpdate(
-            manga = if (fetchDetails) parseManga(document) else manga,
-            chapters = if (fetchChapters) parseChapterList(document) else chapters,
+            manga = parseMangaDetails(document),
+            chapters = parseChapterList(document),
         )
     }
 
     private fun parseChapterList(document: Document): List<SChapter> = document.select("div#chapter-list a.chapter-list-item").map { element ->
         SChapter.create().apply {
             name = element.selectFirst("span.chapter-name")?.text() ?: element.text()
-            date_upload = element.selectFirst("span.chapter-date")?.text()?.let { parseDate(it) } ?: 0L
+            date_upload = DATE_FORMATTER.tryParseDate(element.selectFirst("span.chapter-date")?.text())
             setUrlWithoutDomain(element.absUrl("href"))
         }
     }
-
-    private fun parseDate(date: String): Long = runCatching {
-        synchronized(DATE_FORMAT) { DATE_FORMAT.parse(date)?.time }
-    }.getOrNull() ?: 0L
 
     // ========================= Pages =========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -107,6 +103,6 @@ abstract class ReadHorimiyaOnline : KeiSource() {
         ?.text()
 
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
+        private val DATE_FORMATTER = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
     }
 }
