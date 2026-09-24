@@ -1,17 +1,17 @@
 package eu.kanade.tachiyomi.extension.ja.klto9
 
 import eu.kanade.tachiyomi.source.model.SChapter
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 import kotlin.math.min
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+private val dateFormat = DateTimeFormatter
+    .ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+    .withZone(ZoneId.of("UTC"))
 
 @Serializable
 class Dto(
@@ -33,7 +33,7 @@ class Dto(
                     append(chapterName)
                 }
             }
-            date_upload = dateFormat.tryParse(lastUpdate).let {
+            date_upload = dateFormat.tryParseDateTime(lastUpdate).let {
                 if (it <= 0L) it else min(it, System.currentTimeMillis())
             }
         }
