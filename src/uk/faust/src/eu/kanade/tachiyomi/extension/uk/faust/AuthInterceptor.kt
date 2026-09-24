@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.uk.faust
 
-import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -64,7 +64,7 @@ class AuthInterceptor(
             .header(HEADER_OBFUSCATION, OBFUSCATION_MODE)
 
         if (!currentToken.isNullOrEmpty() && !url.encodedPath.contains("/authentication/")) {
-            requestBuilder.header("Authorization", "Bearer $currentToken")
+            requestBuilder.header(HEADER_AUTH, "Bearer $currentToken")
         }
 
         originalRequest = requestBuilder.build()
@@ -81,7 +81,7 @@ class AuthInterceptor(
                     val retryRequest = originalRequest.newBuilder()
                         .header(HEADER_TIMESTAMP, retryTimestamp)
                         .header(HEADER_SIGN, retrySignature)
-                        .header("Authorization", "Bearer $freshToken")
+                        .header(HEADER_AUTH, "Bearer $freshToken")
                         .build()
                     response = chain.proceed(retryRequest)
                 }
@@ -95,12 +95,12 @@ class AuthInterceptor(
                 ?: timestamp
             val responseBodyBytes = response.body.bytes()
             val decodedBytes = xorDecrypt(responseBodyBytes, responseTs, secretBytes)
-            val decryptedResponseBody = decodedBytes.toResponseBody("application/json; charset=utf-8".toMediaType())
+            val decryptedResponseBody = decodedBytes.toResponseBody(JSON_MEDIA_TYPE)
 
             return response.newBuilder()
                 .removeHeader(HEADER_RESP_OBFUSCATED)
                 .removeHeader(HEADER_RESP_TIMESTAMP)
-                .header("Content-Type", "application/json; charset=utf-8")
+                .header(HEADER_CONTENT, JSON_CONTENT_TYPE)
                 .body(decryptedResponseBody)
                 .build()
         }
@@ -121,18 +121,17 @@ class AuthInterceptor(
         if (isRefreshing) return accessToken
         isRefreshing = true
         try {
-            val url = "$baseUrl/api/authentication/refresh"
+            val url = "$baseUrl$AUTH_PATH"
             val timestamp = Instant.now().epochSecond.toString()
-            val pathAndQuery = "/api/authentication/refresh"
-            val signature = hmacSha256("$timestamp:$pathAndQuery")
+            val signature = hmacSha256("$timestamp:$AUTH_PATH")
 
             val request = Request.Builder()
                 .url(url)
-                .post("{}".toRequestBody("application/json".toMediaType()))
+                .post(EMPTY_POST_BODY)
                 .header(HEADER_TIMESTAMP, timestamp)
                 .header(HEADER_SIGN, signature)
                 .header(HEADER_OBFUSCATION, OBFUSCATION_MODE)
-                .header("Content-Type", "application/json")
+                .header(HEADER_CONTENT, JSON_CONTENT_TYPE)
                 .build()
 
             val client = clientProvider()
@@ -146,7 +145,7 @@ class AuthInterceptor(
                         String(bodyBytes, Charsets.UTF_8)
                     }
 
-                    val tokenDto = jsonInstance.decodeFromString<AuthResponseDto>(bodyString)
+                    val tokenDto = bodyString.parseAs<AuthResponseDto>()
                     if (tokenDto.token.isNotEmpty()) {
                         accessToken = tokenDto.token
                         tokenExpiresAt = decodeJwtExpiration(tokenDto.token)
@@ -166,8 +165,8 @@ class AuthInterceptor(
             val base64Payload = parts[1].replace("-", "+").replace("_", "/")
             val padded = base64Payload.padEnd(base64Payload.length + ((4 - (base64Payload.length % 4)) % 4), '=')
             val payloadJson = String(Base64.getDecoder().decode(padded), Charsets.UTF_8)
-            val jsonObject = jsonInstance.decodeFromString<JsonObject>(payloadJson)
-            jsonObject["exp"]?.jsonPrimitive?.content?.toLong() ?: (Instant.now().epochSecond + 3600)
+            val jsonObject = payloadJson.parseAs<JsonObject>()
+            jsonObject["exp"]?.string?.toLong() ?: (Instant.now().epochSecond + 3600)
         } else {
             Instant.now().epochSecond + 3600
         }
@@ -203,7 +202,13 @@ class AuthInterceptor(
         private const val HEADER_OBFUSCATION = "X-Json-Obfuscation"
         private const val HEADER_RESP_OBFUSCATED = "X-Response-Obfuscated"
         private const val HEADER_RESP_TIMESTAMP = "X-Response-Timestamp"
+        private const val HEADER_AUTH = "Authorization"
+        private const val HEADER_CONTENT = "Content-Type"
         private const val OBFUSCATION_MODE = "xor-v1"
+        private const val AUTH_PATH = "/api/authentication/refresh"
+        private const val JSON_CONTENT_TYPE = "application/json; charset=utf-8"
+        private val JSON_MEDIA_TYPE = JSON_CONTENT_TYPE.toMediaType()
+        private val EMPTY_POST_BODY = "{}".toRequestBody(JSON_MEDIA_TYPE)
     }
 }
 
