@@ -32,12 +32,16 @@ abstract class TempleScan : KeiSource() {
         set("Sec-Fetch-Mode", "navigate")
     }
 
+    private val rscHeaders get() = headersBuilder()
+        .set("rsc", "1")
+        .build()
+
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
 
     override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", OrderFilter.LATEST)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val data = client.get("$baseUrl/comics").extractNextJs<List<BrowseSeries>>()!!
+        val data = client.get("$baseUrl/comics", rscHeaders).extractNextJs<List<BrowseSeries>>()!!
         return parseDirectory(data, query, filters)
     }
 
@@ -99,7 +103,7 @@ abstract class TempleScan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get(baseUrl + manga.url).extractNextJs<SeriesDetails>()!!
+        val details = client.get(baseUrl + manga.url, rscHeaders).extractNextJs<SeriesDetails>()!!
 
         val manga = SManga.create().apply {
             url = "/comic/${details.slug}"
@@ -165,7 +169,7 @@ abstract class TempleScan : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(baseUrl + chapter.url).extractNextJs<PagesList>() ?: return emptyList()
+        val data = client.get(baseUrl + chapter.url, rscHeaders).extractNextJs<PagesList>() ?: return emptyList()
         return data.images.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
         }
