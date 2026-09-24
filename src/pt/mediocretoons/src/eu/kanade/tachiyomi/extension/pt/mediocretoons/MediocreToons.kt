@@ -5,7 +5,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -59,23 +58,20 @@ abstract class MediocreToons :
             return chain.proceed(request)
         }
 
-        if (token.isEmpty()) {
-            login()
-        }
-
-        val response = chain.proceed(request.withToken())
+        val usedToken = loginIfNeeded()
+        val response = chain.proceed(request.withToken(usedToken))
 
         if (response.code != 401) {
             return response.throwIfVipRestricted()
         }
 
         response.close()
-        login()
+        val renewedToken = loginIfNeeded(rejectedToken = usedToken)
 
-        return chain.proceed(request.withToken()).throwIfVipRestricted()
+        return chain.proceed(request.withToken(renewedToken)).throwIfVipRestricted()
     }
 
-    private fun Request.withToken() = newBuilder().header("Authorization", "Bearer $token").build()
+    private fun Request.withToken(token: String) = newBuilder().header("Authorization", "Bearer $token").build()
 
     private fun Response.throwIfVipRestricted(): Response {
         if (code == 403) {
@@ -85,12 +81,24 @@ abstract class MediocreToons :
         return this
     }
 
-    private fun login() {
-        if (email.isEmpty() || password.isEmpty()) {
+    // Concurrent requests wait here, so a token renewed by another thread is reused instead of logging in again
+    @Synchronized
+    private fun loginIfNeeded(rejectedToken: String? = null): String {
+        val current = token
+        if (current.isNotEmpty() && current != rejectedToken) return current
+
+        return login()
+    }
+
+    private fun login(): String {
+        val loginEmail = email
+        val loginPassword = password
+
+        if (loginEmail.isEmpty() || loginPassword.isEmpty()) {
             throw IOException(MISSING_CREDENTIALS_ERROR)
         }
 
-        val body = LoginRequestDto(email.trim(), password).toJsonRequestBody()
+        val body = LoginRequestDto(loginEmail.trim(), loginPassword).toJsonRequestBody()
         val response = client.newCall(POST("$API_URL$LOGIN_PATH", headers, body)).execute()
 
         if (!response.isSuccessful) {
@@ -104,7 +112,15 @@ abstract class MediocreToons :
             throw IOException(LOGIN_INVALID_RESPONSE_ERROR, e)
         }
 
-        token = session.token?.takeIf(String::isNotEmpty) ?: throw IOException(LOGIN_FAILED_ERROR)
+        val newToken = session.token?.takeIf(String::isNotEmpty) ?: throw IOException(LOGIN_FAILED_ERROR)
+
+        // Credentials changed while logging in: this token belongs to the previous account
+        if (loginEmail != email || loginPassword != password) {
+            throw IOException(LOGIN_FAILED_ERROR)
+        }
+
+        token = newToken
+        return newToken
     }
 
     private fun clearSession() {
@@ -176,48 +192,6 @@ abstract class MediocreToons :
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(FormatFilter(), StatusFilter(), SortFilter())
-
-    private class FormatFilter :
-        UriPartFilter(
-            "Formato",
-            arrayOf(
-                "Todos" to "",
-                "Shoujo" to "4",
-                "Comic" to "5",
-                "Yaoi" to "8",
-                "Yuri" to "9",
-                "Hentai" to "10",
-            ),
-        )
-
-    private class StatusFilter :
-        UriPartFilter(
-            "Status",
-            arrayOf(
-                "Todos" to "",
-                "Em lançamento" to "1",
-                "Finalizado" to "2",
-                "Hiato" to "3",
-                "Cancelado" to "4",
-            ),
-        )
-
-    private class SortFilter :
-        UriPartFilter(
-            "Ordenar por",
-            arrayOf(
-                "Mais recentes" to "criada_em_desc",
-                "Mais populares" to "view_geral",
-                "A-Z" to "nome",
-            ),
-        )
-
-    private open class UriPartFilter(
-        displayName: String,
-        private val options: Array<Pair<String, String>>,
-    ) : Filter.Select<String>(displayName, options.map { it.first }.toTypedArray()) {
-        val selected get() = options[state].second
-    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
