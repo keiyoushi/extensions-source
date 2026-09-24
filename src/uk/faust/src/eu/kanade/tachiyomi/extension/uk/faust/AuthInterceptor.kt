@@ -23,7 +23,7 @@ class AuthInterceptor(
     private val baseUrl: String,
 ) : Interceptor {
 
-    private val domain by lazy { baseUrl.toHttpUrl().host }
+    private val domain by lazy { baseUrl.toHttpUrl() }
 
     private val secretBytes by lazy {
         try {
@@ -45,7 +45,11 @@ class AuthInterceptor(
         var originalRequest = chain.request()
         val url = originalRequest.url
 
-        if (url.host != domain || !url.encodedPath.startsWith("/api")) {
+        if (!clientProvider().cookieJar.loadForRequest(domain).any { it.name == "refresh_token" }) {
+            return chain.proceed(originalRequest)
+        }
+
+        if (url.host != domain.host || !url.encodedPath.startsWith("/api")) {
             return chain.proceed(originalRequest)
         }
 
