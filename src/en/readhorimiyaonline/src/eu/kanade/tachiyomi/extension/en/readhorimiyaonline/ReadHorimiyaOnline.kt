@@ -10,10 +10,11 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
@@ -22,19 +23,19 @@ abstract class ReadHorimiyaOnline : KeiSource() {
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val response = client.get(baseUrl)
-        return MangasPage(listOf(parseManga(response.asJsoup())), false)
+        return MangasPage(listOf(parseMangaDetails(response.asJsoup())), false)
     }
 
     // ========================= Latest =========================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val response = client.get(baseUrl)
-        return MangasPage(listOf(parseManga(response.asJsoup())), false)
+        return MangasPage(listOf(parseMangaDetails(response.asJsoup())), false)
     }
 
     // ========================= Search =========================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val response = client.get(baseUrl)
-        return MangasPage(listOf(parseManga(response.asJsoup())), false)
+        return MangasPage(listOf(parseMangaDetails(response.asJsoup())), false)
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList()
@@ -44,7 +45,7 @@ abstract class ReadHorimiyaOnline : KeiSource() {
         val baseHost = baseUrl.substringAfter("://").substringBefore("/")
         if (url.host != baseHost) return null
         val response = client.get(baseUrl)
-        return parseManga(response.asJsoup())
+        return parseMangaDetails(response.asJsoup())
     }
 
     // ========================= Chapters + Update =========================
@@ -81,7 +82,7 @@ abstract class ReadHorimiyaOnline : KeiSource() {
     }
 
     // ========================= Helpers =========================
-    private fun parseManga(doc: Document): SManga = SManga.create().apply {
+    private fun parseMangaDetails(doc: Document): SManga = SManga.create().apply {
         title = "Horimiya"
         url = "/"
         thumbnail_url = doc.selectFirst("img.manga-thumb")?.absUrl("src")
