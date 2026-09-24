@@ -190,6 +190,13 @@ val COMIC_NODE_QUERY = $$"""
                     text
                 }
                 readDirection
+                trackingSites {
+                    anilist
+                    myanimelist
+                    mangaupdates
+                    kitsu
+                    animeplanet
+                }
                 urlPath
                 urlCover
                 title_titleNode {
