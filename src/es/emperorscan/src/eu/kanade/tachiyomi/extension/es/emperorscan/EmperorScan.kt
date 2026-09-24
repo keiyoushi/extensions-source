@@ -7,7 +7,6 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
@@ -15,7 +14,6 @@ import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -23,6 +21,7 @@ import java.util.Locale
 abstract class EmperorScan :
     MadaraNoAjax(),
     ConfigurableSource {
+    override val supportsPostId = false
 
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("es"))
 
@@ -35,15 +34,6 @@ abstract class EmperorScan :
     override val archiveUrlSelector = "*"
     override val archiveTitleSelector = ".ac-t"
 
-    // No postId
-    override fun Element.postId() = "dummy"
-    override fun mangaId(manga: SManga) = ""
-    override fun parseArchive(document: Document) = super.parseArchive(document)
-        .map {
-            it.apply {
-                url = memoPath(it)!!
-            }
-        }
     override val mangaDetailsSelectorTitle = "div.hcol > .htitle"
     override val mangaDetailsSelectorStatus = "div.hcol > .htags > .htag--status"
     override val mangaDetailsSelectorDescription = "div#syn > p"

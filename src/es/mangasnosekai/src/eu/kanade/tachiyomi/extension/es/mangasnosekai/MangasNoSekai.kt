@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.es.mangasnosekai
 
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.lib.synchrony.Deobfuscator
 import keiyoushi.network.get
@@ -17,13 +16,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MangasNoSekai : MadaraNoAjax() {
+    override val supportsPostId = false
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("es"))
 
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
@@ -35,16 +34,6 @@ abstract class MangasNoSekai : MadaraNoAjax() {
     override fun archiveSelector() = "div.page-listing-item > div.row > div"
     override val archiveUrlSelector = "a[href]"
     override val archiveTitleSelector = "figcaption"
-
-    // No postId
-    override fun Element.postId() = "dummy"
-    override fun mangaId(manga: SManga) = ""
-    override fun parseArchive(document: Document) = super.parseArchive(document)
-        .map {
-            it.apply {
-                url = memoPath(it)!!
-            }
-        }
 
     override val mangaDetailsSelectorTitle = "div.thumble-container p.titleMangaSingle"
     override val mangaDetailsSelectorThumbnail = "div.thumble-container img.img-responsive"

@@ -44,6 +44,8 @@ import javax.crypto.spec.SecretKeySpec
 
 abstract class MadaraBase : KeiSource() {
 
+    protected open val supportsPostId = true
+
     enum class ChapterMode {
         MangaPage,
         AdminAjax,
@@ -191,7 +193,12 @@ abstract class MadaraBase : KeiSource() {
     }
 
     protected open fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = SManga.create().apply {
-        url = preserveUrl?.takeIf { !it.all(Char::isDigit) } ?: id
+        val mangaPath = document.location().toHttpUrl().encodedPath
+        url = if (supportsPostId) {
+            preserveUrl?.takeIf { !it.all(Char::isDigit) } ?: id
+        } else {
+            mangaPath
+        }
         title = document.selectFirst(mangaDetailsSelectorTitle)!!.ownText()
         author = document.select(mangaDetailsSelectorAuthor).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         artist = document.select(mangaDetailsSelectorArtist).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
@@ -215,7 +222,7 @@ abstract class MadaraBase : KeiSource() {
             document.selectFirst(seriesTypeSelector)?.text()?.takeIf(String::isNotEmpty)?.let(::add)
         }.distinctBy(String::lowercase).joinToString().ifBlank { null }
         memo = mangaMemo(
-            path = document.location().toHttpUrl().encodedPath,
+            path = mangaPath,
             genres = genres,
             legacyId = id.takeIf { preserveUrl?.all(Char::isDigit) == false },
         )
@@ -282,20 +289,25 @@ abstract class MadaraBase : KeiSource() {
     protected open fun Element.postId() = selectFirst("[data-post-id]")?.attr("data-post-id")
 
     protected open fun parseArchive(document: Document): List<SManga> = document.select(archiveSelector()).mapNotNull { element ->
-        val id = element.attr("data-post-id").takeIf(String::isNotBlank)
-            ?: element.postId()?.takeIf(String::isNotBlank)
-            ?: return@mapNotNull null
+        val id = if (!supportsPostId) {
+            ""
+        } else {
+            element.attr("data-post-id").takeIf(String::isNotBlank)
+                ?: element.postId()?.takeIf(String::isNotBlank)
+                ?: return@mapNotNull null
+        }
         archiveManga(element, id)
     }
 
     protected open fun archiveManga(element: Element, id: String): SManga? {
         val link = element.selectFirst(archiveUrlSelector) ?: return null
         val href = link.attr("abs:href").takeIf(String::isNotBlank) ?: return null
+        val mangaPath = href.toHttpUrl().encodedPath
         return SManga.create().apply {
-            url = id
+            url = id.takeIf { it.isNotEmpty() && supportsPostId } ?: mangaPath
             title = archiveTitleSelector?.let { element.selectFirst(it)?.text() } ?: link.text()
             thumbnail_url = element.selectFirst("img")?.let { processThumbnail(imageFromElement(it), true) }
-            memo = mangaMemo(href.toHttpUrl().encodedPath, emptyList())
+            memo = mangaMemo(mangaPath, emptyList())
         }
     }
 
@@ -325,7 +337,13 @@ abstract class MadaraBase : KeiSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        if (chapter.url.contains('/')) error("Refresh the chapter list.")
+        if (chapter.url.contains('/')) {
+            if (supportsPostId) {
+                error("Refresh the chapter list.")
+            } else {
+                return super.getChapterUrl(chapter)
+            }
+        }
         val mangaPath = chapter.memo["mangaPath"]?.jsonPrimitive?.content
             ?: error("Refresh the chapter list.")
         return "$baseUrl${mangaPath.trimEnd('/')}/${chapter.url}/"

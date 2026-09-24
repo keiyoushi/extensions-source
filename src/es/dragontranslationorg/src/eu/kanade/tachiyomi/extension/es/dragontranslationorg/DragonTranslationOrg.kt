@@ -2,18 +2,17 @@ package eu.kanade.tachiyomi.extension.es.dragontranslationorg
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class DragonTranslationOrg : Madara() {
+    override val supportsPostId = false
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("es"))
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
@@ -23,15 +22,6 @@ abstract class DragonTranslationOrg : Madara() {
     override val archiveUrlSelector = "a"
     override val archiveTitleSelector = ".ac-t"
 
-    // No postId
-    override fun Element.postId() = "dummy"
-    override fun mangaId(manga: SManga) = ""
-    override fun parseArchive(document: Document) = super.parseArchive(document)
-        .map {
-            it.apply {
-                url = memoPath(it)!!
-            }
-        }
     override val mangaDetailsSelectorTitle = "div.hcol > .htitle"
     override val mangaDetailsSelectorStatus = "div.hcol > .htags > .htag--status"
     override val mangaDetailsSelectorDescription = "div#syn > p"

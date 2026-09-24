@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.kunmangaonline
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -18,21 +17,12 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class KunMangaOnline : MadaraNoAjax() {
+    override val supportsPostId = false
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     private val apiHeaders get() = headersBuilder()
         .add("Accept", "application/json")
         .build()
-
-    // No postId (no /feed for search)
-    override fun Element.postId() = "dummy"
-    override fun mangaId(manga: SManga) = ""
-    override fun parseArchive(document: Document) = super.parseArchive(document)
-        .map {
-            it.apply {
-                url = memoPath(it)!!
-            }
-        }
 
     override fun archiveSelector() = ".c-tabs-item__content, .page-item-detail"
     override val archiveUrlSelector = ".post-title a, h3.h4 a"

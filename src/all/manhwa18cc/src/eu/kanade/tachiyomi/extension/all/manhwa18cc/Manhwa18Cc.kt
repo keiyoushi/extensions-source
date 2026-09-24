@@ -1,16 +1,14 @@
 package eu.kanade.tachiyomi.extension.all.manhwa18cc
 
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class Manhwa18Cc : MadaraNoAjax() {
+    override val supportsPostId = false
     override val chapterDateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.US)
 
     override val mangaSubString get() = when (lang) {
@@ -26,16 +24,6 @@ abstract class Manhwa18Cc : MadaraNoAjax() {
 
     override val archiveUrlSelector = "div.manga-item div.data a"
 
-    // No postId
-    override fun Element.postId() = "dummy"
-    override fun mangaId(manga: SManga) = ""
-    override fun parseArchive(document: Document) = super.parseArchive(document)
-        .map {
-            it.apply {
-                url = memoPath(it)!!
-            }
-        }
-
     override suspend fun getPopularManga(page: Int) = archivePage(page, "trending")
 
     override fun nextPageSelector() = "ul.pagination li.next a"
@@ -48,9 +36,15 @@ abstract class Manhwa18Cc : MadaraNoAjax() {
         path: String,
         query: String,
     ) = super.archiveUrlBuilder(page, order, path, query).apply {
-        if (page > 1) removePathSegment(0)
+        if (page > 1) removePathSegment(1)
     }
-    override fun searchUrlBuilder(query: String) = super.searchUrlBuilder(query).addPathSegment("search")
+    override fun searchUrlBuilder(page: Int, query: String) = super.searchUrlBuilder(page, query).apply {
+        if (page > 1) {
+            removePathSegment(1)
+            addQueryParameter("page", page.toString())
+        }
+        setPathSegment(0, "search")
+    }
 
     override val mangaDetailsSelectorDescription = "div.panel-story-description div.dsct"
 

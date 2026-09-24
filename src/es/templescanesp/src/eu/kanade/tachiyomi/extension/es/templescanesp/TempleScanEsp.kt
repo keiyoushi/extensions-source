@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.templescanesp
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -17,8 +16,8 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TempleScanEsp : Madara() {
+    override val supportsPostId = false
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.forLanguageTag("es"))
-
     override val mangaSubString = "serie"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
@@ -37,16 +36,6 @@ abstract class TempleScanEsp : Madara() {
     override fun archiveSelector() = "div.group"
     override val archiveUrlSelector = "div.manga > div a"
     override val archiveTitleSelector = "h3"
-
-    // No postId
-    override fun Element.postId() = "dummy"
-    override fun mangaId(manga: SManga) = ""
-    override fun parseArchive(document: Document) = super.parseArchive(document)
-        .map {
-            it.apply {
-                url = memoPath(it)!!
-            }
-        }
 
     override fun chapterListSelector() = "ul#list-chapters li > a"
     override val chapterNameSelector = "div.grid > span"

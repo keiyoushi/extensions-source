@@ -1,27 +1,15 @@
 package eu.kanade.tachiyomi.extension.en.aquamanga
 
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 
 @Source
 abstract class AquaManga : MadaraNoAjax() {
+    override val supportsPostId = false
 
     override fun archiveSelector() = ".aqua-archive-card"
     override val archiveUrlSelector = ".aqua-archive-card__title a"
     override fun nextPageSelector() = "a.next"
-
-    // No postId
-    override fun Element.postId() = "dummy"
-    override fun mangaId(manga: SManga) = ""
-    override fun parseArchive(document: Document) = super.parseArchive(document)
-        .map {
-            it.apply {
-                url = memoPath(it)!!
-            }
-        }
 
     override val mangaDetailsSelectorTitle = ".aqua-series-info__title"
     override val mangaDetailsSelectorThumbnail = ".aqua-series-cover__img"

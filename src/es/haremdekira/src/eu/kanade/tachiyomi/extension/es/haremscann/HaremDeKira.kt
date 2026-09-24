@@ -1,12 +1,10 @@
 package eu.kanade.tachiyomi.extension.es.haremdekira
 
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -14,6 +12,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class HaremDeKira : MadaraNoAjax() {
+    override val supportsPostId = false
     override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ENGLISH)
 
     override val mangaSubString = "serie"
@@ -29,16 +28,6 @@ abstract class HaremDeKira : MadaraNoAjax() {
     override fun archiveSelector() = "button.group"
     override val archiveUrlSelector = "a"
     override val archiveTitleSelector = "h3"
-
-    // No postId
-    override fun Element.postId() = "dummy"
-    override fun mangaId(manga: SManga) = ""
-    override fun parseArchive(document: Document) = super.parseArchive(document)
-        .map {
-            it.apply {
-                url = memoPath(it)!!
-            }
-        }
 
     override val mangaDetailsSelectorTitle = "div.wp-manga div.grid > h1"
     override val mangaDetailsSelectorStatus = "div.wp-manga div[alt=type]:eq(0) > span"

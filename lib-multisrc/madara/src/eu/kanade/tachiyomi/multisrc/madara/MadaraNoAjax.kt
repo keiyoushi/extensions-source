@@ -57,17 +57,20 @@ abstract class MadaraNoAjax : MadaraBase() {
         return MangasPage(parseArchive(document), document.selectFirst(nextPageSelector()) != null)
     }
 
-    protected open fun searchUrlBuilder(query: String): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
+    protected open fun searchUrlBuilder(page: Int, query: String): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
+        if (page > 1) addPathSegments("page/$page/")
         addQueryParameter(searchQueryParameter, query)
         addQueryParameter("post_type", "wp-manga")
     }
 
     private suspend fun htmlSearch(page: Int, query: String): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
+        if (page > 1 && supportsPostId) return MangasPage(emptyList(), false)
 
-        val document = client.get(searchUrlBuilder(query).build()).asJsoup()
+        val document = client.get(searchUrlBuilder(page, query).build()).asJsoup()
+        val hasNextPage = !supportsPostId && document.selectFirst(nextPageSelector()) != null
+
         val archiveMangas = parseArchive(document)
-        if (archiveMangas.isNotEmpty()) return MangasPage(archiveMangas, false)
+        if (archiveMangas.isNotEmpty()) return MangasPage(archiveMangas, hasNextPage)
 
         val cards = parseSearchCards(document)
         val ids = rssIds(query, cards.map(SearchCard::path))
