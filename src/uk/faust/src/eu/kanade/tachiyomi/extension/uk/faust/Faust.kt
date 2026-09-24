@@ -158,7 +158,7 @@ abstract class Faust :
         val data = client.get(url, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 403 && response.body.string().contains("необхідно увійти")) {
-                    throw Exception("Для перегляду розділів 18+ необхідно увійти до облікового запису у WebView.")
+                    throw Exception("Для перегляду розділів 18+ необхідно увійти до облікового запису у WebView. \nАбо повторно увійдіть, щоб оновити інформацію.")
                 } else {
                     throw HttpException(response.code)
                 }
