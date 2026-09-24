@@ -154,8 +154,6 @@ val COMIC_NODE_QUERY = $$"""
                 name
                 subName
                 altNames
-                authors
-                artists
                 originalLanguage
                 translatedLanguage
                 originalStatus
@@ -165,7 +163,6 @@ val COMIC_NODE_QUERY = $$"""
                 contentRating
                 genres
                 tags
-                publishers
                 dbStatus
                 isPublic
                 follows
@@ -179,27 +176,6 @@ val COMIC_NODE_QUERY = $$"""
                 originalPubZone
                 chaps_normal
                 dateUpload
-                authorNodes {
-                    id
-                    data {
-                        id
-                        name
-                    }
-                }
-                artistNodes {
-                    id
-                    data {
-                        id
-                        name
-                    }
-                }
-                publisherNodes {
-                    id
-                    data {
-                        id
-                        name
-                    }
-                }
                 chapterNode_up_to {
                     id
                     data {
@@ -299,11 +275,6 @@ val CHAPTER_LIST_QUERY = $$"""
                     comments_total
                     views_login
                     views_guest
-                    profileNodes {
-                        data {
-                            name
-                        }
-                    }
                 }
             }
         }
@@ -342,11 +313,6 @@ val CHAPTER_UNIQ_LIST_QUERY = $$"""
                     comments_total
                     views_login
                     views_guest
-                    profileNodes {
-                        data {
-                            name
-                        }
-                    }
                 }
             }
         }
@@ -369,7 +335,6 @@ val COMIC_PROBE_QUERY = $$"""
         get_comicNode(id: $id) {
             id
             data {
-                name
                 subName
                 dbStatus
                 isPublic
@@ -380,8 +345,6 @@ val COMIC_PROBE_QUERY = $$"""
                         datePublic
                     }
                 }
-                urlPath
-                urlCover
             }
         }
     }
