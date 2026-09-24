@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -22,8 +23,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class Klto9 : KeiSource() {
-
-    // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
@@ -36,8 +35,6 @@ abstract class Klto9 : KeiSource() {
         return parseMangasPage(document)
     }
 
-    // ============================== Latest ===============================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
             .addQueryParameter("listType", "pagination")
@@ -48,8 +45,6 @@ abstract class Klto9 : KeiSource() {
         val document = client.get(url).asJsoup()
         return parseMangasPage(document)
     }
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
@@ -110,24 +105,23 @@ abstract class Klto9 : KeiSource() {
     }
 
     private fun parseMangasPage(document: Document): MangasPage {
-        val mangas = document.select("div.thumb-item-flow").mapNotNull { element ->
-            val a = element.selectFirst("div.thumb_attr.series-title a") ?: element.selectFirst("a")
-                ?: return@mapNotNull null
-
-            SManga.create().apply {
-                setUrlWithoutDomain(a.absUrl("href"))
-                title = a.text()
-
-                val imgContainer = element.selectFirst("div.content.img-in-ratio")
-                thumbnail_url = imgContainer?.attr("data-bg")?.takeIf { it.isNotEmpty() }
-                    ?: imgContainer?.style()
-            }
-        }
+        val mangas = document.select("div.thumb-item-flow").mapNotNull { mangaFromElement(it) }
         val hasNextPage = document.selectFirst("ul.pagination li a:contains(»)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    // ============================== Details ==============================
+    private fun mangaFromElement(element: Element): SManga? {
+        val a = element.selectFirst("div.thumb_attr.series-title a") ?: element.selectFirst("a") ?: return null
+
+        return SManga.create().apply {
+            setUrlWithoutDomain(a.absUrl("href"))
+            title = a.text()
+
+            val imgContainer = element.selectFirst("div.content.img-in-ratio")
+            thumbnail_url = imgContainer?.attr("data-bg")?.takeIf { it.isNotEmpty() }
+                ?: imgContainer?.style()
+        }
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -144,13 +138,12 @@ abstract class Klto9 : KeiSource() {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
         return SManga.create().apply {
-            title = document.select("h3[style*=font-weight:bold]").text().ifEmpty {
-                document.select("ol.breadcrumb li[itemprop=itemListElement]:last-child span").text()
-            }
+            title = document.selectFirst("h3[style*=font-weight:bold]")?.textOrNull()
+                ?: document.selectFirst("ol.breadcrumb li[itemprop=itemListElement]:last-child span")!!.text()
 
             val infoUl = document.selectFirst("ul.manga-info") ?: return this
 
-            author = authorRegex.find(infoUl.html())?.groupValues?.get(1) ?: ""
+            author = authorRegex.find(infoUl.html())?.groupValues?.get(1)
 
             val otherNamesLi = infoUl.selectFirst("li:contains(Other name)")
             description = buildString {
@@ -167,16 +160,9 @@ abstract class Klto9 : KeiSource() {
                 }
             }
 
-            val genres = infoUl.select("li:contains(Genre) small a").map { it.text() }
-            genre = genres.joinToString()
+            genre = infoUl.select("li:contains(Genre) small a").joinToString { it.text() }.ifEmpty { null }
 
-            val statusText = infoUl.select("li:contains(Status) a").text().lowercase()
-            status = when {
-                statusText.contains("ongoing") || statusText.contains("incomplete") -> SManga.ONGOING
-                statusText.contains("complete") -> SManga.COMPLETED
-                statusText.contains("pause") || statusText.contains("hiatus") -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
+            status = parseStatus(infoUl.selectFirst("li:contains(Status) a")?.textOrNull())
 
             val img = document.selectFirst("div.info-cover img.thumbnail")
             thumbnail_url = img?.absUrl("src")
@@ -185,7 +171,13 @@ abstract class Klto9 : KeiSource() {
         }
     }
 
-    // ============================= Chapters ==============================
+    private fun parseStatus(status: String?): Int = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("ongoing", ignoreCase = true) || status.contains("incomplete", ignoreCase = true) -> SManga.ONGOING
+        status.contains("complete", ignoreCase = true) -> SManga.COMPLETED
+        status.contains("pause", ignoreCase = true) || status.contains("hiatus", ignoreCase = true) -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val slug = manga.url.substringAfter("teap-").substringBefore(".html")
@@ -207,8 +199,6 @@ abstract class Klto9 : KeiSource() {
         }
     }
 
-    // =============================== Pages ===============================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val cid = if (chapter.url.contains("#")) {
             chapter.url.substringBefore("#")
@@ -226,15 +216,10 @@ abstract class Klto9 : KeiSource() {
 
         val document = client.get(url).asJsoup()
         return document.select("img").mapIndexed { index, img ->
-            val src = (
-                img.attr("data-pagespeed-lazy-src").takeIf { it.isNotEmpty() }
-                    ?: img.absUrl("src")
-                ).trim()
+            val src = img.absUrl("data-pagespeed-lazy-src").ifEmpty { img.absUrl("src") }
             Page(index, imageUrl = src)
         }
     }
-
-    // ============================== Filters ==============================
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         GenreFilter(getGenresList()),
@@ -243,8 +228,6 @@ abstract class Klto9 : KeiSource() {
         GroupFilter(),
         SortFilter(),
     )
-
-    // ============================= Utilities =============================
 
     private val bgImageRegex = Regex("""url\(['"]?([^'"]+)['"]?\)""")
     private val authorRegex = Regex("""Author\(s\)</b>:\s*<small><a[^>]*>([^<]+)""")
