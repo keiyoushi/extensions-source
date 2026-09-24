@@ -13,6 +13,11 @@ keiyoushi {
 
     source {
         lang = "es"
-        baseUrl = "https://manhwa-latino.com"
+        baseUrl {
+            mirrors(
+                "https://manhwa-latino.com",
+                "https://manhwa-es.com",
+            )
+        }
     }
 }
