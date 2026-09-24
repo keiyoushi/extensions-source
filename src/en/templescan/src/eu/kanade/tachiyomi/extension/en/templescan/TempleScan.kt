@@ -30,6 +30,7 @@ abstract class TempleScan : KeiSource() {
     override fun Headers.Builder.configureHeaders() = apply {
         set("Sec-Fetch-Dest", "document")
         set("Sec-Fetch-Mode", "navigate")
+        set("rsc", "1")
     }
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
