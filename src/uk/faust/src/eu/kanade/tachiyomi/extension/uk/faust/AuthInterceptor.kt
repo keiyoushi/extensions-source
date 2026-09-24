@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.uk.faust
 
 import keiyoushi.utils.jsonInstance
-import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -10,6 +9,7 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.security.MessageDigest
@@ -23,6 +23,8 @@ class AuthInterceptor(
     private val baseUrl: String,
 ) : Interceptor {
 
+    private val domain by lazy { baseUrl.toHttpUrl().host }
+
     private val secretBytes by lazy {
         try {
             val b64 = SIGNING_SECRET_B64.replace(Regex("\\s+"), "").replace("-", "+").replace("_", "/")
@@ -33,6 +35,8 @@ class AuthInterceptor(
         }
     }
 
+    private val secretKeySpec by lazy { SecretKeySpec(secretBytes, "HmacSHA256") }
+
     private var accessToken: String? = null
     private var tokenExpiresAt: Long = 0L
     private var isRefreshing: Boolean = false
@@ -41,26 +45,26 @@ class AuthInterceptor(
         var originalRequest = chain.request()
         val url = originalRequest.url
 
-        if (url.host != baseUrl.toHttpUrl().host || !url.encodedPath.startsWith("/api")) {
+        if (url.host != domain || !url.encodedPath.startsWith("/api")) {
             return chain.proceed(originalRequest)
         }
 
         val currentToken = getValidAccessToken()
         val timestamp = Instant.now().epochSecond.toString()
         val pathAndQuery = url.encodedPath + if (url.encodedQuery != null) "?${url.encodedQuery}" else ""
-        val signature = hmacSha256(secretBytes, "$timestamp:$pathAndQuery")
+        val signature = hmacSha256("$timestamp:$pathAndQuery")
 
         val requestBuilder = originalRequest.newBuilder()
-            .header("X-Request-Timestamp", timestamp)
-            .header("X-Request-Sign", signature)
-            .header("X-Json-Obfuscation", OBFUSCATION_MODE)
+            .header(HEADER_TIMESTAMP, timestamp)
+            .header(HEADER_SIGN, signature)
+            .header(HEADER_OBFUSCATION, OBFUSCATION_MODE)
 
         if (!currentToken.isNullOrEmpty() && !url.encodedPath.contains("/authentication/")) {
             requestBuilder.header("Authorization", "Bearer $currentToken")
         }
 
         originalRequest = requestBuilder.build()
-        val response = chain.proceed(originalRequest)
+        var response = chain.proceed(originalRequest)
 
         // Handle 401 Unauthorized -> Refresh token and retry once
         if (response.code == 401 && !url.encodedPath.contains("/authentication/")) {
@@ -69,24 +73,32 @@ class AuthInterceptor(
                 val freshToken = refreshAccessToken()
                 if (!freshToken.isNullOrEmpty()) {
                     val retryTimestamp = Instant.now().epochSecond.toString()
-                    val retrySignature = hmacSha256(secretBytes, "$retryTimestamp:$pathAndQuery")
+                    val retrySignature = hmacSha256("$retryTimestamp:$pathAndQuery")
                     val retryRequest = originalRequest.newBuilder()
-                        .header("X-Request-Timestamp", retryTimestamp)
-                        .header("X-Request-Sign", retrySignature)
+                        .header(HEADER_TIMESTAMP, retryTimestamp)
+                        .header(HEADER_SIGN, retrySignature)
                         .header("Authorization", "Bearer $freshToken")
                         .build()
-                    return chain.proceed(retryRequest)
+                    response = chain.proceed(retryRequest)
                 }
             }
         }
 
         // Handle XOR obfuscation response
         if (response.header(HEADER_RESP_OBFUSCATED)?.lowercase() == OBFUSCATION_MODE) {
-            val responseTs = response.header(HEADER_RESP_TIMESTAMP) ?: timestamp
+            val responseTs = response.header(HEADER_RESP_TIMESTAMP)
+                ?: response.request.header(HEADER_TIMESTAMP)
+                ?: timestamp
             val responseBodyBytes = response.body.bytes()
             val decodedBytes = xorDecrypt(responseBodyBytes, responseTs, secretBytes)
             val decryptedResponseBody = decodedBytes.toResponseBody("application/json; charset=utf-8".toMediaType())
-            return response.newBuilder().body(decryptedResponseBody).build()
+
+            return response.newBuilder()
+                .removeHeader(HEADER_RESP_OBFUSCATED)
+                .removeHeader(HEADER_RESP_TIMESTAMP)
+                .header("Content-Type", "application/json; charset=utf-8")
+                .body(decryptedResponseBody)
+                .build()
         }
 
         return response
@@ -108,14 +120,14 @@ class AuthInterceptor(
             val url = "$baseUrl/api/authentication/refresh"
             val timestamp = Instant.now().epochSecond.toString()
             val pathAndQuery = "/api/authentication/refresh"
-            val signature = hmacSha256(secretBytes, "$timestamp:$pathAndQuery")
+            val signature = hmacSha256("$timestamp:$pathAndQuery")
 
             val request = Request.Builder()
                 .url(url)
-                .post("{}".toJsonRequestBody())
-                .header("X-Request-Timestamp", timestamp)
-                .header("X-Request-Sign", signature)
-                .header("X-Json-Obfuscation", OBFUSCATION_MODE)
+                .post("{}".toRequestBody("application/json".toMediaType()))
+                .header(HEADER_TIMESTAMP, timestamp)
+                .header(HEADER_SIGN, signature)
+                .header(HEADER_OBFUSCATION, OBFUSCATION_MODE)
                 .header("Content-Type", "application/json")
                 .build()
 
@@ -159,17 +171,17 @@ class AuthInterceptor(
         Instant.now().epochSecond + 3600
     }
 
-    private fun hmacSha256(key: ByteArray, data: String): String {
-        if (key.isEmpty()) return ""
+    private fun hmacSha256(data: String): String {
+        if (secretBytes.isEmpty()) return ""
         val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(key, "HmacSHA256"))
+        mac.init(secretKeySpec)
         return mac.doFinal(data.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 
     private fun xorDecrypt(cipherBytes: ByteArray, timestamp: String, secret: ByteArray): ByteArray {
         if (secret.isEmpty()) return cipherBytes
         val digest = MessageDigest.getInstance("SHA-256")
-        digest.update(timestamp.toByteArray(Charsets.UTF_8))
+        digest.update("$timestamp:".toByteArray(Charsets.UTF_8))
         digest.update(secret)
         val key = digest.digest()
 
@@ -182,6 +194,9 @@ class AuthInterceptor(
 
     companion object {
         private const val SIGNING_SECRET_B64 = "WmgrUEwlWlN9K3FqVyc0bTtIJ3ZtaEAjXSh3"
+        private const val HEADER_SIGN = "X-Request-Sign"
+        private const val HEADER_TIMESTAMP = "X-Request-Timestamp"
+        private const val HEADER_OBFUSCATION = "X-Json-Obfuscation"
         private const val HEADER_RESP_OBFUSCATED = "X-Response-Obfuscated"
         private const val HEADER_RESP_TIMESTAMP = "X-Response-Timestamp"
         private const val OBFUSCATION_MODE = "xor-v1"
@@ -189,7 +204,6 @@ class AuthInterceptor(
 }
 
 @Serializable
-data class AuthResponseDto(
+class AuthResponseDto(
     val token: String,
-    val refreshToken: String? = null,
 )
