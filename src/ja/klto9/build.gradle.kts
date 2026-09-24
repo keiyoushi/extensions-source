@@ -14,4 +14,9 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://klto9.com"
     }
+
+    deeplink {
+        path("/teap-..*\\.html")
+        path("/zmqs-..*\\.html")
+    }
 }

@@ -17,6 +17,7 @@ import keiyoushi.utils.textOrNull
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -123,6 +124,27 @@ abstract class Klto9 : KeiSource() {
         val styleUrl = bgImageRegex.find(attr("style"))?.groupValues?.get(1) ?: return null
         ownerDocument()?.baseUri()?.toHttpUrl()?.resolve(styleUrl)?.toString()
     }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        val segment = url.pathSegments.singleOrNull() ?: return null
+        val mangaPath = when {
+            segment.startsWith("teap-") -> "/$segment"
+            segment.startsWith("zmqs-") && segment.contains("-chapter-") ->
+                segment
+                    .substringAfter("zmqs-")
+                    .substringBefore("-chapter-")
+                    .ifEmpty { null }
+                    ?.let { "/teap-$it.html" }
+            else -> null
+        } ?: return null
+
+        return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(mangaPath) }).apply {
+            setUrlWithoutDomain(mangaPath)
+            initialized = true
+        }
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
