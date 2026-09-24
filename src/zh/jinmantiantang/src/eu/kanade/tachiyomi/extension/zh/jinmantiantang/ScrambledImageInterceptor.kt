@@ -26,6 +26,18 @@ object ScrambledImageInterceptor : Interceptor {
         val aid = pathSegments[pathSegments.size - 2].toInt()
         if (aid < SCRAMBLE_ID) return response // 对在漫画章节ID为220980之前的图片未进行图片分割,直接放行
         // 章节ID:220980(包含)之后的漫画(2020.10.27之后)图片进行了分割getRows倒序处理
+        // GIF 未经站点分割加密：peek 3 字节嗅探 "GIF" 魔数，命中则原响应直接透传
+        // （不读整张图进内存，保留动画）。
+        val head = Buffer()
+        response.body.source().peek().read(head, 3)
+        if (head.size == 3L &&
+            head[0] == 'G'.code.toByte() &&
+            head[1] == 'I'.code.toByte() &&
+            head[2] == 'F'.code.toByte()
+        ) {
+            return response
+        }
+
         val responseBuilder = response.newBuilder()
         val imgIndex: String = pathSegments.last().substringBefore('.')
         val input = if ("gzip" == response.header("Content-Encoding")) {
@@ -40,8 +52,7 @@ object ScrambledImageInterceptor : Interceptor {
             response.body.byteStream()
         }
 
-        // GIF 未经站点分割加密：嗅探 "GIF" 魔数，动图原字节直接透传（保留动画）；
-        // 非 GIF 才走 decodeImage 切片还原。
+        // gzip 压缩过的 GIF：解压后字节原样透传（保留动画）；非 GIF 才走切片还原。
         val bytes = input.use { it.readBytes() }
         val isGif = bytes.size >= 3 && bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte() && bytes[2] == 'F'.code.toByte()
 
