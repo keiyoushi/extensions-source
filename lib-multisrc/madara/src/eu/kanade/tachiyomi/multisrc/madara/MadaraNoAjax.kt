@@ -41,6 +41,8 @@ abstract class MadaraNoAjax : MadaraBase() {
         return if (query.isBlank()) archivePage(page, sort) else htmlSearch(page, query)
     }
 
+    protected open fun nextPageSelector() = "div.nav-previous, a.nextpostslink"
+
     protected suspend fun archivePage(page: Int, order: String, path: String = "/$mangaSubString/", query: String = ""): MangasPage {
         val url = baseUrl.toHttpUrl().resolve(path)!!.newBuilder().apply {
             if (page > 1) addPathSegments("page/$page/")
@@ -48,7 +50,7 @@ abstract class MadaraNoAjax : MadaraBase() {
             if (query.isNotBlank()) addQueryParameter("s", query)
         }.build()
         val document = client.get(url).asJsoup()
-        return MangasPage(parseArchive(document), document.selectFirst("div.nav-previous, a.nextpostslink") != null)
+        return MangasPage(parseArchive(document), document.selectFirst(nextPageSelector()) != null)
     }
 
     private suspend fun htmlSearch(page: Int, query: String): MangasPage {

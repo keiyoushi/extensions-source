@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "MikuDoujin"
-    versionCode = 7
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
+    versionCode = 8
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
 
     source {
         lang = "th"
-        baseUrl = "https://miku-doujin.com"
+        baseUrl {
+            custom("https://miku-doujin.com")
+        }
+    }
+
+    deeplink {
+        path("/..*")
     }
 }

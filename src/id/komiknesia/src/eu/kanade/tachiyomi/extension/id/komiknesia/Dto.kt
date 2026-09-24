@@ -6,6 +6,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+class EncryptedEnvelopeDto(
+    val data: String,
+    val time: Double,
+)
+
+@Serializable
 class PayloadDto<T>(
     val data: T,
     val meta: MetaDto? = null,

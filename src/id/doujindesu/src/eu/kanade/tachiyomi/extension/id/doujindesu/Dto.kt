@@ -7,13 +7,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+import kotlin.time.Instant
 
 @Serializable
 class TermsResult(
@@ -27,14 +21,14 @@ class Term(
 
 @Serializable
 class TaxonomyMangas(
-    @SerialName("manga_list") val mangaList: List<MangaItem>,
+    val mangaList: List<MangaItem>,
     val pagination: Pagination,
 )
 
 @Serializable
 class Pagination(
     val page: Int,
-    @SerialName("total_pages") val totalPages: Int,
+    val totalPages: Int,
 )
 
 @Serializable
@@ -92,6 +86,7 @@ class MangaItem(
         status = when {
             this@MangaItem.status.lowercase() in listOf("ongoing", "publishing") -> SManga.ONGOING
             isCompleted() -> SManga.COMPLETED
+            this@MangaItem.status.lowercase() == "hiatus" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
 
@@ -210,7 +205,7 @@ class Chapter(
         url = id
         name = "Chapter ${chapterNumber.format()}${if (isLast) " END" else ""}"
         chapter_number = chapterNumber
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.tryParse(createdAt)
     }
 
     private fun Float.format(): String = toString().removeSuffix(".0")
@@ -219,6 +214,7 @@ class Chapter(
 @Serializable
 class PageList(
     @SerialName("content_urls") private val contentUrls: List<String>,
+    @SerialName("manga_slug") val mangaSlug: String? = null,
 ) {
     val pages: List<String>
         get() = contentUrls.map { page ->

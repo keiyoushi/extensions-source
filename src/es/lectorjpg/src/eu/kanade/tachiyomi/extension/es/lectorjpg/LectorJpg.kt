@@ -1,144 +1,134 @@
 package eu.kanade.tachiyomi.extension.es.lectorjpg
 
 import android.util.Base64
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class LectorJpg : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+abstract class LectorJpg : KeiSource() {
 
     private val apiUrl = "https://api.visorjpg.lat"
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
-        .build()
-
-    class LimitedCache<K, V> : LinkedHashMap<K, V>() {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>): Boolean = size > 8
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) {
+        it.host == baseUrl.toHttpUrl().host
     }
 
-    data class SearchKey(val page: Int, val query: String, val filters: String?)
+    private var latestMangaCursor: String? = null
+    private var searchMangaCursor: String? = null
 
-    private val latestMangaCursor = LimitedCache<Int, String?>()
-    private val searchMangaCursor = LimitedCache<SearchKey, String?>()
-
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/home/trending", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SeriesQueryDto>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.get("$apiUrl/home/trending").parseAs<SeriesQueryDto>()
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val cursor = latestMangaCursor[page - 1] ?: createLatestCursor()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page == 1) latestMangaCursor = null
+        val cursor = latestMangaCursor ?: createLatestCursor()
         val url = "$apiUrl/home/lastest-updates".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
-            .fragment(page.toString())
 
-        return GET(url.build(), headers)
-    }
+        val response = client.get(url.build())
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val page = response.request.url.fragment!!.toInt()
         val result = response.parseAs<SeriesQueryDto>()
-        latestMangaCursor[page] = result.nextCursor
+        latestMangaCursor = result.nextCursor
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, result.hasNextPage())
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+
+        return mangaDetailsParse(client.get(url).asJsoup()).apply {
+            this.url = slug
+        }
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (page == 1) searchMangaCursor = null
+
         val genresParam = filters
             .filterIsInstance<GenreFilter>()
             .flatMap { filter -> filter.state.filter { it.state }.map { it.key } }
             .takeIf { it.isNotEmpty() }
             ?.joinToString(",")
 
-        val searchKey = SearchKey(page - 1, query, genresParam)
-
-        val cursor = searchMangaCursor[searchKey] ?: ""
+        val cursor = searchMangaCursor ?: ""
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
             .addQueryParameter("name", query)
-            .fragment(page.toString())
 
         if (genresParam != null) {
             url.addQueryParameter("genres", genresParam)
         }
 
-        return GET(url.build(), headers)
+        return parseSearchManga(client.get(url.build()))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val page = response.request.url.fragment!!.toInt()
-        val query = response.request.url.queryParameter("name") ?: ""
-        val genresParam = response.request.url.queryParameter("genres")
-
-        val searchKey = SearchKey(page, query, genresParam)
-
+    private fun parseSearchManga(response: Response): MangasPage {
         val result = response.parseAs<SeriesQueryDto>()
-        searchMangaCursor[searchKey] = result.nextCursor
+        searchMangaCursor = result.nextCursor
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, result.hasNextPage())
     }
 
-    override fun getFilterList(): FilterList = FilterList(
-        GenreFilter("Géneros", getGenreList()),
-    )
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("div.grid > h1")!!.text()
-            thumbnail_url = document.selectFirst("div.bg_main.bg-cover")?.imageFromStyle()
-            description = document.select("div.grid > div.container > p").text()
-            status = document.selectFirst("div.grid:has(>div.flex:has(>span:contains(Status))) > div:last-child").parseStatus()
-            genre = document.select("a[href*=/series?genres] > span").joinToString { it.text() }
-        }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(doc), chapterListParse(doc))
     }
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("div.grid > h1")!!.text()
+        thumbnail_url = document.selectFirst("div.bg_main.bg-cover")?.imageFromStyle()
+        description = document.select("div.grid > div.container > p").text()
+        status = document.selectFirst("div.grid:has(span:contains(Status)) > button").parseStatus()
+        genre = document.select("a[href*=/series?genres] > span").joinToString { it.text() }
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div.grid > a.group").map { element ->
-            SChapter.create().apply {
-                name = element.selectFirst("span.truncate")!!.text()
-                setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-                date_upload = element.selectFirst("span.w-fit")?.text()?.let { parseChapterDate(it) } ?: 0L
-            }
+    private fun chapterListParse(document: Document): List<SChapter> = document.select("div.grid > a.group").map { element ->
+        SChapter.create().apply {
+            name = element.selectFirst("span.truncate")!!.text()
+            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+            date_upload = element.selectFirst("span.w-fit")?.text()?.let { parseChapterDate(it) } ?: 0L
         }
     }
 
     private val pagesRegex = """images:(\[.*?])""".toRegex()
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val scripts = document.select("script:containsData(svelteKit)").joinToString("\n") { it.data() }
         val match = pagesRegex.find(scripts) ?: return emptyList()
         val pagesJson = match.groupValues[1]
@@ -146,21 +136,24 @@ abstract class LectorJpg : HttpSource() {
         return imageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        GenreFilter("Géneros", getGenreList()),
+    )
 
-    private val cursorDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val cursorDateFormat = DateTimeFormatter
+        .ofPattern("yyyy-MM-dd HH:mm:ss")
+        .withZone(ZoneOffset.UTC)
 
     private fun createLatestCursor(): String {
-        val now: String? = cursorDateFormat.format(Date())
+        val now: String? = cursorDateFormat.format(Instant.now())
         val json = """{"last_update_at":"$now","id":0,"_pointsToNextItems":true}"""
         return Base64.encodeToString(json.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
     }
 
-    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
-        "on-going" -> SManga.ONGOING
-        "end" -> SManga.COMPLETED
+    private fun Element?.parseStatus(): Int = when (this?.text()) {
+        "En emisión" -> SManga.ONGOING
+        "Completado" -> SManga.COMPLETED
+        "En pausa" -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 
@@ -169,7 +162,8 @@ abstract class LectorJpg : HttpSource() {
         return style.substringAfterLast("url(").substringBefore(")").removeSurrounding("\"")
     }
 
-    private val chapterDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
+    private val chapterDateFormat =
+        DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.forLanguageTag("es"))
 
     private fun parseChapterDate(date: String): Long {
         if (date.contains("hace")) {
@@ -209,68 +203,6 @@ abstract class LectorJpg : HttpSource() {
             return calendar.timeInMillis
         }
 
-        return chapterDateFormat.tryParse(date)
+        return chapterDateFormat.tryParseDate(date)
     }
-
-    private fun getGenreList() = listOf(
-        Genre("BDSM", "bdsm"),
-        Genre("Bebes", "bebes"),
-        Genre("Bestias", "bestias"),
-        Genre("BL Sin Censura", "bl-sin-censura"),
-        Genre("Boys Love", "boys-love"),
-        Genre("Che Tenete Un Poco De Amor Propio", "che-tenete-un-poco-de-amor-propio"),
-        Genre("Ciencia Ficción", "ciencia-ficcion"),
-        Genre("Comedia", "comedia"),
-        Genre("Crimen", "crimen"),
-        Genre("Del Campo", "del-campo"),
-        Genre("Demonios", "demonios"),
-        Genre("Deportes", "deportes"),
-        Genre("Drama", "drama"),
-        Genre("Escolar", "escolar"),
-        Genre("Espacial", "espacial"),
-        Genre("Fantasía", "fantasia"),
-        Genre("Furro", "furro"),
-        Genre("Harem", "harem"),
-        Genre("Harem Inverso", "harem-inverso"),
-        Genre("Historia", "historia"),
-        Genre("Josei", "josei"),
-        Genre("Juego", "juego"),
-        Genre("Mafia", "mafia"),
-        Genre("Magia", "magia"),
-        Genre("Manhwa +19", "manhwa-19"),
-        Genre("Militar", "militar"),
-        Genre("Moderno", "moderno"),
-        Genre("Morocho Hermoso", "morocho-hermoso"),
-        Genre("Mucho Gogogo", "mucho-gogogo"),
-        Genre("Música", "musica"),
-        Genre("Novela", "novela"),
-        Genre("Odio-Amor", "odio-amor"),
-        Genre("Omegaverse", "omegaverse"),
-        Genre("Psicológico", "psicologico"),
-        Genre("Reencarnación", "reencarnacion"),
-        Genre("Relación Por Convivencia", "relacion-por-convivencia"),
-        Genre("Romance", "romance"),
-        Genre("Smut", "smut"),
-        Genre("Telenovela", "telenovela"),
-        Genre("Tetón", "teton"),
-        Genre("Toxicidad", "toxicidad"),
-        Genre("Toxicidad Nivel Chernóbil", "toxicidad-nivel-chernobil"),
-        Genre("Universitario", "universitario"),
-        Genre("Venganza", "venganza"),
-        Genre("Shoujo", "Shoujo"),
-        Genre("Shounen", "Shounen"),
-        Genre("Seinen", "Seinen"),
-        Genre("+18 Sin Censura", "+ 18 Sin Censura"),
-        Genre("NoBL\uD83D\uDC8C", "nobl"),
-        Genre("Girls Love", "gl"),
-        Genre("Adulto", "adulto"),
-        Genre("+18", "18"),
-        Genre("Sistema", "sistema"),
-        Genre("PuchiLovers", "puchilovers"),
-        Genre("Goheart Scan", "goheart-scan"),
-        Genre("Acción", "Acción"),
-        Genre("Aventura", "Aventura"),
-        Genre("Sobrenatural", "Sobrenatural"),
-        Genre("Transmigración", "Transmigración"),
-    )
 }

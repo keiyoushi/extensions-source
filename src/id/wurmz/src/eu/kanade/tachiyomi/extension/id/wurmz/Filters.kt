@@ -2,7 +2,26 @@ package eu.kanade.tachiyomi.extension.id.wurmz
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-open class TypeFilter :
+internal open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    fun toUriPart() = vals[state].second
+}
+
+internal class SortFilter :
+    UriPartFilter(
+        "Urutkan",
+        arrayOf(
+            "Update Terbaru" to "update",
+            "Komik Baru" to "new",
+            "Terlama" to "old",
+            "Populer Hari Ini" to "popular_today",
+            "Populer 3 Hari" to "popular_3d",
+            "Populer 7 Hari" to "popular_7d",
+            "Populer 1 Bulan" to "popular_30d",
+            "Populer Sepanjang Masa" to "popular_all",
+        ),
+    )
+
+internal class TypeFilter :
     UriPartFilter(
         "Tipe",
         arrayOf(
@@ -13,7 +32,7 @@ open class TypeFilter :
         ),
     )
 
-open class StatusFilter :
+internal class StatusFilter :
     UriPartFilter(
         "Status",
         arrayOf(
@@ -25,11 +44,7 @@ open class StatusFilter :
         ),
     )
 
-class GenreFilter : UriPartFilter("Genre", GENRES)
-
-abstract class UriPartFilter(name: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray()) {
-    fun toUriPart() = vals[state].second
-}
+internal class GenreFilter : UriPartFilter("Genre", GENRES)
 
 private val GENRES = arrayOf(
     "Semua Genre" to "",
@@ -37,7 +52,6 @@ private val GENRES = arrayOf(
     "4-Koma" to "4-Koma",
     "Action" to "Action",
     "Adaptation" to "Adaptation",
-    "Adult" to "Adult",
     "Adventure" to "Adventure",
     "Age Gap" to "Age Gap",
     "Aliens" to "Aliens",
@@ -55,6 +69,7 @@ private val GENRES = arrayOf(
     "Cooking" to "Cooking",
     "Crime" to "Crime",
     "Crossdressing" to "Crossdressing",
+    "Cunnilingus" to "Cunnilingus",
     "Delinguents" to "Delinguents",
     "Dementia" to "Dementia",
     "Demons" to "Demons",
@@ -63,6 +78,7 @@ private val GENRES = arrayOf(
     "Dungeons" to "Dungeons",
     "Ecchi" to "Ecchi",
     "Fantasy" to "Fantasy",
+    "Femdom" to "Femdom",
     "Fetish" to "Fetish",
     "Game" to "Game",
     "Gender Bender" to "Gender Bender",
@@ -107,9 +123,9 @@ private val GENRES = arrayOf(
     "Psychological" to "Psychological",
     "Regression" to "Regression",
     "Reincarnation" to "Reincarnation",
+    "Revenge" to "Revenge",
     "Reverse Harem" to "Reverse Harem",
     "Reverse Isekai" to "Reverse Isekai",
-    "Revenge" to "Revenge",
     "Romance" to "Romance",
     "Royal Family" to "Royal Family",
     "Royalty" to "Royalty",
@@ -124,7 +140,6 @@ private val GENRES = arrayOf(
     "Shounen Ai" to "Shounen Ai",
     "Showbiz" to "Showbiz",
     "Slice of Life" to "Slice of Life",
-    "Smut" to "Smut",
     "Sport" to "Sport",
     "Super Power" to "Super Power",
     "Supernatural" to "Supernatural",
@@ -137,6 +152,7 @@ private val GENRES = arrayOf(
     "Vampire" to "Vampire",
     "Villain" to "Villain",
     "Villainess" to "Villainess",
+    "Violence" to "Violence",
     "Virtual Reality" to "Virtual Reality",
     "Webtoons" to "Webtoons",
     "Yakuzas" to "Yakuzas",

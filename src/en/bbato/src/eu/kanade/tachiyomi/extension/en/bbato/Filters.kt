@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.bbato
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import java.util.Calendar
+import java.time.Year
 
 fun getFilters(): FilterList = FilterList(
     TypeFilter(),
@@ -89,7 +89,7 @@ private val statusList = listOf(
     CheckBoxVal("Not Yet Published", "info"),
 )
 
-private val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+private val currentYear = Year.now().value
 
 private val yearList = (currentYear downTo 2005).map {
     CheckBoxVal(it.toString(), it.toString())

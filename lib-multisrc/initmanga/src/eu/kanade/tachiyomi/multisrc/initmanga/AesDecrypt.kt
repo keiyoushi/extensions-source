@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.initmanga
 
 import android.util.Base64
-import org.jsoup.Jsoup
 import java.nio.charset.StandardCharsets
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -14,21 +13,19 @@ object AesDecrypt {
     private val REGEX_SMART_KEY_HTML = Regex("""InitMangaData[\s\S]*?decryption_key["']?\s*[:=]\s*["']([^"']+)["']""")
     val REGEX_ENCRYPTED_DATA = Regex("""var\s+InitMangaEncryptedChapter\s*=\s*(\{.*?\});""", RegexOption.DOT_MATCHES_ALL)
 
-    fun decryptLayered(html: String, ciphertext: String, ivHex: String, saltHex: String): String? {
-        var rawKeyFromScript: String? = null
-
-        val scriptContent = Jsoup.parse(html).selectFirst("script#init-main-js-extra")?.attr("src")
-
-        if (scriptContent != null && scriptContent.contains("base64,")) {
+    fun decryptLayered(document: org.jsoup.nodes.Document, ciphertext: String, ivHex: String, saltHex: String): String? {
+        val rawKeyFromScript = document.select("script[src*=base64]").firstNotNullOfOrNull { script ->
+            val src = script.attr("src")
+            val base64Data = src.substringAfter("base64,").substringBeforeLast("\"").trimEnd('\'', '"')
             runCatching {
-                val base64Data = scriptContent.substringAfter("base64,").substringBeforeLast("\"")
                 val decodedScript = String(Base64.decode(base64Data, Base64.DEFAULT), StandardCharsets.UTF_8)
-
-                rawKeyFromScript = REGEX_DECRYPTION_KEY_INSIDE.find(decodedScript)?.groupValues?.get(1)
-            }
+                REGEX_DECRYPTION_KEY_INSIDE.find(decodedScript)?.groupValues?.get(1)
+            }.getOrNull()
         }
 
-        val finalRawKey = rawKeyFromScript ?: REGEX_SMART_KEY_HTML.find(html)?.groupValues?.get(1)
+        val finalRawKey = rawKeyFromScript
+            ?: REGEX_DECRYPTION_KEY_INSIDE.find(document.html())?.groupValues?.get(1)
+            ?: REGEX_SMART_KEY_HTML.find(document.html())?.groupValues?.get(1)
 
         if (finalRawKey != null) {
             return runCatching {

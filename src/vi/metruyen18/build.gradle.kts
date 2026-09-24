@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MeTruyen18"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "madara"
@@ -14,7 +14,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl {
-            custom("https://metruyen18.vip")
+            custom("https://metruyen18.pro")
         }
     }
 

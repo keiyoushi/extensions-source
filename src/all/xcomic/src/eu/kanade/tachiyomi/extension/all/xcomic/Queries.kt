@@ -3,14 +3,10 @@ package eu.kanade.tachiyomi.extension.all.xcomic
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+// ============================= Variables =============================
+/** Title browse — search / popular / latest. */
 @Serializable
-class ApiComicNodeVariables(val id: String)
-
-@Serializable
-class ApiChapterNodeVariables(val id: String)
-
-@Serializable
-class ApiComicSearchVariables(
+class ApiTitleBrowseVariables(
     val word: String = "",
     val page: Int? = null,
     val size: Int? = null,
@@ -28,14 +24,29 @@ class ApiComicSearchVariables(
     val excGenres: List<String> = emptyList(),
     val incGenresMode: String? = null,
     val excGenresMode: String? = null,
-    val origStatus: String? = null,
-    val siteStatus: String? = null,
+    val origStatus: List<String> = emptyList(),
     val chapCount: String? = null,
     val ignoreGlobalGenres: Boolean = false,
     val ignoreGlobalULangs: Boolean = false,
     val ignoreGlobalBlocks: Boolean = false,
 )
 
+@Serializable
+class ApiTitleBrowseWrapper(val select: ApiTitleBrowseVariables)
+
+/** Title node — details backbone + comic_ids source resolution. */
+@Serializable
+class ApiTitleNodeVariables(val id: String)
+
+/** Source node — probe + chosen-source details + legacy path. */
+@Serializable
+class ApiComicNodeVariables(val id: String)
+
+/** Reader — page image URLs. */
+@Serializable
+class ApiChapterNodeVariables(val id: String)
+
+/** Chapter list for one source. */
 @Serializable
 class ApiChapterListSelect(
     @SerialName("comic_id")
@@ -46,76 +57,124 @@ class ApiChapterListSelect(
 )
 
 @Serializable
-class ApiComicSearchWrapper(val select: ApiComicSearchVariables)
-
-@Serializable
 class ApiChapterListWrapper(val select: ApiChapterListSelect)
 
 // ============================= Queries ==============================
+val TITLE_BROWSE_QUERY = $$"""
+    query get_title_browse($select: Title_Browse_Select) {
+        get_title_browse_items(select: $select) {
+            id
+            data {
+                title
+                native_title
+                romanized_title
+                original_language
+                translated_languages
+                type
+                cover_local_url
+                cover_url
+                comic_ids
+                chap_last_public_at
+            }
+        }
+    }
+"""
+
+val TITLE_NODE_QUERY = $$"""
+    query get_title_titleNode($id: ID!) {
+        get_title_titleNode(id: $id) {
+            id
+            data {
+                title
+                alt_titles
+                native_title
+                romanized_title
+                original_language
+                translated_languages
+                authors
+                artists
+                year
+                type
+                status
+                description
+                cover_local_url
+                cover_local
+                cover_url
+                urlPath
+                total_comics
+                total_chapters
+                total_follows
+                total_reviews
+                total_comments
+                vote_avg
+                vote_users
+                vote_bay
+                vote_val
+                chap_last_public_at
+                created_at
+                updated_at
+                is_merged
+                merged_to
+                comic_ids
+                content_rating_id
+                type_id
+                demographic_ids
+                genre_ids
+                format_ids
+                tracking_sites {
+                    anilist
+                    myanimelist
+                    mangaupdates
+                    kitsu
+                    animeplanet
+                    shikimori
+                    mangabaka
+                }
+            }
+        }
+    }
+"""
 
 val COMIC_NODE_QUERY = $$"""
     query get_comicNode($id: ID!) {
         get_comicNode(id: $id) {
+            id
             data {
                 id
                 name
+                subName
                 altNames
                 authors
-                authorNodes {
-                    id
-                    data {
-                        id
-                        name
-                    }
-                }
                 artists
-                artistNodes {
-                    id
-                    data {
-                        id
-                        name
-                    }
-                }
                 originalLanguage
                 translatedLanguage
                 originalStatus
-                originalPubFrom { y m d }
-                originalPubTill { y m d }
-                originalPubZone
                 uploadStatus
                 type
                 demographics
                 contentRating
                 genres
                 tags
-                tagNodes {
-                    id
-                    data {
-                        id
-                        name
-                    }
-                }
                 publishers
-                publisherNodes {
-                    id
-                    data {
-                        id
-                        name
-                    }
-                }
-                is_hot
-                is_new
+                dbStatus
+                isPublic
                 follows
                 reviews
                 comments_total
                 score_val
+                is_hot
+                is_new
+                originalPubFrom { y m d }
+                originalPubTill { y m d }
+                originalPubZone
                 chaps_normal
-                trackingSites {
-                    mangaupdates
-                    myanimelist
-                    animeplanet
-                    anilist
-                    kitsu
+                dateUpload
+                chapterNode_up_to {
+                    id
+                    data {
+                        dname
+                        datePublic
+                    }
                 }
                 summary {
                     text
@@ -124,19 +183,6 @@ val COMIC_NODE_QUERY = $$"""
                     text
                 }
                 readDirection
-                urlPath
-                urlCover
-            }
-        }
-    }
-"""
-
-val COMIC_ITEMS_QUERY = $$"""
-    query get_comic_browse_items($select: Comic_Browse_Select) {
-        get_comic_browse_items(select: $select) {
-            data {
-                id
-                name
                 urlPath
                 urlCover
             }
@@ -163,14 +209,11 @@ val CHAPTER_LIST_QUERY = $$"""
                     dname
                     title
                     urlPath
-                    sfw_result
-                    chaDuplications
                     dateCreate
                     datePublic
                     dateModify
                     chaNum
                     volNum
-                    volIdx
                     count_images
                     is_new
                     srcName
@@ -210,14 +253,11 @@ val CHAPTER_UNIQ_LIST_QUERY = $$"""
                     dname
                     title
                     urlPath
-                    sfw_result
-                    chaDuplications
                     dateCreate
                     datePublic
                     dateModify
                     chaNum
                     volNum
-                    volIdx
                     count_images
                     is_new
                     srcName
@@ -249,29 +289,19 @@ val CHAPTER_PAGES_QUERY = $$"""
     }
 """
 
-val COMIC_LATEST_QUERY = $$"""
-    query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
-        get_comic_latestUploads(select: $select) {
-            before
-            items {
-                comic {
-                    id
-                    data {
-                        id
-                        name
-                        urlPath
-                        urlCover
-                        translatedLanguage
-                        genres
-                    }
-                }
-                chapters(amount: 1) {
-                    id
-                    data {
-                        id
-                        datePublic
-                    }
-                }
+val COMIC_PROBE_QUERY = $$"""
+    query get_comicNode($id: ID!) {
+        get_comicNode(id: $id) {
+            id
+            data {
+                name
+                subName
+                dbStatus
+                isPublic
+                translatedLanguage
+                chaps_normal
+                urlPath
+                urlCover
             }
         }
     }

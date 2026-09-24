@@ -7,9 +7,23 @@ import eu.kanade.tachiyomi.multisrc.pam.TriStateGroupFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
+import okio.ByteString.Companion.decodeHex
 
 @Source
 abstract class EpsilonScan : Pam() {
+
+    override val readerSecret =
+        "e8abc14766424104bd19de22a0badbb2256330415accfaacd2deb8688ca99405".decodeHex().toByteArray()
+
+    override val kdfDomain = "2xqtlk8p"
+
+    override fun signedPayload(payload: ByteArray) = readerSecret + payload
+
+    override fun manifestPayload(uid: String, version: Int, ts: Long, nonce: String) = "$uid|$version|$nonce|$ts"
+
+    override fun contentKeyMaterial(sharedSecret: ByteArray, info: ByteArray) = listOf(readerSecret, sharedSecret, info)
+
+    override val contentKeyRounds = 1
 
     override val popularFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(3, false)))
     override val latestFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(2, false)))
