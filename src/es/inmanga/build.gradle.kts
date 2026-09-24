@@ -14,4 +14,8 @@ keiyoushi {
         lang = "es"
         baseUrl = "https://inmanga.com"
     }
+
+    deeplink {
+        path("/ver/manga/..*")
+    }
 }

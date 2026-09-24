@@ -17,6 +17,8 @@ import keiyoushi.utils.tryParseDateTime
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import okhttp3.FormBody
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatterBuilder
@@ -73,6 +75,36 @@ abstract class InManga : KeiSource() {
             body = mangaRequestBody(page, 1, query),
         ).asJsoup()
         return parseMangasPage(document)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments
+        if (segments.getOrNull(0) != "ver" || segments.getOrNull(1) != "manga") return null
+
+        val mangaUrl = when (segments.size) {
+            4 -> url.toString()
+            5 -> mangaUrlFromChapter(url) ?: return null
+            else -> return null
+        }
+
+        return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(mangaUrl) }).apply {
+            setUrlWithoutDomain(mangaUrl)
+            initialized = true
+        }
+    }
+
+    private suspend fun mangaUrlFromChapter(url: HttpUrl): String? {
+        val slug = url.pathSegments.getOrNull(2) ?: return null
+        val mangaId = client.get(url).asJsoup()
+            .select("script:containsData(var mid =)")
+            .firstNotNullOfOrNull { script ->
+                script.data()
+                    .substringAfter("var mid = '")
+                    .substringBefore("'")
+            }
+            ?: return null
+        return "$baseUrl/ver/manga/$slug/$mangaId"
     }
 
     private fun parseMangasPage(document: Document): MangasPage {
