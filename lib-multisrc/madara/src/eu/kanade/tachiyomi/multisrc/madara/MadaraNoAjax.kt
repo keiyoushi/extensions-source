@@ -43,24 +43,29 @@ abstract class MadaraNoAjax : MadaraBase() {
 
     protected open fun nextPageSelector() = "div.nav-previous, a.nextpostslink, #navigation-ajax"
 
+    protected open val orderQueryParameter = "m_orderby"
+    protected open val searchQueryParameter = "s"
+
+    protected open fun archiveUrlBuilder(page: Int, order: String, path: String, query: String) = baseUrl.toHttpUrl().resolve(path)!!.newBuilder().apply {
+        if (page > 1) addPathSegments("page/$page/")
+        if (order.isNotBlank()) addQueryParameter(orderQueryParameter, order)
+        if (query.isNotBlank()) addQueryParameter(searchQueryParameter, query)
+    }
+
     protected open suspend fun archivePage(page: Int, order: String, path: String = "/$mangaSubString/", query: String = ""): MangasPage {
-        val url = baseUrl.toHttpUrl().resolve(path)!!.newBuilder().apply {
-            if (page > 1) addPathSegments("page/$page/")
-            if (order.isNotBlank()) addQueryParameter("m_orderby", order)
-            if (query.isNotBlank()) addQueryParameter("s", query)
-        }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(archiveUrlBuilder(page, order, path, query).build()).asJsoup()
         return MangasPage(parseArchive(document), document.selectFirst(nextPageSelector()) != null)
+    }
+
+    protected open fun searchUrlBuilder(query: String): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
+        addQueryParameter(searchQueryParameter, query)
+        addQueryParameter("post_type", "wp-manga")
     }
 
     private suspend fun htmlSearch(page: Int, query: String): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
 
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addQueryParameter("s", query)
-            addQueryParameter("post_type", "wp-manga")
-        }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(searchUrlBuilder(query).build()).asJsoup()
         val archiveMangas = parseArchive(document)
         if (archiveMangas.isNotEmpty()) return MangasPage(archiveMangas, false)
 
