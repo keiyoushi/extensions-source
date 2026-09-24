@@ -177,37 +177,40 @@ abstract class MediocreToons :
 
     override fun getFilterList(data: JsonElement?) = FilterList(FormatFilter(), StatusFilter(), SortFilter())
 
-    private class FormatFilter : UriPartFilter(
-        "Formato",
-        arrayOf(
-            "Todos" to "",
-            "Shoujo" to "4",
-            "Comic" to "5",
-            "Yaoi" to "8",
-            "Yuri" to "9",
-            "Hentai" to "10",
-        ),
-    )
+    private class FormatFilter :
+        UriPartFilter(
+            "Formato",
+            arrayOf(
+                "Todos" to "",
+                "Shoujo" to "4",
+                "Comic" to "5",
+                "Yaoi" to "8",
+                "Yuri" to "9",
+                "Hentai" to "10",
+            ),
+        )
 
-    private class StatusFilter : UriPartFilter(
-        "Status",
-        arrayOf(
-            "Todos" to "",
-            "Em lançamento" to "1",
-            "Finalizado" to "2",
-            "Hiato" to "3",
-            "Cancelado" to "4",
-        ),
-    )
+    private class StatusFilter :
+        UriPartFilter(
+            "Status",
+            arrayOf(
+                "Todos" to "",
+                "Em lançamento" to "1",
+                "Finalizado" to "2",
+                "Hiato" to "3",
+                "Cancelado" to "4",
+            ),
+        )
 
-    private class SortFilter : UriPartFilter(
-        "Ordenar por",
-        arrayOf(
-            "Mais recentes" to "criada_em_desc",
-            "Mais populares" to "view_geral",
-            "A-Z" to "nome",
-        ),
-    )
+    private class SortFilter :
+        UriPartFilter(
+            "Ordenar por",
+            arrayOf(
+                "Mais recentes" to "criada_em_desc",
+                "Mais populares" to "view_geral",
+                "A-Z" to "nome",
+            ),
+        )
 
     private open class UriPartFilter(
         displayName: String,
