@@ -96,15 +96,12 @@ class ComicProbeEnvelope(
 
 @Serializable
 class ComicProbeData(
-    val name: String? = null,
     val subName: String? = null,
     val dbStatus: String? = null,
     val isPublic: Boolean? = null,
     val translatedLanguage: String? = null,
     @SerialName("chaps_normal") val chapsNormal: Int? = null,
     @SerialName("chapterNode_up_to") val chapterUpTo: ChapterUpToNode? = null,
-    val urlPath: String? = null,
-    @SerialName("urlCover") val urlCover: String? = null,
 ) {
     fun isLive(): Boolean = isPublic != false && (dbStatus == null || dbStatus == "normal")
 }
@@ -190,10 +187,6 @@ class ComicNode(
     private val name: String,
     val subName: String? = null,
     private val altNames: List<String>? = null,
-    private val authors: List<String>? = null,
-    private val authorNodes: List<XComicData<XComicName?>>? = null,
-    private val artists: List<String>? = null,
-    private val artistNodes: List<XComicData<XComicName?>>? = null,
     private val originalLanguage: String? = null,
     val translatedLanguage: String? = null,
     private val originalStatus: String? = null,
@@ -206,8 +199,6 @@ class ComicNode(
     private val contentRating: String? = null,
     private val genres: List<String>? = null,
     private val tags: List<String>? = null,
-    private val publishers: List<String>? = null,
-    private val publisherNodes: List<XComicData<XComicName?>>? = null,
     private val tagNodes: List<XComicData<XComicName?>>? = null,
     private val summary: XComicStrings? = null,
     private val extraInfo: XComicStrings? = null,
@@ -244,12 +235,8 @@ class ComicNode(
             url = id
             title = displayTitle
 
-            author = authorNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
-                ?: authors?.takeIf { it.isNotEmpty() }?.joinToString()
-                ?: work?.authors?.takeIf { it.isNotEmpty() }?.joinToString()
-            artist = artistNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
-                ?: artists?.takeIf { it.isNotEmpty() }?.joinToString()
-                ?: work?.artists?.takeIf { it.isNotEmpty() }?.joinToString()
+            author = work?.authors?.takeIf { it.isNotEmpty() }?.joinToString()
+            artist = work?.artists?.takeIf { it.isNotEmpty() }?.joinToString()
 
             genre = buildSet {
                 (work?.type ?: work?.typeId ?: type)?.let { add(it.toTitleCase()) }
@@ -326,9 +313,6 @@ class ComicNode(
 
                 val extras = buildList {
                     uploaders?.takeIf { it.isNotEmpty() }?.let { add("**Uploaders**: ${it.joinToString()}") }
-                    val publisherNames = publisherNodes?.mapNotNull { it.data?.name }
-                        ?.takeIf { it.isNotEmpty() } ?: publishers
-                    publisherNames?.takeIf { it.isNotEmpty() }?.let { add("**Publishers**: ${it.joinToString()}") }
                     val tagNames = tagNodes?.mapNotNull { it.data?.name }
                         ?.takeIf { it.isNotEmpty() } ?: tags
                     tagNames?.takeIf { it.isNotEmpty() }?.let { add("**Tags**: ${it.joinToString()}") }
@@ -482,14 +466,13 @@ class ChapterData(
     private val viewsLogin: Int? = null,
     @SerialName("views_guest")
     private val viewsGuest: Int? = null,
-    private val profileNodes: List<XComicData<XComicName?>?>? = null,
 ) {
     fun toSChapter(comicId: String, editionLabel: String?): SChapter = SChapter.create().apply {
         url = id
-        val uploader = srcName?.takeIf { it.isNotEmpty() }?.replaceFirstChar {
+        val uploader = srcName.normalizeEditionLabel()?.replaceFirstChar {
             if (it.isLowerCase()) it.titlecase() else it.toString()
-        } ?: profileNodes?.mapNotNull { it?.data?.name }?.joinToString().takeIf { !it.isNullOrEmpty() }
-        val scanlatorLabel = editionLabel ?: uploader
+        }
+        val scanlatorLabel = editionLabel.normalizeEditionLabel() ?: uploader
 
         name = buildString {
             val number = (chaNum ?: serial)?.toString()?.removeSuffix(".0")
@@ -522,11 +505,15 @@ class ChapterData(
 internal const val CHAPTER_COMIC_ID_MEMO = "comicId"
 internal const val CHAPTER_UPLOADER_MEMO = "uploader"
 
+internal fun SChapter.comicId(): String? = memo[CHAPTER_COMIC_ID_MEMO]?.stringOrNull
+
 internal fun SChapter.uploader(): String? = memo[CHAPTER_UPLOADER_MEMO]?.stringOrNull
 
 internal fun String?.normalizeEditionLabel(): String? = this
-    ?.let { Parser.unescapeEntities(it, false).trim() }
+    ?.let { Parser.unescapeEntities(it, false).replace(labelWhitespaceRegex, " ").trim() }
     ?.takeIf { it.isNotEmpty() }
+
+private val labelWhitespaceRegex = Regex("\\s+")
 
 // ================================ Helpers =================================
 
