@@ -96,9 +96,12 @@ abstract class MangaStop : KeiSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String {
+        if (manga.url.isId()) return "$baseUrl/obra/${manga.url}"
         val id = manga.memo["id"]?.stringOrNull ?: return baseUrl + manga.url
         return "$baseUrl/obra/$id"
     }
+
+    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.isId()) "$baseUrl/leitor/${chapter.url}" else baseUrl + chapter.url
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -123,10 +126,12 @@ abstract class MangaStop : KeiSource() {
         .parseAs<LeitorDto>()
 
     /**
-     * Returns the WordPress post id behind a site path. Current paths (/obra/{id}, /leitor/{id}) carry it
-     * directly; paths from the old MangaThemesia site (/manga/{slug}/ and /{chapter-slug}/) are looked up by slug.
+     * Returns the WordPress post id behind a stored url or site path. A bare id (the current stored format) and
+     * current paths (/obra/{id}, /leitor/{id}) carry it directly; paths from the old MangaThemesia site
+     * (/manga/{slug}/ and /{chapter-slug}/) are looked up by slug.
      */
     private suspend fun resolveId(path: String): String? {
+        if (path.isId()) return path
         val segments = path.trim('/').split('/')
         val (type, slug) = when {
             segments.size >= 2 && segments[0] in listOf("obra", "leitor") -> return segments[1].toLongOrNull()?.toString()
@@ -141,6 +146,8 @@ abstract class MangaStop : KeiSource() {
             .build()
         return client.get(url).parseAs<List<PostIdDto>>().firstOrNull()?.id?.toString()
     }
+
+    private fun String.isId() = isNotEmpty() && all { it in '0'..'9' }
 
     override val supportsFilterFetching get() = true
 

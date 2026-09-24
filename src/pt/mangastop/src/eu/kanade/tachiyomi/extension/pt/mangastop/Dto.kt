@@ -51,7 +51,7 @@ internal class MangaDto(
     private val thumbnail: String? = null,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/obra/$id"
+        url = id.toString()
         title = titulo
         thumbnail_url = thumbnail?.takeIf { it.isNotEmpty() }
     }
@@ -74,7 +74,7 @@ internal class ObraDto(
     private val capitulos: List<CapituloDto> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/obra/$id"
+        url = id.toString()
         title = titulo
         thumbnail_url = capaUrl?.takeIf { it.isNotEmpty() }
         author = mangaAutor.joinToString { it.nome }.ifEmpty { autor }?.takeIf { it.isNotBlank() }
@@ -115,7 +115,7 @@ internal class CapituloDto(
 ) {
     fun toSChapter() = SChapter.create().apply {
         val number = numero?.replace(',', '.')?.toFloatOrNull()
-        url = "/leitor/$id"
+        url = id.toString()
         name = number?.let { "Capítulo ${it.toString().removeSuffix(".0")}" } ?: tituloPost
         chapter_number = number ?: -1f
         date_upload = DATE_FORMAT.tryParseDate(dataPublicacao, SAO_PAULO)
