@@ -12,18 +12,23 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.textOrNull
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.FormBody
 import org.jsoup.nodes.Document
-import java.time.format.DateTimeFormatter
+import org.jsoup.nodes.Element
+import java.time.format.DateTimeFormatterBuilder
+import java.time.temporal.ChronoField
 
 @Source
 abstract class InManga : KeiSource() {
 
-    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    private val dateFormat = DateTimeFormatterBuilder()
+        .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
+        .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
+        .toFormatter()
 
     private val postHeaders = headers.newBuilder()
         .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
@@ -32,14 +37,22 @@ abstract class InManga : KeiSource() {
 
     private val imageCDN = "https://cdn1.intomanga.com"
 
-    private fun requestBodyBuilder(page: Int, isPopular: Boolean): RequestBody = "filter%5Bgeneres%5D%5B%5D=-1&filter%5BqueryString%5D=&filter%5Bskip%5D=${(page - 1) * 10}&filter%5Btake%5D=10&filter%5Bsortby%5D=${if (isPopular) "1" else "3"}&filter%5BbroadcastStatus%5D=0&filter%5BonlyFavorites%5D=false&d="
-        .toRequestBody(null)
+    private fun mangaRequestBody(page: Int, sortBy: Int, query: String = "") = FormBody.Builder()
+        .add("filter[generes][]", "-1")
+        .add("filter[queryString]", query)
+        .add("filter[skip]", ((page - 1) * 10).toString())
+        .add("filter[take]", "10")
+        .add("filter[sortby]", sortBy.toString())
+        .add("filter[broadcastStatus]", "0")
+        .add("filter[onlyFavorites]", "false")
+        .add("d", "")
+        .build()
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.post(
             url = "$baseUrl/manga/getMangasConsultResult",
             headers = postHeaders,
-            body = requestBodyBuilder(page, true),
+            body = mangaRequestBody(page, 1),
         ).asJsoup()
         return parseMangasPage(document)
     }
@@ -48,32 +61,30 @@ abstract class InManga : KeiSource() {
         val document = client.post(
             url = "$baseUrl/manga/getMangasConsultResult",
             headers = postHeaders,
-            body = requestBodyBuilder(page, false),
+            body = mangaRequestBody(page, 3),
         ).asJsoup()
         return parseMangasPage(document)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val skip = (page - 1) * 10
-        val body =
-            "filter%5Bgeneres%5D%5B%5D=-1&filter%5BqueryString%5D=$query&filter%5Bskip%5D=$skip&filter%5Btake%5D=10&filter%5Bsortby%5D=1&filter%5BbroadcastStatus%5D=0&filter%5BonlyFavorites%5D=false&d="
-                .toRequestBody(null)
-        val document = client.post("$baseUrl/manga/getMangasConsultResult", postHeaders, body).asJsoup()
+        val document = client.post(
+            url = "$baseUrl/manga/getMangasConsultResult",
+            headers = postHeaders,
+            body = mangaRequestBody(page, 1, query),
+        ).asJsoup()
         return parseMangasPage(document)
     }
 
     private fun parseMangasPage(document: Document): MangasPage {
         val elements = document.select("body > a")
+        val hasNextPage = elements.size == 10
+        return MangasPage(elements.map { mangaFromElement(it) }, hasNextPage)
+    }
 
-        val mangas = elements.map { element ->
-            SManga.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
-                title = element.select("h4.m0").text()
-                thumbnail_url = element.select("img").attr("abs:data-src")
-            }
-        }
-
-        return MangasPage(mangas, elements.size == 10)
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.selectFirst("h4.m0")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
     }
 
     override suspend fun fetchMangaUpdate(
@@ -90,18 +101,19 @@ abstract class InManga : KeiSource() {
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
         val document = client.get(getMangaUrl(manga)).asJsoup()
         return SManga.create().apply {
-            document.select("div.col-md-3 div.panel.widget").let { info ->
-                thumbnail_url = info.select("img").attr("abs:src")
-                status = parseStatus(info.select("a.list-group-item:contains(estado) span").text())
+            document.selectFirst("div.col-md-3 div.panel.widget")?.let { info ->
+                thumbnail_url = info.selectFirst("img")?.absUrl("src")
+                status = info.selectFirst("a.list-group-item:contains(estado) span")?.text().let(::parseStatus)
             }
-            document.select("div.col-md-9").let { info ->
-                title = info.select("h1").text()
-                description = info.select("div.panel-body").text()
+            document.selectFirst("div.col-md-9")!!.let { info ->
+                title = info.selectFirst("h1")!!.text()
+                description = info.selectFirst("div.panel-body")?.textOrNull()
             }
         }
     }
 
-    private fun parseStatus(status: String) = when {
+    private fun parseStatus(status: String?) = when {
+        status == null -> SManga.UNKNOWN
         status.contains("En emisión") -> SManga.ONGOING
         status.contains("Finalizado") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
@@ -127,13 +139,13 @@ abstract class InManga : KeiSource() {
         url = "/chapter/chapterIndexControls?identification=${chapter.identification}"
         name = "Chapter ${chapter.friendlyChapterNumber}"
         chapter_number = chapter.number?.toFloat() ?: 0f
-        date_upload = dateFormat.tryParseDate(chapter.registrationDate)
+        date_upload = dateFormat.tryParseDateTime(chapter.registrationDate)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
-        val chapterId = document.select("input#ChapterIdentification").attr("value")
-        val mangaId = document.select("input#MangaIdentification").attr("value")
+        val chapterId = document.selectFirst("input#ChapterIdentification")!!.attr("value")
+        val mangaId = document.selectFirst("input#MangaIdentification")!!.attr("value")
 
         return document.select("img.ImageContainer").mapIndexed { i, img ->
             Page(i, imageUrl = "$imageCDN/i/m/$mangaId/c/$chapterId/o/${img.attr("id")}.jpg")
