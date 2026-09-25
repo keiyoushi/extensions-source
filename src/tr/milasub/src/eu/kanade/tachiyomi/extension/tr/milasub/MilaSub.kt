@@ -1,27 +1,30 @@
 package eu.kanade.tachiyomi.extension.tr.milasub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class MilaSub : Madara() {
-    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val useNewChapterEndpoint = true
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("tr"))
 
-    override fun pageListParse(document: Document): List<Page> {
-        val pageList = super.pageListParse(document)
+    override val chapterMode = ChapterMode.MangaAjax
 
-        if (
-            pageList.isEmpty() &&
-            document.select(".content-blocked, .login-required").isNotEmpty()
-        ) {
-            throw Exception("Inicie sesión en WebView para ver este capítulo")
-        }
-        return pageList
+    override fun parseDetails(document: Document, id: String, preserveUrl: String?) = super.parseDetails(document.also { it.checkAccess() }, id, preserveUrl)
+
+    override val chapterUrlSelector = "a:not(.chapter-thumbnail a)"
+
+    override fun parsePages(document: Document) = super.parsePages(document).ifEmpty {
+        document.checkAccess() ?: emptyList()
+    }
+
+    private fun Document.checkAccess() = selectFirst(".content-blocked, .login-required, title:contains(giriş yapın)")?.let {
+        throw Exception(LOGIN_REQUIRED)
+    }
+
+    companion object {
+        const val LOGIN_REQUIRED = "Bu bölümü görüntülemek için WebView'da giriş yapın"
     }
 }

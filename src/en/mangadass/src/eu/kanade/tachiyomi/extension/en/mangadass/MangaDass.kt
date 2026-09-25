@@ -1,51 +1,47 @@
 package eu.kanade.tachiyomi.extension.en.mangadass
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import okhttp3.OkHttpClient
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class MangaDass : Madara() {
-    override val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.US)
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+abstract class MangaDass : MadaraNoAjax() {
+    override val supportsPostId = false
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.US)
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
-    override val filterNonMangaItems = false
+    override suspend fun getPopularManga(page: Int) = archivePage(page, "trending")
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=trending", headers)
+    override val archiveUrlSelector = "a"
+    override val archiveTitleSelector = "h3"
+    override fun nextPageSelector() = "ul.pagination li.next a"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.selectFirst("h3")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    override val orderQueryParameter = "orderby"
+    override val searchQueryParameter = "q"
+    override fun archiveUrlBuilder(
+        page: Int,
+        order: String,
+        path: String,
+        query: String,
+    ) = super.archiveUrlBuilder(page, order, path, query).apply {
+        if (page > 1) removePathSegment(1)
     }
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$mangaSubString/${searchPage(page)}?m_orderby=latest", headers)
-
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    override fun searchUrlBuilder(page: Int, query: String) = super.searchUrlBuilder(page, query).apply {
+        if (page > 1) {
+            removePathSegment(1)
+            addQueryParameter("page", page.toString())
+        }
+        setPathSegment(0, "search")
+    }
 
     override fun chapterListSelector() = ".row-content-chapter li"
+    override val chapterDateSelector = ".chapter-time"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        with(element.selectFirst("a")!!) {
-            name = text()
-            setUrlWithoutDomain(absUrl("href"))
-        }
-        date_upload = parseChapterDate(element.selectFirst(".chapter-time")?.text())
-    }
+    override val pageListParseSelector = ".read-content img"
 
-    override fun pageListParse(document: Document): List<Page> = document.select(".read-content img").mapIndexed { index, element ->
-        Page(index, imageUrl = element.absUrl("src"))
-    }
+    override val filterGenresSelector = "div.container"
 }

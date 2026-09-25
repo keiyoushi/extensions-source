@@ -6,16 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Jinman Tiantang"
-    versionCode = 58
+    versionCode = 59
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
         name = "禁漫天堂"
         lang = "zh"
-        baseUrl {
-            custom("https://18comic.vip")
-        }
+        baseUrl = "https://18comic.vip"
     }
 
     deeplink {

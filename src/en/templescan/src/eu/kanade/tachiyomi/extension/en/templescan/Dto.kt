@@ -9,7 +9,7 @@ import java.util.Locale
 
 @Serializable
 class BrowseSeries(
-    @SerialName("series_slug") private val slug: String,
+    @SerialName("sref") private val slug: String,
     val title: String,
     @SerialName("alternative_names") val alternativeNames: String? = null,
     private val thumbnail: String? = null,
@@ -35,7 +35,7 @@ class BrowseSeries(
 
 @Serializable
 class SeriesDetails(
-    @SerialName("series_slug") val slug: String,
+    @SerialName("sref") val slug: String,
     val title: String,
     val thumbnail: String? = null,
     val author: String? = null,
@@ -47,18 +47,18 @@ class SeriesDetails(
     val status: String? = null,
     val description: String? = null,
     @SerialName("tag_series") val tags: List<TagWrapper>? = emptyList(),
-    @SerialName("Season") val seasons: List<Chapters>? = emptyList(),
+    val groups: List<ChapterGroup>? = emptyList(),
 ) {
     @Serializable
-    class Chapters(
-        @SerialName("Chapter") val chapters: List<Chapter>,
+    class ChapterGroup(
+        val items: List<Chapter>,
     ) {
         @Serializable
         class Chapter(
             @SerialName("chapter_name") val name: String,
             @SerialName("chapter_title") val title: String? = null,
             @SerialName("chapter_slug") val slug: String,
-            val price: Int,
+            @SerialName("lk") val lock: Int = 0,
             @SerialName("created_at") private val createdAt: String? = null,
         ) {
             val created: Long by lazy {
@@ -80,7 +80,7 @@ class Tag(
 
 @Serializable
 class PagesList(
-    val pages: List<String>,
+    val images: List<String>,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)

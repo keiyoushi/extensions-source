@@ -7,12 +7,12 @@ plugins {
 keiyoushi {
     name = "MilaSub"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
+    theme = "madara"
 
     source {
         lang = "tr"
-        baseUrl = "https://www.millascan.com"
+        baseUrl = "https://millascan.com"
     }
 }
