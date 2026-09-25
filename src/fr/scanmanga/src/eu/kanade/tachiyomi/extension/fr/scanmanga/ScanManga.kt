@@ -27,6 +27,7 @@ import keiyoushi.utils.parseAs
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -38,6 +39,7 @@ import rx.Observable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.Inflater
 
 @Source
@@ -45,7 +47,7 @@ abstract class ScanManga :
     HttpSource(),
     ConfigurableSource {
 
-    private val domain = baseUrl.toHttpUrl().host
+    private val domain = baseUrl.toHttpUrl().topPrivateDomain()!!
     private val baseImageUrl = "https://static.$domain/img/manga"
     private val baseSearchUrl = "https://bqj.$domain/search/quick.json"
 
@@ -90,13 +92,28 @@ abstract class ScanManga :
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-45.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.asJsoup().select("#carouselTOPContainer > div.top").map { element ->
-            SManga.create().apply {
-                val titleElement = element.selectFirst("a.atop")!!
+        val document = response.asJsoup()
+        val mobileElements = document.select("#carouselTOPContainer div.top")
+        val mangas = if (mobileElements.isNotEmpty()) {
+            mobileElements.map { element ->
+                SManga.create().apply {
+                    val link = element.selectFirst("a.atop")!!
 
-                title = titleElement.text()
-                setUrlWithoutDomain(titleElement.attr("href"))
-                thumbnail_url = element.selectFirst("img")?.attr("data-original")
+                    title = link.text()
+                    setUrlWithoutDomain(link.absUrl("href"))
+                    thumbnail_url = element.selectFirst("img")?.absUrl("data-original")
+                }
+            }
+        } else {
+            document.select("div.image_manga.image_listing").map { element ->
+                SManga.create().apply {
+                    val link = element.selectFirst("a[href]")!!
+                    val img = element.selectFirst("img")
+
+                    setUrlWithoutDomain(link.absUrl("href"))
+                    title = img?.attr("title")?.takeIf { it.isNotEmpty() } ?: link.text()
+                    thumbnail_url = img?.absUrl("data-original")
+                }
             }
         }
 
@@ -104,19 +121,32 @@ abstract class ScanManga :
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?po", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
+        val mobileElements = document.select("#content_news .publi")
+        val mangas = if (mobileElements.isNotEmpty()) {
+            mobileElements.map { element ->
+                SManga.create().apply {
+                    val link = element.selectFirst("a.l_manga")!!
 
-        val mangas = document.select("#content_news .publi").map { element ->
-            SManga.create().apply {
-                val mangaElement = element.selectFirst("a.l_manga")!!
+                    title = link.text()
+                    setUrlWithoutDomain(link.absUrl("href"))
+                    thumbnail_url = element.selectFirst("img")?.absUrl("src")
+                }
+            }
+        } else {
+            document.select("div.listing:has(a.nom_manga)").map { element ->
+                SManga.create().apply {
+                    val link = element.selectFirst("a.nom_manga")!!
+                    val img = element.selectFirst("div.logo_manga img")
 
-                title = mangaElement.text()
-                setUrlWithoutDomain(mangaElement.attr("href"))
-
-                thumbnail_url = element.selectFirst("img")?.attr("src")
+                    title = link.text()
+                    setUrlWithoutDomain(link.absUrl("href"))
+                    thumbnail_url = img?.absUrl("data-original")?.takeIf { it.isNotEmpty() }
+                        ?: img?.absUrl("src")
+                }
             }
         }
 
@@ -124,14 +154,30 @@ abstract class ScanManga :
     }
 
     // Search
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val url = query.trim().toHttpUrlOrNull()
+        if (url?.topPrivateDomain() == domain && MANGA_PATH_REGEX.matches(url.encodedPath)) {
+            val manga = SManga.create().apply { this.url = url.encodedPath }
+            return fetchMangaDetails(manga).map {
+                it.url = manga.url
+                it.initialized = true
+                MangasPage(listOf(it), false)
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseSearchUrl
             .toHttpUrl().newBuilder()
             .addQueryParameter("term", query)
+            .addQueryParameter("16", null)
             .build()
             .toString()
 
         val newHeaders = headers.newBuilder()
+            .set("User-Agent", MOBILE_USER_AGENT)
             .add("Content-type", "application/json; charset=UTF-8")
             .build()
 
@@ -139,58 +185,205 @@ abstract class ScanManga :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val json = response.body.string()
-        if (json == "[]") {
+        val json = response.body.string().trimStart()
+        if (json == "[]" || json.startsWith("<")) {
             return MangasPage(emptyList(), false)
         }
 
-        return MangasPage(
-            json.parseAs<MangaSearchDto>().title?.map {
-                SManga.create().apply {
-                    title = it.nom_match
-                    setUrlWithoutDomain(it.url)
-                    thumbnail_url = "$baseImageUrl/${it.image}"
-                }
-            } ?: emptyList(),
-            false,
-        )
+        return json.parseAs<MangaSearchDto>().toMangasPage()
     }
+
+    private fun MangaSearchDto.toMangasPage() = MangasPage(
+        title?.map {
+            SManga.create().apply {
+                title = it.nom_match
+                setUrlWithoutDomain(it.url)
+                thumbnail_url = "$baseImageUrl/${it.image}"
+            }
+        } ?: emptyList(),
+        false,
+    )
 
     // Details
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.select("h1.main_title[itemprop=name]").text()
-            author = document.select("div[itemprop=author]").text()
-            description = document.selectFirst("div.titres_desc[itemprop=description]")?.text()
-            genre = document.selectFirst("div.titres_souspart span[itemprop=genre]")?.text()
+            title = document.selectFirst("h1.main_title[itemprop=name]")?.text()?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("[itemprop=name][content]")?.attr("content")?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("h1")!!.text()
+            author = document.selectFirst("div[itemprop=author]")?.parent()?.ownText()?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("li[itemprop=author]")?.text()
+            description = document.selectFirst("div.titres_desc[itemprop=description]")?.text()?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("p[itemprop=description]")?.text()
+            genre = document.selectFirst("div.titres_souspart span[itemprop=genre]")?.text()?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("li[itemprop=genre]")?.text()
 
-            val statutText = document.selectFirst("div.titres_souspart")?.ownText()
+            val statutText = document.select("div.titres_souspart")
+                .firstOrNull {
+                    it.ownText().contains("En cours", ignoreCase = true) ||
+                        it.ownText().contains("Termin", ignoreCase = true)
+                }
+                ?.ownText()
+                ?: document.select("div.titre_volume_manga span").text()
             status = when {
-                statutText?.contains("En cours", ignoreCase = true) == true -> SManga.ONGOING
-                statutText?.contains("Terminé", ignoreCase = true) == true -> SManga.COMPLETED
+                statutText.contains("En cours", ignoreCase = true) -> SManga.ONGOING
+                statutText.contains("Termin", ignoreCase = true) -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
 
-            thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").attr("src")
+            thumbnail_url = document.selectFirst("div.full_img_serie img[itemprop=image]")
+                ?.absUrl("src")
+                ?.takeIf { it.isNotEmpty() }
+                ?: document.selectFirst("meta[itemprop=image]")?.absUrl("content")
         }
     }
 
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("div.chapt_m").map { element ->
-            val linkEl = element.selectFirst("td.publimg span.i a")!!
-            val titleEl = element.selectFirst("td.publititle")
+        val mobileElements = document.select("div.chapt_m")
+        return if (mobileElements.isNotEmpty()) {
+            mobileElements.map { element ->
+                val link = element.selectFirst("td.publimg span.i a")!!
+                val chapterName = link.text()
+                val extraTitle = element.selectFirst("td.publititle")?.text()
 
-            val chapterName = linkEl.text()
-            val extraTitle = titleEl?.text()
-
-            SChapter.create().apply {
-                name = if (!extraTitle.isNullOrEmpty()) "$chapterName - $extraTitle" else chapterName
-                setUrlWithoutDomain(linkEl.absUrl("href"))
+                SChapter.create().apply {
+                    name = if (!extraTitle.isNullOrEmpty()) "$chapterName - $extraTitle" else chapterName
+                    setUrlWithoutDomain(link.absUrl("href"))
+                }
             }
+        } else {
+            document.select("li.chapitre").map { element ->
+                val link = element.selectFirst("div.chapitre_nom a[href]")!!
+
+                SChapter.create().apply {
+                    name = link.text()
+                    setUrlWithoutDomain(link.absUrl("href"))
+                }
+            }
+        }
+    }
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = super.fetchChapterList(manga).flatMap { chapters ->
+        if (chapters.isNotEmpty()) {
+            Observable.just(chapters)
+        } else {
+            Observable.fromCallable { chapterListWithWebView(manga) }
+        }
+    }
+
+    private fun chapterListWithWebView(manga: SManga): List<SChapter> {
+        val json = runWebViewProbe(
+            url = "$baseUrl${manga.url}",
+            script =
+            """
+                (function() {
+                    const mobile = Array.from(document.querySelectorAll('div.chapt_m'));
+                    const chapters = mobile.length > 0
+                        ? mobile.map(element => {
+                            const link = element.querySelector('td.publimg span.i a');
+                            const extra = element.querySelector('td.publititle')?.textContent.trim();
+                            const name = link?.textContent.trim() || '';
+                            return link ? { name: extra ? name + ' - ' + extra : name, url: link.href } : null;
+                        }).filter(Boolean)
+                        : Array.from(document.querySelectorAll('li.chapitre')).map(element => {
+                            const link = element.querySelector('div.chapitre_nom a[href]');
+                            return link ? { name: link.textContent.trim(), url: link.href } : null;
+                        }).filter(Boolean);
+
+                    if (chapters.length === 0) return 'WAIT';
+                    return 'DONE:' + btoa(unescape(encodeURIComponent(JSON.stringify(chapters))));
+                })();
+            """.trimIndent(),
+            timeoutSeconds = CHAPTER_WEBVIEW_TIMEOUT_SECONDS,
+        ) ?: error("Timed out while loading Scan-Manga chapters in the WebView")
+
+        return json.parseAs<List<WebViewChapterDto>>().map { chapter ->
+            SChapter.create().apply {
+                name = chapter.name
+                setUrlWithoutDomain(chapter.url)
+            }
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun runWebViewProbe(url: String, script: String, timeoutSeconds: Long): String? {
+        val latch = CountDownLatch(1)
+        val result = AtomicReference<String?>()
+        val webViewReference = AtomicReference<WebView?>()
+        val completed = AtomicBoolean(false)
+        val pollStarted = AtomicBoolean(false)
+        val mainHandler = Handler(Looper.getMainLooper())
+
+        mainHandler.post {
+            runCatching {
+                val webView = WebView(applicationContext).also { webViewReference.set(it) }
+                webView.settings.javaScriptEnabled = true
+                webView.settings.domStorageEnabled = true
+
+                lateinit var poll: Runnable
+                poll = Runnable {
+                    if (completed.get()) return@Runnable
+
+                    // Suwayomi's Chromium adapter only returns multiline scripts when they
+                    // contain an explicit return. Keeping this as a single expression works
+                    // in both Suwayomi and Android WebView.
+                    webView.evaluateJavascript(script.replace("\n", " ")) { rawValue ->
+                        if (completed.get()) return@evaluateJavascript
+
+                        val value = rawValue?.trim()?.removeSurrounding("\"").orEmpty()
+                        when {
+                            value.startsWith("DONE:") -> {
+                                val decoded = String(Base64.decode(value.removePrefix("DONE:"), Base64.DEFAULT), Charsets.UTF_8)
+                                result.set(decoded)
+                                completed.set(true)
+                                latch.countDown()
+                            }
+                            value.startsWith("ERROR:") -> {
+                                val decoded = String(Base64.decode(value.removePrefix("ERROR:"), Base64.DEFAULT), Charsets.UTF_8)
+                                result.set("ERROR:$decoded")
+                                completed.set(true)
+                                latch.countDown()
+                            }
+                            else -> mainHandler.postDelayed(poll, WEBVIEW_POLL_INTERVAL_MS)
+                        }
+                    }
+                }
+
+                webView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        if (pollStarted.compareAndSet(false, true)) {
+                            poll.run()
+                        }
+                    }
+                }
+                webView.loadUrl(url)
+            }.onFailure {
+                completed.set(true)
+                latch.countDown()
+            }
+        }
+
+        try {
+            latch.await(timeoutSeconds, TimeUnit.SECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        } finally {
+            completed.set(true)
+            mainHandler.post {
+                runCatching {
+                    webViewReference.getAndSet(null)?.apply {
+                        stopLoading()
+                        destroy()
+                    }
+                }
+            }
+        }
+
+        return result.get()?.also {
+            if (it.startsWith("ERROR:")) error(it.removePrefix("ERROR:"))
         }
     }
 
@@ -364,7 +557,10 @@ abstract class ScanManga :
     override fun pageListParse(response: Response): List<Page> = parsePageList(response.asJsoup())
 
     private fun parsePageList(document: org.jsoup.nodes.Document): List<Page> {
-        val packedScript = document.selectFirst(PACKED_SCRIPT_SELECTOR)!!.data()
+        val packedScript = document.select("script")
+            .map { it.data() }
+            .firstOrNull { HUNTER_OBFUSCATION_REGEX.containsMatchIn(it) }
+            ?: error("Failed to find packed reader script.")
         val unpackedScript = decodeHunter(packedScript)
 
         val (sml) = SML_PARAM_REGEX.find(unpackedScript)?.destructured
@@ -373,7 +569,7 @@ abstract class ScanManga :
         val (sme) = SME_PARAM_REGEX.find(unpackedScript)?.destructured
             ?: error("Failed to extract sme parameter.")
 
-        val (chapterId) = CHAPTER_INFO_REGEX.find(packedScript)?.destructured
+        val (chapterId) = CHAPTER_INFO_REGEX.find(document.html())?.destructured
             ?: error("Failed to extract chapter ID.")
 
         val availableVariables = mapOf(
@@ -506,8 +702,13 @@ abstract class ScanManga :
     }
 
     companion object {
-        private const val PACKED_SCRIPT_SELECTOR = "script:containsData(eval\\(function \\()"
-        private val HUNTER_OBFUSCATION_REGEX = Regex("""eval\s*\(\s*function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""")
+        private const val MOBILE_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        private val MANGA_PATH_REGEX = Regex("""/\d+(?:-\d+)?/[^/]+\.html""")
+        private val HUNTER_OBFUSCATION_REGEX = Regex(
+            """eval\s*\(\s*(?:/\*.*?\*/\s*)?function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
         private val SML_PARAM_REGEX = Regex("""sml\s*=\s*'([^']+)'""")
         private val SME_PARAM_REGEX = Regex("""sme\s*=\s*'([^']+)'""")
         private val CHAPTER_INFO_REGEX = Regex("""const idc = (\d+)""")
@@ -518,5 +719,7 @@ abstract class ScanManga :
         private const val CF_MAX_POLLS = 15
         private const val WARMUP_SETTLE_MS = 200L
         private const val WARMUP_TIMEOUT_SECONDS = 8L
+        private const val WEBVIEW_POLL_INTERVAL_MS = 500L
+        private const val CHAPTER_WEBVIEW_TIMEOUT_SECONDS = 30L
     }
 }

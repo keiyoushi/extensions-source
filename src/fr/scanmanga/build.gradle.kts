@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Scan-Manga"
-    versionCode = 23
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    versionCode = 28
+    contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
-        baseUrl = "https://m.scan-manga.com"
+        baseUrl = "https://www.scan-manga.com"
         lang = "fr"
+    }
+
+    deeplink {
+        host("m.scan-manga.com")
+        host("www.scan-manga.com")
+        path("/..*/..*\\.html")
     }
 }
