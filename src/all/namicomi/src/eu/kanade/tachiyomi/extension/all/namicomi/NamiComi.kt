@@ -19,8 +19,11 @@ import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaListDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.OrganizationDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.PageListDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.PaginatedResponseDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.RefreshTokenRequest
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.RefreshTokenResponse
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.StatusDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.TagDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.Token
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.UnknownEntity
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -35,20 +38,25 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -56,6 +64,8 @@ import okhttp3.Response
 import okio.IOException
 import java.util.Locale
 import kotlin.collections.orEmpty
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Source
@@ -387,7 +397,7 @@ abstract class NamiComi :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$extLang/chapter/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get("$apiUrl/images/chapter/${chapter.url}?newQualities=true")
+        val data = client.get("$apiUrl/images/chapter/${chapter.url}?newQualities=true", authHeaders())
             .parseAs<PageListDto>(json).data
             ?: return emptyList()
 
@@ -446,6 +456,68 @@ abstract class NamiComi :
 
     private val SharedPreferences.showLockedChapters
         get() = getBoolean("${SHOW_LOCKED_CHAPTERS_PREF}_$extLang", false)
+
+    private var token: Token? = null
+    private val mutex = Mutex()
+
+    private suspend fun login() = mutex.withLock {
+        if (token == null) {
+            token = getLocalStorage(baseUrl, "namicomi.user:https://auth.namicomi.com/realms/namicomi:namicomi-frontend")?.parseAs()
+        }
+
+        val current = token ?: return@withLock
+
+        current.refreshExpires?.let {
+            if (Clock.System.now() > it) {
+                token = null
+                runWebView(10.seconds) {
+                    onPageFinished {
+                        evaluateJs("""localStorage.removeItem("namicomi.user:https://auth.namicomi.com/realms/namicomi:namicomi-frontend")""")
+                        resolve(Unit)
+                    }
+                    loadData(baseUrl, "")
+                }
+                return@withLock
+            }
+        }
+
+        if (Clock.System.now().plus(30.seconds) > current.expires) {
+            val body = RefreshTokenRequest(
+                grantType = "refresh_token",
+                refreshToken = current.refreshToken,
+                scope = current.scope,
+                clientId = "namicomi-frontend",
+            ).toJsonRequestBody()
+
+            val response = client.post(
+                "https://auth.namicomi.com/realms/namicomi/protocol/openid-connect/token",
+                body,
+                ensureSuccess = false,
+            )
+
+            if (response.isSuccessful) {
+                val refresh = response.parseAs<RefreshTokenResponse>()
+                token = current.copy(
+                    accessToken = refresh.accessToken,
+                    refreshToken = refresh.refreshToken,
+                    expiresAt = refresh.expires.epochSeconds,
+                    refreshExpiresAt = refresh.refreshExpires?.epochSeconds,
+                )
+            } else {
+                token = null
+            }
+        }
+    }
+
+    private suspend fun authHeaders(): Headers {
+        login()
+
+        return headersBuilder().apply {
+            token?.also {
+                add("Authorization", "Bearer ${it.accessToken}")
+            }
+        }.build()
+    }
 }
 
 const val MANGA_LIMIT = 20
