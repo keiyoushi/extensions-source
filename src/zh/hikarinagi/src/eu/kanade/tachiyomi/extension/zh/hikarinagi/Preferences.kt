@@ -24,7 +24,7 @@ object Preferences {
             key = PREF_CATEGORY
             title = "内容分类"
             summary = "%s"
-            entries = arrayOf("漫画", "轻小说")
+            entries = arrayOf("漫画", "轻小说（条漫）")
             entryValues = arrayOf(CATEGORY_MANGA, CATEGORY_NOVEL)
             setDefaultValue(CATEGORY_MANGA)
         },
