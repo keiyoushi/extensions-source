@@ -28,24 +28,9 @@ import kotlin.time.Instant
 @Source
 abstract class RawUwU : KeiSource() {
     override val supportsFilterFetching = true
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter.POPULAR))
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$baseUrl/spa/genre/all".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "most_viewed")
-            .addQueryParameter("page", page.toString())
-            .build()
-        val response = client.get(url)
-        return parseMangasPage(response)
-    }
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/spa/latest-manga".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .build()
-        val response = client.get(url)
-        return parseMangasPage(response)
-    }
-
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter.LATEST))
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/spa".toHttpUrl().newBuilder()
 

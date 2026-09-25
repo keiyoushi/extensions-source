@@ -41,7 +41,12 @@ class SortFilter(state: Int = 1) :
             "Most viewed today" to "most_viewed_today",
         ),
         state,
-    )
+    ) {
+    companion object {
+        val LATEST = SortFilter(0)
+        val POPULAR = SortFilter(1)
+    }
+}
 
 @Serializable
 class Genre(val name: String, val path: String) {
