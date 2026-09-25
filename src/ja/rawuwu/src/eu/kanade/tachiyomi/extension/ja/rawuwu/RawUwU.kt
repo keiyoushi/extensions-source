@@ -17,36 +17,27 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Response
 import org.jsoup.Jsoup
 import kotlin.time.Instant
 
 @Source
 abstract class RawUwU : KeiSource() {
-
-    // --- BROWSE (POPULAR / LATEST / SEARCH) ---
-
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Header("Filters are ignored when using text search."),
-        StatusFilter(),
-        SortFilter(),
-        GenreFilter(genres),
-    )
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/spa/genre/all".toHttpUrl().newBuilder()
             .addQueryParameter("sort", "most_viewed")
             .addQueryParameter("page", page.toString())
             .build()
-        val result = client.get(url).parseAs<RawUwUResponseDto>()
-        return parseMangaListResponse(result)
+        val response = client.get(url)
+        return parseMangasPage(response)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/spa/latest-manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val result = client.get(url).parseAs<RawUwUResponseDto>()
-        return parseMangaListResponse(result)
+        val response = client.get(url)
+        return parseMangasPage(response)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -66,11 +57,12 @@ abstract class RawUwU : KeiSource() {
             }
         }
         url.addQueryParameter("page", page.toString())
-        val result = client.get(url.build()).parseAs<RawUwUResponseDto>()
-        return parseMangaListResponse(result)
+        val response = client.get(url.build())
+        return parseMangasPage(response)
     }
 
-    private fun parseMangaListResponse(result: RawUwUResponseDto): MangasPage {
+    private fun parseMangasPage(response: Response): MangasPage {
+        val result = response.parseAs<RawUwUResponseDto>()
         val mangas = result.mangaList?.map { manga ->
             SManga.create().apply {
                 url = manga.mangaId.toString()
@@ -82,8 +74,6 @@ abstract class RawUwU : KeiSource() {
         val hasNextPage = result.pagi?.button?.next?.let { it > 0 } ?: false
         return MangasPage(mangas, hasNextPage)
     }
-
-    // --- DETAILS ---
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/raw/${manga.url}"
 
@@ -118,18 +108,15 @@ abstract class RawUwU : KeiSource() {
             }
         }
 
-        author = result.authors?.joinToString { it.authorName }
-        genre = result.tags?.joinToString { it.tagName }
+        author = result.authors?.joinToString { it.authorName }?.ifEmpty { null }
+        genre = result.tags?.joinToString { it.tagName }?.ifEmpty { null }
 
-        val isActive = detail.mangaStatus
-        status = when (isActive) {
+        status = when (detail.mangaStatus) {
             true -> SManga.COMPLETED
             false -> SManga.ONGOING
             else -> SManga.UNKNOWN
         }
     }
-
-    // --- CHAPTERS ---
 
     private fun parseChapterList(result: MangaDetailResponseDto): List<SChapter> {
         val mangaId = result.detail?.mangaId ?: throw Exception("Could not find chapters")
@@ -137,17 +124,14 @@ abstract class RawUwU : KeiSource() {
 
         return chaptersArray.map { chapter ->
             SChapter.create().apply {
-                val num = chapter.chapterNumber!!
-                val formattedNum = if (num % 1.0 == 0.0) num.toInt().toString() else num.toString()
+                val formattedNum = chapter.chapterNumber!!.toString().removeSuffix(".0")
                 url = "/read/$mangaId/chapter-$formattedNum"
                 val title = chapter.chapterTitle?.trim()
                 name = if (!title.isNullOrBlank()) "Ch. $formattedNum - $title" else "Chapter $formattedNum"
-                date_upload = parseDate(chapter.chapterDatePublished ?: "")
+                date_upload = Instant.tryParse(chapter.chapterDatePublished)
             }
         }
     }
-
-    // --- PAGES ---
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val segments = baseUrl.toHttpUrl().resolve(chapter.url)!!.pathSegments
@@ -160,14 +144,16 @@ abstract class RawUwU : KeiSource() {
         val serverUrl = chapterDetail.server ?: throw Exception("Could not server url")
         val htmlContent = chapterDetail.chapterContent ?: throw Exception("Could not find chapter pages")
 
-        val document = Jsoup.parseBodyFragment(htmlContent)
-
-        return document.select("img").mapIndexed { i, img ->
-            val rawPath = img.attr("data-src").removePrefix("/")
-
-            Page(i, imageUrl = "$serverUrl/$rawPath")
+        val document = Jsoup.parseBodyFragment(htmlContent, serverUrl)
+        return document.select("img").mapIndexed { index, image ->
+            Page(index, imageUrl = image.absUrl("data-src"))
         }
     }
 
-    private fun parseDate(dateStr: String?): Long = Instant.tryParse(dateStr)
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        Filter.Header("Filters are ignored when using text search."),
+        StatusFilter(),
+        SortFilter(),
+        GenreFilter(genres),
+    )
 }
