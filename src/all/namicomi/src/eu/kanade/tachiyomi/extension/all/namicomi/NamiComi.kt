@@ -4,39 +4,67 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.AbstractTagDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.ChapterDataDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ChapterListDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.ContentRatingDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.CoverArtDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityAccessMapDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityAccessRequestDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityAccessRequestItemDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.EntityDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaDataDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaListDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.OrganizationDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.PageListDto
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.PaginatedResponseDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.StatusDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.TagDto
+import eu.kanade.tachiyomi.extension.all.namicomi.dto.UnknownEntity
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.encodeToString
-import okhttp3.CacheControl
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.plus
+import kotlinx.serialization.modules.polymorphic
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import okio.IOException
-import rx.Observable
+import java.util.Locale
+import kotlin.collections.orEmpty
+import kotlin.time.Instant
 
 @Source
 abstract class NamiComi :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
+
+    private val apiUrl get() = "https://api.namicomi.com"
+    private val cdnUrl get() = "https://uploads.namicomi.com"
 
     private val extLang: String
         get() = when (lang) {
@@ -48,321 +76,380 @@ abstract class NamiComi :
             else -> lang
         }
 
-    override val supportsLatest = true
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    private val helper = NamiComiHelper(lang)
-
-    final override fun headersBuilder() = super.headersBuilder().apply {
-        set("Referer", "$baseUrl/")
-        set("Origin", baseUrl)
+    val json = Json(jsonInstance) {
+        serializersModule += SerializersModule {
+            polymorphic(EntityDto::class) {
+                defaultDeserializer { UnknownEntity.serializer() }
+            }
+        }
     }
 
-    override val client = network.client.newBuilder()
-        .addNetworkInterceptor { chain ->
+    private val preferences = getPreferences()
+
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addNetworkInterceptor { chain ->
             val response = chain.proceed(chain.request())
 
             if (response.code == 402) {
                 response.close()
-                throw IOException(helper.intl["error_payment_required"])
+                throw IOException("Payment required. Chapter requires a premium subscription")
             }
 
-            return@addNetworkInterceptor response
+            response
         }
-        .rateLimit(3)
-        .build()
-
-    private fun sortedMangaRequest(page: Int, orderBy: String): Request {
-        val url = NamiComiConstants.API_SEARCH_URL.toHttpUrl().newBuilder()
-            .addQueryParameter("order[$orderBy]", "desc")
-            .addQueryParameter("availableTranslatedLanguages[]", extLang)
-            .addQueryParameter("limit", NamiComiConstants.MANGA_LIMIT.toString())
-            .addQueryParameter("offset", helper.getMangaListOffset(page))
-            .addCommonIncludeParameters()
-            .build()
-
-        return GET(url, headers, CacheControl.FORCE_NETWORK)
+        rateLimit(3) { !it.encodedPath.contains("/covers/") }
     }
 
-    // Popular manga section
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$apiUrl/title/search".toHttpUrl().newBuilder()
+            .addQueryParameter("order[views]", "desc")
+            .addQueryParameter("availableTranslatedLanguages[]", extLang)
+            .addQueryParameter("limit", MANGA_LIMIT.toString())
+            .addQueryParameter("offset", (MANGA_LIMIT * (page - 1)).toString())
+            .addCommonIncludeParameters()
+            .build()
+        val response = client.get(url)
 
-    override fun popularMangaRequest(page: Int): Request = sortedMangaRequest(page, "views")
+        return mangaListParse(response)
+    }
 
-    override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$apiUrl/title/search".toHttpUrl().newBuilder()
+            .addQueryParameter("order[publishedAt]", "desc")
+            .addQueryParameter("availableTranslatedLanguages[]", extLang)
+            .addQueryParameter("limit", MANGA_LIMIT.toString())
+            .addQueryParameter("offset", (MANGA_LIMIT * (page - 1)).toString())
+            .addCommonIncludeParameters()
+            .build()
+        val response = client.get(url)
 
-    // Latest manga section
-
-    override fun latestUpdatesRequest(page: Int): Request = sortedMangaRequest(page, "publishedAt")
-
-    override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
+        return mangaListParse(response)
+    }
 
     private fun mangaListParse(response: Response): MangasPage {
-        if (response.code == 204) {
-            return MangasPage(emptyList(), false)
-        }
-
-        val mangaListDto = response.parseAs<MangaListDto>()
-        val mangaList = mangaListDto.data.map { mangaDataDto ->
-            helper.createManga(
-                mangaDataDto,
-                extLang,
-                preferences.coverQuality,
-            )
-        }
+        val mangaListDto = response.parseAs<MangaListDto>(json)
+        val mangaList = mangaListDto.data.map { it.toSManga() }
 
         return MangasPage(mangaList, mangaListDto.meta.hasNextPage)
     }
 
-    // Search manga section
+    private fun MangaDataDto.toSManga(): SManga {
+        val attr = attributes!!
+        val extLocale = Locale.forLanguageTag(extLang)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
+        return SManga.create().apply {
+            initialized = true
+            url = id
+            description = attr.description[lang] ?: attr.description["en"]
+            author = relationships
+                .filterIsInstance<OrganizationDto>()
+                .mapNotNull { it.attributes?.name }
+                .distinct()
+                .joinToString()
+            status = when (attr.publicationStatus) {
+                StatusDto.ONGOING -> SManga.ONGOING
+                StatusDto.CANCELLED -> SManga.CANCELLED
+                StatusDto.COMPLETED -> SManga.COMPLETED
+                StatusDto.HIATUS -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
             }
-            val id = url.pathSegments[2]
-            return fetchSearchManga(page, "${NamiComiConstants.PREFIX_ID_SEARCH}$id", filters)
+            genre = buildList {
+                val genresMap = relationships
+                    .filterIsInstance<AbstractTagDto>()
+                    .groupBy({ it.attributes!!.group }) { tagDto ->
+                        tagDto.attributes!!.name[extLang] ?: tagDto.attributes!!.name["en"]
+                    }
+                    .mapValues { it.value.filterNotNull().sorted() }
+
+                arrayOf("content-warnings", "format", "genre", "theme")
+                    .flatMapTo(this) { genresMap[it].orEmpty() }
+
+                attr.contentRating
+                    .takeIf { it != ContentRatingDto.SAFE }
+                    ?.also { add("Content Rating: $it") }
+
+                attr.originalLanguage
+                    ?.let { Locale.forLanguageTag(it) }
+                    ?.getDisplayName(extLocale)
+                    ?.replaceFirstChar { it.uppercase(extLocale) }
+                    ?.also { add(it) }
+            }.joinToString()
+
+            attributes.title.let { titleMap ->
+                title = titleMap[extLang] ?: titleMap["en"] ?: titleMap.values.first()
+            }
+
+            relationships
+                .filterIsInstance<CoverArtDto>()
+                .firstOrNull()
+                ?.attributes?.fileName
+                ?.also { coverFileName ->
+                    val coverSuffix = preferences.coverQuality
+                    thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
+                        true -> "$cdnUrl/covers/$id/$coverFileName$coverSuffix"
+                        else -> "$cdnUrl/covers/$id/$coverFileName"
+                    }
+                }
         }
-        return super.fetchSearchManga(page, query, filters)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith(NamiComiConstants.PREFIX_ID_SEARCH)) {
-            val mangaId = query.removePrefix(NamiComiConstants.PREFIX_ID_SEARCH)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$apiUrl/title/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("limit", MANGA_LIMIT.toString())
+            addQueryParameter("offset", (MANGA_LIMIT * (page - 1)).toString())
+            addCommonIncludeParameters()
 
-            if (mangaId.isEmpty()) {
-                throw Exception(helper.intl["invalid_manga_id"])
+            query.replace(whitespaceRegex, " ").trim().takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("title", it)
             }
 
-            // If the query is an ID, return the manga directly
-            val url = NamiComiConstants.API_SEARCH_URL.toHttpUrl().newBuilder()
-                .addQueryParameter("ids[]", query.removePrefix(NamiComiConstants.PREFIX_ID_SEARCH))
+            filters.filterIsInstance<UrlQueryFilter>()
+                .forEach { filter -> filter.addQueryParameter(this, extLang) }
+        }.build()
+
+        val response = client.get(url)
+
+        return mangaListParse(response)
+    }
+
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val groupOrder = listOf("content-warnings", "format", "genre", "theme")
+
+        val tags = client.get("$apiUrl/title/tags")
+            .parseAs<PaginatedResponseDto<TagDto>>(json).data
+            .groupBy { it.attributes!!.group }
+            .filterKeys { it in groupOrder }
+            .mapValues { (_, tagList) ->
+                tagList
+                    .map { it.id to (it.attributes!!.name[extLang] ?: it.attributes.name["en"]!!) }
+                    .sortedBy { it.second }
+            }
+            .toList()
+            .sortedBy { groupOrder.indexOf(it.first) }
+            .toMap()
+
+        return tags.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = mutableListOf<Filter<*>>(
+            HasAvailableChaptersFilter(),
+            ContentRatingList(),
+            StatusList(),
+            SortFilter(),
+        )
+
+        data?.parseAs<Map<String, List<Pair<String, String>>>>()?.also { tagGroups ->
+            filters.add(TagsFilterMode())
+            val mapping = mapOf(
+                "content-warnings" to "Content",
+                "format" to "Format",
+                "genre" to "Genre",
+                "theme" to "Theme",
+            )
+            tagGroups.forEach { (group, tags) ->
+                filters.add(
+                    TagList(mapping[group]!!, tags.map { Tag(it.first, it.second) }),
+                )
+            }
+        }
+
+        return FilterList(filters)
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/$extLang/title/${manga.url}"
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val updatedManga = async {
+            if (!fetchDetails) {
+                return@async manga
+            }
+
+            val url = "$apiUrl/title/${manga.url}".toHttpUrl().newBuilder()
                 .addCommonIncludeParameters()
                 .build()
 
-            return GET(url, headers, CacheControl.FORCE_NETWORK)
+            client.get(url).parseAs<MangaDto>(json).data?.toSManga() ?: manga
+        }
+        val updatedChapters = async {
+            if (!fetchChapters) {
+                return@async chapters
+            }
+
+            getChapterList(manga.url)
         }
 
-        val tempUrl = NamiComiConstants.API_SEARCH_URL.toHttpUrl().newBuilder()
-            .addQueryParameter("limit", NamiComiConstants.MANGA_LIMIT.toString())
-            .addQueryParameter("offset", helper.getMangaListOffset(page))
-            .addCommonIncludeParameters()
+        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+    }
 
-        val actualQuery = query.replace(NamiComiConstants.whitespaceRegex, " ")
-        if (actualQuery.isNotBlank()) {
-            tempUrl.addQueryParameter("title", actualQuery)
+    private suspend fun getChapterList(mangaId: String): List<SChapter> {
+        val firstPage = client.get(chapterListUrl(mangaId, 0)).parseAs<ChapterListDto>(json)
+
+        val limit = firstPage.meta.limit
+        val total = firstPage.meta.total
+
+        val remainingPages = coroutineScope {
+            (limit until total step limit).map { offset ->
+                async {
+                    client.get(chapterListUrl(mangaId, offset)).parseAs<ChapterListDto>(json)
+                }
+            }.awaitAll()
         }
 
-        val finalUrl = helper.filters.addFiltersToUrl(
-            url = tempUrl,
-            filters = filters.ifEmpty { getFilterList() },
-            extLang = extLang,
-        )
+        val chapters = (listOf(firstPage) + remainingPages)
+            .flatMap { it.data }
+            .toMutableList()
 
-        return GET(finalUrl, headers, CacheControl.FORCE_NETWORK)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    // Manga Details section
-
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/$extLang/title/${manga.url}/${helper.titleToSlug(manga.title)}"
-
-    /**
-     * Get the API endpoint URL for the entry details.
-     */
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = ("${NamiComiConstants.API_MANGA_URL}/${manga.url}").toHttpUrl().newBuilder()
-            .addCommonIncludeParameters()
-            .build()
-
-        return GET(url, headers, CacheControl.FORCE_NETWORK)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.parseAs<MangaDto>()
-
-        return helper.createManga(
-            manga.data!!,
-            extLang,
-            preferences.coverQuality,
-        )
-    }
-
-    // Chapter list section
-
-    /**
-     * Get the API endpoint URL for the first page of chapter list.
-     */
-    override fun chapterListRequest(manga: SManga): Request = paginatedChapterListRequest(manga.url, 0)
-
-    /**
-     * Required because the chapter list API endpoint is paginated.
-     */
-    private fun paginatedChapterListRequest(mangaId: String, offset: Int): Request {
-        val url = NamiComiConstants.API_CHAPTER_URL.toHttpUrl().newBuilder()
-            .addQueryParameter("titleId", mangaId)
-            .addQueryParameter("includes[]", NamiComiConstants.ORGANIZATION)
-            .addQueryParameter("limit", "200")
-            .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("translatedLanguages[]", extLang)
-            .addQueryParameter("order[volume]", "desc")
-            .addQueryParameter("order[chapter]", "desc")
-            .toString()
-
-        return GET(url, headers, CacheControl.FORCE_NETWORK)
-    }
-
-    /**
-     * Requests information about gated chapters (requiring payment & login).
-     */
-    private fun accessibleChapterListRequest(chapterIds: List<String>): Request = POST(
-        NamiComiConstants.API_GATING_CHECK_URL,
-        headers,
-        chapterIds
-            .map { EntityAccessRequestItemDto(it, NamiComiConstants.CHAPTER) }
-            .let { helper.json.encodeToString(EntityAccessRequestDto(it)) }
-            .toRequestBody(),
-        CacheControl.FORCE_NETWORK,
-    )
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        if (response.code == 204) {
+        if (chapters.isEmpty()) {
             return emptyList()
         }
 
-        val mangaId = response.request.url.queryParameter("titleId")!!
+        val accessibleChapterMap: Map<String, Boolean> = coroutineScope {
+            chapters.map { it.id }.chunked(200).map { chapterIds ->
+                async {
+                    val url = "$apiUrl/gating/check"
+                    val body = EntityAccessRequestDto(
+                        entities = chapterIds.map { EntityAccessRequestItemDto(it, "chapter") },
+                    ).toJsonRequestBody(json)
+                    val response = client.post(url, body)
 
-        val chapterListResponse = response.parseAs<ChapterListDto>()
-        val chapterListResults = chapterListResponse.data.toMutableList()
-        var offset = chapterListResponse.meta.offset
-        var hasNextPage = chapterListResponse.meta.hasNextPage
-
-        // Max results that can be returned is 200 so need to make more API
-        // calls if the chapter list response has a next page.
-        while (hasNextPage) {
-            offset += chapterListResponse.meta.limit
-
-            val newRequest = paginatedChapterListRequest(mangaId, offset)
-            val newResponse = client.newCall(newRequest).execute()
-            val newChapterList = newResponse.parseAs<ChapterListDto>()
-            chapterListResults.addAll(newChapterList.data)
-
-            hasNextPage = newChapterList.meta.hasNextPage
+                    response.parseAs<EntityAccessMapDto>(json)
+                        .data?.attributes?.map ?: emptyMap()
+                }
+            }.awaitAll().fold(mutableMapOf()) { acc, map ->
+                acc.apply { putAll(map) }
+            }
         }
 
-        // If there are no chapters, don't attempt to check gating
-        if (chapterListResults.isEmpty()) {
-            return emptyList()
-        }
-
-        // Split chapter access checks into chunks of 200 chapters
-        val chapterListResultsChunks = chapterListResults.map { it.id }.chunked(200)
-        val accessibleChapterMap: MutableMap<String, Boolean> = mutableMapOf()
-
-        for (chapterIds in chapterListResultsChunks) {
-            val gatingCheckRequest = accessibleChapterListRequest(chapterIds)
-            val gatingCheckResponse = client.newCall(gatingCheckRequest).execute()
-            accessibleChapterMap += gatingCheckResponse.parseAs<EntityAccessMapDto>()
-                .data?.attributes?.map ?: emptyMap()
-        }
-
-        return chapterListResults.mapNotNull {
+        return chapters.mapNotNull {
             val isAccessible = accessibleChapterMap[it.id]!!
             when {
-                // Chapter can be viewed
-                isAccessible -> helper.createChapter(it)
-
-                // Chapter cannot be viewed and user wants to see locked chapters
+                isAccessible -> it.toSChapter()
                 preferences.showLockedChapters -> {
-                    helper.createChapter(it).apply {
-                        name = "${NamiComiConstants.LOCK_SYMBOL} $name"
+                    it.toSChapter().apply {
+                        name = "🔒 $name"
                     }
                 }
-
-                // Ignore locked chapters otherwise
                 else -> null
             }
         }
     }
 
+    private fun chapterListUrl(mangaId: String, offset: Int): HttpUrl = "$apiUrl/chapter".toHttpUrl().newBuilder()
+        .addQueryParameter("titleId", mangaId)
+        .addQueryParameter("includes[]", "organization")
+        .addQueryParameter("limit", "200")
+        .addQueryParameter("offset", offset.toString())
+        .addQueryParameter("translatedLanguages[]", extLang)
+        .addQueryParameter("order[volume]", "desc")
+        .addQueryParameter("order[chapter]", "desc")
+        .build()
+
+    private fun ChapterDataDto.toSChapter(): SChapter {
+        val attr = attributes!!
+        val chapterName = mutableListOf<String>()
+
+        attr.volume?.let {
+            if (it.isNotEmpty()) {
+                chapterName.add("Vol.$it")
+            }
+        }
+
+        attr.chapter?.let {
+            if (it.isNotEmpty()) {
+                chapterName.add("Ch.$it")
+            }
+        }
+
+        attr.name?.let {
+            if (it.isNotEmpty()) {
+                if (chapterName.isNotEmpty()) {
+                    chapterName.add("-")
+                }
+                chapterName.add(it)
+            }
+        }
+
+        return SChapter.create().apply {
+            url = id
+            name = chapterName.joinToString(" ")
+            date_upload = Instant.tryParse(attr.publishAt)
+        }
+    }
+
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$extLang/chapter/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url
-        val url = "${NamiComiConstants.API_URL}/images/chapter/$chapterId?newQualities=true"
-        return GET(url, headers, CacheControl.FORCE_NETWORK)
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get("$apiUrl/images/chapter/${chapter.url}?newQualities=true")
+            .parseAs<PageListDto>(json).data
+            ?: return emptyList()
 
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterId = response.request.url.pathSegments.last()
-        val pageListDataDto = response.parseAs<PageListDto>().data ?: return emptyList()
+        val hash = data.hash
+        val prefix = "${data.baseUrl}/chapter/${chapter.url}/$hash"
 
-        val hash = pageListDataDto.hash
-        val prefix = "${pageListDataDto.baseUrl}/chapter/$chapterId/$hash"
-
-        val urls = if (preferences.useDataSaver) {
-            pageListDataDto.low.map { prefix + "/low/${it.filename}" }
+        return if (preferences.useDataSaver) {
+            data.low.mapIndexed { idx, it -> Page(idx, imageUrl = prefix + "/low/${it.filename}") }
         } else {
-            pageListDataDto.source.map { prefix + "/source/${it.filename}" }
-        }
-
-        return urls.mapIndexed { index, url ->
-            Page(index, url, url)
+            data.source.mapIndexed { idx, it -> Page(idx, imageUrl = prefix + "/source/${it.filename}") }
         }
     }
-
-    override fun imageUrlParse(response: Response): String = ""
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val coverQualityPref = ListPreference(screen.context).apply {
-            key = NamiComiConstants.getCoverQualityPreferenceKey(extLang)
-            title = helper.intl["cover_quality"]
-            entries = NamiComiConstants.getCoverQualityPreferenceEntries(helper.intl)
-            entryValues = NamiComiConstants.getCoverQualityPreferenceEntryValues()
-            setDefaultValue(NamiComiConstants.getCoverQualityPreferenceDefaultValue())
+        ListPreference(screen.context).apply {
+            key = "${COVER_QUALITY_PREF}_$extLang"
+            title = "Cover quality"
+            entries = arrayOf("Original", "Medium", "Low")
+            entryValues = arrayOf("", ".512.jpg", ".256.jpg")
+            setDefaultValue("")
             summary = "%s"
-        }
+        }.also(screen::addPreference)
 
-        val dataSaverPref = SwitchPreferenceCompat(screen.context).apply {
-            key = NamiComiConstants.getDataSaverPreferenceKey(extLang)
-            title = helper.intl["data_saver"]
-            summary = helper.intl["data_saver_summary"]
+        SwitchPreferenceCompat(screen.context).apply {
+            key = "${DATA_SAVER_PREF}_$extLang"
+            title = "Data saver"
+            summary = "Enables smaller, more compressed images"
             setDefaultValue(false)
-        }
+        }.also(screen::addPreference)
 
-        val showLockedChaptersPref = SwitchPreferenceCompat(screen.context).apply {
-            key = NamiComiConstants.getShowLockedChaptersPreferenceKey(extLang)
-            title = helper.intl["show_locked_chapters"]
-            summary = helper.intl["show_locked_chapters_summary"]
+        SwitchPreferenceCompat(screen.context).apply {
+            key = "${SHOW_LOCKED_CHAPTERS_PREF}_$extLang"
+            title = "Show locked/paywalled chapters"
+            summary = "Display chapters that require an account with a premium subscription"
             setDefaultValue(false)
-        }
-
-        screen.addPreference(coverQualityPref)
-        screen.addPreference(dataSaverPref)
-        screen.addPreference(showLockedChaptersPref)
+        }.also(screen::addPreference)
     }
 
-    override fun getFilterList(): FilterList = helper.filters.getFilterList(helper.intl)
-
-    private fun HttpUrl.Builder.addCommonIncludeParameters() = this.addQueryParameter("includes[]", NamiComiConstants.COVER_ART)
-        .addQueryParameter("includes[]", NamiComiConstants.ORGANIZATION)
-        .addQueryParameter("includes[]", NamiComiConstants.TAG)
-        .addQueryParameter("includes[]", NamiComiConstants.PRIMARY_TAG)
-        .addQueryParameter("includes[]", NamiComiConstants.SECONDARY_TAG)
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        helper.json.decodeFromString(body.string())
+    private fun HttpUrl.Builder.addCommonIncludeParameters() = apply {
+        addQueryParameter("includes[]", "cover_art")
+        addQueryParameter("includes[]", "organization")
+        addQueryParameter("includes[]", "tag")
+        addQueryParameter("includes[]", "primary_tag")
+        addQueryParameter("includes[]", "secondary_tag")
+        addQueryParameter("types[]", "manhua")
+        addQueryParameter("types[]", "manwha")
+        addQueryParameter("types[]", "manga")
+        addQueryParameter("types[]", "comic")
     }
 
     private val SharedPreferences.coverQuality
-        get() = getString(NamiComiConstants.getCoverQualityPreferenceKey(extLang), "")
+        get() = getString("${COVER_QUALITY_PREF}_$extLang", "")
 
     private val SharedPreferences.useDataSaver
-        get() = getBoolean(NamiComiConstants.getDataSaverPreferenceKey(extLang), false)
+        get() = getBoolean("${DATA_SAVER_PREF}_$extLang", false)
 
     private val SharedPreferences.showLockedChapters
-        get() = getBoolean(NamiComiConstants.getShowLockedChaptersPreferenceKey(extLang), false)
+        get() = getBoolean("${SHOW_LOCKED_CHAPTERS_PREF}_$extLang", false)
 }
+
+const val MANGA_LIMIT = 20
+private val whitespaceRegex = "\\s+".toRegex()
+private const val COVER_QUALITY_PREF = "thumbnailQuality"
+private const val DATA_SAVER_PREF = "dataSaver"
+private const val SHOW_LOCKED_CHAPTERS_PREF = "showLockedChapters"

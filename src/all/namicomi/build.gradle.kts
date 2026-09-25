@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "NamiComi"
-    versionCode = 6
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf(
         "en", "ar", "bg", "ca", "zh-Hans", "zh-Hant", "hr", "cs", "da", "nl",
@@ -24,12 +24,6 @@ keiyoushi {
     }
 
     deeplink {
-        host("namicomi.com")
         path("/.*/title/..*")
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:i18n"))
 }
