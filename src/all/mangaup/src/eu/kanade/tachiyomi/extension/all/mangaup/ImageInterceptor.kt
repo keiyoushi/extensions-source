@@ -13,25 +13,12 @@ import javax.crypto.spec.SecretKeySpec
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val url = request.url
-        val fragment = url.fragment
-
-        if (fragment.isNullOrEmpty()) {
-            return chain.proceed(request)
-        }
-
-        val parts = fragment.split("#")
-        val key = parts.getOrNull(0)?.removePrefix("key=")
-        val iv = parts.getOrNull(1)?.removePrefix("iv=")
-
-        if (key.isNullOrEmpty() || iv.isNullOrEmpty()) {
-            return chain.proceed(request)
-        }
-
         val response = chain.proceed(request)
+        val fragment = request.url.fragment
 
-        if (!response.isSuccessful) return response
+        if (fragment.isNullOrEmpty() || !fragment.contains(":") || !response.isSuccessful) return response
 
+        val (key, iv) = fragment.split(":")
         val secretKey = SecretKeySpec(key.decodeHex(), "AES")
         val ivSpec = IvParameterSpec(iv.decodeHex())
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
