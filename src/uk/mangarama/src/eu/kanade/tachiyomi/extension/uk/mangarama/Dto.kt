@@ -44,3 +44,11 @@ class PageJSON(
 class Images(
     val pages: List<String>,
 )
+
+@Serializable
+class FiltersData(
+    val status: List<Pair<String, String>>? = emptyList(),
+    val genres: List<Pair<String, String>>? = emptyList(),
+    val type: List<Pair<String, String>>? = emptyList(),
+    val translators: List<Pair<String, String>>? = emptyList(),
+)
