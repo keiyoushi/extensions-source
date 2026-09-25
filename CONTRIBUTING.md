@@ -1158,7 +1158,7 @@ import keiyoushi.utils.rc4
 val keyBytes = "616263".decodeHex()
 
 // Symmetric RC4 stream cipher (serves for both encryption and decryption; skip defaults to 0):
-val decrypted = rc4(key = keyBytes, data = cipherBytes)
+val decrypted = cipherBytes.rc4(key = keyBytes)
 ```
 
 ##### Binary endian helpers
