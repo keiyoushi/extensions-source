@@ -4,7 +4,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class HeaderResponse(
-    val numOfScenes: Int,
     val contentInfos: List<ContentInfo>,
     val dk: String?,
 )
