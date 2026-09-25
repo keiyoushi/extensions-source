@@ -29,12 +29,12 @@ abstract class ColorcitoScan : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val projects = getComicsList().sortedByDescending { it.trending?.visitas ?: 0L }
-        return paginate(projects, page)
+        return MangasPage(projects.map { it.toSManga() }, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val projects = getComicsList().sortedByDescending { Instant.tryParse(it.actualizacionCap) }
-        return paginate(projects, page)
+        return MangasPage(projects.map { it.toSManga() }, false)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -105,18 +105,7 @@ abstract class ColorcitoScan : KeiSource() {
             }
         }
 
-        return paginate(projects, page)
-    }
-
-    private fun paginate(projects: List<ComicDataDto>, page: Int): MangasPage {
-        val fromIndex = (page - 1) * PAGE_SIZE
-        if (fromIndex >= projects.size) {
-            return MangasPage(emptyList(), false)
-        }
-        val toIndex = minOf(fromIndex + PAGE_SIZE, projects.size)
-        val items = projects.subList(fromIndex, toIndex).map { it.toSManga() }
-        val hasNextPage = toIndex < projects.size
-        return MangasPage(items, hasNextPage)
+        return MangasPage(projects.map { it.toSManga() }, false)
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
@@ -143,9 +132,7 @@ abstract class ColorcitoScan : KeiSource() {
         val slug = manga.url.trimEnd('/').substringAfterLast('/')
         val response = client.get("$baseUrl/api/showProject/$slug").parseAs<ProjectDetailsResponseDto>()
         val project = response.response
-        val updatedManga = if (fetchDetails) project.toSManga() else manga
-        val updatedChapters = if (fetchChapters) project.toChapterList() else chapters
-        return SMangaUpdate(updatedManga, updatedChapters)
+        return SMangaUpdate(project.toSManga(), project.toChapterList())
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -159,15 +146,7 @@ abstract class ColorcitoScan : KeiSource() {
         }
     }
 
-    private suspend fun getComicsList(): List<ComicDataDto> = try {
-        client.get("$baseUrl/api/comics").parseAs<ComicsResponseDto>().response
-    } catch (_: Exception) {
-        emptyList()
-    }
+    private suspend fun getComicsList(): List<ComicDataDto> = client.get("$baseUrl/api/comics").parseAs<ComicsResponseDto>().response
 
     private fun extractDirectImageUrl(url: String): String = url.toHttpUrlOrNull()?.queryParameter("url") ?: url
-
-    companion object {
-        private const val PAGE_SIZE = 30
-    }
 }
