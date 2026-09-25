@@ -87,8 +87,7 @@ abstract class RawUwU : KeiSource() {
     private fun parseMangaDetails(result: MangaDetailResponseDto): SManga = SManga.create().apply {
         val detail = result.detail ?: throw Exception("Could not find manga details")
         title = detail.mangaName
-        thumbnail_url = detail.mangaCoverImgFull
-            ?: detail.mangaCoverImg
+        thumbnail_url = detail.mangaCoverImg
 
         val descriptionText = detail.mangaDescription
         val altName = detail.mangaOthersName
