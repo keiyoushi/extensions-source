@@ -37,8 +37,10 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import okio.Buffer
 import org.json.JSONObject
 import org.jsoup.nodes.Document
@@ -70,8 +72,8 @@ abstract class Comix :
         .addInterceptor { chain ->
             val request = chain.request()
 
-            val response = chain.proceed(request)
-            if (response.code != 404) return@addInterceptor response
+            var response = proceedWithRetry(chain, request)
+            if (response.isSuccessful) return@addInterceptor response
 
             val url = request.url.toString()
             val fallbacks = listOf("/i5/", "/si/", "/i/", "/sii/", "/ii/")
@@ -80,15 +82,39 @@ abstract class Comix :
 
             if (fallbacks.isEmpty()) return@addInterceptor response
 
-            var lastResponse = response
             for (fallbackUrl in fallbacks) {
-                lastResponse.close()
-                lastResponse = chain.proceed(request.newBuilder().url(fallbackUrl).build())
-                if (lastResponse.code != 404) break
+                response.close()
+                response = proceedWithRetry(chain, request.newBuilder().url(fallbackUrl).build())
+                if (response.isSuccessful) break
             }
-            lastResponse
+            response
         }
         .rateLimit(5)
+
+    private fun proceedWithRetry(chain: Interceptor.Chain, request: Request): Response {
+        var response = chain.proceed(request)
+        if (response.isSuccessful) return response
+
+        for (attempt in 1..10) {
+            if (response.code !in SERVER_ERROR_CODES && response.code != 404) break
+
+            response.close()
+            runCatching { Thread.sleep(1500) }
+
+            val urlBuilder = request.url.newBuilder()
+                .setQueryParameter("r", attempt.toString())
+
+            if (!request.url.queryParameterNames.contains("8")) {
+                urlBuilder.addQueryParameter("8", null)
+            }
+
+            val retryUrl = urlBuilder.build()
+            response = chain.proceed(request.newBuilder().url(retryUrl).build())
+            if (response.isSuccessful) break
+        }
+
+        return response
+    }
 
     override fun Headers.Builder.configureHeaders() = add("Accept", "*/*")
 
@@ -1087,5 +1113,6 @@ abstract class Comix :
         private const val URI_COMPONENT_SAFE_CHARS = "-_.!~*'()"
         private const val TAG_ID_CACHE_SIZE = 50
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
+        private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
     }
 }
