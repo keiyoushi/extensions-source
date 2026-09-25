@@ -30,6 +30,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -390,7 +392,7 @@ abstract class XCOMIC :
                     comicId = comicId,
                     label = probe.subName.normalizeEditionLabel(),
                     lastPublicAt = probe.chapterUpTo?.data?.datePublic,
-                    chapterCount = probe.chapsNormal ?: 0,
+                    chapterCount = probe.chapsNormal,
                     translatedLanguage = probe.translatedLanguage,
                 )
             }
@@ -410,7 +412,12 @@ abstract class XCOMIC :
         val titleLastPublic = titleLastPublicAt?.takeIf { it > 0L } ?: return false
         val fetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull()?.takeIf { it > 0L } ?: return false
         val previousTitleLastPublic = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull()?.takeIf { it > 0L } ?: return false
-        if (!editions.hasUsableFreshness || editions.sources.any { (it.lastPublicAt ?: Long.MAX_VALUE) > fetchedAt }) return false
+        if (!editions.hasUsableFreshness || editions.sources.any { edition ->
+                edition.lastPublicAt?.takeIf { it > 0L }?.let { it > fetchedAt } == true
+            }
+        ) {
+            return false
+        }
 
         return previousTitleLastPublic == titleLastPublic &&
             manga.memo[MEMO_EDITION_FINGERPRINT]?.string == editionFingerprint &&
@@ -458,16 +465,18 @@ abstract class XCOMIC :
         val comicId: String,
         val label: String?,
         val lastPublicAt: Long?,
-        val chapterCount: Int,
+        val chapterCount: Int?,
         val translatedLanguage: String?,
     )
 
     private class TitleEditions(val sources: List<ChapterEdition>) {
         val bestComicId: String?
-            get() = sources.maxByOrNull { it.chapterCount }?.comicId
+            get() = sources.maxByOrNull { it.chapterCount ?: Int.MIN_VALUE }?.comicId
 
         val hasUsableFreshness: Boolean
-            get() = sources.isNotEmpty() && sources.all { (it.lastPublicAt ?: 0L) > 0L }
+            get() = sources.isNotEmpty() && sources.all { edition ->
+                (edition.lastPublicAt ?: 0L) > 0L || edition.chapterCount == 0
+            }
 
         fun fingerprint(): String = buildJsonArray {
             sources.sortedBy { it.comicId }.forEach { edition ->
@@ -476,7 +485,7 @@ abstract class XCOMIC :
                         put("comicId", edition.comicId)
                         put("label", edition.label.orEmpty())
                         put("lastPublicAt", edition.lastPublicAt ?: 0L)
-                        put("chapterCount", edition.chapterCount)
+                        put("chapterCount", edition.chapterCount?.let { JsonPrimitive(it) } ?: JsonNull)
                         put("translatedLanguage", edition.translatedLanguage.orEmpty())
                     },
                 )
