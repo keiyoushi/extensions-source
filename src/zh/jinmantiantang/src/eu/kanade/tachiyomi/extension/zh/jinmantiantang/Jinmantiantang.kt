@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
 import android.util.Base64
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -48,10 +49,21 @@ abstract class Jinmantiantang :
     KeiSource(),
     ConfigurableSource {
 
-    private val preferences = getPreferences()
+    // 首次加载时迁移旧版镜像列表
+    private val preferences = getPreferences { preferenceMigration() }
+
+    // baseUrl 跟随"使用镜像网址"设置
+    override val baseUrl: String
+        get() = "https://" + preferences.mirrorBaseUrl
+
+    private val updateUrlInterceptor = UpdateUrlInterceptor(preferences)
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        // 拦截器放最前：主站请求失败时自动拉取新镜像列表
+        interceptors().add(0, updateUrlInterceptor)
         addInterceptor(ScrambledImageInterceptor)
+        // 设置了账号密码时自动登录（cookie 与应用内置浏览器共享）
+        addInterceptor(LoginInterceptor(preferences, network.client, { baseUrl }, { headers }))
         // Add rate limit to fix manga thumbnail load failure
         rateLimit(3, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
     }
@@ -491,10 +503,32 @@ abstract class Jinmantiantang :
 
         EditTextPreference(context).apply {
             key = USERNAME_PREF
-            title = "用户名（用于收藏夹）"
-            summary = "在浏览本图源时，用应用内置浏览器打开网页并登录账号，登录态会自动同步到插件（无需填写密码）。\n" +
-                "留空时插件会尝试从登录状态自动识别用户名；识别失败时请在此手动填写（顶栏账号即用户名）。"
+            title = "用户名（登录账号 / 收藏夹）"
+            summary = "填写用户名并设置密码后，插件会自动登录，无需再打开内置浏览器手动登录。\n" +
+                "只在网页登录的用户可不填密码：用户名留空时插件会自动识别登录状态用于收藏夹；识别失败请在此手动填写（顶栏账号即用户名）。"
             setDefaultValue("")
+            // 修改账号时清除会话 cookie，让新凭据立即生效
+            setOnPreferenceChangeListener { _, _ ->
+                clearSessionCookies(baseUrl)
+                true
+            }
+        }.let(screen::addPreference)
+
+        // 密码设置项（与用户名一起构成自动登录凭据）
+        EditTextPreference(context).apply {
+            key = PASSWORD_PREF
+            title = "密码"
+            summary = if (preferences.getString(key, "").isNullOrEmpty()) "未设置，部分漫画需要登录才能观看" else "已设置"
+            dialogTitle = title
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            setOnPreferenceChangeListener { pref, newValue ->
+                (pref as EditTextPreference).summary =
+                    if ((newValue as String).isEmpty()) "未设置，部分漫画需要登录才能观看" else "已设置"
+                clearSessionCookies(baseUrl)
+                true
+            }
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(context).apply {
@@ -524,13 +558,13 @@ abstract class Jinmantiantang :
             }
         }.let(screen::addPreference)
 
-        getPreferenceList(context).forEach(screen::addPreference)
+        // 含"使用镜像网址"设置项
+        getPreferenceList(context, preferences, updateUrlInterceptor.isUpdated).forEach(screen::addPreference)
     }
 
     companion object {
         private const val PREFIX_ID_SEARCH_NO_COLON = "JM"
 
-        private const val USERNAME_PREF = "username"
         private const val FAVORITE_MANGA_SELECTOR = "div[id^='favorites_album_']"
         private const val CHECKIN_PREF = "auto_checkin"
         private const val CHECKIN_DATE_PREF = "last_checkin_date"
