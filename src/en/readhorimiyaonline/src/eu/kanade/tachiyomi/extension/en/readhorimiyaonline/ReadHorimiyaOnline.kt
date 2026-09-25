@@ -19,6 +19,7 @@ import java.util.Locale
 
 @Source
 abstract class ReadHorimiyaOnline : KeiSource() {
+    override val supportsLatest = false
 
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -27,10 +28,7 @@ abstract class ReadHorimiyaOnline : KeiSource() {
     }
 
     // ========================= Latest =========================
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get(baseUrl)
-        return MangasPage(listOf(parseMangaDetails(response.asJsoup())), false)
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ========================= Search =========================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
