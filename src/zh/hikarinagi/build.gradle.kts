@@ -15,7 +15,3 @@ keiyoushi {
         baseUrl = "https://www.hikarinagi.org"
     }
 }
-
-dependencies {
-    implementation(project(":lib:textinterceptor"))
-}

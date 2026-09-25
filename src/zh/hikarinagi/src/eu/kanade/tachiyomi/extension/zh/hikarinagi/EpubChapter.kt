@@ -28,8 +28,6 @@ private val INLINE_TAGS = setOf(
     "mark", "q", "rp", "rt", "ruby", "s", "small", "span", "strike", "strong", "sub", "sup", "time", "u", "wbr",
 )
 
-private val IMAGE_TAGS = setOf("img", "image")
-
 private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp")
 
 /**
@@ -81,7 +79,7 @@ private fun Element.collectBlocks(base: String, images: Map<String, ByteArray>, 
     val containers = children().filter { it.tagName() !in INLINE_TAGS }
     if (containers.isEmpty()) {
         text().takeIf { it.isNotBlank() }?.let { out.add(EpubBlock.Text(it)) }
-        select(IMAGE_TAGS.joinToString()).mapNotNullTo(out) { it.toImageBlock(base, images) }
+        select("img, image").mapNotNullTo(out) { it.toImageBlock(base, images) }
         return
     }
 

@@ -32,7 +32,7 @@ class NovelImageInterceptor : Interceptor {
 
         return Response.Builder()
             .request(request)
-            .protocol(Protocol.HTTP_1_1)
+            .protocol(Protocol.HTTP_2)
             .code(200)
             .message("OK")
             .body(file.source().buffer().asResponseBody(file.mediaType(), file.length()))

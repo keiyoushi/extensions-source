@@ -10,12 +10,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.textinterceptor.TextInterceptor
-import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getArray
+import keiyoushi.utils.getBooleanOrNull
 import keiyoushi.utils.getInt
 import keiyoushi.utils.getLong
 import keiyoushi.utils.getObject
@@ -26,6 +25,8 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -45,14 +46,13 @@ abstract class Hikarinagi :
         Preferences.buildPreferences(screen.context, isNovelMode).forEach { screen.addPreference(it) }
     }
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(TextInterceptor()).addInterceptor(NovelImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(NovelTextInterceptor()).addInterceptor(NovelImageInterceptor())
 
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"
         val FILTER_PARAMS = arrayOf("sort", "region", "audience", "status", "decade", "magazine_id")
 
-        /** Characters of novel text rendered into a single page image. */
-        private const val PAGE_CHARS = 1000
+        private const val UNAVAILABLE_MESSAGE = "未收录本卷内容，暂无在线阅读"
     }
 
     private fun String?.ifNotBlank(action: (String) -> Unit) = this?.takeIf(String::isNotBlank)?.let(action)
@@ -78,38 +78,33 @@ abstract class Hikarinagi :
         return url.build()
     }
 
-    private fun parseBrowse(response: Response, toSManga: (JsonElement) -> SManga): MangasPage {
+    private fun parseBrowse(response: Response): MangasPage {
         val list = response.parseAs<JsonObject>().getObject("list")
-        val manga = list.getArray("items").map(toSManga)
+        val manga = list.getArray("items").map {
+            if (isNovelMode) it.parseAs<NovelItem>().toSManga() else it.parseAs<MangaItem>().toSManga()
+        }
         val hasNextPage = with(list.getObject("meta")) { getInt("page") < getInt("total_pages") }
         return MangasPage(manga, hasNextPage)
     }
 
-    private fun parseMangaBrowse(response: Response) = parseBrowse(response) { it.parseAs<MangaItem>().toSManga() }
-
-    private fun parseNovelBrowse(response: Response) = parseBrowse(response) { it.parseAs<NovelItem>().toSManga() }
-
-    override suspend fun getPopularManga(page: Int): MangasPage = if (isNovelMode) {
-        val filters = FilterList(NovelSortFilter(Filter.Sort.Selection(1, false)))
-        parseNovelBrowse(client.get(novelBrowseUrl(page, null, filters)))
-    } else {
-        val filters = FilterList(SortFilter(Filter.Sort.Selection(1, false)))
-        parseMangaBrowse(client.get(browseUrl(page, null, filters)))
+    /** Browses either category; without [filters] the category's own sort filter is used. */
+    private suspend fun browse(page: Int, query: String? = null, filters: FilterList? = null, sortIndex: Int = 0): MangasPage {
+        val filterList = filters ?: FilterList(
+            if (isNovelMode) NovelSortFilter(Filter.Sort.Selection(sortIndex, false)) else SortFilter(Filter.Sort.Selection(sortIndex, false)),
+        )
+        val url = if (isNovelMode) novelBrowseUrl(page, query, filterList) else browseUrl(page, query, filterList)
+        return parseBrowse(client.get(url))
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = if (isNovelMode) {
-        val filters = FilterList(NovelSortFilter(Filter.Sort.Selection(0, false)))
-        parseNovelBrowse(client.get(novelBrowseUrl(page, null, filters)))
-    } else {
-        val filters = FilterList(SortFilter(Filter.Sort.Selection(0, false)))
-        parseMangaBrowse(client.get(browseUrl(page, null, filters)))
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = browse(page, sortIndex = 1)
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = browse(page, sortIndex = 0)
 
     override fun getFilterList(data: JsonElement?) = if (isNovelMode) {
         FilterList(
             NovelSortFilter(),
-            NovelStatusFilter(),
-            NovelDecadeFilter(),
+            StatusFilter(),
+            DecadeFilter(),
             NovelReadableFilter(),
         )
     } else {
@@ -123,11 +118,7 @@ abstract class Hikarinagi :
         )
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = if (isNovelMode) {
-        parseNovelBrowse(client.get(novelBrowseUrl(page, query, filters)))
-    } else {
-        parseMangaBrowse(client.get(browseUrl(page, query, filters)))
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = browse(page, query, filters)
 
     override fun getMangaUrl(manga: SManga) = if (isNovelMode) {
         "$baseUrl/light-novels/${manga.url.removePrefix(Preferences.NOVEL_URL_PREFIX)}"
@@ -151,7 +142,9 @@ abstract class Hikarinagi :
         val id = manga.url.removePrefix(Preferences.NOVEL_URL_PREFIX)
         val data = client.get("$baseUrl/api/pages/light-novels/$id").parseAs<NovelData>()
         val sManga = data.lightNovel.toSManga(data.people(), data.tags())
-        val sChapters = data.volumes.filter { it.readingAvailable }.map { it.toSChapter() }.reversed()
+        val workTitle = data.lightNovel.name
+        // Volumes without an EPUB are listed too, marked so the reader can refuse them.
+        val sChapters = data.volumes.mapIndexed { index, volume -> volume.toSChapter(index + 1, workTitle) }.reversed()
         SMangaUpdate(sManga, sChapters)
     } else {
         val data = client.get("$baseUrl/api/pages/mangas/${manga.url}").parseAs<MangaData>()
@@ -174,13 +167,15 @@ abstract class Hikarinagi :
      * requested with the login session of the website.
      */
     private suspend fun getNovelPageList(chapter: SChapter): List<Page> {
-        val body = ReaderSessionRequest(volumeId = chapter.url.toInt()).toJsonRequestBody()
+        if (chapter.memo.getBooleanOrNull("unavailable") == true) throw Exception(UNAVAILABLE_MESSAGE)
+
+        val body = buildJsonObject { put("volume_id", chapter.url.toInt()) }.toJsonRequestBody()
         val session = client.post("$baseUrl/api/v3/reader/sessions", body, ensureSuccess = false)
         if (session.code == 401) throw Exception("请先在 WebView 中登录")
         // READER_EPUB_NOT_AVAILABLE, e.g. when the volume lost its EPUB after the chapter list was cached.
-        if (session.code == 404) throw Exception("本卷暂无在线正文")
+        if (session.code == 404) throw Exception(UNAVAILABLE_MESSAGE)
 
-        val epubUrl = session.parseAs<ReaderSessionResponse>().data.url
+        val epubUrl = session.parseAs<JsonObject>().getObject("data").getString("url")
         val chapters = client.get(epubUrl).use { readEpubChapters(it.body.byteStream()) }
         return buildPages(chapters)
     }
@@ -188,33 +183,60 @@ abstract class Hikarinagi :
     private fun buildPages(chapters: List<EpubChapter>): List<Page> {
         val pages = mutableListOf<Page>()
         chapters.forEach { chapter ->
-            var index = 0
             var heading = chapter.title
-            while (index < chapter.blocks.size) {
-                when (val block = chapter.blocks[index]) {
+            var topPadding = true
+            val paragraphs = ArrayDeque<String>()
+
+            fun flushText() {
+                while (paragraphs.isNotEmpty()) {
+                    val budget = PAGE_CHARS - if (heading.isEmpty()) 0 else HEADING_CHARS
+                    val text = StringBuilder()
+                    while (paragraphs.isNotEmpty()) {
+                        val next = paragraphs.first()
+                        if (text.isNotEmpty() && text.length + next.length > budget) break
+                        if (text.isNotEmpty()) text.append('\n')
+                        text.append(paragraphs.removeFirst())
+                    }
+                    pages.add(Page(pages.size, imageUrl = NovelTextInterceptor.createUrl(heading, text.toString(), topPadding)))
+                    heading = ""
+                    topPadding = false
+                }
+            }
+
+            chapter.blocks.forEach { block ->
+                when (block) {
                     is EpubBlock.Image -> {
-                        val imageUrl = NovelImageInterceptor.save(block.bytes, block.path.substringAfterLast('.', "jpg"))
-                        pages.add(Page(pages.size, imageUrl = imageUrl))
-                        index++
+                        flushText()
+                        val url = NovelImageInterceptor.save(block.bytes, block.path.substringAfterLast('.', "jpg"))
+                        pages.add(Page(pages.size, imageUrl = url))
+                        topPadding = true
                     }
 
-                    is EpubBlock.Text -> {
-                        val text = StringBuilder()
-                        while (index < chapter.blocks.size) {
-                            val next = chapter.blocks[index]
-                            if (next !is EpubBlock.Text || (text.isNotEmpty() && text.length + next.text.length > PAGE_CHARS)) break
-                            if (text.isNotEmpty()) text.append('\n')
-                            text.append(next.text.escapeHtml())
-                            index++
-                        }
-                        pages.add(Page(pages.size, imageUrl = TextInterceptorHelper.createUrl(heading, text.toString())))
-                    }
+                    is EpubBlock.Text -> paragraphs.addAll(block.text.splitParagraph())
                 }
-                heading = ""
             }
+            flushText()
         }
         return pages
     }
 }
 
-private fun String.escapeHtml() = replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+/**
+ * Characters a novel page image holds. Bigger pages mean fewer of them; the ceiling is what the
+ * reader can decode at once, roughly a 1000 x 2900 px bitmap here.
+ */
+private const val PAGE_CHARS = 800
+
+/** Room the first page of a chapter gives up for its heading. */
+private const val HEADING_CHARS = 60
+
+/** Keeps a single paragraph from producing a page taller than the reader can decode. */
+private fun String.splitParagraph(): List<String> {
+    // Some EPUBs bring their own paragraph indent; the renderer adds one of its own.
+    val text = trim()
+    return when {
+        text.isEmpty() -> emptyList()
+        text.length <= PAGE_CHARS -> listOf(text)
+        else -> text.chunked(PAGE_CHARS)
+    }
+}

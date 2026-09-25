@@ -142,24 +142,28 @@ class VolumeItem(
     val id: Int,
     private val name: String,
     @SerialName("name_cn") private val nameCn: String? = null,
+    @SerialName("volume_number") private val volumeNumber: Double? = null,
+    @SerialName("volume_label") private val volumeLabel: String? = null,
     @SerialName("publication_date") private val publicationDate: String? = null,
     @SerialName("online_reading_available") val readingAvailable: Boolean = false,
 ) {
-    fun toSChapter() = SChapter.create().apply {
+    /**
+     * Chapter titles are kept short ("第 1 卷") because the site stores the whole work title in
+     * every volume name. Volumes published without a number (mostly the first one) fall back to
+     * their position in the series.
+     */
+    fun toSChapter(ordinal: Int, workTitle: String) = SChapter.create().apply {
         url = id.toString()
-        name = nameCn.ifNotBlank() ?: this@VolumeItem.name
+        name = volumeNumber?.toString()?.removeSuffix(".0")?.let { number ->
+            "第 $number 卷" + (volumeLabel.ifNotBlank()?.let { " $it" } ?: "")
+        } ?: volumeLabel.ifNotBlank() ?: this@VolumeItem.name.takeIf { it != workTitle } ?: "第 $ordinal 卷"
         date_upload = Instant.tryParse(publicationDate)
+        if (!readingAvailable) {
+            scanlator = "暂无在线阅读"
+            memo = buildJsonObject { put("unavailable", true) }
+        }
     }
 }
 
 /** The site returns an empty string instead of null for missing translations. */
 private fun String?.ifNotBlank(): String? = this?.takeIf(String::isNotBlank)
-
-@Serializable
-class ReaderSessionRequest(@SerialName("volume_id") val volumeId: Int)
-
-@Serializable
-class ReaderSessionResponse(val data: ReaderSessionData)
-
-@Serializable
-class ReaderSessionData(val url: String)
