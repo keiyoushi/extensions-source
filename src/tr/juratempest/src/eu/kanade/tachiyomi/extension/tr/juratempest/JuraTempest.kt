@@ -21,9 +21,10 @@ import java.util.Locale
 @Source
 abstract class JuraTempest : KeiSource() {
 
-    // Popular
-    // No dedicated catalog page exists yet (`/explore` is under construction), so the
-    // homepage's highlight carousel is used as a stand-in. Single page, no pagination.
+    // ================================================================
+    // POPULAR
+    // ================================================================
+
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
 
@@ -40,9 +41,10 @@ abstract class JuraTempest : KeiSource() {
         return MangasPage(mangas, false)
     }
 
-    // Latest
-    // Also sourced from the homepage ("Son Yüklenenler" section, a feed of recently
-    // updated chapters) until `/explore` ships. Single page, no pagination.
+    // ================================================================
+    // LATEST
+    // ================================================================
+
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
 
@@ -64,12 +66,10 @@ abstract class JuraTempest : KeiSource() {
         return MangasPage(mangas, false)
     }
 
-    // Search
-    // The site's own search box calls an internal API this extension doesn't
-    // reverse-engineer, and the browse/catalog page (`/explore`) is still under
-    // construction. But `sitemap.xml` lists every manga's URL (slug), so search works by
-    // fuzzy-matching the query against those slugs, then fetching real titles/covers only
-    // for the matches - a handful of requests instead of scraping a full catalog page.
+    // ================================================================
+    // SEARCH
+    // ================================================================
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isBlank()) return MangasPage(emptyList(), false)
 
@@ -102,6 +102,10 @@ abstract class JuraTempest : KeiSource() {
         .replace("i̇", "i")
         .replace(Regex("[^a-z0-9]+"), "")
 
+    // ================================================================
+    // MANGA DETAILS
+    // ================================================================
+
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val segments = url.pathSegments
         if (segments.size != 2 || segments[0] != "explore") return null
@@ -118,18 +122,6 @@ abstract class JuraTempest : KeiSource() {
             }
     }
 
-    // Details & Chapters
-    // Both live on the same manga page, so they're always fetched and parsed together.
-    //
-    // The chapter list rendered in the DOM is paginated client-side (10 rows per page) with
-    // no addressable URL. A React hydration payload embedded in the page normally carries
-    // the full list, but it's unreliable in practice - the site doesn't appear to have any
-    // bot protection, so plain requests, headers, and even a real WebView all get the same
-    // 10-row page. Rather than chase that further, the missing chapters are instead
-    // confirmed to exist by requesting them directly: probing backward every 10 chapters
-    // from the lowest visible one, narrowing in on the exact starting chapter with a binary
-    // search once a gap is found, so series translated starting mid-run (chapter 1 genuinely
-    // 404s) still get everything down to their real first chapter instead of nothing.
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -170,6 +162,21 @@ abstract class JuraTempest : KeiSource() {
         return SMangaUpdate(updatedManga, chapterList)
     }
 
+    private fun parseStatus(status: String): Int {
+        val text = status.lowercase()
+        return when {
+            text.contains("devam") -> SManga.ONGOING
+            text.contains("tamamlandı") -> SManga.COMPLETED
+            text.contains("ara verildi") -> SManga.ON_HIATUS
+            text.contains("iptal") || text.contains("bırakıldı") -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    // ================================================================
+    // CHAPTERS
+    // ================================================================
+
     private fun MatchResult.toChapter(mangaUrl: String): SChapter {
         val (slug, number, title, isSpecial, createdAt) = destructured
         return SChapter.create().apply {
@@ -181,14 +188,6 @@ abstract class JuraTempest : KeiSource() {
         }
     }
 
-    // Confirms whether chapters below [visibleChapters] actually exist by requesting them
-    // directly, rather than guessing. First sweeps backward every 10 chapters until a probe
-    // fails (or chapter 1 is reached), then binary-searches the last 10-chapter window to
-    // pin down the exact starting chapter, so partial translations (starting well after
-    // chapter 1) still get everything down to their real first chapter. Each probed chapter
-    // page is also checked for the same hydration payload (it sometimes carries the full
-    // chapter list with real titles/dates for its release picker); any real data found this
-    // way replaces the bare "Bölüm N" placeholder for that chapter.
     private suspend fun fillMissingChapters(mangaUrl: String, visibleChapters: List<SChapter>): List<SChapter> {
         val lowestWhole = visibleChapters
             .map { it.chapter_number }
@@ -258,18 +257,10 @@ abstract class JuraTempest : KeiSource() {
         }
     }
 
-    private fun parseStatus(status: String): Int {
-        val text = status.lowercase()
-        return when {
-            text.contains("devam") -> SManga.ONGOING
-            text.contains("tamamlandı") -> SManga.COMPLETED
-            text.contains("ara verildi") -> SManga.ON_HIATUS
-            text.contains("iptal") || text.contains("bırakıldı") -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
-    }
+    // ================================================================
+    // PAGES
+    // ================================================================
 
-    // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(baseUrl + chapter.url).asJsoup()
 
@@ -284,18 +275,8 @@ abstract class JuraTempest : KeiSource() {
         private val istanbulZone = ZoneId.of("Europe/Istanbul")
         private val dateFormat = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("tr"))
 
-        // Matches a manga entry in sitemap.xml, e.g.:
-        // <loc>https://juratempe.st/explore/haimiya-senpai-dehset-derecede-sevimli</loc>
         private val sitemapEntryRegex = Regex("""<loc>[^<]*/explore/([a-z0-9-]+)</loc>""")
 
-        // Matches one chapter record from a React hydration payload, e.g.:
-        // slug:"38-5",number:38.5,title:"Bölüm 38.5",isSpecial:!0,createdAt:$R[91]=new Date("2026-08-19T15:11:32.402Z")
-        // The "$R[91]=" part is a minifier-assigned registry reference whose name/index
-        // can change between site deploys, so it's matched loosely rather than pinned.
-        // This payload is unreliable on the manga details page itself, but full or partial
-        // chapter lists using this exact shape also turn up on individual chapter reader
-        // pages (likely powering a "jump to chapter" picker), so the same pattern is reused
-        // there as a bonus source of real titles/dates - see fillMissingChapters.
         private val chapterEntryRegex = Regex(
             """slug:"([^"]+)",number:([0-9.]+),title:"((?:[^"\\]|\\.)*)",isSpecial:(!0|!1),createdAt:(?:${'$'}\w+\[\d+]=)?new Date\("([^"]+)"\)""",
         )
