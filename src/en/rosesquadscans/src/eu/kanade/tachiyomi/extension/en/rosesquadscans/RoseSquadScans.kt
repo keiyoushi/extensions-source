@@ -4,19 +4,24 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class RoseSquadScans : Madara() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MM.dd.yyyy", Locale.US)
+    override val chapterMode = ChapterMode.MangaAjax
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(::authWarningIntercept)
-        .rateLimit(1, 2.seconds)
-        .build()
+    override val supportsFilterFetching = false
 
-    override val useNewChapterEndpoint = true
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(::authWarningIntercept)
+        rateLimit(1, 2.seconds)
+    }
 
     private fun authWarningIntercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
@@ -28,6 +33,4 @@ abstract class RoseSquadScans : Madara() {
 
         return response
     }
-
-    override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"
 }

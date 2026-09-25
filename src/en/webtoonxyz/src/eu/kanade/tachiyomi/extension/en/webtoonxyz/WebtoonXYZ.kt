@@ -1,23 +1,18 @@
 package eu.kanade.tachiyomi.extension.en.webtoonxyz
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class WebtoonXYZ : Madara() {
-    override val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US)
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
     override val mangaSubString = "read"
+    override val genreDirectory = "webtoon-genre"
     override val sendViewCount = false
 
     private val thumbnailOriginalUrlRegex = Regex("-\\d+x\\d+(\\.[a-zA-Z]+)$")
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = super.popularMangaFromElement(element)
-        manga.thumbnail_url = manga.thumbnail_url?.replace(thumbnailOriginalUrlRegex, "$1")
-        return manga
-    }
+    override fun processThumbnail(url: String?, fromSearch: Boolean) = url?.replace(thumbnailOriginalUrlRegex, "$1")
 }

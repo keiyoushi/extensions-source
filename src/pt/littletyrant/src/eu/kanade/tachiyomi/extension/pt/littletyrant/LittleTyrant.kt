@@ -1,13 +1,12 @@
 package eu.kanade.tachiyomi.extension.pt.littletyrant
 
-import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -18,42 +17,35 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class LittleTyrant : Madara() {
-    override val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("pt-BR"))
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(ImageDecoderInterceptor())
-        .rateLimit(3, 1.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addNetworkInterceptor(ImageDecoderInterceptor())
+        rateLimit(3, 1.seconds)
+    }
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Dest", "empty")
-        .set("Sec-Fetch-Site", "same-origin")
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("Sec-Fetch-Mode", "cors")
+        set("Sec-Fetch-Dest", "empty")
+        set("Sec-Fetch-Site", "same-origin")
+    }
 
     // =============================== Popular =================================
 
-    override fun popularMangaSelector() = "[id*=manga-entry-]"
-    override val popularMangaUrlSelector = ".card-title a"
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.selectFirst("h3")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        setUrlWithoutDomain(element.selectFirst(popularMangaUrlSelector)!!.absUrl("href"))
-    }
-
+    override fun archiveSelector() = "[id*=manga-entry-]"
+    override val archiveUrlSelector = ".card-title a"
+    override val archiveTitleSelector = "h3"
+    override fun Element.postId() = id().substringAfter("manga-entry-")
     // =============================== Details =================================
 
     override val mangaDetailsSelectorGenre = ".genres-tax-list a"
@@ -64,50 +56,48 @@ abstract class LittleTyrant : Madara() {
 
     // =============================== Chapters =================================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        val document = client.newCall(mangaDetailsRequest(manga)).execute().asJsoup()
-        val mangaId = document.selectFirst("a.wp-manga-action-button")!!.attr("data-post")
+    override val chapterNameSelector = ".chapter-name-label"
+    override val chapterDateSelector = ".chapter-pub-date"
+
+    override suspend fun fetchChapters(
+        mangaPath: String,
+        id: String,
+        mangaPage: Document?,
+    ): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
         val url = "$baseUrl/wp-admin/admin-ajax.php"
         var offset = 0
         do {
             val form = FormBody.Builder()
                 .add("action", "load_more_chapters")
-                .add("manga_id", mangaId)
+                .add("manga_id", id)
                 .add("offset", offset.toString())
                 .build()
             offset += 12
-            val dto = client.newCall(POST(url, headers, form)).execute().parseAs<ChapterDto>()
+            val dto = client.post(url, form).parseAs<ChapterDto>()
             val chapterElements = dto.toJsoup(baseUrl).select(chapterListSelector())
-            chapters += chapterElements.map(::chapterFromElement)
+            chapters += chapterElements.mapNotNull { chapterFromElement(it, mangaPath) }
         } while (!dto.isEmpty())
 
-        chapters.sortedByDescending(SChapter::chapter_number)
-    }
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        name = element.selectFirst(".chapter-name-label")!!.text()
-        date_upload = parseChapterDate(element.selectFirst(".chapter-pub-date")?.text())
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        return chapters.sortedByDescending(SChapter::chapter_number)
     }
 
     // =============================== Pages =================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(pages)")?.data()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
+
+        val script = document.selectFirst("script:containsData(_proxyUrls)")?.data()
             ?: return emptyList()
 
-        val pages = PAGES_REGEX.find(script)?.groupValues?.last() ?: return emptyList()
-        val tokenBaseUrl = BASE_URL_PAGE_REGEX.find(script)?.groupValues?.last()?.toHttpUrlOrNull() ?: return pages.parseAs<List<String>>()
-            .mapIndexed { index, urlEncoded ->
-                Page(index, imageUrl = Base64.decode(urlEncoded, Base64.DEFAULT).toString(Charsets.UTF_8))
-            }
+        val pages = PROXY_URLS_REGEX.find(script)?.groupValues?.last() ?: return emptyList()
+        val themePath = BASE_URL_PAGE_REGEX.find(script)?.groupValues?.last()
+            ?.replace("\\/", "/")
+            ?.toHttpUrlOrNull() ?: return emptyList()
 
-        val token = client
-            .newCall(pageTokenRequest(tokenBaseUrl))
-            .execute()
-            .body.string()
+        val token = getToken(themePath)
+
+        val baseUrl = "${themePath.scheme}://${themePath.host}"
 
         return pages
             .parseAs<List<String>>()
@@ -120,11 +110,13 @@ abstract class LittleTyrant : Madara() {
                 Page(index, imageUrl = imageUrl)
             }
     }
-    private fun pageTokenRequest(pageBaseUrl: HttpUrl): Request {
-        val pageHeaders = headers.newBuilder()
+
+    private suspend fun getToken(pageBaseUrl: HttpUrl): String {
+        val pageHeaders = headersBuilder()
             .set("X-Reader-Sec", "tiraninha-web")
             .build()
-        return GET("$pageBaseUrl/gatekeeper.php?t=${System.currentTimeMillis()}", pageHeaders)
+        val url = "$pageBaseUrl/gatekeeper.php?t=${System.currentTimeMillis()}"
+        return client.get(url, pageHeaders).body.string()
     }
 
     // =============================== Images =================================
@@ -139,7 +131,7 @@ abstract class LittleTyrant : Madara() {
     }
 
     companion object {
-        private val PAGES_REGEX = """pages\s+=\s+(\[[^]]+])""".toRegex(RegexOption.IGNORE_CASE)
+        private val PROXY_URLS_REGEX = """_proxyUrls\s*=\s*(\[[^]]+])""".toRegex(RegexOption.IGNORE_CASE)
         private val BASE_URL_PAGE_REGEX = """_themePath\s+=\s+"([^"]+)""".toRegex(RegexOption.IGNORE_CASE)
     }
 }

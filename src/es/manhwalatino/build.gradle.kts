@@ -8,11 +8,16 @@ keiyoushi {
     name = "Manhwa-Latino"
     versionCode = 11
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "madara"
 
     source {
         lang = "es"
-        baseUrl = "https://manhwa-latino.com"
+        baseUrl {
+            mirrors(
+                "https://manhwa-latino.com",
+                "https://manhwa-es.com",
+            )
+        }
     }
 }

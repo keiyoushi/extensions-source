@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.montetai
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Serializable
 class ChapterListDto(
@@ -11,7 +12,7 @@ class ChapterListDto(
     fun toSChapterList(parseChapterDate: (date: String?) -> Long): List<SChapter> = data.rows.map {
         SChapter.create().apply {
             name = it.title
-            url = it.url
+            url = it.url.toHttpUrl().encodedPath
             date_upload = parseChapterDate(it.date)
         }
     }
