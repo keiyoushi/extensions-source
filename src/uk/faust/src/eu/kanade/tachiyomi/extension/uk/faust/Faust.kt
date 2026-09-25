@@ -43,7 +43,7 @@ abstract class Faust :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(10) { it.host == domain }
-        addInterceptor(AuthInterceptor({ client }, baseUrl))
+        addInterceptor(AuthInterceptor({ client }, { baseUrl }))
     }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Content-Type", "application/json")

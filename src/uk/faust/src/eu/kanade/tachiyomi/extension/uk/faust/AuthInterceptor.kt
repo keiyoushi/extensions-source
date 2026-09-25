@@ -4,6 +4,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -20,10 +21,10 @@ import javax.crypto.spec.SecretKeySpec
 
 class AuthInterceptor(
     private val clientProvider: () -> OkHttpClient,
-    private val baseUrl: String,
+    private val baseUrlProvider: () -> String,
 ) : Interceptor {
 
-    private val domain by lazy { baseUrl.toHttpUrl() }
+    private val domain: HttpUrl get() = baseUrlProvider().toHttpUrl()
 
     private val secretBytes by lazy {
         try {
@@ -121,7 +122,7 @@ class AuthInterceptor(
         if (isRefreshing) return accessToken
         isRefreshing = true
         try {
-            val url = "$baseUrl$AUTH_PATH"
+            val url = "${baseUrlProvider()}$AUTH_PATH"
             val timestamp = Instant.now().epochSecond.toString()
             val signature = hmacSha256("$timestamp:$AUTH_PATH")
 
