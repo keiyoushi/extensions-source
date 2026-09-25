@@ -143,7 +143,17 @@ abstract class MangaCrab : KeiSource() {
             ?.content
             ?.toLongOrNull()
 
-        val detailsDeferred = if (fetchDetails || (fetchChapters && savedMangaId == null)) {
+        val detailsDto = if (savedMangaId == null) {
+            client
+                .get("$baseUrl/api/mv/mangas/by-slug/$slug")
+                .parseAs<MangaCrabMangaDto>()
+        } else {
+            null
+        }
+
+        val mangaId = detailsDto?.id ?: savedMangaId
+
+        val detailsDeferred = if (savedMangaId != null && fetchDetails) {
             async {
                 client
                     .get("$baseUrl/api/mv/mangas/by-slug/$slug")
@@ -153,10 +163,7 @@ abstract class MangaCrab : KeiSource() {
             null
         }
 
-        val detailsDto = detailsDeferred?.await()
-        val mangaId = detailsDto?.id ?: savedMangaId
-
-        val chaptersDeferred = if (fetchChapters && mangaId != null) {
+        val chaptersDeferred = if (fetchChapters) {
             async {
                 client
                     .get(
@@ -168,15 +175,16 @@ abstract class MangaCrab : KeiSource() {
             null
         }
 
+        val updatedDetailsDto = detailsDeferred?.await() ?: detailsDto
         val chaptersDto = chaptersDeferred?.await()
 
         SMangaUpdate(
-            manga = if (detailsDto != null) {
+            manga = if (updatedDetailsDto != null) {
                 if (fetchDetails) {
-                    detailsDto.asSManga().apply {
+                    updatedDetailsDto.asSManga().apply {
                         memo = JsonObject(
                             mapOf(
-                                "mangaId" to JsonPrimitive(detailsDto.id),
+                                "mangaId" to JsonPrimitive(updatedDetailsDto.id),
                             ),
                         )
                     }
@@ -184,7 +192,7 @@ abstract class MangaCrab : KeiSource() {
                     manga.apply {
                         memo = JsonObject(
                             mapOf(
-                                "mangaId" to JsonPrimitive(detailsDto.id),
+                                "mangaId" to JsonPrimitive(updatedDetailsDto.id),
                             ),
                         )
                     }
@@ -196,7 +204,7 @@ abstract class MangaCrab : KeiSource() {
                 chaptersDto
                     ?.items
                     ?.map { chapter ->
-                        chapter.asSChapter(mangaId!!)
+                        chapter.asSChapter(requireNotNull(mangaId))
                     }
                     .orEmpty()
             } else {
