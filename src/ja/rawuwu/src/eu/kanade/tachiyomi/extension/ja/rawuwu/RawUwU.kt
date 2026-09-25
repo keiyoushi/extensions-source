@@ -48,15 +48,15 @@ abstract class RawUwU : KeiSource() {
 
     private fun parseMangasPage(response: Response): MangasPage {
         val result = response.parseAs<RawUwUResponseDto>()
-        val mangas = result.mangaList?.map { manga ->
+        val mangas = result.mangaList.map { manga ->
             SManga.create().apply {
                 url = manga.mangaId.toString()
                 title = manga.mangaName
                 thumbnail_url = manga.mangaCoverImg
             }
-        } ?: emptyList()
+        }
 
-        val hasNextPage = result.pagi?.button?.next?.let { it > 0 } ?: false
+        val hasNextPage = result.pagi.button.next > 0
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -85,47 +85,36 @@ abstract class RawUwU : KeiSource() {
     }
 
     private fun parseMangaDetails(result: MangaDetailResponseDto): SManga = SManga.create().apply {
-        val detail = result.detail ?: throw Exception("Could not find manga details")
+        val detail = result.detail
         title = detail.mangaName
         thumbnail_url = detail.mangaCoverImg
 
-        val descriptionText = detail.mangaDescription
-        val altName = detail.mangaOthersName
         description = buildString {
-            if (!descriptionText.isNullOrBlank()) append(descriptionText)
+            detail.mangaDescription?.let(::append)
+            if (isNotEmpty()) append("\n\n")
 
-            if (!altName.isNullOrBlank()) {
-                if (isNotEmpty()) append("\n\n")
-
-                append("Alternative Names: ")
-                altName.split(",").forEach { name ->
-                    append("\n - ${name.trim()}")
-                }
+            append("Alternative Names: ")
+            detail.mangaOthersName.split(",").forEach { name ->
+                append("\n - ${name.trim()}")
             }
         }
 
-        author = result.authors?.joinToString { it.authorName }?.ifEmpty { null }
-        genre = result.tags?.joinToString { it.tagName.toGenreName() }?.ifEmpty { null }
+        author = result.authors.joinToString { it.authorName }.ifEmpty { null }
+        genre = result.tags.joinToString { it.tagName.toGenreName() }.ifEmpty { null }
 
-        status = when (detail.mangaStatus) {
-            true -> SManga.COMPLETED
-            false -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
+        status = if (detail.mangaStatus) SManga.COMPLETED else SManga.ONGOING
     }
 
     private fun parseChapterList(result: MangaDetailResponseDto): List<SChapter> {
-        val mangaId = result.detail?.mangaId ?: throw Exception("Could not find chapters")
-        val chaptersArray = result.chapters ?: return emptyList()
+        val mangaId = result.detail.mangaId
 
-        return chaptersArray.map { chapter ->
+        return result.chapters.map { chapter ->
             SChapter.create().apply {
-                val chapterNumber = chapter.chapterNumber!!
+                val chapterNumber = chapter.chapterNumber
                 val formattedNum = chapterNumber.toString().removeSuffix(".0")
                 url = "/read/$mangaId/chapter-$formattedNum"
                 chapter_number = chapterNumber
-                val title = chapter.chapterTitle?.trim()
-                name = if (!title.isNullOrBlank()) "Ch. $formattedNum - $title" else "Chapter $formattedNum"
+                name = chapter.chapterTitle?.let { "Ch. $formattedNum - $it" } ?: "Chapter $formattedNum"
                 date_upload = Instant.tryParse(chapter.chapterDatePublished)
             }
         }
@@ -138,11 +127,8 @@ abstract class RawUwU : KeiSource() {
 
         val result = client.get("$baseUrl/spa/manga/$mangaId/$chapterNum").parseAs<ChapterPageResponseDto>()
 
-        val chapterDetail = result.chapterDetail ?: throw Exception("Could not find chapter detail")
-        val serverUrl = chapterDetail.server ?: throw Exception("Could not server url")
-        val htmlContent = chapterDetail.chapterContent ?: throw Exception("Could not find chapter pages")
-
-        val document = Jsoup.parseBodyFragment(htmlContent, serverUrl)
+        val chapterDetail = result.chapterDetail
+        val document = Jsoup.parseBodyFragment(chapterDetail.chapterContent, chapterDetail.server)
         return document.select("img").mapIndexed { index, image ->
             Page(index, imageUrl = image.absUrl("data-src"))
         }
