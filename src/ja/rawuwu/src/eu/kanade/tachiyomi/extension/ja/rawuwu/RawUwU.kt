@@ -3,64 +3,53 @@ package eu.kanade.tachiyomi.extension.ja.rawuwu
 import eu.kanade.tachiyomi.extension.ja.rawuwu.dto.ChapterPageResponseDto
 import eu.kanade.tachiyomi.extension.ja.rawuwu.dto.MangaDetailResponseDto
 import eu.kanade.tachiyomi.extension.ja.rawuwu.dto.RawUwUResponseDto
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Source
-abstract class RawUwU : HttpSource() {
-
-    override val supportsLatest = true
-
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-    }
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+abstract class RawUwU : KeiSource() {
 
     // --- BROWSE (POPULAR / LATEST / SEARCH) ---
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Filters are ignored when using text search."),
         StatusFilter(),
         SortFilter(),
         GenreFilter(genres),
     )
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/spa/genre/all".toHttpUrl().newBuilder()
             .addQueryParameter("sort", "most_viewed")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
+        val result = client.get(url).parseAs<RawUwUResponseDto>()
+        return parseMangaListResponse(result)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/spa/latest-manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
+        val result = client.get(url).parseAs<RawUwUResponseDto>()
+        return parseMangaListResponse(result)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/spa".toHttpUrl().newBuilder()
 
         if (query.isNotEmpty()) {
@@ -77,16 +66,11 @@ abstract class RawUwU : HttpSource() {
             }
         }
         url.addQueryParameter("page", page.toString())
-        return GET(url.build(), headers)
+        val result = client.get(url.build()).parseAs<RawUwUResponseDto>()
+        return parseMangaListResponse(result)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaListResponse(response)
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaListResponse(response)
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaListResponse(response)
-
-    private fun parseMangaListResponse(response: Response): MangasPage {
-        val result = response.parseAs<RawUwUResponseDto>()
-
+    private fun parseMangaListResponse(result: RawUwUResponseDto): MangasPage {
         val mangas = result.mangaList?.map { manga ->
             SManga.create().apply {
                 url = manga.mangaId.toString()
@@ -103,50 +87,51 @@ abstract class RawUwU : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/raw/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/spa/manga/${manga.url}")
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val result = client.get("$baseUrl/spa/manga/${manga.url}").parseAs<MangaDetailResponseDto>()
+        return SMangaUpdate(parseMangaDetails(result), parseChapterList(result))
+    }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<MangaDetailResponseDto>()
+    private fun parseMangaDetails(result: MangaDetailResponseDto): SManga = SManga.create().apply {
+        val detail = result.detail ?: throw Exception("Could not find manga details")
+        title = detail.mangaName
+        thumbnail_url = detail.mangaCoverImgFull
+            ?: detail.mangaCoverImg
 
-        return SManga.create().apply {
-            val detail = result.detail ?: throw Exception("Could not find manga details")
-            title = detail.mangaName
-            thumbnail_url = detail.mangaCoverImgFull
-                ?: detail.mangaCoverImg
+        val descriptionText = detail.mangaDescription
+        val altName = detail.mangaOthersName
+        description = buildString {
+            if (!descriptionText.isNullOrBlank()) append(descriptionText)
 
-            val descriptionText = detail.mangaDescription
-            val altName = detail.mangaOthersName
-            description = buildString {
-                if (!descriptionText.isNullOrBlank()) append(descriptionText)
+            if (!altName.isNullOrBlank()) {
+                if (isNotEmpty()) append("\n\n")
 
-                if (!altName.isNullOrBlank()) {
-                    if (isNotEmpty()) append("\n\n")
-
-                    append("Alternative Names: ")
-                    altName.split(",").forEach { name ->
-                        append("\n - ${name.trim()}")
-                    }
+                append("Alternative Names: ")
+                altName.split(",").forEach { name ->
+                    append("\n - ${name.trim()}")
                 }
             }
+        }
 
-            author = result.authors?.joinToString { it.authorName }
-            genre = result.tags?.joinToString { it.tagName }
+        author = result.authors?.joinToString { it.authorName }
+        genre = result.tags?.joinToString { it.tagName }
 
-            val isActive = detail.mangaStatus
-            status = when (isActive) {
-                true -> SManga.COMPLETED
-                false -> SManga.ONGOING
-                else -> SManga.UNKNOWN
-            }
+        val isActive = detail.mangaStatus
+        status = when (isActive) {
+            true -> SManga.COMPLETED
+            false -> SManga.ONGOING
+            else -> SManga.UNKNOWN
         }
     }
 
     // --- CHAPTERS ---
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/spa/manga/${manga.url}", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<MangaDetailResponseDto>()
+    private fun parseChapterList(result: MangaDetailResponseDto): List<SChapter> {
         val mangaId = result.detail?.mangaId ?: throw Exception("Could not find chapters")
         val chaptersArray = result.chapters ?: return emptyList()
 
@@ -164,16 +149,12 @@ abstract class RawUwU : HttpSource() {
 
     // --- PAGES ---
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val segments = baseUrl.toHttpUrl().resolve(chapter.url)!!.pathSegments
         val mangaId = segments[1]
         val chapterNum = segments[2].removePrefix("chapter-")
 
-        return GET("$baseUrl/spa/manga/$mangaId/$chapterNum", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<ChapterPageResponseDto>()
+        val result = client.get("$baseUrl/spa/manga/$mangaId/$chapterNum").parseAs<ChapterPageResponseDto>()
 
         val chapterDetail = result.chapterDetail ?: throw Exception("Could not find chapter detail")
         val serverUrl = chapterDetail.server ?: throw Exception("Could not server url")
@@ -188,6 +169,5 @@ abstract class RawUwU : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
-    private fun parseDate(dateStr: String?): Long = dateFormat.tryParse(dateStr)
+    private fun parseDate(dateStr: String?): Long = Instant.tryParse(dateStr)
 }
