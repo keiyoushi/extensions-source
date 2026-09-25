@@ -1,45 +1,41 @@
 package eu.kanade.tachiyomi.extension.es.codearc
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class CodeArc : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+abstract class CodeArc : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .connectTimeout(15.seconds)
+    override fun OkHttpClient.Builder.configureClient() = connectTimeout(15.seconds)
         .readTimeout(30.seconds)
-        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
+        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
         .rateLimit(1, 1.seconds) { it.host == "cdn.codearctraducciones.com" }
-        .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    private val rscHeaders
+        get() = headers.newBuilder()
+            .add("RSC", "1")
+            .build()
 
-    private val rscHeaders = headersBuilder()
-        .add("RSC", "1")
-        .build()
+    override suspend fun getPopularManga(page: Int): MangasPage = popularMangaParse(client.get("$baseUrl/ranking?mode=popular&page=$page"))
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking?mode=popular&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
         val mangas = document.select("a.group.relative.min-w-0[href]").map { element ->
@@ -58,9 +54,9 @@ abstract class CodeArc : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list?page=$page", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = latestUpdatesParse(client.get("$baseUrl/list?page=$page"))
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
+    private fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
         val mangas = document.select("a.group.overflow-hidden[href]").map { element ->
@@ -80,14 +76,14 @@ abstract class CodeArc : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty() && filters.none { it is UriPartFilter && it.state != 0 } &&
             filters.none { it is GenreGroup && it.state.any { genre -> genre.state } }
         ) {
             val url = "$baseUrl/api/mangas/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .addQueryParameter("limit", "50")
-            return GET(url.build(), headers)
+            return searchMangaParse(client.get(url.build()))
         }
 
         val url = "$baseUrl/list".toHttpUrl().newBuilder().apply {
@@ -121,10 +117,10 @@ abstract class CodeArc : HttpSource() {
                 }
             }
         }
-        return GET(url.build(), headers)
+        return searchMangaParse(client.get(url.build()))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    private fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.pathSegments.contains("api")) {
             val result = response.parseAs<SearchResponseDto>()
             val mangas = result.items.map { it.toSManga(baseUrl) }
@@ -133,34 +129,41 @@ abstract class CodeArc : HttpSource() {
         return latestUpdatesParse(response)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = client.get(getMangaUrl(manga)).asJsoup().let { document ->
+        SMangaUpdate(
+            mangaDetailsParse(document),
+            chapterListParse(document),
+        )
+    }
 
-        return SManga.create().apply {
-            title = document.selectFirst("h1")!!.text().replace("Vista Previa", "")
-            description = document.selectFirst("p.whitespace-pre-line")?.text()
-            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
-            genre = document.select("a[href*=/list?generos=]").joinToString { it.text() }
+    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1")!!.text().replace("Vista Previa", "")
+        description = document.selectFirst("p.whitespace-pre-line")?.text()
+        thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
+        genre = document.select("a[href*=/list?generos=]").joinToString { it.text() }
 
-            val htmlArtists = document.select("a[href*=/creador/]").joinToString { it.text() }
-            if (htmlArtists.isNotEmpty()) {
-                artist = htmlArtists
-                author = htmlArtists
-            }
+        val htmlArtists = document.select("a[href*=/creador/]").joinToString { it.text() }
+        if (htmlArtists.isNotEmpty()) {
+            artist = htmlArtists
+            author = htmlArtists
+        }
 
-            val statusText = document.selectFirst("span.inline-flex:has(span.rounded-full)")
-                ?.text()?.lowercase()
-            status = when {
-                statusText == null -> SManga.UNKNOWN
-                statusText.contains("finalizado") -> SManga.COMPLETED
-                statusText.contains("publicándose") || statusText.contains("publicandose") -> SManga.ONGOING
-                else -> SManga.UNKNOWN
-            }
+        val statusText = document.selectFirst("span.inline-flex:has(span.rounded-full)")
+            ?.text()?.lowercase()
+        status = when {
+            statusText == null -> SManga.UNKNOWN
+            statusText.contains("finalizado") -> SManga.COMPLETED
+            statusText.contains("publicándose") || statusText.contains("publicandose") -> SManga.ONGOING
+            else -> SManga.UNKNOWN
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun chapterListParse(document: Document): List<SChapter> {
         val chapterLinks = document.select("a.group.block[href*=/reader/][href*=/cascade]")
 
         if (chapterLinks.isNotEmpty()) {
@@ -193,9 +196,8 @@ abstract class CodeArc : HttpSource() {
         return emptyList()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
-
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter), rscHeaders)
         val readerData = response.extractNextJs<ReaderDto>() ?: return emptyList()
         val pages = readerData.initialPages.toMutableList()
         val pagesFetchUrl = baseUrl.toHttpUrl().resolve(readerData.pagesFetchUrl) ?: return emptyList()
@@ -204,9 +206,7 @@ abstract class CodeArc : HttpSource() {
             val url = pagesFetchUrl.newBuilder()
                 .setQueryParameter("offset", pages.size.toString())
                 .build()
-            val newPages = client.newCall(GET(url, headers)).execute().use { apiResponse ->
-                apiResponse.parseAs<ReaderPagesDto>().items
-            }
+            val newPages = client.get(url).parseAs<ReaderPagesDto>().items
             if (newPages.isEmpty()) break
             pages += newPages
         }
@@ -216,9 +216,7 @@ abstract class CodeArc : HttpSource() {
         }
     }
 
-    override fun getFilterList(): FilterList = getFilters()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
 
     private companion object {
         const val POPULAR_MAX_PAGE = 5

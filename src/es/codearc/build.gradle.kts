@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Code Arc Mangas"
-    versionCode = 3
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "es"
