@@ -344,6 +344,12 @@ abstract class IkigaiMangas :
         }
     }
 
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Sec-Fetch-Dest", "image")
+        .header("Sec-Fetch-Mode", "no-cors")
+        .header("Sec-Fetch-Site", "cross-site")
+        .build()
+
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Nota: Los filtros son ignorados si se realiza una búsqueda por texto."),
         Filter.Separator(),

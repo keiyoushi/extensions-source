@@ -17,7 +17,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -28,11 +27,11 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.URLDecoder
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -288,8 +287,10 @@ abstract class MoeTruyen : KeiSource() {
         val allImages = readerImages(document)
         val readerPages = document.selectFirst("[data-reader-lazy-pages]")
 
-        if (readerPages != null && hasEncryptedReaderMedia(readerPages)) {
-            return fetchV4Pages(chapterUrl, (allImages.size - 1).coerceAtLeast(0))
+        if (readerPages != null && isImgxProtected(readerPages)) {
+            val pageCount = readerPages.attr("data-reader-total-pages").toIntOrNull()
+                ?: allImages.size
+            return fetchImgxPages(chapterUrl, pageCount)
         }
 
         return allImages
@@ -305,54 +306,50 @@ abstract class MoeTruyen : KeiSource() {
             .mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
             }
-            .toList()
     }
 
-    private fun hasEncryptedReaderMedia(readerPages: Element): Boolean {
-        val accessUrl = readerPages.attr("data-reader-imgx-access-url")
-        if (accessUrl.isBlank()) return false
-        val mediaJson = readerPages.attr("data-reader-imgx-media")
-            .ifBlank { return false }
-        val media = runCatching {
-            URLDecoder.decode(mediaJson, Charsets.UTF_8.name()).parseAs<List<ReaderMediaEntry>>()
-        }.getOrDefault(emptyList())
-        return media.any { entry ->
-            entry.storageKey.startsWith("chapters/") &&
-                !entry.storageKey.endsWith("/0.js") &&
-                !entry.downloadUrl.endsWith("/0.js")
-        }
-    }
+    private fun isImgxProtected(readerPages: Element): Boolean = readerPages.attr("data-reader-imgx-access-url").isNotBlank()
 
-    private suspend fun fetchV4Pages(chapterUrl: String, pageCount: Int): List<Page> {
-        val readerScript = client.get("$baseUrl/reader.js").body.string()
-        val decoderPath = Regex("\\.\\./chunks/(v4-[A-Za-z0-9_-]+\\.js)")
-            .find(readerScript)
-            ?.groupValues
-            ?.get(1)
-            ?: throw IllegalStateException("IMGX v4 decoder missing")
-        val decoderUrl = "$baseUrl/chunks/$decoderPath"
-        val readerScriptForWebView = readerScript.replace(
-            Regex("window\\.__IMGX_RUNTIME__\\?\\.take\\(\\)\\|\\|null"),
-            "null",
-        )
-        check(readerScriptForWebView != readerScript) { "IMGX reader runtime claim not found" }
+    private suspend fun fetchImgxPages(chapterUrl: String, pageCount: Int): List<Page> {
+        if (pageCount <= 0) return emptyList()
+
         val script = javaClass.getResource("/assets/imgx-v4-reader.js")?.readText()
             ?: throw IllegalStateException("imgx-v4-reader.js not found")
+        val workerPatch = javaClass.getResource("/assets/imgx-worker-patch.js")?.readText()
+            ?: throw IllegalStateException("imgx-worker-patch.js not found")
         val pool = ('a'..'z') + ('A'..'Z')
         val bridgeName = (1..(10..20).random())
             .map { pool.random() }
             .joinToString("")
-        val webViewScript = script
-            .replace("__IMGX_DECODER_URL__", decoderUrl)
-            .replace("__IMGX_BRIDGE__", bridgeName)
+        val webViewScript = script.replace("__IMGX_BRIDGE__", bridgeName)
         val pages = arrayOfNulls<ByteArray>(pageCount)
-        val downloadUrls = arrayOfNulls<String>(pageCount)
+        val mimeTypes = arrayOfNulls<String>(pageCount)
 
-        runWebView<Unit>(timeout = 90.seconds) {
+        runWebView<Unit>(timeout = 60.seconds) {
             interceptRequest { request ->
-                if (request.url.toString().substringBefore('?') == "$baseUrl/reader.js") {
-                    WebResourceResponse("application/javascript", "UTF-8", readerScriptForWebView.byteInputStream())
-                } else {
+                val path = request.url.encodedPath
+                if (path?.endsWith("imgx-worker.js") != true) {
+                    return@interceptRequest null
+                }
+                try {
+                    val upstream = Request.Builder()
+                        .url(request.url.toString())
+                        .apply {
+                            request.requestHeaders.forEach { (key, value) -> header(key, value) }
+                        }
+                        .build()
+                    client.newCall(upstream).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            return@interceptRequest null
+                        }
+                        val patched = workerPatch + "\n" + response.body.string()
+                        WebResourceResponse(
+                            "application/javascript",
+                            "UTF-8",
+                            patched.byteInputStream(),
+                        )
+                    }
+                } catch (_: Exception) {
                     null
                 }
             }
@@ -362,16 +359,16 @@ abstract class MoeTruyen : KeiSource() {
                     "page" -> {
                         val index = payload["index"]!!.jsonPrimitive.int
                         val data = payload["data"]!!.jsonPrimitive.content
-                        val downloadUrl = payload["downloadUrl"]?.jsonPrimitive?.content
+                        val mime = payload["mime"]?.jsonPrimitive?.content
                         if (index in pages.indices) {
                             pages[index] = Base64.decode(data, Base64.DEFAULT)
-                            downloadUrls[index] = downloadUrl
+                            mimeTypes[index] = mime
                         }
                     }
                     "done" -> resolve(Unit)
                     "error" -> {
-                        val message = payload["message"]?.jsonPrimitive?.content ?: "IMGX reader failed"
-                        reject(Exception(message))
+                        val text = payload["message"]?.jsonPrimitive?.content ?: "IMGX reader failed"
+                        reject(Exception(text))
                     }
                 }
             }
@@ -385,27 +382,30 @@ abstract class MoeTruyen : KeiSource() {
 
         return pages.mapIndexed { index, data ->
             val bytes = data ?: throw IllegalStateException("IMGX page ${index + 1} missing")
-            val imageUrl = downloadUrls[index]
-                ?: throw IllegalStateException("IMGX page ${index + 1} download URL missing")
-            webViewImages[imageUrl] = bytes
+            val imageUrl = imgxPageUrl(chapterUrl, index)
+            val mime = mimeTypes[index] ?: "image/png"
+            webViewImages[imageUrl] = bytes to mime
             Page(index, imageUrl = imageUrl)
         }
     }
 
+    private fun imgxPageUrl(chapterUrl: String, index: Int): String = "$chapterUrl#imgx-page-$index"
+
     private fun webViewImageInterceptor() = Interceptor { chain ->
         val request = chain.request()
-        val data = webViewImages[request.url.toString()]
-        if (data == null) return@Interceptor chain.proceed(request)
+        val entry = webViewImages[request.url.toString()]
+        if (entry == null) return@Interceptor chain.proceed(request)
 
+        val (data, mime) = entry
         Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
             .code(200)
             .message("OK")
-            .header("Content-Type", "image/webp")
+            .header("Content-Type", mime)
             .header("Content-Length", data.size.toString())
             .header("Cache-Control", "no-store")
-            .body(data.toResponseBody("image/webp".toMediaType()))
+            .body(data.toResponseBody(mime.toMediaType()))
             .build()
     }
 
@@ -415,8 +415,8 @@ abstract class MoeTruyen : KeiSource() {
         }
 
     private val webViewImages = Collections.synchronizedMap(
-        object : LinkedHashMap<String, ByteArray>(100, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?): Boolean = size > 100
+        object : LinkedHashMap<String, Pair<ByteArray, String>>(100, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<ByteArray, String>>?): Boolean = size > 100
         },
     )
 
@@ -463,10 +463,4 @@ abstract class MoeTruyen : KeiSource() {
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
     private val numberRegex = Regex("""\d+""")
-
-    @Serializable
-    private class ReaderMediaEntry(
-        val storageKey: String,
-        val downloadUrl: String,
-    )
 }

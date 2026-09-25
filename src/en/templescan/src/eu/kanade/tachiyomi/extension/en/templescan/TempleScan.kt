@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -24,6 +25,11 @@ abstract class TempleScan : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1)
+    }
+
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("Sec-Fetch-Dest", "document")
+        set("Sec-Fetch-Mode", "navigate")
     }
 
     private val rscHeaders get() = headersBuilder()
@@ -140,9 +146,9 @@ abstract class TempleScan : KeiSource() {
             }.filterNotNull().joinToString()
         }
 
-        val chapters = details.seasons?.flatMap { season ->
-            season.chapters.filter {
-                it.price == 0
+        val chapters = details.groups?.flatMap { group ->
+            group.items.filter {
+                it.lock == 0
             }.map { chapter ->
                 SChapter.create().apply {
                     url = "/comic/${manga.url.substringAfterLast('/')}/${chapter.slug}"
@@ -164,7 +170,7 @@ abstract class TempleScan : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val data = client.get(baseUrl + chapter.url, rscHeaders).extractNextJs<PagesList>() ?: return emptyList()
-        return data.pages.mapIndexed { idx, url ->
+        return data.images.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
         }
     }

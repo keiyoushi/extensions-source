@@ -17,15 +17,15 @@ val POPULAR_QUERY = $$"""
 val LATEST_QUERY = $$"""
     query newArrivalContents($layoutId: ID!, $limit: Int!, $offset: Int) {
       newArrivalContents(layoutId: $layoutId, limit: $limit, offset: $offset) {
+        titleId
         contentName
         compressedContentThumbnailPath
-        titleId
       }
     }
 """.trimIndent()
 
 val DETAILS_QUERY = $$"""
-    query bookTitle($titleId: Int!) {
+    query bookTitleDetail($titleId: Int!, $limit: Int!, $sortType: String) {
       bookTitle(titleId: $titleId) {
         titleName
         titleNameKana
@@ -41,11 +41,6 @@ val DETAILS_QUERY = $$"""
         }
         hasLastVolume
       }
-    }
-""".trimIndent()
-
-val CHAPTER_LIST_QUERY = $$"""
-    query bookContents($titleId: Int!, $limit: Int!, $sortType: String) {
       bookContents(titleId: $titleId, limit: $limit, sortType: $sortType) {
         distributionId
         contentName

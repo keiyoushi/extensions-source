@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.ganma
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -9,187 +8,209 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.boolean
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.persistedQueryExtension
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import java.util.Calendar
-import java.util.TimeZone
+import java.time.LocalDate
+import java.time.ZoneId
 
 @Source
 abstract class Ganma :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
+    private val apiUrl get() = "$baseUrl/api/graphql"
+    private val preferences by getPreferencesLazy()
+    private val jst = ZoneId.of("Asia/Tokyo")
 
-    private val apiUrl = "$baseUrl/api/graphql"
-    private val jst = TimeZone.getTimeZone("Asia/Tokyo")
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    // Custom UA needed to read chapters.
+    private val readerHeaders get() = headersBuilder()
+        .set("User-Agent", "GanmaReader/10.11.0 Android")
+        .build()
+
+    // Desktop UA needed to read web only chapters.
+    private val desktopHeaders get() = headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
+        .build()
 
     private var lastCursor: String? = null
-    private val webOnlyAliases = mutableSetOf<String>()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("X-From", "$baseUrl/web")
+    override fun getHomeUrl(): String = "$baseUrl/web"
+
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("X-From", "$baseUrl/web")
+    }
 
     // Popular
-    override fun popularMangaRequest(page: Int) = graphQLRequest("home", HASH_HOME, EmptyVariables)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseGraphQLAs<HomeDto>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.post(
+            apiUrl,
+            desktopHeaders,
+            graphQLBody(
+                operationName = "home",
+                variables = EmptyVariables,
+                extensions = persistedQueryExtension(HASH_HOME),
+            ),
+        ).parseGraphQLAs<HomeDto>()
         val mangas = result.ranking.totalRanking.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         if (page == 1) lastCursor = null
-        val today = getLatestDay()
-        return graphQLRequest("serialMagazinesByDayOfWeek", HASH_SERIAL_MAGAZINES_BY_DAY_OF_WEEK, DayOfWeekVariables(today, lastCursor))
+        return dayOfWeekPage(LocalDate.now(jst).dayOfWeek.name)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseGraphQLAs<LatestResponse>()
-        val panels = result.serialPerDayOfWeek.panels
-        lastCursor = panels.pageInfo.endCursor
-        val mangas = panels.edges.map { it.node.storyInfo.magazine.toSManga() }
-        return MangasPage(mangas, panels.pageInfo.hasNextPage)
+    private suspend fun dayOfWeekPage(dayOfWeek: String): MangasPage {
+        val result = client.post(
+            apiUrl,
+            desktopHeaders,
+            graphQLBody(
+                operationName = "serialMagazinesByDayOfWeek",
+                variables = DayOfWeekVariables(dayOfWeek, lastCursor),
+                extensions = persistedQueryExtension(HASH_SERIAL_MAGAZINES_BY_DAY_OF_WEEK),
+            ),
+        ).parseGraphQLAs<LatestResponse>().serialPerDayOfWeek.panels
+        val mangas = result.edges.map { it.node.storyInfo.magazine.toSManga() }
+        lastCursor = result.pageInfo.endCursor
+        return MangasPage(mangas, result.pageInfo.hasNextPage)
     }
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (page == 1) lastCursor = null
         if (query.isNotBlank()) {
-            return graphQLRequest(
-                "magazinesByKeywordSearch",
-                HASH_MAGAZINES_BY_KEYWORD_SEARCH,
-                SearchVariables(query, lastCursor),
-                false,
-            ).newBuilder().tag("search").build()
-        }
-
-        val categoryFilter = filters.firstInstance<CategoryFilter>()
-        return if (categoryFilter.value == "finished") {
-            graphQLRequest("finishedMagazines", HASH_FINISHED_MAGAZINES, FinishedVariables(lastCursor)).newBuilder().tag("finished").build()
-        } else {
-            graphQLRequest("serialMagazinesByDayOfWeek", HASH_SERIAL_MAGAZINES_BY_DAY_OF_WEEK, DayOfWeekVariables(categoryFilter.value, lastCursor))
-        }
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = when (response.request.tag()) {
-        "search" -> {
-            val result = response.parseGraphQLAs<SearchResponse>().searchComic
+            val result = client.post(
+                apiUrl,
+                desktopHeaders,
+                graphQLBody(
+                    operationName = "magazinesByKeywordSearch",
+                    variables = SearchVariables(query, lastCursor),
+                    extensions = persistedQueryExtension(HASH_MAGAZINES_BY_KEYWORD_SEARCH),
+                ),
+            ).parseGraphQLAs<SearchResponse>().searchComic
             val mangas = result.edges.map { it.node.toSManga() }
             lastCursor = result.pageInfo.endCursor
-            MangasPage(mangas, result.pageInfo.hasNextPage)
+            return MangasPage(mangas, result.pageInfo.hasNextPage)
         }
 
-        "finished" -> {
-            val result = response.parseGraphQLAs<FinishedResponseDto>().magazinesByCategory.magazines
-            val mangas = result.edges.map { it.node.toSManga() }
-            lastCursor = result.pageInfo.endCursor
-            MangasPage(mangas, result.pageInfo.hasNextPage)
+        val category = filters.firstInstance<CategoryFilter>().value
+        if (category != "finished") {
+            return dayOfWeekPage(category)
         }
 
-        else -> {
-            latestUpdatesParse(response)
-        }
+        val result = client.post(
+            apiUrl,
+            desktopHeaders,
+            graphQLBody(
+                operationName = "finishedMagazines",
+                variables = FinishedVariables(lastCursor),
+                extensions = persistedQueryExtension(HASH_FINISHED_MAGAZINES),
+            ),
+        ).parseGraphQLAs<FinishedResponseDto>().magazinesByCategory.magazines
+        val mangas = result.edges.map { it.node.toSManga() }
+        lastCursor = result.pageInfo.endCursor
+        return MangasPage(mangas, result.pageInfo.hasNextPage)
     }
 
-    // Details
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        CategoryFilter(),
+    )
+
     override fun getMangaUrl(manga: SManga) = "$baseUrl/web/magazine/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga) = graphQLRequest("magazineDetail", HASH_MAGAZINE_DETAIL, MagazineDetailVariables(manga.url))
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.parseGraphQLAs<DetailsResponse>().magazine
-        if (manga.isWebOnlySensitive == true) webOnlyAliases.add(manga.alias)
-        return manga.toSManga()
-    }
-
-    // Chapters
-    override fun chapterListRequest(manga: SManga): Request = graphQLRequest("storyInfoList", HASH_STORY_INFO_LIST, ChapterListVariables(manga.url, 9999, null)).newBuilder().tag(manga.url).build()
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val slug = response.request.tag().toString()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val result = response.parseGraphQLAs<ChapterResponse>()
-        return result.magazine.storyInfos.edges
-            .filter { !hideLocked || !it.node.isLocked }
-            .map { it.node.toSChapter(slug) }
-            .reversed()
+        val details = async {
+            if (!fetchDetails) return@async manga
+            client.post(
+                apiUrl,
+                desktopHeaders,
+                graphQLBody(
+                    operationName = "magazineDetail",
+                    variables = MagazineDetailVariables(manga.url),
+                    extensions = persistedQueryExtension(HASH_MAGAZINE_DETAIL),
+                ),
+            ).parseGraphQLAs<DetailsResponse>().magazine.toSManga()
+        }
+
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            client.post(
+                apiUrl,
+                desktopHeaders,
+                graphQLBody(
+                    operationName = "storyInfoList",
+                    variables = ChapterListVariables(manga.url, 9999, null),
+                    extensions = persistedQueryExtension(HASH_STORY_INFO_LIST),
+                ),
+            ).parseGraphQLAs<ChapterResponse>().magazine.storyInfos.edges
+                .filter { !hideLocked || !it.node.isLocked }
+                .map { it.node.toSChapter(manga.url) }
+                .reversed()
+        }
+
+        SMangaUpdate(
+            details.await(),
+            chapterList.await(),
+        )
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/web/reader/${chapter.url}/0"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/web/reader/${chapter.memo["alias"]!!.string}/${chapter.url}/0"
 
     // Viewer
-    override fun pageListRequest(chapter: SChapter): Request {
-        val (alias, storyId) = "$baseUrl#${chapter.url}".toHttpUrl().fragment!!.split("/")
-        return graphQLRequest("magazineStoryForReader", HASH_MAGAZINE_STORY_FOR_READER, ViewerVariables(alias, storyId), alias !in webOnlyAliases)
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val apiHeaders = if (chapter.memo["desktop"]!!.boolean) desktopHeaders else readerHeaders
+        val result = client.post(
+            apiUrl,
+            apiHeaders,
+            graphQLBody(
+                operationName = "magazineStoryForReader",
+                variables = ViewerVariables(chapter.memo["alias"]!!.string, chapter.url),
+                extensions = persistedQueryExtension(HASH_MAGAZINE_STORY_FOR_READER),
+            ),
+        ).parseGraphQLAs<ViewerResponse>().magazine.storyContents
 
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseGraphQLAs<ViewerResponse>().magazine.storyContents
         if (result.error != null) {
             throw Exception("Log in via WebView and get premium or purchase this chapter to read.")
         }
 
         val pageImages = result.pageImages!!
-        val sign = pageImages.pageImageSign
         return buildList {
-            (1..pageImages.pageCount).mapTo(this) { i ->
-                val url = "${pageImages.pageImageBaseUrl}$i.jpg".toHttpUrl().newBuilder()
-                    .encodedQuery(sign)
+            (1..pageImages.pageCount).mapTo(this) {
+                val url = "${pageImages.pageImageBaseUrl}$it.jpg".toHttpUrl().newBuilder()
+                    .encodedQuery(pageImages.pageImageSign)
                     .setQueryParameter("w", "4999")
                     .build()
                     .toString()
-                Page(i - 1, imageUrl = url)
+                Page(it - 1, imageUrl = url)
             }
-            result.afterword?.imageUrl?.let { imageUrl ->
-                val url = imageUrl.toHttpUrl().newBuilder()
+            result.afterword?.imageUrl?.let {
+                val url = it.toHttpUrl().newBuilder()
                     .setQueryParameter("w", "4999")
                     .build()
                     .toString()
                 add(Page(size, imageUrl = url))
             }
         }
-    }
-
-    override fun getFilterList() = FilterList(CategoryFilter())
-
-    private inline fun <reified V : Any> graphQLRequest(operationName: String, hash: String, variables: V, useAppHeaders: Boolean = false): Request {
-        val headers = headersBuilder()
-            .set(
-                "User-Agent",
-                if (useAppHeaders) {
-                    // Custom UA needed to read chapters.
-                    "GanmaReader/10.7.0 Android"
-                } else {
-                    // Desktop UA needed to read web only chapters.
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
-                },
-            )
-            .build()
-
-        return graphQLPost(
-            apiUrl,
-            headers,
-            operationName = operationName,
-            variables = variables,
-            extensions = persistedQueryExtension(hash),
-        )
-    }
-
-    private fun getLatestDay(): String {
-        val calendar = Calendar.getInstance(jst)
-        val days = arrayOf("SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY")
-        return days[calendar.get(Calendar.DAY_OF_WEEK) - 1]
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -200,11 +221,8 @@ abstract class Ganma :
         }.also(screen::addPreference)
     }
 
-    // Unsupported
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     companion object {
-        // https://ganma.jp/web/_next/static/chunks/app/layout-fbbe5dd886d24cb7.js
+        // https://web.archive.org/web/20260309082826/https://ganma.jp/web/_next/static/chunks/app/layout-fbbe5dd886d24cb7.js
         private const val HASH_HOME = "b65659a4a5689bac97168591122219b69ee089d840b0415ace241d0caebee900"
         private const val HASH_MAGAZINE_DETAIL = "9a1460a42f8d04c70b23bb9ad763d0dbef2eb6f5d05dafca98ca2be8a2bfe867"
         private const val HASH_STORY_INFO_LIST = "acd460c52a231029d09e1ccca0aa06b99ae8163d5edff661cd64984ebb6dc4c3"

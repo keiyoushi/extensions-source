@@ -6,13 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Perf Scan"
-    versionCode = 31
+    versionCode = 0
     contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
+    libVersion = "1.6"
+    theme = "loneseal"
 
     source {
         lang = "fr"
         baseUrl = "https://perf-scan.xyz"
         versionId = 2
+    }
+
+    deeplink {
+        path("/series/..*")
     }
 }

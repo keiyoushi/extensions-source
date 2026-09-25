@@ -608,7 +608,10 @@ abstract class GroupLe :
     // ============================== Utilities ===============================
     protected open fun authGuard(document: Document) {
         document.selectFirst("script:containsData(viewSettings)")?.data()?.let { authReq ->
-            if (authReq.contains("blockedForAnonymous") && document.selectFirst("script:containsData(window.current_user_id)") == null) {
+            val blockedCode = BLOCKED_ANON_REGEX.find(authReq)?.value
+            val isBlocked = blockedCode?.contains(ALLOW_ANONYMOUS_REGEX) ?: false
+
+            if (isBlocked && document.selectFirst("script:containsData(window.current_user_id)") == null) {
                 throw Exception("Для просмотра контента необходима авторизация через WebView🌍 или включите автоматическую авторизацию в настройках расширения")
             }
         }
@@ -728,6 +731,8 @@ abstract class GroupLe :
         private val SINGLE_REGEX = Regex("""\s*Сингл\s*""")
         private val FILTERS_REGEX = """window\.__FILTERS\.(\w+)\s*=\s*([{].*?[}]);""".toRegex()
         private val PAGES_REGEX = """\[['"](.*?)['"],['"](.*?)['"],['"](.*?)['"].*?]""".toRegex()
+        private val BLOCKED_ANON_REGEX = """\{[^{}]*?['"]blockedForAnonymous['"][^{}]*?\}""".toRegex()
+        private val ALLOW_ANONYMOUS_REGEX = """enabled:\s*true""".toRegex()
         private val CHECK_JSON = """(\w+)\s*:""".toRegex()
         private val dateFormat = DateTimeFormatter.ofPattern("[dd.MM.yy][d.MM.yy]", Locale.ROOT)
         private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "avif", "svg")

@@ -1,27 +1,21 @@
 package eu.kanade.tachiyomi.extension.ar.yonabar
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
-import okhttp3.Response
 import org.jsoup.nodes.Document
 
 @Source
 abstract class YonaBar : Madara() {
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val mangaSubString = "yaoi"
 
-    // The next page has an error; it’s a site issue
-    override fun popularMangaParse(response: Response): MangasPage = super.popularMangaParse(response).copy(hasNextPage = false)
+    override val pageListParseSelector = ".reading-content img:not(#image-0\\.0)"
 
-    override fun latestUpdatesParse(response: Response): MangasPage = super.latestUpdatesParse(response).copy(hasNextPage = false)
-
-    override fun pageListParse(document: Document): List<Page> = super.pageListParse(document)
-        .map { page ->
+    override fun parsePages(document: Document) = super.parsePages(document)
+        .mapNotNull { page ->
             page.apply {
-                imageUrl = imageUrl!!.replaceFirst("medium1", "medium1x")
+                imageUrl = imageUrl!!
+                    .replaceFirst("medium1", "medium1xf")
+                    .replaceFirst("medium2", "medium2x")
             }
         }
 }

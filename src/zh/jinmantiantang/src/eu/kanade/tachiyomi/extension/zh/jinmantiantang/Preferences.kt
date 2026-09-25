@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.webkit.CookieManager
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
@@ -9,27 +10,11 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
 
-internal fun getPreferenceList(context: Context, preferences: SharedPreferences, isUrlUpdated: Boolean) = arrayOf(
-    ListPreference(context).apply {
-        key = MAINSITE_RATELIMIT_PREF
-        title = "在限制时间内（下个设置项）允许的请求数量。"
-        entries = Array(10) { "${it + 1}" }
-        entryValues = Array(10) { "${it + 1}" }
-        summary = "此值影响更新书架时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s"
-
-        setDefaultValue(MAINSITE_RATELIMIT_PREF_DEFAULT)
-    },
-
-    ListPreference(context).apply {
-        key = MAINSITE_RATELIMIT_PERIOD
-        title = "限制持续时间。单位秒"
-        entries = Array(60) { "${it + 1}" }
-        entryValues = Array(60) { "${it + 1}" }
-        summary = "此值影响更新书架时请求的间隔时间。调大此值可能减小IP被屏蔽的几率，但更新时间也会变慢。需要重启软件以生效。\n当前值：%s"
-
-        setDefaultValue(MAINSITE_RATELIMIT_PERIOD_DEFAULT)
-    },
-
+internal fun getPreferenceList(
+    context: Context,
+    preferences: SharedPreferences,
+    isUrlUpdated: Boolean,
+) = arrayOf(
     ListPreference(context).apply {
         val urlList = preferences.urlList
         val fullList = SITE_ENTRIES_ARRAY + urlList
@@ -56,7 +41,8 @@ internal fun getPreferenceList(context: Context, preferences: SharedPreferences,
     },
 )
 
-val SharedPreferences.baseUrl: String
+/** 镜像设置选出的域名(不含 scheme) */
+internal val SharedPreferences.mirrorBaseUrl: String
     get() {
         val list = SITE_ENTRIES_ARRAY
         val index = mirrorIndex
@@ -66,11 +52,25 @@ val SharedPreferences.baseUrl: String
 
 internal const val BLOCK_PREF = "BLOCK_GENRES_LIST"
 
-internal const val MAINSITE_RATELIMIT_PREF = "mainSiteRateLimitPreference"
-internal const val MAINSITE_RATELIMIT_PREF_DEFAULT = 1.toString()
+// 登录用户名：沿用官方 1.6 已有的 "username" 键（收藏夹自动识别功能在用），保证旧设置值直接生效
+internal const val USERNAME_PREF = "username"
 
-internal const val MAINSITE_RATELIMIT_PERIOD = "mainSiteRateLimitPeriodPreference"
-internal const val MAINSITE_RATELIMIT_PERIOD_DEFAULT = 3.toString()
+// 登录密码
+internal const val PASSWORD_PREF = "password"
+
+// 仅清除登录会话 cookie（改账号/密码后强制重新登录生效）；AVS 年龄验证 cookie 有意保留
+private val SESSION_COOKIE_NAMES = arrayOf("PHPSESSID", "jmc_id", "jmc_password")
+
+internal fun clearSessionCookies(baseUrl: String) {
+    val manager = CookieManager.getInstance()
+    for (name in SESSION_COOKIE_NAMES) {
+        manager.setCookie(baseUrl, "$name=; Max-Age=-1; Path=/")
+    }
+    manager.flush()
+}
+
+internal val SharedPreferences.blockList: List<String>
+    get() = getString(BLOCK_PREF, "")!!.substringBefore("//").trim().lowercase().split(' ')
 
 private const val USE_MIRROR_URL_PREF = "useMirrorWebsitePreference"
 
@@ -99,26 +99,30 @@ private val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_L
 fun SharedPreferences.preferenceMigration() {
     if (getString(DEFAULT_LIST_PREF, "")!! != DEFAULT_LIST) {
         edit()
-            .remove("overrideBaseUrl")
             .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
             .setUrlList(DEFAULT_LIST, mirrorIndex)
             .apply()
     }
 }
 
-fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int): SharedPreferences.Editor {
+private fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int): SharedPreferences.Editor {
     putString(URL_LIST_PREF, urlList)
     val maxIndex = SITE_ENTRIES_ARRAY.size + urlList.count { it == ',' }
     if (oldIndex in 0..maxIndex) return this
     return putString(USE_MIRROR_URL_PREF, maxIndex.toString())
 }
 
-class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interceptor {
-    private val baseUrl = "https://" + preferences.baseUrl
+/** 主站请求失败时从 stevenyomi.github.io 拉取最新镜像域名列表，提示用户重启并选择镜像。 */
+class UpdateUrlInterceptor(
+    private val preferences: SharedPreferences,
+) : Interceptor {
+    @Volatile
     var isUpdated = false
+        private set
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val baseUrl = "https://" + preferences.mirrorBaseUrl
         if (!request.url.toString().startsWith(baseUrl)) return chain.proceed(request)
 
         val failedResponse = try {

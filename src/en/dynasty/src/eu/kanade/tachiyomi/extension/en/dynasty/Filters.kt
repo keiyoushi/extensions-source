@@ -41,15 +41,13 @@ private val typeOptions = listOf(
 class Tag(
     private val id: Int,
     private val name: String,
-    private val permalink: String,
 ) {
-    val checkBoxOption get() = TagCheckBox(id, name, permalink)
+    val checkBoxOption get() = TagCheckBox(id, name)
 }
 
 class TagCheckBox(
     val id: Int,
     name: String,
-    val permalink: String,
 ) : Filter.TriState(name)
 
 class TagFilter(
@@ -60,8 +58,6 @@ class TagFilter(
 ) {
     val included get() = state.filter { it.isIncluded() }
     val excluded get() = state.filter { it.isExcluded() }
-
-    fun isEmpty() = included.isEmpty() && excluded.isEmpty()
 }
 
 abstract class TextFilter(name: String) : Filter.Text(name) {

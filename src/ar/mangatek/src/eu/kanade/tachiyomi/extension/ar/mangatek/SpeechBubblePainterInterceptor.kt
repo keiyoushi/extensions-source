@@ -24,7 +24,7 @@ class SpeechBubblePainterInterceptor : Interceptor {
         val request = chain.request()
         val url = request.url.toString()
 
-        if (PAGE_REGEX.containsMatchIn(url).not()) {
+        if (PAGE_REGEX.containsMatchIn(url).not() && request.url.fragment?.startsWith("[") != true) {
             return chain.proceed(request)
         }
 
@@ -54,14 +54,14 @@ class SpeechBubblePainterInterceptor : Interceptor {
             val pxHeight = speechBubble.h
             val pxCenterY = pxY + (pxHeight / 2f)
 
-            textPaint.color = Color.parseColor(speechBubble.color)
-            textPaint.bgColor = Color.parseColor(speechBubble.strokeColor)
+            textPaint.color = parseColorSafe(speechBubble.color, Color.BLACK)
+            textPaint.bgColor = parseColorSafe(speechBubble.strokeColor, Color.WHITE)
             textPaint.textSize = speechBubble.fontSizePx
             textPaint.strokeWidth = speechBubble.strokeWidthPx
 
             val bubble = createBubble(pxHeight, pxWidth, speechBubble, textPaint)
             val finalY = getYAxis(pxY, pxHeight, pxCenterY, textPaint, bubble)
-            canvas.draw(textPaint, bubble, speechBubble.angle, pxX, finalY)
+            canvas.draw(textPaint, bubble, speechBubble.actualAngle, pxX, finalY)
         }
 
         val ext = url.substringBefore("#")
@@ -168,7 +168,13 @@ class SpeechBubblePainterInterceptor : Interceptor {
         textPaint.style = style
     }
 
+    private fun parseColorSafe(color: String?, defaultColor: Int): Int = try {
+        if (!color.isNullOrBlank()) Color.parseColor(color) else defaultColor
+    } catch (_: Exception) {
+        defaultColor
+    }
+
     companion object {
-        val mediaType = "image/png".toMediaType()
+        private val mediaType = "image/png".toMediaType()
     }
 }

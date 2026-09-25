@@ -1,16 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.mangaup
 
-import android.annotation.SuppressLint
-import android.app.Application
-import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.text.InputType
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -18,343 +12,246 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.protobuf.ProtoBuf
+import keiyoushi.utils.parseAsProto
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.string
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MangaUp :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    private val domain = "manga-up.com"
-    override val supportsLatest = true
-
-    private val apiUrl = "https://global-api.$domain/api"
-    private val imgUrl = "https://global-img.$domain"
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val domain get() = "manga-up.com"
+    private val apiUrl get() = "https://global-api.$domain/api"
+    private val imgUrl get() = "https://global-img.$domain"
+    private val preferences by getPreferencesLazy()
+    private val secretMutex = Mutex()
+    private val manualSecret: String
+        get() = preferences.getString(SECRET_PREF, "")!!
 
     private var secret: String? = null
+    private var rejectedSecret: String? = null
 
-    @SuppressLint("SetJavaScriptEnabled")
-    @Synchronized
-    private fun fetchSecret(): String? {
-        val useSession = preferences.getBoolean(LOGGED_IN_SESSION_PREF, true)
-        if (!useSession) return null
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
-        if (secret != null) return secret
-
-        val latch = CountDownLatch(1)
-        var token: String? = null
-
-        Handler(Looper.getMainLooper()).post {
-            val webView = WebView(Injekt.get<Application>())
-            with(webView.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
-            }
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    view.evaluateJavascript("window.localStorage.getItem('secret')") { value ->
-                        token = value?.trim('"')
-                        if (token == "null" || token.isNullOrBlank()) token = null
-
-                        latch.countDown()
-                        view.stopLoading()
-                        view.destroy()
-                    }
-                }
-            }
-            webView.loadDataWithBaseURL("$baseUrl/", " ", "text/html", "utf-8", null)
-        }
-
-        latch.await(10, TimeUnit.SECONDS)
-
-        secret = token
-        return secret
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    @Synchronized
-    private fun flushSecret(target: String) {
-        Handler(Looper.getMainLooper()).post {
-            val webView = WebView(Injekt.get<Application>())
-            with(webView.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
-            }
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    val script = "if(window.localStorage.getItem('secret')==='$target'){window.localStorage.removeItem('secret');}"
-                    view.evaluateJavascript(script) {
-                        view.stopLoading()
-                        view.destroy()
-                    }
-                }
-            }
-            webView.loadDataWithBaseURL("$baseUrl/", " ", "text/html", "utf-8", null)
-        }
-    }
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val response = chain.proceed(request)
-
-            // 410: expired secret -> device got removed OR more than 3 secrets/devices active, oldest one expires
-            // 401: invalid secret -> login was aborted; UA mismatch from previous login
-            if (response.code == 410 || response.code == 401) {
-                response.close()
-
-                val failedSecret = request.url.queryParameter("secret")
-
-                if (failedSecret != null) {
-                    flushSecret(failedSecret)
-
-                    synchronized(this) {
-                        if (secret == failedSecret) {
-                            secret = null
-                        }
-                    }
-                }
-
-                val newSecret = fetchSecret()
-                val isMyPage = request.url.pathSegments.lastOrNull() == "my_page"
-                val isSecretValid = !newSecret.isNullOrEmpty() && newSecret != failedSecret
-
-                if (!isSecretValid && isMyPage) {
-                    val target = request.url.fragment
-                    throw IOException("Log in via WebView to access your $target")
-                }
-
-                val newUrl = request.url.newBuilder()
-
-                if (isSecretValid) {
-                    newUrl.setQueryParameter("secret", newSecret)
-                } else {
-                    newUrl.removeAllQueryParameters("secret")
-
-                    synchronized(this) {
-                        if (secret == newSecret) {
-                            secret = null
-                        }
-                    }
-                }
-
-                val newRequest = request.newBuilder()
-                    .url(newUrl.build())
-                    .build()
-
-                return@addInterceptor chain.proceed(newRequest)
-            }
-            response
-        }
-        .build()
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
-            .apply {
-                fetchSecret()?.let { addQueryParameter("secret", it) }
-            }
-            .addQueryParameter("app_ver", "0")
-            .addQueryParameter("os_ver", "0")
+            .addCommonParameters()
             .addQueryParameter("lang", lang)
             .build()
-        return GET(url, headers)
-    }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAsProto<PopularResponse>()
-        val mangas = result.titles?.map { it.toSManga(imgUrl) } ?: emptyList()
+        val result = apiRequest(url).parseAsProto<SeriesResponse>()
+        val mangas = result.titles.orEmpty()
+            .sortedByDescending { it.bookmarks }
+            .map { it.toSManga(imgUrl) }
+
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/home_v2".toHttpUrl().newBuilder()
-            .apply {
-                fetchSecret()?.let { addQueryParameter("secret", it) }
-            }
-            .addQueryParameter("app_ver", "0")
-            .addQueryParameter("os_ver", "0")
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$apiUrl/search".toHttpUrl().newBuilder()
+            .addCommonParameters()
             .addQueryParameter("lang", lang)
             .build()
-        return GET(url, headers)
-    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAsProto<HomeResponse>()
-        val list = if (result.type == "Updates for you") {
-            result.updates
-        } else {
-            result.newSeries
-        }
-        val mangas = list?.map { it.toSManga(imgUrl) } ?: emptyList()
+        val result = apiRequest(url).parseAsProto<SeriesResponse>()
+        val mangas = result.titles.orEmpty()
+            .sortedByDescending { it.updatedAt }
+            .map { it.toSManga(imgUrl) }
+
         return MangasPage(mangas, false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host && url.host != "www.${baseUrl.toHttpUrl().host}") {
-                throw Exception("Unsupported url")
-            }
-            val id = url.pathSegments[1]
-            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
-        }
-        return super.fetchSearchManga(page, query, filters)
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val genre = filters.firstInstance<SelectFilter>().value
+        if (query.isNotBlank()) {
+            val url = "$apiUrl/manga/search".toHttpUrl().newBuilder()
+                .addCommonParameters()
+                .addQueryParameter("word", query)
+                .addQueryParameter("lang", lang)
+                .build()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith(PREFIX_ID_SEARCH) && query.matches(ID_SEARCH_PATTERN)) {
-            return mangaDetailsRequest(SManga.create().apply { url = "/manga/${query.removePrefix(PREFIX_ID_SEARCH)}" })
+            val result = apiRequest(url).parseAsProto<SearchResponse>()
+            val mangas = result.titles?.map { it.toSManga(imgUrl) }.orEmpty()
+            return MangasPage(mangas, false)
         }
 
-        val currentSecret = fetchSecret()
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .apply {
-                currentSecret?.let { addQueryParameter("secret", it) }
+        if (genre == FAVORITES || genre == HISTORY) {
+            if (getSecret() == null) {
+                throw IOException("Log in via WebView to access your $genre.")
             }
-            .addQueryParameter("app_ver", "0")
-            .addQueryParameter("os_ver", "0")
+
+            val url = "$apiUrl/my_page".toHttpUrl().newBuilder()
+                .addCommonParameters()
+                .addQueryParameter("lang", lang)
+                .build()
+
+            val result = apiRequest(url).parseAsProto<MyPageResponse>()
+            val titles = if (genre == FAVORITES) result.favorites else result.history
+            val mangas = titles?.map { it.toSManga(imgUrl) }.orEmpty()
+            return MangasPage(mangas, false)
+        }
+
+        if (genre.isEmpty()) {
+            return getPopularManga(page)
+        }
+
+        val url = "$apiUrl/manga/tag".toHttpUrl().newBuilder()
+            .addCommonParameters()
+            .addQueryParameter("tag_id", genre)
             .addQueryParameter("lang", lang)
+            .build()
 
-        val genreFilter = filters.firstInstance<SelectFilter>()
-
-        if (query.isNotEmpty()) {
-            url.addPathSegments("manga/search")
-            url.addQueryParameter("word", query)
-        } else if (genreFilter.selectedValue.isNotEmpty()) {
-            if (genreFilter.selectedValue == "favorites" || genreFilter.selectedValue == "history") {
-                if (currentSecret == null) {
-                    throw Exception("Log in via WebView to access your ${genreFilter.selectedValue}")
-                }
-                url.addPathSegment("my_page")
-                url.fragment(genreFilter.selectedValue)
-            } else {
-                url.addPathSegments("manga/tag")
-                url.addQueryParameter("tag_id", genreFilter.selectedValue)
-            }
-        } else {
-            return popularMangaRequest(page)
-        }
-
-        return GET(url.build(), headers)
+        val result = apiRequest(url).parseAsProto<SearchResponse>()
+        val mangas = result.titles?.map { it.toSManga(imgUrl) }.orEmpty()
+        return MangasPage(mangas, false)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.last() == "detail_v2") {
-            val result = response.parseAsProto<MangaDetailResponse>()
-            val mangaId = response.request.url.queryParameter("title_id")!!
-            return MangasPage(listOf(result.toSManga(mangaId, imgUrl)), false)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val host = baseUrl.toHttpUrl().host
+        if (url.host != host && url.host != "www.$host") throw Exception("Unsupported URL")
+        val titleId = url.pathSegments.getOrNull(1) ?: return null
+        val manga = SManga.create().apply {
+            this.url = titleId
         }
-
-        val fragment = response.request.url.fragment
-        if (fragment == "favorites" || fragment == "history") {
-            val result = response.parseAsProto<MyPageResponse>()
-            val list = if (fragment == "favorites") result.favorites else result.history
-            val mangas = list?.map { it.toSManga(imgUrl) } ?: emptyList()
-            return MangasPage(mangas, false)
-        }
-
-        if (response.request.url.pathSegments.contains("manga") && response.request.url.pathSegments.last() != "detail_v2") {
-            val result = response.parseAsProto<SearchResponse>()
-            val mangas = result.titles?.map { it.toSManga(imgUrl) } ?: emptyList()
-            return MangasPage(mangas, false)
-        }
-
-        return popularMangaParse(response)
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val titleId = manga.url.substringAfterLast("/")
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url.substringAfterLast("/")}"
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
+        val titleId = manga.url.substringAfterLast("/") // for old url compatibility
         val url = "$apiUrl/manga/detail_v2".toHttpUrl().newBuilder()
-            .apply {
-                fetchSecret()?.let { addQueryParameter("secret", it) }
-            }
-            .addQueryParameter("app_ver", "0")
-            .addQueryParameter("os_ver", "0")
+            .addCommonParameters()
             .addQueryParameter("title_id", titleId)
             .addQueryParameter("quality", "high")
             .addQueryParameter("ui_lang", lang)
             .build()
-        return GET(url, headers)
+
+        val result = apiRequest(url).parseAsProto<MangaDetailResponse>()
+        return SMangaUpdate(
+            result.toSManga(titleId, imgUrl),
+            result.chapters
+                .filter { !hidePaid || it.price == null }
+                .map { it.toSChapter(titleId) },
+        )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAsProto<MangaDetailResponse>()
-        val mangaId = response.request.url.queryParameter("title_id")!!
-        return result.toSManga(mangaId, imgUrl)
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/${chapter.memo["titleId"]!!.string}/${chapter.url}"
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAsProto<MangaDetailResponse>()
-        val mangaId = response.request.url.queryParameter("title_id")!!
-        val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
-        return result.chapters
-            .filter { !hidePaid || it.price == null }
-            .map { it.toSChapter(mangaId) }
-    }
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfterLast("/")
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$apiUrl/manga/viewer_v2".toHttpUrl().newBuilder()
-            .apply {
-                fetchSecret()?.let { addQueryParameter("secret", it) }
-            }
-            .addQueryParameter("app_ver", "0")
-            .addQueryParameter("os_ver", "0")
-            .addQueryParameter("chapter_id", chapterId)
+            .addCommonParameters()
+            .addQueryParameter("chapter_id", chapter.url)
             .addQueryParameter("quality", "high")
             .addQueryParameter("lang", lang)
             .build()
-            .toString()
 
-        return POST(url, headers)
-    }
+        val result = apiRequest(url, post = true).parseAsProto<ViewerResponse>()
 
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAsProto<ViewerResponse>()
-        val pages = result.pageBlocks.flatMap { it.pages }
-            .filter { !it.url.contains("tutorial") }
+        val pages = result.pageBlocks
+            .firstOrNull { it.chapterId == chapter.url.toInt() }
+            ?.pages
+            ?.filterNot { it.url.contains("tutorial") }
 
-        if (pages.isEmpty()) {
-            throw Exception("Log in via WebView and purchase this chapter")
+        if (pages.isNullOrEmpty()) {
+            throw Exception("Log in via WebView and purchase this chapter to read.")
         }
 
         return pages.mapIndexed { i, page ->
-            val img = imgUrl + page.url + "#key=${page.key}#iv=${page.iv}"
-            Page(i, imageUrl = img)
+            Page(i, imageUrl = "$imgUrl${page.url}#${page.key}:${page.iv}")
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private suspend fun HttpUrl.Builder.addCommonParameters() = apply {
+        addQueryParameter("app_ver", "0")
+        addQueryParameter("os_ver", "0")
+        getSecret()?.let { addQueryParameter("secret", it) }
+    }
 
-    // Helpers
-    private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
+    private suspend fun apiRequest(url: HttpUrl, post: Boolean = false): Response {
+        val response = if (post) {
+            client.post(url, EMPTY_BODY, ensureSuccess = false)
+        } else {
+            client.get(url, ensureSuccess = false)
+        }
+        if (response.isSuccessful) return response
+        response.close()
 
-    override fun getFilterList() = FilterList(
+        val secret = url.queryParameter("secret")
+        if (secret != null) {
+            when (response.code) {
+                // malformed secret
+                500 -> if (secret == manualSecret) throw IOException("Invalid Secret")
+
+                // invalid secret -> login was aborted; UA mismatch from previous login
+                401 -> {
+                    rejectSecret(secret)
+                    val newSecret = getSecret()
+                    val retryUrl = url.newBuilder().apply {
+                        if (newSecret != null) setQueryParameter("secret", newSecret) else removeAllQueryParameters("secret")
+                    }.build()
+                    return apiRequest(retryUrl, post)
+                }
+            }
+        }
+        throw HttpException(response.code)
+    }
+
+    private suspend fun getSecret(): String? = secretMutex.withLock {
+        val manual = manualSecret
+        if (manual.isNotBlank()) return manual.takeIf { it != rejectedSecret }
+
+        secret ?: getLocalStorage(baseUrl, "secret")
+            ?.takeIf { it.isNotBlank() && it != rejectedSecret }
+            ?.also { secret = it }
+    }
+
+    private suspend fun rejectSecret(failed: String) {
+        val fromWebView = secretMutex.withLock {
+            rejectedSecret = failed
+            if (secret == failed) secret = null
+            failed != manualSecret
+        }
+
+        if (!fromWebView) return
+
+        runCatching {
+            runWebView(timeout = 10.seconds) {
+                onPageFinished {
+                    val script = "if(localStorage.getItem('secret')===${failed.toJsonString()}){localStorage.removeItem('secret')}"
+                    evaluateJs(script) { resolve(Unit) }
+                }
+                loadData(baseUrl, "")
+            }
+        }
+    }
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SelectFilter(
             "Genres",
             arrayOf(
@@ -370,36 +267,42 @@ abstract class MangaUp :
                 Pair("Media Tie-ins", "21"),
                 Pair("LGBTQ+", "253"),
                 Pair("Completed", "256"),
-                Pair("History", "history"),
-                Pair("Favorites", "favorites"),
+                Pair("Own History", HISTORY),
+                Pair("Own Favorites", FAVORITES),
             ),
         ),
     )
 
     private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        val selectedValue: String get() = vals[state].second
+        val value: String
+            get() = vals[state].second
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_PAID_PREF
-            title = "Hide paid chapters"
+            title = "Hide Locked Chapters"
             summary = "Hide chapters that require points to unlock."
             setDefaultValue(false)
         }.also(screen::addPreference)
 
-        SwitchPreferenceCompat(screen.context).apply {
-            key = LOGGED_IN_SESSION_PREF
-            title = "Logged-in Session"
-            summary = "If enabled, uses the session from the WebView to access your content.\nDisable to browse as a guest."
-            setDefaultValue(true)
+        EditTextPreference(screen.context).apply {
+            key = SECRET_PREF
+            title = "Secret Token"
+            summary = "Paste your token here to log in with it directly.\n" +
+                "Leave empty to log in through WebView."
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
         }.also(screen::addPreference)
     }
 
     companion object {
-        const val PREFIX_ID_SEARCH = "id:"
-        private val ID_SEARCH_PATTERN = "^id:(\\d+)$".toRegex()
         private const val HIDE_PAID_PREF = "hide_paid_chapters"
-        private const val LOGGED_IN_SESSION_PREF = "logged_in_session"
+        private const val SECRET_PREF = "secret_token"
+        private const val FAVORITES = "favorites"
+        private const val HISTORY = "history"
+
+        private val EMPTY_BODY = ByteArray(0).toRequestBody()
     }
 }

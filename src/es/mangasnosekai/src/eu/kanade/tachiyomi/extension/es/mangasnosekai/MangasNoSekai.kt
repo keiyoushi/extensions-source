@@ -1,70 +1,39 @@
 package eu.kanade.tachiyomi.extension.es.mangasnosekai
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.lib.synchrony.Deobfuscator
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class MangasNoSekai : Madara() {
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
+abstract class MangasNoSekai : MadaraNoAjax() {
+    override val supportsPostId = false
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("es"))
+
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-
-    override val client = super.client.newBuilder()
-        .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
-        .build()
-
-    override val useNewChapterEndpoint = true
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=views", headers)
-
-    override fun popularMangaSelector() = "div.page-listing-item > div.row > div"
-
-    override fun popularMangaNextPageSelector() = "a.next.page-numbers"
-
-    override val popularMangaUrlSelector = "a[href]"
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-
-        with(element) {
-            selectFirst(popularMangaUrlSelector)!!.let {
-                manga.setUrlWithoutDomain(it.attr("abs:href"))
-            }
-
-            selectFirst("figcaption")!!.let {
-                manga.title = it.text()
-            }
-
-            selectFirst("img")?.let {
-                manga.thumbnail_url = imageFromElement(it)
-            }
-        }
-
-        return manga
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) {
+        it.host == baseUrl.toHttpUrl().host
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/biblioteca/${searchPage(page)}?m_orderby=latest", headers)
-
-    override fun searchMangaNextPageSelector() = "nav.navigation a.next"
+    override fun archiveSelector() = "div.page-listing-item > div.row > div"
+    override val archiveUrlSelector = "a[href]"
+    override val archiveTitleSelector = "figcaption"
 
     override val mangaDetailsSelectorTitle = "div.thumble-container p.titleMangaSingle"
     override val mangaDetailsSelectorThumbnail = "div.thumble-container img.img-responsive"
@@ -73,72 +42,15 @@ abstract class MangasNoSekai : Madara() {
     override val mangaDetailsSelectorAuthor = "section#section-sinopsis div.d-flex:has(div:contains(Autor)) p a"
     override val mangaDetailsSelectorGenre = "section#section-sinopsis div.d-flex:has(div:contains(Generos)) p a"
     override val altNameSelector = "section#section-sinopsis div.d-flex:has(div:contains(Otros nombres)) p"
-    override val altName = "Otros nombres: "
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
-        with(document) {
-            selectFirst(mangaDetailsSelectorTitle)?.let {
-                manga.title = it.ownText()
-            }
-            select(mangaDetailsSelectorAuthor).joinToString { it.text() }.let {
-                manga.author = it
-            }
-            select(mangaDetailsSelectorDescription).let {
-                manga.description = it.text()
-            }
-            select(mangaDetailsSelectorThumbnail).first()?.let {
-                manga.thumbnail_url = imageFromElement(it)
-            }
-            selectFirst(mangaDetailsSelectorStatus)?.ownText()?.let {
-                manga.status = when (it) {
-                    in completedStatusList -> SManga.COMPLETED
-                    in ongoingStatusList -> SManga.ONGOING
-                    in hiatusStatusList -> SManga.ON_HIATUS
-                    in canceledStatusList -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
-                }
-            }
-            val genres = select(mangaDetailsSelectorGenre)
-                .map { element -> element.text().lowercase(Locale.ROOT) }
-                .toMutableSet()
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
-            manga.genre = genres.toList().joinToString(", ") { genre ->
-                genre.replaceFirstChar {
-                    if (it.isLowerCase()) {
-                        it.titlecase(
-                            Locale.ROOT,
-                        )
-                    } else {
-                        it.toString()
-                    }
-                }
-            }
-
-            document.select(altNameSelector).firstOrNull()?.ownText()?.let {
-                if (it.isBlank().not() && it.notUpdating()) {
-                    manga.description = when {
-                        manga.description.isNullOrBlank() -> altName + it
-                        else -> manga.description + "\n\n$altName" + it
-                    }
-                }
-            }
-        }
-
-        return manga
-    }
-
-    override val orderByFilterOptions: Map<String, String> = mapOf(
-        intl["order_by_filter_relevance"] to "",
-        intl["order_by_filter_latest"] to "latest3",
-        intl["order_by_filter_az"] to "alphabet",
-        intl["order_by_filter_rating"] to "rating",
-        intl["order_by_filter_trending"] to "trending",
-        intl["order_by_filter_views"] to "views3",
-        intl["order_by_filter_new"] to "new-manga",
-    )
-
-    private fun altChapterRequest(url: String, mangaId: String, page: Int, objects: List<Pair<String, String>>): Request {
+    private suspend fun getChapters(
+        url: String,
+        mangaId: String,
+        page: Int,
+        objects: List<Pair<String, String>>,
+    ): ChapterWrapper {
         val form = FormBody.Builder()
             .add("mangaid", mangaId)
             .add("page", page.toString())
@@ -147,15 +59,16 @@ abstract class MangasNoSekai : Madara() {
             form.add(key, value)
         }
 
-        return POST(baseUrl + url, xhrHeaders, form.build())
+        return client.post(baseUrl + url, xhrHeaders, form.build()).parseAs<ChapterWrapper>()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        launchIO { countViews(document) }
-
-        val coreScript = document.selectFirst("script#wp-manga-js")!!.attr("abs:src")
-        val coreScriptBody = Deobfuscator.deobfuscateScript(client.newCall(GET(coreScript, headers)).execute().body.string())
+    override suspend fun fetchChapters(
+        mangaPath: String,
+        id: String,
+        mangaPage: Document?,
+    ): List<SChapter> {
+        val coreScript = mangaPage!!.selectFirst("script#wp-manga-js")!!.attr("abs:src")
+        val coreScriptBody = Deobfuscator.deobfuscateScript(client.get(coreScript, headers).body.string())
             ?: throw Exception("No se pudo deobfuscar el script")
 
         val regexCapture = ACTION_REGEX.find(coreScriptBody)?.groupValues
@@ -169,24 +82,21 @@ abstract class MangasNoSekai : Madara() {
                 if (!value.isNullOrEmpty()) key to value else null
             }.toList()
 
-        val mangaId = document.selectFirst("script#wp-manga-js-extra")?.data()
-            ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
-            ?: document.selectFirst("script#manga_disqus_embed-js-extra")?.data()
-                ?.let { ALT_MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
-            ?: throw Exception("No se pudo obtener el id del manga")
-
         val chapterList = mutableListOf<SChapter>()
-        var page = 1
-        do {
-            val request = altChapterRequest(url, mangaId, page, objects)
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw Exception("HTTP ${response.code}: Intente iniciar sesión en WebView")
+        val mangaId = mangaPage.mangaId()!!
+
+        val first = getChapters(url, mangaId, 1, objects)
+        chapterList.addAll(first.chapters.map { it.toSChapter() })
+
+        coroutineScope {
+            (2..first.totalPages).map { page ->
+                async {
+                    getChapters(url, mangaId, page, objects)
+                }
+            }.awaitAll().forEach { result ->
+                chapterList.addAll(result.chapters.map { it.toSChapter() })
             }
-            val result = response.parseAs<ChapterWrapper>()
-            chapterList.addAll(result.chapters.map { it.toSChapter() })
-            page++
-        } while (result.hasNextPage())
+        }
 
         return chapterList
     }
@@ -198,7 +108,9 @@ abstract class MangasNoSekai : Madara() {
         setUrlWithoutDomain(this@toSChapter.url.removeSuffix("/"))
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = super.pageListRequest(chapter.apply { url = "$url/" })
+    override val supportsFilterFetching = false
+
+    override suspend fun fetchChapterDocument(chapterUrl: String) = super.fetchChapterDocument(chapterUrl.trimEnd('/') + "/")
 
     companion object {
         val ACTION_REGEX = """function\s+.*?[\s\S]*?\.ajax;?[\s\S]*?(?:'?url'?:\s*'([^']*)')(?:[\s\S]*?'?data'?:\s*\{([^}]*)\})?""".toRegex()

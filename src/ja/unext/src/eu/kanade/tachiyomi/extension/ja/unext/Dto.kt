@@ -5,67 +5,85 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
 
 // Variables
 @Suppress("unused")
 @Serializable
 class PopularVariables(
-    val targetCode: String,
-    val page: Int,
-    val pageSize: Int,
+    private val targetCode: String,
+    private val page: Int,
+    private val pageSize: Int,
 )
 
 @Suppress("unused")
 @Serializable
 class LatestVariables(
-    val tagCode: String,
-    val page: Int,
-    val pageSize: Int,
+    private val tagCode: String,
+    private val page: Int,
+    private val pageSize: Int,
 )
 
 @Suppress("unused")
 @Serializable
 class SearchVariables(
-    val query: String,
-    val page: Int,
-    val pageSize: Int,
-    val filterSaleType: String?,
-    val sortOrder: String,
+    private val query: String,
+    private val page: Int,
+    private val pageSize: Int,
+    private val filterSaleType: String?,
+    private val sortOrder: String,
 )
 
 @Suppress("unused")
 @Serializable
 class DetailsVariables(
-    val bookSakuhinCode: String,
-    val viewBookCode: String,
-    val bookListPageSize: Int,
-    val bookListChapterPageSize: Int,
+    private val bookSakuhinCode: String,
+    private val viewBookCode: String,
+    private val bookListPageSize: Int,
+    private val bookListChapterPageSize: Int,
 )
 
 @Suppress("unused")
 @Serializable
 class ChapterListVariables(
-    val bookSakuhinCode: String,
-    val booksPage: Int,
-    val booksPageSize: Int,
+    private val bookSakuhinCode: String,
+    private val booksPage: Int,
+    private val booksPageSize: Int,
 )
 
 @Suppress("unused")
 @Serializable
 class PageListVariables(
-    val bookFileCode: String,
+    private val bookFileCode: String,
+)
+
+@Suppress("unused")
+@Serializable
+class ChallengeRequest(
+    private val version: Int,
+    @SerialName("play_token") private val playToken: String,
+    private val nonce: String,
+    private val kek: String,
+    private val profile: String,
+)
+
+@Suppress("unused")
+@Serializable
+class LicenseRequest(
+    private val challenge: String,
+    private val signature: String,
 )
 
 // Responses
 @Serializable
 class PageInfo(
-    val page: Int,
-    val pageSize: Int,
-    val results: Int,
-)
+    private val page: Int,
+    private val pages: Int,
+) {
+    fun hasNextPage() = page < pages
+}
 
 @Serializable
 class PopularResponse(
@@ -85,24 +103,16 @@ class BookRankingSakuhin(
 
 @Serializable
 class LatestResponse(
-    @SerialName("webfront_newBooks")
-    val newBooks: NewBooks,
-)
-
-@Serializable
-class NewBooks(
-    val books: List<BookSakuhin>,
-    val pageInfo: PageInfo,
+    @SerialName("webfront_newBooks") val newBooks: BookList,
 )
 
 @Serializable
 class SearchResponse(
-    @SerialName("webfront_bookFreewordSearch")
-    val search: SearchResult,
+    @SerialName("webfront_bookFreewordSearch") val search: BookList,
 )
 
 @Serializable
-class SearchResult(
+class BookList(
     val books: List<BookSakuhin>,
     val pageInfo: PageInfo,
 )
@@ -124,28 +134,6 @@ class BookTitleBooks(
 )
 
 @Serializable
-class PlaylistResponse(
-    @SerialName("webfront_bookPlaylistUrl")
-    val playlistUrl: PlaylistUrl,
-)
-
-@Serializable
-class PlaylistUrl(
-    val playlistBaseUrl: String,
-    val playlistUrl: UbookContainer,
-)
-
-@Serializable
-class UbookContainer(
-    val ubooks: List<UBook>,
-)
-
-@Serializable
-class UBook(
-    val content: String,
-)
-
-@Serializable
 class BookSakuhin(
     private val sakuhinCode: String,
     private val name: String,
@@ -154,14 +142,9 @@ class BookSakuhin(
     private val isCompleted: Boolean?,
     private val subgenreTagList: List<SubgenreTag>?,
 ) {
-    @Serializable
-    class Detail(
-        val introduction: String?,
-    )
-
     fun toSManga(): SManga = SManga.create().apply {
         title = name
-        url = "/book/title/$sakuhinCode"
+        url = sakuhinCode
         thumbnail_url = book.thumbnail?.standard?.let { "https://$it" }
         description = detail?.introduction
         status = if (isCompleted == true) SManga.COMPLETED else SManga.ONGOING
@@ -179,6 +162,11 @@ class BookSakuhin(
 }
 
 @Serializable
+class Detail(
+    val introduction: String?,
+)
+
+@Serializable
 class SubgenreTag(
     val name: String,
 )
@@ -189,42 +177,115 @@ class Book(
     private val name: String,
     val thumbnail: Thumbnail?,
     private val publicStartDateTime: String?,
-    val isFree: Boolean?,
-    val isPurchased: Boolean?,
-    val rightsExpirationDatetime: String?,
+    private val isFree: Boolean?,
+    private val isPurchased: Boolean?,
+    private val bookNo: Int?,
+    private val rightsExpirationDatetime: String?,
     val credits: List<Credit>?,
-    val bookContent: BookContent?,
+    private val bookContent: BookContent?,
 ) {
-    @Serializable
-    class Thumbnail(
-        val standard: String?,
-    )
-
-    @Serializable
-    class BookContent(
-        val mainBookFile: BookFile?,
-    )
-
-    @Serializable
-    class BookFile(
-        val code: String,
-    )
+    val isLocked: Boolean
+        get() = isFree != true && isPurchased != true && rightsExpirationDatetime == null
 
     fun toSChapter(sakuhinCode: String): SChapter = SChapter.create().apply {
-        val lock = if (isFree != true && isPurchased != true && rightsExpirationDatetime == null) "🔒 " else ""
-        name = "$lock${this@Book.name}"
-        val bookFileCode = bookContent?.mainBookFile?.code
-        val fragment = if (bookFileCode != null) "#$bookFileCode" else ""
-        url = "/book/view/$sakuhinCode/$code$fragment"
-        date_upload = dateFormat.tryParse(publicStartDateTime)
+        url = code
+        name = (if (isLocked) "🔒 " else "") + this@Book.name
+        date_upload = Instant.tryParse(publicStartDateTime)
+        chapter_number = bookNo?.toFloat() ?: -1f
+        memo = buildJsonObject {
+            put("sakuhinCode", sakuhinCode)
+            bookContent?.mainBookFile?.let {
+                put("bookFileCode", it.code)
+            }
+        }
     }
-
-    @Serializable
-    class Credit(
-        val penName: String?,
-        val bookAuthorType: String?,
-    )
 }
+
+@Serializable
+class Thumbnail(
+    val standard: String?,
+)
+
+@Serializable
+class Credit(
+    val penName: String?,
+    val bookAuthorType: String?,
+)
+
+@Serializable
+class BookContent(
+    val mainBookFile: BookFile?,
+)
+
+@Serializable
+class BookFile(
+    val code: String,
+)
+
+@Serializable
+class UserResponse(
+    val unextUser: UnextUser,
+)
+
+@Serializable
+class UnextUser(
+    val id: String,
+)
+
+@Serializable
+class PlaylistResponse(
+    private val data: PlaylistData?,
+    private val errors: List<ApiError>?,
+) {
+    val playlist get() = data?.playlist
+    val errorCode get() = errors?.firstOrNull()?.extensions?.code
+}
+
+@Serializable
+class PlaylistData(
+    @SerialName("webfront_bookPlaylistUrl") val playlist: Playlist?,
+)
+
+@Serializable
+class ApiError(
+    val extensions: ApiErrorExtensions?,
+)
+
+@Serializable
+class ApiErrorExtensions(
+    val code: String?,
+)
+
+@Serializable
+class Playlist(
+    val playToken: String,
+    val licenseUrl: String,
+    private val playlistBaseUrl: String,
+    private val playlistUrl: UBookList,
+) {
+    val zipUrl get() = "$playlistBaseUrl/${playlistUrl.ubooks.first().content}"
+}
+
+@Serializable
+class UBookList(
+    val ubooks: List<UBook>,
+)
+
+@Serializable
+class UBook(
+    val content: String,
+)
+
+@Serializable
+class LicenseResponse(
+    val license: License,
+)
+
+@Serializable
+class License(
+    val data: String,
+    val iv: String,
+)
 
 @Serializable
 class UBookIndex(
@@ -261,15 +322,10 @@ class DrmFile(
 
 @Serializable
 class ImageRequestData(
-    val zipUrl: String,
-    val localFileHeaderOffset: Long,
+    val localHeaderOffset: Long,
     val compressedSize: Long,
     val method: Int,
     val key: String,
     val iv: String,
     val originalFileSize: Long,
 )
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}

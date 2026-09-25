@@ -8,8 +8,8 @@ keiyoushi {
     name = "Taurus Fansub"
     versionCode = 9
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "madara"
 
     source {
         lang = "es"
