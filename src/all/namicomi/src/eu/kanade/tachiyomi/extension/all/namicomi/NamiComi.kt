@@ -117,6 +117,7 @@ abstract class NamiComi :
             .addQueryParameter("limit", MANGA_LIMIT.toString())
             .addQueryParameter("offset", (MANGA_LIMIT * (page - 1)).toString())
             .addCommonIncludeParameters()
+            .addCommonTypeParameters()
             .build()
         val response = client.get(url)
 
@@ -130,6 +131,7 @@ abstract class NamiComi :
             .addQueryParameter("limit", MANGA_LIMIT.toString())
             .addQueryParameter("offset", (MANGA_LIMIT * (page - 1)).toString())
             .addCommonIncludeParameters()
+            .addCommonTypeParameters()
             .build()
         val response = client.get(url)
 
@@ -208,6 +210,7 @@ abstract class NamiComi :
             addQueryParameter("limit", MANGA_LIMIT.toString())
             addQueryParameter("offset", (MANGA_LIMIT * (page - 1)).toString())
             addCommonIncludeParameters()
+            addCommonTypeParameters()
 
             query.replace(whitespaceRegex, " ").trim().takeIf { it.isNotBlank() }?.also {
                 addQueryParameter("title", it)
@@ -442,6 +445,9 @@ abstract class NamiComi :
         addQueryParameter("includes[]", "tag")
         addQueryParameter("includes[]", "primary_tag")
         addQueryParameter("includes[]", "secondary_tag")
+    }
+
+    private fun HttpUrl.Builder.addCommonTypeParameters() = apply {
         addQueryParameter("types[]", "manhua")
         addQueryParameter("types[]", "manwha")
         addQueryParameter("types[]", "manga")
