@@ -141,7 +141,6 @@ class NamedRef(val name: String)
 class VolumeItem(
     val id: Int,
     private val name: String,
-    @SerialName("name_cn") private val nameCn: String? = null,
     @SerialName("volume_number") private val volumeNumber: Double? = null,
     @SerialName("volume_label") private val volumeLabel: String? = null,
     @SerialName("publication_date") private val publicationDate: String? = null,
