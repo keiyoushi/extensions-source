@@ -14,4 +14,9 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://rawuwu.net"
     }
+
+    deeplink {
+        path("/raw/..*")
+        path("/read/..*")
+    }
 }

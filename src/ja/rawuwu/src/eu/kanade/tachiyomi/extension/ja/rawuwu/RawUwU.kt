@@ -16,6 +16,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -76,6 +77,18 @@ abstract class RawUwU : KeiSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/raw/${manga.url}"
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() !in setOf("raw", "read")) return null
+
+        val mangaId = url.pathSegments.getOrNull(1) ?: return null
+        val result = client.get("$baseUrl/spa/manga/$mangaId").parseAs<MangaDetailResponseDto>()
+
+        return parseMangaDetails(result).apply {
+            this.url = mangaId
+            initialized = true
+        }
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
