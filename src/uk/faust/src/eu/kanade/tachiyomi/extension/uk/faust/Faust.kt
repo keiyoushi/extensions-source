@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.uk.faust
 
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -42,6 +43,7 @@ abstract class Faust :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(10) { it.host == domain }
+        addInterceptor(AuthInterceptor({ client }, { baseUrl }))
     }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Content-Type", "application/json")
@@ -153,7 +155,16 @@ abstract class Faust :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (chapterSlug, seriesSlug) = chapter.url.split("/", limit = 2)
         val url = "$apiUrl/chapters/$chapterSlug?titleSlug=$seriesSlug"
-        val data = client.get(url).use { it.parseAs<ChapterResponseList>() }
+        val data = client.get(url, ensureSuccess = false).use { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 403 && response.body.string().contains("необхідно увійти")) {
+                    throw Exception("Для перегляду розділів 18+ необхідно увійти до облікового запису у WebView. \nАбо повторно увійдіть, щоб оновити інформацію.")
+                } else {
+                    throw HttpException(response.code)
+                }
+            }
+            response.parseAs<ChapterResponseList>()
+        }
         return data.pages.map { page ->
             Page(page.pageNumber, imageUrl = page.blobName)
         }
