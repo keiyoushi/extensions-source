@@ -30,24 +30,19 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
-import okhttp3.Response
 import org.jsoup.parser.Parser
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class XCOMIC :
     KeiSource(),
     ConfigurableSource {
-
-    private val probeCache = ConcurrentHashMap<String, ComicProbeData>()
-
-    private val titleFreshness = ConcurrentHashMap<String, Long>()
 
     private val preferences by getPreferencesLazy()
 
@@ -60,22 +55,9 @@ abstract class XCOMIC :
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val idMatch = idQueryRegex.matchEntire(query.trim())
         if (idMatch != null) {
-            val id = idMatch.groupValues[1].substringBefore("-")
-            val extLang = if (lang == "all") null else mapLangCode(lang)
-
-            val node = fetchTitleNode(id)
-            if (node != null) {
-                val browseNode = node.toBrowseNode()
-                val rows = flattenTitle(browseNode, extLang, forceFresh = true)
-                if (rows.isNotEmpty()) {
-                    val mangas = rows.map { (tid, cid, p) ->
-                        p.toBrowseSManga(baseUrl, tid, cid, browseNode, extLang, ::cleanTitleIfNeeded)
-                    }
-                    return MangasPage(mangas, false)
-                }
-            }
-            return runCatching { MangasPage(listOf(legacyComicDetails(id)), false) }
-                .getOrElse { MangasPage(emptyList(), false) }
+            val id = idMatch.groupValues[1]
+            val manga = resolveIdLookup(id) ?: throw Exception("Entry id '$id' not found")
+            return MangasPage(listOf(manga), false)
         }
 
         var sort: String? = null
@@ -170,68 +152,36 @@ abstract class XCOMIC :
             ignoreGlobalGenres = isIgnoreGenreBlocklist(),
         )
 
-        val payload = graphQLBody(query = TITLE_BROWSE_QUERY, variables = ApiTitleBrowseWrapper(variables))
-        val response = client.post("$baseUrl/query/", payload)
-        return parseSearchManga(response)
+        val wrapper = ApiTitleBrowseWrapper(variables)
+        return coroutineScope {
+            val itemsDeferred = async {
+                val payload = graphQLBody(query = TITLE_BROWSE_QUERY, variables = wrapper)
+                client.post("$baseUrl/query/", payload).parseGraphQLAs<TitleBrowseData>()
+            }
+            val pagerDeferred = async {
+                val payload = graphQLBody(query = TITLE_BROWSE_PAGER_QUERY, variables = wrapper)
+                client.post("$baseUrl/query/", payload).parseGraphQLAs<TitleBrowsePagerData>().pager
+            }
+
+            MangasPage(parseSearchManga(itemsDeferred.await()), pagerDeferred.await().hasNextPage())
+        }
     }
 
-    /**
-     * Flatten: title page → concurrent per-title probing (TITLES_IN_FLIGHT
-     * titles at a time, COMIC_PROBES_PER_TITLE probes each) → one row per
-     * live source in the extension language.
-     */
-    private suspend fun parseSearchManga(response: Response): MangasPage {
-        val titles = response.parseGraphQLAs<TitleBrowseData>().items.orEmpty()
-        if (titles.isEmpty()) return MangasPage(emptyList(), false)
-        val extLang = if (lang == "all") null else mapLangCode(lang)
+    private fun parseSearchManga(data: TitleBrowseData): List<SManga> = data.items.orEmpty()
+        .mapNotNull { it.toSManga(baseUrl, ::cleanTitleIfNeeded) }
+        .distinctBy { it.url }
 
-        val flattened = coroutineScope {
-            titles.chunked(TITLES_IN_FLIGHT).flatMap { batch ->
-                batch.map { t -> async { flattenTitle(t, extLang) } }.awaitAll()
+    private fun TitleBrowseNode.toSManga(baseUrl: String, cleanTitle: (String) -> String): SManga? {
+        val titleId = id?.takeIf { it.isNotBlank() } ?: return null
+        val item = data
+        return SManga.create().apply {
+            url = titleId
+            title = cleanTitle(item?.title.orEmpty()).unescapeHtml().ifBlank { titleId }
+            thumbnail_url = (item?.coverLocalUrl ?: item?.coverUrl)?.let {
+                if (it.startsWith("http")) it else "$baseUrl$it"
             }
-        }.flatten()
-
-        val mangas = flattened.map { (titleId, cid, p) ->
-            val t = titles.first { it.id == titleId }
-            p.toBrowseSManga(baseUrl, titleId, cid, t, extLang, ::cleanTitleIfNeeded)
+            memo = buildJsonObject { put(MEMO_TITLE_ID, titleId) }
         }
-
-        return MangasPage(mangas, titles.size >= BROWSE_PAGE_SIZE)
-    }
-
-    private suspend fun flattenTitle(
-        t: TitleBrowseNode,
-        extLang: String?,
-        forceFresh: Boolean = false,
-    ): List<Triple<String, String, ComicProbeData>> {
-        val titleId = t.id?.takeIf { it.isNotBlank() } ?: return emptyList()
-        val ids = t.data?.comicIds.orEmpty().filter { it.isNotBlank() }
-        if (ids.isEmpty()) return emptyList()
-
-        val nowPublic = t.data?.chapLastPublicAt ?: 0L
-        val unchanged = !forceFresh && nowPublic in 1..(titleFreshness[titleId] ?: 0L)
-
-        if (unchanged && ids.all { probeCache.containsKey(it) }) {
-            return ids.mapNotNull { cid ->
-                probeCache[cid]?.takeIf {
-                    it.isLive() && (extLang == null || it.translatedLanguage == extLang)
-                }?.let { Triple(titleId, cid, it) }
-            }.sortedByDescending { it.third.chapsNormal ?: 0 }
-        }
-
-        val probes = mutableMapOf<String, ComicProbeData>()
-        coroutineScope {
-            ids.chunked(COMIC_PROBES_PER_TITLE).flatMap { chunk ->
-                chunk.map { cid ->
-                    async { fetchComicProbe(cid)?.let { probes[cid] = it } }
-                }.awaitAll()
-            }
-        }
-        if (nowPublic > 0) titleFreshness[titleId] = nowPublic
-        return probes.entries
-            .filter { it.value.isLive() && (extLang == null || it.value.translatedLanguage == extLang) }
-            .map { (cid, p) -> Triple(titleId, cid, p) }
-            .sortedByDescending { it.third.chapsNormal ?: 0 }
     }
 
     // ============================== Filters ==============================
@@ -242,14 +192,9 @@ abstract class XCOMIC :
         val document = response.asJsoup()
 
         val filterMap = mutableMapOf<String, MutableList<Map<String, String>>>()
-        filterMap["genres"] = mutableListOf()
-        filterMap["types"] = mutableListOf()
-        filterMap["demographics"] = mutableListOf()
-        filterMap["contentRatings"] = mutableListOf()
 
         document.select("details.group").forEach { details ->
             val summaryText = details.selectFirst("summary")?.text()?.lowercase() ?: return@forEach
-            val container = details.selectFirst("div.columns-2") ?: details.selectFirst("div.w-full.overflow-y-auto")
             val category = when {
                 "genre" in summaryText -> "genres"
                 "type" in summaryText -> "types"
@@ -259,34 +204,65 @@ abstract class XCOMIC :
             }
 
             if (category != null) {
-                container?.select("div")?.forEach { div ->
-                    val slug = div.attr(":")
-                    val name = div.selectFirst("span")?.text()?.trim()
-                    if (slug.isNotEmpty() && !name.isNullOrEmpty()) {
-                        filterMap[category]?.add(mapOf("name" to name, "value" to slug))
+                val options = (
+                    if (category == "genres") {
+                        extractSlugFilterOptions(details)
+                    } else {
+                        extractNamedFilterOptions(details)
+                    }
+                    ).toMutableList()
+
+                if (category == "genres") {
+                    val formatsHeader = details.select("div").firstOrNull { it.ownText() == "Formats" }
+                    val formats = formatsHeader?.nextElementSibling()?.let(::extractSlugFilterOptions).orEmpty()
+                    if (formats.isNotEmpty()) {
+                        filterMap.getOrPut("formats") { mutableListOf() }.addAll(formats)
+                        val formatValues = formats.map { it["value"] }.toSet()
+                        options.removeAll { it["value"] in formatValues }
                     }
                 }
+
+                filterMap.getOrPut(category) { mutableListOf() }.addAll(options)
             }
         }
 
-        if (filterMap["genres"].isNullOrEmpty() && filterMap["types"].isNullOrEmpty()) {
-            throw Exception("Failed to fetch filters dynamically")
-        }
-
         val cleanMap = filterMap.mapValues { it.value.distinctBy { v -> v["value"] } }
+        validateDynamicFilters(cleanMap)
         return cleanMap.toJsonElement()
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList {
-        val parsed = data?.parseAs<Map<String, List<Map<String, String>>>>() ?: emptyMap()
+    private fun extractNamedFilterOptions(scope: org.jsoup.nodes.Element): List<Map<String, String>> = scope.select("label[data-value]").mapNotNull { label ->
+        val value = label.attr("data-value")
+        val name = label.selectFirst("span")?.text()?.trim()
+        if (value.matches(filterValueRegex) && !name.isNullOrEmpty()) {
+            mapOf("name" to name, "value" to value)
+        } else {
+            null
+        }
+    }
 
-        fun extractList(key: String): List<Pair<String, String>> = parsed[key]?.mapNotNull { map ->
+    private fun extractSlugFilterOptions(scope: org.jsoup.nodes.Element): List<Map<String, String>> = scope.select("div[:]").mapNotNull { div ->
+        val value = div.attr(":")
+        val name = div.selectFirst("span")?.text()?.trim()
+        if (value.matches(filterValueRegex) && !name.isNullOrEmpty()) {
+            mapOf("name" to name, "value" to value)
+        } else {
+            null
+        }
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val parsed = data?.parseAs<Map<String, List<Map<String, String>>>>()
+        parsed?.let(::validateDynamicFilters)
+
+        fun extractList(key: String): List<Pair<String, String>> = parsed?.get(key)?.mapNotNull { map ->
             val name = map["name"]
             val value = map["value"]
             if (name != null && value != null) name to value else null
         } ?: emptyList()
 
         val dynamicGenres = extractList("genres")
+        val dynamicFormats = extractList("formats")
         val dynamicTypes = extractList("types")
         val dynamicDemographics = extractList("demographics")
         val dynamicContentRatings = extractList("contentRatings")
@@ -299,7 +275,7 @@ abstract class XCOMIC :
                 add(Filter.Separator())
                 if (dynamicDemographics.isNotEmpty()) add(DemographicFilter(options = dynamicDemographics))
                 if (dynamicGenres.isNotEmpty()) add(GenreGroupFilter(options = dynamicGenres))
-                add(FormatFilter())
+                add(if (dynamicFormats.isNotEmpty()) FormatFilter(dynamicFormats) else FormatFilter())
                 add(GenreInModeFilter())
                 add(GenreExModeFilter())
                 add(Filter.Separator())
@@ -313,6 +289,18 @@ abstract class XCOMIC :
         )
     }
 
+    private fun validateDynamicFilters(filters: Map<String, List<Map<String, String>>>) {
+        val incompleteGroups = DYNAMIC_FILTER_GROUPS.filter { key ->
+            val options = filters[key]
+            options.isNullOrEmpty() || options.any { option ->
+                option["name"].isNullOrBlank() || option["value"]?.matches(filterValueRegex) != true
+            }
+        }
+        if (incompleteGroups.isNotEmpty()) {
+            throw Exception("Incomplete XCOMIC filters: ${incompleteGroups.joinToString()}")
+        }
+    }
+
     // ============================== Details ==============================
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -320,169 +308,313 @@ abstract class XCOMIC :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details: SManga
-        val gate: Boolean
-        if (fetchDetails) {
-            val (d, g) = getMangaDetails(manga)
-            details = d
-            gate = g
-        } else {
-            details = manga
-            gate = false
+        if (!fetchDetails && !fetchChapters) return SMangaUpdate(manga, chapters)
+        val title = resolveStoredTitleNode(manga.url) ?: error("Title not found: ${manga.url}")
+        val editions = resolveTargetComics(title)
+        val deduplicate = isDeduplicateChapters()
+        val editionFilter = includedEditionLabels().sorted().joinToString(",")
+        val editionFingerprint = editions.fingerprint()
+        val chaptersCurrent = isChapterCacheCurrent(manga, title.chapLastPublicAt, editions, editionFingerprint, editionFilter, deduplicate)
+
+        val chapterList = when {
+            !fetchChapters -> chapters
+            chaptersCurrent -> postProcessChapters(disambiguateEditionLabels(chapters))
+            editions.sources.isEmpty() -> emptyList()
+            else -> fetchAllChapters(editions.sources, deduplicate)
         }
-        val chapterList = if (fetchChapters && !gate) getChapterList(manga) else chapters
+
+        val details = if (fetchDetails) {
+            getMangaDetails(manga, title, editions, chapterList.mapNotNull { it.uploader() }.distinct())
+        } else {
+            manga
+        }
+
+        details.url = manga.url
+        val chapterMemo = if (fetchChapters && !chaptersCurrent && editions.sources.isNotEmpty()) {
+            buildChapterMemo(manga.memo, title.chapLastPublicAt, editionFingerprint, editionFilter, deduplicate)
+        } else {
+            manga.memo
+        }
+        details.memo = buildTitleMemo(chapterMemo, title)
+
         return SMangaUpdate(details, chapterList)
     }
 
-    private suspend fun fetchTitleNode(id: String): TitleNodeData? = runCatching {
+    private suspend fun fetchTitleNode(id: String): TitleNodeData? {
         val payload = graphQLBody(query = TITLE_NODE_QUERY, variables = ApiTitleNodeVariables(id))
-        client.post("$baseUrl/query/", payload).parseGraphQLAs<TitleNodeEnvelope>().response?.data
-    }.getOrNull()
+        return client.post("$baseUrl/query/", payload).parseGraphQLAs<TitleNodeEnvelope>().response?.data
+    }
 
-    private suspend fun fetchComicNode(id: String): ComicNode? = runCatching {
+    private suspend fun fetchComicNode(id: String): ComicNode? {
         val payload = graphQLBody(query = COMIC_NODE_QUERY, variables = ApiComicNodeVariables(id))
-        client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicNodeData>().response.data
-    }.getOrNull()
+        return client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicNodeData>().response.data
+    }
 
     private suspend fun fetchComicProbe(id: String): ComicProbeData? {
-        probeCache[id]?.let { return it }
-        val fetched = runCatching {
-            val payload = graphQLBody(query = COMIC_PROBE_QUERY, variables = ApiComicNodeVariables(id))
-            client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicProbeEnvelope>().response?.data
-        }.getOrNull()
-        if (fetched != null) probeCache[id] = fetched
-        return fetched
+        val payload = graphQLBody(query = COMIC_PROBE_QUERY, variables = ApiComicNodeVariables(id))
+        return client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicProbeEnvelope>().response?.data
     }
 
-    /**
-     * Browse rows pin their source in the URL ("<titleId>:<sourceId>").
-     * Unpinned (legacy/id:) URLs fall back to pick-over-comic_ids,
-     * then to the legacy comic path.
-     */
-    private suspend fun getMangaDetails(manga: SManga): Pair<SManga, Boolean> {
-        val extLang = if (lang == "all") null else mapLangCode(lang)
-        val (titleId, pinned) = splitMangaUrl(manga.url)
-
-        val title = fetchTitleNode(titleId)
-            ?: return legacyComicDetails(manga.url).apply { url = manga.url } to false
-        val resolved = if (title.isMerged == true && !title.mergedTo.isNullOrBlank() && title.mergedTo != titleId) {
-            fetchTitleNode(title.mergedTo) ?: title
-        } else {
-            title
-        }
-
-        val (comicId, comic) = pinned?.let { pid ->
-            fetchComicNode(pid)?.takeIf { it.isLive() }?.let { pid to it }
-        } ?: pickComic(resolved.comicIds.orEmpty().filter { it.isNotBlank() }, extLang)
-            ?: error("Failed to load '$lang' uploads for this source")
-
-        val sourceLatest = comic.chapterUpTo?.data?.datePublic ?: 0L
-        val prevFetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull() ?: 0L
-        val prevLastPublic = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull() ?: 0L
-
-        val chaptersCurrent = prevFetchedAt > 0L &&
-            (title.chapLastPublicAt ?: 0L) <= prevLastPublic && // main unchanged
-            sourceLatest <= prevFetchedAt // our source unchanged
-
-        val base = comic.toSManga(baseUrl, ::cleanTitleIfNeeded)
-        base.url = manga.url
-        resolved.overlayOnto(base, baseUrl)
-
-        val label = comic.subName?.takeIf { it.isNotBlank() }
-            ?: manga.memo["label"]?.string?.takeIf { it.isNotBlank() }
-        label?.let { base.title = "${base.title} · ${it.unescapeHtml()}" }
-
-        base.memo = buildJsonObject {
-            base.memo["urlPath"]?.let { put("urlPath", it) }
-            put("sourceId", comicId)
-            if (!chaptersCurrent) {
-                put(MEMO_FETCHED_AT, System.currentTimeMillis().toString())
-                put(MEMO_LAST_PUBLIC, (title.chapLastPublicAt ?: 0L).toString())
-            }
-        }
-        return base to chaptersCurrent
+    private suspend fun fetchResolvedTitleNode(id: String): TitleNodeData? {
+        val title = fetchTitleNode(id) ?: return null
+        val mergedId = title.mergedTo?.takeIf { title.isMerged == true && it.isNotBlank() && it != id }
+        return mergedId?.let { fetchTitleNode(it) } ?: title
     }
 
-    /** Probes comic_ids (COMIC_PROBES_PER_TITLE at a time); full nodes. */
-    private suspend fun pickComic(ids: List<String>, extLang: String?): Pair<String, ComicNode>? {
+    private suspend fun resolveStoredTitleNode(storedUrl: String): TitleNodeData? {
+        val ids = storedUrl.split(':', limit = 2).filter { it.isNotBlank() }.distinct()
         if (ids.isEmpty()) return null
-        val nodes = coroutineScope {
-            ids.chunked(COMIC_PROBES_PER_TITLE).flatMap { chunk ->
-                chunk.map { cid -> async { fetchComicNode(cid)?.let { cid to it } } }
-                    .awaitAll().filterNotNull()
-            }
-        }.filter { it.second.isLive() }
-        return nodes.filter { extLang == null || it.second.translatedLanguage == extLang }
-            .maxByOrNull { it.second.chapsNormal ?: 0 }
-            ?: nodes.firstOrNull()?.takeIf { extLang == null }
+
+        fetchResolvedTitleNode(ids.first())?.let { return it }
+
+        for (comicId in ids) {
+            val comic = fetchComicNode(comicId) ?: continue
+            val parentTitle = comic.titleNode ?: continue
+            val parentId = parentTitle.id?.takeIf { it.isNotBlank() } ?: continue
+            return fetchResolvedTitleNode(parentId) ?: parentTitle
+        }
+        return null
     }
 
-    private suspend fun legacyComicDetails(id: String): SManga {
-        val comic = fetchComicNode(id) ?: error("Comic not found: $id")
-        val m = comic.toSManga(baseUrl, ::cleanTitleIfNeeded)
-        comic.subName?.takeIf { it.isNotBlank() }?.let {
-            m.title = "${m.title} · ${it.unescapeHtml()}"
+    private suspend fun resolveTargetComics(title: TitleNodeData): TitleEditions {
+        val comicIds = title.comicIds.orEmpty().filter { it.isNotBlank() }.distinct()
+        val probeResults = coroutineScope {
+            comicIds.chunked(COMIC_PROBES_PER_TITLE).flatMap { batch ->
+                batch.map { comicId -> async { comicId to fetchComicProbe(comicId) } }.awaitAll()
+            }
         }
-        return m
+        val expectedLanguage = if (lang == "all") null else mapLangCode(lang)
+        val sources = probeResults
+            .mapNotNull { (comicId, probe) -> probe?.let { comicId to it } }
+            .filter { (_, probe) -> probe.isLive() && (expectedLanguage == null || probe.translatedLanguage == expectedLanguage) }
+            .map { (comicId, probe) ->
+                ChapterEdition(
+                    comicId = comicId,
+                    label = probe.subName.normalizeEditionLabel(),
+                    lastPublicAt = probe.chapterUpTo?.data?.datePublic,
+                    chapterCount = probe.chapsNormal,
+                    translatedLanguage = probe.translatedLanguage,
+                )
+            }
+            .sortedBy { it.comicId }
+
+        return TitleEditions(sources)
+    }
+
+    private fun isChapterCacheCurrent(
+        manga: SManga,
+        titleLastPublicAt: Long?,
+        editions: TitleEditions,
+        editionFingerprint: String,
+        editionFilter: String,
+        deduplicate: Boolean,
+    ): Boolean {
+        val titleLastPublic = titleLastPublicAt?.takeIf { it > 0L } ?: return false
+        val fetchedAt = manga.memo[MEMO_FETCHED_AT]?.string?.toLongOrNull()?.takeIf { it > 0L } ?: return false
+        val previousTitleLastPublic = manga.memo[MEMO_LAST_PUBLIC]?.string?.toLongOrNull()?.takeIf { it > 0L } ?: return false
+        if (!editions.hasUsableFreshness || editions.sources.any { edition ->
+                edition.lastPublicAt?.takeIf { it > 0L }?.let { it > fetchedAt } == true
+            }
+        ) {
+            return false
+        }
+
+        return previousTitleLastPublic == titleLastPublic &&
+            manga.memo[MEMO_EDITION_FINGERPRINT]?.string == editionFingerprint &&
+            manga.memo[MEMO_CHAPTER_DATA_VERSION]?.string?.toIntOrNull() == CHAPTER_DATA_VERSION &&
+            manga.memo[MEMO_DEDUPLICATE]?.string == deduplicate.toString() &&
+            manga.memo[MEMO_SOURCES_FILTER]?.string.orEmpty() == editionFilter
+    }
+
+    private fun buildChapterMemo(
+        original: JsonElement,
+        titleLastPublicAt: Long?,
+        editionFingerprint: String,
+        editionFilter: String,
+        deduplicate: Boolean,
+    ) = buildJsonObject {
+        original.jsonObject.forEach { (key, value) -> put(key, value) }
+        put(MEMO_FETCHED_AT, System.currentTimeMillis().toString())
+        titleLastPublicAt?.takeIf { it > 0L }?.let { put(MEMO_LAST_PUBLIC, it.toString()) }
+        put(MEMO_EDITION_FINGERPRINT, editionFingerprint)
+        put(MEMO_CHAPTER_DATA_VERSION, CHAPTER_DATA_VERSION.toString())
+        put(MEMO_DEDUPLICATE, deduplicate.toString())
+        put(MEMO_SOURCES_FILTER, editionFilter)
+    }
+
+    private fun buildTitleMemo(original: JsonElement, title: TitleNodeData) = buildJsonObject {
+        original.jsonObject.forEach { (key, value) -> put(key, value) }
+        title.id?.takeIf { it.isNotBlank() }?.let { put(MEMO_TITLE_ID, it) }
+    }
+
+    private suspend fun getMangaDetails(
+        manga: SManga,
+        title: TitleNodeData,
+        editions: TitleEditions,
+        uploaders: List<String>,
+    ): SManga {
+        val comicId = editions.bestComicId ?: title.comicIds.orEmpty().firstOrNull() ?: return manga
+        val comic = fetchComicNode(comicId) ?: return manga
+        return comic.toSManga(baseUrl, ::cleanTitleIfNeeded, title, uploaders).apply {
+            url = manga.url
+            memo = buildJsonObject {}
+        }
+    }
+
+    private class ChapterEdition(
+        val comicId: String,
+        val label: String?,
+        val lastPublicAt: Long?,
+        val chapterCount: Int?,
+        val translatedLanguage: String?,
+    )
+
+    private class TitleEditions(val sources: List<ChapterEdition>) {
+        val bestComicId: String?
+            get() = sources.maxByOrNull { it.chapterCount ?: Int.MIN_VALUE }?.comicId
+
+        val hasUsableFreshness: Boolean
+            get() = sources.isNotEmpty() && sources.all { edition ->
+                (edition.lastPublicAt ?: 0L) > 0L || edition.chapterCount == 0
+            }
+
+        fun fingerprint(): String = buildJsonArray {
+            sources.sortedBy { it.comicId }.forEach { edition ->
+                add(
+                    buildJsonObject {
+                        put("comicId", edition.comicId)
+                        put("label", edition.label.orEmpty())
+                        put("lastPublicAt", edition.lastPublicAt ?: 0L)
+                        put("chapterCount", edition.chapterCount?.let { JsonPrimitive(it) } ?: JsonNull)
+                        put("translatedLanguage", edition.translatedLanguage.orEmpty())
+                    },
+                )
+            }
+        }.toString()
+    }
+
+    private suspend fun resolveIdLookup(id: String): SManga? {
+        val title = resolveStoredTitleNode(id) ?: return null
+        val titleId = title.id?.takeIf { it.isNotBlank() } ?: return null
+        val manga = title.toBrowseNode().toSManga(baseUrl, ::cleanTitleIfNeeded) ?: return null
+        manga.url = titleId
+        return getMangaDetails(manga, title, resolveTargetComics(title), emptyList()).apply {
+            url = titleId
+            memo = buildTitleMemo(memo, title)
+        }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val seg = url.pathSegments
         val id = seg.takeIf { it.size >= 2 }?.get(1)?.substringBefore("-") ?: return null
         return when (seg[0]) {
-            "title" -> runCatching { getMangaDetails(SManga.create().apply { this.url = id }).first }.getOrNull()
-            "source" -> runCatching { legacyComicDetails(id) }.getOrNull()
+            "title" -> resolveIdLookup(id)
+            "source", "comic" -> resolveIdLookup(id)
             else -> null
         }
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        manga.memo["urlPath"]?.string?.let { return "$baseUrl$it" }
-        return if (':' in manga.url) {
-            "$baseUrl/title/${manga.url.substringBefore(':')}"
-        } else {
-            "$baseUrl/source/${manga.url}"
-        }
+        val titleId = manga.memo[MEMO_TITLE_ID]?.string?.takeIf { it.isNotBlank() } ?: manga.url.substringBefore(':')
+        return "$baseUrl/title/$titleId"
     }
 
     // ============================= Chapters ==============================
-    private suspend fun getChapterList(manga: SManga): List<SChapter> = coroutineScope {
-        val comicId = resolveComicId(manga) ?: return@coroutineScope emptyList()
-        val deduplicate = isDeduplicateChapters()
+    private suspend fun fetchAllChapters(sources: List<ChapterEdition>, deduplicate: Boolean): List<SChapter> = coroutineScope {
+        val chapters = sources.chunked(COMIC_PROBES_PER_TITLE).flatMap { batch ->
+            batch.map { source ->
+                async { fetchChapterList(source.comicId, deduplicate, source.label) }
+            }.awaitAll().flatten()
+        }
+        postProcessChapters(disambiguateEditionLabels(chapters))
+    }
+
+    private fun disambiguateEditionLabels(chapters: List<SChapter>): List<SChapter> {
+        val chapterLabels = chapters.mapNotNull { chapter ->
+            val label = chapter.scanlator.normalizeEditionLabel() ?: chapter.uploader().normalizeEditionLabel()
+            val comicId = chapter.comicId()
+            if (label == null || comicId == null) null else Triple(chapter, label, comicId)
+        }
+        val collidingEditions = chapterLabels
+            .groupBy { (_, label, _) -> label.lowercase() }
+            .mapValues { (_, entries) -> entries.map { it.third }.distinct().takeIf { it.size > 1 }.orEmpty() }
+            .filterValues { it.isNotEmpty() }
+
+        return chapters.onEach { chapter ->
+            val label = chapter.scanlator.normalizeEditionLabel() ?: chapter.uploader().normalizeEditionLabel()
+            val comicId = chapter.comicId()
+            chapter.scanlator = when {
+                label == null -> null
+                comicId != null && comicId in collidingEditions[label.lowercase()].orEmpty() -> "$label [$comicId]"
+                else -> label
+            }
+        }
+    }
+
+    private suspend fun fetchChapterList(comicId: String, deduplicate: Boolean, editionLabel: String?): List<SChapter> = coroutineScope {
         val pageSize = if (deduplicate) 1000 else 100
 
-        val firstPage = fetchChapterListPage(comicId, 1, deduplicate, pageSize)
+        val firstPage = fetchChapterListPage(comicId, 1, deduplicate, pageSize, editionLabel)
         val allChapters = firstPage.chapters.toMutableList()
-        val totalItems = firstPage.total ?: 0
+        val totalItems = firstPage.total
 
-        if (totalItems > pageSize && firstPage.hasNextPage) {
+        if (firstPage.hasNextPage) {
+            if (totalItems == null || totalItems <= pageSize) {
+                error("Chapter pagination is incomplete for comic $comicId")
+            }
             val totalPages = (totalItems + (pageSize - 1)) / pageSize
 
             (2..totalPages).chunked(3).forEach { batch ->
-                val deferredPages = batch.map { pageNum ->
+                val pages = batch.map { pageNum ->
                     async {
-                        fetchChapterListPage(comicId, pageNum, deduplicate, pageSize).chapters
+                        fetchChapterListPage(comicId, pageNum, deduplicate, pageSize, editionLabel)
                     }
+                }.awaitAll()
+
+                pages.forEachIndexed { index, page ->
+                    val pageNum = batch[index]
+                    if (page.hasNextPage != (pageNum < totalPages) || page.total != totalItems) {
+                        error("Chapter pagination changed while fetching comic $comicId")
+                    }
+                    allChapters.addAll(page.chapters)
                 }
-                allChapters.addAll(deferredPages.awaitAll().flatten())
             }
+        } else if (totalItems != null && totalItems > pageSize) {
+            error("Chapter pagination ended early for comic $comicId")
+        }
+
+        if (totalItems != null && allChapters.size != totalItems) {
+            error("Expected $totalItems chapters for comic $comicId, received ${allChapters.size}")
         }
 
         allChapters
     }
 
-    /** URL pin → memo pin → title's comic_ids probe → legacy fallback. */
-    private suspend fun resolveComicId(manga: SManga): String? {
-        val (titleId, pinned) = splitMangaUrl(manga.url)
-        pinned?.let { return it }
-        manga.memo["sourceId"]?.string?.let { return it }
-        val ids = fetchTitleNode(titleId)?.comicIds?.filter { it.isNotBlank() }
-            ?: return manga.url // legacy entry: url is already a comic id
-        val extLang = if (lang == "all") null else mapLangCode(lang)
-        return pickComic(ids, extLang)?.first
+    private fun postProcessChapters(chapters: List<SChapter>): List<SChapter> {
+        val includedEditions = includedEditionLabels()
+        val filtered = if (includedEditions.isEmpty()) {
+            chapters
+        } else {
+            chapters.filter { chapter ->
+                val label = chapter.scanlator.normalizeEditionLabel()?.lowercase() ?: return@filter false
+                label in includedEditions || includedEditions.any { base -> label.startsWith("$base [") }
+            }
+        }
+
+        return if (isGroupByEdition()) {
+            filtered.sortedWith(compareBy<SChapter> { it.scanlator?.lowercase().orEmpty() }.thenByDescending { it.chapter_number })
+        } else {
+            filtered.sortedByDescending { it.chapter_number }
+        }
     }
 
-    private suspend fun fetchChapterListPage(comicId: String, page: Int, deduplicate: Boolean, pageSize: Int): ChapterListPage {
+    private suspend fun fetchChapterListPage(
+        comicId: String,
+        page: Int,
+        deduplicate: Boolean,
+        pageSize: Int,
+        editionLabel: String?,
+    ): ChapterListPage {
         val select = ApiChapterListSelect(
             comicId = comicId,
             page = page,
@@ -500,7 +632,7 @@ abstract class XCOMIC :
         }
 
         return ChapterListPage(
-            chapters = data.items.map { it.data.toSChapter() },
+            chapters = data.items.map { it.data.toSChapter(comicId, editionLabel) },
             total = data.paging.total,
             hasNextPage = data.paging.hasNextPage(),
         )
@@ -532,129 +664,7 @@ abstract class XCOMIC :
 
     private fun getChapterId(url: String): String = url
 
-    // ==================== URL splitting + browse row mapper ====================
-    private fun splitMangaUrl(url: String): Pair<String, String?> {
-        val i = url.indexOf(':')
-        return if (i < 0) url to null else url.substring(0, i) to url.substring(i + 1)
-    }
-
-    /**
-     * One browse row per source: "Title · <subName> · N ch" (+ [lang] when
-     * language is "all"). Label = subName only.
-     */
-    private fun ComicProbeData.toBrowseSManga(
-        baseUrl: String,
-        titleId: String,
-        comicId: String,
-        t: TitleBrowseNode,
-        extLang: String?,
-        cleanTitle: (String) -> String,
-    ): SManga = SManga.create().apply {
-        url = "$titleId:$comicId"
-        val displayTitle = cleanTitle(t.data?.title.orEmpty()).ifBlank { titleId }
-        title = buildString {
-            append(displayTitle)
-            subName?.takeIf { it.isNotBlank() }?.let { append(" · ", it.unescapeHtml()) }
-            if (extLang == null) translatedLanguage?.let { append(" [", langDisplayName(it), "]") }
-        }
-
-        memo = buildJsonObject {
-            put("titleId", titleId)
-            put("sourceId", comicId)
-            put("label", (subName ?: ""))
-            put("tlang", (translatedLanguage ?: ""))
-            put("lastPublicAt", "0")
-        }
-
-        thumbnail_url = (t.data?.coverLocalUrl ?: t.data?.coverUrl ?: urlCover)
-            ?.let { if (it.startsWith("http")) it else "$baseUrl$it" }
-    }
-
-    // =================== Title overlay (main identity) ====================
-    private fun TitleNodeData.overlayOnto(m: SManga, baseUrl: String) {
-        val tTitle = title
-        val tAlt = altTitles?.filterNotNull().orEmpty()
-        val tNative = nativeTitle
-        val tOLang = originalLanguage
-        val tLangs = translatedLanguages?.filterNotNull()
-        val tYear = year
-        val tType = type
-        val tDesc = description
-        val tCover = coverLocalUrl ?: coverUrl
-        val tGenres = genreIds.orEmpty()
-        val tDemos = demographicIds.orEmpty()
-        val tCR = contentRating
-        val tFormats = formatIds.orEmpty()
-
-        cleanTitleIfNeeded(tTitle.orEmpty()).takeIf { it.isNotBlank() }?.let { m.title = it }
-
-        authors?.takeIf { it.isNotEmpty() }?.let { m.author = it.joinToString() }
-        artists?.takeIf { it.isNotEmpty() }?.let { m.artist = it.joinToString() }
-
-        tCover?.takeIf { it.isNotBlank() }?.let { c ->
-            m.thumbnail_url = if (c.startsWith("http")) c else baseUrl + c
-        }
-
-        m.genre = buildSet {
-            m.genre?.split(", ")?.filter { it.isNotBlank() }?.forEach { add(it) }
-            tType?.let { add(it.toTagCase()) }
-            tDemos.forEach { add(it.toTagCase()) }
-            tCR?.let { add(it.toTagCase()) }
-            tGenres.forEach { add(it.toTagCase()) }
-            tFormats.forEach { add(it.toTagCase()) }
-        }.joinToString()
-
-        val block = buildString {
-            val meta = buildList {
-                tOLang?.let { add("**Original**: " + langDisplayName(it)) }
-                tLangs?.takeIf { it.isNotEmpty() }?.let { ls ->
-                    add("**Translated**: " + ls.joinToString { langDisplayName(it) })
-                }
-                tYear?.takeIf { it > 0 }?.let { add("**Released**: $it") }
-                tType?.let { add("**Type**: " + it.toTagCase()) }
-                tDesc?.takeIf { it.isNotBlank() }?.let {
-                    add("**Description**:\n" + it.toMarkdownUrls())
-                }
-                chapLastPublicAt?.takeIf { it > 0 }?.let {
-                    add("\n\n**Updated**: " + SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date(it)))
-                }
-            }
-            val stats = buildList {
-                voteAvg?.takeIf { it > 0 }?.let { add("**Score**: " + "%.1f".format(it)) }
-                voteUsers?.takeIf { it > 0 }?.let { add("**Votes**: $it") }
-                totalFollows?.takeIf { it > 0 }?.let { add("**Follows**: $it") }
-                totalComments?.takeIf { it > 0 }?.let { add("**Comments**: $it") }
-                totalReviews?.takeIf { it > 0 }?.let { add("**Reviews**: $it") }
-            }
-            if (meta.isNotEmpty()) append(meta.joinToString("\n"))
-            if (stats.isNotEmpty()) {
-                if (isNotEmpty()) append("\n")
-                append("**Statistics**\n" + stats.joinToString(" · "))
-            }
-            val alt = tAlt.map { it.trim() }
-                .filter { it.isNotEmpty() && it != tTitle }
-                .distinct()
-            if (alt.isNotEmpty()) {
-                if (isNotEmpty()) append("\n")
-                append("**Alternative Titles**:\n" + alt.joinToString("\n") { "- $it" })
-            }
-        }
-
-        m.description = buildString {
-            if (block.isNotEmpty()) {
-                append(block)
-                append("\n\n---\n\n")
-            }
-            append(m.description.orEmpty())
-            val tLinks = trackingSites.toMarkdownLinks()
-            if (tLinks.isNotEmpty()) {
-                append("\n\n**External Links**:\n")
-                append(tLinks.joinToString("\n") { "- $it" })
-            }
-        }
-    }
-
-    /** Converts a title node into the browse-node shape flattenTitle consumes. */
+    // ============================ Title node mapper ==========================
     private fun TitleNodeData.toBrowseNode(): TitleBrowseNode = TitleBrowseNode(
         id = id,
         data = TitleBrowseItem(
@@ -739,8 +749,26 @@ abstract class XCOMIC :
         SwitchPreferenceCompat(screen.context).apply {
             key = DEDUPLICATE_CHAPTERS_PREF
             title = "Deduplicate Chapter List"
-            summary = "Use a deduplicated chapter list from server side.\nNote: May hide other scanlator uploads."
+            summary = "Use a deduplicated chapter list from server side.\nNote: May hide duplicate uploads from the same edition."
             setDefaultValue(true)
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = SOURCE_INCLUDE_PREF
+            title = "Chapter Editions To Include"
+            summary = includeEditionsSummary()
+            setDefaultValue("")
+            setOnPreferenceChangeListener { _, newValue ->
+                summary = includeEditionsSummary(newValue as String)
+                true
+            }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = GROUP_BY_SOURCE_PREF
+            title = "Group Chapters By Edition"
+            summary = "Sort chapters by edition label, then chapter number."
+            setDefaultValue(false)
         }.also(screen::addPreference)
     }
 
@@ -748,16 +776,16 @@ abstract class XCOMIC :
     private fun customRemoveTitle(): String = preferences.getString(REMOVE_TITLE_CUSTOM_PREF, "")!!
     private fun isIgnoreGenreBlocklist(): Boolean = preferences.getBoolean(IGNORE_GENRE_BLOCKLIST_PREF, false)
     private fun isDeduplicateChapters(): Boolean = preferences.getBoolean(DEDUPLICATE_CHAPTERS_PREF, true)
+    private fun isGroupByEdition(): Boolean = preferences.getBoolean(GROUP_BY_SOURCE_PREF, false)
+    private fun includedEditionLabels(): Set<String> = preferences.getString(SOURCE_INCLUDE_PREF, "")!!
+        .split(',')
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+        .toSet()
+
+    private fun includeEditionsSummary(value: String = preferences.getString(SOURCE_INCLUDE_PREF, "")!!): String = "Comma-separated edition labels; a base label includes matching editions, while a suffixed label selects one. Current: ${value.ifBlank { "(all editions)" }}"
 
     // ========================= Helpers =========================
-    private fun String.toTagCase(): String = this.replace("_", " ").split(" ").joinToString(" ") { word ->
-        word.lowercase().replaceFirstChar {
-            if (it.isLowerCase()) it.titlecase() else it.toString()
-        }
-    }
-
-    private fun langDisplayName(code: String): String = languages.firstOrNull { it.second == code }?.first ?: code.uppercase()
-
     private fun String.unescapeHtml(): String = Parser.unescapeEntities(this, false)
 
     private class DefaultSortFilter(val sort: String) : Filter.Header("")
@@ -775,18 +803,27 @@ abstract class XCOMIC :
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
         private const val IGNORE_GENRE_BLOCKLIST_PREF = "IGNORE_GENRE_BLOCKLIST"
         private const val DEDUPLICATE_CHAPTERS_PREF = "DEDUPLICATE_CHAPTERS"
+        private const val SOURCE_INCLUDE_PREF = "SOURCE_INCLUDE"
+        private const val GROUP_BY_SOURCE_PREF = "GROUP_BY_SOURCE"
 
-        private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9-_]+)\\s*$", RegexOption.IGNORE_CASE)
+        private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9_-]+(?::[a-zA-Z0-9_-]+)?)\\s*$", RegexOption.IGNORE_CASE)
 
         // Maximum is 48
         private const val BROWSE_PAGE_SIZE = 12
 
-        // Fan-out shape: 3 titles concurrently, 5 comic probes each
-        private const val TITLES_IN_FLIGHT = 3
         private const val COMIC_PROBES_PER_TITLE = 5
 
+        private val filterValueRegex = Regex("""^[a-z0-9][a-z0-9_]*$""")
+        private val DYNAMIC_FILTER_GROUPS = listOf("contentRatings", "types", "demographics", "genres", "formats")
+
+        private const val MEMO_TITLE_ID = "titleId"
         private const val MEMO_FETCHED_AT = "chaptersFetchedAt" // when we last pulled the list
         private const val MEMO_LAST_PUBLIC = "lastPublicAt" // title.chapLastPublicAt at that time
+        private const val MEMO_EDITION_FINGERPRINT = "chapterEditions"
+        private const val MEMO_CHAPTER_DATA_VERSION = "chapterDataVersion"
+        private const val MEMO_DEDUPLICATE = "chapterDeduplicate"
+        private const val MEMO_SOURCES_FILTER = "sourcesFilter"
+        private const val CHAPTER_DATA_VERSION = 1
 
         private val titleRegex: Regex =
             Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)

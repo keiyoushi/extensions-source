@@ -38,7 +38,7 @@ class ApiTitleBrowseWrapper(val select: ApiTitleBrowseVariables)
 @Serializable
 class ApiTitleNodeVariables(val id: String)
 
-/** Source node — probe + chosen-source details + legacy path. */
+/** Comic node — edition metadata and chapter details. */
 @Serializable
 class ApiComicNodeVariables(val id: String)
 
@@ -80,11 +80,21 @@ val TITLE_BROWSE_QUERY = $$"""
     }
 """
 
+val TITLE_BROWSE_PAGER_QUERY = $$"""
+    query get_title_browse_pager($select: Title_Browse_Select) {
+        get_title_browse_pager(select: $select) {
+            next
+            total
+        }
+    }
+"""
+
 val TITLE_NODE_QUERY = $$"""
     query get_title_titleNode($id: ID!) {
         get_title_titleNode(id: $id) {
             id
             data {
+                id
                 title
                 alt_titles
                 native_title
@@ -144,8 +154,6 @@ val COMIC_NODE_QUERY = $$"""
                 name
                 subName
                 altNames
-                authors
-                artists
                 originalLanguage
                 translatedLanguage
                 originalStatus
@@ -155,7 +163,6 @@ val COMIC_NODE_QUERY = $$"""
                 contentRating
                 genres
                 tags
-                publishers
                 dbStatus
                 isPublic
                 follows
@@ -183,8 +190,61 @@ val COMIC_NODE_QUERY = $$"""
                     text
                 }
                 readDirection
+                trackingSites {
+                    anilist
+                    myanimelist
+                    mangaupdates
+                    kitsu
+                    animeplanet
+                }
                 urlPath
                 urlCover
+                title_titleNode {
+                    id
+                    data {
+                        id
+                        title
+                        alt_titles
+                        native_title
+                        romanized_title
+                        original_language
+                        translated_languages
+                        authors
+                        artists
+                        content_rating_id
+                        type_id
+                        demographic_ids
+                        genre_ids
+                        format_ids
+                        year
+                        type
+                        status
+                        description
+                        cover_local_url
+                        cover_url
+                        urlPath
+                        total_chapters
+                        total_follows
+                        total_reviews
+                        total_comments
+                        vote_avg
+                        vote_users
+                        vote_val
+                        chap_last_public_at
+                        is_merged
+                        merged_to
+                        comic_ids
+                        tracking_sites {
+                            anilist
+                            myanimelist
+                            mangaupdates
+                            kitsu
+                            animeplanet
+                            shikimori
+                            mangabaka
+                        }
+                    }
+                }
             }
         }
     }
@@ -201,7 +261,6 @@ val CHAPTER_LIST_QUERY = $$"""
                 id
                 data {
                     id
-                    comicId
                     dbStatus
                     isFinal
                     volume
@@ -223,11 +282,6 @@ val CHAPTER_LIST_QUERY = $$"""
                     comments_total
                     views_login
                     views_guest
-                    profileNodes {
-                        data {
-                            name
-                        }
-                    }
                 }
             }
         }
@@ -245,7 +299,6 @@ val CHAPTER_UNIQ_LIST_QUERY = $$"""
                 id
                 data {
                     id
-                    comicId
                     dbStatus
                     isFinal
                     volume
@@ -267,11 +320,6 @@ val CHAPTER_UNIQ_LIST_QUERY = $$"""
                     comments_total
                     views_login
                     views_guest
-                    profileNodes {
-                        data {
-                            name
-                        }
-                    }
                 }
             }
         }
@@ -294,14 +342,16 @@ val COMIC_PROBE_QUERY = $$"""
         get_comicNode(id: $id) {
             id
             data {
-                name
                 subName
                 dbStatus
                 isPublic
                 translatedLanguage
                 chaps_normal
-                urlPath
-                urlCover
+                chapterNode_up_to {
+                    data {
+                        datePublic
+                    }
+                }
             }
         }
     }
