@@ -14,6 +14,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
@@ -51,14 +52,9 @@ abstract class RawUwU : KeiSource() {
         if (query.isNotEmpty()) {
             url.addPathSegment("search").addQueryParameter("query", query)
         } else {
-            filters.forEach { filter ->
-                if (filter is UriFilter) {
-                    filter.addToUri(url)
-                } else if (filter is GenreFilter) {
-                    url.addPathSegment("genre")
-                    url.addPathSegment(filter.values[filter.state].path)
-                }
-            }
+            filters.filterIsInstance<UriFilter>().forEach { it.addToUri(url) }
+            val genre = filters.firstInstanceOrNull<GenreFilter>() ?: GenreFilter()
+            url.addPathSegment("genre").addPathSegment(genre.values[genre.state].path)
         }
         url.addQueryParameter("page", page.toString())
         val response = client.get(url.build())
@@ -140,8 +136,10 @@ abstract class RawUwU : KeiSource() {
 
         return chaptersArray.map { chapter ->
             SChapter.create().apply {
-                val formattedNum = chapter.chapterNumber!!.toString().removeSuffix(".0")
+                val chapterNumber = chapter.chapterNumber!!
+                val formattedNum = chapterNumber.toString().removeSuffix(".0")
                 url = "/read/$mangaId/chapter-$formattedNum"
+                chapter_number = chapterNumber
                 val title = chapter.chapterTitle?.trim()
                 name = if (!title.isNullOrBlank()) "Ch. $formattedNum - $title" else "Chapter $formattedNum"
                 date_upload = Instant.tryParse(chapter.chapterDatePublished)
