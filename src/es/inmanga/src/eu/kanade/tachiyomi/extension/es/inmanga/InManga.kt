@@ -32,11 +32,6 @@ abstract class InManga : KeiSource() {
         .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
         .toFormatter()
 
-    private val postHeaders = headers.newBuilder()
-        .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-        .add("X-Requested-With", "XMLHttpRequest")
-        .build()
-
     private val imageCDN = "https://cdn1.intomanga.com"
 
     private fun mangaRequestBody(page: Int, sortBy: Int, query: String = "") = FormBody.Builder()
@@ -53,7 +48,6 @@ abstract class InManga : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.post(
             url = "$baseUrl/manga/getMangasConsultResult",
-            headers = postHeaders,
             body = mangaRequestBody(page, 1),
         ).asJsoup()
         return parseMangasPage(document)
@@ -62,7 +56,6 @@ abstract class InManga : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val document = client.post(
             url = "$baseUrl/manga/getMangasConsultResult",
-            headers = postHeaders,
             body = mangaRequestBody(page, 3),
         ).asJsoup()
         return parseMangasPage(document)
@@ -71,7 +64,6 @@ abstract class InManga : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val document = client.post(
             url = "$baseUrl/manga/getMangasConsultResult",
-            headers = postHeaders,
             body = mangaRequestBody(page, 1, query),
         ).asJsoup()
         return parseMangasPage(document)
