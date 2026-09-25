@@ -27,10 +27,10 @@ import kotlin.time.Instant
 
 @Source
 abstract class RawUwU : KeiSource() {
-    override val supportsFilterFetching = true
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter.POPULAR))
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter.LATEST))
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/spa".toHttpUrl().newBuilder()
 
@@ -133,6 +133,8 @@ abstract class RawUwU : KeiSource() {
             Page(index, imageUrl = image.absUrl("data-src"))
         }
     }
+
+    override val supportsFilterFetching = true
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<Array<Genre>>() ?: emptyArray()
