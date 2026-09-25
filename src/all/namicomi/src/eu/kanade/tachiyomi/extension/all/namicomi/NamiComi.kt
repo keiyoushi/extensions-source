@@ -19,7 +19,6 @@ import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaListDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.OrganizationDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.PageListDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.PaginatedResponseDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.RefreshTokenRequest
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.RefreshTokenResponse
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.StatusDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.TagDto
@@ -56,6 +55,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -488,12 +488,12 @@ abstract class NamiComi :
         }
 
         if (Clock.System.now().plus(30.seconds) > current.expires) {
-            val body = RefreshTokenRequest(
-                grantType = "refresh_token",
-                refreshToken = current.refreshToken,
-                scope = current.scope,
-                clientId = "namicomi-frontend",
-            ).toJsonRequestBody()
+            val body = FormBody.Builder()
+                .add("grant_type", "refresh_token")
+                .add("refresh_token", current.refreshToken)
+                .add("scope", current.scope)
+                .add("client_id", "namicomi-frontend")
+                .build()
 
             val response = client.post(
                 "https://auth.namicomi.com/realms/namicomi/protocol/openid-connect/token",

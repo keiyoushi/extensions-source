@@ -20,14 +20,6 @@ data class Token(
 }
 
 @Serializable
-class RefreshTokenRequest(
-    @SerialName("grant_type") val grantType: String,
-    @SerialName("refresh_token") val refreshToken: String,
-    val scope: String,
-    @SerialName("client_id") val clientId: String,
-)
-
-@Serializable
 class RefreshTokenResponse(
     @SerialName("access_token") val accessToken: String,
     @SerialName("expires_in") private val accessTokenExpiresIn: Long,
