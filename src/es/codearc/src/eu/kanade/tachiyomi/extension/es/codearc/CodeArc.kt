@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -42,8 +43,9 @@ abstract class CodeArc : KeiSource() {
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 title = element.selectFirst("div.truncate.text-base")!!.text()
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
-                    ?: element.selectFirst("img")?.attr("srcSet")?.split(",")
+                val image = element.selectFirst("img")
+                thumbnail_url = image?.absUrl("src")
+                    ?: image?.attr("srcSet")?.split(",")
                         ?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
             }
         }
@@ -64,8 +66,9 @@ abstract class CodeArc : KeiSource() {
                 setUrlWithoutDomain(element.absUrl("href"))
                 title = element.selectFirst("div.line-clamp-2")?.text()
                     ?: element.attr("aria-label").takeIf { it.isNotEmpty() }!!
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
-                    ?: element.selectFirst("img")?.attr("srcSet")?.split(",")
+                val image = element.selectFirst("img")
+                thumbnail_url = image?.absUrl("src")
+                    ?: image?.attr("srcSet")?.split(",")
                         ?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
             }
         }
@@ -136,19 +139,19 @@ abstract class CodeArc : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = client.get(getMangaUrl(manga)).asJsoup().let { document ->
         SMangaUpdate(
-            mangaDetailsParse(document),
-            chapterListParse(document),
+            parseMangaDetails(document),
+            parseChapterList(document),
         )
     }
 
-    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1")!!.text().replace("Vista Previa", "")
-        description = document.selectFirst("p.whitespace-pre-line")?.text()
+        description = document.selectFirst("p.whitespace-pre-line")?.textOrNull()
         thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
-        genre = document.select("a[href*=/list?generos=]").joinToString { it.text() }
+        genre = document.select("a[href*=/list?generos=]").joinToString { it.text() }.ifEmpty { null }
 
-        val htmlArtists = document.select("a[href*=/creador/]").joinToString { it.text() }
-        if (htmlArtists.isNotEmpty()) {
+        val htmlArtists = document.select("a[href*=/creador/]").joinToString { it.text() }.ifEmpty { null }
+        if (htmlArtists != null) {
             artist = htmlArtists
             author = htmlArtists
         }
@@ -163,7 +166,7 @@ abstract class CodeArc : KeiSource() {
         }
     }
 
-    private fun chapterListParse(document: Document): List<SChapter> {
+    private fun parseChapterList(document: Document): List<SChapter> {
         val chapterLinks = document.select("a.group.block[href*=/reader/][href*=/cascade]")
 
         if (chapterLinks.isNotEmpty()) {
