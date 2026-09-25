@@ -13,7 +13,9 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -24,6 +26,8 @@ import kotlin.time.Instant
 
 @Source
 abstract class RawUwU : KeiSource() {
+    override val supportsFilterFetching = true
+
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/spa/genre/all".toHttpUrl().newBuilder()
             .addQueryParameter("sort", "most_viewed")
@@ -51,9 +55,8 @@ abstract class RawUwU : KeiSource() {
                 if (filter is UriFilter) {
                     filter.addToUri(url)
                 } else if (filter is GenreFilter) {
-                    val genreId = genres[filter.state].path
                     url.addPathSegment("genre")
-                    url.addPathSegment(genreId)
+                    url.addPathSegment(filter.values[filter.state].path)
                 }
             }
         }
@@ -122,7 +125,7 @@ abstract class RawUwU : KeiSource() {
         }
 
         author = result.authors?.joinToString { it.authorName }?.ifEmpty { null }
-        genre = result.tags?.joinToString { it.tagName }?.ifEmpty { null }
+        genre = result.tags?.joinToString { it.tagName.toGenreName() }?.ifEmpty { null }
 
         status = when (detail.mangaStatus) {
             true -> SManga.COMPLETED
@@ -163,10 +166,26 @@ abstract class RawUwU : KeiSource() {
         }
     }
 
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Header("Filters are ignored when using text search."),
-        StatusFilter(),
-        SortFilter(),
-        GenreFilter(genres),
-    )
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<Array<Genre>>() ?: emptyArray()
+        return FilterList(
+            Filter.Header("Filters are ignored when using text search."),
+            StatusFilter(),
+            SortFilter(),
+            GenreFilter(genres),
+        )
+    }
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/genre/all").asJsoup()
+        val genres = document.select(".genre-list a[id]").map {
+            Genre(it.attr("title").toGenreName(), it.id())
+        }
+        return genres.toJsonElement()
+    }
+
+    private fun String.toGenreName() = split(' ')
+        .joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { it.titlecase() }
+        }
 }
