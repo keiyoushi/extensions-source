@@ -6,11 +6,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 class ChapterWrapper(
     @SerialName("chapters_to_display") val chapters: List<Chapter>,
-    @SerialName("total_pages") private val totalPages: Int,
-    @SerialName("current_page") private val currentPage: Int,
-) {
-    fun hasNextPage() = currentPage < totalPages
-}
+    @SerialName("total_pages") val totalPages: Int,
+)
 
 @Serializable
 class Chapter(

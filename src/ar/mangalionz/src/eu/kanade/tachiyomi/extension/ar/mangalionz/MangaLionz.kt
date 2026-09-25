@@ -1,73 +1,11 @@
 package eu.kanade.tachiyomi.extension.ar.mangalionz
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
-import okhttp3.FormBody
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class MangaLionz : Madara() {
-    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar"))
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-
-    override val chapterUrlSuffix = ""
-
-    override fun searchMangaRequest(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Request = if (query.isNotBlank()) {
-        POST(
-            "$baseUrl/wp-admin/admin-ajax.php",
-            headers,
-            FormBody
-                .Builder()
-                .add("action", "wp-manga-search-manga")
-                .add("title", query)
-                .build(),
-        )
-    } else {
-        super.searchMangaRequest(page, query, filters)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val contentType = response.header("Content-Type")
-        return contentType?.takeIf { it.startsWith("application/json") }?.let {
-            val dto = response.parseAs<SearchResponseDto>()
-
-            if (!dto.success) {
-                MangasPage(emptyList(), false)
-            } else {
-                val manga = dto.data.map {
-                    SManga.create().apply {
-                        setUrlWithoutDomain(it.url)
-                        title = it.title
-                    }
-                }
-                MangasPage(manga, false)
-            }
-        } ?: super.searchMangaParse(response)
-    }
-
-    @Serializable
-    data class SearchResponseDto(
-        val data: List<SearchEntryDto>,
-        val success: Boolean,
-    )
-
-    @Serializable
-    data class SearchEntryDto(
-        val url: String = "",
-        val title: String = "",
-    )
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.forLanguageTag("ar"))
 }

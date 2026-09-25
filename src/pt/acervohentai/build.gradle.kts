@@ -6,10 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Acervo Hentai"
-    theme = "madaralegacy"
+    theme = "madara"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"

@@ -4,61 +4,51 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import java.io.ByteArrayOutputStream
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class ManhwaBreakup : Madara() {
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("th"))
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = false
-
-    override val filterNonMangaItems = false
+abstract class ManhwaBreakup : MadaraNoAjax() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("th"))
 
     // Descrambling logic from ManhuaKey
-    override val client = super.client.newBuilder()
-        .addNetworkInterceptor(::imageDescrambler)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor(::imageDescrambler)
 
     override val pageListParseSelector = ".reading-content img, .reading-content div.displayImage + script:containsData(p,a,c,k,e,d)"
-    override fun pageListParse(document: Document): List<Page> {
-        launchIO { countViews(document) }
-        val location = document.location()
+    override fun parsePages(document: Document) = document.select(pageListParseSelector).mapIndexed { idx, element ->
+        if (element.tagName().equals("img")) {
+            Page(idx, imageUrl = imageFromElement(element))
+        } else {
+            val unpackedScript = Unpacker.unpack(element.data())
+            val blockWidth = blockWidthRegex.find(unpackedScript)!!.groupValues[1].toInt()
+            val blockHeight = blockHeightRegex.find(unpackedScript)!!.groupValues[1].toInt()
+            val matrix = unpackedScript.substringAfter("[")
+                .substringBefore("];")
+                .let { "[$it]" }
+            val scrambledImageUrl = unpackedScript.substringAfter("url(")
+                .substringBefore(");")
 
-        return document.select(pageListParseSelector).mapIndexed { idx, element ->
-            if (element.tagName().equals("img")) {
-                Page(idx, location, imageFromElement(element))
-            } else {
-                val unpackedScript = Unpacker.unpack(element.data())
-                val blockWidth = blockWidthRegex.find(unpackedScript)!!.groupValues[1].toInt()
-                val blockHeight = blockHeightRegex.find(unpackedScript)!!.groupValues[1].toInt()
-                val matrix = unpackedScript.substringAfter("[")
-                    .substringBefore("];")
-                    .let { "[$it]" }
-                val scrambledImageUrl = unpackedScript.substringAfter("url(")
-                    .substringBefore(");")
+            val data = ScramblingData(
+                blockWidth = blockWidth,
+                blockHeight = blockHeight,
+                matrix = matrix.parseAs(),
+            )
 
-                val data = ScramblingData(
-                    blockWidth = blockWidth,
-                    blockHeight = blockHeight,
-                    matrix = json.decodeFromString(matrix),
-                )
-
-                Page(idx, location, "$scrambledImageUrl#${json.encodeToString(data)}")
-            }
+            Page(idx, imageUrl = "$scrambledImageUrl#${data.toJsonString()}")
         }
     }
 
@@ -80,7 +70,7 @@ abstract class ManhwaBreakup : Madara() {
             return response
         }
 
-        val scramblingData = json.decodeFromString<ScramblingData>(request.url.fragment!!)
+        val scramblingData = request.url.fragment!!.parseAs<ScramblingData>()
 
         val scrambledImg = BitmapFactory.decodeStream(response.body.byteStream())
         val descrambledImg = Bitmap.createBitmap(scrambledImg.width, scrambledImg.height, Bitmap.Config.ARGB_8888)
