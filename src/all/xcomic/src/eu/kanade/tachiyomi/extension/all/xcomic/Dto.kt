@@ -14,9 +14,6 @@ import java.time.ZoneOffset
 
 // ============================= Shared primitives =============================
 @Serializable
-class XComicName(val name: String? = null)
-
-@Serializable
 class XComicData<T>(
     val data: T,
 )
@@ -199,7 +196,6 @@ class ComicNode(
     private val contentRating: String? = null,
     private val genres: List<String>? = null,
     private val tags: List<String>? = null,
-    private val tagNodes: List<XComicData<XComicName?>>? = null,
     private val summary: XComicStrings? = null,
     private val extraInfo: XComicStrings? = null,
     private val readDirection: String? = null,
@@ -313,9 +309,7 @@ class ComicNode(
 
                 val extras = buildList {
                     uploaders?.takeIf { it.isNotEmpty() }?.let { add("**Uploaders**: ${it.joinToString()}") }
-                    val tagNames = tagNodes?.mapNotNull { it.data?.name }
-                        ?.takeIf { it.isNotEmpty() } ?: tags
-                    tagNames?.takeIf { it.isNotEmpty() }?.let { add("**Tags**: ${it.joinToString()}") }
+                    tags?.takeIf { it.isNotEmpty() }?.let { add("**Tags**: ${it.joinToString()}") }
                 }
                 addAll(extras)
 
