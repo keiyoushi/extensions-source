@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "LeerCapitulo"
-    versionCode = 17
+    versionCode = 18
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
@@ -14,9 +14,4 @@ keiyoushi {
         lang = "es"
         baseUrl = "https://www.leercapitulo.co"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:synchrony"))
 }
