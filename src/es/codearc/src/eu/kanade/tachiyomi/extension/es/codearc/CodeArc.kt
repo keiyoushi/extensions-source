@@ -11,7 +11,6 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
@@ -28,11 +27,7 @@ abstract class CodeArc : KeiSource() {
         .readTimeout(30.seconds)
         .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
         .rateLimit(1, 1.seconds) { it.host == "cdn.codearctraducciones.com" }
-
-    private val rscHeaders
-        get() = headers.newBuilder()
-            .add("RSC", "1")
-            .build()
+        .addInterceptor(ReaderPageRefresh(::client, ::headers, ::baseUrl))
 
     override suspend fun getPopularManga(page: Int): MangasPage = popularMangaParse(client.get("$baseUrl/ranking?mode=popular&page=$page"))
 
@@ -201,22 +196,19 @@ abstract class CodeArc : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter), rscHeaders)
-        val readerData = response.extractNextJs<ReaderDto>() ?: return emptyList()
-        val pages = readerData.initialPages.toMutableList()
-        val pagesFetchUrl = baseUrl.toHttpUrl().resolve(readerData.pagesFetchUrl) ?: return emptyList()
-
-        while (pages.size < readerData.totalPages) {
-            val url = pagesFetchUrl.newBuilder()
-                .setQueryParameter("offset", pages.size.toString())
-                .build()
-            val newPages = client.get(url).parseAs<ReaderPagesDto>().items
-            if (newPages.isEmpty()) break
-            pages += newPages
-        }
+        val chapterUrl = getChapterUrl(chapter).toHttpUrl()
+        val pages = fetchReaderPages(client, headers, chapterUrl.toString(), readerPagesUrl(chapterUrl))
 
         return pages.mapIndexed { index, page ->
-            Page(index, imageUrl = page.imagenUrl)
+            Page(
+                index,
+                imageUrl = page.imagenUrl.toHttpUrl().newBuilder()
+                    .setQueryParameter("reader_slug", chapterUrl.pathSegments[1])
+                    .setQueryParameter("reader_chapter", chapterUrl.pathSegments[2])
+                    .setQueryParameter("reader_page", page.orden.toString())
+                    .build()
+                    .toString(),
+            )
         }
     }
 

@@ -24,17 +24,12 @@ class SearchItemDto(
 
 @Serializable
 class PageDto(
+    val orden: Int,
     @SerialName("imagen_url") val imagenUrl: String,
-)
-
-@Serializable
-class ReaderDto(
-    val initialPages: List<PageDto>,
-    val totalPages: Int,
-    val pagesFetchUrl: String,
 )
 
 @Serializable
 class ReaderPagesDto(
     val items: List<PageDto>,
+    val total: Int,
 )
