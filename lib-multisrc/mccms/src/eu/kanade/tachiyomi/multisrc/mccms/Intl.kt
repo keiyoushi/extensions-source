@@ -68,10 +68,4 @@ object Intl {
             "zh" -> "分类筛选（搜索时无效）"
             else -> "Category filters (ignored for text search)"
         }
-
-    val tapReset
-        get() = when (lang) {
-            "zh" -> "点击“重置”尝试刷新标签分类"
-            else -> "Tap 'Reset' to load genres"
-        }
 }
