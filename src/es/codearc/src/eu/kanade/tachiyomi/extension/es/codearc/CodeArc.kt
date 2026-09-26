@@ -14,6 +14,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -125,6 +126,22 @@ abstract class CodeArc : KeiSource() {
             return MangasPage(mangas, false)
         }
         return latestUpdatesParse(response)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments
+        val slug = when {
+            segments.firstOrNull() == "reader" -> segments.getOrNull(1)
+            segments.size == 1 -> segments[0]
+            else -> null
+        }?.takeIf { it.isNotEmpty() } ?: return null
+        val mangaUrl = "$baseUrl/$slug"
+
+        return parseMangaDetails(client.get(mangaUrl).asJsoup()).apply {
+            setUrlWithoutDomain(mangaUrl)
+            initialized = true
+        }
     }
 
     override suspend fun fetchMangaUpdate(

@@ -14,4 +14,8 @@ keiyoushi {
         lang = "es"
         baseUrl = "https://mangas.codearctraducciones.com"
     }
+
+    deeplink {
+        path("/..*")
+    }
 }
