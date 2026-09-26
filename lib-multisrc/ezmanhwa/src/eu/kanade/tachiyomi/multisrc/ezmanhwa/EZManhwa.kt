@@ -2,33 +2,36 @@ package eu.kanade.tachiyomi.multisrc.ezmanhwa
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 
 abstract class EZManhwa :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     abstract val apiUrl: String
 
-    override val supportsLatest = true
-
     private val preferences by getPreferencesLazy()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Accept", "application/json, text/plain, */*")
-        .set("Referer", "$baseUrl/")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = addEZManhwaHeaders()
+
+    protected fun Headers.Builder.addEZManhwaHeaders(): Headers.Builder = set("Accept", "application/json, text/plain, */*")
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}"
 
@@ -38,12 +41,9 @@ abstract class EZManhwa :
 
     // ── Browse ───────────────────────────────────────────────────────────────
 
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/series?page=$page&perPage=20&sort=popular", headers)
+    override suspend fun getPopularManga(page: Int) = parseSeriesList(client.get("$apiUrl/series?page=$page&perPage=20&sort=popular"))
 
-    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/series?page=$page&perPage=20&sort=latest", headers)
-
-    override fun popularMangaParse(response: Response) = parseSeriesList(response)
-    override fun latestUpdatesParse(response: Response) = parseSeriesList(response)
+    override suspend fun getLatestUpdates(page: Int) = parseSeriesList(client.get("$apiUrl/series?page=$page&perPage=20&sort=latest"))
 
     private fun parseSeriesList(response: Response): MangasPage {
         val dto = response.parseAs<EZManhwaSeriesListDto>()
@@ -53,12 +53,14 @@ abstract class EZManhwa :
 
     // ── Search ───────────────────────────────────────────────────────────────
 
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = parseSeriesList(client.get(searchMangaUrl(page, query, filters)))
+
     // Base implementation sends filters only during browse.
     // Override if the source's search endpoint behaviour differs.
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    protected open fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
         val isSearch = query.isNotBlank()
         val endpoint = if (isSearch) "$apiUrl/series/search" else "$apiUrl/series"
-        val url = endpoint.toHttpUrl().newBuilder().apply {
+        return endpoint.toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("perPage", "20")
             if (isSearch) {
@@ -79,25 +81,36 @@ abstract class EZManhwa :
                 if (!sortAdded) addQueryParameter("sort", "latest")
             }
         }.build()
-        return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = parseSeriesList(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+
+        return client.get("$apiUrl/series/$slug").parseAs<EZManhwaSeriesDto>().toSManga()
+    }
 
     // ── Details ──────────────────────────────────────────────────────────────
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/series/${manga.url}", headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (fetchDetails) client.get("$apiUrl/series/${manga.url}").parseAs<EZManhwaSeriesDto>().toSManga() else manga
+        }
+        val chapterList = async { if (fetchChapters) fetchChapterList(manga.url) else chapters }
 
-    override fun mangaDetailsParse(response: Response) = response.parseAs<EZManhwaSeriesDto>().toSManga().apply { initialized = true }
+        SMangaUpdate(details.await(), chapterList.await())
+    }
 
     // ── Chapters ─────────────────────────────────────────────────────────────
 
-    override fun chapterListRequest(manga: SManga) = GET("$apiUrl/series/${manga.url}/chapters?page=1&perPage=100&sort=desc", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        // pathSegments for /api/v1/series/{slug}/chapters: [api, v1, series, slug, chapters]
-        val seriesSlug = response.request.url.pathSegments[3]
-        val initialData = response.parseAs<EZManhwaChapterListDto>()
+    private suspend fun fetchChapterList(seriesSlug: String): List<SChapter> {
+        val url = "$apiUrl/series/$seriesSlug/chapters?page=1&perPage=100&sort=desc".toHttpUrl()
+        val initialData = client.get(url).parseAs<EZManhwaChapterListDto>()
         val chapters = mutableListOf<SChapter>()
 
         fun parsePage(dto: EZManhwaChapterListDto) {
@@ -110,12 +123,9 @@ abstract class EZManhwa :
         var curr = initialData.currentPage
         while (curr < initialData.totalPages) {
             curr++
-            val nextUrl = response.request.url.newBuilder()
+            val nextUrl = url.newBuilder()
                 .setQueryParameter("page", curr.toString()).build()
-            parsePage(
-                client.newCall(GET(nextUrl, headers)).execute()
-                    .parseAs<EZManhwaChapterListDto>(),
-            )
+            parsePage(client.get(nextUrl).parseAs<EZManhwaChapterListDto>())
         }
         return chapters
     }
@@ -125,10 +135,10 @@ abstract class EZManhwa :
 
     // ── Pages ────────────────────────────────────────────────────────────────
 
-    override fun pageListRequest(chapter: SChapter) = GET("$apiUrl/${chapter.url}", headers)
+    protected open fun pageListUrl(chapter: SChapter) = "$apiUrl/${chapter.url}"
 
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<EZManhwaPageListDto>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get(pageListUrl(chapter)).parseAs<EZManhwaPageListDto>()
         if (data.requiresPurchase == true) {
             throw Exception(
                 "Chapter requires purchase (${data.totalImages} pages). " +
@@ -139,9 +149,7 @@ abstract class EZManhwa :
             ?: throw Exception("No images found. Chapter may be locked or require login via webview.")
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Not used")
-
-    override fun getFilterList() = FilterList(EZManhwaSortFilter(), EZManhwaStatusFilter(), EZManhwaTypeFilter())
+    override fun getFilterList(data: JsonElement?) = FilterList(EZManhwaSortFilter(), EZManhwaStatusFilter(), EZManhwaTypeFilter())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
