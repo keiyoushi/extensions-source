@@ -1,25 +1,22 @@
 package eu.kanade.tachiyomi.multisrc.eromuse
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 
-abstract class EroMuse : HttpSource() {
-
-    override val supportsLatest = true
+abstract class EroMuse : KeiSource() {
 
     /**
      * Browse, search, and latest all run through an ArrayDeque of requests that acts as a stack we push and pop to/from
@@ -79,13 +76,13 @@ abstract class EroMuse : HttpSource() {
     protected fun getAlbumType(url: String, default: Int = AUTHOR): Int = albums.filter { it.third != SEARCH_RESULTS_OR_BASE && url.contains(it.second, true) }
         .getOrElse(0) { Triple(null, null, default) }.third
 
-    protected fun parseManga(document: Document): MangasPage {
-        fun internalParse(internalDocument: Document): List<SManga> {
+    protected suspend fun parseManga(document: Document): MangasPage {
+        suspend fun internalParse(internalDocument: Document): List<SManga> {
             val authorDocument = if (stackItem.pageType == VARIOUS_AUTHORS) {
                 internalDocument.select(albumSelector).let { elements ->
                     elements.reversed().map { pageStack.addLast(StackItem(it.attr("abs:href"), AUTHOR)) }
                 }
-                client.newCall(stackRequest()).execute().asJsoup()
+                client.get(stackUrl()).asJsoup()
             } else {
                 internalDocument
             }
@@ -118,12 +115,12 @@ abstract class EroMuse : HttpSource() {
                                 when (depth) {
                                     1 -> { // eg. /comics/album/Fakku-Comics
                                         pageStack.addLast(StackItem(url, VARIOUS_AUTHORS))
-                                        if (searchMangas.isEmpty()) searchMangas += internalParse(client.newCall(stackRequest()).execute().asJsoup()) else null
+                                        if (searchMangas.isEmpty()) searchMangas += internalParse(client.get(stackUrl()).asJsoup()) else null
                                     }
 
                                     2 -> { // eg. /comics/album/Fakku-Comics/Bosshi
                                         pageStack.addLast(StackItem(url, AUTHOR))
-                                        if (searchMangas.isEmpty()) searchMangas += internalParse(client.newCall(stackRequest()).execute().asJsoup()) else null
+                                        if (searchMangas.isEmpty()) searchMangas += internalParse(client.get(stackUrl()).asJsoup()) else null
                                     }
 
                                     else -> {
@@ -138,7 +135,7 @@ abstract class EroMuse : HttpSource() {
                             AUTHOR -> {
                                 if (depth == 1) { // eg. /comics/album/ShadBase-Comics
                                     pageStack.addLast(StackItem(url, AUTHOR))
-                                    if (searchMangas.isEmpty()) searchMangas += internalParse(client.newCall(stackRequest()).execute().asJsoup()) else null
+                                    if (searchMangas.isEmpty()) searchMangas += internalParse(client.get(stackUrl()).asJsoup()) else null
                                 } else {
                                     // eg. 2 -> /comics/album/ShadBase-Comics/RickMorty
                                     // eg. 3 -> /comics/album/Incase-Comics/Comic/Alfie
@@ -157,45 +154,36 @@ abstract class EroMuse : HttpSource() {
         return MangasPage(mangas, pageStack.isNotEmpty())
     }
 
-    protected fun stackRequest(): Request {
+    protected fun stackUrl(): String {
         stackItem = pageStack.removeLast()
-        val url = if (stackItem.pageType == AUTHOR && currentSortingMode.isNotEmpty() && !stackItem.url.contains("sort")) {
+        return if (stackItem.pageType == AUTHOR && currentSortingMode.isNotEmpty() && !stackItem.url.contains("sort")) {
             stackItem.url.toHttpUrl().newBuilder().addQueryParameter("sort", currentSortingMode).toString()
         } else {
             stackItem.url
         }
-        return GET(url, headers)
     }
 
     // Popular
 
-    protected fun fetchManga(url: String, page: Int, sortingMode: String): Observable<MangasPage> {
+    protected suspend fun fetchManga(url: String, page: Int, sortingMode: String): MangasPage {
         if (page == 1) {
             pageStack.clear()
             pageStack.addLast(StackItem(url, VARIOUS_AUTHORS))
             currentSortingMode = sortingMode
         }
 
-        return client.newCall(stackRequest())
-            .asObservableSuccess()
-            .map { response -> parseManga(response.asJsoup()) }
+        return parseManga(client.get(stackUrl()).asJsoup())
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchManga("$baseUrl/comics/album/Various-Authors", page, "")
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchManga("$baseUrl/comics/album/Various-Authors", page, "")
 
     // Latest
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchManga("$baseUrl/comics/album/Various-Authors?sort=date", page, "date")
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchManga("$baseUrl/comics/album/Various-Authors?sort=date", page, "date")
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (page == 1) {
             pageStack.clear()
 
@@ -218,19 +206,35 @@ abstract class EroMuse : HttpSource() {
             }
         }
 
-        return client.newCall(stackRequest())
-            .asObservableSuccess()
-            .map { response -> parseManga(response.asJsoup()) }
+        return parseManga(client.get(stackUrl()).asJsoup())
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        val document = client.get(url).asJsoup()
+        return parseDetails(document).apply {
+            title = document.title().substringBefore(" | ")
+        }
+    }
 
     // Details
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        with(response.asJsoup()) {
-            setUrlWithoutDomain(response.request.url.toString())
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        // Details and chapters come from the same page
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val details = parseDetails(document).apply { title = manga.title }
+        return SMangaUpdate(details, if (fetchChapters) parseChapters(document) else chapters)
+    }
+
+    protected open fun parseDetails(document: Document): SManga = SManga.create().apply {
+        with(document) {
+            setUrlWithoutDomain(location())
             thumbnail_url = select("$albumSelector img").firstOrNull()?.imgAttr()
             author = when (getAlbumType(url)) {
                 AUTHOR -> {
@@ -254,8 +258,8 @@ abstract class EroMuse : HttpSource() {
     protected open val linkedChapterSelector = "a.c-tile:has(img)[href*=/comics/album/]"
     protected open val pageThumbnailSelector = "a.c-tile:has(img)[href*=/comics/picture/] img"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        fun parseChapters(document: Document, isFirstPage: Boolean, chapters: ArrayDeque<SChapter>): List<SChapter> {
+    private suspend fun parseChapters(firstPage: Document): List<SChapter> {
+        suspend fun parseChapters(document: Document, isFirstPage: Boolean, chapters: ArrayDeque<SChapter>): List<SChapter> {
             // Linked chapters
             document.select(linkedChapterSelector)
                 .mapNotNull {
@@ -273,17 +277,17 @@ abstract class EroMuse : HttpSource() {
                     chapters.add(
                         SChapter.create().apply {
                             name = "Chapter"
-                            setUrlWithoutDomain(response.request.url.toString())
+                            setUrlWithoutDomain(document.location())
                         },
                     )
                 }
             }
 
-            document.nextPageOrNull()?.let { url -> parseChapters(client.newCall(GET(url, headers)).execute().asJsoup(), false, chapters) }
+            document.nextPageOrNull()?.let { url -> parseChapters(client.get(url).asJsoup(), false, chapters) }
             return chapters
         }
 
-        return parseChapters(response.asJsoup(), true, ArrayDeque())
+        return parseChapters(firstPage, true, ArrayDeque())
     }
 
     // Pages
@@ -291,8 +295,8 @@ abstract class EroMuse : HttpSource() {
     protected open val pageThumbnailPathSegment = "/th/"
     protected open val pageFullSizePathSegment = "/fl/"
 
-    override fun pageListParse(response: Response): List<Page> {
-        fun parsePages(
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        suspend fun parsePages(
             document: Document,
             nestedChapterDocuments: ArrayDeque<Document> = ArrayDeque(),
             pages: ArrayList<Page> = ArrayList(),
@@ -301,19 +305,19 @@ abstract class EroMuse : HttpSource() {
             document.select(linkedChapterSelector)
                 .mapNotNull {
                     nestedChapterDocuments.add(
-                        client.newCall(GET(it.attr("abs:href"), headers)).execute().asJsoup(),
+                        client.get(it.attr("abs:href")).asJsoup(),
                     )
                 }
 
             var lastPage: Int = pages.size
             pages.addAll(
                 document.select(pageThumbnailSelector).mapIndexed { i, img ->
-                    Page(lastPage + i, "", img.imgAttr().replace(pageThumbnailPathSegment, pageFullSizePathSegment))
+                    Page(lastPage + i, imageUrl = img.imgAttr().replace(pageThumbnailPathSegment, pageFullSizePathSegment))
                 },
             )
 
             document.nextPageOrNull()?.let { url ->
-                pages.addAll(parsePages(client.newCall(GET(url, headers)).execute().asJsoup(), nestedChapterDocuments, pages))
+                pages.addAll(parsePages(client.get(url).asJsoup(), nestedChapterDocuments, pages))
             }
 
             while (!nestedChapterDocuments.isEmpty()) {
@@ -323,14 +327,12 @@ abstract class EroMuse : HttpSource() {
             return pages
         }
 
-        return parsePages(response.asJsoup())
+        return parsePages(client.get(getChapterUrl(chapter)).asJsoup())
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Filters
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Text search only combines with sort!"),
         Filter.Separator(),
         AlbumFilter(getAlbumList()),
