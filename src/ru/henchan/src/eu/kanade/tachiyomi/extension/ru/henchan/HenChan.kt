@@ -1,33 +1,30 @@
 package eu.kanade.tachiyomi.extension.ru.henchan
 
 import eu.kanade.tachiyomi.multisrc.multichan.MultiChan
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.net.URL
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class HenChan : MultiChan() {
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/newest?offset=${20 * (page - 1)}", headers)
+    override fun latestUpdatesUrl(page: Int) = "$baseUrl/manga/newest?offset=${20 * (page - 1)}"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
         if (query.isNotEmpty()) {
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("do", "search")
@@ -36,13 +33,12 @@ abstract class HenChan : MultiChan() {
                 .addQueryParameter("search_start", page.toString())
                 .build()
                 .toString()
-            return GET(url, headers)
+            return url
         }
 
         var genres = ""
-        val filterList = filters.ifEmpty { getFilterList() }
 
-        filterList.forEach { filter ->
+        filters.forEach { filter ->
             if (filter is GenreList) {
                 filter.state
                     .filter { !it.isIgnored() }
@@ -52,7 +48,7 @@ abstract class HenChan : MultiChan() {
             }
         }
 
-        val orderBy = filterList.firstInstanceOrNull<OrderBy>()
+        val orderBy = filters.firstInstanceOrNull<OrderBy>()
         val url = if (genres.isNotEmpty()) {
             val order = orderBy?.toUriPartWithGenres() ?: ""
             "$baseUrl/tags/${genres.dropLast(1)}&sort=manga$order?offset=${20 * (page - 1)}"
@@ -61,7 +57,7 @@ abstract class HenChan : MultiChan() {
             "$baseUrl/$order?offset=${20 * (page - 1)}"
         }
 
-        return GET(url, headers)
+        return url
     }
 
     override fun searchMangaSelector() = ".content_row:not(:has(div.item:containsOwn(Тип)))"
@@ -95,44 +91,33 @@ abstract class HenChan : MultiChan() {
         return manga
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
-        .asObservable().doOnNext { response ->
-            if (!response.isSuccessful) {
-                response.close()
-                // Error message for exceeding last page
-                if (response.code == 404) {
-                    Observable.just(
-                        listOf(
-                            SChapter.create().apply {
-                                url = manga.url
-                                name = "Chapter"
-                                chapter_number = 1f
-                            },
-                        ),
-                    )
-                } else {
-                    throw Exception("HTTP error ${response.code}")
-                }
-            }
-        }
-        .map { response ->
-            chapterListParse(response)
+    override suspend fun fetchChapterList(manga: SManga, mangaPage: Document): List<SChapter> {
+        if (manga.thumbnail_url?.endsWith("#") == true) {
+            return chapterListParse(mangaPage)
         }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = baseUrl + if (manga.thumbnail_url?.endsWith("#") == true) {
-            manga.url
-        } else {
-            manga.url.replace("/manga/", "/related/")
+        val response = client.get(baseUrl + manga.url.replace("/manga/", "/related/"), ensureSuccess = false)
+        if (!response.isSuccessful) {
+            response.close()
+            // Error message for exceeding last page
+            if (response.code == 404) {
+                return listOf(
+                    SChapter.create().apply {
+                        url = manga.url
+                        name = "Chapter"
+                        chapter_number = 1f
+                    },
+                )
+            }
+            throw Exception("HTTP error ${response.code}")
         }
-        return GET(url, headers)
+        return chapterListParse(response.asJsoup())
     }
 
     override fun chapterListSelector() = ".related"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val responseUrl = response.request.url.toString()
-        val document = response.asJsoup()
+    private suspend fun chapterListParse(document: Document): List<SChapter> {
+        val responseUrl = document.location()
 
         // exhentai chapter
         if (responseUrl.contains("/manga/")) {
@@ -142,7 +127,7 @@ abstract class HenChan : MultiChan() {
             chap.chapter_number = 1F
 
             val dateText = document.select("div.row4_right b").text()
-            chap.date_upload = exhentaiDateFormat.tryParse(dateText)
+            chap.date_upload = exhentaiDateFormat.tryParseDate(dateText)
             return listOf(chap)
         }
 
@@ -154,7 +139,7 @@ abstract class HenChan : MultiChan() {
             chap.name = relatedText
                 .split(" похожий на ")[1]
                 .replace("\\\"", "\"")
-                .replace("\\'", "'")
+                .replace("\'", "'")
             chap.chapter_number = 1F
             return listOf(chap)
         }
@@ -172,8 +157,7 @@ abstract class HenChan : MultiChan() {
             val url = nextElement.attr("abs:href")
             if (url.isEmpty()) break
 
-            val get = GET(url, headers = headers)
-            val nextPage = client.newCall(get).execute().asJsoup()
+            val nextPage = client.get(url).asJsoup()
             result.addAll(
                 nextPage.select(chapterListSelector()).map {
                     chapterFromElement(it)
@@ -196,17 +180,16 @@ abstract class HenChan : MultiChan() {
         return chapter
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = if (chapter.url.contains("/manga/")) {
             baseUrl + chapter.url.replace("/manga/", "/online/")
         } else {
             baseUrl + chapter.url
         }
-        return GET(url, Headers.Builder().add("Accept", "image/webp,image/apng").build())
+        return pageListParse(client.get(url, Headers.Builder().add("Accept", "image/webp,image/apng").build()).body.string())
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
+    override fun pageListParse(html: String): List<Page> {
         val prefix = "fullimg\": ["
         val beginIndex = html.indexOf(prefix) + prefix.length
         val endIndex = html.indexOf("]", beginIndex)
@@ -218,7 +201,7 @@ abstract class HenChan : MultiChan() {
         return pageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         OrderBy(),
         GenreList(getGenreList()),
     )
@@ -226,8 +209,6 @@ abstract class HenChan : MultiChan() {
     companion object {
         private val manganewThumbsRegex = "(?<=/)manganew_thumbs\\w*?(?=/)".toRegex(RegexOption.IGNORE_CASE)
         private val chapterNumberRegex = "(глава\\s|часть\\s)([0-9]+\\.?[0-9]*)".toRegex(RegexOption.IGNORE_CASE)
-        private val exhentaiDateFormat by lazy {
-            SimpleDateFormat("dd MMMM yyyy", Locale("ru"))
-        }
+        private val exhentaiDateFormat = DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale("ru"))
     }
 }
