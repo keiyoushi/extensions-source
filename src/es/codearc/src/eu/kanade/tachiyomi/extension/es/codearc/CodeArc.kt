@@ -161,7 +161,8 @@ abstract class CodeArc : KeiSource() {
         status = when {
             statusText == null -> SManga.UNKNOWN
             statusText.contains("finalizado") -> SManga.COMPLETED
-            statusText.contains("publicándose") || statusText.contains("publicandose") -> SManga.ONGOING
+            statusText.contains("publicándose") || statusText.contains("publicandose") ||
+                statusText.contains("emisión") || statusText.contains("emision") -> SManga.ONGOING
             else -> SManga.UNKNOWN
         }
     }
