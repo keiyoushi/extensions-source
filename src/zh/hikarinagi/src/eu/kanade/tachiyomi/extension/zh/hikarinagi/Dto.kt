@@ -20,18 +20,9 @@ class MangaData(
     val manga: MangaItem,
     val chapters: List<ChapterItem>,
     private val people: JsonArray,
-    // private val producers: JsonArray,
     private val tags: JsonArray,
 ) {
-    fun people() = people.associate {
-        with(it.obj) {
-            val role = getString("role")
-            val value = with(getObject("person")) { getStringOrNull("trans_name") ?: getString("name") }
-            role to value
-        }
-    }.takeIf { it.isNotEmpty() }
-
-    // fun producers() = producers.map { it.obj.getObject("producer").getString("name") }
+    fun people() = people.toPeople("role")
 
     fun tags() = tags.map { it.obj.getObject("tag").getString("name") }
 }
@@ -42,7 +33,6 @@ class MangaItem(
     val name: String,
     @SerialName("name_cn") val nameCn: String?,
     private val covers: JsonArray,
-    // val status: String?,
     @SerialName("serial_status") val serialStatus: String?,
     @SerialName("latest_chapter_at") val latestChapterAt: String?,
     val summary: String?,
@@ -71,10 +61,6 @@ class ChapterItem(
     val id: Int,
     val name: String,
     @SerialName("page_count") val size: Int,
-    // @SerialName("chapter_type") val chapterType: String, // SERIALIZATION - 连载 | EXTRA - 番外
-    // @SerialName("chapter_number") val chapterNumber: String?,
-    // @SerialName("volume_number") val volumeNumber: String?,
-    // val readable: Boolean,
 ) {
     fun toSChapter(cid: String, timestamp: Long) = SChapter.create().apply {
         url = id.toString()
@@ -92,13 +78,7 @@ class NovelData(
     private val people: JsonArray,
     private val tags: JsonArray,
 ) {
-    fun people() = people.associate {
-        with(it.obj) {
-            val role = getString("relation")
-            val value = with(getObject("person")) { getStringOrNull("trans_name").ifNotBlank() ?: getString("name") }
-            role to value
-        }
-    }.takeIf { it.isNotEmpty() }
+    fun people() = people.toPeople("relation")
 
     fun tags() = tags.map { it.obj.getObject("tag").getString("name") }
 }
@@ -146,11 +126,7 @@ class VolumeItem(
     @SerialName("publication_date") private val publicationDate: String? = null,
     @SerialName("online_reading_available") val readingAvailable: Boolean = false,
 ) {
-    /**
-     * Chapter titles are kept short ("第 1 卷") because the site stores the whole work title in
-     * every volume name. Volumes published without a number (mostly the first one) fall back to
-     * their position in the series.
-     */
+    /** Titles stay short ("第 1 卷"): the site stores the whole work title in every volume name. */
     fun toSChapter(ordinal: Int, workTitle: String) = SChapter.create().apply {
         url = id.toString()
         name = volumeNumber?.toString()?.removeSuffix(".0")?.let { number ->
@@ -166,3 +142,12 @@ class VolumeItem(
 
 /** The site returns an empty string instead of null for missing translations. */
 private fun String?.ifNotBlank(): String? = this?.takeIf(String::isNotBlank)
+
+/** Credits are keyed by the role field the two sections call differently. */
+private fun JsonArray.toPeople(roleKey: String) = associate {
+    with(it.obj) {
+        val role = getString(roleKey)
+        val value = with(getObject("person")) { getStringOrNull("trans_name").ifNotBlank() ?: getString("name") }
+        role to value
+    }
+}.takeIf { it.isNotEmpty() }

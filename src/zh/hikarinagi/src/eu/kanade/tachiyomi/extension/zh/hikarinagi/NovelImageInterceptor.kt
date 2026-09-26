@@ -1,25 +1,21 @@
 package eu.kanade.tachiyomi.extension.zh.hikarinagi
 
+import android.webkit.MimeTypeMap
 import keiyoushi.utils.applicationContext
 import okhttp3.Interceptor
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
 import okhttp3.Response
+import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.ByteString.Companion.toByteString
 import okio.buffer
 import okio.source
 import java.io.File
 import java.io.IOException
-import java.security.MessageDigest
 
-/**
- * Serves the illustrations extracted from a volume EPUB.
- *
- * Images are content addressed (`<sha1>.<extension>`), so page URLs stay short and stable even
- * though the same file name can appear in several volumes. The bytes are written to the app
- * cache while the page list is built.
- */
+/** Serves the illustrations extracted from a volume EPUB, addressed by content. */
 class NovelImageInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -30,13 +26,7 @@ class NovelImageInterceptor : Interceptor {
         val file = File(cacheDir, url.pathSegments.last())
         if (!file.exists()) throw IOException("插图已失效，请刷新本章节")
 
-        return Response.Builder()
-            .request(request)
-            .protocol(Protocol.HTTP_2)
-            .code(200)
-            .message("OK")
-            .body(file.source().buffer().asResponseBody(file.mediaType(), file.length()))
-            .build()
+        return Response.Builder().request(request).ok(file.source().buffer().asResponseBody(file.mediaType(), file.length()))
     }
 
     companion object {
@@ -46,7 +36,7 @@ class NovelImageInterceptor : Interceptor {
 
         /** Stores an illustration and returns the URL it is served from. */
         fun save(bytes: ByteArray, extension: String): String {
-            val name = "${bytes.digest()}.${extension.lowercase()}"
+            val name = "${bytes.toByteString().sha1().hex().take(24)}.${extension.lowercase()}"
             val file = File(cacheDir, name)
             if (file.length() != bytes.size.toLong()) {
                 cacheDir.mkdirs()
@@ -55,13 +45,9 @@ class NovelImageInterceptor : Interceptor {
             return "http://$HOST/$name"
         }
 
-        private fun ByteArray.digest(): String = MessageDigest.getInstance("SHA-1").digest(this).take(12).joinToString("") { "%02x".format(it) }
-
-        private fun File.mediaType(): MediaType = when (extension.lowercase()) {
-            "png" -> "image/png"
-            "gif" -> "image/gif"
-            "webp" -> "image/webp"
-            else -> "image/jpeg"
-        }.toMediaType()
+        private fun File.mediaType(): MediaType = (MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.lowercase()) ?: "image/jpeg").toMediaType()
     }
 }
+
+/** The 200 the local page interceptors answer with. */
+internal fun Response.Builder.ok(body: ResponseBody): Response = code(200).message("OK").protocol(Protocol.HTTP_2).body(body).build()

@@ -44,10 +44,7 @@ object Preferences {
 
     fun isReadableOnly(preferences: SharedPreferences) = preferences.getBoolean(PREF_READABLE_ONLY, true)
 
-    /**
-     * Whether a rendered page should be dark. "跟随 Mihon" needs the app's own theme, which the
-     * caller may not be able to read; when it cannot, the system setting answers for it.
-     */
+    /** Whether a rendered page should be dark; "跟随 Mihon" falls back to the system. */
     fun isDark(preferences: SharedPreferences, appDark: Boolean?, systemDark: Boolean) = when (preferences.getString(PREF_DARK_MODE, DARK_APP)) {
         DARK_ALWAYS -> true
         DARK_NEVER -> false

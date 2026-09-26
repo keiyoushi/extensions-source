@@ -15,23 +15,11 @@ import android.text.TextPaint
 import keiyoushi.utils.applicationContext
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
 
-/**
- * Renders a page of novel text into an image for continuous (vertical) reading.
- *
- * The vertical layout is driven by baselines: paragraphs are stacked a line plus one paragraph gap
- * apart, so the spacing between paragraphs is exactly one line spacing plus [PARAGRAPH_GAP] instead
- * of whatever the text engine happens to report. A page ends after the last line's descent plus the
- * same paragraph gap, which is what makes stacked pages continue without a seam.
- *
- * Lines are justified to the right margin by widening their gaps, not by stretching the glyphs, and
- * a mark that ends a line is placed by its ink so it does not leave half a character behind.
- * Colours follow the app's own light or dark theme.
- */
+/** Renders a page of novel text into an image for continuous (vertical) reading. */
 class NovelTextInterceptor(private val preferences: SharedPreferences) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -49,17 +37,11 @@ class NovelTextInterceptor(private val preferences: SharedPreferences) : Interce
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
         bitmap.recycle()
 
-        return Response.Builder()
-            .request(request)
-            .protocol(Protocol.HTTP_2)
-            .code(200)
-            .message("OK")
-            .body(stream.toByteArray().toResponseBody(IMAGE_PNG))
-            .build()
+        return Response.Builder().request(request).ok(stream.toByteArray().toResponseBody(IMAGE_PNG))
     }
 
     private fun render(title: String, text: String, topPadding: Boolean): Bitmap {
-        val dark = Preferences.isDark(preferences, mihonDarkTheme(), systemDarkTheme())
+        val dark = Preferences.isDark(preferences, appCompatDarkTheme(), systemDarkTheme())
         val textPaint = TextPaint(bodyPaint).apply { color = if (dark) DARK_TEXT else LIGHT_TEXT }
         val titlePaint = TextPaint(headingPaint).apply { color = if (dark) DARK_TEXT else LIGHT_TEXT }
         val divider = Paint().apply {
@@ -71,8 +53,7 @@ class NovelTextInterceptor(private val preferences: SharedPreferences) : Interce
         val paragraphs = text.split('\n').filter(String::isNotBlank).map { bodyLayout(it, textPaint) }
 
         val headingBlock = heading?.let { it.height + 2 * HEADING_GAP + DIVIDER_HEIGHT } ?: 0
-        // Pages that continue a running text stay flush with the page above; pages that start after
-        // an illustration (or a chapter) get the same breathing room as the space above a heading.
+        // Chapters and illustrations start with breathing room; a continued page does not.
         val topMargin = if (heading != null || topPadding) TOP_MARGIN else 0
         val firstBaseline = (topMargin + headingBlock) - textPaint.ascent()
         var lastBaseline = firstBaseline
@@ -106,18 +87,7 @@ class NovelTextInterceptor(private val preferences: SharedPreferences) : Interce
         return bitmap
     }
 
-    /**
-     * Mihon's own light/dark choice, or null when it cannot be read.
-     *
-     * The app installs its theme with `AppCompatDelegate.setDefaultNightMode`, and its release build
-     * keeps every name (`-dontobfuscate`) while still shrinking and inlining, so the two obvious
-     * entry points are gone from the APK: `getDefaultNightMode` has no caller, and the trivial
-     * `getThemeMode` getter is inlined. What survives is the field AppCompat keeps for itself and
-     * the app's own preference, reached through fields rather than through those getters.
-     */
-    private fun mihonDarkTheme(): Boolean? = appCompatDarkTheme() ?: uiPreferencesDarkTheme()
-
-    /** The value Mihon handed to AppCompat, which is not exposed through a getter in the APK. */
+    // Set through AppCompatDelegate; its getter is shrunk away in release builds, so read the field.
     private fun appCompatDarkTheme(): Boolean? = runCatching {
         val field = Class.forName("androidx.appcompat.app.AppCompatDelegate")
             .getDeclaredField("sDefaultNightMode")
@@ -129,30 +99,7 @@ class NovelTextInterceptor(private val preferences: SharedPreferences) : Interce
         }
     }.getOrNull()
 
-    /** The app's theme preference, for builds where AppCompat's field is not what was set. */
-    private fun uiPreferencesDarkTheme(): Boolean? = runCatching {
-        val app = applicationContext
-        val preferences = member(app, "graph")?.let { member(it, "uiPreferences") }
-            ?: member(app, "uiPreferences")
-            ?: return@runCatching null
-        val themeMode = member(preferences, "themeMode") ?: return@runCatching null
-        val mode = themeMode.javaClass.getMethod("get").invoke(themeMode)
-        when ((mode as? Enum<*>)?.name) {
-            "DARK" -> true
-            "LIGHT" -> false
-            else -> null
-        }
-    }.getOrNull()
-
-    /** A member of the app by getter, by method, or by field; null when it does not have one. */
-    private fun member(owner: Any, name: String): Any? {
-        val type = owner.javaClass
-        val getter = "get" + name.replaceFirstChar { it.uppercaseChar() }
-        return runCatching { type.getMethod(getter).invoke(owner) }.getOrNull()
-            ?: runCatching { type.getDeclaredField(name).apply { isAccessible = true }.get(owner) }.getOrNull()
-    }
-
-    /** The system's night mode, which the dark mode preference can follow or override. */
+    /** The system's night mode, the fallback when the app's own theme cannot be read. */
     private fun systemDarkTheme(): Boolean {
         val uiMode = applicationContext.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         return uiMode == Configuration.UI_MODE_NIGHT_YES
@@ -171,12 +118,12 @@ class NovelTextInterceptor(private val preferences: SharedPreferences) : Interce
             val lineText = layout.text.subSequence(start, end).toString().trimEnd('\n')
             if (lineText.isEmpty()) continue
 
-            // A closing mark is placed so that its ink meets the margin: the full width box of a
-            // mark leaves half a character of paper white at the end of a line, and stretching the
-            // characters in front of it to close that gap is the part of justification to avoid.
+            // Place a trailing mark by its ink, so it does not leave half a character of paper behind.
             val mark = lineText.takeIf { it.length > 1 }?.last()?.takeIf { it in HANGING_MARKS }
             val body = if (mark == null) lineText else lineText.dropLast(1)
-            val markX = X_PADDING + CONTENT_WIDTH - inkRight(lineText, paint)
+            val inkBounds = Rect()
+            paint.getTextBounds(lineText, lineText.length - 1, lineText.length, inkBounds)
+            val markX = X_PADDING + CONTENT_WIDTH - inkBounds.right
             val width = if (mark == null) CONTENT_WIDTH else (markX - X_PADDING).toInt()
 
             // The last line of a paragraph stays short, like in print.
@@ -188,13 +135,6 @@ class NovelTextInterceptor(private val preferences: SharedPreferences) : Interce
         }
     }
 
-    /** Distance from the start of the last character of [text] to the right edge of its ink. */
-    private fun inkRight(text: String, paint: TextPaint): Float {
-        val bounds = Rect()
-        paint.getTextBounds(text, text.length - 1, text.length, bounds)
-        return bounds.right.toFloat()
-    }
-
     /** Widens the gaps of a line until it meets [width]; false when the line is better left aligned. */
     private fun drawJustified(canvas: Canvas, line: String, baseline: Float, width: Int, paint: TextPaint): Boolean {
         val natural = paint.measureText(line)
@@ -202,9 +142,7 @@ class NovelTextInterceptor(private val preferences: SharedPreferences) : Interce
         val slack = width - natural
         if (slack < JUSTIFY_MIN_SLACK || slack > JUSTIFY_MAX_SLACK) return false
 
-        // The run is drawn once, unscaled, with the spare space shared by its gaps: stretching the
-        // glyphs instead is what makes a wide line look different from its neighbours, and putting
-        // all of the space into the one or two gaps next to a mark makes those gaps obvious.
+        // Share the slack between all gaps; stretching glyphs or dumping it next to one mark shows.
         paint.letterSpacing = slack / (line.length * BODY_SIZE)
         canvas.drawText(line, X_PADDING, baseline, paint)
         paint.letterSpacing = 0f
@@ -244,11 +182,7 @@ class NovelTextInterceptor(private val preferences: SharedPreferences) : Interce
         private const val JUSTIFY_MIN_SLACK = 2f
         private const val JUSTIFY_MAX_SLACK = 2 * BODY_SIZE
 
-        /**
-         * Marks whose ink leaves paper white in front of them when they end a line, so their ink
-         * (not their box) is aligned to the margin. Point marks plus the closing marks, and the
-         * Chinese ！？: which sit left of centre in their box.
-         */
+        /** Marks whose ink sits left of centre, so their ink (not their box) can end a line. */
         private const val HANGING_MARKS = "，。、；：！？,.;:!?）〕］｝〉》」』】〗”’"
 
         // AppCompatDelegate.MODE_NIGHT_NO / MODE_NIGHT_YES, what the app gives it for LIGHT / DARK.

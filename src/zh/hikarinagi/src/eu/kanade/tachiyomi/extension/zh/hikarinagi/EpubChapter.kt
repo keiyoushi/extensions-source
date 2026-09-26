@@ -4,6 +4,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import java.io.InputStream
+import java.nio.file.Paths
 import java.util.zip.ZipInputStream
 
 class EpubChapter(
@@ -18,11 +19,7 @@ sealed interface EpubBlock {
     class Image(val path: String, val bytes: ByteArray) : EpubBlock
 }
 
-/**
- * Elements that never break a paragraph apart. Everything else is treated as a container
- * whose children are walked, so wrappers like `<section>` or `<div>` do not collapse a
- * chapter into a single block.
- */
+/** Elements that never break a paragraph apart; anything else is walked as a container. */
 private val INLINE_TAGS = setOf(
     "a", "abbr", "b", "big", "br", "cite", "code", "del", "em", "font", "i", "img", "ins", "label",
     "mark", "q", "rp", "rt", "ruby", "s", "small", "span", "strike", "strong", "sub", "sup", "time", "u", "wbr",
@@ -30,12 +27,7 @@ private val INLINE_TAGS = setOf(
 
 private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp")
 
-/**
- * Reads the documents of an EPUB in spine order, keeping their text blocks and illustrations.
- *
- * Package documents, (X)HTML documents and images are buffered; fonts and other resources are
- * skipped. Documents without any content (empty pages) are dropped.
- */
+/** Reads the documents of an EPUB in spine order, keeping their text blocks and illustrations. */
 fun readEpubChapters(input: InputStream): List<EpubChapter> {
     val documents = mutableMapOf<String, String>()
     val images = mutableMapOf<String, ByteArray>()
@@ -100,14 +92,4 @@ private fun Element.toImageBlock(base: String, images: Map<String, ByteArray>): 
     return EpubBlock.Image(path, bytes)
 }
 
-private fun resolveEpubPath(baseDir: String, href: String): String {
-    val parts = baseDir.split('/').filter(String::isNotEmpty).toMutableList()
-    href.removePrefix("/").split('/').forEach { segment ->
-        when (segment) {
-            "", "." -> Unit
-            ".." -> parts.removeLastOrNull()
-            else -> parts.add(segment)
-        }
-    }
-    return parts.joinToString("/")
-}
+private fun resolveEpubPath(baseDir: String, href: String): String = Paths.get(baseDir, href.removePrefix("/")).normalize().toString()

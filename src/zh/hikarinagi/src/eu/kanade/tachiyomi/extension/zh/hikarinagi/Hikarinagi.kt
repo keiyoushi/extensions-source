@@ -52,7 +52,6 @@ abstract class Hikarinagi :
 
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"
-        val FILTER_PARAMS = arrayOf("sort", "region", "audience", "status", "decade", "magazine_id")
 
         /** Must match the light novel source's name in `build.gradle.kts`. */
         const val NOVEL_SOURCE_NAME = "Hikarinagi Novels"
@@ -62,23 +61,14 @@ abstract class Hikarinagi :
 
     private fun String?.ifNotBlank(action: (String) -> Unit) = this?.takeIf(String::isNotBlank)?.let(action)
 
-    private fun browseUrl(page: Int, query: String?, filters: FilterList): HttpUrl {
-        val url = "$baseUrl/api/pages/mangas/browse".toHttpUrl().newBuilder()
+    private fun browseUrl(path: String, page: Int, query: String?, filters: FilterList, readableOnly: Boolean): HttpUrl {
+        val url = "$baseUrl/api/pages/$path/browse".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "24")
         query.ifNotBlank { url.addQueryParameter("search", it) }
-        filters.forEachIndexed { i, filter -> filter.toString().ifNotBlank { url.addQueryParameter(FILTER_PARAMS[i], it) } }
-        return url.build()
-    }
-
-    private fun novelBrowseUrl(page: Int, query: String?, filters: FilterList): HttpUrl {
-        val url = "$baseUrl/api/pages/light-novels/browse".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("page_size", "24")
-        query.ifNotBlank { url.addQueryParameter("search", it) }
-        if (Preferences.isReadableOnly(preferences)) url.addQueryParameter("readable", "1")
+        if (readableOnly) url.addQueryParameter("readable", "1")
         filters.forEach { filter ->
-            (filter as? UrlPartFilter)?.toUrlPart()?.let { url.addQueryParameter(it.first, it.second) }
+            (filter as? QueryParamFilter)?.toQueryParam()?.let { url.addQueryParameter(it.first, it.second) }
         }
         return url.build()
     }
@@ -92,13 +82,14 @@ abstract class Hikarinagi :
         return MangasPage(manga, hasNextPage)
     }
 
-    /** Browses either category; without [filters] the category's own sort filter is used. */
+    /** Browses either section; without [filters] the section's own sort filter is used. */
     private suspend fun browse(page: Int, query: String? = null, filters: FilterList? = null, sortIndex: Int = 0): MangasPage {
         val filterList = filters ?: FilterList(
             if (isNovelMode) NovelSortFilter(Filter.Sort.Selection(sortIndex, false)) else SortFilter(Filter.Sort.Selection(sortIndex, false)),
         )
-        val url = if (isNovelMode) novelBrowseUrl(page, query, filterList) else browseUrl(page, query, filterList)
-        return parseBrowse(client.get(url))
+        val path = if (isNovelMode) "light-novels" else "mangas"
+        val readableOnly = isNovelMode && Preferences.isReadableOnly(preferences)
+        return parseBrowse(client.get(browseUrl(path, page, query, filterList, readableOnly)))
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = browse(page, sortIndex = 1)
@@ -168,10 +159,7 @@ abstract class Hikarinagi :
         List(urls.size) { Page(it, imageUrl = urls[it]) }
     }
 
-    /**
-     * Novel volumes are served as EPUB files behind a short lived signed URL that has to be
-     * requested with the login session of the website.
-     */
+    /** The volume's EPUB sits behind a short lived signed URL that needs the login session. */
     private suspend fun getNovelPageList(chapter: SChapter): List<Page> {
         if (chapter.memo.getBooleanOrNull("unavailable") == true) throw Exception(UNAVAILABLE_MESSAGE)
 
@@ -227,10 +215,7 @@ abstract class Hikarinagi :
     }
 }
 
-/**
- * Characters a novel page image holds. Bigger pages mean fewer of them; the ceiling is what the
- * reader can decode at once, roughly a 1000 x 2900 px bitmap here.
- */
+/** Characters one page image holds; bigger pages risk a bitmap the reader cannot decode. */
 private const val PAGE_CHARS = 800
 
 /** Room the first page of a chapter gives up for its heading. */
