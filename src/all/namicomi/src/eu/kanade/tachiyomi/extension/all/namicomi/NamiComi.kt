@@ -332,29 +332,10 @@ abstract class NamiComi :
             }
         }
 
-        val inaccessibleChaptersIds = accessibleChapterMap.filter { !it.value }.map { it.key }
-        val authAccessibleChapterMap: Map<String, Boolean> = coroutineScope {
-            inaccessibleChaptersIds.chunked(200).map { chapterIds ->
-                async {
-                    val url = "$apiUrl/gating/check"
-                    val body = EntityAccessRequestDto(
-                        entities = chapterIds.map { EntityAccessRequestItemDto(it, "chapter") },
-                    ).toJsonRequestBody(json)
-                    val response = client.post(url, authHeaders(), body)
-
-                    response.parseAs<EntityAccessMapDto>(json)
-                        .data?.attributes?.map ?: emptyMap()
-                }
-            }.awaitAll().fold(HashMap()) { acc, map ->
-                acc.apply { putAll(map) }
-            }
-        }
-
         return chapters.mapNotNull {
             val isAccessible = accessibleChapterMap[it.id]!!
-            val isAuthAccessible = isAccessible || authAccessibleChapterMap[it.id] ?: false
 
-            if (!preferences.showLockedChapters && !isAuthAccessible) {
+            if (!isAccessible && !preferences.showLockedChapters) {
                 return@mapNotNull null
             }
 
@@ -364,11 +345,7 @@ abstract class NamiComi :
                 url = it.id
                 name = buildString {
                     if (!isAccessible) {
-                        if (isAuthAccessible) {
-                            append("🔓 ")
-                        } else {
-                            append("🔒 ")
-                        }
+                        append("🔒 ")
                     }
                     attr.volume?.takeIf(String::isNotBlank)?.also { vol ->
                         append("Vol.", vol)
@@ -430,9 +407,9 @@ abstract class NamiComi :
             throw when (response.code) {
                 402 -> when {
                     token == null ->
-                        Exception("Locked Chapter, login via webview to authorize")
+                        Exception("Login via WebView")
                     else ->
-                        Exception("Locked Chapter, purchase the chapter on the site")
+                        Exception("Purchase the chapter on the website")
                 }
                 else -> HttpException(response.code)
             }
@@ -505,12 +482,6 @@ abstract class NamiComi :
 
     private suspend fun login() = mutex.withLock {
         if (token == null) {
-            val cookiePresent = client.cookieJar
-                .loadForRequest("https://auth.$domain/realms/namicomi/account/#/".toHttpUrl())
-                .any { it.name == "KEYCLOAK_SESSION" }
-
-            if (!cookiePresent) return@withLock
-
             token = getLocalStorage(baseUrl, "namicomi.user:https://auth.namicomi.com/realms/namicomi:namicomi-frontend")?.parseAs()
         }
 
