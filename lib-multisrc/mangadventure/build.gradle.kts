@@ -3,8 +3,8 @@ plugins {
 }
 
 keiyoushi {
-    baseVersionCode = 15
-    libVersion = "1.4"
+    baseVersionCode = 0
+    libVersion = "1.6"
 
     deeplink {
         path("/reader/..*")
