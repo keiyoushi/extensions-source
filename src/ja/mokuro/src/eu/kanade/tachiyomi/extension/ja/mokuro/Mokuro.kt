@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ja.mokuro
 
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -24,6 +25,14 @@ import okhttp3.OkHttpClient
 import java.net.URLDecoder
 import java.net.URLEncoder
 
+// Built through HttpUrl because cover paths contain spaces, parentheses, '#' and
+// non-ASCII characters, where a hand-rolled encoder gets the encoding wrong.
+private fun coverUrl(apiBase: String, cover: String): String = apiBase.toHttpUrl().newBuilder()
+    .addPathSegment("cover")
+    .addQueryParameter("path", cover)
+    .build()
+    .toString()
+
 @Source
 abstract class Mokuro :
     KeiSource(),
@@ -33,6 +42,11 @@ abstract class Mokuro :
 
     private val titleLang: String
         get() = preferences.getString(TITLE_LANG_PREF, TITLE_LANG_DEFAULT) ?: TITLE_LANG_DEFAULT
+
+    private val useLatestVolumeCover: Boolean
+        get() = preferences.getBoolean(PREF_USE_LATEST_VOLUME_COVER, PREF_USE_LATEST_VOLUME_COVER_DEFAULT)
+
+    private val apiBase = "$baseUrl/catalog/api"
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(CbzInterceptor())
@@ -45,7 +59,8 @@ abstract class Mokuro :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val catalog = getCatalog()
         val pref = titleLang
-        return MangasPage(catalog.series.map { it.toSManga(pref) }, false)
+        val covers = getCoverIndex()
+        return MangasPage(catalog.series.map { it.toSManga(pref, covers.urlFor(it.seriesTitle)) }, false)
     }
 
     // ===============================
@@ -55,9 +70,10 @@ abstract class Mokuro :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val catalog = getCatalog()
         val pref = titleLang
+        val covers = getCoverIndex()
         val mangas = catalog.series
             .sortedByDescending { it.updatedAt.orEmpty() }
-            .map { it.toSManga(pref) }
+            .map { it.toSManga(pref, covers.urlFor(it.seriesTitle)) }
         return MangasPage(mangas, false)
     }
 
@@ -103,7 +119,8 @@ abstract class Mokuro :
             }
         }
 
-        return MangasPage(sequence.map { it.toSManga(pref) }.toList(), false)
+        val covers = getCoverIndex()
+        return MangasPage(sequence.map { it.toSManga(pref, covers.urlFor(it.seriesTitle)) }.toList(), false)
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
@@ -161,9 +178,10 @@ abstract class Mokuro :
             val catalog = getCatalog()
             val catalogEntry = catalog.series.find { it.seriesTitle == manga.url }
                 ?: throw Exception("Series not found")
+            val cover = resolveCoverUrl(manga.url)
 
             manga.apply {
-                catalogEntry.fillDetails(this, titleLang)
+                catalogEntry.fillDetails(this, titleLang, cover)
             }
         } else {
             manga
@@ -244,6 +262,13 @@ abstract class Mokuro :
             entryValues = arrayOf("native", "english", "romaji", "folder")
             setDefaultValue(TITLE_LANG_DEFAULT)
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_LATEST_VOLUME_COVER
+            title = "Use latest volume cover"
+            summary = "Show the newest volume's cover instead of the first volume's."
+            setDefaultValue(PREF_USE_LATEST_VOLUME_COVER_DEFAULT)
+        }.also(screen::addPreference)
     }
 
     // ===============================
@@ -265,8 +290,36 @@ abstract class Mokuro :
         return response.parseAs<SeriesDetailDto>()
     }
 
+    // Keyed case-insensitively: a few folder names differ only by case between
+    // the catalog and the cover API (e.g. `Kingdom` vs `kingdom`).
+    private class CoverIndex(private val apiBase: String, series: List<LibrarySeriesDto>) {
+        private val covers = HashMap<String, String>(series.size)
+
+        init {
+            for (entry in series) {
+                entry.cover?.let { covers.putIfAbsent(entry.name.lowercase(), it) }
+            }
+        }
+
+        fun urlFor(seriesTitle: String): String? = covers[seriesTitle.lowercase()]?.let { coverUrl(apiBase, it) }
+    }
+
+    private suspend fun getCoverIndex(): CoverIndex = CoverIndex(apiBase, client.get("$apiBase/library").parseAs<LibraryDto>().series)
+
+    private suspend fun resolveCoverUrl(seriesTitle: String): String? {
+        if (useLatestVolumeCover) {
+            val url = "$apiBase/series".toHttpUrl().newBuilder().addQueryParameter("name", seriesTitle).build()
+            val cover = client.get(url).parseAs<LibrarySeriesDetailDto>().volumes.lastOrNull { it.cover != null }?.cover
+            if (cover != null) return coverUrl(apiBase, cover)
+        }
+        return getCoverIndex().urlFor(seriesTitle)
+    }
+
     companion object {
         private const val TITLE_LANG_PREF = "mokuro_title_lang"
         private const val TITLE_LANG_DEFAULT = "native"
+
+        private const val PREF_USE_LATEST_VOLUME_COVER = "pref_use_latest_volume_cover"
+        private const val PREF_USE_LATEST_VOLUME_COVER_DEFAULT = false
     }
 }
