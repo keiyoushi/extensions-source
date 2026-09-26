@@ -5,7 +5,6 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.AbstractTagDto
-import eu.kanade.tachiyomi.extension.all.namicomi.dto.ChapterDataDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ContentRatingDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.CoverArtDto
@@ -38,7 +37,6 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.getBoolean
 import keiyoushi.utils.getBooleanOrNull
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
@@ -329,24 +327,71 @@ abstract class NamiComi :
                     response.parseAs<EntityAccessMapDto>(json)
                         .data?.attributes?.map ?: emptyMap()
                 }
-            }.awaitAll().fold(mutableMapOf()) { acc, map ->
+            }.awaitAll().fold(HashMap()) { acc, map ->
+                acc.apply { putAll(map) }
+            }
+        }
+
+        val inaccessibleChaptersIds = accessibleChapterMap.filter { !it.value }.map { it.key }
+        val authAccessibleChapterMap: Map<String, Boolean> = coroutineScope {
+            inaccessibleChaptersIds.chunked(200).map { chapterIds ->
+                async {
+                    val url = "$apiUrl/gating/check"
+                    val body = EntityAccessRequestDto(
+                        entities = chapterIds.map { EntityAccessRequestItemDto(it, "chapter") },
+                    ).toJsonRequestBody(json)
+                    val response = client.post(url, authHeaders(), body)
+
+                    response.parseAs<EntityAccessMapDto>(json)
+                        .data?.attributes?.map ?: emptyMap()
+                }
+            }.awaitAll().fold(HashMap()) { acc, map ->
                 acc.apply { putAll(map) }
             }
         }
 
         return chapters.mapNotNull {
             val isAccessible = accessibleChapterMap[it.id]!!
-            when {
-                isAccessible -> it.toSChapter()
-                preferences.showLockedChapters -> {
-                    it.toSChapter().apply {
-                        name = "🔒 $name"
-                        memo = buildJsonObject {
-                            put("needs_auth", true)
+            val isAuthAccessible = isAccessible || authAccessibleChapterMap[it.id] ?: false
+
+            if (!preferences.showLockedChapters && !isAuthAccessible) {
+                return@mapNotNull null
+            }
+
+            val attr = it.attributes!!
+
+            SChapter.create().apply {
+                url = it.id
+                name = buildString {
+                    if (!isAccessible) {
+                        if (isAuthAccessible) {
+                            append("🔓 ")
+                        } else {
+                            append("🔒 ")
                         }
                     }
+                    attr.volume?.takeIf(String::isNotBlank)?.also { vol ->
+                        append("Vol.", vol)
+                    }
+                    attr.chapter?.takeIf(String::isNotBlank)?.also { chapterNumber ->
+                        if (isNotBlank()) {
+                            append(" ")
+                        }
+                        append("Ch.", chapterNumber)
+                    }
+                    attr.name?.takeIf(String::isNotBlank)?.also { chapterName ->
+                        if (isNotBlank()) {
+                            append(" - ")
+                        }
+                        append(chapterName)
+                    }
                 }
-                else -> null
+                date_upload = Instant.tryParse(attr.publishAt)
+                if (!isAccessible) {
+                    memo = buildJsonObject {
+                        put("needs_auth", true)
+                    }
+                }
             }
         }
     }
@@ -360,38 +405,6 @@ abstract class NamiComi :
         .addQueryParameter("order[volume]", "desc")
         .addQueryParameter("order[chapter]", "desc")
         .build()
-
-    private fun ChapterDataDto.toSChapter(): SChapter {
-        val attr = attributes!!
-        val chapterName = mutableListOf<String>()
-
-        attr.volume?.let {
-            if (it.isNotEmpty()) {
-                chapterName.add("Vol.$it")
-            }
-        }
-
-        attr.chapter?.let {
-            if (it.isNotEmpty()) {
-                chapterName.add("Ch.$it")
-            }
-        }
-
-        attr.name?.let {
-            if (it.isNotEmpty()) {
-                if (chapterName.isNotEmpty()) {
-                    chapterName.add("-")
-                }
-                chapterName.add(it)
-            }
-        }
-
-        return SChapter.create().apply {
-            url = id
-            name = chapterName.joinToString(" ")
-            date_upload = Instant.tryParse(attr.publishAt)
-        }
-    }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$extLang/chapter/${chapter.url}"
 
@@ -492,6 +505,12 @@ abstract class NamiComi :
 
     private suspend fun login() = mutex.withLock {
         if (token == null) {
+            val cookiePresent = client.cookieJar
+                .loadForRequest("https://auth.$domain/realms/namicomi/account/#/".toHttpUrl())
+                .any { it.name == "KEYCLOAK_SESSION" }
+
+            if (!cookiePresent) return@withLock
+
             token = getLocalStorage(baseUrl, "namicomi.user:https://auth.namicomi.com/realms/namicomi:namicomi-frontend")?.parseAs()
         }
 
@@ -559,4 +578,3 @@ private val whitespaceRegex = "\\s+".toRegex()
 private const val COVER_QUALITY_PREF = "thumbnailQuality"
 private const val DATA_SAVER_PREF = "dataSaver"
 private const val SHOW_LOCKED_CHAPTERS_PREF = "showLockedChapters"
-private const val AUTH_TOKEN = "auth_token"
