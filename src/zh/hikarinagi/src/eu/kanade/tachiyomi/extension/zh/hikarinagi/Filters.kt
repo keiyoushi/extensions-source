@@ -77,8 +77,77 @@ class NovelSortFilter(select: Selection? = Selection(0, false)) :
     }
 }
 
-class NovelReadableFilter :
-    Filter.CheckBox("仅显示可在线阅读"),
+/** Light novel imprints (文庫); the manga browse has magazines instead and ignores this. */
+class BunkoFilter :
+    Filter.Select<String>("文库", LABELS),
     UrlPartFilter {
-    override fun toUrlPart() = if (state) "readable" to "1" else null
+    override fun toUrlPart() = IDS.getOrNull(state - 1)?.let { "bunko_id" to it }
+
+    companion object {
+        private val BUNKOS = listOf(
+            "コバルト文庫" to 2,
+            "スーパーダッシュ文庫" to 6,
+            "富士見ファンタジア文庫" to 8,
+            "角川スニーカー文庫" to 12,
+            "電撃文庫" to 14,
+            "ガガガ文庫" to 19,
+            "メディアワークス文庫" to 25,
+            "ファミ通文庫" to 26,
+            "カドカワBOOKS" to 31,
+            "電撃の新文芸" to 41,
+            "ヒーロー文庫" to 42,
+            "MF文庫J" to 43,
+            "ダッシュエックス文庫" to 47,
+            "講談社ラノベ文庫" to 51,
+            "GA文庫" to 54,
+            "HJ文庫" to 57,
+            "角川文庫" to 59,
+            "角川ビーンズ文庫" to 61,
+            "オーバーラップ文庫" to 63,
+            "GAノベル" to 65,
+            "富士見ミステリー文庫" to 68,
+            "オーバーラップノベルス" to 70,
+            "アース・スターノベル" to 71,
+            "SQEXノベル" to 73,
+            "GCノベルズ" to 79,
+            "GCN文庫" to 81,
+            "ブレイブ文庫" to 83,
+            "富士見L文庫" to 84,
+            "HJノベルス" to 87,
+            "一迅社文庫アイリス" to 88,
+            "MFブックス" to 89,
+            "角川ルビー文庫" to 101,
+            "KAエスマ文庫" to 104,
+            "ビーズログ文庫" to 116,
+            "集英社みらい文庫" to 117,
+            "角川ホラー文庫" to 121,
+            "モンスター文庫" to 130,
+            "集英社オレンジ文庫" to 144,
+            "Mノベルス" to 150,
+            "角川ティーンズルビー文庫" to 160,
+            "ことのは文庫" to 170,
+            "オーバーラップノベルスf" to 179,
+            "Celicaノベルス" to 188,
+            "一迅社ノベルス" to 192,
+            "アース・スター ルナ" to 193,
+            "ダンガン文庫" to 220,
+            "小学館文庫" to 225,
+            "ドラゴンノベルス" to 230,
+            "星海社FICTIONS" to 231,
+            "ハガネ文庫" to 240,
+            "マッグガーデン・ノベルズ" to 241,
+            "月光之城" to 242,
+            "サーガフォレスト" to 244,
+            "株式会社アスキー・メディアワークス" to 934,
+            "Kラノベブックス" to 10647,
+            "ツギクルブックス" to 10651,
+            "BKブックス" to 10653,
+            "レジーナブックス" to 19323,
+            "モーニングスターブックス" to 19328,
+        )
+
+        private val IDS = BUNKOS.map { it.second.toString() }
+
+        private val LABELS = (listOf("全部") + BUNKOS.map { it.first }).toTypedArray()
+    }
 }

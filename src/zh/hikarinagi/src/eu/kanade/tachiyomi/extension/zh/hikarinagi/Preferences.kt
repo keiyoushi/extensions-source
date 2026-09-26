@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.hikarinagi
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.SwitchPreferenceCompat
 
@@ -9,9 +10,14 @@ object Preferences {
 
     private const val PREF_CATEGORY = "CATEGORY"
     private const val PREF_READABLE_ONLY = "READABLE_ONLY"
+    private const val PREF_DARK_MODE = "DARK_MODE"
 
     private const val CATEGORY_MANGA = "manga"
     private const val CATEGORY_NOVEL = "novel"
+
+    private const val DARK_APP = "app"
+    private const val DARK_ALWAYS = "always"
+    private const val DARK_NEVER = "never"
 
     /**
      * The light novel section shares the numeric id space with the manga section,
@@ -28,6 +34,19 @@ object Preferences {
             entryValues = arrayOf(CATEGORY_MANGA, CATEGORY_NOVEL)
             setDefaultValue(CATEGORY_MANGA)
         },
+        ListPreference(context).apply {
+            key = PREF_DARK_MODE
+            title = "深色模式"
+            summary = "%s"
+            entries = arrayOf("跟随 Mihon", "始终开启", "始终关闭")
+            entryValues = arrayOf(DARK_APP, DARK_ALWAYS, DARK_NEVER)
+            setDefaultValue(DARK_APP)
+            setEnabled(isNovel)
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(context, "已加载章节需清除缓存后生效", Toast.LENGTH_LONG).show()
+                true
+            }
+        },
         SwitchPreferenceCompat(context).apply {
             key = PREF_READABLE_ONLY
             title = "不显示无可读章节的轻小说"
@@ -40,4 +59,14 @@ object Preferences {
     fun isNovel(preferences: SharedPreferences) = preferences.getString(PREF_CATEGORY, CATEGORY_MANGA) == CATEGORY_NOVEL
 
     fun isReadableOnly(preferences: SharedPreferences) = preferences.getBoolean(PREF_READABLE_ONLY, false)
+
+    /**
+     * Whether a rendered page should be dark. "跟随 Mihon" needs the app's own theme, which the
+     * caller may not be able to read; when it cannot, the system setting answers for it.
+     */
+    fun isDark(preferences: SharedPreferences, appDark: Boolean?, systemDark: Boolean) = when (preferences.getString(PREF_DARK_MODE, DARK_APP)) {
+        DARK_ALWAYS -> true
+        DARK_NEVER -> false
+        else -> appDark ?: systemDark
+    }
 }

@@ -46,7 +46,7 @@ abstract class Hikarinagi :
         Preferences.buildPreferences(screen.context, isNovelMode).forEach { screen.addPreference(it) }
     }
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(NovelTextInterceptor()).addInterceptor(NovelImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(NovelTextInterceptor(preferences)).addInterceptor(NovelImageInterceptor())
 
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"
@@ -101,11 +101,12 @@ abstract class Hikarinagi :
     override suspend fun getLatestUpdates(page: Int): MangasPage = browse(page, sortIndex = 0)
 
     override fun getFilterList(data: JsonElement?) = if (isNovelMode) {
+        // Readable only lives in the preferences; it applies to browsing and searching alike.
         FilterList(
             NovelSortFilter(),
+            BunkoFilter(),
             StatusFilter(),
             DecadeFilter(),
-            NovelReadableFilter(),
         )
     } else {
         FilterList(
