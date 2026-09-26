@@ -1,17 +1,14 @@
 package eu.kanade.tachiyomi.extension.zh.sixmh
 
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMSWeb
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
-import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
@@ -25,16 +22,11 @@ abstract class SixMH : MCCMSWeb() {
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val request = super.searchMangaRequest(page, query, filters)
-        // Use mobile user agent
-        return GET(request.url, headers)
-    }
+    // Use mobile user agent
+    override val searchHeaders get() = headers
 
     // Details
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
-
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val element = document.selectFirst("div.cy_info")!!
         title = element.selectFirst("div.cy_title")!!.text()
         thumbnail_url = element.selectFirst("div.cy_info_cover > a > img.pic")?.absUrl("src")
