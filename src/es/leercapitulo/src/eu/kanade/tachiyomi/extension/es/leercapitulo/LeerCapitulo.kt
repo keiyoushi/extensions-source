@@ -41,14 +41,20 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".hot-manga > .thumbnails > a, .hot-manga a[title]").mapNotNull { element ->
-            val link = element.attr("abs:href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val mangas = document.select(".container .row a[href*='/leer/'], div[class*='col'] a[href*='/leer/']").mapNotNull { element ->
+            val link = element.attr("abs:href")
+            val img = element.selectFirst("img") ?: return@mapNotNull null
+            val mangaTitle = element.selectFirst("h3, h4, .title, p")?.text() 
+                ?: element.attr("title").ifBlank { img.attr("alt") }
+
+            if (mangaTitle.isBlank()) return@mapNotNull null
+
             SManga.create().apply {
                 setUrlWithoutDomain(link)
-                title = element.attr("title").ifBlank { element.text() }
-                thumbnail_url = element.selectFirst("img")?.imgAttr()
+                title = mangaTitle
+                thumbnail_url = img.imgAttr()
             }
-        }
+        }.distinctBy { it.url }
 
         return MangasPage(mangas, hasNextPage = false)
     }
@@ -117,14 +123,20 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".mainpage-manga").mapNotNull { element ->
-            val linkElement = element.selectFirst(".media-body > a, h4 a, a") ?: return@mapNotNull null
+        val mangas = document.select(".container a[href*='/leer/']").mapNotNull { element ->
+            val link = element.attr("abs:href")
+            val img = element.selectFirst("img") ?: return@mapNotNull null
+            val mangaTitle = element.selectFirst("h3, h4, .media-heading")?.text()
+                ?: element.attr("title").ifBlank { img.attr("alt") }
+
+            if (mangaTitle.isBlank()) return@mapNotNull null
+
             SManga.create().apply {
-                setUrlWithoutDomain(linkElement.attr("abs:href"))
-                title = element.selectFirst("h4")?.text() ?: linkElement.text()
-                thumbnail_url = element.selectFirst("img")?.imgAttr()
+                setUrlWithoutDomain(link)
+                title = mangaTitle
+                thumbnail_url = img.imgAttr()
             }
-        }
+        }.distinctBy { it.url }
 
         return MangasPage(mangas, hasNextPage = false)
     }
