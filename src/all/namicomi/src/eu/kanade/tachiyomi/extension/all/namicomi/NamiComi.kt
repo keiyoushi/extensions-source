@@ -24,6 +24,7 @@ import eu.kanade.tachiyomi.extension.all.namicomi.dto.StatusDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.TagDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.Token
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.UnknownEntity
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -37,6 +38,8 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getBoolean
+import keiyoushi.utils.getBooleanOrNull
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.jsonInstance
@@ -52,6 +55,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
@@ -61,7 +66,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okio.IOException
 import java.util.Locale
 import kotlin.collections.orEmpty
 import kotlin.time.Clock
@@ -73,8 +77,9 @@ abstract class NamiComi :
     KeiSource(),
     ConfigurableSource {
 
-    private val apiUrl get() = "https://api.namicomi.com"
-    private val cdnUrl get() = "https://uploads.namicomi.com"
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrl get() = "https://api.$domain"
+    private val cdnUrl get() = "https://uploads.$domain"
 
     private val extLang: String
         get() = when (lang) {
@@ -86,7 +91,7 @@ abstract class NamiComi :
             else -> lang
         }
 
-    val json = Json(jsonInstance) {
+    private val json = Json(jsonInstance) {
         serializersModule += SerializersModule {
             polymorphic(EntityDto::class) {
                 defaultDeserializer { UnknownEntity.serializer() }
@@ -96,19 +101,7 @@ abstract class NamiComi :
 
     private val preferences = getPreferences()
 
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        addNetworkInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-
-            if (response.code == 402) {
-                response.close()
-                throw IOException("Payment required. Chapter requires a premium subscription")
-            }
-
-            response
-        }
-        rateLimit(3) { !it.encodedPath.contains("/covers/") }
-    }
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { !it.encodedPath.contains("/covers/") }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/title/search".toHttpUrl().newBuilder()
@@ -348,6 +341,9 @@ abstract class NamiComi :
                 preferences.showLockedChapters -> {
                     it.toSChapter().apply {
                         name = "🔒 $name"
+                        memo = buildJsonObject {
+                            put("needs_auth", true)
+                        }
                     }
                 }
                 else -> null
@@ -400,8 +396,36 @@ abstract class NamiComi :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$extLang/chapter/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get("$apiUrl/images/chapter/${chapter.url}?newQualities=true", authHeaders())
-            .parseAs<PageListDto>(json).data
+        val needsAuth = chapter.memo.getBooleanOrNull("needs_auth") ?: false
+
+        val url = "$apiUrl/images/chapter/${chapter.url}?newQualities=true"
+
+        val response = if (needsAuth) {
+            client.get(url, authHeaders(), ensureSuccess = false)
+        } else {
+            client.get(url, ensureSuccess = false).let {
+                if (it.code == 402) {
+                    it.close()
+                    client.get(url, authHeaders(), ensureSuccess = false)
+                } else {
+                    it
+                }
+            }
+        }
+
+        if (!response.isSuccessful) {
+            throw when (response.code) {
+                402 -> when {
+                    token == null ->
+                        Exception("Locked Chapter, login via webview to authorize")
+                    else ->
+                        Exception("Locked Chapter, purchase the chapter on the site")
+                }
+                else -> HttpException(response.code)
+            }
+        }
+
+        val data = response.parseAs<PageListDto>(json).data
             ?: return emptyList()
 
         val hash = data.hash
@@ -475,14 +499,7 @@ abstract class NamiComi :
 
         current.refreshExpires?.let {
             if (Clock.System.now() > it) {
-                token = null
-                runWebView(10.seconds) {
-                    onPageFinished {
-                        evaluateJs("""localStorage.removeItem("namicomi.user:https://auth.namicomi.com/realms/namicomi:namicomi-frontend")""")
-                        resolve(Unit)
-                    }
-                    loadData(baseUrl, "")
-                }
+                cleanUpToken()
                 return@withLock
             }
         }
@@ -496,7 +513,7 @@ abstract class NamiComi :
                 .build()
 
             val response = client.post(
-                "https://auth.namicomi.com/realms/namicomi/protocol/openid-connect/token",
+                "https://auth.$domain/realms/namicomi/protocol/openid-connect/token",
                 body,
                 ensureSuccess = false,
             )
@@ -510,8 +527,19 @@ abstract class NamiComi :
                     refreshExpiresAt = refresh.refreshExpires?.epochSeconds,
                 )
             } else {
-                token = null
+                cleanUpToken()
             }
+        }
+    }
+
+    private suspend fun cleanUpToken() {
+        token = null
+        runWebView(10.seconds) {
+            onPageFinished {
+                evaluateJs("""localStorage.removeItem("namicomi.user:https://auth.namicomi.com/realms/namicomi:namicomi-frontend")""")
+                resolve(Unit)
+            }
+            loadData(baseUrl, "")
         }
     }
 
@@ -531,3 +559,4 @@ private val whitespaceRegex = "\\s+".toRegex()
 private const val COVER_QUALITY_PREF = "thumbnailQuality"
 private const val DATA_SAVER_PREF = "dataSaver"
 private const val SHOW_LOCKED_CHAPTERS_PREF = "showLockedChapters"
+private const val AUTH_TOKEN = "auth_token"
