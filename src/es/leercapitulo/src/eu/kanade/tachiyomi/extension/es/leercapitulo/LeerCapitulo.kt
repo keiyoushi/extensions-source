@@ -15,12 +15,20 @@ import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.nio.charset.Charset
 import kotlin.time.Duration.Companion.seconds
+
+@Serializable
+data class Dto(
+    val link: String = "",
+    val label: String = "",
+    val thumbnail: String = ""
+)
 
 @Source
 abstract class LeerCapitulo : HttpSource() {
@@ -41,16 +49,19 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".container .row a[href*='/leer/'], div[class*='col'] a[href*='/leer/']").mapNotNull { element ->
-            val link = element.attr("abs:href")
+        val mangas = document.select(".hot-manga > .thumbnails > a, .mainpage-manga, .item, a[href*='/leer/']:has(img)").mapNotNull { element ->
+            val linkElement = element.selectFirst("a[href*='/leer/']") ?: if (element.tagName() == "a") element else return@mapNotNull null
+            val url = linkElement.attr("abs:href")
+            if (url.isBlank()) return@mapNotNull null
+
             val img = element.selectFirst("img") ?: return@mapNotNull null
-            val mangaTitle = element.selectFirst("h3, h4, .title, p")?.text() 
-                ?: element.attr("title").ifBlank { img.attr("alt") }
+            val mangaTitle = element.selectFirst("h3, h4, .title, p, .media-heading")?.text() 
+                ?: linkElement.attr("title").ifBlank { img.attr("alt") }
 
             if (mangaTitle.isBlank()) return@mapNotNull null
 
             SManga.create().apply {
-                setUrlWithoutDomain(link)
+                setUrlWithoutDomain(url)
                 title = mangaTitle
                 thumbnail_url = img.imgAttr()
             }
@@ -65,7 +76,6 @@ abstract class LeerCapitulo : HttpSource() {
         if (query.isNotBlank()) {
             urlBuilder.addPathSegment("search-autocomplete")
             urlBuilder.addQueryParameter("term", query)
-
             return GET(urlBuilder.build(), headers)
         }
 
@@ -80,34 +90,40 @@ abstract class LeerCapitulo : HttpSource() {
             urlBuilder.addPathSegment(it.toUriPart())
         }
 
-        urlBuilder.addPathSegment("")
+        urlBuilder.addPathSegment("") 
         urlBuilder.addQueryParameter("page", page.toString())
 
         val url = urlBuilder.build()
-        if (url.pathSegments.size <= 1) {
-            throw Exception("Debe seleccionar un filtro o realizar una búsqueda por texto.")
-        }
+        if (url.pathSegments.size <= 1) throw Exception("Debe seleccionar un filtro o realizar una búsqueda por texto.")
 
         return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
+        // 1. Intento de parseo por API JSON (Autocomplete original)
         if (response.request.url.pathSegments.contains("search-autocomplete")) {
-            val mangas = response.parseAs<List<Dto>>().map { it.toSManga() }
-            return MangasPage(mangas, hasNextPage = false)
-        }
-
-        val document = response.asJsoup()
-        val mangas = document.select("div.cate-manga div.mainpage-manga, div.mainpage-manga").mapNotNull { element ->
-            val linkElement = element.selectFirst("div.media-body a, h4 a, a[href*='/leer/']") ?: return@mapNotNull null
-            SManga.create().apply {
-                setUrlWithoutDomain(linkElement.attr("abs:href"))
-                title = linkElement.text()
-                thumbnail_url = element.selectFirst("img")?.imgAttr()
+            try {
+                val mangas = response.parseAs<List<Dto>>().map { it.toSManga() }
+                if (mangas.isNotEmpty()) return MangasPage(mangas, false)
+            } catch (e: Exception) {
+                // Si la web ahora devuelve HTML o bloquea el JSON, pasamos al plan B
             }
         }
 
-        val hasNextPage = document.selectFirst("ul.pagination > li.active + li") != null
+        // 2. Plan B: Búsqueda agresiva en el HTML devuelto
+        val document = response.asJsoup()
+        val mangas = document.select("div.cate-manga div.mainpage-manga, .manga-item, .item, a[href*='/leer/']:has(img)").mapNotNull { element ->
+            val linkElement = element.selectFirst("a[href*='/leer/']") ?: if (element.tagName() == "a") element else return@mapNotNull null
+            val img = element.selectFirst("img") ?: return@mapNotNull null
+            
+            SManga.create().apply {
+                setUrlWithoutDomain(linkElement.attr("abs:href"))
+                title = element.selectFirst("h3, h4, .title, p, .media-body a")?.text() ?: linkElement.text().ifBlank { img.attr("alt") }
+                thumbnail_url = img.imgAttr()
+            }
+        }.distinctBy { it.url }
+
+        val hasNextPage = document.selectFirst("ul.pagination > li.active + li, .pagination .next") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -121,33 +137,15 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(".container a[href*='/leer/']").mapNotNull { element ->
-            val link = element.attr("abs:href")
-            val img = element.selectFirst("img") ?: return@mapNotNull null
-            val mangaTitle = element.selectFirst("h3, h4, .media-heading")?.text()
-                ?: element.attr("title").ifBlank { img.attr("alt") }
-
-            if (mangaTitle.isBlank()) return@mapNotNull null
-
-            SManga.create().apply {
-                setUrlWithoutDomain(link)
-                title = mangaTitle
-                thumbnail_url = img.imgAttr()
-            }
-        }.distinctBy { it.url }
-
-        return MangasPage(mangas, hasNextPage = false)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("h1")?.text() ?: ""
+            title = document.selectFirst("h1, h2, .title")?.text() ?: ""
 
             val altNames = document.selectFirst(".description-update > span:contains(Títulos Alternativos:) + :matchText")?.text()
-            val desc = document.selectFirst("#example2, .detail-content, .description")?.text()
+            val desc = document.selectFirst("#example2, .description, .summary, .detail-content")?.text()
             description = buildString {
                 if (!desc.isNullOrEmpty()) append(desc)
                 if (!altNames.isNullOrEmpty()) {
@@ -159,24 +157,36 @@ abstract class LeerCapitulo : HttpSource() {
 
             genre = document.select(".description-update a[href*='/genre/']").joinToString { it.text() }
             status = document.selectFirst(".description-update > span:contains(Estado:) + :matchText")?.text()?.toStatus() ?: SManga.UNKNOWN
-            thumbnail_url = document.selectFirst(".cover-detail > img, .detail-info img")?.imgAttr()
+            thumbnail_url = document.selectFirst(".cover-detail > img, .detail-info img, .manga-info img")?.imgAttr()
         }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val chapterElements = document.select(".chapter-list ul li, .chapter-list div.row, ul.list-chapters li")
         
-        return chapterElements.mapNotNull { element ->
-            val link = element.selectFirst("a[href*='/leer/'], a.xanh, a") ?: return@mapNotNull null
-            val chapterUrl = link.attr("abs:href")
-            if (!chapterUrl.contains("/leer/")) return@mapNotNull null
-
+        // Búsqueda en listas estructuradas
+        var chapterElements = document.select(".chapter-list ul li, ul.list-chapters li, .list-chapter li, .row-chapter, .chapter-item")
+        var chapters = chapterElements.mapNotNull { element ->
+            val link = element.selectFirst("a.xanh, a[href*='/leer/'], a[href*='/capitulo/']") ?: return@mapNotNull null
             SChapter.create().apply {
-                setUrlWithoutDomain(chapterUrl)
-                name = link.text().ifBlank { element.selectFirst(".chapter-title")?.text() ?: "Capítulo" }
+                setUrlWithoutDomain(link.attr("abs:href"))
+                name = link.text().ifBlank { element.selectFirst(".chapter-title, h4")?.text() ?: "Capítulo" }
             }
         }
+
+        // Búsqueda desesperada si cambiaron por completo las clases (Atrapa cualquier enlace que ponga Capítulo)
+        if (chapters.isEmpty()) {
+            chapters = document.select("a[href*='/leer/']").filter { 
+                it.text().contains("Capítulo", ignoreCase = true) || it.text().contains("Cap ", ignoreCase = true)
+            }.map { link ->
+                SChapter.create().apply {
+                    setUrlWithoutDomain(link.attr("abs:href"))
+                    name = link.text()
+                }
+            }
+        }
+
+        return chapters.distinctBy { it.url }
     }
 
     private var cachedScriptUrl: String? = null
@@ -184,7 +194,6 @@ abstract class LeerCapitulo : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        // 1. Búsqueda agresiva en todos los contenedores de lectura típicos
         val imageElements = document.select(
             "#chapter-content img, .chapter-content img, .reading-content img, " +
             "#vungdoc img, .page-break img, .container-chapter img, " +
@@ -193,39 +202,26 @@ abstract class LeerCapitulo : HttpSource() {
 
         var directImages = imageElements.mapNotNull { it.imgAttr().takeIf { src -> src.startsWith("http") } }
 
-        // 2. Si fallan los selectores exactos, atrapamos cualquier imagen de la página 
-        // que no sea un logo, avatar o miniatura de la interfaz
         if (directImages.isEmpty()) {
             directImages = document.select("img").mapNotNull { element ->
                 val src = element.imgAttr()
-                if (src.startsWith("http") && 
-                    !src.contains("logo", true) && 
-                    !src.contains("avatar", true) && 
-                    !src.contains("thumb", true)) {
-                    src
-                } else null
+                if (src.startsWith("http") && !src.contains("logo", true) && !src.contains("avatar", true) && !src.contains("thumb", true)) src else null
             }
         }
 
-        // Si encontró al menos un par de páginas, las devuelve directamente
         if (directImages.isNotEmpty() && directImages.size > 2) {
             return directImages.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
         }
 
-        // 3. Fallback al descifrado de scripts (por si el capítulo es antiguo y sigue ofuscado)
         val arrayDataElement = document.selectFirst("#array_data, input[type=hidden]")
         val arrayData = arrayDataElement?.text() ?: arrayDataElement?.attr("value") ?: ""
 
-        if (arrayData.isBlank()) {
-            throw Exception("Las imágenes no están expuestas en el HTML del visor.")
-        }
+        if (arrayData.isBlank()) throw Exception("Las imágenes no están expuestas en el HTML del visor.")
 
-        val orderList = document.selectFirst("meta[property=ad:check]")?.attr("content")
-            ?.replace(ORDER_LIST_REGEX, "-")?.split("-")
+        val orderList = document.selectFirst("meta[property=ad:check]")?.attr("content")?.replace(ORDER_LIST_REGEX, "-")?.split("-")
         val useReversedString = orderList?.any { it == "01" } == true
 
-        val scripts = document.select("head > script[src*=.js], script[src^=/assets/]")
-            .map { it.attr("abs:src") }.reversed().toMutableList()
+        val scripts = document.select("head > script[src*=.js], script[src^=/assets/]").map { it.attr("abs:src") }.reversed().toMutableList()
 
         var dataScript: String? = null
         cachedScriptUrl?.let { if (scripts.remove(it)) scripts.add(0, it) }
