@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.es.mangasin
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.multisrc.mmrcms.SuggestionDto
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,18 +11,18 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.lib.synchrony.Deobfuscator
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.net.URLDecoder
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
@@ -32,22 +31,15 @@ abstract class MangasIn : MMRCMS() {
 
     override val supportsAdvancedSearch = false
 
-    override val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    override val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val client = super.client.newBuilder()
-        .rateLimit(1, 1.seconds) { it.host == baseUrlHost }
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 1.seconds) { it.host == baseUrlHost }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/lasted?p=$page", headers)
+    override fun latestUpdatesUrl(page: Int) = "$baseUrl/lasted?p=$page"
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        runCatching { fetchFilterOptions() }
-
         val data = response.parseAs<LatestUpdateResponse>()
         val manga = data.data.map {
             SManga.create().apply {
@@ -61,16 +53,14 @@ abstract class MangasIn : MMRCMS() {
         return MangasPage(manga, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
         if (query.isEmpty()) {
-            return super.searchMangaRequest(page, query, filters)
+            return super.searchMangaUrl(page, query, filters)
         }
 
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        return "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query)
-        }.build()
-
-        return GET(url, headers)
+        }.build().toString()
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -96,8 +86,8 @@ abstract class MangasIn : MMRCMS() {
 
     private var key = ""
 
-    private fun getKey(): String {
-        val script = client.newCall(GET("$baseUrl/js/ads2.js")).execute().body.string()
+    private suspend fun getKey(): String {
+        val script = client.get("$baseUrl/js/ads2.js").body.string()
         val deobfuscatedScript = Deobfuscator.deobfuscateScript(script)
             ?: throw Exception("No se pudo desofuscar el script")
 
@@ -112,8 +102,7 @@ abstract class MangasIn : MMRCMS() {
             ?: throw Exception("No se pudo encontrar la clave")
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    override suspend fun chapterListParse(document: Document): List<SChapter> {
         val mangaUrl = document.location().removeSuffix("/")
         val encodeChapterData = CHAPTER_DATA_REGEX.find(document.html())?.value ?: throw Exception("No se pudo encontrar la lista de capítulos")
         val unescapedChapterData = encodeChapterData.unescape()
@@ -140,7 +129,7 @@ abstract class MangasIn : MMRCMS() {
                     "Capítulo ${it.number}: ${it.name}"
                 }
 
-                date_upload = dateFormat.tryParse(it.createdAt)
+                date_upload = dateFormat.tryParseDateTime(it.createdAt)
 
                 setUrlWithoutDomain("$mangaUrl/${it.slug}")
             }
