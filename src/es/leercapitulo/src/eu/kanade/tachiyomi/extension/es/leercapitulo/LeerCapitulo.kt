@@ -184,46 +184,54 @@ abstract class LeerCapitulo : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        // Intento 1: Extracción directa si las imágenes están renderizadas en el DOM
-        val directImages = document.select("#array_data img, .chapter-content img, .reading-content img")
-            .mapNotNull { it.imgAttr().takeIf { src -> src.startsWith("http") } }
-        
-        if (directImages.isNotEmpty()) {
-            return directImages.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
-        }
+        // 1. Búsqueda agresiva en todos los contenedores de lectura típicos
+        val imageElements = document.select(
+            "#chapter-content img, .chapter-content img, .reading-content img, " +
+            "#vungdoc img, .page-break img, .container-chapter img, " +
+            ".text-center img, #array_data img"
+        )
 
-        // Intento 2: Decodificación por script ofuscado con fallback seguro
-        val orderList = document.selectFirst("meta[property=ad:check]")?.attr("content")
-            ?.replace(ORDER_LIST_REGEX, "-")
-            ?.split("-")
+        var directImages = imageElements.mapNotNull { it.imgAttr().takeIf { src -> src.startsWith("http") } }
 
-        val useReversedString = orderList?.any { it == "01" } == true
-
-        val arrayDataElement = document.selectFirst("#array_data")
-        val arrayData = arrayDataElement?.text() ?: arrayDataElement?.attr("value") ?: ""
-
-        if (arrayData.isBlank()) {
-            throw Exception("No se encontraron páginas en este capítulo")
-        }
-
-        val scripts = document.select("head > script[src*=.js], script[src^=/assets/]")
-            .map { it.attr("abs:src") }
-            .reversed()
-            .toMutableList()
-
-        var dataScript: String? = null
-
-        cachedScriptUrl?.let {
-            if (scripts.remove(it)) {
-                scripts.add(0, it)
+        // 2. Si fallan los selectores exactos, atrapamos cualquier imagen de la página 
+        // que no sea un logo, avatar o miniatura de la interfaz
+        if (directImages.isEmpty()) {
+            directImages = document.select("img").mapNotNull { element ->
+                val src = element.imgAttr()
+                if (src.startsWith("http") && 
+                    !src.contains("logo", true) && 
+                    !src.contains("avatar", true) && 
+                    !src.contains("thumb", true)) {
+                    src
+                } else null
             }
         }
 
-        for (scriptUrl in scripts) {
-            val scriptData = runCatching {
-                notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().use { it.body.string() }
-            }.getOrNull() ?: continue
+        // Si encontró al menos un par de páginas, las devuelve directamente
+        if (directImages.isNotEmpty() && directImages.size > 2) {
+            return directImages.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+        }
 
+        // 3. Fallback al descifrado de scripts (por si el capítulo es antiguo y sigue ofuscado)
+        val arrayDataElement = document.selectFirst("#array_data, input[type=hidden]")
+        val arrayData = arrayDataElement?.text() ?: arrayDataElement?.attr("value") ?: ""
+
+        if (arrayData.isBlank()) {
+            throw Exception("Las imágenes no están expuestas en el HTML del visor.")
+        }
+
+        val orderList = document.selectFirst("meta[property=ad:check]")?.attr("content")
+            ?.replace(ORDER_LIST_REGEX, "-")?.split("-")
+        val useReversedString = orderList?.any { it == "01" } == true
+
+        val scripts = document.select("head > script[src*=.js], script[src^=/assets/]")
+            .map { it.attr("abs:src") }.reversed().toMutableList()
+
+        var dataScript: String? = null
+        cachedScriptUrl?.let { if (scripts.remove(it)) scripts.add(0, it) }
+
+        for (scriptUrl in scripts) {
+            val scriptData = runCatching { notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().use { it.body.string() } }.getOrNull() ?: continue
             val deobfuscatedScript = runCatching { Deobfuscator.deobfuscateScript(scriptData) }.getOrNull()
             if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
                 dataScript = deobfuscatedScript
@@ -233,38 +241,26 @@ abstract class LeerCapitulo : HttpSource() {
         }
 
         if (dataScript == null) {
-            // Si el script no coincide, intentar split directo si arrayData ya es Base64
-            val directUrls = runCatching {
-                String(Base64.decode(arrayData, Base64.DEFAULT), Charset.forName("UTF-8")).split(",")
-            }.getOrNull()
-
-            if (!directUrls.isNullOrEmpty()) {
-                return directUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
-            }
-            throw Exception("No se pudo obtener el script de descifrado")
+            val directUrls = runCatching { String(Base64.decode(arrayData, Base64.DEFAULT), Charset.forName("UTF-8")).split(",") }.getOrNull()
+            if (!directUrls.isNullOrEmpty()) return directUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
+            throw Exception("No se pudo descifrar el script de imágenes.")
         }
 
         val keys = KEY_REGEX.findAll(dataScript).map { it.groupValues[1] }.toList()
-        if (keys.size < 2) {
-            throw Exception("Error analizando las claves de cifrado")
-        }
-        val (key1, key2) = keys
-
+        if (keys.size < 2) throw Exception("Error de claves de cifrado")
+        
         val encodedUrls = arrayData.replace(DECODE_REGEX) {
-            val index = key2.indexOf(it.value)
-            if (index in key1.indices) key1[index].toString() else it.value
+            val index = keys[1].indexOf(it.value)
+            if (index in keys[0].indices) keys[0][index].toString() else it.value
         }
 
         val urlList = String(Base64.decode(encodedUrls, Base64.DEFAULT), Charset.forName("UTF-8")).split(",")
-
         val sortedUrls = orderList?.mapNotNull {
             val idx = if (useReversedString) it.reversed().toIntOrNull() else it.toIntOrNull()
             if (idx != null && idx in urlList.indices) urlList[idx] else null
         }?.reversed()?.takeIf { it.isNotEmpty() } ?: urlList
 
-        return sortedUrls.mapIndexed { i, imageUrl ->
-            Page(i, imageUrl = imageUrl)
-        }
+        return sortedUrls.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
     }
 
     private fun Element.imgAttr(): String = when {
