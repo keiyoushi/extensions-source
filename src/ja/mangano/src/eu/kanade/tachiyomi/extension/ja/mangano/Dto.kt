@@ -7,14 +7,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 // Variables
-@Serializable
-object EmptyVariables
-
 @Suppress("unused")
 @Serializable
 class LatestVariables(
@@ -72,6 +67,7 @@ class Node(
     private val coverImage: CoverImage?,
     private val user: User?,
     private val tags: List<Tag>?,
+    val episodes: Episodes?,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         url = id
@@ -127,16 +123,6 @@ class Tag(
 )
 
 @Serializable
-class ChapterResponse(
-    val node: ChapterNode,
-)
-
-@Serializable
-class ChapterNode(
-    val episodes: Episodes,
-)
-
-@Serializable
 class Episodes(
     val edges: List<ChapterEdge>,
 )
@@ -170,7 +156,7 @@ class ChapterNodeX(
         url = id
         name = lock + preview + title
         chapter_number = number?.toFloat() ?: -1f
-        date_upload = dateFormat.tryParse(publishedAt)
+        date_upload = Instant.tryParse(publishedAt)
     }
 }
 
@@ -178,10 +164,6 @@ class ChapterNodeX(
 class SalesInfo(
     val pagesChargedFrom: Int,
 )
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
 
 @Serializable
 class ViewerResponse(
