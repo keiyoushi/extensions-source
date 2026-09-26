@@ -11,7 +11,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.serializer
-import java.text.SimpleDateFormat
+import kotlin.time.Instant
 
 @Serializable
 data class FilterResponseDto(
@@ -101,10 +101,10 @@ fun MangaDto.toSMangaDetails() = this.toSManga().apply {
     update_strategy = status.toUpdateStrategy()
 }
 
-fun ChapterDto.toSChapter(mangaSlug: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+fun ChapterDto.toSChapter(mangaSlug: String) = SChapter.create().apply {
     url = "$mangaSlug/$slug"
     name = "Capítulo $num"
-    date_upload = dateFormat.tryParse(createdAt)
+    date_upload = Instant.tryParse(createdAt)
     chapter_number = num
 }
 
