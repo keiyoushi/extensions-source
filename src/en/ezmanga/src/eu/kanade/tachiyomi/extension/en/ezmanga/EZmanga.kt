@@ -4,27 +4,26 @@ import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwa
 import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaSortFilter
 import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaStatusFilter
 import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaTypeFilter
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 
 @Source
 abstract class EZmanga : EZManhwa() {
 
     override val apiUrl = "https://vapi.ezmanga.org/api/v1"
 
-    override val client = network.client.newBuilder()
-        .rateLimit(2)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
         val isSearch = query.isNotBlank()
         val endpoint = if (isSearch) "$apiUrl/series/search" else "$apiUrl/series"
-        val url = endpoint.toHttpUrl().newBuilder().apply {
+        return endpoint.toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("perPage", "20")
             if (isSearch) {
@@ -46,18 +45,17 @@ abstract class EZmanga : EZManhwa() {
                 if (!sortAdded) addQueryParameter("sort", "latest")
             }
         }.build()
-        return GET(url, headers)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = if (chapter.url.contains("/chapters/")) {
-        GET("$apiUrl/${chapter.url}", headers)
+    override fun pageListUrl(chapter: SChapter) = if (chapter.url.contains("/chapters/")) {
+        "$apiUrl/${chapter.url}"
     } else {
         val path = chapter.url.removePrefix("/series/")
         val slash = path.indexOf('/')
-        GET("$apiUrl/series/${path.substring(0, slash)}/chapters/${path.substring(slash + 1)}", headers)
+        "$apiUrl/series/${path.substring(0, slash)}/chapters/${path.substring(slash + 1)}"
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         EZManhwaSortFilter(),
         EZManhwaStatusFilter(),
         EZManhwaTypeFilter(),
