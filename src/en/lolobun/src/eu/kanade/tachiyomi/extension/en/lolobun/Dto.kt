@@ -31,7 +31,7 @@ class SearchItemDto(
     @SerialName("Cover") private val cover: String?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/c/$id"
+        url = id.toString()
         title = this@SearchItemDto.title
         thumbnail_url = cover?.let { if (it.startsWith("http")) it else "$COVER_URL/$it" }
     }
