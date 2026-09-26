@@ -10,245 +10,221 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.GraphQLException
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseGraphQLAs
-import okhttp3.Request
+import keiyoushi.utils.stringOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Source
 abstract class Sokuyomi :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    private val domain = "sokuyomi.jp"
-    override val supportsLatest = true
-
-    private val apiUrl = "https://api.$domain/graphql"
-    private val cdnUrl = "https://cdn.$domain"
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrl get() = "https://api.$domain/graphql"
+    private val cdnUrl get() = "https://cdn.$domain"
     private val preferences by getPreferencesLazy()
+    private val jst = ZoneId.of("Asia/Tokyo")
+    private val clientVersionFormat = DateTimeFormatter.ofPattern("yyyyMMdd")
+    private val tokenMutex = Mutex()
 
-    private var bearerToken: String? = null
-    private var tokenExpiration: Long = 0L
     private var loginFailed = false
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(GraphQLErrorInterceptor())
-        .addInterceptor(ImageInterceptor())
-        .addInterceptor {
-            val request = it.request()
-            if (request.url.fragment == "auth") {
-                return@addInterceptor it.proceed(request)
-            }
-
-            val newRequest = request.newBuilder().apply {
-                val token = getToken()
-                if (token.isNotBlank()) {
-                    header("Authorization", "Bearer $token")
-                }
-            }.build()
-            val response = it.proceed(newRequest)
-            if (response.code == 403) {
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(GraphQLErrorInterceptor())
+        addInterceptor(ImageInterceptor())
+        addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            if (response.code == 405) {
                 throw IOException("This service is only available in Japan.")
             }
             response
         }
-        .build()
-
-    override fun popularMangaRequest(page: Int) = graphQLPost(
-        apiUrl,
-        headers,
-        SERIES_QUERY,
-        "ListTitle",
-        PopularVariables(50, page - 1, "LIKE_COUNT", true),
-    )
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseGraphQLAs<SeriesResponse>()
-        val mangas = result.listTitle.edges.map { it.node.toSManga(cdnUrl) }
-        return MangasPage(mangas, result.listTitle.pageInfo.hasNextPage())
     }
 
-    override fun latestUpdatesRequest(page: Int) = graphQLPost(
+    override fun Headers.Builder.configureHeaders() = set("Client-Version", LocalDate.now(jst).format(clientVersionFormat))
+
+    override suspend fun getPopularManga(page: Int): MangasPage = client.post(
         apiUrl,
-        headers,
-        SERIES_QUERY,
-        "ListTitle",
-        PopularVariables(50, page - 1, "LATEST_BOOK_OPEND_AT", true),
-    )
+        graphQLBody(
+            LIST_QUERY,
+            "ListTitle",
+            ListVariables(50, page - 1, "LIKE_COUNT", "DESC"),
+        ),
+    ).toMangasPage()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.post(
+        apiUrl,
+        graphQLBody(
+            LIST_QUERY,
+            "ListTitle",
+            ListVariables(50, page - 1, "LATEST_BOOK_OPEND_AT", "DESC"),
+        ),
+    ).toMangasPage()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            return graphQLPost(
-                apiUrl,
-                headers,
-                SEARCH_QUERY,
-                "ListTitle",
-                SearchVariables(
-                    query,
-                    query,
-                    query,
-                    50,
-                    page - 1,
-                    "LIKE_COUNT",
-                    true,
-                ),
-            )
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val tags = filters.firstInstance<TagFilter>().value
+        val variables = if (query.isNotBlank()) {
+            ListVariables(50, page - 1, "LIKE_COUNT", "DESC", query)
+        } else {
+            ListVariables(20, page - 1, "LIKE_COUNT", "ASC", tagSlug = tags)
         }
 
-        val filter = filters.firstInstance<TagFilter>()
-        return graphQLPost(
+        return client.post(
             apiUrl,
-            headers,
-            TAG_FILTER_QUERY,
-            "ListTitleByTag",
-            TagFilterVariables(
-                filter.value,
-                20,
-                page - 1,
+            graphQLBody(
+                LIST_QUERY,
+                "ListTitle",
+                variables,
             ),
-        )
+        ).toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun Response.toMangasPage(): MangasPage {
+        val result = this.parseGraphQLAs<SeriesResponse>().listTitle
+        val mangas = result.edges.map { it.node.toSManga(cdnUrl) }
+        return MangasPage(mangas, result.pageInfo.hasNextPage())
+    }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${manga.url}/detail/"
 
-    override fun mangaDetailsRequest(manga: SManga) = graphQLPost(
-        apiUrl,
-        headers,
-        DETAILS_QUERY,
-        "GetTitle",
-        DetailsVariables(manga.url),
-    )
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val result = client.post(
+            apiUrl,
+            apiHeaders(),
+            graphQLBody(
+                DETAILS_QUERY,
+                "GetTitle",
+                DetailsVariables(manga.url),
+            ),
+        ).parseGraphQLAs<DetailsResponse>()
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseGraphQLAs<DetailsResponse>().getTitle.toSManga(cdnUrl)
-
-    override fun chapterListRequest(manga: SManga): Request = graphQLPost(
-        apiUrl,
-        headers,
-        CHAPTER_LIST_QUERY,
-        "ListVolume",
-        ChapterListVariables(manga.url, 1000, 0, "DESC"),
-    )
-
-    override fun chapterListParse(response: Response): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val result = response.parseGraphQLAs<ChapterResponse>()
-        return result.listVolume.edges
+        val chapterList = result.listChapter.edges
             .filter { !hideLocked || !it.node.isLocked }
-            .map { it.node.toSChapter() }
+            .map { it.node.toSChapter("chapter") }
+
+        val volumeList = result.listVolume.edges
+            .filter { !hideLocked || !it.node.isLocked }
+            .map { it.node.toSChapter("volume") }
+
+        return SMangaUpdate(
+            result.getTitle.toSManga(cdnUrl),
+            chapterList + volumeList,
+        )
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/viewer/volume/${chapter.url}/"
+    override fun getChapterUrl(chapter: SChapter): String {
+        val type = chapter.memo["type"]?.stringOrNull ?: "volume"
+        return "$baseUrl/viewer/$type/${chapter.url}/"
+    }
 
-    override fun pageListRequest(chapter: SChapter): Request = graphQLPost(
-        apiUrl,
-        headers,
-        VIEWER_QUERY,
-        "GetVolumeViewer",
-        ViewerVariables(chapter.url),
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val body = if (chapter.memo["type"]?.stringOrNull == "chapter") {
+            graphQLBody(CHAPTER_VIEWER_QUERY, "GetChapterViewer", ViewerVariables(chapter.url))
+        } else {
+            graphQLBody(VOLUME_VIEWER_QUERY, "GetVolumeViewer", ViewerVariables(chapter.url))
+        }
+
+        val result = try {
+            client.post(apiUrl, apiHeaders(), body).parseGraphQLAs<ViewerResponse>()
+        } catch (e: GraphQLException) {
+            if (loginFailed) throw IOException("Invalid E-Mail or Password")
+            throw IOException(e.message?.substringAfter("Viewer ") + " (Log in via Settings.)")
+        }
+
+        return result.viewer.pages.map {
+            Page(it.pageNumber, imageUrl = "$cdnUrl/${it.key}#scramble")
+        }
+    }
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        TagFilter(),
     )
 
-    override fun pageListParse(response: Response): List<Page> {
-        try {
-            val result = response.parseGraphQLAs<ViewerResponse>()
-            return result.getVolumeViewer.volumePages.map {
-                Page(it.pageNumber, imageUrl = "$cdnUrl/${it.key}#scramble")
-            }
-        } catch (e: GraphQLException) {
-            throw IOException(e.message?.substringAfter("input: getVolumeViewer ") + " (Log in via Settings.)")
-        }
+    private suspend fun apiHeaders(): Headers {
+        val token = getToken() ?: return headers
+        return headersBuilder()
+            .set("Authorization", "Bearer $token")
+            .build()
     }
 
-    @Synchronized
-    private fun getToken(): String {
-        if (loginFailed) {
-            return ""
-        }
-
-        if (bearerToken != null && System.currentTimeMillis() < tokenExpiration) {
-            return bearerToken!!
-        }
+    private suspend fun getToken(): String? = tokenMutex.withLock {
+        if (loginFailed) return null
+        if (System.currentTimeMillis() < preferences.getLong(EXPIRES, 0L)) return preferences.getString(TOKEN, null)
 
         val refreshToken = preferences.getString(REFRESH, "")!!
-        if (refreshToken.isNotBlank()) {
-            try {
-                val newTokens = refresh(refreshToken)
-                saveTokens(newTokens.token)
-                return newTokens.token.accessToken
-            } catch (_: Exception) {
-            }
-        }
+        val tokens = refreshToken.takeIf { it.isNotEmpty() }?.let { refresh(it) }
+            ?: login()
+            ?: return null
 
-        val email = preferences.getString(EMAIL_PREF_KEY, "")!!
-        val password = preferences.getString(PASSWORD_PREF_KEY, "")!!
-
-        if (email.isNotBlank() && password.isNotBlank()) {
-            try {
-                val newTokens = login(email, password)
-                saveTokens(newTokens.signin)
-                return newTokens.signin.accessToken
-            } catch (_: Exception) {
-                loginFailed = true
-                return ""
-            }
-        }
-
-        return ""
-    }
-
-    private fun login(email: String, password: String): LoginResponse {
-        val request = graphQLPost(
-            "$apiUrl#auth",
-            headers,
-            LOGIN_QUERY,
-            "Signin",
-            LoginVariables(
-                email,
-                password,
-            ),
-        )
-        return client.newCall(request).execute().parseGraphQLAs<LoginResponse>()
-    }
-
-    private fun refresh(refreshToken: String): RefreshResponse {
-        val request = graphQLPost(
-            "$apiUrl#auth",
-            headers,
-            REFRESH_QUERY,
-            "Signin",
-            RefreshVariables(
-                refreshToken,
-            ),
-        )
-        return client.newCall(request).execute().parseGraphQLAs<RefreshResponse>()
-    }
-
-    private fun saveTokens(signin: Signin) {
-        val expiration = System.currentTimeMillis() + (86400 * 1000L)
-        bearerToken = signin.accessToken
-        tokenExpiration = expiration
         preferences.edit().apply {
-            putString(TOKEN, signin.accessToken)
-            putString(REFRESH, signin.refreshToken)
-            putLong(EXPIRES, expiration)
+            putString(TOKEN, tokens.accessToken)
+            putString(REFRESH, tokens.refreshToken)
+            putLong(EXPIRES, tokens.expiresAt * 1000)
             apply()
         }
+        tokens.accessToken
     }
 
-    @Synchronized
+    private suspend fun login(): Signin? {
+        val email = preferences.getString(EMAIL_PREF_KEY, "")!!
+        val password = preferences.getString(PASSWORD_PREF_KEY, "")!!
+        if (email.isBlank() || password.isBlank()) return null
+
+        return try {
+            client.post(
+                apiUrl,
+                graphQLBody(
+                    LOGIN_QUERY,
+                    "Signin",
+                    LoginVariables(email, password),
+                ),
+            ).parseGraphQLAs<LoginResponse>().signin
+        } catch (_: GraphQLException) {
+            loginFailed = true
+            null
+        }
+    }
+
+    private suspend fun refresh(refreshToken: String): Signin? = try {
+        client.post(
+            apiUrl,
+            graphQLBody(
+                REFRESH_QUERY,
+                "Token",
+                RefreshVariables(refreshToken),
+            ),
+        ).parseGraphQLAs<RefreshResponse>().token
+    } catch (_: GraphQLException) {
+        null
+    }
+
     private fun clearTokens() {
         loginFailed = false
-        bearerToken = null
-        tokenExpiration = 0L
         preferences.edit().apply {
             remove(TOKEN)
             remove(REFRESH)
@@ -288,12 +264,6 @@ abstract class Sokuyomi :
             }
         }.also(screen::addPreference)
     }
-
-    override fun getFilterList() = FilterList(
-        TagFilter(),
-    )
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
