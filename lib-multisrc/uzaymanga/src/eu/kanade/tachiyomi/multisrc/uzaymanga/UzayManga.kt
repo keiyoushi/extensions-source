@@ -16,7 +16,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
 
 // The listing endpoint returns bogus currentPage/totalPages values, so the last page is
 // detected by a short page instead.
@@ -69,12 +68,7 @@ abstract class UzayManga : KeiSource() {
             }
         }
 
-        val response = client.get(url.build())
-        return searchMangaParse(response)
-    }
-
-    private fun searchMangaParse(response: Response): MangasPage {
-        val (svelte, root) = response.parseSvelteRoot() ?: return MangasPage(emptyList(), false)
+        val (svelte, root) = client.get(url.build()).parseSvelteRoot() ?: return MangasPage(emptyList(), false)
         val seriesArray = svelte.resolveArray(root, "series") ?: return MangasPage(emptyList(), false)
 
         return MangasPage(svelte.toSMangaList(seriesArray, baseUrl, cdnUrl), seriesArray.size == PAGE_SIZE)

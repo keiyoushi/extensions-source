@@ -17,20 +17,16 @@ import kotlin.time.Instant
 
 @Serializable
 class SvelteResponse(
-    private val type: String,
     private val nodes: List<SvelteNode>? = null,
 ) {
-    fun getData(): JsonArray? = nodes?.lastOrNull { it.getType() == "data" }?.getData()
+    fun getData(): JsonArray? = nodes?.lastOrNull { it.type == "data" }?.data
 }
 
 @Serializable
 class SvelteNode(
-    private val type: String,
-    private val data: JsonArray? = null,
-) {
-    fun getType() = type
-    fun getData() = data
-}
+    val type: String,
+    val data: JsonArray? = null,
+)
 
 /**
  * Helper class to navigate SvelteKit's 'devalue' serialized data array.
