@@ -1,20 +1,17 @@
 package eu.kanade.tachiyomi.extension.ja.comicborder
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Element
 
 @Source
 abstract class ComicBorder : GigaViewer() {
     override val supportsLatest = false
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun popularMangaUrl(page: Int) = baseUrl
 
     override val popularMangaSelector = "section.top-series"
 
@@ -24,6 +21,5 @@ abstract class ComicBorder : GigaViewer() {
         thumbnail_url = element.selectFirst(".top-key-image")?.absUrl("data-src")
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw UnsupportedOperationException()
 }
