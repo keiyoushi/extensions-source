@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
@@ -19,6 +18,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 
+// The listing endpoint returns bogus currentPage/totalPages values, so the last page is
+// detected by a short page instead.
+private const val PAGE_SIZE = 20
+
 abstract class UzayManga : KeiSource() {
 
     protected open val cdnUrl: String? = null
@@ -27,42 +30,27 @@ abstract class UzayManga : KeiSource() {
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$baseUrl/manga/__data.json".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "popular")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("x-sveltekit-invalidated", "001")
-            .build()
-        val response = client.get(url, headers)
-        return searchMangaParse(response)
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter().apply { state = 1 }))
 
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/manga/__data.json".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "update")
+        val url = "$baseUrl/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("x-sveltekit-invalidated", "001")
             .build()
-        val response = client.get(url, headers)
-        return searchMangaParse(response)
+        val (svelte, root) = client.get(url).parseSvelteRoot() ?: return MangasPage(emptyList(), false)
+
+        val lastEpisodes = svelte.resolveObject(root, "lastEpisodes") ?: return MangasPage(emptyList(), false)
+        val seriesArray = svelte.resolveArray(lastEpisodes, "data") ?: return MangasPage(emptyList(), false)
+
+        val currentPage = svelte.resolveInt(lastEpisodes, "currentPage") ?: 1
+        val totalPages = svelte.resolveInt(lastEpisodes, "totalPage") ?: 1
+        return MangasPage(svelte.toSMangaList(seriesArray, baseUrl, cdnUrl), currentPage < totalPages)
     }
 
     // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val slug = query.substringAfter(URL_SEARCH_PREFIX)
-            val url = "$baseUrl/manga/$slug/__data.json".toHttpUrl().newBuilder()
-                .addQueryParameter("x-sveltekit-invalidated", "001")
-                .build()
-
-            val response = client.get(url, headers)
-            val manga = mangaDetailsParse(response).apply { this.url = "/manga/$slug" }
-            return MangasPage(listOf(manga), false)
-        }
-
         val url = "$baseUrl/manga/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("x-sveltekit-invalidated", "001")
@@ -81,42 +69,15 @@ abstract class UzayManga : KeiSource() {
             }
         }
 
-        if (filters.none { it is SortFilter } && query.isBlank()) {
-            url.addQueryParameter("sort", "new")
-        }
-
-        val response = client.get(url.build(), headers)
+        val response = client.get(url.build())
         return searchMangaParse(response)
     }
 
     private fun searchMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<SvelteResponse>()
-        val dataArray = dto.getData() ?: return MangasPage(emptyList(), false)
-        val svelte = SvelteData(dataArray)
+        val (svelte, root) = response.parseSvelteRoot() ?: return MangasPage(emptyList(), false)
+        val seriesArray = svelte.resolveArray(root, "series") ?: return MangasPage(emptyList(), false)
 
-        val root = svelte.getObject(0) ?: return MangasPage(emptyList(), false)
-
-        val seriesIdx = root["series"]?.jsonPrimitive?.intOrNull ?: return MangasPage(emptyList(), false)
-        val seriesArray = svelte.getArray(seriesIdx) ?: return MangasPage(emptyList(), false)
-
-        val mangas = seriesArray.mapNotNull {
-            val mangaIdx = it.jsonPrimitive.intOrNull ?: return@mapNotNull null
-            val mangaObj = svelte.getObject(mangaIdx) ?: return@mapNotNull null
-
-            SManga.create().apply {
-                title = svelte.resolveString(mangaObj, "name") ?: return@mapNotNull null
-                val imagePath = svelte.resolveString(mangaObj, "image") ?: ""
-                val baseImgUrl = cdnUrl?.removeSuffix("/") ?: baseUrl.removeSuffix("/")
-                thumbnail_url = if (imagePath.startsWith("http")) imagePath else "$baseImgUrl/${imagePath.removePrefix("/")}"
-                val slug = svelte.resolveString(mangaObj, "slug") ?: return@mapNotNull null
-                url = "/manga/$slug"
-            }
-        }
-
-        val currentPage = svelte.resolveInt(root, "currentPage") ?: 1
-        val totalPages = svelte.resolveInt(root, "totalPages") ?: 1
-
-        return MangasPage(mangas, currentPage < totalPages)
+        return MangasPage(svelte.toSMangaList(seriesArray, baseUrl, cdnUrl), seriesArray.size == PAGE_SIZE)
     }
 
     // ============================== Details ==============================
@@ -125,47 +86,35 @@ abstract class UzayManga : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val pathSegments = url.pathSegments.filter { it.isNotEmpty() }
         if (pathSegments.size < 2 || pathSegments[0] != "manga") return null
-        val slug = pathSegments[1]
-        val reqUrl = "$baseUrl/manga/$slug/__data.json".toHttpUrl().newBuilder()
-            .addQueryParameter("x-sveltekit-invalidated", "001")
-            .build()
-        val response = client.get(reqUrl, headers)
-        return mangaDetailsParse(response).apply { this.url = "/manga/$slug" }.takeIf { it.title.isNotEmpty() }
+
+        val manga = SManga.create().apply { this.url = "/manga/${pathSegments[1]}" }
+
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .takeIf { it.title.isNotEmpty() }
     }
 
-    private fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.parseAs<SvelteResponse>()
-        val dataArray = dto.getData() ?: return SManga.create()
-        val svelte = SvelteData(dataArray)
-        val root = svelte.getObject(0) ?: return SManga.create()
+    private fun parseMangaDetails(seriesObj: JsonObject, svelte: SvelteData): SManga? {
+        val manga = svelte.toSManga(seriesObj, baseUrl, cdnUrl) ?: return null
 
-        val seriesIdx = root["series"]?.jsonPrimitive?.intOrNull ?: return SManga.create()
-        val seriesObj = svelte.getObject(seriesIdx) ?: return SManga.create()
+        return manga.apply {
+            description = svelte.resolveString(seriesObj, "description")
 
-        return parseMangaDetails(seriesObj, svelte)
-    }
+            status = when (svelte.resolveInt(seriesObj, "status")) {
+                1 -> SManga.ONGOING
+                2 -> SManga.COMPLETED
+                3 -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
 
-    private fun parseMangaDetails(seriesObj: JsonObject, svelte: SvelteData): SManga = SManga.create().apply {
-        title = svelte.resolveString(seriesObj, "name") ?: ""
-        val imagePath = svelte.resolveString(seriesObj, "image") ?: ""
-        val baseImgUrl = cdnUrl?.removeSuffix("/") ?: baseUrl.removeSuffix("/")
-        thumbnail_url = if (imagePath.startsWith("http")) imagePath else "$baseImgUrl/${imagePath.removePrefix("/")}"
-        description = svelte.resolveString(seriesObj, "description")
-
-        status = when (svelte.resolveInt(seriesObj, "status")) {
-            1 -> SManga.ONGOING
-            2 -> SManga.COMPLETED
-            3 -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
-
-        val resolvedCatArray = svelte.resolveArray(seriesObj, "resolvedCategories")
-        if (resolvedCatArray != null) {
-            genre = resolvedCatArray.mapNotNull {
-                val catObjIdx = it.jsonPrimitive.intOrNull ?: return@mapNotNull null
-                val catObj = svelte.getObject(catObjIdx) ?: return@mapNotNull null
-                svelte.resolveString(catObj, "title")
-            }.joinToString()
+            val resolvedCatArray = svelte.resolveArray(seriesObj, "resolvedCategories")
+            if (resolvedCatArray != null) {
+                genre = resolvedCatArray.mapNotNull {
+                    val catObjIdx = it.jsonPrimitive.intOrNull ?: return@mapNotNull null
+                    val catObj = svelte.getObject(catObjIdx) ?: return@mapNotNull null
+                    svelte.resolveString(catObj, "title")
+                }.joinToString()
+            }
         }
     }
 
@@ -210,16 +159,10 @@ abstract class UzayManga : KeiSource() {
         val url = "$baseUrl${manga.url}/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("x-sveltekit-invalidated", "001")
             .build()
-        val response = client.get(url, headers)
-        val dto = response.parseAs<SvelteResponse>()
-        val dataArray = dto.getData() ?: return SMangaUpdate(manga, chapters)
-        val svelte = SvelteData(dataArray)
-        val root = svelte.getObject(0) ?: return SMangaUpdate(manga, chapters)
+        val (svelte, root) = client.get(url).parseSvelteRoot() ?: return SMangaUpdate(manga, chapters)
+        val seriesObj = svelte.resolveObject(root, "series") ?: return SMangaUpdate(manga, chapters)
 
-        val seriesIdx = root["series"]?.jsonPrimitive?.intOrNull ?: return SMangaUpdate(manga, chapters)
-        val seriesObj = svelte.getObject(seriesIdx) ?: return SMangaUpdate(manga, chapters)
-
-        val updatedManga = parseMangaDetails(seriesObj, svelte).apply { this.url = manga.url }
+        val updatedManga = parseMangaDetails(seriesObj, svelte)?.apply { this.url = manga.url } ?: manga
         val updatedChapters = parseChapterList(seriesObj, svelte)
         return SMangaUpdate(updatedManga, updatedChapters)
     }
@@ -230,25 +173,15 @@ abstract class UzayManga : KeiSource() {
         val url = "$baseUrl${chapter.url}/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("x-sveltekit-invalidated", "001")
             .build()
-        val response = client.get(url, headers)
-
-        val dto = response.parseAs<SvelteResponse>()
-        val dataArray = dto.getData() ?: return emptyList()
-        val svelte = SvelteData(dataArray)
-
-        val root = svelte.getObject(0) ?: return emptyList()
-        val episodeIdx = root["episode"]?.jsonPrimitive?.intOrNull ?: return emptyList()
-        val episodeObj = svelte.getObject(episodeIdx) ?: return emptyList()
-
+        val (svelte, root) = client.get(url).parseSvelteRoot() ?: return emptyList()
+        val episodeObj = svelte.resolveObject(root, "episode") ?: return emptyList()
         val imagesArray = svelte.resolveArray(episodeObj, "images") ?: return emptyList()
 
         return imagesArray.mapIndexedNotNull { index, element ->
             val imageIdx = element.jsonPrimitive.intOrNull ?: return@mapIndexedNotNull null
             val imagePath = svelte.getString(imageIdx) ?: return@mapIndexedNotNull null
 
-            val baseImgUrl = cdnUrl?.removeSuffix("/") ?: baseUrl.removeSuffix("/")
-            val imageUrl = if (imagePath.startsWith("http")) imagePath else "$baseImgUrl/${imagePath.removePrefix("/")}"
-            Page(index, imageUrl = imageUrl)
+            Page(index, imageUrl = resolveImageUrl(imagePath, baseUrl, cdnUrl))
         }
     }
 
@@ -260,8 +193,4 @@ abstract class UzayManga : KeiSource() {
         StatusFilter(),
         CountryFilter(),
     )
-
-    companion object {
-        const val URL_SEARCH_PREFIX = "slug:"
-    }
 }
