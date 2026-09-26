@@ -11,22 +11,24 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.secretstream.SecretStream
 import keiyoushi.lib.secretstream.State
 import keiyoushi.lib.secretstream.X25519
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
@@ -40,7 +42,7 @@ import java.net.URLDecoder
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
@@ -48,10 +50,11 @@ import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlin.math.abs
 import kotlin.time.Duration.Companion.seconds
 
 abstract class Pam :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     protected val baseHttpUrl = baseUrl.toHttpUrl()
@@ -67,14 +70,11 @@ abstract class Pam :
         classLoader = this::class.java.classLoader!!,
     )
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::imageInterceptor)
-        .rateLimit(1, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", "https://${baseHttpUrl.host}")
-        .set("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder {
+        addInterceptor(::imageInterceptor)
+        rateLimit(1, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
+        return this
+    }
 
     private var version: String? = null
     private var csrfToken: String? = null
@@ -137,25 +137,61 @@ abstract class Pam :
         }
     }
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", popularFilters)
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", latestFilters)
-
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchManga(page, "", latestFilters)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchManga(page, "", popularFilters)
 
     protected abstract val popularFilters: FilterList
     protected abstract val latestFilters: FilterList
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val request: Request
         if (query.isNotEmpty()) {
             val url = baseHttpUrl.newBuilder().apply {
                 addPathSegments("api/v1/search/series")
                 addQueryParameter("q", query)
             }.build()
 
-            return apiRequest(
+            request = apiRequest(
+                url,
+                includeXSRFToken = true,
+                includeCSRFToken = false,
+                includeVersion = false,
+            )
+        } else {
+            val url = baseHttpUrl.newBuilder().apply {
+                addPathSegment("library")
+                if (page > 1) {
+                    addQueryParameter("page", page.toString())
+                }
+
+                filters.filterIsInstance<TriStateGroupFilter>().forEach { group ->
+                    when (group.name) {
+                        "Genres", "Genres/Thèmes" -> {
+                            group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_genres", it.joinToString(",")) }
+                            group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_genres", it.joinToString(",")) }
+                        }
+
+                        "Types" -> {
+                            group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_types", it.joinToString(",")) }
+                            group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_types", it.joinToString(",")) }
+                        }
+                    }
+                }
+
+                filters.firstInstanceOrNull<CheckBoxGroup>()?.also { status ->
+                    if (status.checked.isNotEmpty()) {
+                        addQueryParameter("status", status.checked.joinToString(","))
+                    }
+                }
+                filters.firstInstanceOrNull<SortFilter>()?.also { sort ->
+                    addQueryParameter("orderby", sort.sort)
+                    if (sort.ascending) {
+                        addQueryParameter("order", "asc")
+                    }
+                }
+            }.build()
+
+            request = apiRequest(
                 url,
                 includeXSRFToken = true,
                 includeCSRFToken = false,
@@ -163,47 +199,8 @@ abstract class Pam :
             )
         }
 
-        val url = baseHttpUrl.newBuilder().apply {
-            addPathSegment("library")
-            if (page > 1) {
-                addQueryParameter("page", page.toString())
-            }
+        val response = client.newCall(request).execute()
 
-            filters.filterIsInstance<TriStateGroupFilter>().forEach { group ->
-                when (group.name) {
-                    "Genres", "Genres/Thèmes" -> {
-                        group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_genres", it.joinToString(",")) }
-                        group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_genres", it.joinToString(",")) }
-                    }
-                    "Types" -> {
-                        group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_types", it.joinToString(",")) }
-                        group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_types", it.joinToString(",")) }
-                    }
-                }
-            }
-
-            filters.firstInstanceOrNull<CheckBoxGroup>()?.also { status ->
-                if (status.checked.isNotEmpty()) {
-                    addQueryParameter("status", status.checked.joinToString(","))
-                }
-            }
-            filters.firstInstanceOrNull<SortFilter>()?.also { sort ->
-                addQueryParameter("orderby", sort.sort)
-                if (sort.ascending) {
-                    addQueryParameter("order", "asc")
-                }
-            }
-        }.build()
-
-        return apiRequest(
-            url,
-            includeXSRFToken = true,
-            includeCSRFToken = false,
-            includeVersion = false,
-        )
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.queryParameter("q") != null) {
             val data = response.parseAs<SearchResponse>().data
 
@@ -221,23 +218,26 @@ abstract class Pam :
         }
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$baseUrl/serie/${manga.url}".toHttpUrl()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
-        return apiRequest(
-            url,
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val request = apiRequest(
+            getMangaUrl(manga).toHttpUrl(),
             includeXSRFToken = true,
             includeCSRFToken = false,
             includeVersion = true,
         )
-    }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
-
-    override fun mangaDetailsParse(response: Response): SManga {
+        val response = client.newCall(request).execute()
         val data = response.parseAs<MangaResponse>().props.serie
 
-        return SManga.create().apply {
+        val manga = SManga.create().apply {
             url = data.slug
             title = data.title
             thumbnail_url = createThumbnailUrl(data.image)
@@ -266,6 +266,24 @@ abstract class Pam :
                 else -> SManga.UNKNOWN
             }
         }
+
+        val hidePremium = preferences.getBoolean(HIDE_PREMIUM_PREF, false)
+        val chapters = data.chapters.filter { !(it.isPremium && hidePremium) }.map {
+            SChapter.create().apply {
+                url = "/serie/${data.slug}/chapter/${it.slug}"
+                name = buildString {
+                    if (it.isPremium) {
+                        append("\uD83D\uDD12 ")
+                    }
+                    append(it.title)
+                }
+                date_upload = it.createdAt.substringBefore(".").let { dateStr ->
+                    dateFormat.tryParseDateTime(dateStr)
+                }
+            }
+        }.asReversed()
+
+        return SMangaUpdate(manga, chapters)
     }
 
     protected open fun createThumbnailUrl(imagePath: String?): String? {
@@ -273,33 +291,7 @@ abstract class Pam :
         return "$baseUrl$imagePath#$THUMBNAIL_FRAGMENT"
     }
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<MangaResponse>().props.serie
-        val hidePremium = preferences.getBoolean(HIDE_PREMIUM_PREF, false)
-
-        return data.chapters
-            .filter { !(it.isPremium && hidePremium) }
-            .map {
-                SChapter.create().apply {
-                    url = "/serie/${data.slug}/chapter/${it.slug}"
-                    name = buildString {
-                        if (it.isPremium) {
-                            append("\uD83D\uDD12 ")
-                        }
-                        append(it.title)
-                    }
-                    date_upload = it.createdAt.substringBefore(".").let { dateStr ->
-                        dateFormat.tryParse(dateStr)
-                    }
-                }
-            }.asReversed()
-    }
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.US).withZone(TimeZone.getTimeZone("UTC").toZoneId())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -309,38 +301,89 @@ abstract class Pam :
         }.also(screen::addPreference)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$baseUrl${chapter.url}".toHttpUrl()
 
-        return apiRequest(
+        val request = apiRequest(
             url,
             includeXSRFToken = true,
             includeCSRFToken = false,
             includeVersion = true,
         )
+
+        val response = client.newCall(request).execute()
+
+        val body = response.parseAs<PageListResponse>()
+        val props = body.props
+        val id = sessionKey(props.data.serie.slug, props.data.slug)
+        val state = openChapter(body)
+        sessions[id] = state.session
+
+        val manifest = state.manifest ?: return (1..props.pageCount).map { idx ->
+            Page(
+                index = idx - 1,
+                url = "$id#$idx",
+                imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
+            )
+        }
+
+        val variant = manifest.variants.minByOrNull { abs(it - MAX_VARIANT_WIDTH) }
+            ?.let { "-$it" }
+            .orEmpty()
+
+        return (1..manifest.count).map { idx ->
+            Page(
+                index = idx - 1,
+                url = "$id#$idx",
+                imageUrl = "$baseUrl${manifest.base}$idx$variant.ece#$id",
+            )
+        }
     }
 
     /**
-     * Baked into the reader's WASM signer, and rebuilt per site: the attestation endpoint
-     * answers a wrong secret with an endless `refresh` rather than an error, so a site whose
-     * values are not known here can never mint a chapter token. See IMPLEMENT.md for how to
-     * recover them from a site's signer.
+     * Id of the site's own reader signer: its key in the pam-reader release and the name of the
+     * fallback bundled as `assets/pam/<id>.wasm`. Each site ships a differently obfuscated module,
+     * so it is executed rather than reimplemented - see IMPLEMENT.md.
      */
-    protected abstract val readerSecret: ByteArray
+    protected abstract val readerId: String
 
-    protected abstract val kdfDomain: String
+    private val readerWasm by lazy {
+        ReaderWasmManager(readerId, client, preferences) {
+            val path = "assets/pam/$readerId.wasm"
+            this::class.java.classLoader!!.getResourceAsStream(path)?.use { it.readBytes() }
+                ?: throw IOException("Missing reader signer: $path")
+        }
+    }
 
-    /** Where [readerSecret] sits relative to the bytes signed by the attestation and manifest HMACs. */
-    protected abstract fun signedPayload(payload: ByteArray): ByteArray
+    /** `signAttestation`: HMACs the device report and client pubkey against the challenge. */
+    protected abstract fun Signer.signAttestation(challenge: String, payload: String): String
 
-    /** Field order of the manifest signature payload. */
-    protected abstract fun manifestPayload(uid: String, version: Int, ts: Long, nonce: String): String
+    /** `signManifest`: signs the manifest request fields with the chapter token. */
+    protected abstract fun Signer.signManifest(token: String, version: Int, uid: String, ts: Long, nonce: String): String
 
-    /** Order in which [readerSecret], the ECDH secret and the KDF info feed each page-key round. */
-    protected abstract fun contentKeyMaterial(sharedSecret: ByteArray, info: ByteArray): List<ByteArray>
+    /**
+     * `ecdhInit` followed by `kdfRot`: seeds the signer with this session's ECDH secret, then
+     * unmasks the manifest hint into the chapter's page key.
+     */
+    protected abstract fun Signer.deriveContentKey(
+        privateKey: ByteArray,
+        serverPubkey: ByteArray,
+        uid: String,
+        keyVersion: Int,
+        hint: ByteArray,
+    ): ByteArray
 
-    /** How many times the page-key digest is folded over itself before unmasking the hint. */
-    protected abstract val contentKeyRounds: Int
+    /**
+     * The signer holds 16 MB of WASM memory, so it is built per chapter and dropped again
+     * instead of being kept for the source's lifetime.
+     */
+    private fun <T> withSigner(block: Signer.() -> T): T = try {
+        Signer(readerWasm.get()).block()
+    } catch (e: Exception) {
+        // Most likely the site rotated its module since the cached one was fetched.
+        if (!readerWasm.refresh()) throw e
+        Signer(readerWasm.get()).block()
+    }
 
     private val secureRandom = SecureRandom()
 
@@ -370,21 +413,26 @@ abstract class Pam :
         val priv = ByteArray(32).also(secureRandom::nextBytes)
         val clientPub = X25519.publicKey(priv)
         val shared = X25519.scalarMult(priv, serverPub)
-        priv.fill(0)
         val clientPubkeyB64 = Base64.encodeToString(clientPub, Base64.NO_WRAP)
 
-        if (!props.readerV2) {
-            val token = props.chapterToken ?: throw IOException("Chapter token missing")
-            return ChapterState(ChapterSession(token, shared, clientPubkeyB64), null)
+        try {
+            if (!props.readerV2) {
+                val token = props.chapterToken ?: throw IOException("Chapter token missing")
+                return ChapterState(ChapterSession(token, shared, clientPubkeyB64), null)
+            }
+
+            return withSigner {
+                val token = attest(body, clientPubkeyB64)
+                val manifest = requestManifest(props.data.uid, token, clientPubkeyB64)
+
+                ChapterState(
+                    ChapterSession(token, shared, clientPubkeyB64, contentKey(manifest, priv, serverPub)),
+                    manifest,
+                )
+            }
+        } finally {
+            priv.fill(0)
         }
-
-        val token = attest(body, clientPubkeyB64)
-        val manifest = requestManifest(props.data.uid, token, clientPubkeyB64)
-
-        return ChapterState(
-            ChapterSession(token, shared, clientPubkeyB64, contentKey(manifest, shared)),
-            manifest,
-        )
     }
 
     /**
@@ -393,7 +441,7 @@ abstract class Pam :
      * the challenge embedded in the page: only the challenge handed back by the partial
      * reload gets a token.
      */
-    private fun attest(body: PageListResponse, clientPubkeyB64: String): String {
+    private fun Signer.attest(body: PageListResponse, clientPubkeyB64: String): String {
         val attestation = body.props.attestation ?: throw IOException("Missing attestation challenge")
         val device = deviceReport(attestation.webglSeed)
         var challenge = attestation.challenge
@@ -402,7 +450,7 @@ abstract class Pam :
             val request = AttestationRequest(
                 c = challenge,
                 v = hmacSha256Hex(device, challenge.toByteArray()),
-                sp = hmacSha256Hex(challenge, signedPayload("$device\u0000$clientPubkeyB64".toByteArray())),
+                sp = signAttestation(challenge, "$device\u0000$clientPubkeyB64"),
                 d = device,
                 pk = clientPubkeyB64,
             )
@@ -441,19 +489,23 @@ abstract class Pam :
     }
 
     /**
-     * Stands in for the browser fingerprint the site collects through canvas and WebGL. The
-     * server only checks that it matches the HMAC we send alongside it, so a fixed plausible
-     * report is enough.
+     * Stands in for the browser fingerprint the site collects through canvas and WebGL.
+     *
+     * The values themselves cannot be checked - the server hands out a seed and has no way to
+     * know what an unknown GPU would rasterise - but how they react to a new seed can be, and
+     * that is what the `refresh` round re-tests. The reader renders `webgl_proof` from the
+     * seed, so it has to change with it, while `canvas_hash` draws a fixed string and has to
+     * stay the same.
      */
     private fun deviceReport(webglSeed: String): String = """{"webdriver":false,"webgl_vendor":"Qualcomm","webgl_renderer":"Adreno (TM) 730",""" +
-        """"webgl_proof":"${sha256Hex("webgl_proof")}","gl_sig":"8192|1|1|23",""" +
+        """"webgl_proof":"${sha256Hex("proof:$webglSeed")}","gl_sig":"8192|1|1|23",""" +
         """"device_memory":null,"hardware_concurrency":8,"effective_type":null,"save_data":false,""" +
         """"screen_width":1080,"screen_height":2340,"viewport_width":1080,"viewport_height":2130,""" +
         """"device_pixel_ratio":2.75,"max_touch_points":5,"has_touch":true,""" +
         """"locale":"en-US","timezone":"America/New_York","platform":"Linux armv8l",""" +
-        """"canvas_hash":"${sha256Hex(webglSeed)}"}"""
+        """"canvas_hash":"${sha256Hex("attest:canvas")}"}"""
 
-    private fun requestManifest(uid: String, chapterToken: String, clientPubkeyB64: String): ManifestResponse {
+    private fun Signer.requestManifest(uid: String, chapterToken: String, clientPubkeyB64: String): ManifestResponse {
         val ts = System.currentTimeMillis() / 1000
         val nonce = hexNonce()
         val request = ManifestRequest(
@@ -462,10 +514,7 @@ abstract class Pam :
             t = chapterToken,
             ts = ts,
             n = nonce,
-            s = hmacSha256Hex(
-                chapterToken,
-                signedPayload(manifestPayload(uid, MANIFEST_VERSION, ts, nonce).toByteArray()),
-            ),
+            s = signManifest(chapterToken, MANIFEST_VERSION, uid, ts, nonce),
         )
 
         val call = apiRequest(
@@ -483,22 +532,12 @@ abstract class Pam :
      * The manifest hint is the page key masked with a digest chain over the ECDH secret, so
      * it is worthless to any other session.
      */
-    private fun contentKey(manifest: ManifestResponse, sharedSecret: ByteArray): ByteArray {
+    private fun Signer.contentKey(manifest: ManifestResponse, privateKey: ByteArray, serverPubkey: ByteArray): ByteArray {
         val segments = manifest.base.split('/').filter(String::isNotEmpty)
         require(segments.size >= 4 && segments[0] == "p") { "unexpected manifest base: ${manifest.base}" }
 
-        val info = "$kdfDomain|${segments[1]}|${segments[2]}".toByteArray()
-        val digest = MessageDigest.getInstance("SHA-256")
-        var folded = ByteArray(0)
-        val material = contentKeyMaterial(sharedSecret, info)
-        repeat(contentKeyRounds) {
-            digest.update(folded)
-            material.forEach(digest::update)
-            folded = digest.digest()
-        }
-
         val hint = Base64.decode(manifest.hint, Base64.DEFAULT)
-        return ByteArray(32) { i -> (folded[i].toInt() xor hint[i].toInt()).toByte() }
+        return deriveContentKey(privateKey, serverPubkey, segments[1], segments[2].toInt(), hint)
     }
 
     private fun ensureSession(serieSlug: String, chapterSlug: String): ChapterSession {
@@ -528,33 +567,6 @@ abstract class Pam :
             val sess = openChapter(body).session
             sessions[id] = sess
             return sess
-        }
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val body = response.parseAs<PageListResponse>()
-        val props = body.props
-        val id = sessionKey(props.data.serie.slug, props.data.slug)
-        val state = openChapter(body)
-        sessions[id] = state.session
-
-        val manifest = state.manifest
-            ?: return (1..props.pageCount).map { idx ->
-                Page(
-                    index = idx - 1,
-                    url = "$id#$idx",
-                    imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
-                )
-            }
-
-        val variant = manifest.variants.maxOrNull()?.let { "-$it" }.orEmpty()
-
-        return (1..manifest.count).map { idx ->
-            Page(
-                index = idx - 1,
-                url = "$id#$idx",
-                imageUrl = "$baseUrl${manifest.base}$idx$variant.ece#$id",
-            )
         }
     }
 
@@ -624,12 +636,9 @@ abstract class Pam :
         if (session.contentKey != null) {
             if (!response.isSuccessful) return response
 
-            return response.newBuilder()
-                .body(
-                    decryptEce(response.body.bytes(), session.contentKey)
-                        .toResponseBody("image/webp".toMediaType()),
-                )
-                .build()
+            return response.newBuilder().body(
+                decryptEce(response.body.bytes(), session.contentKey).toResponseBody("image/webp".toMediaType()),
+            ).build()
         }
 
         val pageNameRaw = response.header("X-Page-Name") ?: return response
@@ -756,13 +765,12 @@ abstract class Pam :
             update(1)
         }.doFinal().copyOf(length)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
 private const val ATTESTATION_ATTEMPTS = 3
 private const val MANIFEST_VERSION = 2
+private const val MAX_VARIANT_WIDTH = 2160
 private val ECE_KEY_INFO = "Content-Encoding: aes128gcm\u0000".toByteArray()
 private val ECE_NONCE_INFO = "Content-Encoding: nonce\u0000".toByteArray()
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
