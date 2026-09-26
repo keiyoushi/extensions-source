@@ -10,9 +10,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class SvelteResponse(
@@ -67,12 +65,6 @@ class SvelteData(private val array: JsonArray) {
         if (dateArray.size < 2) return 0L
         val el = dateArray[1]
         val dateString = if (el is JsonPrimitive && el !is JsonNull) el.content else return 0L
-        return dateFormat.tryParse(dateString)
-    }
-
-    companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
+        return Instant.tryParse(dateString)
     }
 }
