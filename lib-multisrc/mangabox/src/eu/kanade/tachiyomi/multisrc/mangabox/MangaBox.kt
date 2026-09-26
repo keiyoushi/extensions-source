@@ -456,7 +456,7 @@ abstract class MangaBox :
 
         return if (mergeImages == true) {
             coroutineScope {
-                val headers = headersBuilder().set("Range", WebpSizeGetter.RANGE).build()
+                val headers = imageHeaders.newBuilder().set("Range", WebpSizeGetter.RANGE).build()
                 val deferredSizes = imageUrls.map { url ->
                     async {
                         try {
@@ -518,9 +518,17 @@ abstract class MangaBox :
         }
     }
 
+    // Image CDNs reject hotlinked requests: images are only served when the Referer is the
+    // site origin with a trailing slash and no sub-path. Without it every request gets a
+    // Cloudflare 403, which surfaces as "All CDN attempts failed".
+    private val imageHeaders: Headers
+        get() = headers.newBuilder()
+            .set("Referer", "$baseUrl/")
+            .build()
+
     override fun imageRequest(page: Page): Request = GET(
         page.imageUrl!!,
-        headers, // Headers are sometimes not added for image requests for some reason
+        imageHeaders, // Headers are sometimes not added for image requests for some reason
     )
         .newBuilder()
         .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag())
