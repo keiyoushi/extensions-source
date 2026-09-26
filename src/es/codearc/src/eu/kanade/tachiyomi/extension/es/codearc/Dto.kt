@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.es.codearc
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Serializable
 class SearchResponseDto(
@@ -19,6 +20,24 @@ class SearchItemDto(
         url = "/$slug"
         title = titulo
         thumbnail_url = portada?.let { if (it.startsWith("http")) it else "$baseUrl$it" }
+    }
+}
+
+@Serializable
+class RelatedResponseDto(
+    val items: List<RelatedItemDto>,
+)
+
+@Serializable
+class RelatedItemDto(
+    private val href: String,
+    private val portada: String,
+    private val titulo: String,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = href.toHttpUrl().encodedPath
+        title = titulo
+        thumbnail_url = portada
     }
 }
 

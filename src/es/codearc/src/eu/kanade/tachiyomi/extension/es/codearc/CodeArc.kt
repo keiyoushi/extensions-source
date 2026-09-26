@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
@@ -29,6 +30,8 @@ abstract class CodeArc : KeiSource() {
         .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
         .rateLimit(1, 1.seconds) { it.host == "cdn.codearctraducciones.com" }
         .addInterceptor(ReaderPageRefresh(::client, ::headers, ::baseUrl))
+
+    private val rscHeaders get() = headers.newBuilder().add("RSC", "1").build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = popularMangaParse(client.get("$baseUrl/ranking?mode=popular&page=$page"))
 
@@ -178,6 +181,12 @@ abstract class CodeArc : KeiSource() {
             else -> SManga.UNKNOWN
         }
     }
+
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), rscHeaders)
+        .extractNextJs<RelatedResponseDto>()
+        ?.items?.map { it.toSManga() }.orEmpty()
 
     private fun parseChapterList(document: Document): List<SChapter> {
         val chapterLinks = document.select("a.group.block[href*=/reader/][href*=/cascade]")
