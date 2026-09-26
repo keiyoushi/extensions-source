@@ -4,9 +4,6 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.clipstudioreader.ClipStudioReader
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,19 +11,25 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import org.jsoup.nodes.Document
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
@@ -36,14 +39,12 @@ abstract class FireCross :
 
     override val supportsLatest = false
 
-    private val apiUrl = "$baseUrl/api"
-    private val dateFormat = SimpleDateFormat("yyyy/M/d", Locale.ROOT)
+    private val apiUrl get() = "$baseUrl/api"
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.ROOT)
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ebook/comics?sort=1&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/ebook/comics?sort=1&page=$page").asJsoup()
         val mangas = document.select("ul.seriesList li.seriesList_item").map {
             SManga.create().apply {
                 val list = it.selectFirst("a.seriesList_itemTitle")!!
@@ -56,7 +57,9 @@ abstract class FireCross :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query)
             addQueryParameter("t", "1")
@@ -69,11 +72,8 @@ abstract class FireCross :
                 }
             }
         }.build()
-        return GET(url, headers)
-    }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val mangas = document.select("ul.seriesList#search-result li.seriesList_item").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("a.seriesList_itemTitle")!!.text()
@@ -86,17 +86,32 @@ abstract class FireCross :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1.ebook-series-title")!!.text()
-            author = document.select("ul.ebook-series-author li").joinToString { it.text() }
-            description = document.selectFirst("p.ebook-series-synopsis")?.text()
-            genre = document.select("div.book-genre a").joinToString { it.text() }
-        }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || !url.encodedPath.startsWith("/ebook/series/")) return null
+
+        return parseDetails(client.get(url).asJsoup()).apply { this.url = url.encodedPath }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async { if (fetchDetails) parseDetails(client.get(getMangaUrl(manga)).asJsoup()) else manga }
+        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
+
+        SMangaUpdate(details.await(), chapterList.await())
+    }
+
+    private fun parseDetails(document: Document) = SManga.create().apply {
+        title = document.selectFirst("h1.ebook-series-title")!!.text()
+        author = document.select("ul.ebook-series-author li").joinToString { it.text() }
+        description = document.selectFirst("p.ebook-series-synopsis")?.text()
+        genre = document.select("div.book-genre a").joinToString { it.text() }
+    }
+
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val chapters = mutableListOf<SChapter>()
         var page = 1
@@ -106,7 +121,7 @@ abstract class FireCross :
                 .addQueryParameter("sort", "latest")
                 .addQueryParameter("page", page.toString())
                 .build()
-            val document = client.newCall(GET(url, headers)).execute().asJsoup()
+            val document = client.get(url).asJsoup()
 
             chapters += document.select("div.shop-item--episode").mapNotNull {
                 val info = it.selectFirst(".shop-item-info")!!
@@ -116,7 +131,7 @@ abstract class FireCross :
 
                 SChapter.create().apply {
                     name = nameText
-                    date_upload = dateFormat.tryParse(dateText)
+                    date_upload = dateFormat.tryParseDate(dateText, ZoneId.of("Asia/Tokyo"))
 
                     when {
                         form != null -> {
@@ -140,12 +155,12 @@ abstract class FireCross :
             page++
         }
 
-        return Observable.just(chapters)
+        return chapters
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (!chapter.url.startsWith("{")) {
-            return Observable.error(Exception("Log in via WebView and purchase this chapter to read."))
+            throw Exception("Log in via WebView and purchase this chapter to read.")
         }
 
         val chapterId = chapter.url.parseAs<ChapterId>()
@@ -159,17 +174,11 @@ abstract class FireCross :
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val apiRequest = POST("$apiUrl/reader", apiHeaders, formBody)
-
-        return client.newCall(apiRequest).asObservable().map {
-            val redirectUrl = it.parseAs<ApiResponse>().redirect
-            val viewerRequest = GET(redirectUrl, headers)
-            val viewerResponse = client.newCall(viewerRequest).execute()
-            super.pageListParse(viewerResponse)
-        }
+        val redirectUrl = client.post("$apiUrl/reader", apiHeaders, formBody).parseAs<ApiResponse>().redirect
+        return pageListParse(client.get(redirectUrl))
     }
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Note: Search and active filters are applied together"),
         Filter.Header("Note: Novels only show images, not text!"),
         LabelFilter(),
@@ -186,10 +195,4 @@ abstract class FireCross :
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
     }
-
-    // Unsupported
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 }
