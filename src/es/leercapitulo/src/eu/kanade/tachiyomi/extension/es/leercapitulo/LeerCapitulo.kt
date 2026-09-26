@@ -15,20 +15,12 @@ import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.nio.charset.Charset
 import kotlin.time.Duration.Companion.seconds
-
-@Serializable
-data class Dto(
-    val link: String = "",
-    val label: String = "",
-    val thumbnail: String = ""
-)
 
 @Source
 abstract class LeerCapitulo : HttpSource() {
@@ -49,7 +41,7 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".hot-manga > .thumbnails > a, .mainpage-manga, .item, a[href*='/leer/']:has(img)").mapNotNull { element ->
+        val mangas = document.select(".container .row a[href*='/leer/'], div[class*='col'] a[href*='/leer/']").mapNotNull { element ->
             val linkElement = element.selectFirst("a[href*='/leer/']") ?: if (element.tagName() == "a") element else return@mapNotNull null
             val url = linkElement.attr("abs:href")
             if (url.isBlank()) return@mapNotNull null
@@ -100,17 +92,15 @@ abstract class LeerCapitulo : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        // 1. Intento de parseo por API JSON (Autocomplete original)
         if (response.request.url.pathSegments.contains("search-autocomplete")) {
             try {
                 val mangas = response.parseAs<List<Dto>>().map { it.toSManga() }
                 if (mangas.isNotEmpty()) return MangasPage(mangas, false)
             } catch (e: Exception) {
-                // Si la web ahora devuelve HTML o bloquea el JSON, pasamos al plan B
+                // Ignore and fallback
             }
         }
 
-        // 2. Plan B: Búsqueda agresiva en el HTML devuelto
         val document = response.asJsoup()
         val mangas = document.select("div.cate-manga div.mainpage-manga, .manga-item, .item, a[href*='/leer/']:has(img)").mapNotNull { element ->
             val linkElement = element.selectFirst("a[href*='/leer/']") ?: if (element.tagName() == "a") element else return@mapNotNull null
@@ -164,7 +154,6 @@ abstract class LeerCapitulo : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         
-        // Búsqueda en listas estructuradas
         var chapterElements = document.select(".chapter-list ul li, ul.list-chapters li, .list-chapter li, .row-chapter, .chapter-item")
         var chapters = chapterElements.mapNotNull { element ->
             val link = element.selectFirst("a.xanh, a[href*='/leer/'], a[href*='/capitulo/']") ?: return@mapNotNull null
@@ -174,7 +163,6 @@ abstract class LeerCapitulo : HttpSource() {
             }
         }
 
-        // Búsqueda desesperada si cambiaron por completo las clases (Atrapa cualquier enlace que ponga Capítulo)
         if (chapters.isEmpty()) {
             chapters = document.select("a[href*='/leer/']").filter { 
                 it.text().contains("Capítulo", ignoreCase = true) || it.text().contains("Cap ", ignoreCase = true)
