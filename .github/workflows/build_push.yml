@@ -22,7 +22,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build Debug APK
-        run: ./gradlew :src:es:leercapitulo:assembleDebug
+        run: ./gradlew :src:es:leercapitulo:spotlessApply :src:es:leercapitulo:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
