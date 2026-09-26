@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "YaoiChan"
-    versionCode = 5
+    versionCode = 0
     contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "multichan"
 
     source {
