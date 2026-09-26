@@ -41,10 +41,11 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".hot-manga > .thumbnails > a").map { element ->
+        val mangas = document.select(".hot-manga > .thumbnails > a, .hot-manga a[title]").mapNotNull { element ->
+            val link = element.attr("abs:href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
             SManga.create().apply {
-                setUrlWithoutDomain(element.attr("abs:href"))
-                title = element.attr("title")
+                setUrlWithoutDomain(link)
+                title = element.attr("title").ifBlank { element.text() }
                 thumbnail_url = element.selectFirst("img")?.imgAttr()
             }
         }
@@ -73,7 +74,7 @@ abstract class LeerCapitulo : HttpSource() {
             urlBuilder.addPathSegment(it.toUriPart())
         }
 
-        urlBuilder.addPathSegment("") // Empty path segment to avoid 404
+        urlBuilder.addPathSegment("")
         urlBuilder.addQueryParameter("page", page.toString())
 
         val url = urlBuilder.build()
@@ -91,10 +92,11 @@ abstract class LeerCapitulo : HttpSource() {
         }
 
         val document = response.asJsoup()
-        val mangas = document.select("div.cate-manga div.mainpage-manga").map { element ->
+        val mangas = document.select("div.cate-manga div.mainpage-manga, div.mainpage-manga").mapNotNull { element ->
+            val linkElement = element.selectFirst("div.media-body a, h4 a, a[href*='/leer/']") ?: return@mapNotNull null
             SManga.create().apply {
-                setUrlWithoutDomain(element.selectFirst("div.media-body a")!!.attr("abs:href"))
-                title = element.selectFirst("div.media-body a")!!.text()
+                setUrlWithoutDomain(linkElement.attr("abs:href"))
+                title = linkElement.text()
                 thumbnail_url = element.selectFirst("img")?.imgAttr()
             }
         }
@@ -105,7 +107,7 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Los filtros serán ignorados si se realiza una búsqueda por texto."),
-        Filter.Header("Los filtros no se pueden combinar  entre ellos."),
+        Filter.Header("Los filtros no se pueden combinar entre ellos."),
         GenreFilter(),
         AlphabeticFilter(),
         StatusFilter(),
@@ -115,10 +117,11 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".mainpage-manga").map { element ->
+        val mangas = document.select(".mainpage-manga").mapNotNull { element ->
+            val linkElement = element.selectFirst(".media-body > a, h4 a, a") ?: return@mapNotNull null
             SManga.create().apply {
-                setUrlWithoutDomain(element.selectFirst(".media-body > a")!!.attr("abs:href"))
-                title = element.selectFirst("h4")!!.text()
+                setUrlWithoutDomain(linkElement.attr("abs:href"))
+                title = element.selectFirst("h4")?.text() ?: linkElement.text()
                 thumbnail_url = element.selectFirst("img")?.imgAttr()
             }
         }
@@ -129,10 +132,10 @@ abstract class LeerCapitulo : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
+            title = document.selectFirst("h1")?.text() ?: ""
 
             val altNames = document.selectFirst(".description-update > span:contains(Títulos Alternativos:) + :matchText")?.text()
-            val desc = document.selectFirst("#example2")?.text()
+            val desc = document.selectFirst("#example2, .detail-content, .description")?.text()
             description = buildString {
                 if (!desc.isNullOrEmpty()) append(desc)
                 if (!altNames.isNullOrEmpty()) {
@@ -142,20 +145,24 @@ abstract class LeerCapitulo : HttpSource() {
                 }
             }
 
-            genre = document.select(".description-update a[href^='/genre/']").joinToString { it.text() }
+            genre = document.select(".description-update a[href*='/genre/']").joinToString { it.text() }
             status = document.selectFirst(".description-update > span:contains(Estado:) + :matchText")?.text()?.toStatus() ?: SManga.UNKNOWN
-            thumbnail_url = document.selectFirst(".cover-detail > img")?.imgAttr()
+            thumbnail_url = document.selectFirst(".cover-detail > img, .detail-info img")?.imgAttr()
         }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select(".chapter-list > ul > li").map { element ->
+        val chapterElements = document.select(".chapter-list ul li, .chapter-list div.row, ul.list-chapters li")
+        
+        return chapterElements.mapNotNull { element ->
+            val link = element.selectFirst("a[href*='/leer/'], a.xanh, a") ?: return@mapNotNull null
+            val chapterUrl = link.attr("abs:href")
+            if (!chapterUrl.contains("/leer/")) return@mapNotNull null
+
             SChapter.create().apply {
-                with(element.selectFirst("a.xanh")!!) {
-                    setUrlWithoutDomain(attr("abs:href"))
-                    name = text()
-                }
+                setUrlWithoutDomain(chapterUrl)
+                name = link.text().ifBlank { element.selectFirst(".chapter-title")?.text() ?: "Capítulo" }
             }
         }
     }
@@ -164,15 +171,30 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+
+        // Intento 1: Extracción directa si las imágenes están renderizadas en el DOM
+        val directImages = document.select("#array_data img, .chapter-content img, .reading-content img")
+            .mapNotNull { it.imgAttr().takeIf { src -> src.startsWith("http") } }
+        
+        if (directImages.isNotEmpty()) {
+            return directImages.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+        }
+
+        // Intento 2: Decodificación por script ofuscado con fallback seguro
         val orderList = document.selectFirst("meta[property=ad:check]")?.attr("content")
             ?.replace(ORDER_LIST_REGEX, "-")
             ?.split("-")
 
         val useReversedString = orderList?.any { it == "01" } == true
 
-        val arrayData = document.selectFirst("#array_data")!!.text()
+        val arrayDataElement = document.selectFirst("#array_data")
+        val arrayData = arrayDataElement?.text() ?: arrayDataElement?.attr("value") ?: ""
 
-        val scripts = document.select("head > script[src^=/assets/][src*=.js]")
+        if (arrayData.isBlank()) {
+            throw Exception("No se encontraron páginas en este capítulo")
+        }
+
+        val scripts = document.select("head > script[src*=.js], script[src^=/assets/]")
             .map { it.attr("abs:src") }
             .reversed()
             .toMutableList()
@@ -186,7 +208,10 @@ abstract class LeerCapitulo : HttpSource() {
         }
 
         for (scriptUrl in scripts) {
-            val scriptData = notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().use { it.body.string() }
+            val scriptData = runCatching {
+                notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().use { it.body.string() }
+            }.getOrNull() ?: continue
+
             val deobfuscatedScript = runCatching { Deobfuscator.deobfuscateScript(scriptData) }.getOrNull()
             if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
                 dataScript = deobfuscatedScript
@@ -195,20 +220,35 @@ abstract class LeerCapitulo : HttpSource() {
             }
         }
 
-        if (dataScript == null) throw Exception("Unable to find the script")
+        if (dataScript == null) {
+            // Si el script no coincide, intentar split directo si arrayData ya es Base64
+            val directUrls = runCatching {
+                String(Base64.decode(arrayData, Base64.DEFAULT), Charset.forName("UTF-8")).split(",")
+            }.getOrNull()
 
-        val (key1, key2) = KEY_REGEX.findAll(dataScript).map { it.groupValues[1] }.toList()
+            if (!directUrls.isNullOrEmpty()) {
+                return directUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
+            }
+            throw Exception("No se pudo obtener el script de descifrado")
+        }
+
+        val keys = KEY_REGEX.findAll(dataScript).map { it.groupValues[1] }.toList()
+        if (keys.size < 2) {
+            throw Exception("Error analizando las claves de cifrado")
+        }
+        val (key1, key2) = keys
 
         val encodedUrls = arrayData.replace(DECODE_REGEX) {
             val index = key2.indexOf(it.value)
-            key1[index].toString()
+            if (index in key1.indices) key1[index].toString() else it.value
         }
 
         val urlList = String(Base64.decode(encodedUrls, Base64.DEFAULT), Charset.forName("UTF-8")).split(",")
 
-        val sortedUrls = orderList?.map {
-            if (useReversedString) urlList[it.reversed().toInt()] else urlList[it.toInt()]
-        }?.reversed() ?: urlList
+        val sortedUrls = orderList?.mapNotNull {
+            val idx = if (useReversedString) it.reversed().toIntOrNull() else it.toIntOrNull()
+            if (idx != null && idx in urlList.indices) urlList[idx] else null
+        }?.reversed()?.takeIf { it.isNotEmpty() } ?: urlList
 
         return sortedUrls.mapIndexed { i, imageUrl ->
             Page(i, imageUrl = imageUrl)
@@ -218,7 +258,8 @@ abstract class LeerCapitulo : HttpSource() {
     private fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
-        else -> attr("abs:src")
+        hasAttr("src") -> attr("abs:src")
+        else -> ""
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
