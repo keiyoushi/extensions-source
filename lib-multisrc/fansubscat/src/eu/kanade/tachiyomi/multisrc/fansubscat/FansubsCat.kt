@@ -1,113 +1,59 @@
 package eu.kanade.tachiyomi.multisrc.fansubscat
 
 import eu.kanade.tachiyomi.AppInfo
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
-abstract class FansubsCat : HttpSource() {
+abstract class FansubsCat : KeiSource() {
 
     protected open val apiBaseUrl: String
         get() = baseUrl.replace("https://manga.", "https://api.")
 
     abstract val isHentaiSite: Boolean
 
-    override val supportsLatest = true
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", "Tachiyomi/${AppInfo.getVersionName()}")
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Tachiyomi/${AppInfo.getVersionName()}")
-
-    private val json: Json by injectLazy()
-
-    private fun parseMangaFromJson(response: Response): MangasPage {
-        val jsonObject = json.decodeFromString<JsonObject>(response.body.string())
-
-        val mangas = jsonObject["result"]!!.jsonArray.map { json ->
-            SManga.create().apply {
-                url = json.jsonObject["slug"]!!.jsonPrimitive.content
-                title = json.jsonObject["name"]!!.jsonPrimitive.content
-                thumbnail_url = json.jsonObject["thumbnail_url"]!!.jsonPrimitive.content
-                author = json.jsonObject["author"]!!.jsonPrimitive.contentOrNull
-                description = json.jsonObject["synopsis"]!!.jsonPrimitive.contentOrNull
-                status = json.jsonObject["status"]!!.jsonPrimitive.content.toStatus()
-                genre = json.jsonObject["genres"]!!.jsonPrimitive.contentOrNull
-            }
-        }
-
+    private fun parseMangaList(response: Response): MangasPage {
+        val mangas = response.parseAs<ResultDto<List<MangaDto>>>().result.map { it.toSManga() }
         return MangasPage(mangas, mangas.size >= 20)
-    }
-
-    private fun parseChapterListFromJson(response: Response): List<SChapter> {
-        val jsonObject = json.decodeFromString<JsonObject>(response.body.string())
-
-        return jsonObject["result"]!!.jsonArray.map { json ->
-            SChapter.create().apply {
-                url = json.jsonObject["id"]!!.jsonPrimitive.content
-                name = json.jsonObject["title"]!!.jsonPrimitive.content
-                chapter_number = json.jsonObject["number"]!!.jsonPrimitive.float
-                scanlator = json.jsonObject["fansub"]!!.jsonPrimitive.content
-                date_upload = json.jsonObject["created"]!!.jsonPrimitive.long
-            }
-        }
-    }
-
-    private fun parsePageListFromJson(response: Response): List<Page> {
-        val jsonObject = json.decodeFromString<JsonObject>(response.body.string())
-
-        return jsonObject["result"]!!.jsonArray.mapIndexed { i, it ->
-            Page(
-                i,
-                it.jsonObject["url"]!!.jsonPrimitive.content,
-                it.jsonObject["url"]!!.jsonPrimitive.content,
-            )
-        }
     }
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/manga/popular/$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaFromJson(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$apiBaseUrl/manga/popular/$page"))
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl/manga/recent/$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaFromJson(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$apiBaseUrl/manga/recent/$page"))
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val mangaTypeFilter = filterList.find { it is MangaTypeFilter } as MangaTypeFilter
-        val stateFilter = filterList.find { it is StateFilter } as StateFilter
-        val genreFilter = filterList.find { it is GenreTagFilter } as GenreTagFilter
-        val themeFilter = filterList.find { it is ThemeTagFilter } as ThemeTagFilter
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val mangaTypeFilter = filters.firstInstance<MangaTypeFilter>()
+        val stateFilter = filters.firstInstance<StateFilter>()
+        val genreFilter = filters.firstInstance<GenreTagFilter>()
+        val themeFilter = filters.firstInstance<ThemeTagFilter>()
         val builder = "$apiBaseUrl/manga/search/$page".toHttpUrl().newBuilder()
         mangaTypeFilter.addQueryParameter(builder)
         stateFilter.addQueryParameter(builder)
         if (!isHentaiSite) {
-            val demographyFilter = filterList.find { it is DemographyFilter } as DemographyFilter
+            val demographyFilter = filters.firstInstance<DemographyFilter>()
             demographyFilter.addQueryParameter(builder)
         }
         genreFilter.addQueryParameter(builder)
@@ -115,66 +61,51 @@ abstract class FansubsCat : HttpSource() {
         if (query.isNotBlank()) {
             builder.addQueryParameter("query", query)
         }
-        return GET(builder.build(), headers)
+        return parseMangaList(client.get(builder.build()))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaFromJson(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.pathSegments.firstOrNull()?.takeIf(String::isNotBlank) ?: return null
+
+        return fetchMangaDetails(slug)
+    }
 
     // Details
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(
-        "$apiBaseUrl/manga/details/${manga.url.substringAfterLast('/')}",
-        headers,
-    )
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val slug = manga.url.substringAfterLast('/')
+        val details = async { if (fetchDetails) fetchMangaDetails(slug) else manga }
+        val chapterList = async { if (fetchChapters) fetchChapterList(slug) else chapters }
+
+        SMangaUpdate(details.await(), chapterList.await())
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val jsonObject = json.decodeFromString<JsonObject>(response.body.string())
-        val resultObject = jsonObject.jsonObject["result"]!!.jsonObject
+    private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$apiBaseUrl/manga/details/$slug").parseAs<ResultDto<MangaDto>>().result.toSManga()
 
-        return SManga.create().apply {
-            url = resultObject["slug"]!!.jsonPrimitive.content
-            title = resultObject["name"]!!.jsonPrimitive.content
-            thumbnail_url = resultObject["thumbnail_url"]!!.jsonPrimitive.content
-            author = resultObject["author"]!!.jsonPrimitive.contentOrNull
-            description = resultObject["synopsis"]!!.jsonPrimitive.contentOrNull
-            status = resultObject["status"]!!.jsonPrimitive.content.toStatus()
-            genre = resultObject["genres"]!!.jsonPrimitive.contentOrNull
-        }
-    }
-
-    private fun String?.toStatus() = when {
-        this == null -> SManga.UNKNOWN
-        this.contains("ongoing", ignoreCase = true) -> SManga.ONGOING
-        this.contains("finished", ignoreCase = true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
-
-    // Chapters
-
-    override fun chapterListRequest(manga: SManga): Request = GET(
-        "$apiBaseUrl/manga/chapters/${manga.url.substringAfterLast('/')}",
-        headers,
-    )
-
-    override fun chapterListParse(response: Response): List<SChapter> = parseChapterListFromJson(response)
+    private suspend fun fetchChapterList(slug: String): List<SChapter> = client.get("$apiBaseUrl/manga/chapters/$slug")
+        .parseAs<ResultDto<List<ChapterDto>>>()
+        .result
+        .map { it.toSChapter() }
 
     // Pages
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(
-        "$apiBaseUrl/manga/pages/${chapter.url.substringAfterLast('/')}",
-        headers,
-    )
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiBaseUrl/manga/pages/${chapter.url.substringAfterLast('/')}")
+        .parseAs<ResultDto<List<PageDto>>>()
+        .result
+        .mapIndexed { i, page -> page.toPage(i) }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url.replace("/", "?f=")}"
 
-    override fun pageListParse(response: Response): List<Page> = parsePageListFromJson(response)
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // Filter
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         listOfNotNull(
             MangaTypeFilter("Tipus", getMangaTypeList()),
             StateFilter("Estat", getStateList()),
