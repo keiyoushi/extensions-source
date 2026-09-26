@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Temple Scan"
-    versionCode = 12
+    versionCode = 13
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "madara"
