@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
 class RankingResponse(
@@ -78,7 +80,7 @@ class TitleBook(
     fun toSManga(): SManga = SManga.create().apply {
         url = titleId.toString()
         title = name
-        author = this@TitleBook.author?.toString()
+        author = this@TitleBook.author?.joinToString()
         description = summary
         genre = tags?.joinToString { it.value }
         thumbnail_url = imageUrl
@@ -104,15 +106,17 @@ class ChapterData(
 class Episode(
     private val id: Int,
     private val name: String,
-    @SerialName("reading_condition") val readingCondition: String,
+    @SerialName("reading_condition") private val readingCondition: String,
 ) {
+    val isLocked: Boolean
+        get() = readingCondition != "EPISODE_READ_CONDITION_FREE"
+
     fun toSChapter(titleId: String): SChapter = SChapter.create().apply {
-        url = "$id#$titleId"
-        val isPaid = readingCondition != "EPISODE_READ_CONDITION_FREE"
-        name = if (isPaid) {
-            "🔒 ${this@Episode.name}"
-        } else {
-            this@Episode.name
+        val lock = if (isLocked) "🔒 " else ""
+        url = id.toString()
+        name = lock + this@Episode.name
+        memo = buildJsonObject {
+            put("titleId", titleId)
         }
     }
 }
