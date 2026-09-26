@@ -10,13 +10,16 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.tryParse
 import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.Jsoup
-import java.time.Instant
+import org.jsoup.parser.Parser
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Instant
 
 @Source
 abstract class JuraTempest : KeiSource() {
@@ -74,7 +77,8 @@ abstract class JuraTempest : KeiSource() {
         if (query.isBlank()) return MangasPage(emptyList(), false)
 
         val sitemapXml = client.get("$baseUrl/sitemap.xml").body.string()
-        val slugs = sitemapEntryRegex.findAll(sitemapXml).map { it.groupValues[1] }.distinct().toList()
+        val sitemapDocument = Jsoup.parse(sitemapXml, baseUrl, Parser.xmlParser())
+        val slugs = sitemapDocument.select("url > loc").mapNotNull { it.text().toSlugOrNull() }.distinct()
 
         val normalizedQuery = normalizeForSearch(query)
         val matchedSlugs = slugs.filter { normalizeForSearch(it).contains(normalizedQuery) }
@@ -90,6 +94,12 @@ abstract class JuraTempest : KeiSource() {
         }
 
         return MangasPage(mangas, matchedSlugs.size > page * SEARCH_PAGE_SIZE)
+    }
+
+    private fun String.toSlugOrNull(): String? {
+        val url = toHttpUrlOrNull() ?: return null
+        if (url.host != HOST_NAME || url.pathSegments.size != 2 || url.pathSegments[0] != "explore") return null
+        return url.pathSegments[1]
     }
 
     private fun normalizeForSearch(text: String): String = text.lowercase()
@@ -108,7 +118,7 @@ abstract class JuraTempest : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val segments = url.pathSegments
-        if (segments.size != 2 || segments[0] != "explore") return null
+        if (url.host != HOST_NAME || segments.size != 2 || segments[0] != "explore") return null
 
         val manga = SManga.create().apply {
             this.url = "/explore/${segments[1]}"
@@ -128,8 +138,7 @@ abstract class JuraTempest : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val html = client.get(baseUrl + manga.url).body.string()
-        val document = Jsoup.parse(html, baseUrl + manga.url)
+        val document = client.get(baseUrl + manga.url).asJsoup()
 
         val updatedManga = SManga.create().apply {
             url = manga.url
@@ -144,19 +153,25 @@ abstract class JuraTempest : KeiSource() {
                 ?: SManga.UNKNOWN
         }
 
-        val hydratedChapters = chapterEntryRegex.findAll(html).map { match -> match.toChapter(manga.url) }.toList()
+        val chapterList = if (fetchChapters) {
+            val hydratedChapters = chapterEntryRegex.findAll(document.html())
+                .map { match -> match.toChapter(manga.url) }
+                .toList()
 
-        val chapterList = hydratedChapters.ifEmpty {
-            val visibleChapters = document.select("a[data-slot=chapter-row]").map { element ->
-                SChapter.create().apply {
-                    setUrlWithoutDomain(element.absUrl("href"))
-                    name = element.selectFirst("span.truncate.font-medium")!!.text()
-                    chapter_number = element.selectFirst("div.size-10")?.text()?.trim()?.toFloatOrNull() ?: -1f
-                    date_upload = element.selectFirst("span.text-muted-foreground.text-xs")?.text()
-                        ?.let { dateFormat.tryParseDate(it, istanbulZone) } ?: 0L
+            hydratedChapters.ifEmpty {
+                val visibleChapters = document.select("a[data-slot=chapter-row]").map { element ->
+                    SChapter.create().apply {
+                        setUrlWithoutDomain(element.absUrl("href"))
+                        name = element.selectFirst("span.truncate.font-medium")!!.text()
+                        chapter_number = element.selectFirst("div.size-10")?.text()?.trim()?.toFloatOrNull() ?: -1f
+                        date_upload = element.selectFirst("span.text-muted-foreground.text-xs")?.text()
+                            ?.let { dateFormat.tryParseDate(it, istanbulZone) } ?: 0L
+                    }
                 }
+                visibleChapters + fillMissingChapters(manga.url, visibleChapters)
             }
-            visibleChapters + fillMissingChapters(manga.url, visibleChapters)
+        } else {
+            chapters
         }
 
         return SMangaUpdate(updatedManga, chapterList)
@@ -183,7 +198,7 @@ abstract class JuraTempest : KeiSource() {
             url = "$mangaUrl/$slug"
             name = title.replace("\\\"", "\"").replace("\\\\", "\\")
             chapter_number = number.toFloatOrNull() ?: -1f
-            date_upload = runCatching { Instant.parse(createdAt).toEpochMilli() }.getOrDefault(0L)
+            date_upload = Instant.tryParse(createdAt)
             scanlator = if (isSpecial == "!0") "Özel" else null
         }
     }
@@ -206,20 +221,17 @@ abstract class JuraTempest : KeiSource() {
             } catch (e: Exception) {
                 return false
             }
-            val ok = response.isSuccessful
-            if (ok) {
-                runCatching { response.body.string() }.getOrNull()?.let { body ->
-                    chapterEntryRegex.findAll(body).forEach { match ->
-                        val chapter = match.toChapter(mangaUrl)
-                        val number = chapter.chapter_number
-                        if (number > 0 && number == number.toInt().toFloat()) {
-                            discovered[number.toInt()] = chapter
-                        }
+            runCatching { response.body.string() }.getOrNull()?.let { body ->
+                chapterEntryRegex.findAll(body).forEach { match ->
+                    val chapter = match.toChapter(mangaUrl)
+                    val number = chapter.chapter_number
+                    if (number > 0 && number == number.toInt().toFloat()) {
+                        discovered[number.toInt()] = chapter
                     }
                 }
             }
             response.close()
-            return ok
+            return true
         }
 
         var lastGood = lowestWhole
@@ -271,11 +283,10 @@ abstract class JuraTempest : KeiSource() {
 
     companion object {
         private const val SEARCH_PAGE_SIZE = 20
+        private const val HOST_NAME = "juratempe.st"
 
         private val istanbulZone = ZoneId.of("Europe/Istanbul")
         private val dateFormat = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("tr"))
-
-        private val sitemapEntryRegex = Regex("""<loc>[^<]*/explore/([a-z0-9-]+)</loc>""")
 
         private val chapterEntryRegex = Regex(
             """slug:"([^"]+)",number:([0-9.]+),title:"((?:[^"\\]|\\.)*)",isSpecial:(!0|!1),createdAt:(?:${'$'}\w+\[\d+]=)?new Date\("([^"]+)"\)""",
