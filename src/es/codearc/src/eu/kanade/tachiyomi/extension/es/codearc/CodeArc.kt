@@ -13,13 +13,11 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -141,7 +139,7 @@ abstract class CodeArc : KeiSource() {
         }?.takeIf { it.isNotEmpty() } ?: return null
         val mangaUrl = "$baseUrl/$slug"
 
-        return parseMangaDetails(client.get(mangaUrl).asJsoup()).apply {
+        return client.get(mangaUrl, rscHeaders).extractNextJs<DetailsResponseDto>()?.toSManga(baseUrl)?.apply {
             setUrlWithoutDomain(mangaUrl)
             initialized = true
         }
@@ -152,34 +150,8 @@ abstract class CodeArc : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = client.get(getMangaUrl(manga)).asJsoup().let { document ->
-        SMangaUpdate(
-            parseMangaDetails(document),
-            parseChapterList(document),
-        )
-    }
-
-    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text().replace("Vista Previa", "")
-        description = document.selectFirst("p.whitespace-pre-line")?.textOrNull()
-        thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
-        genre = document.select("a[href*=/list?generos=]").joinToString { it.text() }.ifEmpty { null }
-
-        val htmlArtists = document.select("a[href*=/creador/]").joinToString { it.text() }.ifEmpty { null }
-        if (htmlArtists != null) {
-            artist = htmlArtists
-            author = htmlArtists
-        }
-
-        val statusText = document.selectFirst("span.inline-flex:has(span.rounded-full)")
-            ?.text()?.lowercase()
-        status = when {
-            statusText == null -> SManga.UNKNOWN
-            statusText.contains("finalizado") -> SManga.COMPLETED
-            statusText.contains("publicándose") || statusText.contains("publicandose") ||
-                statusText.contains("emisión") || statusText.contains("emision") -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
+    ): SMangaUpdate = client.get(getMangaUrl(manga), rscHeaders).extractNextJs<DetailsResponseDto>()!!.let { details ->
+        SMangaUpdate(details.toSManga(baseUrl), details.toSChapterList())
     }
 
     override val supportsRelatedMangas = true
@@ -187,39 +159,6 @@ abstract class CodeArc : KeiSource() {
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), rscHeaders)
         .extractNextJs<RelatedResponseDto>()
         ?.items?.map { it.toSManga() }.orEmpty()
-
-    private fun parseChapterList(document: Document): List<SChapter> {
-        val chapterLinks = document.select("a.group.block[href*=/reader/][href*=/cascade]")
-
-        if (chapterLinks.isNotEmpty()) {
-            return chapterLinks.map { element ->
-                val href = element.absUrl("href")
-                val chapterText = element.selectFirst("h3")?.text() ?: ""
-                val chapterNum = CHAPTER_NUM_REGEX.find(href)?.groupValues?.get(1)
-
-                SChapter.create().apply {
-                    setUrlWithoutDomain(href)
-                    name = chapterText.ifEmpty { "Chapter ${chapterNum ?: "1"}" }
-                    chapter_number = chapterNum?.toFloatOrNull() ?: 0f
-                }
-            }
-        }
-
-        val singleChapterBtn = document.selectFirst("a[href*=/cascade]:has(span:contains(Leer))")
-            ?: document.selectFirst("a[href*=/reader/][href*=/cascade]")
-
-        if (singleChapterBtn != null) {
-            return listOf(
-                SChapter.create().apply {
-                    setUrlWithoutDomain(singleChapterBtn.absUrl("href"))
-                    name = "Chapter 1"
-                    chapter_number = 1f
-                },
-            )
-        }
-
-        return emptyList()
-    }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter).toHttpUrl()
@@ -242,6 +181,5 @@ abstract class CodeArc : KeiSource() {
 
     private companion object {
         const val POPULAR_MAX_PAGE = 5
-        val CHAPTER_NUM_REGEX = """/reader/[^/]+/(\d+)/""".toRegex()
     }
 }
