@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.jiuermanhua
 
 import eu.kanade.tachiyomi.multisrc.sinmh.SinMH
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
@@ -13,5 +12,5 @@ abstract class JiuerManhua : SinMH() {
 
     override fun mangaDetailsParse(document: Document) = mangaDetailsParseDMZJStyle(document, hasBreadcrumb = false)
 
-    override fun pageListRequest(chapter: SChapter) = GET(baseUrl + chapter.url, headers)
+    override fun pageListUrl(chapter: SChapter) = baseUrl + chapter.url
 }
