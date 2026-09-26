@@ -38,7 +38,9 @@ abstract class Hikarinagi :
     ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
-    private val isNovelMode get() = Preferences.isNovel(preferences)
+
+    // Both sections are separate sources generated from this one class, told apart by their name.
+    private val isNovelMode get() = name == NOVEL_SOURCE_NAME
 
     override fun getHomeUrl() = if (isNovelMode) "$baseUrl/light-novels" else "$baseUrl/mangas"
 
@@ -51,6 +53,9 @@ abstract class Hikarinagi :
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"
         val FILTER_PARAMS = arrayOf("sort", "region", "audience", "status", "decade", "magazine_id")
+
+        /** Must match the light novel source's name in `build.gradle.kts`. */
+        const val NOVEL_SOURCE_NAME = "Hikarinagi Novels"
 
         private const val UNAVAILABLE_MESSAGE = "未收录本卷内容，暂无在线阅读"
     }
@@ -122,7 +127,7 @@ abstract class Hikarinagi :
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = browse(page, query, filters)
 
     override fun getMangaUrl(manga: SManga) = if (isNovelMode) {
-        "$baseUrl/light-novels/${manga.url.removePrefix(Preferences.NOVEL_URL_PREFIX)}"
+        "$baseUrl/light-novels/${manga.url}"
     } else {
         "$baseUrl/mangas/${manga.url}"
     }
@@ -140,7 +145,7 @@ abstract class Hikarinagi :
         fetchChapters: Boolean,
     ): SMangaUpdate = if (isNovelMode) {
         // Volumes and details come from the same response, so both are always returned.
-        val id = manga.url.removePrefix(Preferences.NOVEL_URL_PREFIX)
+        val id = manga.url
         val data = client.get("$baseUrl/api/pages/light-novels/$id").parseAs<NovelData>()
         val sManga = data.lightNovel.toSManga(data.people(), data.tags())
         val workTitle = data.lightNovel.name

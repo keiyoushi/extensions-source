@@ -116,7 +116,7 @@ class NovelItem(
     private val bunko: NamedRef? = null,
 ) {
     fun toSManga(people: Map<String, String>? = null, tags: List<String>? = null) = SManga.create().apply {
-        url = Preferences.NOVEL_URL_PREFIX + id
+        url = id.toString()
         title = nameCn.ifNotBlank() ?: name
         author = people?.get("author") ?: this@NovelItem.author?.name
         artist = people?.get("illustrator")
