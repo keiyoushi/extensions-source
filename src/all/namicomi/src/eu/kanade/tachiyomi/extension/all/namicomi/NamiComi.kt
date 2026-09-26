@@ -263,6 +263,30 @@ abstract class NamiComi :
         return FilterList(filters)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (
+            (url.host != domain) ||
+            (url.pathSize < 3) ||
+            (url.pathSegments[0] != extLang) ||
+            (url.pathSegments[1] != "title")
+        ) {
+            return null
+        }
+
+        val slug = url.pathSegments[2]
+
+        return fetchMangaUpdate(
+            manga = SManga.create().apply {
+                this.url = slug
+            },
+            chapters = emptyList(),
+            fetchDetails = true,
+            fetchChapters = false,
+        ).manga
+    }
+
+    override val supportRelatedMangasBySearch = true
+
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/$extLang/title/${manga.url}"
 
     override suspend fun fetchMangaUpdate(
