@@ -28,8 +28,6 @@ abstract class MMLook : KeiSource() {
 
     protected open val useLegacyMangaUrl: Boolean = false
 
-    override val supportsLatest = true
-
     override fun OkHttpClient.Builder.configureClient() = followRedirects(false)
         .hostnameVerifier { _, _ -> true }
 
@@ -116,7 +114,10 @@ abstract class MMLook : KeiSource() {
     ): SMangaUpdate {
         val mangaId = manga.url.removeSurrounding("/")
         val document = client.get("$desktopUrl/$mangaId/").asJsoup()
-        return SMangaUpdate(mangaDetailsParse(document), fetchChapterList(document, mangaId))
+        return SMangaUpdate(
+            mangaDetailsParse(document),
+            if (fetchChapters) fetchChapterList(document, mangaId) else chapters,
+        )
     }
 
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
