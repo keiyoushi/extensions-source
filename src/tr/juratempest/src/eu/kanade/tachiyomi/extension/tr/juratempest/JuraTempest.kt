@@ -221,13 +221,12 @@ abstract class JuraTempest : KeiSource() {
             } catch (e: Exception) {
                 return false
             }
-            runCatching { response.body.string() }.getOrNull()?.let { body ->
-                chapterEntryRegex.findAll(body).forEach { match ->
-                    val chapter = match.toChapter(mangaUrl)
-                    val number = chapter.chapter_number
-                    if (number > 0 && number == number.toInt().toFloat()) {
-                        discovered[number.toInt()] = chapter
-                    }
+            val body = response.body.string()
+            chapterEntryRegex.findAll(body).forEach { match ->
+                val chapter = match.toChapter(mangaUrl)
+                val number = chapter.chapter_number
+                if (number > 0 && number == number.toInt().toFloat()) {
+                    discovered[number.toInt()] = chapter
                 }
             }
             response.close()
