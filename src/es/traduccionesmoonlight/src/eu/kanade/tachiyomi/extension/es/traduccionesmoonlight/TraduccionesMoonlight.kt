@@ -8,7 +8,5 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class TraduccionesMoonlight : MoonlightTL() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.host == baseUrlHost }
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 }

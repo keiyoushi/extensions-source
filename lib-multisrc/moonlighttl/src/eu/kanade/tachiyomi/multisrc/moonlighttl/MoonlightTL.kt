@@ -17,11 +17,8 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import kotlin.math.min
 
 abstract class MoonlightTL : KeiSource() {
-    override val supportsLatest = true
-
     protected val intl = Intl(
         lang,
         setOf("en", "es"),
@@ -53,22 +50,18 @@ abstract class MoonlightTL : KeiSource() {
         return MangasPage(mangas, false)
     }
 
-    private var comicsList = listOf<SeriesDto>()
-
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (comicsList.isEmpty()) {
-            comicsList = client.get("$baseUrl/api/comics").parseAs<ResponseDto<List<SeriesDto>>>().response
-        }
-        return applyFilters(comicsList, page, query, filters)
+        val comics = client.get("$baseUrl/api/comics").parseAs<ResponseDto<List<SeriesDto>>>().response
+        return applyFilters(comics, query, filters)
     }
 
-    private fun applyFilters(comics: List<SeriesDto>, page: Int, query: String, filterList: FilterList): MangasPage {
+    private fun applyFilters(comics: List<SeriesDto>, query: String, filterList: FilterList): MangasPage {
         var filteredList = mutableListOf<SeriesDto>()
 
         if (query.isNotBlank()) {
             if (query.length < 2) throw Exception(intl["search_length_error"])
             filteredList.addAll(
-                comicsList.filter {
+                comics.filter {
                     it.name.contains(query, ignoreCase = true) || it.alternativeName?.contains(query, ignoreCase = true) == true
                 },
             )
@@ -99,13 +92,7 @@ abstract class MoonlightTL : KeiSource() {
             }
         }
 
-        val hasNextPage = filteredList.size > page * MANGAS_PER_PAGE
-
-        return MangasPage(
-            filteredList.subList((page - 1) * MANGAS_PER_PAGE, min(page * MANGAS_PER_PAGE, filteredList.size))
-                .map { it.toSManga(seriesPath) },
-            hasNextPage,
-        )
+        return MangasPage(filteredList.map { it.toSManga(seriesPath) }, false)
     }
 
     override fun getFilterList(data: JsonElement?) = getFilters(intl)
@@ -151,9 +138,5 @@ abstract class MoonlightTL : KeiSource() {
         hasAttr("data-src") -> attr("abs:data-src")
         hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
         else -> attr("abs:src")
-    }
-
-    companion object {
-        const val MANGAS_PER_PAGE = 15
     }
 }

@@ -10,9 +10,7 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class LectorAsteria : MoonlightTL() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.host == baseUrlHost }
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
     override suspend fun pageListParse(document: Document): List<Page> = document.select("main > div > img.block").mapIndexed { i, element ->
         Page(i, imageUrl = element.attr("abs:src"))
