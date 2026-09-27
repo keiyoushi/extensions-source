@@ -2,16 +2,20 @@ package eu.kanade.tachiyomi.extension.ja.pashup
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import kotlin.time.Duration.Companion.days
 
 @Serializable
-class EntryResponse(
+class ContentResponse(
     @SerialName("TotalResults") val totalResults: Int,
-    @SerialName("Contents") val contents: List<Content>,
+    @SerialName("Contents") val contents: List<Content> = emptyList(),
 )
 
 @Serializable
@@ -23,14 +27,15 @@ class Content(
     @SerialName("Writers") private val writers: List<Writer>?,
     @SerialName("Explain") private val explain: String?,
     @SerialName("Tags") private val tags: List<String>?,
+    @SerialName("Product") val product: Product?,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         url = seriesId
         title = name
         thumbnail_url = images?.series
         author = writers?.joinToString { "${it.roleName}: ${it.name}" }
-        description = explain?.let { Jsoup.parse(it).text() }
-        genre = tags?.joinToString { it }
+        description = explain?.let { Jsoup.parseBodyFragment(it).text() }
+        genre = tags?.joinToString()
         tags?.let { status = if (it.contains("完結")) SManga.COMPLETED else SManga.ONGOING }
     }
 }
@@ -47,41 +52,32 @@ class Writer(
 )
 
 @Serializable
-class ChapterResponse(
-    @SerialName("Contents") val contents: List<ChapterContent>,
-)
-
-@Serializable
-class ChapterContent(
-    @SerialName("Product") val product: Product,
-    @SerialName("SeriesID") val seriesId: String,
-    @SerialName("ProductMinMax") val productMinMax: Map<String, MinMax>?,
-)
-
-@Serializable
-class MinMax(
-    @SerialName("Min") val min: Product?,
-    @SerialName("Max") val max: Product?,
-)
-
-@Serializable
 class Product(
     @SerialName("ID") val id: String,
     @SerialName("Name") private val name: String,
-    @SerialName("StartDate") val startDate: String?,
+    @SerialName("StartDate") private val startDate: String?,
+    @SerialName("EndDate") private val endDate: String?,
     @SerialName("DownloadURL") val downloadUrl: String,
     @SerialName("SalesUnit") val salesUnit: String?,
-    @SerialName("EndDate") val endDate: String?,
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat, seriesId: String): SChapter = SChapter.create().apply {
-        val isLocked = downloadUrl.contains("/pageapi/download")
+    val isLocked: Boolean
+        get() = downloadUrl.contains("/pageapi/download")
+
+    val isAvailable: Boolean
+        get() {
+            val endTime = dateFormat.tryParseDate(endDate)
+            return endTime == 0L || endTime + 1.days.inWholeMilliseconds > System.currentTimeMillis()
+        }
+
+    fun toSChapter(seriesId: String): SChapter = SChapter.create().apply {
+        url = id
         name = if (isLocked) "🔒 ${this@Product.name}" else this@Product.name
-        url = "$seriesId#$id"
-        date_upload = dateFormat.tryParse(startDate)
+        date_upload = dateFormat.tryParseDate(startDate)
+        memo = buildJsonObject {
+            put("seriesId", seriesId)
+            if (!isLocked) put("viewerUrl", downloadUrl)
+        }
     }
 }
 
-@Serializable
-class CPhpResponse(
-    val url: String,
-)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.of("Asia/Tokyo"))
