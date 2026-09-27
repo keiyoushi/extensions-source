@@ -1,15 +1,13 @@
 package eu.kanade.tachiyomi.extension.ja.comicyours
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import okhttp3.Request
 import org.jsoup.nodes.Element
 
 @Source
 abstract class ComicYours : GigaViewer() {
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun popularMangaUrl(page: Int) = baseUrl
 
     override val popularMangaSelector: String = "a[class^=MainVisual_imageLink_], li[class^=SeriesPageItem_item_] a[class^=SeriesPageItem_itemLink_]"
 
@@ -19,7 +17,7 @@ abstract class ComicYours : GigaViewer() {
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
+    override fun latestUpdatesUrl(page: Int) = popularMangaUrl(page)
 
     override val latestUpdatesSelector: String = "ul[class^=LatestUpdatedSeries_LatestUpdatedSeriesList_] li"
 

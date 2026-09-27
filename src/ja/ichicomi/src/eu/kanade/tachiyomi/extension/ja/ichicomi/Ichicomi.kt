@@ -1,14 +1,14 @@
 package eu.kanade.tachiyomi.extension.ja.ichicomi
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import org.jsoup.nodes.Element
 
 @Source
@@ -24,17 +24,15 @@ abstract class Ichicomi : GigaViewer() {
         thumbnail_url = link.selectFirst("img[class^=Series_thumbnail__]")?.absUrl("src")
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder()
+            return "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .build()
-            return GET(url, headers)
         }
 
         val filter = filters.firstInstance<CollectionFilter>()
-        val url = "$baseUrl/${filter.getPath()}"
-        return GET(url, headers)
+        return "$baseUrl/${filter.getPath()}".toHttpUrl()
     }
 
     override val searchMangaSelector: String = "li[class^=SearchResultItem_li__]"
@@ -51,7 +49,7 @@ abstract class Ichicomi : GigaViewer() {
         fun getPath(): String = paths[state]
     }
 
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Pair<String, String>>().apply {
             add(Pair("すべて", ""))
             addAll(getCollections().map { Pair(it.name, "series/${it.path}") })

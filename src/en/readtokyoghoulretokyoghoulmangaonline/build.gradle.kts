@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Read Tokyo Ghoul Re & Tokyo Ghoul Manga Online"
-    versionCode = 5
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangacatalog"
 
     source {
