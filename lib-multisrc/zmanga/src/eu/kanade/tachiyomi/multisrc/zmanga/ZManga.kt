@@ -29,10 +29,22 @@ abstract class ZManga : KeiSource() {
 
     protected open val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
 
+    // Some sites rename the advanced-search route (e.g. "advance-search").
+    protected open val searchPath = "advanced-search"
+
+    protected open val typeFilterValues = arrayOf(
+        Pair("All", ""),
+        Pair("Manga", "Manga"),
+        Pair("Manhua", "Manhua"),
+        Pair("Manhwa", "Manhwa"),
+        Pair("One-Shot", "One-Shot"),
+        Pair("Doujin", "Doujin"),
+    )
+
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/advanced-search/${pagePathSegment(page)}?order=popular").asJsoup()
+        val document = client.get("$baseUrl/$searchPath/${pagePathSegment(page)}?order=popular").asJsoup()
         val mangas = document.select(popularMangaSelector()).map { element ->
             popularMangaFromElement(element)
         }
@@ -53,7 +65,7 @@ abstract class ZManga : KeiSource() {
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/advanced-search/${pagePathSegment(page)}?order=update").asJsoup()
+        val document = client.get("$baseUrl/$searchPath/${pagePathSegment(page)}?order=update").asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { element ->
             latestUpdatesFromElement(element)
         }
@@ -75,7 +87,7 @@ abstract class ZManga : KeiSource() {
         val document = if (query.isBlank() && isProjectPage) {
             client.get("$baseUrl$projectPageString/page/$page".toHttpUrl()).asJsoup()
         } else {
-            val url = "$baseUrl/advanced-search/${pagePathSegment(page)}".toHttpUrl().newBuilder()
+            val url = "$baseUrl/$searchPath/${pagePathSegment(page)}".toHttpUrl().newBuilder()
             url.addQueryParameter("title", query)
             filters.forEach { filter ->
                 when (filter) {
@@ -209,7 +221,7 @@ abstract class ZManga : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/advanced-search/").asJsoup()
+        val document = client.get("$baseUrl/$searchPath/").asJsoup()
         return buildJsonArray {
             document.select("div.custom-checkbox input[name=\"genre[]\"]").forEach { element ->
                 buildJsonObject {
@@ -234,7 +246,7 @@ abstract class ZManga : KeiSource() {
             AuthorFilter(),
             YearFilter(),
             StatusFilter(),
-            TypeFilter(),
+            TypeFilter(typeFilterValues),
             OrderByFilter(),
             GenreList(genres),
         )

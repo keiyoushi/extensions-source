@@ -21,18 +21,7 @@ class YearFilter : Filter.Text("Year")
 
 class StatusFilter : Filter.TriState("Completed")
 
-class TypeFilter :
-    UriPartFilter(
-        "Type",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Manga", "Manga"),
-            Pair("Manhua", "Manhua"),
-            Pair("Manhwa", "Manhwa"),
-            Pair("One-Shot", "One-Shot"),
-            Pair("Doujin", "Doujin"),
-        ),
-    )
+class TypeFilter(vals: Array<Pair<String, String>>) : UriPartFilter("Type", vals)
 
 class OrderByFilter :
     UriPartFilter(
