@@ -33,9 +33,7 @@ abstract class MangasIn : MMRCMS() {
 
     override val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 1.seconds) { it.host == baseUrlHost }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     override fun latestUpdatesUrl(page: Int) = "$baseUrl/lasted?p=$page"
 
@@ -63,16 +61,14 @@ abstract class MangasIn : MMRCMS() {
         }.build().toString()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    override fun searchMangaParse(response: Response, page: Int): MangasPage {
         val searchType = response.request.url.pathSegments.last()
 
         if (searchType != "search") {
-            return super.searchMangaParse(response)
+            return super.searchMangaParse(response, page)
         }
 
-        searchDirectory = response.parseAs<List<SuggestionDto>>()
-
-        return parseSearchDirectory(1)
+        return parseSearchDirectory(response.parseAs<List<SuggestionDto>>(), page)
     }
 
     override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {

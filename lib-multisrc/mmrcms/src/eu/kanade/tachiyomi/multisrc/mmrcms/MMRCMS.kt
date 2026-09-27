@@ -102,29 +102,18 @@ abstract class MMRCMS : KeiSource() {
 
     protected open fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    protected var searchDirectory = emptyList<SuggestionDto>()
-
     private val searchTokenRegex = Regex("""['"]_token['"]\s*:\s*['"]([0-9A-Za-z]+)['"]""")
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (query.isNotEmpty()) {
-            if (page == 1) {
-                return searchMangaParse(client.get(searchMangaUrl(page, query, filters)))
-            }
-            return parseSearchDirectory(page)
-        }
-
-        if (supportsAdvancedSearch) {
-            val response = client.get(searchMangaUrl(page, query, filters))
-            val fragment = response.request.url.fragment
-            val document = response.asJsoup()
-            fragment ?: return MangasPage(emptyList(), false)
+        if (query.isEmpty() && supportsAdvancedSearch) {
+            val document = client.get("$baseUrl/advanced-search").asJsoup()
+            val params = baseUrl.toHttpUrl().newBuilder().apply {
+                filters.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
+            }.build().encodedQuery.orEmpty()
 
             val body = FormBody.Builder().apply {
-                val fragmentPage = fragment.substringAfter("page=").substringBefore("&")
-
-                add("params", fragment.substringAfter("page=$fragmentPage&"))
-                add("page", fragmentPage)
+                add("params", params)
+                add("page", page.toString())
 
                 document.selectFirst("script:containsData(_token)")?.data()?.let {
                     searchTokenRegex.find(it)?.groupValues?.get(1)?.let { token ->
@@ -139,29 +128,21 @@ abstract class MMRCMS : KeiSource() {
             return MangasPage(mangas, hasNextPage)
         }
 
-        return searchMangaParse(client.get(searchMangaUrl(page, query, filters)))
+        return searchMangaParse(client.get(searchMangaUrl(page, query, filters)), page)
     }
 
-    protected open fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (query.isNotEmpty()) {
-                addPathSegment("search")
-                addQueryParameter("query", query)
-            } else {
-                addPathSegment(if (supportsAdvancedSearch) "advanced-search" else "filterList")
-                addQueryParameter("page", page.toString())
-                filters.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
-            }
-        }.build()
-
-        return if (query.isEmpty() && supportsAdvancedSearch) {
-            url.toString().replaceFirst("?", "#")
+    protected open fun searchMangaUrl(page: Int, query: String, filters: FilterList): String = baseUrl.toHttpUrl().newBuilder().apply {
+        if (query.isNotEmpty()) {
+            addPathSegment("search")
+            addQueryParameter("query", query)
         } else {
-            url.toString()
+            addPathSegment("filterList")
+            addQueryParameter("page", page.toString())
+            filters.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
         }
-    }
+    }.build().toString()
 
-    protected open fun searchMangaParse(response: Response): MangasPage {
+    protected open fun searchMangaParse(response: Response, page: Int): MangasPage {
         val searchType = response.request.url.pathSegments.last()
 
         if (searchType == "filterList") {
@@ -171,8 +152,7 @@ abstract class MMRCMS : KeiSource() {
             return MangasPage(mangas, hasNextPage)
         }
 
-        searchDirectory = response.parseAs<SearchResultDto>().suggestions
-        return parseSearchDirectory(1)
+        return parseSearchDirectory(response.parseAs<SearchResultDto>().suggestions, page)
     }
 
     protected open fun searchMangaSelector(): String = "div.media"
@@ -187,7 +167,7 @@ abstract class MMRCMS : KeiSource() {
 
     protected open fun searchMangaNextPageSelector(): String? = ".pagination a[rel=next]"
 
-    protected open fun parseSearchDirectory(page: Int): MangasPage {
+    protected open fun parseSearchDirectory(searchDirectory: List<SuggestionDto>, page: Int): MangasPage {
         val manga = searchDirectory.subList((page - 1) * 24, min(page * 24, searchDirectory.size))
             .map {
                 SManga.create().apply {
