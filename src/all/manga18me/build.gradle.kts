@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Manga18Me"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf("all", "en").forEach {
         source {
