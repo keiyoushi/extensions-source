@@ -6,7 +6,6 @@ import android.os.Looper
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -15,11 +14,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -36,7 +38,7 @@ import java.io.IOException
 import kotlin.math.abs
 
 abstract class MangoTheme :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     protected abstract val encryptionKey: String
@@ -69,15 +71,15 @@ abstract class MangoTheme :
 
     protected open val tokenPreferenceKey = PREF_TOKEN
 
-    protected open val loginRequiredMessage = "Fa\u00e7a o login nas configura\u00e7\u00f5es"
+    protected open val loginRequiredMessage = "Faça o login nas configurações"
 
     protected open val loginSuccessMessage = "Login realizado com sucesso"
 
     protected open val loginWarningMessage =
-        "\u26a0\ufe0f Os dados inseridos nesta se\u00e7\u00e3o ser\u00e3o usados somente para realizar o login na fonte."
+        "⚠️ Os dados inseridos nesta seção serão usados somente para realizar o login na fonte."
 
     protected open val loginDialogMessageFormat =
-        "Insira %s para prosseguir com o acesso aos recursos dispon\u00edveis na fonte."
+        "Insira %s para prosseguir com o acesso aos recursos disponíveis na fonte."
 
     protected open val emailPreferenceTitle = "E-mail"
 
@@ -147,36 +149,23 @@ abstract class MangoTheme :
             .build()
     }
 
-    override val client: OkHttpClient by lazy {
-        network.client.newBuilder()
-            .addInterceptor(authInterceptor)
-            .addInterceptor(decryptInterceptor)
-            .rateLimit(2)
-            .build()
-    }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(authInterceptor)
+        .addInterceptor(decryptInterceptor)
+        .rateLimit(2)
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Accept-Language", "$lang, en-US;q=0.8, en;q=0.7")
+    override fun Headers.Builder.configureHeaders() = addMangoThemeHeaders()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/obras/top10/views?periodo=total", headers)
+    protected fun Headers.Builder.addMangoThemeHeaders(): Headers.Builder = set("Accept-Language", "$lang, en-US;q=0.8, en;q=0.7")
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.get("$apiUrl/obras/top10/views?periodo=total")
+            .parseAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
         return MangasPage(result.items.map { it.toSManga(cdnUrl) }, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/capitulos/recentes?pagina=$page&limite=$latestPageSize", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$apiUrl/capitulos/recentes?pagina=$page&limite=$latestPageSize"))
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
-        return MangasPage(
-            mangas = result.items.map { it.toSManga(cdnUrl) },
-            hasNextPage = result.pagination?.hasNextPage == true,
-        )
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", searchPageSize.toString())
@@ -186,10 +175,10 @@ abstract class MangoTheme :
         filters.filterIsInstance<MangoThemeUrlQueryFilter>()
             .forEach { it.addQueryParameter(url) }
 
-        return GET(url.build(), headers)
+        return parseMangasPage(client.get(url.build()))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    private fun parseMangasPage(response: Response): MangasPage {
         val result = response.parseAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
         return MangasPage(
             mangas = result.items.map { it.toSManga(cdnUrl) },
@@ -197,7 +186,7 @@ abstract class MangoTheme :
         )
     }
 
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>(
             StatusFilter(getStatusFilterOptions()),
             FormatFilter(getFormatFilterOptions()),
@@ -211,41 +200,32 @@ abstract class MangoTheme :
         return FilterList(filters)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(
-        "$apiUrl/obras/${manga.url.extractMangaId()}",
-        headersBuilder()
-            .apply {
-                manga.url.extractStoredSlug()
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { add(STORED_SLUG_HEADER, it) }
-            }
-            .build(),
-    )
+    // details and chapters come from the same endpoint
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val storedSlug = manga.url.extractStoredSlug().takeIf { it.isNotEmpty() }
+        val dto = client.get("$apiUrl/obras/${manga.url.extractMangaId()}")
+            .parseAs<MangoThemeResponse<MangoThemeMangaDto>>()
+            .items
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangoThemeResponse<MangoThemeMangaDto>>()
-        .items
-        .toSManga(cdnUrl, response.request.header(STORED_SLUG_HEADER))
+        val fallbackSlug = dto.slug ?: storedSlug
+        val chapterList = dto.chapters
+            .map { it.toSChapter(fallbackSlug) }
+            .sortedByDescending { it.chapter_number }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<MangoThemeResponse<MangoThemeMangaDto>>()
-        .items
-        .let { manga ->
-            val fallbackSlug = manga.slug ?: response.request.header(STORED_SLUG_HEADER)
-            manga.chapters.map { chapter ->
-                chapter.toSChapter(fallbackSlug)
-            }
-        }
-        .sortedByDescending { it.chapter_number }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val mangaId = chapter.url.extractChapterMangaId()
-        val chapterNumber = chapter.url.extractChapterNumber()
-        return GET("$apiUrl/obras/$mangaId/capitulos/$chapterNumber", headers)
+        return SMangaUpdate(dto.toSManga(cdnUrl, storedSlug), chapterList)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val pages = response.parseAs<MangoThemeResponse<MangoThemePageChapterDto>>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val mangaId = chapter.url.extractChapterMangaId()
+        val chapterNumber = chapter.url.extractChapterNumber()
+
+        val pages = client.get("$apiUrl/obras/$mangaId/capitulos/$chapterNumber")
+            .parseAs<MangoThemeResponse<MangoThemePageChapterDto>>()
             .items
             .pages
             .sortedBy { it.number }
@@ -264,8 +244,6 @@ abstract class MangoTheme :
 
         return pages
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/$webMangaPathSegment/${manga.url.toWebMangaReference()}"
 
@@ -447,7 +425,6 @@ abstract class MangoTheme :
         private const val PREF_EMAIL = "pref_email"
         private const val PREF_PASSWORD = "pref_password"
         private const val PREF_TOKEN = "pref_token"
-        private const val STORED_SLUG_HEADER = "X-MangoTheme-Stored-Slug"
         private const val ENCRYPTED_HEADER = "x-encrypted"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }

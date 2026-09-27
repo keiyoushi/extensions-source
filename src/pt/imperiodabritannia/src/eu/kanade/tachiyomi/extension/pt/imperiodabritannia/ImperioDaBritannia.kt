@@ -17,7 +17,7 @@ abstract class ImperioDaBritannia : MangoTheme() {
 
     override val apiUrl = "https://api.${baseUrl.substringAfterLast("/")}/api"
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = addMangoThemeHeaders()
         .set("X-API-Token", apiToken)
         .set("X-Brit-Cache", "true")
         .set("X-Noencryptionbritta", "1")

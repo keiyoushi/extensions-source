@@ -6,6 +6,8 @@ import keiyoushi.annotation.Source
 @Source
 abstract class BladeToons : MangoTheme() {
 
+    override val apiUrl = "https://api.bladetoons.com/api"
+
     override val cdnUrl = "https://cdn.bladetoons.com"
 
     override val encryptionKey = "abmPisXlFjOLVTnYhbYQTpkWJtOGKwVttzLqstfjRBNVaEtQYG"
@@ -13,6 +15,8 @@ abstract class BladeToons : MangoTheme() {
     override val webMangaPathSegment = "obra"
 
     override val webUrlSalt = "mango-secret-salt-2024"
+
+    override val requiresLogin = true
 
     override fun buildTimedWebMangaReference(mangaId: String, hash: String): String = "$mangaId$hash${mangaId.firstOrNull()?.toString().orEmpty()}"
 
