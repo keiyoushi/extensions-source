@@ -16,15 +16,10 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
 
 abstract class MultiChan : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun OkHttpClient.Builder.configureClient() = connectTimeout(30.seconds)
-        .readTimeout(30.seconds)
-        .rateLimit(2)
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/mostfavorites?offset=${20 * (page - 1)}").asJsoup()

@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.ru.henchan
 
 import eu.kanade.tachiyomi.multisrc.multichan.MultiChan
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -11,7 +12,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -109,7 +109,7 @@ abstract class HenChan : MultiChan() {
                     },
                 )
             }
-            throw Exception("HTTP error ${response.code}")
+            throw HttpException(response.code)
         }
         return chapterListParse(response.asJsoup())
     }
@@ -186,7 +186,7 @@ abstract class HenChan : MultiChan() {
         } else {
             baseUrl + chapter.url
         }
-        return pageListParse(client.get(url, Headers.Builder().add("Accept", "image/webp,image/apng").build()).body.string())
+        return pageListParse(client.get(url, headersBuilder().add("Accept", "image/webp,image/apng").build()).body.string())
     }
 
     override fun pageListParse(html: String): List<Page> {
