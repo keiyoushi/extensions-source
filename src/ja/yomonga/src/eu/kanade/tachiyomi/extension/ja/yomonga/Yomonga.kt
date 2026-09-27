@@ -1,38 +1,39 @@
 package eu.kanade.tachiyomi.extension.ja.yomonga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
-import keiyoushi.lib.speedbinb.SpeedBinbReader
+import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.string
+import keiyoushi.utils.textOrNull
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 
 @Source
-abstract class Yomonga : HttpSource() {
+abstract class Yomonga : KeiSource() {
     override val supportsLatest = false
 
-    private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(SpeedBinbInterceptor(jsonInstance))
-        .build()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/titles/?page_num=$page").toMangasPage()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/titles/?page_num=$page", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/titles/".toHttpUrl().newBuilder()
             .addQueryParameter("page_num", page.toString())
 
@@ -48,11 +49,11 @@ abstract class Yomonga : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
+        return client.get(url.build()).toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun Response.toMangasPage(): MangasPage {
+        val document = this.asJsoup()
         val mangas = document.select("div.book-box4").map {
             SManga.create().apply {
                 title = it.selectFirst("div.book-box4-title")!!.text()
@@ -64,14 +65,19 @@ abstract class Yomonga : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val details = SManga.create().apply {
             title = document.selectFirst(".intr-title")!!.text()
             author = document.select(".intr-writer").joinToString {
-                it.text().replace(Regex("^(漫画|原作|キャラクター原案)："), "").trim()
+                it.text().replace(AUTHOR_ROLE_REGEX, "").trim()
             }
-            description = document.selectFirst(".intr-text > .intr-desc")?.text()
+            description = document.selectFirst(".intr-text > .intr-desc")?.textOrNull()
             genre = document.select(".tag-wrapper .tag").joinToString { it.text() }
             status = when {
                 genre?.contains("連載中") == true -> SManga.ONGOING
@@ -80,25 +86,29 @@ abstract class Yomonga : HttpSource() {
             }
             thumbnail_url = document.selectFirst(".intr-thumbnail")?.absUrl("src")
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(".episode-list[data-episode_no]").map {
+        val chapterList = document.select(".episode-list[data-episode_no]").map {
             SChapter.create().apply {
+                val link = it.selectFirst("a.button-type1")!!.absUrl("href").toHttpUrl()
+                url = link.queryParameter("cid")!!
                 name = it.selectFirst(".episode-name")!!.text()
-                setUrlWithoutDomain(it.selectFirst("a.button-type1")!!.absUrl("href"))
+                memo = buildJsonObject {
+                    put("title", link.pathSegments[1])
+                }
             }
         }
+
+        return SMangaUpdate(
+            details,
+            chapterList,
+        )
     }
 
-    override fun pageListParse(response: Response): List<Page> = reader.pageListParse(response)
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/titles/${chapter.memo["title"]!!.string}/?episode=${chapter.url}&cid=${chapter.url}"
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.fetchPages("$baseUrl/binb/sws/apis/bibGetCntntInfo.php".toHttpUrl(), chapter.url)
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         FilterGroup(),
     )
 
@@ -159,5 +169,9 @@ abstract class Yomonga : HttpSource() {
 
     private class FilterOption(private val name: String, val queryParam: String, val value: String) {
         override fun toString() = name
+    }
+
+    companion object {
+        private val AUTHOR_ROLE_REGEX = Regex("^(漫画|原作|キャラクター原案)：")
     }
 }
