@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.oceanwp
 
 import eu.kanade.tachiyomi.source.model.Filter
+import kotlinx.serialization.Serializable
 
 abstract class SelectFilter(
     name: String,
@@ -14,3 +15,9 @@ abstract class SelectFilter(
 
 class CategoryFilter(options: List<Pair<String, String>>) : SelectFilter("Category", options)
 class TagFilter(options: List<Pair<String, String>>) : SelectFilter("Tag", options)
+
+@Serializable
+class FilterData(
+    val categories: List<Pair<String, String>>,
+    val tags: List<Pair<String, String>>,
+)

@@ -57,7 +57,7 @@ internal class YearRangeFilter :
         },
     ) {
     private companion object {
-        const val MIN_YEAR = 2019
+        const val MIN_YEAR = 2018
         val maxYear = Calendar.getInstance().get(Calendar.YEAR)
     }
     val minValue: String? get() = (state[0] as MinFilter).state.takeIf { it.isNotBlank() }?.toIntOrNull()?.coerceIn(MIN_YEAR, maxYear)?.toString()

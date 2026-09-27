@@ -16,7 +16,6 @@ import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -36,8 +35,8 @@ import java.io.IOException
 abstract class PixivComic :
     KeiSource(),
     ConfigurableSource {
-    private val apiUrl = "$baseUrl/api/app"
-    private val viewerUrl = "https://comic-store-viewer.pixiv.net/api"
+    private val apiUrl get() = "$baseUrl/api/app"
+    private val viewerUrl get() = "https://comic-store-viewer.pixiv.net/api"
     private val preferences by getPreferencesLazy()
     private val pageSize = 30
 
@@ -189,29 +188,23 @@ abstract class PixivComic :
             return@coroutineScope SMangaUpdate(updatedManga, updatedChapters)
         }
 
-        val officialWork = if (fetchDetails || fetchChapters) {
-            async { fetchOfficialWork(manga.url) }
-        } else {
-            null
-        }
-        val episodes = if (fetchChapters) {
-            async { fetchEpisodes(manga.url) }
-        } else {
-            null
+        val officialWork = async { fetchOfficialWork(manga.url) }
+
+        val details = async {
+            if (!fetchDetails) return@async manga
+            officialWork.await().toSManga()
         }
 
-        val officialWorkResult = officialWork?.await()
-        val updatedManga = if (fetchDetails) officialWorkResult!!.toSManga() else manga
-
-        val updatedChapters = if (fetchChapters) {
-            val episodeChapters = episodes!!.await()
-                .filter { !hideLocked || !it.isLocked }
-                .map { it.toSChapter() }
-
-            val storeProductKey = officialWorkResult?.storeProductKey
-            val volumeChapters = if (storeProductKey.isNullOrEmpty()) {
-                emptyList()
-            } else {
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            val episodes = async {
+                fetchEpisodes(manga.url)
+                    .filter { !hideLocked || !it.isLocked }
+                    .map { it.toSChapter() }
+            }
+            val volumes = async {
+                val storeProductKey = officialWork.await().storeProductKey
+                if (storeProductKey.isNullOrEmpty()) return@async emptyList()
                 try {
                     fetchVolumes(storeProductKey)
                         .filter { !hideLocked || !it.isLocked }
@@ -220,13 +213,13 @@ abstract class PixivComic :
                     emptyList()
                 }
             }
-
-            episodeChapters + volumeChapters
-        } else {
-            chapters
+            episodes.await() + volumes.await()
         }
 
-        SMangaUpdate(updatedManga, updatedChapters)
+        SMangaUpdate(
+            details.await(),
+            chapterList.await(),
+        )
     }
 
     private suspend fun fetchOfficialWork(mangaId: String): OfficialWork = client.get("$apiUrl/works/v5/$mangaId").parseAs<ApiResponse<DetailsResponse>>().data.officialWork
@@ -260,11 +253,12 @@ abstract class PixivComic :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterResponse = client.get(getChapterUrl(chapter))
         if (chapter.url.any { it.isLetter() }) {
-            val authUrl = generateSequence(chapterResponse) { it.priorResponse }
-                .map { it.request.url }
-                .firstOrNull { it.queryParameter("u1") != null || it.queryParameter("u2") != null }
+            val authUrl = client.get(getChapterUrl(chapter)).use { response ->
+                generateSequence(response) { it.priorResponse }
+                    .map { it.request.url }
+                    .firstOrNull { it.queryParameter("u1") != null || it.queryParameter("u2") != null }
+            }
 
             val cid = authUrl?.queryParameter("cid")
             val u1 = authUrl?.queryParameter("u1")
@@ -281,15 +275,14 @@ abstract class PixivComic :
                 }.build()
 
             val content = client.get(cUrl).parseAs<PublusContent>()
-
             if (content.url.isNullOrEmpty()) {
                 throw Exception("Log in via WebView and purchase this volume to read.")
             }
 
-            return fetchPages(content.url!!, headers, client, content.authInfo?.toAuth(), hashFilenames = false)
+            return client.fetchPages(content.url!!, content.authInfo?.toAuth(), hashFilenames = false)
         }
 
-        val salt = chapterResponse.asJsoup().extractNextJs<SaltResponse>()?.props?.pageProps?.salt.orEmpty()
+        val salt = client.get(getChapterUrl(chapter)).extractNextJs<PageProps>()?.salt.orEmpty()
         val (time, hash) = getTimeAndHash(salt)
         val header = headersBuilder()
             .add("X-Client-Time", time)

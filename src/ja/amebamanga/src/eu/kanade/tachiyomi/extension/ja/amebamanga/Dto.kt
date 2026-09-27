@@ -7,17 +7,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
-class RankingResponse(
-    private val totalCount: Int,
-    private val offset: Int,
-    val titleRankResponses: List<TitleResponse>,
-) {
-    fun hasNextPage() = offset < totalCount
-}
+class TitleListResponse(
+    val totalCount: Int,
+    @JsonNames("titleRankResponses", "books", "results") val titles: List<TitleResponse>,
+)
 
 @Serializable
 class TitleResponse(
@@ -32,12 +28,6 @@ class TitleResponse(
         thumbnail_url = imageUrl ?: maxBook?.imageUrl
     }
 }
-
-@Serializable
-class LatestResponse(
-    val totalCount: Int,
-    @JsonNames("results") val books: List<TitleResponse>,
-)
 
 @Serializable
 class MaxBook(
@@ -113,18 +103,16 @@ class Book(
     val isLocked: Boolean
         get() = discount?.type != "FREE"
 
-    fun isLockedFor(ownedIds: Set<Int>?) = if (ownedIds != null) id !in ownedIds else isLocked
+    fun isLockedFor(ownedIds: Set<Int>) = isLocked && id !in ownedIds
 
-    fun toSChapter(ownedIds: Set<Int>? = null) = SChapter.create().apply {
+    fun toSChapter(ownedIds: Set<Int>) = SChapter.create().apply {
         val lock = if (isLockedFor(ownedIds)) "🔒 " else ""
         url = id.toString()
         name = lock + contentsName
-        date_upload = dateFormat.tryParse(startDatetime)
+        date_upload = Instant.tryParse(startDatetime)
         chapter_number = vol?.toFloat() ?: -1f
     }
 }
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ", Locale.ROOT)
 
 @Serializable
 class Discount(
@@ -167,12 +155,12 @@ class BookData(
 // for novels
 @Serializable
 class ReflowBook(
-    val reflowData: ReflowData?,
+    val reflowData: ReflowData,
 )
 
 @Serializable
 class ReflowData(
-    val profiles: List<ReflowProfile> = emptyList(),
+    val profiles: List<ReflowProfile>,
 )
 
 @Serializable

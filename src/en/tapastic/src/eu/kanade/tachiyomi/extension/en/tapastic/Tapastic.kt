@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -37,6 +38,12 @@ abstract class Tapastic :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        addCookie(
+            listOf(
+                "birthDate" to "1990-01-01",
+                "adjustedBirthDate" to "1990-01-01",
+            ),
+        )
         addInterceptor(TextInterceptor())
     }
 
