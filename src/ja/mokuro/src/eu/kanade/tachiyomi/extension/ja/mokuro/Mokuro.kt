@@ -46,7 +46,7 @@ abstract class Mokuro :
     private val useLatestVolumeCover: Boolean
         get() = preferences.getBoolean(PREF_USE_LATEST_VOLUME_COVER, PREF_USE_LATEST_VOLUME_COVER_DEFAULT)
 
-    private val apiBase = "$baseUrl/catalog/api"
+    private val apiBase get() = "$baseUrl/catalog/api"
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(CbzInterceptor())
