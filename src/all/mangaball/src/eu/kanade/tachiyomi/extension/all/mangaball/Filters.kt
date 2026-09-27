@@ -26,17 +26,61 @@ abstract class TriStateGroupFilter<T>(
 }
 
 class SortFilter :
-    SelectFilter<String>(
+    Filter.Sort(
         "Sort By",
+        arrayOf("Latest Updated", "Most Viewed", "Top Rated", "Recently Added", "Title"),
+        Selection(0, false),
+    ) {
+    val sortBy get() = SORT_BY[state?.index ?: 0]
+    val sortOrder get() = if (state?.ascending == true) "asc" else "desc"
+
+    companion object {
+        private val SORT_BY = arrayOf("lastupdate", "views", "rating", "created_at", "name")
+    }
+}
+
+class TypeFilter :
+    SelectFilter<String>(
+        "Type",
         options = listOf(
-            "Lastest Updated Chapters" to "updated_chapters_desc",
-            "Oldest Updated Chapters" to "updated_chapters_asc",
-            "Lastest Created" to "created_at_desc",
-            "Oldest Created" to "created_at_asc",
-            "Title A-Z" to "name_asc",
-            "Title Z-A" to "name_desc",
-            "Views High to Low" to "views_desc",
-            "Views Low to High" to "views_asc",
+            "All" to "",
+            "Manga" to "manga",
+            "Manhwa" to "manhwa",
+            "Manhua" to "manhua",
+            "Comics" to "comics",
+        ),
+    )
+
+class DemographicFilter :
+    SelectFilter<String>(
+        "Magazine Demographic",
+        options = listOf(
+            "All" to "",
+            "Shounen" to "shounen",
+            "Shoujo" to "shoujo",
+            "Seinen" to "seinen",
+            "Josei" to "josei",
+        ),
+    )
+
+class StatusFilter :
+    SelectFilter<String>(
+        "Publication Status",
+        options = listOf(
+            "All" to "",
+            "Ongoing" to "ongoing",
+            "Completed" to "completed",
+            "Hiatus" to "hiatus",
+            "Cancelled" to "cancelled",
+        ),
+    )
+
+class TagModeFilter :
+    SelectFilter<String>(
+        "Tag Mode",
+        options = listOf(
+            "AND" to "AND",
+            "OR" to "OR",
         ),
     )
 
@@ -76,6 +120,7 @@ class GenreFilter :
             "Adult" to "689371f0a943baf927094f03",
             "Adventure" to "685146c5f3ed681c80f257e6",
             "Boys' Love" to "685148ef15e8b86aae68e573",
+            "Comic" to "68ecab8507ec62d87e62780f",
             "Comedy" to "685146c5f3ed681c80f257e5",
             "Crime" to "685148da15e8b86aae68e51f",
             "Drama" to "685148cf15e8b86aae68e4dd",
@@ -85,15 +130,21 @@ class GenreFilter :
             "Historical" to "685148db15e8b86aae68e527",
             "Horror" to "685148da15e8b86aae68e520",
             "Isekai" to "685146c5f3ed681c80f257e9",
+            "Josei(W)" to "694cc2d9f8014f5e0a63ac73",
             "Magical Girls" to "6851490d15e8b86aae68e5d4",
+            "Manga" to "68ecab1e07ec62d87e627806",
+            "Manhua" to "68ecab4807ec62d87e62780b",
+            "Manhwa" to "68ecab3b07ec62d87e627809",
             "Mature" to "68932d11a943baf927094e7b",
             "Mecha" to "6851490c15e8b86aae68e5d2",
             "Medical" to "6851494e15e8b86aae68e66e",
             "Mystery" to "685148d215e8b86aae68e4f4",
             "Philosophical" to "685148e215e8b86aae68e544",
             "Psychological" to "685148d715e8b86aae68e507",
+            "Revenge" to "694cc2d9f8014f5e0a63ac75",
             "Romance" to "685148cf15e8b86aae68e4db",
             "Sci-Fi" to "685148cf15e8b86aae68e4da",
+            "Shoujo(G)" to "694cc2d9f8014f5e0a63ac74",
             "Shounen Ai" to "689f0ab1f2e66744c6091524",
             "Slice of Life" to "685148d015e8b86aae68e4e3",
             "Smut" to "689371f2a943baf927094f04",
@@ -108,21 +159,11 @@ class GenreFilter :
         ),
     )
 
-class OriginFilter :
-    TriStateGroupFilter<String>(
-        "Origin",
-        options = listOf(
-            "Comic" to "68ecab8507ec62d87e62780f",
-            "Manga" to "68ecab1e07ec62d87e627806",
-            "Manhua" to "68ecab4807ec62d87e62780b",
-            "Manhwa" to "68ecab3b07ec62d87e627809",
-        ),
-    )
-
 class ThemeFilter :
     TriStateGroupFilter<String>(
         "Theme",
         options = listOf(
+            "3D" to "6a0026ba63a8d384c0a4be13",
             "Aliens" to "6851490d15e8b86aae68e5d5",
             "Animals" to "685148e715e8b86aae68e54b",
             "Comics" to "68bf09ff8fdeab0b6a9bc2b7",
@@ -153,6 +194,7 @@ class ThemeFilter :
             "Reverse Harem" to "685148df15e8b86aae68e533",
             "Samurai" to "6851490415e8b86aae68e5b9",
             "School Life" to "685148d015e8b86aae68e4e7",
+            "Seinen" to "6a0025c263a8d384c0a4be07",
             "Shota" to "685148d115e8b86aae68e4ed",
             "Supernatural" to "685148db15e8b86aae68e528",
             "Survival" to "685148cf15e8b86aae68e4dc",
@@ -163,49 +205,5 @@ class ThemeFilter :
             "Villainess" to "6851492115e8b86aae68e602",
             "Virtual Reality" to "68514a1115e8b86aae68e83e",
             "Zombies" to "6851490c15e8b86aae68e5d3",
-        ),
-    )
-
-class TagIncludeMode :
-    SelectFilter<String>(
-        "Tag Include Mode",
-        options = listOf(
-            "AND" to "and",
-            "OR" to "or",
-        ),
-    )
-
-class TagExcludeMode :
-    SelectFilter<String>(
-        "Tag Exclude Mode",
-        options = listOf(
-            "AND" to "and",
-            "OR" to "or",
-        ),
-    )
-
-class DemographicFilter :
-    SelectFilter<String>(
-        "Magazine Demographic",
-        options = listOf(
-            "Any" to "any",
-            "Shounen" to "shounen",
-            "Shoujo" to "shoujo",
-            "Seinen" to "seinen",
-            "Josei" to "josei",
-            "Yuri" to "yuri",
-            "Yaoi" to "yaoi",
-        ),
-    )
-
-class StatusFilter :
-    SelectFilter<String>(
-        "Publication Status",
-        options = listOf(
-            "Any" to "any",
-            "Ongoing" to "ongoing",
-            "Completed" to "completed",
-            "Hiatus" to "hiatus",
-            "Cancelled" to "cancelled",
         ),
     )
