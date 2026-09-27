@@ -1,17 +1,15 @@
 package eu.kanade.tachiyomi.extension.ja.kuragebunch
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import okhttp3.Request
 import org.jsoup.nodes.Element
 
 @Source
 abstract class KurageBunch : GigaViewer() {
     override val supportsLatest: Boolean = false
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series/kuragebunch", headers)
+    override fun popularMangaUrl(page: Int) = "$baseUrl/series/kuragebunch"
 
     override val popularMangaSelector: String = "ul.page-series-list li div.item-box"
 

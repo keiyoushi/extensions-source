@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.multisrc.gigaviewer
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,27 +10,30 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
 // GigaViewer Sources: https://hatena.co.jp/solutions/gigaviewer
 abstract class GigaViewer :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }
     protected open val dayTimeZone = TimeZone.getTimeZone("Asia/Tokyo")!!
     protected open val preferences: SharedPreferences by getPreferencesLazy()
     protected open val dayOfWeek: String by lazy {
@@ -40,10 +42,9 @@ abstract class GigaViewer :
             .lowercase(Locale.US)
     }
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addGigaViewerInterceptors()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
+    protected fun OkHttpClient.Builder.addGigaViewerInterceptors(): OkHttpClient.Builder = addInterceptor(ImageInterceptor())
         .addInterceptor {
             // Search returns 404 when no results are found.
             val request = it.request()
@@ -58,17 +59,13 @@ abstract class GigaViewer :
             }
             response
         }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series", headers)
+    protected open fun popularMangaUrl(page: Int) = "$baseUrl/series"
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(popularMangaUrl(page)).asJsoup())
+
+    protected open fun popularMangaParse(document: Document): MangasPage {
         val mangas = document.select(popularMangaSelector).map(::popularMangaFromElement)
         val hasNextPage = popularMangaNextPageSelector?.let { document.selectFirst(it) != null } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -84,10 +81,10 @@ abstract class GigaViewer :
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
+    protected open fun latestUpdatesUrl(page: Int) = popularMangaUrl(page)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(latestUpdatesUrl(page)).asJsoup()
         val mangas = document.select(latestUpdatesSelector).map(::latestUpdatesFromElement)
         val hasNextPage = latestUpdatesNextPageSelector?.let { document.selectFirst(it) != null } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -99,35 +96,34 @@ abstract class GigaViewer :
     protected open fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    protected open fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder().apply {
+            return "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder().apply {
                 addQueryParameter("q", query)
                 if (page > 1) {
                     addQueryParameter("page", page.toString())
                 }
             }.build()
-            return GET(url, headers)
         }
 
         val path = filters.firstInstance<CollectionFilter>().selected.path
-        val url = "$baseUrl/series".toHttpUrl().newBuilder().apply {
+        return "$baseUrl/series".toHttpUrl().newBuilder().apply {
             if (path.isNotBlank()) {
                 addPathSegments(path)
             }
         }
             .build()
-        return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.contains(searchPathSegment)) {
-            val document = response.asJsoup()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = searchMangaUrl(page, query, filters)
+        val document = client.get(url).asJsoup()
+        if (url.pathSegments.contains(searchPathSegment)) {
             val mangas = document.select(searchMangaSelector).map(::searchMangaFromElement)
             val hasNextPage = searchMangaNextPageSelector?.let { document.selectFirst(it) != null } ?: false
             return MangasPage(mangas, hasNextPage)
         }
-        return popularMangaParse(response)
+        return popularMangaParse(document)
     }
 
     protected open val searchMangaSelector = "ul.search-series-list li, ul.series-list li"
@@ -140,23 +136,37 @@ abstract class GigaViewer :
         setUrlWithoutDomain(element.selectFirst("div.thmb-container a")!!.absUrl("href"))
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        return mangaDetailsParse(client.get(url).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+    }
+
+    // Details and chapters come from the same page
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(document), fetchChapterList(document))
+    }
+
     // Details
     protected open val mangaDetailsInfoSelector: String = "section.series-information div.series-header"
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            val infoElement = document.selectFirst(mangaDetailsInfoSelector)!!
-            title = infoElement.selectFirst("h1.series-header-title")!!.text()
-            author = infoElement.selectFirst("h2.series-header-author")?.text()
-            description = infoElement.selectFirst("p.series-header-description")?.text()
-            thumbnail_url = infoElement.selectFirst("div.series-header-image-wrapper img")?.absUrl("data-src")
-        }
+    protected open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val infoElement = document.selectFirst(mangaDetailsInfoSelector)!!
+        title = infoElement.selectFirst("h1.series-header-title")!!.text()
+        author = infoElement.selectFirst("h2.series-header-author")?.text()
+        description = infoElement.selectFirst("p.series-header-description")?.text()
+        thumbnail_url = infoElement.selectFirst("div.series-header-image-wrapper img")?.absUrl("data-src")
     }
 
     // Chapters
-    protected open fun paginatedChaptersRequest(referer: String, aggregateId: String, offset: Int, type: String = "episode"): Response {
-        val newHeaders = super.headersBuilder()
+    protected open suspend fun paginatedChapters(referer: String, aggregateId: String, offset: Int, type: String = "episode"): List<GigaViewerPaginationReadableProduct> {
+        val newHeaders = headersBuilder()
             .set("Referer", referer)
             .build()
 
@@ -167,29 +177,24 @@ abstract class GigaViewer :
             .addQueryParameter("offset", offset.toString())
             .build()
 
-        val request = GET(apiUrl, newHeaders)
-        val response = client.newCall(request).execute()
-        return response
+        return client.get(apiUrl, newHeaders).parseAs()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val referer = response.request.url.toString()
+    private suspend fun fetchChapterList(document: Document): List<SChapter> {
+        val referer = document.location()
         val aggregateId = document.selectFirst("script.js-valve")?.attr("data-giga_series")
             ?: document.selectFirst(".js-readable-products-pagination")!!.attr("data-aggregate-id")
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val hideUnavailable = preferences.getBoolean(HIDE_UNAVAILABLE_PREF_KEY, false)
         val chapters = mutableListOf<SChapter>()
 
-        fun fetchChapters(type: String) {
+        suspend fun fetchChapters(type: String) {
             var offset = 0
             val isVolume = type == "volume"
 
             // repeat until the offset is too large to return any chapters, resulting in an empty list
             while (true) {
-                // make request
-                val result = paginatedChaptersRequest(referer, aggregateId, offset, type)
-                val resultData = result.parseAs<List<GigaViewerPaginationReadableProduct>>()
+                val resultData = paginatedChapters(referer, aggregateId, offset, type)
 
                 if (resultData.isEmpty()) break
 
@@ -200,7 +205,7 @@ abstract class GigaViewer :
                         else -> true
                     }
                 }.map {
-                    it.toSChapter(dateFormat, isVolume)
+                    it.toSChapter(isVolume)
                 }.toCollection(chapters)
 
                 // increase offset
@@ -216,8 +221,8 @@ abstract class GigaViewer :
     }
 
     // Pages
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val episode = document.selectFirst("script#episode-json")!!.attr("data-value")
         val results = episode.parseAs<GigaViewerEpisodeDto>()
         val page = results.readableProduct.pageStructure
@@ -239,17 +244,12 @@ abstract class GigaViewer :
             }
     }
 
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = super.headersBuilder()
-            .set("Referer", page.url)
-            .build()
-        return GET(page.imageUrl!!, newHeaders)
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Referer", page.url)
+        .build()
 
     // Filters
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
         val collections = getCollections()
         return if (collections.isNotEmpty()) {
             FilterList(CollectionFilter(collections))

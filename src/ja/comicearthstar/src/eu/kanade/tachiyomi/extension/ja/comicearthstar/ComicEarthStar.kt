@@ -5,79 +5,67 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import keiyoushi.annotation.Source
+import keiyoushi.network.post
 import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseGraphQLAs
-import okhttp3.Request
-import okhttp3.Response
-import java.util.Calendar
-import java.util.TimeZone
+import kotlinx.serialization.json.JsonElement
+import okhttp3.OkHttpClient
+import java.time.DayOfWeek
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 
 @Source
 abstract class ComicEarthStar : GigaViewer() {
-    private val apiUrl = "$baseUrl/graphql"
-    private val jst = TimeZone.getTimeZone("Asia/Tokyo")
+    private val apiUrl get() = "$baseUrl/graphql"
 
-    override val client = super.client.newBuilder()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addGigaViewerInterceptors()
         .addInterceptor(GraphQLErrorInterceptor())
-        .build()
 
     override val supportsLatest = false
 
-    override fun popularMangaRequest(page: Int): Request {
-        val cal = Calendar.getInstance(jst)
-        cal.set(Calendar.DAY_OF_WEEK, Calendar.THURSDAY)
-        cal.set(Calendar.HOUR_OF_DAY, 18)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-
-        if (Calendar.getInstance(jst).time.before(cal.time)) {
-            cal.add(Calendar.DATE, -7)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        // updates are published weekly on Thursday 18:00 JST
+        val now = ZonedDateTime.now(ZoneId.of("Asia/Tokyo"))
+        var since = now.with(TemporalAdjusters.previousOrSame(DayOfWeek.THURSDAY))
+            .truncatedTo(ChronoUnit.DAYS)
+            .withHour(18)
+        if (now.isBefore(since)) {
+            since = since.minusWeeks(1)
         }
-
-        val since = cal.time
-        cal.add(Calendar.DATE, 7)
-        val until = cal.time
+        val until = since.plusWeeks(1)
 
         val variables = mapOf(
-            "latestUpdatedSince" to dateFormat.format(since),
-            "latestUpdatedUntil" to dateFormat.format(until),
+            "latestUpdatedSince" to DateTimeFormatter.ISO_INSTANT.format(since.toInstant()),
+            "latestUpdatedUntil" to DateTimeFormatter.ISO_INSTANT.format(until.toInstant()),
         )
 
-        return graphQLPost(apiUrl, headers, LATEST_QUERY, "Earthstar_LatestUpdates", variables)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
+        val response = client.post(apiUrl, body = graphQLBody(LATEST_QUERY, "Earthstar_LatestUpdates", variables))
         val results = response.parseGraphQLAs<LatestResponse>().serialGroup.latestUpdatedSeriesEpisodes.map { it.toSManga() }
         return MangasPage(results, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val mangas = if (query.isNotEmpty()) {
             val variables = mapOf(
                 "keyword" to query,
             )
-            return graphQLPost(apiUrl, headers, SEARCH_QUERY, "Common_Search", variables).newBuilder().tag("search").build()
-        }
-
-        val filter = filters.firstInstance<CategoryFilter>()
-        return graphQLPost(apiUrl, headers, filter.value, filter.type, EmptyVariables)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val tag = response.request.tag()
-        val mangas = if (tag == "search") {
-            response.parseGraphQLAs<SearchResponse>().searchSeries.edges.map { it.node.toSManga() }
+            client.post(apiUrl, body = graphQLBody(SEARCH_QUERY, "Common_Search", variables))
+                .parseGraphQLAs<SearchResponse>().searchSeries.edges.map { it.node.toSManga() }
         } else {
-            response.parseGraphQLAs<SeriesResponse>().serialGroup.seriesSlice.seriesList.map { it.toSManga() }
+            val filter = filters.firstInstance<CategoryFilter>()
+            client.post(apiUrl, body = graphQLBody(filter.value, filter.type, EmptyVariables))
+                .parseGraphQLAs<SeriesResponse>().serialGroup.seriesSlice.seriesList.map { it.toSManga() }
         }
 
         return MangasPage(mangas, false)
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         CategoryFilter(),
     )
 
