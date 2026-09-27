@@ -12,10 +12,11 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
+import keiyoushi.utils.tryParseZonedDateTime
 import okhttp3.HttpUrl
 import okhttp3.Response
-import kotlin.time.Instant
+import java.time.format.DateTimeFormatter
 
 @Source
 abstract class Nekopost : KeiSource() {
@@ -234,7 +235,7 @@ abstract class Nekopost : KeiSource() {
                 url = "$projectId/${it.chapterId}/${projectId}_${it.chapterId}.json"
                 name = it.chapterName
                 chapter_number = it.chapterNo.toFloat()
-                date_upload = Instant.tryParse(it.publishDate.value)
+                date_upload = parseFormattedDate(it.publishDate.value)
                 scanlator = it.providerName
             }
         }
@@ -263,7 +264,12 @@ abstract class Nekopost : KeiSource() {
         else -> SManga.UNKNOWN
     }
 
+    private fun parseFormattedDate(value: String): Long = oldDateTimeFormat.tryParseDateTime(value).takeIf { it > 0L }
+        ?: newDateTimeFormat.tryParseZonedDateTime(value)
+
     companion object {
+        private val oldDateTimeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        private val newDateTimeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
         private const val POPULAR_PAGE_SIZE = 15
         private const val LATEST_PAGE_SIZE = 15
         private const val SEARCH_PAGE_SIZE = 100
