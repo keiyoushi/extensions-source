@@ -21,6 +21,7 @@ object ChapterAccessSerializer : JsonTransformingSerializer<Map<String, LockDto>
 
 @Serializable
 class ChapterDatesDto(
+    @Serializable(with = ChapterAccessSerializer::class)
     val chapterDates: Map<String, String> = emptyMap(),
     @Serializable(with = ChapterAccessSerializer::class)
     val chapterAccess: Map<String, LockDto> = emptyMap(),
