@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.leercapitulo
 
-import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,15 +10,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
-import keiyoushi.lib.synchrony.Deobfuscator
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import java.nio.charset.Charset
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
@@ -33,7 +33,6 @@ abstract class LeerCapitulo : HttpSource() {
         .rateLimit(1, 3.seconds) { it.host == baseUrlHost }
         .build()
 
-    private val notRateLimitClient = network.client
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
 
     override fun headersBuilder() = super.headersBuilder()
@@ -75,6 +74,30 @@ abstract class LeerCapitulo : HttpSource() {
 
         urlBuilder.addQueryParameter("page", page.toString())
         return GET(urlBuilder.build(), headers)
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.isBlank()) {
+            return client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { searchMangaParse(it) }
+        }
+
+        val autocompleteUrl = "$baseUrl/search-autocomplete?term=$query"
+        return client.newCall(GET(autocompleteUrl, headers)).asObservableSuccess()
+            .map { response ->
+                val mangas = runCatching {
+                    response.parseAs<List<Dto>>().map { it.toSManga() }
+                }.getOrNull() ?: emptyList()
+
+                if (mangas.isEmpty()) throw Exception("Empty autocomplete")
+                MangasPage(mangas, false)
+            }
+            .onErrorResumeNext {
+                client.newCall(searchMangaRequest(page, query, filters))
+                    .asObservableSuccess()
+                    .map { searchMangaParse(it) }
+            }
     }
 
     override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response)
@@ -155,72 +178,49 @@ abstract class LeerCapitulo : HttpSource() {
         }
     }
 
-    private var cachedScriptUrl: String? = null
-
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        val directImages = document.select("#chapter-content img, .chapter-content img, #array_data img")
-            .mapNotNull { it.imgAttr().takeIf { src -> src.startsWith("http") } }
-
-        if (directImages.isNotEmpty() && directImages.size > 2) {
-            return directImages.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+        // Extracción directa de las imágenes en el nuevo visor (#lcPages o .lc-pages)
+        val imageElements = document.select("#lcPages img, main.lc-pages img, .lc-pages img")
+        val pages = imageElements.mapNotNull { element ->
+            val src = element.imgAttr()
+            if (src.startsWith("http")) src else null
         }
 
-        val arrayDataElement = document.selectFirst("#array_data") ?: document.select("input[type=hidden]").firstOrNull { it.attr("value").length > 100 }
-        val arrayData = arrayDataElement?.text() ?: arrayDataElement?.attr("value") ?: ""
-
-        if (arrayData.isBlank()) throw Exception("Las imágenes no están expuestas en el HTML del visor.")
-
-        val orderList = document.selectFirst("meta[property=ad:check]")?.attr("content")?.replace(ORDER_LIST_REGEX, "-")?.split("-")
-        val useReversedString = orderList?.any { it == "01" } == true
-
-        val scripts = document.select("head > script[src*=.js], script[src^=/assets/]").map { it.attr("abs:src") }.reversed().toMutableList()
-
-        var dataScript: String? = null
-        cachedScriptUrl?.let { if (scripts.remove(it)) scripts.add(0, it) }
-
-        for (scriptUrl in scripts) {
-            val scriptData = runCatching { notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().use { it.body.string() } }.getOrNull() ?: continue
-            val deobfuscatedScript = runCatching { Deobfuscator.deobfuscateScript(scriptData) }.getOrNull()
-            if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
-                dataScript = deobfuscatedScript
-                cachedScriptUrl = scriptUrl
-                break
+        if (pages.isNotEmpty()) {
+            return pages.mapIndexed { i, imageUrl ->
+                Page(i, imageUrl = imageUrl)
             }
         }
 
-        if (dataScript == null) {
-            val directUrls = runCatching { String(Base64.decode(arrayData, Base64.DEFAULT), Charset.forName("UTF-8")).split(",") }.getOrNull()
-            if (!directUrls.isNullOrEmpty()) return directUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
-            throw Exception("No se pudo descifrar el script de imágenes.")
+        // Fallback genérico por si cambian la clase contenedora
+        val fallbackImages = document.select("main img, #chapter-content img, .chapter-content img")
+            .mapNotNull { it.imgAttr().takeIf { src -> src.startsWith("http") } }
+
+        if (fallbackImages.isNotEmpty()) {
+            return fallbackImages.mapIndexed { i, imageUrl ->
+                Page(i, imageUrl = imageUrl)
+            }
         }
 
-        val keys = KEY_REGEX.findAll(dataScript).map { it.groupValues[1] }.toList()
-        if (keys.size < 2) throw Exception("Error de claves de cifrado")
-
-        val encodedUrls = arrayData.replace(DECODE_REGEX) {
-            val index = keys[1].indexOf(it.value)
-            if (index in keys[0].indices) keys[0][index].toString() else it.value
-        }
-
-        val urlList = String(Base64.decode(encodedUrls, Base64.DEFAULT), Charset.forName("UTF-8")).split(",")
-        val sortedUrls = orderList?.mapNotNull {
-            val idx = if (useReversedString) it.reversed().toIntOrNull() else it.toIntOrNull()
-            if (idx != null && idx in urlList.indices) urlList[idx] else null
-        }?.reversed()?.takeIf { it.isNotEmpty() } ?: urlList
-
-        return sortedUrls.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+        throw Exception("No se encontraron páginas en este capítulo")
     }
 
     private fun Element.imgAttr(): String = when {
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("src") -> attr("abs:src")
         else -> ""
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    private fun Dto.toSManga() = SManga.create().apply {
+        setUrlWithoutDomain(link)
+        title = label
+        thumbnail_url = if (thumbnail.startsWith("http")) thumbnail else baseUrl + thumbnail
+    }
 
     private fun String.toStatus() = when (this.lowercase().trim()) {
         "ongoing", "en emision" -> SManga.ONGOING
@@ -234,10 +234,4 @@ abstract class LeerCapitulo : HttpSource() {
         GenreFilter(),
         StatusFilter(),
     )
-
-    companion object {
-        private val ORDER_LIST_REGEX = "[^\\d]+".toRegex()
-        private val KEY_REGEX = """'([A-Z0-9]{62})'""".toRegex(RegexOption.IGNORE_CASE)
-        private val DECODE_REGEX = Regex("[A-Z0-9]", RegexOption.IGNORE_CASE)
-    }
 }
