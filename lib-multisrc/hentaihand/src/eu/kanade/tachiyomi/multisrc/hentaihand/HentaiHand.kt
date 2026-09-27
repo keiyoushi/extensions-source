@@ -2,7 +2,8 @@ package eu.kanade.tachiyomi.multisrc.hentaihand
 
 import android.content.SharedPreferences
 import android.text.InputType
-import android.widget.Toast
+import android.util.LruCache
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -34,8 +35,6 @@ abstract class HentaiHand :
     abstract val chapters: Boolean
 
     protected open val hhLangId: List<Int> = emptyList()
-
-    override val supportsLatest = true
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::authIntercept)
 
@@ -78,8 +77,15 @@ abstract class HentaiHand :
 
     // filter query needs to be resolved to an ID
     // Returns the first matched id, or null if there are no results
-    private suspend fun lookupFilterId(query: String, uri: String): Int? = client.get("$baseUrl/api/$uri?q=$query")
-        .parseAs<ResponseDto<List<IdDto>>>().data.firstOrNull()?.id
+    private val filterIdCache = LruCache<String, Int>(100)
+
+    private suspend fun lookupFilterId(query: String, uri: String): Int? {
+        val key = "$uri:$query"
+        filterIdCache.get(key)?.let { return it }
+        return client.get("$baseUrl/api/$uri?q=$query")
+            .parseAs<ResponseDto<List<IdDto>>>().data.firstOrNull()?.id
+            ?.also { filterIdCache.put(key, it) }
+    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
@@ -187,8 +193,8 @@ abstract class HentaiHand :
     }
 
     private var token: String = ""
-    private val username by lazy { getPrefUsername() }
-    private val password by lazy { getPrefPassword() }
+    private val username get() = getPrefUsername()
+    private val password get() = getPrefPassword()
 
     // Preferences
 
@@ -199,7 +205,7 @@ abstract class HentaiHand :
         screen.addPreference(screen.editTextPreference(PASSWORD_TITLE, PASSWORD_DEFAULT, password, true))
     }
 
-    private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String, isPassword: Boolean = false): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+    private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String, isPassword: Boolean = false): EditTextPreference = EditTextPreference(context).apply {
         key = title
         this.title = title
         summary = value
@@ -209,16 +215,6 @@ abstract class HentaiHand :
         if (isPassword) {
             setOnBindEditTextListener {
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }
-        setOnPreferenceChangeListener { _, newValue ->
-            try {
-                val res = preferences.edit().putString(title, newValue as String).commit()
-                Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                res
-            } catch (e: Exception) {
-                e.printStackTrace()
-                false
             }
         }
     }
