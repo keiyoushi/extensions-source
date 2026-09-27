@@ -1,54 +1,46 @@
 package eu.kanade.tachiyomi.multisrc.clipstudioreader
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
 
-abstract class ClipStudioReader : HttpSource() {
+abstract class ClipStudioReader : KeiSource() {
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(Deobfuscator())
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addClipStudioInterceptors()
+
+    protected fun OkHttpClient.Builder.addClipStudioInterceptors(): OkHttpClient.Builder = addInterceptor(Deobfuscator())
         .addInterceptor(ImageInterceptor())
-        .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-
-    override fun pageListParse(response: Response): List<Page> {
+    protected suspend fun pageListParse(response: Response): List<Page> {
         val requestUrl = response.request.url
         val contentId = requestUrl.queryParameter("c")
 
         if (contentId != null) {
             // EPUB-based path
-            val tokenUrl = "$baseUrl/api/tokens/viewer?content_id=$contentId".toHttpUrl()
-            val tokenResponse = client.newCall(GET(tokenUrl, headers)).execute()
-            val viewerToken = tokenResponse.parseAs<TokenResponse>().token
+            val tokenUrl = "$baseUrl/api/tokens/viewer?content_id=$contentId"
+            val viewerToken = client.get(tokenUrl).parseAs<TokenResponse>().token
 
-            val metaUrl = "$baseUrl/api/contents/$contentId/meta".toHttpUrl()
+            val metaUrl = "$baseUrl/api/contents/$contentId/meta"
             val apiHeaders = headersBuilder().add("Authorization", "Bearer $viewerToken").build()
-            val metaResponse = client.newCall(GET(metaUrl, apiHeaders)).execute()
-            val contentBaseUrl = metaResponse.parseAs<MetaResponse>().content.baseUrl
+            val contentBaseUrl = client.get(metaUrl, apiHeaders).parseAs<MetaResponse>().content.baseUrl
 
             val preprocessUrl = "$contentBaseUrl/preprocess-settings.json"
-            val obfuscationResponse = client.newCall(GET(preprocessUrl, headers)).execute()
-            val obfuscationKey = obfuscationResponse.parseAs<PreprocessSettings>().obfuscateImageKey
+            val obfuscationKey = client.get(preprocessUrl).parseAs<PreprocessSettings>().obfuscateImageKey
 
             val containerUrl = "$contentBaseUrl/META-INF/container.xml"
-            val containerResponse = client.newCall(GET(containerUrl, headers)).execute()
-            val containerDoc = Jsoup.parse(containerResponse.body.string(), containerUrl, Parser.xmlParser())
+            val containerDoc = client.get(containerUrl).asJsoup(Parser.xmlParser())
             val opfPath = containerDoc.selectFirst("*|rootfile")?.attr("full-path")
                 ?: throw Exception("Failed to find rootfile in container.xml")
 
             val opfUrl = (contentBaseUrl.removeSuffix("/") + "/" + opfPath).toHttpUrl()
-            val opfResponse = client.newCall(GET(opfUrl, headers)).execute()
-            val opfDoc = opfResponse.asJsoup()
+            val opfDoc = client.get(opfUrl).asJsoup()
 
             val imageManifestItems = opfDoc.select("*|item[media-type^=image/]")
                 .sortedBy { it.attr("href") }
@@ -89,9 +81,7 @@ abstract class ClipStudioReader : HttpSource() {
             addQueryParameter("param", authkey)
         }.build()
 
-        val faceResponse = client.newCall(GET(faceUrl, headers)).execute()
-        if (!faceResponse.isSuccessful) throw Exception("HTTP error ${faceResponse.code} while fetching face.xml")
-        val faceData = faceResponse.use { parseFaceData(it.asJsoup()) }
+        val faceData = parseFaceData(client.get(faceUrl).asJsoup())
 
         return (0 until faceData.totalPages).map { i ->
             val pageFileName = i.toString().padStart(4, '0') + ".xml"
@@ -106,7 +96,8 @@ abstract class ClipStudioReader : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
+    override suspend fun getImageUrl(page: Page): String {
+        val response = client.get(page.url)
         val requestUrl = response.request.url
         val document = response.asJsoup()
 
