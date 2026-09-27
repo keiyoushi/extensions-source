@@ -1,11 +1,10 @@
 package eu.kanade.tachiyomi.multisrc.kemono
 
-import android.app.Application
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.kemono.KemonoCreatorDto.Companion.serviceName
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,18 +16,19 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Cache
 import okhttp3.CacheControl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.File
+import java.io.IOException
 import java.time.ZoneOffset
 import kotlin.math.min
 import kotlin.time.Duration.Companion.minutes
@@ -46,18 +46,40 @@ abstract class Kemono :
             chain.proceed(request)
         }
     }
+        .addInterceptor(::thumbnailFallbackInterceptor)
         .cache(
             Cache(
-                directory = File(Injekt.get<Application>().externalCacheDir, "network_cache_${name.lowercase()}"),
+                directory = File(applicationContext.externalCacheDir, "network_cache_${name.lowercase()}"),
                 maxSize = 50L * 1024 * 1024, // 50 MiB
             ),
         )
+        .readTimeout(5.minutes)
         .rateLimit(1)
 
-    private val creatorsClient by lazy {
-        client.newBuilder()
-            .readTimeout(5.minutes)
+    // Full-size files redirect to the nX file servers, which are often unreachable;
+    // the thumbnail server still works, so fall back to it. Once they fail to connect, skip them
+    // for the rest of the session so every page doesn't wait for the connect timeout.
+    private var fileServersUnreachable = false
+
+    private fun thumbnailFallbackInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (request.url.pathSegments.first() != dataPath) return chain.proceed(request)
+
+        if (!fileServersUnreachable) {
+            try {
+                val response = chain.proceed(request)
+                if (response.isSuccessful) return response
+                response.close()
+            } catch (e: IOException) {
+                if (chain.call().isCanceled()) throw e
+                fileServersUnreachable = true
+            }
+        }
+
+        val thumbnailUrl = request.url.newBuilder()
+            .encodedPath("/thumbnail${request.url.encodedPath}")
             .build()
+        return chain.proceed(request.newBuilder().url(thumbnailUrl).build())
     }
 
     private val preferences = getPreferences()
@@ -124,16 +146,11 @@ abstract class Kemono :
                 emptyList()
             }
 
-            val response = creatorsClient.get(
+            val response = client.get(
                 "$baseUrl/$apiPath/creators",
                 headers,
                 CacheControl.Builder().maxStale(30.minutes).build(),
-                ensureSuccess = false,
             )
-            if (!response.isSuccessful) {
-                response.close()
-                throw Exception("HTTP error ${response.code}")
-            }
             val allCreators = response.parseAs<List<KemonoCreatorDto>>().filterNot { it.service.lowercase() == "discord" }
             allCreators.filter {
                 val includeType = typeIncluded.isEmpty() || typeIncluded.contains(it.service.serviceName().lowercase())
@@ -244,7 +261,7 @@ abstract class Kemono :
                 delay(10000)
             }
         }
-        throw Exception("HTTP error $code")
+        throw HttpException(code)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -255,7 +272,7 @@ abstract class Kemono :
     override fun imageRequest(page: Page): Request {
         val imageUrl = page.imageUrl!!
 
-        if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return GET(imageUrl, headers)
+        if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return Request.Builder().url(imageUrl).headers(headers).build()
 
         val index = imageUrl.indexOf('/', 8)
         val url = buildString {
@@ -263,7 +280,7 @@ abstract class Kemono :
             append("/thumbnail")
             append(imageUrl.substring(index))
         }
-        return GET(url, headers)
+        return Request.Builder().url(url).headers(headers).build()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
