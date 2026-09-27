@@ -9,11 +9,9 @@ private const val PTBINBA_CHAR_LOOKUP = "aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsSt
 abstract class PtBinbDescrambler(
     val s: String,
     val u: String,
-    val width: Int,
-    val height: Int,
 ) : SpeedBinbDescrambler()
 
-class PtBinbDescramblerF(s: String, u: String, width: Int, height: Int) : PtBinbDescrambler(s, u, width, height) {
+class PtBinbDescramblerF(s: String, u: String) : PtBinbDescrambler(s, u) {
 
     private var widthPieces: Int = 0
     private var heightPieces: Int = 0
@@ -75,14 +73,14 @@ class PtBinbDescramblerF(s: String, u: String, width: Int, height: Int) : PtBinb
 
     override fun isScrambled() = pieceDest != null
 
-    override fun canDescramble(): Boolean {
+    override fun canDescramble(width: Int, height: Int): Boolean {
         val i = 2 * widthPieces * piecePadding
         val n = 2 * heightPieces * piecePadding
 
         return width >= 64 + i && height >= 64 + n && width * height >= (320 + i) * (320 + n)
     }
 
-    override fun getCanvasDimensions(): Pair<Int, Int> = if (canDescramble()) {
+    override fun getCanvasDimensions(width: Int, height: Int): Pair<Int, Int> = if (canDescramble(width, height)) {
         Pair(
             width - 2 * widthPieces * piecePadding,
             height - 2 * heightPieces * piecePadding,
@@ -91,14 +89,14 @@ class PtBinbDescramblerF(s: String, u: String, width: Int, height: Int) : PtBinb
         Pair(width, height)
     }
 
-    override fun getDescrambleCoords(): List<PtImgTranslation> {
+    override fun getDescrambleCoords(width: Int, height: Int): List<PtImgTranslation> {
         val pieceDest = this.pieceDest
 
         if (!isScrambled() || pieceDest == null) {
             return emptyList()
         }
 
-        if (!canDescramble()) {
+        if (!canDescramble(width, height)) {
             return listOf(
                 PtImgTranslation(0, 0, width, height, 0, 0),
             )
@@ -155,7 +153,7 @@ class PtBinbDescramblerF(s: String, u: String, width: Int, height: Int) : PtBinb
     private class TNP(val wPos: List<Int>, val hPos: List<Int>, val pieces: List<Int>)
 }
 
-class PtBinbDescramblerA(s: String, u: String, width: Int, height: Int) : PtBinbDescrambler(s, u, width, height) {
+class PtBinbDescramblerA(s: String, u: String) : PtBinbDescrambler(s, u) {
 
     private var srcPieces: PieceCollection? = null
 
@@ -178,16 +176,16 @@ class PtBinbDescramblerA(s: String, u: String, width: Int, height: Int) : PtBinb
 
     override fun isScrambled() = srcPieces != null && dstPieces != null
 
-    override fun canDescramble(): Boolean = width >= 64 && height >= 64 && width * height >= 102400
+    override fun canDescramble(width: Int, height: Int): Boolean = width >= 64 && height >= 64 && width * height >= 102400
 
-    override fun getCanvasDimensions(): Pair<Int, Int> = Pair(width, height)
+    override fun getCanvasDimensions(width: Int, height: Int): Pair<Int, Int> = Pair(width, height)
 
-    override fun getDescrambleCoords(): List<PtImgTranslation> {
+    override fun getDescrambleCoords(width: Int, height: Int): List<PtImgTranslation> {
         if (!isScrambled()) {
             return emptyList()
         }
 
-        if (!canDescramble()) {
+        if (!canDescramble(width, height)) {
             return listOf(
                 PtImgTranslation(0, 0, width, height, 0, 0),
             )

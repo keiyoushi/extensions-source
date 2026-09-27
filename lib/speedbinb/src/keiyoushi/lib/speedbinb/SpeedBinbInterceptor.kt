@@ -1,22 +1,23 @@
 package keiyoushi.lib.speedbinb
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import keiyoushi.lib.speedbinb.descrambler.PtBinbDescramblerA
 import keiyoushi.lib.speedbinb.descrambler.PtBinbDescramblerF
 import keiyoushi.lib.speedbinb.descrambler.PtImgDescrambler
+import keiyoushi.lib.speedbinb.descrambler.SpeedBinbDescrambler
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import java.io.IOException
 
-class SpeedBinbInterceptor(private val json: Json) : Interceptor {
-
+class SpeedBinbInterceptor : Interceptor {
     private val textInterceptor by lazy { TextInterceptor() }
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -29,56 +30,58 @@ class SpeedBinbInterceptor(private val json: Json) : Interceptor {
             host == TextInterceptorHelper.HOST -> textInterceptor.intercept(chain)
             filename.endsWith(".ptimg.json") -> interceptPtImg(chain, request)
             fragment == null -> chain.proceed(request)
-            fragment.startsWith("ptbinb,") -> interceptPtBinB(chain, request)
+            fragment.startsWith("ptbinb,") -> interceptPtBinb(chain, request, fragment)
             else -> chain.proceed(request)
         }
     }
 
     private fun interceptPtImg(chain: Interceptor.Chain, request: Request): Response {
-        val response = chain.proceed(request)
-        val metadata = json.decodeFromString<PtImg>(response.body.string())
+        val metadata = chain.proceed(request).parseAs<PtImg>()
         val imageUrl = request.url.newBuilder()
             .setPathSegment(request.url.pathSize - 1, metadata.resources.i.src)
             .build()
-        val imageResponse = chain.proceed(
+        val response = chain.proceed(
             request.newBuilder().url(imageUrl).build(),
         )
 
-        if (metadata.translations.isEmpty()) {
-            return imageResponse
-        }
-
-        val image = BitmapFactory.decodeStream(imageResponse.body.byteStream())
-        val descrambler = PtImgDescrambler(metadata)
-        return imageResponse.newBuilder()
-            .body(descrambler.descrambleImage(image)!!.toResponseBody(JPEG_MEDIA_TYPE))
-            .build()
+        return response.descramble(PtImgDescrambler(metadata))
     }
 
-    private fun interceptPtBinB(chain: Interceptor.Chain, request: Request): Response {
-        val response = chain.proceed(request)
-        val fragment = request.url.fragment!!
+    private fun interceptPtBinb(chain: Interceptor.Chain, request: Request, fragment: String): Response {
         val (s, u) = fragment.removePrefix("ptbinb,").split(",", limit = 2)
 
         if (s.isEmpty() && u.isEmpty()) {
-            return response
+            return chain.proceed(request)
         }
 
-        val imageData = response.body.bytes()
-        val image = BitmapFactory.decodeByteArray(imageData, 0, imageData.size)
         val descrambler = if (s[0] == '=' && u[0] == '=') {
-            PtBinbDescramblerF(s, u, image.width, image.height)
+            PtBinbDescramblerF(s, u)
         } else if (NUMERIC_CHARACTERS.contains(s[0]) && NUMERIC_CHARACTERS.contains(u[0])) {
-            PtBinbDescramblerA(s, u, image.width, image.height)
+            PtBinbDescramblerA(s, u)
         } else {
             throw IOException("Cannot select descrambler for key pair s=$s, u=$u")
         }
-        val descrambled = descrambler.descrambleImage(image) ?: imageData
 
-        return response.newBuilder()
-            .body(descrambled.toResponseBody(JPEG_MEDIA_TYPE))
-            .build()
+        return chain.proceed(request).descramble(descrambler)
     }
+}
+
+private fun Response.descramble(descrambler: SpeedBinbDescrambler): Response {
+    if (!isSuccessful || !descrambler.isScrambled()) {
+        return this
+    }
+
+    val image = BitmapFactory.decodeStream(this.body.byteStream())
+    val descrambled = descrambler.descrambleImage(image)
+    image.recycle()
+
+    val buffer = Buffer()
+    descrambled.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+    descrambled.recycle()
+
+    return newBuilder()
+        .body(buffer.asResponseBody(JPEG_MEDIA_TYPE, buffer.size))
+        .build()
 }
 
 private const val NUMERIC_CHARACTERS = "0123456789"
