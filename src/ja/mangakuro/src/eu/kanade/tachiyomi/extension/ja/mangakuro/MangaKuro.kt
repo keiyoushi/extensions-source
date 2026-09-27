@@ -13,9 +13,9 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import java.util.Calendar
 
 @Source
@@ -26,15 +26,15 @@ abstract class MangaKuro : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = mangaListParse("all-manga", page, "sort", "views")
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaListPage("all-manga", page, "sort", "views")
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse("all-manga", page, "sort", "latest-updated")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaListPage("all-manga", page, "sort", "latest-updated")
 
     // =============================== Search ===============================
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = mangaListParse("search", page, "keyword", query)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getMangaListPage("search", page, "keyword", query)
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val baseHost = baseUrl.toHttpUrl().host
@@ -48,7 +48,7 @@ abstract class MangaKuro : KeiSource() {
             .apply { this.url = mangaUrl }
     }
 
-    private suspend fun mangaListParse(path: String, page: Int, param: String, value: String): MangasPage {
+    private suspend fun getMangaListPage(path: String, page: Int, param: String, value: String): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment(path)
             .addPathSegment(page.toString())
@@ -81,16 +81,16 @@ abstract class MangaKuro : KeiSource() {
 
         return SMangaUpdate(
             manga = mangaDetailsParse(document, manga),
-            chapters = document.select("div.chapter_box .item").map(::chapterFromElement),
+            chapters = document.select("div.chapter_box .item").mapNotNull(::chapterFromElement),
         )
     }
 
     private fun mangaDetailsParse(document: Document, manga: SManga): SManga = manga.apply {
         title = document.selectFirst("div.detail_name > h1")?.text() ?: title
-        author = document.selectFirst("div:has(.lnr-user) + .info_value")
-            ?.text()
-            ?.takeUnless { it == "未詳" }
+        author = document.select("div:has(.lnr-user) + .info_value a[href*='/authors/']")
+            .joinedTexts { it != "未詳" && it != "不明" }
         status = parseStatus(document.selectFirst("div:has(.lnr-leaf) + .info_value")?.text())
+        genre = document.select("div.detail_listInfo a.genres-el").joinedTexts()
         description = document.selectFirst(".detail_reviewContent")?.text()
         thumbnail_url = document.selectFirst(".detail_avatar img")?.absUrl("src") ?: thumbnail_url
     }
@@ -106,12 +106,15 @@ abstract class MangaKuro : KeiSource() {
 
     // ============================== Chapters ==============================
 
-    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val anchor = element.selectFirst("a.chapter_num")!!
-        setUrlWithoutDomain(anchor.absUrl("href"))
-        name = anchor.text().removePrefix("#").trim()
+    private fun chapterFromElement(element: Element): SChapter? {
+        val anchor = element.selectFirst("a.chapter_num") ?: return null
 
-        date_upload = parseDate(element.selectFirst("p.chapter_info:nth-of-type(2)")?.text())
+        return SChapter.create().apply {
+            setUrlWithoutDomain(anchor.absUrl("href"))
+            name = anchor.text().removePrefix("#").trim()
+
+            date_upload = parseDate(element.selectFirst("p.chapter_info:nth-of-type(2)")?.text())
+        }
     }
 
     // =============================== Pages ================================
@@ -122,26 +125,21 @@ abstract class MangaKuro : KeiSource() {
 
         val chapterId = document.select("script:containsData(CHAPTER_ID)")
             .firstNotNullOfOrNull { chapterIdRegex.find(it.data())?.groupValues?.get(1) }
-            ?: throw Exception("Failed to find chapter id")
+            ?: return emptyList()
 
         val pageHeaders = headersBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
             .set("Referer", chapterUrl)
             .build()
 
-        val response = client.get("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders)
+        return client.get("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders)
             .parseAs<PageListResponseDto>()
-
-        if (!response.status) {
-            throw Exception(response.msg ?: "Unknown error")
-        }
-
-        return Jsoup.parseBodyFragment(response.html, chapterUrl)
-            .select("div.image_story img")
-            .mapIndexed { index, element -> Page(index, imageUrl = element.absUrl("src")) }
+            .toPageList(chapterUrl)
     }
 
     // ============================= Utilities ==============================
+
+    private fun Elements.joinedTexts(predicate: (String) -> Boolean = { true }): String? = eachText().filter(predicate).distinct().joinToString().takeIf { it.isNotEmpty() }
 
     private fun parseDate(dateText: String?): Long {
         dateText ?: return 0L
