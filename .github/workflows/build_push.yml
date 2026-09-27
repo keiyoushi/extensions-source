@@ -11,6 +11,11 @@ on:
       - '.github/scripts/**'
       - '.github/workflows/build_push.yml'
   workflow_dispatch:
+    inputs:
+      rebuild_index:
+        description: Only rebuild the index from existing files (drop deleted extensions, relink icons); no builds or uploads
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -25,8 +30,11 @@ env:
 jobs:
   prepare:
     name: Prepare job
+    if: ${{ !inputs.rebuild_index }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      actions: read
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
@@ -37,15 +45,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Get last successful CI commit
-        uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
-        with:
-          fallback-sha: 4b825dc642cb6eb9a060e54bf8d69288fbee4904 # empty tree
+      - id: base
+        name: Get last successful CI commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(python ./.github/scripts/find-base-sha.py build_push.yml)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - id: generate-matrices
         name: Create output matrices
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
-          python ./.github/scripts/generate-build-matrices.py "$NX_BASE"
+          python ./.github/scripts/generate-build-matrices.py "$BASE_SHA"
 
   build:
     name: Build extensions (${{ matrix.chunk.number }})
@@ -154,6 +167,46 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git add .
             git commit -m "Update extensions repo"
+            git push
+            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.json
+            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.pb
+          else
+            echo "No changes to commit"
+          fi
+
+  rebuild-index:
+    name: Rebuild extension index
+    if: github.repository == 'keiyoushi/extensions-source' && inputs.rebuild_index
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: main
+          persist-credentials: false
+
+      - name: Checkout repo branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: keiyoushi/extensions
+          token: ${{ secrets.BOT_PAT }}
+          ref: repo
+          path: repo
+          persist-credentials: true
+
+      - name: Rebuild and deploy index
+        run: |
+          cd repo
+          pip install protobuf
+          python -u ../main/.github/scripts/rebuild-index.py
+          git config --global user.email "156378334+keiyoushi-bot@users.noreply.github.com"
+          git config --global user.name "keiyoushi-bot"
+          git status
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "Rebuild extensions index"
             git push
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.json
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.pb
