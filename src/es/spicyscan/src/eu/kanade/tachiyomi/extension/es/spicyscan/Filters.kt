@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.spicytheme
+package eu.kanade.tachiyomi.extension.es.spicyscan
 
 import eu.kanade.tachiyomi.source.model.Filter
 
