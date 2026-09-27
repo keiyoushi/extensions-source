@@ -16,6 +16,10 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -39,10 +43,15 @@ abstract class Guya :
     // Scanlator id -> name, loaded while browsing so the preference screen can list them
     private var scanlators = emptyMap<String, String>()
 
-    private suspend fun updateScanlators() {
-        if (scanlators.isEmpty()) {
-            scanlators = runCatching { client.get("$baseUrl/api/get_all_groups/").parseAs<Map<String, String>>() }
-                .getOrDefault(emptyMap())
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private var scanlatorsJob: Job? = null
+
+    private fun updateScanlators() {
+        if (scanlators.isEmpty() && scanlatorsJob?.isActive != true) {
+            scanlatorsJob = scope.launch {
+                scanlators = runCatching { client.get("$baseUrl/api/get_all_groups/").parseAs<Map<String, String>>() }
+                    .getOrDefault(emptyMap())
+            }
         }
     }
 
