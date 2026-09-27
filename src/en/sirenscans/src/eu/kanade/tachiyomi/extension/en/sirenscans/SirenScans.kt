@@ -172,7 +172,7 @@ abstract class SirenScans :
             .addQueryParameter("series_slug", seriesSlug)
             .build()
 
-        val json = client.get(apiUrl).body.string().parseAs<ChaptersResponseDto>()
+        val json = client.get(apiUrl).parseAs<ChaptersResponseDto>()
         val rowsDocument = Jsoup.parseBodyFragment(json.rowsHtml, baseUrl)
 
         return rowsDocument.select("a.chapter-row[href]")
@@ -208,7 +208,7 @@ abstract class SirenScans :
     private fun parsePageList(document: Document): List<Page> = document
         .select("div#strip-reader img.reader-page")
         .mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
+            Page(i, imageUrl = element.attr("abs:src"))
         }
 
     // ========================= Filters =========================

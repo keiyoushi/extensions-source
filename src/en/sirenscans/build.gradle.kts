@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Siren Scans"
-    versionCode = 1
+    versionCode = 22
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
