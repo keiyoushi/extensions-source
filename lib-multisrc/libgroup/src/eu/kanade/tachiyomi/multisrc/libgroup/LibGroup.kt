@@ -1,16 +1,10 @@
 package eu.kanade.tachiyomi.multisrc.libgroup
 
 import android.annotation.SuppressLint
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -23,12 +17,14 @@ import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
@@ -38,27 +34,19 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 abstract class LibGroup :
     KeiSource(),
     ConfigurableSource {
-    private val apiDomainHost by lazy { apiDomain.toHttpUrl().host }
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     private val preferences by getPreferencesLazy {
         if (getString(SERVER_PREF, "main") == "fourth") {
             edit().putString(SERVER_PREF, "secondary").apply()
         }
     }
-
-    override val supportsLatest = true
 
     private var bearerToken: String? = null
 
@@ -74,20 +62,22 @@ abstract class LibGroup :
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             if (response.code == 419) {
+                response.close()
                 throw IOException("HTTP error ${response.code}. Проверьте сайт. Для завершения авторизации необходимо перезапустить приложение с полной остановкой.")
             }
             if (response.code == 404) {
+                response.close()
                 throw IOException("HTTP error ${response.code}. Проверьте сайт. Попробуйте авторизоваться через WebView🌎︎ и обновите список. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
             }
             return@addInterceptor response
         }
-        .rateLimit(1) { it.host == apiDomainHost || it.host == baseUrlHost }
+        .rateLimit(1) { it.host == apiDomain.toHttpUrl().host || it.host == baseUrl.toHttpUrl().host }
         .rateLimit(3)
 
     override fun Headers.Builder.configureHeaders() = set("Accept", "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         .set("Site-Id", siteId.toString())
 
-    private fun imageHeader() = headers.newBuilder()
+    private fun imageHeader() = headersBuilder()
         .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         .build()
 
@@ -111,7 +101,7 @@ abstract class LibGroup :
         if (url.contains(apiDomain) && !url.contains("/api/auth/me")) {
             // Force change token if use manual
             if (bearerToken.isNullOrBlank() || (!manualToken.isNullOrBlank() && bearerToken != manualToken)) {
-                val token = loadToken()
+                val token = runBlocking { loadToken() }
                 if (token != null) {
                     bearerToken = token.getToken()
                     userId = token.getUserId()
@@ -129,7 +119,7 @@ abstract class LibGroup :
     }
 
     @SuppressLint("ApplySharedPref")
-    private fun loadToken(): AuthToken? {
+    private suspend fun loadToken(): AuthToken? {
         // Try to get manually configured token from preferences
         val manualToken = preferences.getString("bearer_token", "")
         val userId = preferences.getString("user_id", "")
@@ -168,55 +158,16 @@ abstract class LibGroup :
         return null
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    @Suppress("NAME_SHADOWING")
-    private fun refreshToken(): AuthToken? {
-        val latch = CountDownLatch(1)
-        var returnValue: AuthToken? = null
-        Handler(Looper.getMainLooper()).post {
-            val webView = WebView(Injekt.get<Application>())
-            with(webView.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-            }
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    val view = view!!
-                    val script = "javascript:localStorage['auth']"
-                    view.evaluateJavascript(script) {
-                        view.stopLoading()
-                        view.destroy()
-                        if (!it.isNullOrBlank() && (it != "null")) {
-                            val str: String = if ((it.first() == '"') && (it.last() == '"')) {
-                                it.substringAfter("\"").substringBeforeLast("\"")
-                                    .replace("\\", "")
-                            } else {
-                                it.replace("\\", "")
-                            }
-                            str.parseAs<AuthToken>().let { auth ->
-                                if (auth.isValid()) {
-                                    returnValue = auth
-                                }
-                            }
-                        }
-                        latch.countDown()
-                    }
-                }
-            }
-            webView.loadUrl(baseUrl)
-        }
-        latch.await(20, TimeUnit.SECONDS)
+    private suspend fun refreshToken(): AuthToken? = getLocalStorage(baseUrl, "auth")
+        ?.parseAs<AuthToken>()
+        ?.takeIf { it.isValid() }
 
-        return returnValue
-    }
-
-    private fun isUserTokenValid(token: String): Boolean {
+    private suspend fun isUserTokenValid(token: String): Boolean {
         val headers = Headers.Builder().apply {
             add("Accept", "application/json")
             add("Authorization", token)
         }.build()
-        client.newCall(GET("$apiDomain/api/auth/me", headers)).execute().also { response ->
+        client.get("$apiDomain/api/auth/me", headers, ensureSuccess = false).use { response ->
             return when (response.code) {
                 401 -> throw Exception("Попробуйте авторизоваться через WebView🌎︎. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
                 else -> true
@@ -292,9 +243,6 @@ abstract class LibGroup :
     private suspend fun getDefaultBranch(id: String): List<Branch> = client.get("$apiDomain/api/branches/$id").parseAs<Data<List<Branch>>>().data
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        if (manga.status == SManga.LICENSED) {
-            Log.d("MangaLib", "Manga is licensed: ${manga.title}")
-        }
         val slugUrl = manga.url.removePrefix("/")
         val chaptersData = client.get("$apiDomain/api/manga${manga.url}/chapters").parseAs<Data<List<Chapter>>>()
             .also { if (it.data.isEmpty()) return emptyList() }
