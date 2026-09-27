@@ -40,9 +40,7 @@ abstract class MangAdventure : KeiSource() {
         "Mozilla/5.0 (Android ${VERSION.RELEASE}; Mobile) Tachiyomi/${AppInfo.getVersionName()}"
 
     /** The URL of the site's API. */
-    private val apiUrl by lazy { "$baseUrl/api/v2" }
-
-    override val supportsLatest = true
+    private val apiUrl get() = "$baseUrl/api/v2"
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", userAgent)
 
