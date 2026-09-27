@@ -15,10 +15,9 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -37,8 +36,6 @@ abstract class SinMH : KeiSource() {
 
     protected open val mobileUrl: String
         get() = baseUrl.replaceFirst("www.", "m.")
-
-    override val supportsLatest = true
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
@@ -90,7 +87,12 @@ abstract class SinMH : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = if (query.isNotEmpty()) {
-            "$baseUrl/search/?keywords=$query&page=$page"
+            baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments("search/")
+                .addQueryParameter("keywords", query)
+                .addQueryParameter("page", page.toString())
+                .build()
+                .toString()
         } else {
             val categories = filters.filterIsInstance<UriPartFilter>().map { it.toUriPart() }
                 .filter { it.isNotEmpty() }
@@ -111,70 +113,30 @@ abstract class SinMH : KeiSource() {
 
     override fun getMangaUrl(manga: SManga) = mobileUrl + manga.url
 
+    // details and chapters come from the same mobile page
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) mangaDetailsParse(client.get(baseUrl + manga.url).asJsoup()) else manga }
-        val chapterList = async { if (fetchChapters) chapterListParse(client.get(mobileUrl + manga.url).asJsoup()) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
+    ): SMangaUpdate {
+        val document = client.get(mobileUrl + manga.url).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
     protected open fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst(".book-title > h1")?.text().orEmpty()
-        val detailsList = document.selectFirst(".detail-list")
-        if (detailsList != null) {
-            author = detailsList.select("strong:contains(作者) ~ *").text()
-            genre = mangaDetailsParseDefaultGenre(document, detailsList)
-            status = when (detailsList.selectFirst("strong:contains(状态) + *")?.text()) {
-                "连载中" -> SManga.ONGOING
-                "已完结" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+        title = document.selectFirst("#comicName")!!.text()
+        val items = document.select(".Introduct_Sub .txtItme")
+        author = items.firstOrNull { it.selectFirst(".icon01") != null }?.text()
+        val links = items.filter { it.selectFirst(".icon02") != null }.flatMap { it.select("a") }.map { it.text().removePrefix("#") }
+        status = when {
+            "连载中" in links -> SManga.ONGOING
+            "已完结" in links -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
-        description = document.selectFirst("#intro-all")?.text()
-            ?.removePrefix("漫画简介：")?.trimStart()
-            ?.removePrefix("漫画简介：")?.trimStart().orEmpty() // some sources have double prefix
-        thumbnail_url = document.selectFirst("div.book-cover img")?.absUrl("src")
-    }
-
-    protected open fun mangaDetailsParseDefaultGenre(document: Document, detailsList: Element): String {
-        val category = detailsList.selectFirst("strong:contains(类型) + a")
-        val breadcrumbs = document.selectFirst("div.breadcrumb-bar")?.select("a[href^=/list/]")
-        return buildString {
-            category?.text()?.let { append(it) }
-            breadcrumbs?.map(Element::text)?.filter(String::isNotEmpty)?.joinTo(this, prefix = ", ")
-        }
-    }
-
-    protected fun mangaDetailsParseDMZJStyle(document: Document, hasBreadcrumb: Boolean) = SManga.create().apply {
-        val detailsDiv = document.selectFirst("div.comic_deCon") ?: return@apply
-        title = detailsDiv.selectFirst("h1")?.text().orEmpty()
-        val details = detailsDiv.select("> ul > li")
-        val linkSelector = "a"
-
-        if (details.isNotEmpty()) {
-            author = details[0].text().removePrefix("作者：").trimStart()
-        }
-        if (details.size > 1) {
-            status = when (details[1].selectFirst(linkSelector)?.text()) {
-                "连载中" -> SManga.ONGOING
-                "已完结" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-        }
-        genre = buildList {
-            if (details.size > 2) details[2].selectFirst(linkSelector)?.let { add(it) } // 类别
-            if (details.size > 3) addAll(details[3].select(linkSelector)) // 类型
-            if (hasBreadcrumb) {
-                document.selectFirst("div.mianbao")?.select("a[href^=/list/]")?.let { addAll(it) }
-            }
-        }.mapTo(mutableSetOf()) { it.text() }.joinToString()
-
-        description = detailsDiv.selectFirst("> p.comic_deCon_d")?.text().orEmpty()
-        thumbnail_url = document.selectFirst("div.comic_i_img > img")?.absUrl("src")
+        genre = links.filter { it != "连载中" && it != "已完结" }.distinct().joinToString()
+        description = (document.selectFirst("#full-des") ?: document.selectFirst("#simple-des"))?.text()?.removePrefix("介绍:")
+        thumbnail_url = document.selectFirst("#Cover img")?.absUrl("src")
     }
 
     // Chapters
