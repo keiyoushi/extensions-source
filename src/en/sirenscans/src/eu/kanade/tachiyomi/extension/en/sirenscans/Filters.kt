@@ -72,7 +72,6 @@ class GenreFilter(genres: List<Genre>) :
 
 class Genre(val name: String, val value: String)
 
-
 fun parseGenreData(document: Document): JsonElement {
     val genres = document.select("div#search-genres-list a.genre-tag[data-tag]").map { el ->
         buildJsonObject {
