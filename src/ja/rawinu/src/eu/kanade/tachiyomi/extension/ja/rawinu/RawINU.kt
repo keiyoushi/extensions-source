@@ -20,11 +20,9 @@ import org.jsoup.nodes.Element
 @Source
 abstract class RawINU : FMReader() {
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::ddosChallengeInterceptor)
         .addCookie("smartlink_shown" to "1")
-        .rateLimit(2) { it.host == baseUrlHost }
+        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
     private val patternDdosKey = """'([a-f0-9]{32})'""".toRegex()
 
