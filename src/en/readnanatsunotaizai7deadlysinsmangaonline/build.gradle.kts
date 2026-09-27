@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Read Nanatsu no Taizai 7 Deadly Sins Manga Online"
-    versionCode = 4
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangacatalog"
 
     source {
