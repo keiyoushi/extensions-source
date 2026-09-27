@@ -1,96 +1,60 @@
 package eu.kanade.tachiyomi.extension.ja.ohtawebcomic
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
-import keiyoushi.lib.speedbinb.SpeedBinbReader
+import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.jsonInstance
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
-import rx.Observable
 
 @Source
-abstract class OhtaWebComic : HttpSource() {
-
+abstract class OhtaWebComic : KeiSource() {
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(SpeedBinbInterceptor(jsonInstance))
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return client.newCall(popularMangaRequest(page))
-            .asObservableSuccess()
-            .map { response ->
-                val document = response.asJsoup()
-                val directory = document.select(".bnrList ul li a")
-
-                val startIndex = (page - 1) * 24
-                if (startIndex >= directory.size) {
-                    return@map MangasPage(emptyList(), false)
-                }
-
-                val endRange = minOf(page * 24, directory.size)
-                val manga = directory.subList(startIndex, endRange).map(::parseMangaFromElement)
-                val hasNextPage = endRange < directory.size
-
-                MangasPage(manga, hasNextPage)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mangas = client.get("$baseUrl/list/").asJsoup().select(".bnrList ul li a").map {
+            SManga.create().apply {
+                setUrlWithoutDomain(it.absUrl("href"))
+                title = it.selectFirst(".title")!!.text()
+                thumbnail_url = it.selectFirst(".pic img")?.absUrl("src")
             }
+        }
+        return MangasPage(mangas, false)
     }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/list/", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                val document = response.asJsoup()
-                val directory = document.select(".bnrList ul li a")
-                    .filter { it.selectFirst(".title")?.text()?.contains(query, true) == true }
-
-                val startIndex = (page - 1) * 24
-                if (startIndex >= directory.size) {
-                    return@map MangasPage(emptyList(), false)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val mangas = client.get("$baseUrl/list/").asJsoup().select(".bnrList ul li a")
+            .filter { it.selectFirst(".title")?.text()?.contains(query, true) == true }
+            .map {
+                SManga.create().apply {
+                    setUrlWithoutDomain(it.absUrl("href"))
+                    title = it.selectFirst(".title")!!.text()
+                    thumbnail_url = it.selectFirst(".pic img")?.absUrl("src")
                 }
-
-                val endRange = minOf(page * 24, directory.size)
-                val manga = directory.subList(startIndex, endRange).map(::parseMangaFromElement)
-                val hasNextPage = endRange < directory.size
-
-                MangasPage(manga, hasNextPage)
             }
+        return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/list/", headers)
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    private fun parseMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        title = element.selectFirst(".title")!!.text()
-        thumbnail_url = element.selectFirst(".pic img")?.absUrl("src")
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val details = SManga.create().apply {
             title = document.selectFirst("[itemprop=name]")!!.text()
             author = document.selectFirst("[itemprop=author]")?.text()
             thumbnail_url = document.selectFirst(".contentHeader")
@@ -114,55 +78,41 @@ abstract class OhtaWebComic : HttpSource() {
                 }
             }
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = document.select(".backnumberList a[onclick*=openBook]")
-            .sortedByDescending {
-                it.selectFirst("dt.number")!!.ownText().toInt()
-            }
-            .map { chapterFromElement(it) }
-
-        if (chapters.isNotEmpty()) {
-            return chapters
-        }
-
-        return document.select(".headBtnList a[onclick*=openBook]")
+        val chapterList = document.select(".backnumberList a[onclick*=openBook]")
+            .sortedByDescending { it.selectFirst("dt.number")!!.ownText().toInt() }
             .map {
                 SChapter.create().apply {
-                    url = "/contents/${it.getChapterId()}"
-                    name = it.ownText()
+                    url = it.getChapterId()
+                    name = it.selectFirst("div.title")!!.text()
                 }
             }
+            .ifEmpty {
+                document.select(".headBtnList a[onclick*=openBook]").map {
+                    SChapter.create().apply {
+                        url = it.getChapterId()
+                        name = it.ownText()
+                    }
+                }
+            }
+
+        return SMangaUpdate(
+            details,
+            chapterList,
+        )
     }
 
-    private fun chapterFromElement(element: Element) = SChapter.create().apply {
-        url = "/contents/${element.getChapterId()}"
-        name = element.selectFirst("div.title")!!.text()
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "https://www.yondemill.jp/contents/${chapter.url}?view=1&u0=1"
 
-    private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) }
-
-    override fun pageListRequest(chapter: SChapter) = GET("https://www.yondemill.jp${chapter.url}?view=1&u0=1", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val readerUrl = document.selectFirst("script:containsData(location.href)")!!
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val readerUrl = client.get(getChapterUrl(chapter)).asJsoup()
+            .selectFirst("script:containsData(location.href)")!!
             .data()
             .substringAfter("location.href='")
             .substringBefore("';")
 
-        val requestHeaders = headers.newBuilder()
-            .set("Referer", response.request.url.toString())
-            .build()
-
-        val readerResponse = client.newCall(GET(readerUrl, requestHeaders)).execute()
-
-        return reader.pageListParse(readerResponse)
+        return client.fetchPages(client.get(readerUrl).asJsoup())
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
 
 private fun Element.getChapterId(): String = attr("onclick")
