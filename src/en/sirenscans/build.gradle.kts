@@ -6,13 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Siren Scans"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "keyoapp"
 
     source {
         lang = "en"
-        baseUrl = "https://sirenscans.com"
+        baseUrl = "https://sirenscans.org"
     }
 }
