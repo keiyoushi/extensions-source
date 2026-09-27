@@ -19,9 +19,20 @@ object ChapterAccessSerializer : JsonTransformingSerializer<Map<String, LockDto>
     }
 }
 
+object ChapterDatesSerializer : JsonTransformingSerializer<Map<String, String>>(
+    MapSerializer(String.serializer(), String.serializer()),
+) {
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        if (element is JsonArray) {
+            return JsonObject(emptyMap())
+        }
+        return element
+    }
+}
+
 @Serializable
 class ChapterDatesDto(
-    @Serializable(with = ChapterAccessSerializer::class)
+    @Serializable(with = ChapterDatesSerializer::class)
     val chapterDates: Map<String, String> = emptyMap(),
     @Serializable(with = ChapterAccessSerializer::class)
     val chapterAccess: Map<String, LockDto> = emptyMap(),
