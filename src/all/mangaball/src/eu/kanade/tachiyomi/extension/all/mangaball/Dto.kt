@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
@@ -29,13 +31,15 @@ class SearchResponse(
 @Serializable
 class MangaDto(
     private val id: String,
+    private val slug: String,
     private val name: String,
     private val image: ImageDto? = null,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = id
+        url = slug
         title = name
         thumbnail_url = image?.url
+        memo = buildJsonObject { put("id", id) }
     }
 }
 
@@ -47,6 +51,7 @@ class TitleResponse(
 @Serializable
 class TitleDto(
     private val id: String,
+    private val slug: String,
     private val name: String,
     private val image: ImageDto? = null,
     private val description: List<String> = emptyList(),
@@ -65,12 +70,13 @@ class TitleDto(
         }.trim()
 
         return SManga.create().apply {
-            url = id
+            url = slug
             title = name
             thumbnail_url = image?.url
             genre = tags.joinToString { it.name }
             author = this@TitleDto.author.joinToString { it.name }
             this.description = description
+            memo = buildJsonObject { put("id", id) }
             this.status = when (this@TitleDto.status) {
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED

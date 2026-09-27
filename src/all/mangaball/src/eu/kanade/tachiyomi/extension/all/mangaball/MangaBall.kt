@@ -19,6 +19,7 @@ import keiyoushi.utils.JSON_MEDIA_TYPE
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -184,8 +185,11 @@ abstract class MangaBall :
     }
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        // Older versions stored the slug in SManga.url, but the chapter listing endpoint needs the title id.
-        val titleId = if (MONGO_ID_REGEX.matches(manga.url)) manga.url else getMangaDetails(manga.url).url
+        // The chapter listing endpoint needs the title id, which is stored in memo. Entries saved by
+        // older versions only have the slug (or id) in SManga.url, so they need one details fetch.
+        val titleId = manga.memo["id"]?.stringOrNull
+            ?: getMangaDetails(manga.url).memo["id"]?.stringOrNull
+            ?: throw Exception("Missing title id for ${manga.url}")
         val body = TitleIdRequest(titleId).toJsonBody()
 
         val chapters = client.post("$baseUrl/api/v1/chapter/chapter-listing-by-title-id", headers, body)
@@ -244,7 +248,6 @@ abstract class MangaBall :
 
 private const val NSFW_PREF = "nsfw_pref"
 private const val LEGACY_HOST = "mangaball.net"
-private val MONGO_ID_REGEX = Regex("^[a-f\\d]{24}$")
 
 // OkHttp 5 appends "; charset=utf-8" when a request body is built from a String, and this API
 // rejects any Content-Type other than a bare "application/json" with HTTP 400.
