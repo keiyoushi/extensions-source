@@ -29,10 +29,6 @@ abstract class MCCMS : KeiSource() {
 
     protected open val config: MCCMSConfig = MCCMSConfig()
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val supportsLatest = true
-
     init {
         Intl.lang = lang
     }
@@ -46,7 +42,7 @@ abstract class MCCMS : KeiSource() {
         }
         chain.proceed(request)
     }
-        .rateLimit(2) { it.host == baseUrlHost }
+        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", System.getProperty("http.agent")!!)
         .removeAll("Origin")
