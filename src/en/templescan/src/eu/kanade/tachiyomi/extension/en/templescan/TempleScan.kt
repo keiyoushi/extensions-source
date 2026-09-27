@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.templescan
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,39 +13,48 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.jsoup.Jsoup
-import org.jsoup.safety.Safelist
+import org.jsoup.nodes.Document
 
 @Source
-abstract class TempleScan : KeiSource() {
+abstract class TempleScan :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1)
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
+        // Cloudflare rejects the app's default User-Agent (both for pages and for the image CDN),
+        // so a full browser fingerprint is required.
+        set("User-Agent", USER_AGENT)
+        set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+        set("Accept-Language", "en-US,en;q=0.9")
         set("Sec-Fetch-Dest", "document")
         set("Sec-Fetch-Mode", "navigate")
+        set("Sec-Fetch-Site", "none")
+        set("Upgrade-Insecure-Requests", "1")
     }
-
-    private val rscHeaders get() = headersBuilder()
-        .set("rsc", "1")
-        .build()
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
 
     override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", OrderFilter.LATEST)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val data = client.get("$baseUrl/comics", rscHeaders).extractNextJs<List<BrowseSeries>>()!!
-        return parseDirectory(data, query, filters)
+        val catalog = fetchCatalog()
+        return parseDirectory(catalog, query, filters)
     }
 
     private fun parseDirectory(series: List<BrowseSeries>, query: String, filters: FilterList): MangasPage {
@@ -103,56 +115,50 @@ abstract class TempleScan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get(baseUrl + manga.url, rscHeaders).extractNextJs<SeriesDetails>()!!
+        val slug = manga.url.substringAfterLast('/')
+        val document = client.get("$baseUrl/comic/$slug").asJsoup()
+
+        val series = document.jsonLd<ComicSeriesLd> { it.isSeries }
+        val seriesData = document.extractNextJs<SeriesDataWrapper>()?.seriesData
+        // The status only lives in the browse catalog; the detail page renders it without a stable hook.
+        val catalogEntry = fetchCatalog().firstOrNull { it.slug == slug }
+
+        val genres = series?.genre.orEmpty()
+        val adult = genres.any { it.equals("+18", ignoreCase = true) }
 
         val manga = SManga.create().apply {
-            url = "/comic/${details.slug}"
-            title = details.title
-            thumbnail_url = details.thumbnail
-            status = when (details.status) {
-                "Ongoing" -> SManga.ONGOING
-                "Hiatus" -> SManga.ON_HIATUS
-                "Completed" -> SManga.COMPLETED
-                "Canceled" -> SManga.CANCELLED
-                "Dropped" -> SManga.CANCELLED
+            url = "/comic/$slug"
+            title = series?.name ?: catalogEntry?.title ?: slug
+            thumbnail_url = series?.image ?: catalogEntry?.thumbnail
+            author = series?.author?.name
+            status = when (catalogEntry?.status?.lowercase()) {
+                "ongoing" -> SManga.ONGOING
+                "hiatus" -> SManga.ON_HIATUS
+                "completed" -> SManga.COMPLETED
+                "canceled", "dropped" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
-            author = details.author
-            artist = details.studio
-            // Sometimes site adds #tags at the end of description
-            // Site can use any word to indicate tags, I saw at least: "Tags:", "Keywords:", TAGS
-            val cleanDescription = if (details.description?.contains("#") == true) {
-                details.description.substringBefore("#").replace(LAST_WORD_REGEX, "").trim()
-            } else {
-                details.description.toString()
-            }
-            description = buildString {
-                append(Jsoup.clean(cleanDescription, Safelist.none()))
-                details.alternativeNames?.takeIf { it.isNotBlank() }?.let {
-                    append("\n\n")
-                    append("Alternative Name: $it\n")
-                }
-            }
             genre = buildList {
-                add(details.badge)
-                add(details.year)
-                if (details.adult) {
-                    add("Adult")
+                catalogEntry?.badge?.let { add(it) }
+                if (adult) add("Adult")
+                addAll(genres.filterNot { it.equals("+18", ignoreCase = true) })
+            }.joinToString()
+            description = buildString {
+                append(document.synopsis() ?: series?.description.orEmpty())
+                series?.alternateName?.takeIf { it.isNotBlank() }?.let {
+                    append("\n\nAlternative Name: ").append(it)
                 }
-                details.tags?.map { it.tag.name }?.let { addAll(it) }
-                details.description?.takeIf { it.contains("#") }?.let { desc ->
-                    addAll(TEXT_TAGS_REGEX.findAll(desc).map { it.groupValues[1] })
-                }
-            }.filterNotNull().joinToString()
+            }
         }
 
-        val chapters = details.groups?.flatMap { group ->
-            group.items.filter {
-                it.lock == 0
-            }.map { chapter ->
+        val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED_CHAPTERS, true)
+        val chapterList = seriesData?.chapters.orEmpty()
+            .filter { !hideLocked || it.price <= 0 }
+            .map { chapter ->
                 SChapter.create().apply {
-                    url = "/comic/${manga.url.substringAfterLast('/')}/${chapter.slug}"
+                    url = "/comic/$slug/${chapter.slug}"
                     name = buildString {
+                        if (chapter.price > 0) append("\uD83D\uDD12 ")
                         append(chapter.name)
                         if (!chapter.title.isNullOrBlank()) {
                             append(": ", chapter.title)
@@ -161,22 +167,47 @@ abstract class TempleScan : KeiSource() {
                     date_upload = chapter.created
                 }
             }
-        } ?: chapters
 
-        return SMangaUpdate(manga, chapters)
+        return SMangaUpdate(manga, chapterList)
     }
 
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(baseUrl + chapter.url, rscHeaders).extractNextJs<PagesList>() ?: return emptyList()
+        val data = client.get(baseUrl + chapter.url).extractNextJs<PagesList>() ?: return emptyList()
         return data.images.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
         }
     }
 
+    // ============================ Preferences =============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HIDE_LOCKED_CHAPTERS
+            title = "Hide locked chapters"
+            summary = "Hide early access chapters that require a subscription. If disabled, they are shown with a \uD83D\uDD12 prefix but stay unreadable without a subscription."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
+    }
+
+    // ============================= Utilities ==============================
+
+    private suspend fun fetchCatalog(): List<BrowseSeries> = client.get("$baseUrl/comics").extractNextJs<List<BrowseSeries>>().orEmpty()
+
+    private inline fun <reified T> Document.jsonLd(predicate: (T) -> Boolean): T? = select("script[type=application/ld+json]")
+        .mapNotNull { runCatching { it.data().parseAs<T>() }.getOrNull() }
+        .firstOrNull(predicate)
+
+    private fun Document.synopsis(): String? = selectFirst("#series-synopsis-text")?.let { element ->
+        element.select("p").takeIf { it.isNotEmpty() }?.joinToString("\n\n") { it.text() }
+            ?: element.text()
+    }?.takeIf { it.isNotBlank() }
+
     companion object {
-        private val TEXT_TAGS_REGEX = """(?i)#(\w+)""".toRegex()
-        private val LAST_WORD_REGEX = """[\w\s]+:?\s*$""".toRegex()
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+
+        private const val PREF_HIDE_LOCKED_CHAPTERS = "pref_hide_locked_chapters"
     }
 }

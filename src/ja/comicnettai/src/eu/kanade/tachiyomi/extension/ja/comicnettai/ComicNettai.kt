@@ -1,47 +1,57 @@
 package eu.kanade.tachiyomi.extension.ja.comicnettai
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.Serializable
+import keiyoushi.utils.string
+import keiyoushi.utils.textOrNull
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Source
-abstract class ComicNettai : HttpSource() {
+abstract class ComicNettai : KeiSource() {
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy.MM.dd").withZone(ZoneId.of("Asia/Tokyo"))
+
     override val supportsLatest = false
 
-    private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.ROOT)
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(PublusInterceptor())
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(PublusInterceptor())
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
+        return client.get(url).toMangasPage()
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("page", page.toString())
+            .build()
+        return client.get(url).toMangasPage()
+    }
+
+    private fun Response.toMangasPage(): MangasPage {
+        val document = this.asJsoup()
         val mangas = document.select(".full--comic__list .full--comic__item").map {
             SManga.create().apply {
                 title = it.selectFirst(".full--comic__title")!!.text()
@@ -53,72 +63,53 @@ abstract class ComicNettai : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        var document = client.get(getMangaUrl(manga)).asJsoup()
+        val details = SManga.create().apply {
             title = document.selectFirst(".detail--title")!!.text()
             author = document.select(".detail__author__item").joinToString { it.text() }
-            description = document.selectFirst(".detail--discription")?.text()
+            description = document.selectFirst(".detail--discription")?.textOrNull()
             thumbnail_url = document.selectFirst(".detail-catch__img")?.absUrl("src")
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = mutableListOf<SChapter>()
-        var document = response.asJsoup()
+        if (!fetchChapters) return SMangaUpdate(details, chapters)
 
-        while (true) {
-            val pageChapters = document.select(".detail--product__list a.detail--product__item").map {
-                SChapter.create().apply {
-                    name = it.selectFirst(".detail--product__item__title")!!.text()
-                    setUrlWithoutDomain(it.absUrl("href"))
-                    date_upload = dateFormat.tryParse(it.selectFirst(".detail--product__item__sdate")?.text())
+        val chapterList = buildList {
+            while (true) {
+                document.select(".detail--product__list a.detail--product__item").mapTo(this) {
+                    SChapter.create().apply {
+                        url = it.selectFirst(".detail--product__thum")!!.absUrl("data-src").toHttpUrl().pathSegments[2]
+                        name = it.selectFirst(".detail--product__item__title")!!.text()
+                        date_upload = dateFormat.tryParseDate(it.selectFirst(".detail--product__item__sdate")?.textOrNull())
+                        memo = buildJsonObject {
+                            put("cid", it.absUrl("href").toHttpUrl().queryParameter("cid"))
+                        }
+                    }
                 }
+                val nextUrl = document.selectFirst(".pagenation__item:not(.is-hidde) .pagenation__item__link--next")?.absUrl("href") ?: break
+                document = client.get(nextUrl).asJsoup()
             }
-            chapters.addAll(pageChapters)
-
-            val nextUrl = document.selectFirst(".pagenation__item__link--next")?.absUrl("href")
-            if (nextUrl.isNullOrEmpty()) {
-                break
-            }
-
-            val request = GET(nextUrl, headers)
-            val nextResponse = client.newCall(request).execute()
-            document = nextResponse.asJsoup()
         }
-        return chapters
+
+        return SMangaUpdate(
+            details,
+            chapterList,
+        )
     }
 
-    @Serializable
-    class CPhpResponse(
-        val url: String,
-    )
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/publus/viewer.html?cid=${chapter.memo["cid"]!!.string}"
 
-    override fun pageListParse(response: Response): List<Page> {
-        val cid = response.request.url.queryParameter("cid")
-        val cUrl = "$baseUrl/api/viewer/c".toHttpUrl().newBuilder()
-            .addQueryParameter("cid", cid)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = "$baseUrl/api/viewer/c".toHttpUrl().newBuilder()
+            .addQueryParameter("cid", chapter.memo["cid"]!!.string)
             .build()
 
-        val cRequest = GET(cUrl, headers)
-        val cResponse = client.newCall(cRequest).execute()
-        val cPhp = cResponse.parseAs<CPhpResponse>().url
-
-        return fetchPages(cPhp, headers, client)
+        val contentUrl = client.get(url).parseAs<PublusContent>().url!!
+        return client.fetchPages(contentUrl)
     }
-
-    override fun imageUrlParse(response: Response): String = response.request.url.toString()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }
