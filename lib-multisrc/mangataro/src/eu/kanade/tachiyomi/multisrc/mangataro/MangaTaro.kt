@@ -5,6 +5,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -22,6 +23,7 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -29,8 +31,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.internal.closeQuietly
 import okio.IOException
@@ -44,8 +44,6 @@ import java.util.Calendar
 import java.util.Locale
 
 abstract class MangaTaro : KeiSource() {
-
-    override val supportsLatest = true
 
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int) = browseManga(page, "", SortFilter.popular)
@@ -67,7 +65,7 @@ abstract class MangaTaro : KeiSource() {
         val body = SearchQueryPayload(
             query = query.trim(),
             limit = 25,
-        ).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+        ).toJsonRequestBody()
 
         val data = client.post("$baseUrl/auth/search", body).parseAs<SearchQueryResponse>().results
 
@@ -106,7 +104,7 @@ abstract class MangaTaro : KeiSource() {
                 ?.selected.let(::listOfNotNull),
             sort = filters.firstInstance<SortFilter>().selected,
             genreMatchMode = filters.firstInstance<TagFilterMatch>().selected,
-        ).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+        ).toJsonRequestBody()
 
         return client.post("$baseUrl/wp-json/manga/v1/load", body).parseAs()
     }
@@ -220,33 +218,61 @@ abstract class MangaTaro : KeiSource() {
     }
 
     // ======================== Chapters =========================
-    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val timestamp = System.currentTimeMillis() / 1000
-        val token = md5(
-            "${timestamp}mng_ch_${isoDateFormatter.format(Instant.now())}",
-        ).substring(0, 16)
+    // The chapter token is only accepted within about a minute of the server's clock,
+    // so a skewed device clock is corrected with the server's Date header
+    private var serverTimeOffset = 0L
 
-        val dto = manga.url.parseAs<MangaUrl>()
+    private fun chapterListUrl(dto: MangaUrl, offset: Int): HttpUrl {
+        val now = Instant.ofEpochMilli(System.currentTimeMillis() + serverTimeOffset)
+        val token = md5("${now.epochSecond}mng_ch_${isoDateFormatter.format(now)}").substring(0, 16)
 
-        val url = "$baseUrl/auth/manga-chapters".toHttpUrl().newBuilder().apply {
+        return "$baseUrl/auth/manga-chapters".toHttpUrl().newBuilder().apply {
             addQueryParameter("manga_id", dto.id)
-            addQueryParameter("offset", "0")
-            addQueryParameter("limit", "9999")
+            addQueryParameter("offset", offset.toString())
+            addQueryParameter("limit", "500")
             addQueryParameter("order", "DESC")
             addQueryParameter("_t", token)
-            addQueryParameter("_ts", timestamp.toString())
+            addQueryParameter("_ts", now.epochSecond.toString())
             dto.group?.let {
                 addQueryParameter("group_id", it.toString())
             }
         }.build()
+    }
 
-        val data = client.get(url).parseAs<ChapterList>()
+    private suspend fun fetchChapterPage(dto: MangaUrl, offset: Int): ChapterList {
+        val response = client.get(chapterListUrl(dto, offset), ensureSuccess = false)
+        if (response.code != 403) {
+            if (!response.isSuccessful) {
+                response.close()
+                throw HttpException(response.code)
+            }
+            return response.parseAs()
+        }
+
+        val serverTime = response.headers.getDate("Date")
+        response.close()
+        serverTimeOffset = (serverTime ?: throw HttpException(403)).time - System.currentTimeMillis()
+        return client.get(chapterListUrl(dto, offset)).parseAs()
+    }
+
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val dto = manga.url.parseAs<MangaUrl>()
+
+        val data = buildList {
+            var page = fetchChapterPage(dto, 0)
+            addAll(page.chapters)
+            // the server caps each response at 500 chapters
+            while (page.hasMore && page.chapters.isNotEmpty()) {
+                page = fetchChapterPage(dto, size)
+                addAll(page.chapters)
+            }
+        }
         countViews(dto.id)
 
         val placeholders = listOf(null, "", "N/A", "—")
         var hasScanlator = false
 
-        val chapters = data.chapters.filter {
+        val chapters = data.filter {
             it.language.equals(lang, ignoreCase = true)
         }.map {
             SChapter.create().apply {
@@ -269,7 +295,7 @@ abstract class MangaTaro : KeiSource() {
         }
 
         if (hasScanlator) {
-            chapters.onEach { it.scanlator = it.scanlator ?: "​" } // Insert zero-width space
+            chapters.onEach { it.scanlator = it.scanlator ?: "\u200B" } // Insert zero-width space
         }
 
         return chapters
@@ -326,8 +352,7 @@ abstract class MangaTaro : KeiSource() {
     }
 
     private fun countViews(postId: String) {
-        val payload = """{"post_id":"$postId"}"""
-            .toRequestBody(JSON_MEDIA_TYPE)
+        val payload = mapOf("post_id" to postId).toJsonRequestBody()
         val url = "$baseUrl/wp-json/pviews/v1/increment/"
         val request = POST(url, headers, payload)
 
@@ -346,8 +371,6 @@ abstract class MangaTaro : KeiSource() {
     }
 
     companion object {
-        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-
         private val isoDateFormatter = DateTimeFormatter.ofPattern("yyyyMMddHH", Locale.US).withZone(ZoneOffset.UTC)
 
         private val relativeDateRegex = Regex("""(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago""")
