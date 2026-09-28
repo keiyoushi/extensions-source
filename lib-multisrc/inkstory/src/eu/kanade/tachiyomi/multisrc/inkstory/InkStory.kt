@@ -402,7 +402,7 @@ abstract class InkStory :
     // ============================== Preferences ===============================
     private fun prefBranch(): String = preferences.getString(PREF_CHAPTER_BRANCH_MODE, DEFAULT_CHAPTER_BRANCH_MODE) ?: DEFAULT_CHAPTER_BRANCH_MODE
     private fun prefBranchQuery(): String = preferences.getString(PREF_PREFERRED_BRANCH_QUERY, DEFAULT_PREFERRED_BRANCH_QUERY) ?: DEFAULT_PREFERRED_BRANCH_QUERY
-    private fun prefDelay(): Boolean = preferences.getBoolean(DELAY_CHAPTERS, true)
+    private fun prefDelay(): Boolean = preferences.getBoolean(DELAY_CHAPTERS, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -425,8 +425,9 @@ abstract class InkStory :
         SwitchPreferenceCompat(screen.context).apply {
             key = DELAY_CHAPTERS
             title = DELAY_CHAPTERS_TITLE
-            summary = DELAY_CHAPTERS_SUM
-            setDefaultValue(true)
+            summaryOn = DELAY_CHAPTERS_SUM_ON
+            summaryOff = DELAY_CHAPTERS_SUM_OFF
+            setDefaultValue(false)
         }.let(screen::addPreference)
     }
 
@@ -458,7 +459,8 @@ abstract class InkStory :
         private const val SECRET_KEY = "UySkp0BzPhwlvP2V"
         private const val DELAY_CHAPTERS = "delay_chapters"
         private const val DELAY_CHAPTERS_TITLE = "Скрывать главы"
-        private const val DELAY_CHAPTERS_SUM = "ⓘПриложение не будет отображать главы выпущенные менее 4-х дней назад"
+        private const val DELAY_CHAPTERS_SUM_ON = "Главы новее 4 дней скрыты"
+        private const val DELAY_CHAPTERS_SUM_OFF = "Показываются все главы"
         private val SECRET_KEY_BYTES = SECRET_KEY.toByteArray()
         private val BRANCH_MODE = arrayOf(
             "Все ветки" to "all",
