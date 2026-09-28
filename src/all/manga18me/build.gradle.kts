@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manga18Me"
-    versionCode = 4
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
