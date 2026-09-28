@@ -316,6 +316,5 @@ abstract class DamCoNuong : KeiSource() {
         return genres.toJsonElement()
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList =
-        getFilters(data?.parseAs<List<GenreOption>>())
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<List<GenreOption>>())
 }
