@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manhwa18.cc"
-    versionCode = 8
+    versionCode = 9
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "madara"
