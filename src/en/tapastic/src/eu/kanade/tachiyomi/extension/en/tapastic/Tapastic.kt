@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.tapastic
 
 import android.content.SharedPreferences
+import android.text.Html
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -11,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.dataimage.DataImageInterceptor
+import keiyoushi.lib.dataimage.dataImageAsUrl
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.network.addCookie
@@ -46,6 +49,7 @@ abstract class Tapastic :
             ),
         )
         addInterceptor(TextInterceptor())
+        addInterceptor(DataImageInterceptor())
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
@@ -219,13 +223,36 @@ abstract class Tapastic :
 
         // check if the "Style" button is in the toolbar, because it is even present on locked chapters, so even those are detected correctly
         val isNovel = document.selectFirst(".toolbar a[data-type=\"style\"]") != null
-        if (isNovel) {
-            throw IOException("This is not a comic, but a novel chapter")
-        }
 
-        val pages = document.select("img.content__img").mapIndexed { i, img ->
-            Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
-        }.toMutableList()
+        val pages = if (isNovel) {
+            document.selectFirst(".main__body--book")?.let {
+                val title = document.selectFirst(".viewer__header .title")?.text()
+                val bodyHtml = it.html()
+                val images = it.select("img")
+                val bodyParts = Html.fromHtml(bodyHtml, Html.FROM_HTML_MODE_LEGACY).toString().split("￼")
+
+                val paragraphs = mutableListOf<Page>()
+                if (title != null) {
+                    paragraphs.add(Page(-1, "", TextInterceptorHelper.createUrl(title, "")))
+                }
+                var i = 0
+                for (string in bodyParts) {
+                    if (string.isNotBlank()) {
+                        paragraphs.add(Page(i, "", TextInterceptorHelper.createUrl("", string.trim().replace("\n", "<br>"))))
+                    }
+                    val image = images.getOrNull(i)
+                    if (image != null) {
+                        paragraphs.add(Page(i++, "", image.dataImageAsUrl("src")))
+                    }
+                    i++
+                }
+                paragraphs
+            } ?: mutableListOf()
+        } else {
+            document.select("img.content__img").mapIndexed { i, img ->
+                Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
+            }.toMutableList()
+        }
 
         if (showAuthorsNotesPref) {
             val episodeStory = document.select("p.js-episode-story").html()
