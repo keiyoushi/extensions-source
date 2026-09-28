@@ -187,8 +187,6 @@ abstract class Catoons : KeiSource() {
             if (detailsChunk != null && chaptersChunk != null) return
 
             runWebView<Unit> {
-                javaScriptEnabled = true
-                domStorageEnabled = true
                 blockImages = true
 
                 interceptRequest { request ->
@@ -216,8 +214,6 @@ abstract class Catoons : KeiSource() {
             if (latestChunk != null) return
 
             runWebView<Unit> {
-                javaScriptEnabled = true
-                domStorageEnabled = true
                 blockImages = true
 
                 interceptRequest { request ->
