@@ -25,9 +25,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class LeerCapitulo : KeiSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 3.seconds) { it.host == baseUrlHost }
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 3.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val mangas = client.get(baseUrl).asJsoup().select(".lc-slide").map { element ->
@@ -90,7 +88,7 @@ abstract class LeerCapitulo : KeiSource() {
     )
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrlHost || url.pathSegments.firstOrNull() != "manga" || url.pathSize < 3) return null
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga" || url.pathSize < 3) return null
 
         val response = client.get(baseUrl + url.encodedPath)
         // Follows the site's redirect to the canonical slug.
