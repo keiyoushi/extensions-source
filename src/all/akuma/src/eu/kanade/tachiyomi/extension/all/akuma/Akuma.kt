@@ -4,36 +4,37 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
+import org.jsoup.nodes.Document
 import java.io.IOException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class Akuma :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val akumaLang: String
@@ -76,17 +77,13 @@ abstract class Akuma :
 
     private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(ddosGuardIntercept)
-        .addInterceptor(::tokenInterceptor)
-        .rateLimit(2)
-        .build()
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ENGLISH)
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ddosGuardIntercept)
+        addInterceptor(::tokenInterceptor)
+        rateLimit(2)
+    }
 
     private fun tokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -153,76 +150,21 @@ abstract class Akuma :
         }.also(screen::addPreference)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        val payload = FormBody.Builder()
-            .add("view", "3")
-            .build()
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
-        val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
-
-        if (page == 1) {
-            nextHash = null
-        } else {
-            url.addQueryParameter("cursor", nextHash)
-        }
-        if (lang != "all") {
-            // append like `q=language:english$`
-            url.addQueryParameter("q", "language:$akumaLang$")
-        }
-
-        return POST(url.toString(), headers, payload)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        if (document.text().contains("Max keywords of 3 exceeded.")) {
-            throw Exception("Login required for more than 3 filters")
-        } else if (document.text().contains("Max keywords of 8 exceeded.")) {
-            throw Exception("Only max of 8 filters are allowed")
-        }
-
-        val mangas = document.select(".post-loop li").map { element ->
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val id = url.pathSegments.getOrNull(1) ?: return null
+        return fetchMangaUpdate(
             SManga.create().apply {
-                setUrlWithoutDomain(element.select("a").attr("href"))
-                title = element.select(".overlay-title").text().replace("\"", "").let {
-                    if (displayFullTitle) it else it.shortenTitle()
-                }
-                thumbnail_url = element.select("img").attr("abs:src")
-            }
-        }
-
-        val nextUrl = document.select(".page-item a[rel*=next]").first()?.attr("href")
-
-        nextHash = nextUrl?.toHttpUrlOrNull()?.queryParameter("cursor")
-
-        return MangasPage(mangas, !nextHash.isNullOrEmpty())
+                this.url = "/g/$id"
+            },
+            emptyList(),
+            true,
+            false,
+        ).manga
     }
-
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> = if (query.startsWith("https://")) {
-        val url = query.toHttpUrl()
-        if (url.host != baseUrl.toHttpUrl().host) {
-            throw Exception("Unsupported url")
-        }
-        val id = url.pathSegments[1]
-        fetchSearchManga(page, "$PREFIX_ID$id", filters)
-    } else if (query.startsWith(PREFIX_ID)) {
-        val url = "/g/${query.substringAfter(PREFIX_ID)}"
-        val manga = SManga.create().apply { this.url = url }
-        fetchMangaDetails(manga).map {
-            MangasPage(listOf(it.apply { this.url = url }), false)
-        }
-    } else {
-        super.fetchSearchManga(page, query, filters)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val request = popularMangaRequest(page)
-
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val finalQuery: MutableList<String> = mutableListOf(query)
 
         if (lang != "all") {
@@ -257,74 +199,113 @@ abstract class Akuma :
             }
         }
 
-        val url = request.url.newBuilder()
-            .setQueryParameter("q", finalQuery.joinToString(" "))
-            .build()
-
-        return request.newBuilder()
-            .url(url)
-            .build()
-    }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.select(".entry-title").text().replace("\"", "").let {
-                if (displayFullTitle) it else it.shortenTitle()
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (page == 1) {
+                nextHash = null
+            } else {
+                addQueryParameter("cursor", nextHash)
             }
-            thumbnail_url = document.select(".img-thumbnail").attr("abs:src")
 
-            author = document.select(".group~.value").eachText().joinToString()
-            artist = document.select(".artist~.value").eachText().joinToString()
-
-            val characters = document.select(".character~.value").eachText()
-            val parodies = document.select(".parody~.value").eachText()
-            val males = document.select(".male~.value")
-                .map { "${it.text()} ♂" }
-            val females = document.select(".female~.value")
-                .map { "${it.text()} ♀" }
-            val others = document.select(".other~.value")
-                .map { "${it.text()} ◊" }
-
-            genre = (males + females + others).joinToString()
-            description = buildString {
-                append(
-                    "Full English and Japanese title: \n",
-                    document.select(".entry-title").text(),
-                    "\n",
-                    document.select(".entry-title+span").text(),
-                    "\n\n",
-                )
-
-                append("Language: ", document.select(".language~.value").eachText().joinToString(), "\n")
-                append("Pages: ", document.select(".pages .value").text(), "\n")
-                append("Upload Date: ", document.select(".date .value>time").text().replace(" ", ", ") + " UTC", "\n")
-                append("Categories: ", document.selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
-
-                parodies.takeIf { it.isNotEmpty() }?.let { append("Parodies: ", parodies.joinToString(), "\n") }
-                characters.takeIf { it.isNotEmpty() }?.let { append("Characters: ", characters.joinToString(), "\n") }
-            }
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            status = SManga.UNKNOWN
+            setQueryParameter("q", finalQuery.joinToString(" "))
         }
+
+        val payload = FormBody.Builder()
+            .add("view", "3")
+            .build()
+
+        return parseSearch(client.post(url.build(), payload))
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private fun parseSearch(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        return listOf(
-            SChapter.create().apply {
-                setUrlWithoutDomain("${response.request.url}/1")
-                name = "Chapter"
-                date_upload = dateFormat.tryParse(document.select(".date .value>time").text())
-            },
+        if (document.text().contains("Max keywords of 3 exceeded.")) {
+            throw Exception("Login required for more than 3 filters")
+        } else if (document.text().contains("Max keywords of 8 exceeded.")) {
+            throw Exception("Only max of 8 filters are allowed")
+        }
+
+        val mangas = document.select(".post-loop li").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.select("a").attr("href"))
+                title = element.select(".overlay-title").text().replace("\"", "").let {
+                    if (displayFullTitle) it else it.shortenTitle()
+                }
+                thumbnail_url = element.select("img").attr("abs:src")
+            }
+        }
+
+        val nextUrl = document.select(".page-item a[rel*=next]").first()?.attr("href")
+
+        nextHash = nextUrl?.toHttpUrl()?.queryParameter("cursor")
+
+        return MangasPage(mangas, !nextHash.isNullOrEmpty())
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            manga = mangaDetailsParse(doc),
+            chapters = chapterListParse(doc),
         )
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        setUrlWithoutDomain(document.location())
+        title = document.select(".entry-title").text().replace("\"", "").let {
+            if (displayFullTitle) it else it.shortenTitle()
+        }
+        thumbnail_url = document.select(".img-thumbnail").attr("abs:src")
+
+        author = document.select(".group~.value").eachText().joinToString()
+        artist = document.select(".artist~.value").eachText().joinToString()
+
+        val characters = document.select(".character~.value").eachText()
+        val parodies = document.select(".parody~.value").eachText()
+        val males = document.select(".male~.value")
+            .map { "${it.text()} ♂" }
+        val females = document.select(".female~.value")
+            .map { "${it.text()} ♀" }
+        val others = document.select(".other~.value")
+            .map { "${it.text()} ◊" }
+
+        genre = (males + females + others).joinToString()
+        description = buildString {
+            append(
+                "Full English and Japanese title: \n",
+                document.select(".entry-title").text(),
+                "\n",
+                document.select(".entry-title+span").text(),
+                "\n\n",
+            )
+
+            append("Language: ", document.select(".language~.value").eachText().joinToString(), "\n")
+            append("Pages: ", document.select(".pages .value").text(), "\n")
+            append("Upload Date: ", document.select(".date .value>time").text().replace(" ", ", ") + " UTC", "\n")
+            append("Categories: ", document.selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
+
+            parodies.takeIf { it.isNotEmpty() }?.let { append("Parodies: ", parodies.joinToString(), "\n") }
+            characters.takeIf { it.isNotEmpty() }?.let { append("Characters: ", characters.joinToString(), "\n") }
+        }
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        status = SManga.UNKNOWN
+    }
+
+    private fun chapterListParse(document: Document): List<SChapter> = listOf(
+        SChapter.create().apply {
+            setUrlWithoutDomain("${document.location()}/1")
+            name = "Chapter"
+            date_upload = dateFormat.tryParseDate(document.select(".date .value>time").text())
+        },
+    )
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val totalPages = document.select(".nav-select option").last()
             ?.attr("value")?.toIntOrNull() ?: return emptyList()
 
@@ -332,22 +313,20 @@ abstract class Akuma :
 
         return (1..totalPages).map { i ->
             if (i == 1) {
-                Page(i, url = "$url/$i", imageUrl = document.select(".entry-content img").attr("abs:src"))
+                Page(i, imageUrl = document.select(".entry-content img").attr("abs:src"))
             } else {
                 Page(i, url = "$url/$i")
             }
         }
     }
 
-    override fun imageUrlParse(response: Response): String = response.asJsoup().select(".entry-content img").attr("abs:src")
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url).asJsoup().select(".entry-content img").attr("abs:src")
 
-    override fun getFilterList(): FilterList = getFilters()
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
+
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
     companion object {
-        const val PREFIX_ID = "id:"
         private const val PREF_TITLE = "pref_title"
     }
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }
