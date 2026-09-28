@@ -166,7 +166,7 @@ abstract class Tapastic :
                     appendLine("\n\nType: $it")
                 }
                 document.selectFirst(".colophon")?.wholeText()?.let {
-                    appendLine("\n\n${it.replace(Regex("^$title\\s*", IGNORE_CASE), "")}")
+                    appendLine("\n\n${it.replace(Regex("^$title\\s*?(?:\\(Novel\\)|\\(Comic\\))?\\n\\s*", IGNORE_CASE), "")}")
                 }
             }
 
