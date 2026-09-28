@@ -26,8 +26,6 @@ abstract class MangaWork : KeiSource() {
 
     protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d/M/yyyy", Locale.ROOT)
 
-    override val supportsLatest = true
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     protected open val seriesPath = "series"
@@ -218,7 +216,10 @@ abstract class MangaWork : KeiSource() {
     ): SMangaUpdate {
         val mangaUrl = getMangaUrl(manga)
         val document = client.get(mangaUrl).asJsoup()
-        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document, mangaUrl))
+        return SMangaUpdate(
+            mangaDetailsParse(document),
+            if (fetchChapters) chapterListParse(document, mangaUrl) else chapters,
+        )
     }
 
     protected open fun mangaDetailsParse(document: Document): SManga {
