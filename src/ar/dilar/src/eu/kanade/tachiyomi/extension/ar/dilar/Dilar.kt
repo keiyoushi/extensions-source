@@ -40,7 +40,7 @@ import javax.crypto.spec.SecretKeySpec
 abstract class Dilar : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         add("X-DH-Pub", clientPubB64)
-        add("X-Crypto-Caps", "1,2,3,4,5,6,7,8,9")
+        add("X-Crypto-Caps", "1,2,3,4,5,6,7,8,9,10,11,12")
     }
 
     // Popular
@@ -138,56 +138,60 @@ abstract class Dilar : KeiSource() {
         val serverPubRaw = Base64.decode(data.epk, Base64.URL_SAFE)
         val serverPubKey = rawToPoint(serverPubRaw)
         val iv = Base64.decode(data.iv, Base64.URL_SAFE)
+        val ct = Base64.decode(data.ct, Base64.URL_SAFE)
+        val tag = Base64.decode(data.tag, Base64.URL_SAFE)
 
         val sharedSecret = KeyAgreement.getInstance("ECDH").apply {
             init(ecKeyPair.private)
             doPhase(serverPubKey, true)
         }.generateSecret()
 
-        val (salt, info) = when (data.v) {
-            1 -> {
-                clientPubRaw + serverPubRaw to
-                    "dilar.response.ecies.v1|${data.e}".toByteArray()
-            }
+        val spec = when (data.v) {
+            1 -> CipherSpec(
+                clientPubRaw + serverPubRaw,
+                "dilar.response.ecies.v1|${data.e}".toByteArray(),
+            )
 
-            2 -> {
-                serverPubRaw + clientPubRaw to
-                    "dilar.response.ecies.v2|${data.e}".toByteArray()
-            }
+            2 -> CipherSpec(
+                serverPubRaw + clientPubRaw,
+                "dilar.response.ecies.v2|${data.e}".toByteArray(),
+            )
 
-            3 -> {
-                sha256(serverPubRaw + clientPubRaw) to
-                    "dilar.response.ecies.v3|${data.e}".toByteArray()
-            }
+            3 -> CipherSpec(
+                sha256(serverPubRaw + clientPubRaw),
+                "dilar.response.ecies.v3|${data.e}".toByteArray(),
+            )
 
-            4 -> {
-                sha256(clientPubRaw + serverPubRaw + iv) to
-                    "dilar.response.ecies.v4|${data.e}|${data.iv}"
-                        .toByteArray()
-            }
+            4 -> CipherSpec(
+                sha256(clientPubRaw + serverPubRaw + iv),
+                "dilar.response.ecies.v4|${data.e}|${data.iv}"
+                    .toByteArray(),
+            )
 
-            5 -> {
+            5 -> CipherSpec(
                 hmac(
                     key = iv,
                     data = serverPubRaw + clientPubRaw,
-                ) to "dilar.response.ecies.v5|${data.e}".toByteArray()
-            }
+                ),
+                "dilar.response.ecies.v5|${data.e}".toByteArray(),
+            )
 
-            6 -> {
-                sha256(sha256(clientPubRaw) + sha256(serverPubRaw) + iv) to
-                    "dilar.response.ecies.v6|${data.e}|${data.iv}".toByteArray()
-            }
+            6 -> CipherSpec(
+                sha256(sha256(clientPubRaw) + sha256(serverPubRaw) + iv),
+                "dilar.response.ecies.v6|${data.e}|${data.iv}".toByteArray(),
+            )
 
-            7 -> {
-                hkdfSha256(
+            7 -> CipherSpec(
+                hkdf(
                     ikm = iv,
                     salt = serverPubRaw,
                     info = "dilar.response.ecies.v7.salt".toByteArray(),
                     length = 32,
-                ) to "dilar.response.ecies.v7|${data.e}".toByteArray()
-            }
+                ),
+                "dilar.response.ecies.v7|${data.e}".toByteArray(),
+            )
 
-            8 -> {
+            8 -> CipherSpec(
                 sha256(
                     joinBytes(
                         u16(clientPubRaw.size),
@@ -197,10 +201,11 @@ abstract class Dilar : KeiSource() {
                         u16(iv.size),
                         iv,
                     ),
-                ) to "dilar.response.ecies.v8|${data.e}|${iv.toHex()}".toByteArray()
-            }
+                ),
+                "dilar.response.ecies.v8|${data.e}|${iv.toHex()}".toByteArray(),
+            )
 
-            9 -> {
+            9 -> CipherSpec(
                 hmac(
                     key = iv,
                     data = joinBytes(
@@ -210,32 +215,113 @@ abstract class Dilar : KeiSource() {
                         clientPubRaw,
                     ),
                     algorithm = "HmacSHA512",
-                ).copyOfRange(0, 32) to "dilar.response.ecies.v9|${data.e}|${ sha256(iv).toHex().take(16)}".toByteArray()
-            }
+                ).copyOfRange(0, 32),
+                "dilar.response.ecies.v9|${data.e}|${sha256(iv).toHex().take(16)}".toByteArray(),
+            )
+
+            10 -> CipherSpec(
+                sha512(
+                    joinBytes(
+                        u16(clientPubRaw.size),
+                        clientPubRaw,
+                        u16(serverPubRaw.size),
+                        serverPubRaw,
+                        u16(iv.size),
+                        iv,
+                    ),
+                ),
+                "dilar.response.ecies.v10|${data.e}|${sha512(iv).toHex().take(24)}".toByteArray(),
+                hash = "HmacSHA512",
+            )
+
+            11 -> CipherSpec(
+                hmac(
+                    key = serverPubRaw,
+                    data = joinBytes(u16(iv.size), iv, u16(clientPubRaw.size), clientPubRaw),
+                    algorithm = "HmacSHA512",
+                ),
+                "dilar.response.ecies.v11|${data.e}|${sha384(iv).toBase64Url().take(22)}".toByteArray(),
+                hash = "HmacSHA512",
+                derivedNonce = true,
+            )
+
+            12 -> CipherSpec(
+                hmac(
+                    key = clientPubRaw,
+                    data = joinBytes(u16(serverPubRaw.size), serverPubRaw, u16(iv.size), iv),
+                    algorithm = "HmacSHA512",
+                ).copyOf(32),
+                "dilar.response.ecies.v12|${data.e}|${sha256(joinBytes(u16(iv.size), iv)).toBase64Url().take(22)}".toByteArray(),
+                hash = "HmacSHA384",
+                derivedNonce = true,
+                aad = v12Aad(data, serverPubRaw, iv, ct.size),
+            )
 
             else -> error("Unsupported encryption protocol version: ${data.v}")
         }
 
-        val key = hkdfSha256(
+        val keyMaterial = hkdf(
             ikm = sharedSecret,
-            salt = salt,
-            info = info,
-            length = 32,
+            salt = spec.salt,
+            info = spec.info,
+            length = if (spec.derivedNonce) 44 else 32,
+            algorithm = spec.hash,
         )
-
-        val ct = Base64.decode(data.ct, Base64.URL_SAFE)
-        val tag = Base64.decode(data.tag, Base64.URL_SAFE)
+        val key = keyMaterial.copyOf(32)
+        val nonce = if (spec.derivedNonce) keyMaterial.copyOfRange(32, 44) else iv
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
+            spec.aad?.let { updateAAD(it) }
         }
 
         return cipher.doFinal(ct + tag).toString(Charsets.UTF_8)
     }
 
+    private class CipherSpec(
+        val salt: ByteArray,
+        val info: ByteArray,
+        val hash: String = "HmacSHA256",
+        val derivedNonce: Boolean = false,
+        val aad: ByteArray? = null,
+    )
+
+    private fun v12Aad(
+        data: EncryptedResponseDto,
+        serverPubRaw: ByteArray,
+        iv: ByteArray,
+        ctSize: Int,
+    ): ByteArray {
+        val label = "dilar.response.ecies.v12".toByteArray()
+        val version = data.v.toString().toByteArray()
+        val e = data.e.toString().toByteArray()
+        val size = u32(ctSize)
+
+        return sha256(
+            joinBytes(
+                u16(label.size),
+                label,
+                u16(version.size),
+                version,
+                u16(e.size),
+                e,
+                u16(serverPubRaw.size),
+                serverPubRaw,
+                u16(iv.size),
+                iv,
+                u16(size.size),
+                size,
+            ),
+        )
+    }
+
     private fun u16(n: Int): ByteArray = byteArrayOf(((n shr 8) and 0xFF).toByte(), (n and 0xFF).toByte())
 
+    private fun u32(n: Int): ByteArray = byteArrayOf((n ushr 24).toByte(), (n ushr 16).toByte(), (n ushr 8).toByte(), n.toByte())
+
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
+    private fun ByteArray.toBase64Url(): String = Base64.encodeToString(this, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
 
     private fun joinBytes(vararg parts: ByteArray): ByteArray {
         val size = parts.sumOf { it.size }
@@ -284,17 +370,27 @@ abstract class Dilar : KeiSource() {
         init(SecretKeySpec(key, algorithm))
     }.doFinal(data)
 
-    // HKDF-SHA256
+    // HKDF
 
     private fun sha256(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(data)
 
-    private fun hkdfSha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
-        val prk = hmac(salt, ikm)
+    private fun sha384(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-384").digest(data)
+
+    private fun sha512(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-512").digest(data)
+
+    private fun hkdf(
+        ikm: ByteArray,
+        salt: ByteArray,
+        info: ByteArray,
+        length: Int,
+        algorithm: String = "HmacSHA256",
+    ): ByteArray {
+        val prk = hmac(salt, ikm, algorithm)
         val okm = ByteArrayOutputStream()
         var t = ByteArray(0)
         var counter = 1
         while (okm.size() < length) {
-            t = hmac(prk, t + info + byteArrayOf(counter.toByte()))
+            t = hmac(prk, t + info + byteArrayOf(counter.toByte()), algorithm)
             okm.write(t)
             counter++
         }
