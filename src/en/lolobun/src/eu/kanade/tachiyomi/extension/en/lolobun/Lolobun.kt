@@ -14,17 +14,9 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getLongOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -94,7 +86,7 @@ abstract class Lolobun :
 
         return SMangaUpdate(
             manga = document.toSManga().apply { url = manga.url },
-            chapters = if (fetchChapters) document.toSChapterList(chapters) else chapters,
+            chapters = document.toSChapterList(),
         )
     }
 
@@ -113,18 +105,17 @@ abstract class Lolobun :
         genre = info.drop(1).joinToString().ifEmpty { null }
     }
 
-    private suspend fun Document.toSChapterList(knownChapters: List<SChapter>): List<SChapter> {
+    private fun Document.toSChapterList(): List<SChapter> {
         val items = select(".catalog-list .catalog-item")
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF, false)
-        val knownDates = knownChapters.associate { it.url to it.memo.getLongOrNull(RELEASE_DATE_KEY) }
         // The comic page only shows the latest chapter's release date
-        val latestDate = LATEST_DATE_FORMAT.tryParseDate(selectFirst(".lastest-update-time")?.text())
+        val latestDate = DATE_FORMAT.tryParseDate(selectFirst(".lastest-update-time")?.text())
         // "Extra 01" etc. sit between numbered chapters. Number them right after the preceding chapter,
         // otherwise the app parses "Extra 01" as chapter 1
         var previousNumber = 0f
         var extrasSincePrevious = 0
 
-        val chapters = items.mapIndexedNotNull { index, element ->
+        return items.mapIndexedNotNull { index, element ->
             val link = element.selectFirst(".title a")!!
             val title = link.text()
             val number = CHAPTER_NUMBER_REGEX.matchEntire(title)?.groupValues?.get(1)?.toFloat()
@@ -143,40 +134,9 @@ abstract class Lolobun :
                 url = link.attr("href").substringAfter("/c/")
                 name = if (locked) "🔒 $title" else title
                 chapter_number = chapterNumber
-                val knownDate = knownDates[url]
-                when {
-                    knownDate != null -> setReleaseDate(knownDate)
-                    index == items.lastIndex -> date_upload = latestDate
-                }
+                if (index == items.lastIndex) date_upload = latestDate
             }
-        }
-
-        if (preferences.getBoolean(ALL_DATES_PREF, false)) {
-            // Only each chapter's own page has its release date, so this is one request per chapter not read yet
-            val permits = Semaphore(5)
-            coroutineScope {
-                chapters.filter { knownDates[it.url] == null }
-                    .map { chapter -> async { permits.withPermit { chapter.setReleaseDate(fetchReleaseDate(chapter)) } } }
-                    .awaitAll()
-            }
-        }
-
-        return chapters.asReversed()
-    }
-
-    private suspend fun fetchReleaseDate(chapter: SChapter): Long {
-        // "Updated at 2025/5/12 0:00:00". The time is almost always midnight, so keep only the day
-        val date = client.get(getChapterUrl(chapter)).asJsoup()
-            .selectFirst(".title-box .time-box span")?.text()
-            ?.removePrefix("Updated at ")?.substringBefore(' ')
-
-        return RELEASE_DATE_FORMAT.tryParseDate(date)
-    }
-
-    // Kept in memo so each chapter page is only read once
-    private fun SChapter.setReleaseDate(date: Long) {
-        date_upload = date
-        if (date != 0L) memo = buildJsonObject { put(RELEASE_DATE_KEY, date) }
+        }.asReversed()
     }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/c/${chapter.url}"
@@ -200,24 +160,13 @@ abstract class Lolobun :
             summary = "Don't list paid chapters (🔒). Refresh a comic's chapter list to apply."
             setDefaultValue(false)
         }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = ALL_DATES_PREF
-            title = "Load release dates for all chapters"
-            summary = "Reads each chapter's date from its own page, once per chapter, so a comic's next refresh is slower. " +
-                "When off, only the newest chapter gets a date."
-            setDefaultValue(false)
-        }.also(screen::addPreference)
     }
 
     companion object {
         private const val HIDE_LOCKED_PREF = "hide_locked_chapters"
-        private const val ALL_DATES_PREF = "all_release_dates"
-        private const val RELEASE_DATE_KEY = "releaseDate"
         private val CHAPTER_NUMBER_REGEX = Regex("""chapter\s*(\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
 
-        // The site shows plain calendar dates. Parsing them in the device's timezone keeps the same day as on the site
-        private val LATEST_DATE_FORMAT = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH)
-        private val RELEASE_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.ENGLISH)
+        // A plain calendar date. Parsing it in the device's timezone keeps the same day as on the site
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH)
     }
 }
