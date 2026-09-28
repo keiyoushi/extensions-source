@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.sacachispa
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,10 +10,13 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
@@ -85,7 +89,9 @@ abstract class Sacachispa : KeiSource() {
         val details = client.get("$API_URL/manga/${manga.url}").parseAs<MangaResponse>().data
 
         return SManga.create().apply {
-            url = manga.url
+            // Persist the UUID so legacy slug-based entries stop resolving it on every refresh.
+            url = details.id
+            memo = buildJsonObject { put("slug", details.slug) }
             title = details.title
             thumbnail_url = details.covers.firstOrNull()?.image?.toCoverUrl()
             author = details.authors.joinToString { it.name }.ifEmpty { null }
@@ -126,12 +132,12 @@ abstract class Sacachispa : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get("$API_URL/releases/${chapter.url}/pages", ensureSuccess = false)
 
-        if (!response.isSuccessful) {
-            // Locked (Patreon-exclusive) chapters answer with 403 and a JSON error body;
-            // surface the server message instead of a bare "HTTP Error 403".
+        if (response.code == 403) {
+            // Locked (Patreon-exclusive) chapters answer with 403 and a JSON error body.
             val message = runCatching { response.parseAs<ErrorResponse>().error?.message }.getOrNull()
-            throw Exception(message ?: "Failed to load chapter pages (HTTP ${response.code})")
+            if (message != null) throw Exception(message)
         }
+        if (!response.isSuccessful) throw HttpException(response.code)
 
         val items = response.parseAs<PageListResponse>().data.items
 
@@ -140,7 +146,8 @@ abstract class Sacachispa : KeiSource() {
 
     // =============================== URLs ================================
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
+    // The site's manga route needs both segments; the slug is only cosmetic, so the id works as a fallback.
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}/${manga.memo.getStringOrNull("slug") ?: manga.url}"
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
 
@@ -148,6 +155,7 @@ abstract class Sacachispa : KeiSource() {
 
     private fun MangaListDto.toSManga() = SManga.create().apply {
         url = id
+        memo = buildJsonObject { put("slug", slug) }
         title = this@toSManga.title
         thumbnail_url = cover?.toCoverUrl()
     }

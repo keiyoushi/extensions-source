@@ -11,6 +11,7 @@ class MangaListResponse(
 @Serializable
 class MangaListDto(
     val id: String,
+    val slug: String,
     val title: String,
     val cover: String? = null,
 )
@@ -23,6 +24,7 @@ class MangaResponse(
 @Serializable
 class MangaDetailDto(
     val id: String,
+    val slug: String,
     val title: String,
     val status: String,
     val authors: List<NamedDto> = emptyList(),
