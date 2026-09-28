@@ -18,8 +18,9 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.JSON_MEDIA_TYPE
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -177,19 +178,32 @@ abstract class MangaBall :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async { if (fetchDetails) getMangaDetails(manga.url) else manga }
-        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
+    ): SMangaUpdate {
+        val titleId = manga.memo.getStringOrNull("id")
 
-        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+        return if (fetchChapters && titleId != null) {
+            coroutineScope {
+                val mangaDeferred = async { if (fetchDetails) getMangaDetails(manga.url) else manga }
+                val chaptersDeferred = async { getChapterList(titleId) }
+
+                SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+            }
+        } else {
+            // Entries saved by older versions have no id in memo, so one details fetch is needed to
+            // resolve it. Returning that manga persists the id, saving the fetch on later refreshes.
+            val updatedManga = if (titleId == null || fetchDetails) getMangaDetails(manga.url) else manga
+
+            val updatedChapters = if (fetchChapters) {
+                getChapterList(updatedManga.memo.getString("id"))
+            } else {
+                chapters
+            }
+
+            SMangaUpdate(updatedManga, updatedChapters)
+        }
     }
 
-    private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        // The chapter listing endpoint needs the title id, which is stored in memo. Entries saved by
-        // older versions only have the slug (or id) in SManga.url, so they need one details fetch.
-        val titleId = manga.memo["id"]?.stringOrNull
-            ?: getMangaDetails(manga.url).memo["id"]?.stringOrNull
-            ?: throw Exception("Missing title id for ${manga.url}")
+    private suspend fun getChapterList(titleId: String): List<SChapter> {
         val body = TitleIdRequest(titleId).toJsonBody()
 
         val chapters = client.post("$baseUrl/api/v1/chapter/chapter-listing-by-title-id", headers, body)
