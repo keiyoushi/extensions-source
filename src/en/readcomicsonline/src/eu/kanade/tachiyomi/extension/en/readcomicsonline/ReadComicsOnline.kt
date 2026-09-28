@@ -33,7 +33,7 @@ abstract class ReadComicsOnline : MMRCMS() {
 
     override val dateFormat = SimpleDateFormat("d MMM yyyy", Locale.US)
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic-list?sort=views&page=$page")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic-list?sort=views&page=$page", headers)
 
     override fun popularMangaSelector(): String = "div.comic-list-layout .grid > .group"
 
@@ -47,7 +47,7 @@ abstract class ReadComicsOnline : MMRCMS() {
 
     override fun popularMangaNextPageSelector(): String? = "nav a[rel=next]"
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic-list?sort=latest&page=$page")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic-list?sort=latest&page=$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -81,7 +81,7 @@ abstract class ReadComicsOnline : MMRCMS() {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1.text-2xl")?.text() ?: ""
         thumbnail_url = guessCover(document.location(), document.selectFirst("img.w-full.rounded-xl")?.imgAttr())
-        description = document.selectFirst("p.mt-5.text-sm")?.text() ?: ""
+        description = document.selectFirst("div:has(> div > h3:contains(Synopsis)) > div > p")?.text()
 
         document.selectFirst("div.flex.flex-wrap.gap-2 span.rounded-full")?.let {
             status = when (it.text().lowercase()) {
