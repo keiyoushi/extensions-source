@@ -24,4 +24,5 @@ keiyoushi {
 dependencies {
 
     implementation(project(":lib:textinterceptor"))
+    implementation(project(":lib:dataimage"))
 }
