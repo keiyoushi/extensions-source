@@ -35,8 +35,10 @@ abstract class Yanmaga :
     ConfigurableSource {
     private val preferences by getPreferencesLazy()
     private val isGravure get() = name.contains("グラビア")
-    private val searchPathPrefix get() = if (isGravure) "/gravures/books/" else "/comics/"
-    private val latestPath get() = if (isGravure) "gravures/books" else "comics/series"
+    private val workPath get() = if (isGravure) "gravures/books" else "comics"
+    private val latestPath get() = if (isGravure) workPath else "comics/series"
+    private val workNameIndex get() = if (isGravure) 2 else 1
+    private val SManga.isGravureBook get() = url.startsWith("/gravures/books/")
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd").withZone(ZoneId.of("Asia/Tokyo"))
     private val xhrHeaders get() = headersBuilder()
         .set("X-Requested-With", "XMLHttpRequest")
@@ -83,7 +85,7 @@ abstract class Yanmaga :
                 setUrlWithoutDomain(it.absUrl("href"))
                 title = it.selectFirst(".text-wrapper h2")!!.text()
                 thumbnail_url = it.selectFirst(".img-bg-wrapper")?.absUrl("data-bg")?.toThumbnail()
-                if (isGravure && !it.absUrl("href").contains("/series/")) update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+                if (isGravureBook) update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }
         val hasNextPage = mangas.size == LATEST_UPDATES_PER_PAGE
@@ -112,12 +114,12 @@ abstract class Yanmaga :
         }
 
         val document = response.asJsoup()
-        val mangas = document.select("main a[href^=$searchPathPrefix]:has(img)").map {
+        val mangas = document.select("main a[href^=/$workPath/]:has(img)").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 title = it.selectFirst("p")!!.text()
                 thumbnail_url = it.selectFirst("img")?.absUrl("src")?.toThumbnail()
-                if (isGravure && !it.absUrl("href").contains("/series/")) update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+                if (isGravureBook) update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }
 
@@ -131,13 +133,13 @@ abstract class Yanmaga :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        if (isGravure && !manga.url.contains("/series/")) {
+        if (manga.isGravureBook) {
             val segments = getMangaUrl(manga).toHttpUrl().pathSegments
             val chapter = SChapter.create().apply {
-                url = segments.last()
+                url = segments[3]
                 name = "作品"
                 memo = buildJsonObject {
-                    put("name", segments[segments.size - 2])
+                    put("name", segments[2])
                 }
             }
             return@coroutineScope SMangaUpdate(manga, listOf(chapter))
@@ -187,11 +189,11 @@ abstract class Yanmaga :
                         SChapter.create().apply {
                             val segments = link.absUrl("href").toHttpUrl().pathSegments
                             val title = it.selectFirst(".mod-episode-title")!!.text()
-                            url = segments.last()
+                            url = segments[workNameIndex + 1]
                             name = if (isLocked) "🔒 $title" else title
                             date_upload = dateFormat.tryParseDate(it.selectFirst(".mod-episode-date")?.textOrNull())
                             memo = buildJsonObject {
-                                put("name", segments[segments.size - 2])
+                                put("name", segments[workNameIndex])
                             }
                         }
                     }
@@ -206,7 +208,7 @@ abstract class Yanmaga :
         )
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${if (isGravure) "gravures/books" else "comics"}/${chapter.memo["name"]!!.string}/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$workPath/${chapter.memo["name"]!!.string}/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
