@@ -27,6 +27,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okio.IOException
+import kotlin.text.RegexOption.IGNORE_CASE
 
 @Source
 abstract class Tapastic :
@@ -161,8 +162,8 @@ abstract class Tapastic :
             thumbnail_url = document.selectFirst(".thumb.js-thumbnail img")?.absUrl("src")
             description = buildString {
                 append(document.selectFirst(".description__body")?.text())
-                document.selectFirst(".colophon")?.text()?.let {
-                    appendLine("\n\n$it")
+                document.selectFirst(".colophon")?.wholeText()?.let {
+                    appendLine("\n\n${it.replace(Regex("^$title\\s*", IGNORE_CASE), "")}")
                 }
             }
 
