@@ -217,6 +217,12 @@ abstract class Tapastic :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(baseUrl + chapter.url).asJsoup()
 
+        // check if the "Style" button is in the toolbar, because it is even present on locked chapters, so even those are detected correctly
+        val isNovel = document.selectFirst(".toolbar a[data-type=\"style\"]") != null
+        if (isNovel) {
+            throw IOException("This is not a comic, but a novel chapter")
+        }
+
         val pages = document.select("img.content__img").mapIndexed { i, img ->
             Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
         }.toMutableList()
