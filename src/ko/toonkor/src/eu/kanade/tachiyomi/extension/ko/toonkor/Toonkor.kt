@@ -97,8 +97,11 @@ abstract class Toonkor : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(baseUrl + chapter.url).asJsoup()
-        val encoded = document.select("script:containsData(toon_img)").firstOrNull()?.data()
-            ?.substringAfter("'")?.substringBefore("'") ?: return emptyList()
+        // Several scripts mention toon_img; only the one assigning the base64 blob is useful,
+        // so match the assignment instead of taking the first quoted string of the first match.
+        val encoded = document.select("script")
+            .firstNotNullOfOrNull { toonImgRegex.find(it.data())?.groupValues?.get(1) }
+            ?: return emptyList()
 
         val decoded = String(Base64.decode(encoded, Base64.DEFAULT))
 
@@ -129,6 +132,7 @@ abstract class Toonkor : KeiSource() {
     companion object {
         private val KOREA_ZONE = ZoneId.of("Asia/Seoul")
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
+        private val toonImgRegex = Regex("""toon_img\s*=\s*'([^']+)'""")
         private val pageListRegex = Regex("""src="([^"]*)"""")
     }
 }
