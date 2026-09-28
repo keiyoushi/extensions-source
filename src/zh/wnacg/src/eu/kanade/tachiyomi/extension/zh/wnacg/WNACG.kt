@@ -144,20 +144,11 @@ abstract class WNACG :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) return SMangaUpdate(manga, chapters)
-
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        val updatedManga = if (fetchDetails) {
-            mangaDetailsParse(document).apply { url = manga.url }
-        } else {
-            manga
-        }
-        val updatedChapters = if (fetchChapters) {
-            chaptersParse(document, manga)
-        } else {
-            chapters
-        }
-        return SMangaUpdate(updatedManga, updatedChapters)
+        return SMangaUpdate(
+            mangaDetailsParse(document).apply { url = manga.url },
+            chaptersParse(document, manga),
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(
