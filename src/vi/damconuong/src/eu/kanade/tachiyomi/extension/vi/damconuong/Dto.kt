@@ -5,17 +5,19 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.jsoup.Jsoup
+import org.jsoup.parser.Parser
 import kotlin.time.Instant
 
 @Serializable
 class PagesResponse(
-    val e: String,
+    @SerialName("e") val encrypted: String,
 )
 
 @Serializable
 class PagesPayload(
-    val p: List<String> = emptyList(),
-    val s: List<String?>? = null,
+    @SerialName("p") val pages: List<String> = emptyList(),
+    @SerialName("s") val scrambleKeys: List<String?>? = null,
 )
 
 @Serializable
@@ -115,14 +117,7 @@ class ChapterDto(
     }
 }
 
-private fun htmlToText(html: String): String = html
-    .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-    .replace(Regex("</p\\s*>", RegexOption.IGNORE_CASE), "\n")
-    .replace(Regex("<[^>]+>"), "")
-    .replace("&nbsp;", " ")
-    .replace("&amp;", "&")
-    .replace("&lt;", "<")
-    .replace("&gt;", ">")
-    .replace("&quot;", "\"")
-    .replace("&#39;", "'")
-    .trim()
+private fun htmlToText(html: String): String {
+    val text = Jsoup.parse(html).wholeOwnText()
+    return Parser.unescapeEntities(text, false).trim()
+}

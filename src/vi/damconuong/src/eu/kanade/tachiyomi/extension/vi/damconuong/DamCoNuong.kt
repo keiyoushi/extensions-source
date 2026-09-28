@@ -15,7 +15,10 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
@@ -40,14 +43,16 @@ abstract class DamCoNuong : KeiSource() {
 
     @Volatile private var authToken: String? = null
 
+    @Volatile private var apiHost: String? = null
+
     private fun authInterceptor() = Interceptor { chain ->
-        chain.proceed(
-            chain.request().newBuilder().apply {
-                authToken?.takeIf { it.isNotBlank() }?.let {
-                    header("Authorization", "Bearer $it")
-                }
-            }.build(),
-        )
+        val request = chain.request()
+        val token = authToken?.takeIf { it.isNotBlank() }
+        if (token != null && request.url.host == apiHost) {
+            chain.proceed(request.newBuilder().header("Authorization", "Bearer $token").build())
+        } else {
+            chain.proceed(request)
+        }
     }
 
     private suspend fun loadAuthToken() {
@@ -60,9 +65,7 @@ abstract class DamCoNuong : KeiSource() {
 
     private suspend fun readAuthTokenFromWebView(): String? {
         val raw = getLocalStorage(baseUrl, "auth-storage") ?: return null
-        return runCatching {
-            raw.parseAs<AuthStorage>().state?.token?.takeIf { it.isNotBlank() }
-        }.getOrNull()
+        return raw.parseAs<AuthStorage>().state?.token?.takeIf { it.isNotBlank() }
     }
 
     private suspend fun refreshAuthToken() {
@@ -73,7 +76,9 @@ abstract class DamCoNuong : KeiSource() {
 
     private fun isLoginRequired(text: String): Boolean = text.contains("\"code\":\"login_required\"") || text.contains("Login required to read")
 
-    private suspend fun api(): String = ApiBase.get(client, baseUrl, preferences)
+    private suspend fun api(): String = ApiBase.get(client, baseUrl, preferences).also {
+        apiHost = it.toHttpUrl().host
+    }
 
     private suspend fun fetchJson(url: String): String {
         loadAuthToken()
@@ -179,23 +184,31 @@ abstract class DamCoNuong : KeiSource() {
     ): SMangaUpdate {
         val slug = manga.url.trimStart('/').substringAfterLast('/')
 
-        val details = if (fetchDetails) {
-            fetchJson("${api()}/mangas/$slug?include=artist,author,group,genres")
-                .parseAs<DetailResponse>()
-                .data
-                .toSMangaDetails()
-                .apply { this.url = manga.url }
-        } else {
-            manga
-        }
+        return coroutineScope {
+            val detailsDeferred = async {
+                if (!fetchDetails) return@async manga
+                val dto = fetchJson("${api()}/mangas/$slug?include=artist,author,group,genres")
+                    .parseAs<DetailResponse>()
+                    .data
+                dto.toSMangaDetails().apply {
+                    this.url = manga.url
+                    memo = buildJsonObject {
+                        dto.group?.slug?.let { put("group_slug", it) }
+                        dto.author?.slug?.let { put("author_slug", it) }
+                        dto.artist?.slug?.let { put("artist_slug", it) }
+                        dto.genres.firstOrNull()?.slug?.let { put("genre_slug", it) }
+                    }
+                }
+            }
+            val chaptersDeferred = async {
+                if (fetchChapters) fetchChapterList(slug) else chapters
+            }
 
-        val chapterList = if (fetchChapters) {
-            fetchChapterList(slug)
-        } else {
-            chapters
+            SMangaUpdate(
+                manga = detailsDeferred.await(),
+                chapters = chaptersDeferred.await(),
+            )
         }
-
-        return SMangaUpdate(manga = details, chapters = chapterList)
     }
 
     private suspend fun fetchChapterList(mangaSlug: String): List<SChapter> {
@@ -231,17 +244,22 @@ abstract class DamCoNuong : KeiSource() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val slug = manga.url.trimStart('/').substringAfterLast('/')
-        val detail = client.get("${api()}/mangas/$slug?include=artist,author,group,genres")
-            .parseAs<DetailResponse>()
-            .data
-
-        // Same order as the site's "Có thể bạn thích": group → author → artist → first genre.
         val sources = listOfNotNull(
-            detail.group?.slug?.let { "groups" to it },
-            detail.author?.slug?.let { "authors" to it },
-            detail.artist?.slug?.let { "artists" to it },
-            detail.genres.firstOrNull()?.slug?.let { "genres" to it },
-        )
+            manga.memo["group_slug"]?.stringOrNull?.let { "groups" to it },
+            manga.memo["author_slug"]?.stringOrNull?.let { "authors" to it },
+            manga.memo["artist_slug"]?.stringOrNull?.let { "artists" to it },
+            manga.memo["genre_slug"]?.stringOrNull?.let { "genres" to it },
+        ).ifEmpty {
+            val detail = fetchJson("${api()}/mangas/$slug?include=artist,author,group,genres")
+                .parseAs<DetailResponse>()
+                .data
+            listOfNotNull(
+                detail.group?.slug?.let { "groups" to it },
+                detail.author?.slug?.let { "authors" to it },
+                detail.artist?.slug?.let { "artists" to it },
+                detail.genres.firstOrNull()?.slug?.let { "genres" to it },
+            )
+        }
 
         for ((type, taxonomySlug) in sources) {
             val list = client.get("${api()}/$type/$taxonomySlug/mangas?per_page=12")
@@ -269,10 +287,10 @@ abstract class DamCoNuong : KeiSource() {
         val response = fetchJson("${api()}/mangas/$mangaSlug/chapters/$chapterSlug/pages?_=$token")
             .parseAs<PagesResponse>()
 
-        val payload = PagesCrypto.decryptPages(response.e, token, path)
-        return payload.p.mapIndexedNotNull { index, src ->
+        val payload = PagesCrypto.decryptPages(response.encrypted, token, path)
+        return payload.pages.mapIndexedNotNull { index, src ->
             if (src.isBlank()) return@mapIndexedNotNull null
-            val key = payload.s?.getOrNull(index)?.takeIf { it.isNotEmpty() }
+            val key = payload.scrambleKeys?.getOrNull(index)?.takeIf { it.isNotEmpty() }
             val imageUrl = if (key != null) "$src#$key" else src
             Page(index, url = imageUrl, imageUrl = imageUrl)
         }
@@ -295,10 +313,9 @@ abstract class DamCoNuong : KeiSource() {
             page++
         } while (page <= lastPage)
 
-        return buildJsonObject {
-            put("genres", genres.toJsonElement())
-        }
+        return genres.toJsonElement()
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<FilterData>()?.genres)
+    override fun getFilterList(data: JsonElement?): FilterList =
+        getFilters(data?.parseAs<List<GenreOption>>())
 }

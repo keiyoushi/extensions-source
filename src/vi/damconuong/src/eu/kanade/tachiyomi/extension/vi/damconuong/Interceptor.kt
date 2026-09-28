@@ -6,9 +6,9 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import keiyoushi.utils.rc4
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.readIntBigEndian
 import keiyoushi.utils.writeIntBigEndian
-import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -291,8 +291,6 @@ object DecoderScraper {
 // ============================== Pages crypto ===============================
 
 object PagesCrypto {
-    private val json = Json { ignoreUnknownKeys = true }
-
     @Volatile private var tokKey: ByteArray? = null
 
     @Volatile private var encKey: ByteArray? = null
@@ -337,7 +335,7 @@ object PagesCrypto {
         )
         cipher.updateAAD(path.toByteArray(StandardCharsets.UTF_8))
         val plain = cipher.doFinal(cipherBytes)
-        return json.decodeFromString(PagesPayload.serializer(), String(plain, StandardCharsets.UTF_8))
+        return String(plain, StandardCharsets.UTF_8).parseAs()
     }
 
     private fun hmac(key: ByteArray, data: ByteArray): ByteArray {
