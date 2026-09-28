@@ -26,8 +26,6 @@ import java.util.Locale
 
 @Source
 abstract class Niceoppai : KeiSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host.removePrefix("www.") }
-
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga_list/all/any/most-popular-monthly/$page").asJsoup())
 
@@ -68,7 +66,7 @@ abstract class Niceoppai : KeiSource() {
 
     // Deeplink
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host.removePrefix("www.") != baseUrlHost) return null
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
 
         val segments = url.pathSegments.filter { it.isNotEmpty() }
         val slug = segments.firstOrNull()?.takeIf { segments.size <= 2 && it != "manga_list" } ?: return null
