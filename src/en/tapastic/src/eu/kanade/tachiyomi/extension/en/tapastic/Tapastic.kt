@@ -162,6 +162,9 @@ abstract class Tapastic :
             thumbnail_url = document.selectFirst(".thumb.js-thumbnail img")?.absUrl("src")
             description = buildString {
                 append(document.selectFirst(".description__body")?.text())
+                document.selectFirst(".stats > a[href^=\"/static-landing/genre?category=\"]")?.text()?.let {
+                    appendLine("\n\nType: $it")
+                }
                 document.selectFirst(".colophon")?.wholeText()?.let {
                     appendLine("\n\n${it.replace(Regex("^$title\\s*", IGNORE_CASE), "")}")
                 }
