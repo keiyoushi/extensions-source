@@ -14,9 +14,12 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
@@ -46,6 +49,7 @@ abstract class SirenScans :
 
     // =========================Popular===========================
     // At this point the site only loads like 40 manga for latest, popular or any filter
+    // and I couldn't find a way to load anymore on the site
     // so this will need to be updated if site starts using pagination
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
@@ -113,13 +117,15 @@ abstract class SirenScans :
 
         val response = client.get(newUrl)
 
-        return parseMangaDetails(response.asJsoup()).apply {
-            setUrlWithoutDomain(newUrl.encodedPath)
-        }
+        return parseMangaDetails(
+            response.asJsoup(),
+            newUrl.encodedPath,
+        )
     }
 
     // ========================= Details =========================
-    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+    private fun parseMangaDetails(document: Document, mangaUrl: String): SManga = SManga.create().apply {
+        url = mangaUrl
         title = document.selectFirst("h1")!!.text().trim()
 
         description = document.selectFirst("p#series-desc")
@@ -144,28 +150,19 @@ abstract class SirenScans :
             "hiatus" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-    }
-
-    private fun metaValue(document: Document, label: String): String? {
-        val labelSpan = document.select("div.flex.items-center.justify-between span")
-            .find { it.text().trim().equals(label, ignoreCase = true) }
-        return labelSpan?.parent()?.nextElementSibling()?.text()?.trim()
-    }
-
-    private fun statValue(document: Document, label: String): String? {
-        val labelDiv = document.select("div")
-            .find { it.children().isEmpty() && it.text().trim().equals(label, ignoreCase = true) }
-        return labelDiv?.nextElementSibling()?.select("span")?.last()?.text()?.trim()
+        val chaptersDiv = document.selectFirst("div#chapters-list")
+        val seriesUid = chaptersDiv?.attr("data-series-uid").orEmpty()
+        val seriesSlug = chaptersDiv?.attr("data-series-slug").orEmpty()
+        if (seriesUid.isNotBlank() && seriesSlug.isNotBlank()) {
+            memo = buildJsonObject {
+                put("uid", seriesUid)
+                put("slug", seriesSlug)
+            }
+        }
     }
 
     // ========================= Chapters =========================
-    private suspend fun parseChapterList(document: Document): List<SChapter> {
-        val chaptersListDiv = document.selectFirst("div#chapters-list") ?: return emptyList()
-        val seriesUid = chaptersListDiv.attr("data-series-uid")
-        val seriesSlug = chaptersListDiv.attr("data-series-slug")
-
-        if (seriesUid.isBlank() || seriesSlug.isBlank()) return emptyList()
-
+    private suspend fun parseChapterList(seriesUid: String, seriesSlug: String): List<SChapter> {
         val apiUrl = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("_chapters_html", "1")
             .addQueryParameter("series_uid", seriesUid)
@@ -192,11 +189,27 @@ abstract class SirenScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
-        return SMangaUpdate(
-            manga = parseMangaDetails(document),
-            chapters = parseChapterList(document),
-        )
+        var uid = manga.memo.getStringOrNull("uid")
+        var slug = manga.memo.getStringOrNull("slug")
+        var updatedManga = manga
+
+        if (fetchDetails || (fetchChapters && (uid == null || slug == null))) {
+            val parsed = parseMangaDetails(client.get(baseUrl + manga.url).asJsoup(), manga.url)
+            uid = parsed.memo.getStringOrNull("uid") ?: uid
+            slug = parsed.memo.getStringOrNull("slug") ?: slug
+            updatedManga = if (fetchDetails) parsed else manga.apply { memo = parsed.memo }
+        }
+
+        val updatedChapters = if (fetchChapters) {
+            parseChapterList(
+                uid ?: throw IllegalStateException("Could not find series ID for: ${manga.url}"),
+                slug ?: throw IllegalStateException("Could not find series slug for: ${manga.url}"),
+            )
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     // ========================= Pages =========================
@@ -242,6 +255,18 @@ abstract class SirenScans :
             }
         }
         return MangasPage(mangas, hasNextPage = false)
+    }
+
+    private fun metaValue(document: Document, label: String): String? {
+        val labelSpan = document.select("div.flex.items-center.justify-between span")
+            .find { it.text().trim().equals(label, ignoreCase = true) }
+        return labelSpan?.parent()?.nextElementSibling()?.text()?.trim()
+    }
+
+    private fun statValue(document: Document, label: String): String? {
+        val labelDiv = document.select("div")
+            .find { it.children().isEmpty() && it.text().trim().equals(label, ignoreCase = true) }
+        return labelDiv?.nextElementSibling()?.select("span")?.last()?.text()?.trim()
     }
 
     // ========================= Companion Object =========================
