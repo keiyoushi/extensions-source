@@ -2,9 +2,8 @@ package eu.kanade.tachiyomi.extension.vi.damconuong
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import kotlinx.serialization.Serializable
 
-fun getFilters(genres: List<GenreOption>?): FilterList = FilterList(
+fun getFilters(genres: List<GenreDto>?): FilterList = FilterList(
     buildList {
         add(SortFilter())
         add(StatusFilter())
@@ -13,22 +12,17 @@ fun getFilters(genres: List<GenreOption>?): FilterList = FilterList(
     },
 )
 
-@Serializable
-class GenreOption(
-    val name: String,
-    val id: String,
-)
-
 class SortFilter :
     UriPartFilter(
         "Sắp xếp",
         arrayOf(
             Pair("Mới cập nhật", "-updated_at"),
-            Pair("Mới nhất", "-created_at"),
+            Pair("Mới thêm", "-created_at"),
             Pair("Cũ nhất", "created_at"),
             Pair("Xem nhiều", "-views"),
             Pair("Top ngày", "-views_day"),
             Pair("Top tuần", "-views_week"),
+            Pair("Đánh giá", "-average_rating"),
             Pair("A-Z", "name"),
             Pair("Z-A", "-name"),
         ),
@@ -49,12 +43,12 @@ class SearchTypeFilter :
         "Tìm theo",
         arrayOf(
             Pair("Tên truyện", "name"),
-            Pair("Tác giả", "artist"),
-            Pair("Doujinshi", "doujinshi"),
+            Pair("Tác giả", "author"),
+            Pair("Họa sĩ", "artist"),
         ),
     )
 
-class Genre(name: String, val id: String) : Filter.CheckBox(name)
+class Genre(name: String, val id: Int) : Filter.CheckBox(name)
 
 class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
 
