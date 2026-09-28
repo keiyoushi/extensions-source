@@ -260,7 +260,7 @@ abstract class InkStory :
                 val branchType = prefBranch()
                 val delay = prefDelay()
                 val url = "$API_URL/chapters?bookId=$bookId&moderationStatus=APPROVED"
-                val fourDaysAgo = System.currentTimeMillis() - 4.days.inWholeMilliseconds
+                val fourDaysAgo = Clock.System.now().minus(4.days)
 
                 val data = client.get(url).parseAs<List<ChapterDto>>()
                     .map { it.toSChapter(branches, manga.url) }
