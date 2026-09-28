@@ -128,7 +128,10 @@ suspend fun OkHttpClient.fetchPages(
         else -> throw UnsupportedOperationException("Unsupported ServerType value ${contentItem.serverType}")
     }.toHttpUrl()
 
-    val pages = Jsoup.parseBodyFragment(sbcData.ttx).select("t-case:first-of-type t-img").mapIndexed { i, it ->
+    // The ttx never closes its tags. After 128 pages, Jsoup before 1.23.2 stops matching </t-case>,
+    // causing the <t-nocase> fallback to be nested inside it, so only parse the first case.
+    val firstCase = sbcData.ttx.substringAfter("<t-case", "").substringAfter(">").substringBefore("</t-case>")
+    val pages = Jsoup.parseBodyFragment(firstCase).select("t-img").mapIndexed { i, it ->
         val src = it.attr("src")
         val keyPair = determineKeyPair(src, ptbl, ctbl)
         val imageUrl = pageBaseUrl.newBuilder()

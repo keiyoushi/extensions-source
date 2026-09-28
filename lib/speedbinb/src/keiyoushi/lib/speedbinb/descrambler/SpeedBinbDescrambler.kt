@@ -7,7 +7,6 @@ import keiyoushi.lib.speedbinb.PtImgTranslation
 
 abstract class SpeedBinbDescrambler {
     abstract fun isScrambled(): Boolean
-    abstract fun canDescramble(width: Int, height: Int): Boolean
     abstract fun getCanvasDimensions(width: Int, height: Int): Pair<Int, Int>
     abstract fun getDescrambleCoords(width: Int, height: Int): List<PtImgTranslation>
 

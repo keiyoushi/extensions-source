@@ -6,12 +6,10 @@ private val PTBINBF_REGEX = Regex("""^=([0-9]+)-([0-9]+)([-+])([0-9]+)-([-_0-9A-
 private const val PTBINBF_CHAR_LOOKUP = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 private const val PTBINBA_CHAR_LOOKUP = "aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ"
 
-abstract class PtBinbDescrambler(
-    val s: String,
-    val u: String,
-) : SpeedBinbDescrambler()
-
-class PtBinbDescramblerF(s: String, u: String) : PtBinbDescrambler(s, u) {
+class PtBinbDescramblerF(
+    private val s: String,
+    private val u: String,
+) : SpeedBinbDescrambler() {
 
     private var widthPieces: Int = 0
     private var heightPieces: Int = 0
@@ -73,7 +71,7 @@ class PtBinbDescramblerF(s: String, u: String) : PtBinbDescrambler(s, u) {
 
     override fun isScrambled() = pieceDest != null
 
-    override fun canDescramble(width: Int, height: Int): Boolean {
+    private fun canDescramble(width: Int, height: Int): Boolean {
         val i = 2 * widthPieces * piecePadding
         val n = 2 * heightPieces * piecePadding
 
@@ -153,7 +151,10 @@ class PtBinbDescramblerF(s: String, u: String) : PtBinbDescrambler(s, u) {
     private class TNP(val wPos: List<Int>, val hPos: List<Int>, val pieces: List<Int>)
 }
 
-class PtBinbDescramblerA(s: String, u: String) : PtBinbDescrambler(s, u) {
+class PtBinbDescramblerA(
+    s: String,
+    u: String,
+) : SpeedBinbDescrambler() {
 
     private var srcPieces: PieceCollection? = null
 
@@ -176,7 +177,7 @@ class PtBinbDescramblerA(s: String, u: String) : PtBinbDescrambler(s, u) {
 
     override fun isScrambled() = srcPieces != null && dstPieces != null
 
-    override fun canDescramble(width: Int, height: Int): Boolean = width >= 64 && height >= 64 && width * height >= 102400
+    private fun canDescramble(width: Int, height: Int): Boolean = width >= 64 && height >= 64 && width * height >= 102400
 
     override fun getCanvasDimensions(width: Int, height: Int): Pair<Int, Int> = Pair(width, height)
 
