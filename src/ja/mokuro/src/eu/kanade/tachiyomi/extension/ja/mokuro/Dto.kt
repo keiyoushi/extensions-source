@@ -6,6 +6,27 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+class LibraryDto(
+    val series: List<LibrarySeriesDto> = emptyList(),
+)
+
+@Serializable
+class LibrarySeriesDto(
+    val name: String,
+    val cover: String? = null,
+)
+
+@Serializable
+class LibrarySeriesDetailDto(
+    val volumes: List<LibraryVolumeDto> = emptyList(),
+)
+
+@Serializable
+class LibraryVolumeDto(
+    val cover: String? = null,
+)
+
+@Serializable
 class CatalogDto(
     val series: List<CatalogSeriesDto>,
 )
@@ -41,14 +62,16 @@ class CatalogSeriesDto(
             synonyms.any { it.contains(q, ignoreCase = true) }
     }
 
-    fun toSManga(pref: String = "native"): SManga = SManga.create().apply {
+    fun toSManga(pref: String = "native", coverUrl: String? = null): SManga = SManga.create().apply {
         title = displayTitle(pref)
         url = seriesTitle
+        thumbnail_url = coverUrl
     }
 
-    fun fillDetails(manga: SManga, pref: String = "native") {
+    fun fillDetails(manga: SManga, pref: String = "native", coverUrl: String? = null) {
         manga.title = displayTitle(pref)
         manga.genre = tag
+        coverUrl?.let { manga.thumbnail_url = it }
         manga.description = buildString {
             titles?.english?.takeIf { it.isNotBlank() && it != manga.title }?.let {
                 append("English: ").appendLine(it)
