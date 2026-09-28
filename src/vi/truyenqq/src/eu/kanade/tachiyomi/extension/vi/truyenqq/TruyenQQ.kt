@@ -12,49 +12,61 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TruyenQQ : KeiSource() {
 
+    private val siteUrl: String get() = baseUrl.truyenQQOrigin()
+
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
     }
+
+    override fun Headers.Builder.configureHeaders() = removeAll("Origin")
+        .set("Referer", "$siteUrl/")
+
+    override fun getHomeUrl(): String = "$siteUrl/truyen-moi-cap-nhat"
 
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
 
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$baseUrl/truyen-yeu-thich" + if (page > 1) "/trang-$page" else ""
+        val url = "$siteUrl/truyen-yeu-thich" + if (page > 1) "/trang-$page" else ""
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(fetchDocument(url, MANGA_LIST_SELECTOR))
     }
 
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/truyen-moi-cap-nhat" + if (page > 1) "/trang-$page" else ""
+        val url = "$siteUrl/truyen-moi-cap-nhat" + if (page > 1) "/trang-$page" else ""
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(fetchDocument(url, MANGA_LIST_SELECTOR))
     }
 
     // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val endpoint = if (query.isNotBlank()) "tim-kiem" else "tim-kiem-nang-cao"
-        val url = ("$baseUrl/$endpoint" + if (page > 1) "/trang-$page" else "").toHttpUrl().newBuilder().apply {
+        val url = ("$siteUrl/$endpoint" + if (page > 1) "/trang-$page" else "").toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("q", query)
             } else {
@@ -86,15 +98,15 @@ abstract class TruyenQQ : KeiSource() {
             }
         }.build()
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(fetchDocument(url.toString(), MANGA_LIST_SELECTOR))
     }
 
-    private fun parseMangaPage(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val manga = document.select("ul.grid > li").map { element ->
+    private fun parseMangaPage(document: Document, selector: String = MANGA_LIST_SELECTOR): MangasPage {
+        val manga = document.select(selector).mapNotNull { element ->
+            val anchor = element.selectFirst(".book_info .qtip a, .book_info .book_name a")
+                ?: return@mapNotNull null
             SManga.create().apply {
-                val anchor = element.selectFirst(".book_info .qtip a")!!
-                setUrlWithoutDomain(anchor.attr("href"))
+                setUrlWithoutDomain(anchor.attr("href").truyenQQPath())
                 title = anchor.text()
                 thumbnail_url = element.selectFirst(".book_avatar img")?.absUrl("src")
             }
@@ -104,15 +116,15 @@ abstract class TruyenQQ : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen-tranh") return null
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() !in listOf("truyen-tranh", "doc-truyen")) return null
 
-        val slug = url.pathSegments.getOrNull(1)?.takeIf { url.pathSegments.size == 2 } ?: return null
+        val slug = url.toString().truyenQQPath().substringAfterLast('/')
         val mangaSlug = chapterSlugRegex.matchEntire(slug)?.groupValues?.get(1)
             ?: slug.takeIf { mangaSlugRegex.matches(it) }
             ?: return null
         val mangaPath = "/truyen-tranh/$mangaSlug"
 
-        return parseMangaDetails(client.get("$baseUrl$mangaPath").asJsoup()).apply {
+        return parseMangaDetails(fetchDocument("$siteUrl$mangaPath", ".list-info")).apply {
             setUrlWithoutDomain(mangaPath)
         }
     }
@@ -125,7 +137,7 @@ abstract class TruyenQQ : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = fetchDocument(getMangaUrl(manga), ".list-info")
         return SMangaUpdate(
             parseMangaDetails(document),
             parseChapterList(document),
@@ -158,10 +170,57 @@ abstract class TruyenQQ : KeiSource() {
 
     private fun parseChapterList(document: Document): List<SChapter> = document.select("div.works-chapter-list div.works-chapter-item").map { element ->
         SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href").truyenQQPath())
             name = element.select("a").text().trim()
             date_upload = dateFormat.tryParse(element.select(".time-chap").text())
         }
+    }
+
+    override fun getMangaUrl(manga: SManga): String = siteUrl + manga.url.truyenQQPath()
+
+    override fun getChapterUrl(chapter: SChapter): String = siteUrl + chapter.url.truyenQQPath()
+
+    private suspend fun fetchDocument(url: String, expectedSelector: String): Document {
+        documentCache[url]
+            ?.takeIf { System.currentTimeMillis() - it.savedAt < DOCUMENT_CACHE_TTL }
+            ?.document
+            ?.clone()
+            ?.takeIf { it.selectFirst(expectedSelector) != null }
+            ?.let { return it }
+
+        val response = client.get(
+            url,
+            cacheControl = CacheControl.FORCE_NETWORK,
+            ensureSuccess = false,
+        )
+        val document = response.use { if (it.isSuccessful) it.asJsoup() else null }
+        if (document?.selectFirst(expectedSelector) != null) {
+            cacheDocument(url, document)
+            return document
+        }
+
+        return runWebView(timeout = 45.seconds) {
+            userAgent = this@TruyenQQ.headers["User-Agent"] ?: userAgent
+            blockImages = true
+            poll(100.milliseconds) {
+                evaluateJs("document.documentElement.outerHTML") { result ->
+                    val html = runCatching { result.parseAs<String>() }.getOrNull()
+                    if (html != null) {
+                        val webViewDocument = Jsoup.parse(html, url)
+                        if (webViewDocument.selectFirst(expectedSelector) != null) {
+                            cacheDocument(url, webViewDocument)
+                            resolve(webViewDocument)
+                        }
+                    }
+                }
+            }
+            loadUrl(url)
+        }
+    }
+
+    private fun cacheDocument(url: String, document: Document) {
+        if (documentCache.size >= DOCUMENT_CACHE_SIZE) documentCache.clear()
+        documentCache[url] = CachedDocument(System.currentTimeMillis(), document.clone())
     }
 
     private fun DateTimeFormatter.tryParse(date: String): Long = runCatching {
@@ -173,16 +232,11 @@ abstract class TruyenQQ : KeiSource() {
 
     // =============================== Pages ================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val cacheControl = CacheControl.FORCE_NETWORK
-        client.get(getChapterUrl(chapter), cacheControl).use { response ->
-            return response.asJsoup()
-                .select(".page-chapter img:not([src*='stress.gif'])")
-                .mapIndexed { idx, it ->
-                    Page(idx, imageUrl = it.absUrl("src"))
-                }
+    override suspend fun getPageList(chapter: SChapter): List<Page> = fetchDocument(getChapterUrl(chapter), ".page-chapter img")
+        .select(".page-chapter img:not([src*='stress.gif'])")
+        .mapIndexed { idx, it ->
+            Page(idx, imageUrl = it.absUrl("src"))
         }
-    }
 
     // ============================== Filters ===============================
 
@@ -197,4 +251,17 @@ abstract class TruyenQQ : KeiSource() {
 
     private val mangaSlugRegex = Regex(""".+-\d+""")
     private val chapterSlugRegex = Regex("""(.+-\d+)-chap-.+""")
+
+    private companion object {
+        const val MANGA_LIST_SELECTOR = "ul.grid > li"
+        const val DOCUMENT_CACHE_TTL = 5 * 60 * 1000L
+        const val DOCUMENT_CACHE_SIZE = 20
+
+        val documentCache = ConcurrentHashMap<String, CachedDocument>()
+    }
+
+    private data class CachedDocument(
+        val savedAt: Long,
+        val document: Document,
+    )
 }
