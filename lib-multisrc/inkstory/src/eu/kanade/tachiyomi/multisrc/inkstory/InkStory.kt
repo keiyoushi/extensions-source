@@ -31,6 +31,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 
 abstract class InkStory :
@@ -260,7 +261,7 @@ abstract class InkStory :
                 val branchType = prefBranch()
                 val delay = prefDelay()
                 val url = "$API_URL/chapters?bookId=$bookId&moderationStatus=APPROVED"
-                val fourDaysAgo = Clock.System.now().minus(4.days)
+                val fourDaysAgo = Clock.System.now().minus(4.days).toEpochMilliseconds()
 
                 val data = client.get(url).parseAs<List<ChapterDto>>()
                     .map { it.toSChapter(branches, manga.url) }
