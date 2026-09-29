@@ -9,27 +9,41 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
 abstract class Kiutaku : KeiSource() {
-    override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
-
-    // ============================== Popular ===============================
-    private fun getPage(page: Int) = (page - 1) * 20
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/hot".toHttpUrl().newBuilder()
             .addQueryParameter("start", getPage(page).toString())
             .build()
         val document = client.get(url).asJsoup()
+        return parseMangasPage(document)
+    }
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("start", getPage(page).toString())
+            .build()
+        val document = client.get(url).asJsoup()
+        return parseMangasPage(document)
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("search", query)
+            .addQueryParameter("start", getPage(page).toString())
+            .build()
+        val document = client.get(url).asJsoup()
+        return parseMangasPage(document)
+    }
+
+    private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select("div.blog > div.items-row").map(::mangaFromElement)
         val hasNextPage = document.selectFirst("nav > a.pagination-next:not([disabled])") != null
         return MangasPage(mangas, hasNextPage)
@@ -37,41 +51,13 @@ abstract class Kiutaku : KeiSource() {
 
     private fun mangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a.item-link")!!.absUrl("href"))
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        title = element.selectFirst("h2")?.text() ?: "Cosplay"
-    }
-
-    // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("start", getPage(page).toString())
-            .build()
-        val document = client.get(url).asJsoup()
-        val mangas = document.select("div.blog > div.items-row").map(::mangaFromElement)
-        val hasNextPage = document.selectFirst("nav > a.pagination-next:not([disabled])") != null
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    // =============================== Search ===============================
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (query.startsWith(PREFIX_SEARCH)) {
-            val id = query.removePrefix(PREFIX_SEARCH)
-            return MangasPage(listOf(getMangaByUrl("$baseUrl/$id".toHttpUrl())!!), false)
-        }
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("search", query)
-            .addQueryParameter("start", getPage(page).toString())
-            .build()
-
-        val document = client.get(url).asJsoup()
-        val mangas = document.select("div.blog > div.items-row").map(::mangaFromElement)
-        val hasNextPage = document.selectFirst("nav > a.pagination-next:not([disabled])") != null
-        return MangasPage(mangas, hasNextPage)
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")?.ifEmpty { null }
+        title = element.selectFirst("h2")!!.text()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) throw Exception("Unsupported url")
-        val id = url.pathSegments.first()
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val id = url.pathSegments.firstOrNull() ?: return null
         val document = client.get("$baseUrl/$id").asJsoup()
         return parseMangaDetails(document).apply {
             setUrlWithoutDomain("$baseUrl/$id")
@@ -79,7 +65,6 @@ abstract class Kiutaku : KeiSource() {
         }
     }
 
-    // =========================== Manga Details ============================
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -93,14 +78,13 @@ abstract class Kiutaku : KeiSource() {
     private fun parseMangaDetails(document: Document) = SManga.create().apply {
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        title = document.selectFirst("div.article-header")?.text() ?: "Cosplay"
+        title = document.selectFirst("div.article-header")!!.text()
         genre = document.selectFirst("div.article-tags")
             ?.select("a.tag > span")
             ?.eachText()
             ?.joinToString { it.trimStart('#') }
     }
 
-    // ============================== Chapters ==============================
     private fun parseChapterList(document: Document): List<SChapter> = document
         .select("nav.pagination:first-of-type a")
         .map(::chapterFromElement)
@@ -113,12 +97,9 @@ abstract class Kiutaku : KeiSource() {
         chapter_number = text.toFloatOrNull() ?: 1F
     }
 
-    // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
         .select("div.article-fulltext img[src]")
         .mapIndexed { index, item -> Page(index, imageUrl = item.absUrl("src")) }
 
-    companion object {
-        const val PREFIX_SEARCH = "id:"
-    }
+    private fun getPage(page: Int) = (page - 1) * 20
 }
