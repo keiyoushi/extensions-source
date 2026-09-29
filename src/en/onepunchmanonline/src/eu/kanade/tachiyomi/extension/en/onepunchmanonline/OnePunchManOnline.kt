@@ -1,51 +1,48 @@
 package eu.kanade.tachiyomi.extension.en.onepunchmanonline
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 
 @Source
-abstract class OnePunchManOnline : HttpSource() {
-
-    override val supportsLatest = true
+abstract class OnePunchManOnline : KeiSource() {
 
     // ============================== Popular ===============================
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int) = MangasPage(listOf(createManga()), false)
 
     // =============================== Latest ================================
-    override fun fetchLatestUpdates(page: Int) = fetchPopularManga(page)
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override val supportsLatest = false
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Search ================================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val manga = createManga()
-        if (query.isBlank() || manga.title.contains(query, ignoreCase = true)) {
+        return if (query.isBlank() || manga.title.contains(query, ignoreCase = true)) {
             MangasPage(listOf(manga), false)
         } else {
             MangasPage(emptyList(), false)
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
     // ============================== Details ===============================
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val chapterList = if (fetchChapters) getChapters() else chapters
+        return SMangaUpdate(createManga(), chapterList)
+    }
 
     private fun createManga(): SManga = SManga.create().apply {
         title = "One Punch Man"
@@ -59,9 +56,7 @@ abstract class OnePunchManOnline : HttpSource() {
     }
 
     // ============================== Chapters ===============================
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl, headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("ul li a[href*='/manga/']").map { element ->
+    private suspend fun getChapters(): List<SChapter> = client.get(baseUrl).asJsoup().select("ul li a[href*='/manga/']").map { element ->
         SChapter.create().apply {
             setUrlWithoutDomain(element.attr("abs:href"))
             name = element.text()
@@ -69,8 +64,8 @@ abstract class OnePunchManOnline : HttpSource() {
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
         return document.select("div.entry-content img, .separator img, p img")
             .map { img ->
                 img.attr("abs:data-src")
@@ -83,5 +78,9 @@ abstract class OnePunchManOnline : HttpSource() {
             }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    // Image host (mangafreak) returns 403 when a Referer from this site is sent
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .removeHeader("Referer")
+        .removeHeader("Origin")
+        .build()
 }
