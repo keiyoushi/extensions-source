@@ -18,85 +18,71 @@ import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import org.jsoup.Jsoup
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
+import java.util.concurrent.ConcurrentHashMap
 
-// The Interceptor joins the dialogues and pages of the manga.
+// Draws the OCR dialogues onto the page image.
 class ComposedImageInterceptor(
-    val language: Language,
+    private val settings: () -> Language,
 ) : Interceptor {
+
+    private val fonts = ConcurrentHashMap<String, Typeface>()
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url.toString()
 
-        if (PAGE_REGEX.containsMatchIn(url).not()) {
+        if (!PAGE_REGEX.containsMatchIn(url)) {
             return chain.proceed(request)
         }
 
-        val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
-            ?: emptyList()
+        val dialogues = request.url.fragment?.parseAs<List<Dialog>>().orEmpty()
+        val response = chain.proceed(request)
 
-        val imageRequest = request.newBuilder()
-            .url(url)
-            .build()
-
-        val response = chain.proceed(imageRequest)
-
-        if (response.isSuccessful.not()) {
+        if (!response.isSuccessful || dialogues.isEmpty()) {
             return response
         }
 
-        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
-            .copy(Bitmap.Config.ARGB_8888, true)
-
+        val language = settings()
+        val options = BitmapFactory.Options().apply { inMutable = true }
+        val bitmap = response.body.byteStream().use { BitmapFactory.decodeStream(it, null, options) }!!
         val canvas = Canvas(bitmap)
+        val font = selectFontFamily(language)
 
         dialogues.forEach { dialog ->
             dialog.scale = language.dialogBoxScale
-            val textPaint = createTextPaint(selectFontFamily())
-            val dialogBox = createDialogBox(dialog, textPaint)
+            val textPaint = createTextPaint(language, font)
+            val dialogBox = createDialogBox(language, dialog, textPaint)
             val y = getYAxis(textPaint, dialog, dialogBox)
             canvas.draw(textPaint, dialogBox, dialog, dialog.x, y)
         }
 
-        val output = ByteArrayOutputStream()
-
-        val ext = url.substringBefore("#")
-            .substringAfterLast(".")
-            .lowercase()
-        val format = when (ext) {
-            "png" -> Bitmap.CompressFormat.PNG
-            "jpeg", "jpg" -> Bitmap.CompressFormat.JPEG
-            else -> Bitmap.CompressFormat.WEBP
+        val (format, mediaType) = when (url.substringBefore("#").substringAfterLast(".").lowercase()) {
+            "png" -> Bitmap.CompressFormat.PNG to "image/png"
+            "jpeg", "jpg" -> Bitmap.CompressFormat.JPEG to "image/jpeg"
+            else -> Bitmap.CompressFormat.WEBP to "image/webp"
         }
 
-        bitmap.compress(format, 100, output)
-
-        val responseBody = output.toByteArray().toResponseBody(mediaType)
+        val output = Buffer()
+        bitmap.compress(format, 100, output.outputStream())
+        bitmap.recycle()
 
         return response.newBuilder()
-            .body(responseBody)
+            .body(output.asResponseBody(mediaType.toMediaType(), output.size))
             .build()
     }
 
-    private fun createTextPaint(font: Typeface?): TextPaint {
-        val defaultTextSize = language.fontSize.pt
-        return TextPaint().apply {
-            color = Color.BLACK
-            textSize = defaultTextSize
-            font?.let {
-                typeface = it
-            }
-            isAntiAlias = true
-        }
+    private fun createTextPaint(language: Language, font: Typeface?): TextPaint = TextPaint().apply {
+        color = Color.BLACK
+        textSize = language.fontSize / SCALED_DENSITY
+        font?.let { typeface = it }
+        isAntiAlias = true
     }
 
-    private fun selectFontFamily(): Typeface? {
+    private fun selectFontFamily(language: Language): Typeface? {
         if (language.disableFontSettings) {
             return null
         }
@@ -104,28 +90,19 @@ class ComposedImageInterceptor(
     }
 
     /**
-     * Loads font from the `assets/fonts` directory within the APK
-     *
-     * @param fontName The name of the font to load.
-     * @return A `Typeface` instance of the loaded font or `null` if an error occurs.
-     *
-     * Example usage:
-     * <pre>{@code
-     *   val typeface: TypeFace? = loadFont("filename.ttf")
-     * }</pre>
+     * Loads a font from the `assets/fonts` directory within the APK.
      */
-    private fun loadFont(fontName: String): Typeface? = try {
-        this::class.java.classLoader!!
-            .getResourceAsStream("assets/fonts/$fontName")
-            .toTypeface(fontName)
+    private fun loadFont(fontName: String): Typeface? = fonts[fontName] ?: try {
+        val fontFile = File.createTempFile(fontName, ".ttf")
+        this::class.java.classLoader!!.getResourceAsStream("assets/fonts/$fontName")!!.use { input ->
+            fontFile.outputStream().use(input::copyTo)
+        }
+        Typeface.createFromFile(fontFile).also {
+            fontFile.delete()
+            fonts[fontName] = it
+        }
     } catch (_: Exception) {
         null
-    }
-
-    private fun InputStream.toTypeface(fontName: String): Typeface? {
-        val fontFile = File.createTempFile(fontName, fontName.substringAfter("."))
-        this.copyTo(FileOutputStream(fontFile))
-        return Typeface.createFromFile(fontFile)
     }
 
     /**
@@ -143,13 +120,13 @@ class ComposedImageInterceptor(
         }
     }
 
-    private fun createDialogBox(dialog: Dialog, textPaint: TextPaint): StaticLayout {
-        var dialogBox = createBoxLayout(dialog, textPaint)
+    private fun createDialogBox(language: Language, dialog: Dialog, textPaint: TextPaint): StaticLayout {
+        var dialogBox = createBoxLayout(language, dialog, textPaint)
 
-        // The best way I've found to adjust the text in the dialog box (Especially in long dialogues)
+        // Shrink the text until it fits the dialog box (especially for long dialogues)
         while (dialogBox.height > dialog.height) {
             textPaint.textSize -= 0.5f
-            dialogBox = createBoxLayout(dialog, textPaint)
+            dialogBox = createBoxLayout(language, dialog, textPaint)
         }
 
         textPaint.color = Color.BLACK
@@ -158,8 +135,8 @@ class ComposedImageInterceptor(
         return dialogBox
     }
 
-    private fun createBoxLayout(dialog: Dialog, textPaint: TextPaint): StaticLayout {
-        val text = dialog.getTextBy(language).cleanUp()
+    private fun createBoxLayout(language: Language, dialog: Dialog, textPaint: TextPaint): StaticLayout {
+        val text = Jsoup.parse(dialog.getTextBy(language)).text()
 
         return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, dialog.width.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
@@ -175,8 +152,6 @@ class ComposedImageInterceptor(
             }
         }.build()
     }
-
-    private fun String.cleanUp(): String = Jsoup.parse(this).text()
 
     private fun Canvas.draw(textPaint: TextPaint, layout: StaticLayout, dialog: Dialog, x: Float, y: Float) {
         save()
@@ -206,12 +181,8 @@ class ComposedImageInterceptor(
         textPaint.style = style
     }
 
-    // https://pixelsconverter.com/pt-to-px
-    private val Int.pt: Float get() = this / SCALED_DENSITY
-
     companion object {
         // w3: Absolute Lengths [...](https://www.w3.org/TR/css3-values/#absolute-lengths)
-        const val SCALED_DENSITY = 0.75f // 1px = 0.75pt
-        val mediaType = "image/png".toMediaType()
+        private const val SCALED_DENSITY = 0.75f // 1px = 0.75pt
     }
 }

@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm
 
-class MachineTranslationsFactoryUtils
-
 data class Language(
     val lang: String,
     val target: String = lang,
