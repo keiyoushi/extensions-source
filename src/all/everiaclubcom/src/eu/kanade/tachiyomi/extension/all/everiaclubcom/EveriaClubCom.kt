@@ -1,27 +1,25 @@
 package eu.kanade.tachiyomi.extension.all.everiaclubcom
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
+import org.jsoup.parser.Parser
 
 @Source
-abstract class EveriaClubCom : HttpSource() {
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+abstract class EveriaClubCom : KeiSource() {
 
     private val Element.imgSrc: String?
         get() = when {
@@ -36,15 +34,14 @@ abstract class EveriaClubCom : HttpSource() {
         setUrlWithoutDomain(it.attr("abs:href").removePrefix(baseUrl))
         with(it.selectFirst("img")!!) {
             thumbnail_url = imgSrc
-            title = attr("title")
+            title = Parser.unescapeEntities(attr("title"), false)
         }
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/?page=$page").asJsoup())
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select(".mainleft .leftp > a").map {
             mangaFromElement(it)
         }
@@ -53,10 +50,8 @@ abstract class EveriaClubCom : HttpSource() {
     }
 
     // Popular
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select(".mainright li a").map {
             mangaFromElement(it)
         }
@@ -64,9 +59,9 @@ abstract class EveriaClubCom : HttpSource() {
     }
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val tagFilter = filters.filterIsInstance<TagFilter>().first()
-        val categoryFilter = filters.filterIsInstance<CategoryFilter>().first()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val tagFilter = filters.firstInstance<TagFilter>()
+        val categoryFilter = filters.firstInstance<CategoryFilter>()
         val url = when {
             tagFilter.state.isNotBlank() -> baseUrl.toHttpUrl().newBuilder()
                 .addPathSegment("tags")
@@ -83,46 +78,45 @@ abstract class EveriaClubCom : HttpSource() {
 
             else -> "$baseUrl/?page=$page".toHttpUrl().newBuilder()
         }
-        return GET(url.build(), headers)
+        return parseMangaList(client.get(url.build()).asJsoup())
     }
-
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
     // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            genre = document.select("div.end span:contains(Tags:) ~ a > p.tags").joinToString {
-                it.ownText()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (fetchDetails) {
+            val document = client.get(getMangaUrl(manga)).asJsoup()
+            manga.apply {
+                genre = document.select("div.end span:contains(Tags:) ~ a > p.tags").joinToString {
+                    it.ownText()
+                }
+                status = SManga.COMPLETED
             }
-            status = SManga.COMPLETED
         }
-    }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapter = SChapter.create().apply {
             url = manga.url
             name = "Gallery"
             chapter_number = 1f
             date_upload = 0L
         }
-        return Observable.just(listOf(chapter))
+        return SMangaUpdate(manga, listOf(chapter))
     }
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val images = document.select(".mainleft img")
         return images.mapIndexed { index, image ->
             Page(index, imageUrl = image.imgSrc)
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
     // Filters
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("NOTE: Only one filter will be applied!"),
         Filter.Separator(),
         TagFilter(),
