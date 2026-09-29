@@ -14,4 +14,8 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://mangade.io"
     }
+
+    deeplink {
+        path("/comic/..*")
+    }
 }

@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -72,6 +73,19 @@ abstract class MangaDE : KeiSource() {
         val chapterSlug = url.pathSegments[1]
 
         return "$baseUrl/comic/$mangaSlug-$mid/$chapterSlug"
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        if (url.pathSegments.firstOrNull() != "comic") return null
+        val mangaId = url.pathSegments.getOrNull(1)
+            ?.substringAfterLast('-', "")
+            ?.removePrefix("pid")
+            ?.takeIf { it.isNotEmpty() } ?: return null
+
+        val data = client.get("$apiUrl/comics/$mangaId/view").parseAs<PayloadDto<MangaDto>>().data
+        return data.toSManga().apply { initialized = true }
     }
 
     override suspend fun fetchMangaUpdate(
