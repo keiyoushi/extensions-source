@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "KaliScan"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "madtheme"
+    libVersion = "1.6"
 
     source {
         lang = "en"
