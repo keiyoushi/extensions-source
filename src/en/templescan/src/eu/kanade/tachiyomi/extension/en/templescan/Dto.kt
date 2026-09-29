@@ -7,17 +7,12 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-// The site's React Server Components payload renames a fixed subset of field names to
-// deterministic short keys. The client bundle (module that exports the rename map) derives
-// each key from FNV-1a 32-bit of "<salt>:<name>:<i>" — incrementing i until the key is
-// unique, processing the fields in the bundle's order: series_slug, Season, Chapter, price,
-// title, chapter_name, chapter_slug, images — and encodes the hash as
-// chr(97 + hash % 26) + (hash ushr 5).toString(36). If the site rotates its salt
-// (currently "d1a803a73523"), recompute this mapping from the bundle.
+// Fields the site renames to short keys are declared under their logical names; the payload is
+// remapped before decoding, so these stay valid across salt rotations. See [RscKeys].
 @Serializable
 class BrowseSeries(
-    @SerialName("jdp5hu") val title: String,
-    @SerialName("m15392f") val slug: String,
+    val title: String,
+    @SerialName("series_slug") val slug: String,
     @SerialName("alternative_names") val alternativeNames: String? = null,
     val thumbnail: String? = null,
     val badge: String? = null,
@@ -55,38 +50,33 @@ class ComicSeriesLd(
 }
 
 @Serializable
-class SeriesDataWrapper(
-    val seriesData: SeriesData,
+class SeriesData(
+    @SerialName("Season") private val seasons: List<Season>? = null,
 ) {
+    val chapters: List<Chapter> get() = seasons.orEmpty().flatMap { it.chapters }
+
     @Serializable
-    class SeriesData(
-        @SerialName("m21n2s7") private val seasons: List<Season>? = null,
+    class Season(
+        @SerialName("Chapter") private val items: List<Chapter>? = null,
     ) {
-        val chapters: List<Chapter> get() = seasons.orEmpty().flatMap { it.chapters }
+        val chapters: List<Chapter> get() = items.orEmpty()
+    }
 
-        @Serializable
-        class Season(
-            @SerialName("opez75") private val items: List<Chapter>? = null,
-        ) {
-            val chapters: List<Chapter> get() = items.orEmpty()
-        }
-
-        @Serializable
-        class Chapter(
-            @SerialName("c27b2ow") val name: String,
-            @SerialName("chapter_title") val title: String? = null,
-            @SerialName("m1shekt") val slug: String,
-            @SerialName("ivo8tc") val price: Int = 0,
-            @SerialName("created_at") private val createdAt: String? = null,
-        ) {
-            val created: Long by lazy { dateFormat.tryParse(createdAt) }
-        }
+    @Serializable
+    class Chapter(
+        @SerialName("chapter_name") val name: String,
+        @SerialName("chapter_title") val title: String? = null,
+        @SerialName("chapter_slug") val slug: String,
+        val price: Int = 0,
+        @SerialName("created_at") private val createdAt: String? = null,
+    ) {
+        val created: Long by lazy { dateFormat.tryParse(createdAt) }
     }
 }
 
 @Serializable
 class PagesList(
-    @SerialName("xdmo0k") val images: List<String>,
+    val images: List<String>,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
