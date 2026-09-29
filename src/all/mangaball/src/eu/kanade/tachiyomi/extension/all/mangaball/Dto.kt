@@ -137,7 +137,7 @@ class ChapterListResponse(
 class ChapterDto(
     private val id: String,
     private val name: String? = null,
-    private val number: Float,
+    private val number: Float? = null,
     private val volume: Float = 0f,
     private val lang: String,
     private val group: GroupDto? = null,
@@ -165,7 +165,9 @@ class ChapterDto(
                     }
                 }
             }
-            chapter_number = number
+            if (number != null) {
+                chapter_number = number
+            }
             date_upload = dateFormat.tryParseDateTime(createdAt, ZoneOffset.UTC)
             scanlator = group?.name
         }
