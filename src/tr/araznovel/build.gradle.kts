@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "ArazNovel"
-    versionCode = 4
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
 
     source {
         lang = "tr"
-        baseUrl = "https://araznovel.com"
+        baseUrl = "https://manga.araznovel.com"
+        versionId = 2
     }
 }
