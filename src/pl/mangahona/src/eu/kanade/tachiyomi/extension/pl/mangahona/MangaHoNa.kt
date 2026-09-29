@@ -1,24 +1,24 @@
 package eu.kanade.tachiyomi.extension.pl.mangahona
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.format.DateTimeFormatter
 
 @Source
-abstract class MangaHoNa : HttpSource() {
+abstract class MangaHoNa : KeiSource() {
 
     override val supportsLatest = false
 
@@ -26,122 +26,82 @@ abstract class MangaHoNa : HttpSource() {
 
     private val cdnBaseUrl = "https://cdn.mangahona.pl"
 
-    override fun headersBuilder() = super.headersBuilder()
-
     // ========================= Popular =========================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/manga", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangaList = response.parseAs<List<MangaDto>>()
-        val mangas = mangaList.map { dto ->
-            SManga.create().apply {
-                url = dto.id
-                title = dto.name
-                thumbnail_url = dto.coverImage?.let {
-                    "$cdnBaseUrl/images.php".toHttpUrl().newBuilder()
-                        .addQueryParameter("url", it)
-                        .addQueryParameter("w", "1900")
-                        .build()
-                        .toString()
-                }
-            }
-        }
-        return MangasPage(mangas, false)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mangaList = client.get("$apiBaseUrl/manga").parseAs<List<MangaDto>>()
+        return MangasPage(mangaList.map { it.toSManga() }, false)
     }
 
     // ========================= Latest =========================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ========================= Search =========================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = query.toHttpUrlOrNull()
-        if (url != null && url.host == baseUrl.toHttpUrl().host) {
-            val pathSegments = url.pathSegments
-            val mangaId = when {
-                pathSegments.size >= 2 && pathSegments[0] == "manga" -> pathSegments[1]
-                pathSegments.size >= 2 && pathSegments[0] == "czytaj" -> pathSegments[1]
-                else -> null
-            }
-            if (mangaId != null) {
-                return GET("$apiBaseUrl/manga/$mangaId", headers)
-            }
-        }
-        return GET("$apiBaseUrl/manga#$query", headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val url = response.request.url
-        val isDeeplink = url.pathSegments.lastOrNull()?.let { it != "manga" } ?: false
-
-        if (isDeeplink) {
-            val dto = response.parseAs<MangaDto>()
-            val manga = SManga.create().apply {
-                this.url = dto.id
-                title = dto.name
-                thumbnail_url = dto.coverImage?.let {
-                    "$cdnBaseUrl/images.php".toHttpUrl().newBuilder()
-                        .addQueryParameter("url", it)
-                        .addQueryParameter("w", "1900")
-                        .build()
-                        .toString()
-                }
-            }
-            return MangasPage(listOf(manga), false)
-        }
-
-        val query = response.request.url.fragment.orEmpty()
-        val mangaList = response.parseAs<List<MangaDto>>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val mangaList = client.get("$apiBaseUrl/manga").parseAs<List<MangaDto>>()
         val filtered = if (query.isNotBlank()) {
             mangaList.filter { it.name.contains(query, ignoreCase = true) }
         } else {
             mangaList
         }
-        val mangas = filtered.map { dto ->
-            SManga.create().apply {
-                this.url = dto.id
-                title = dto.name
-                thumbnail_url = dto.coverImage?.let {
-                    "$cdnBaseUrl/images.php".toHttpUrl().newBuilder()
-                        .addQueryParameter("url", it)
-                        .addQueryParameter("w", "1900")
-                        .build()
-                        .toString()
-                }
-            }
+        return MangasPage(filtered.map { it.toSManga() }, false)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val pathSegments = url.pathSegments
+        val mangaId = when {
+            pathSegments.size >= 2 && pathSegments[0] == "manga" -> pathSegments[1]
+            pathSegments.size >= 2 && pathSegments[0] == "czytaj" -> pathSegments[1]
+            else -> return null
         }
-        return MangasPage(mangas, false)
+        return client.get("$apiBaseUrl/manga/$mangaId").parseAs<MangaDto>().toSManga()
+    }
+
+    private fun MangaDto.toSManga() = SManga.create().apply {
+        url = id.toString()
+        title = name
+        thumbnail_url = thumbnailUrl(coverImage)
+    }
+
+    private fun thumbnailUrl(coverImage: String?) = coverImage?.let {
+        "$cdnBaseUrl/images.php".toHttpUrl().newBuilder()
+            .addQueryParameter("url", it)
+            .addQueryParameter("w", "1900")
+            .build()
+            .toString()
     }
 
     // ========================= Details =========================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         if (manga.url.startsWith("/manga/")) {
             throw Exception("Migrate from $name to $name (same extension)")
         }
-        return GET("$apiBaseUrl/manga/${manga.url}", headers)
+        return coroutineScope {
+            val details = if (fetchDetails) async { fetchDetails(manga) } else null
+            val chapterList = if (fetchChapters) async { fetchChapters(manga) } else null
+            SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+        }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.parseAs<MangaDto>()
+    private suspend fun fetchDetails(manga: SManga): SManga {
+        val dto = client.get("$apiBaseUrl/manga/${manga.url}").parseAs<MangaDto>()
         return SManga.create().apply {
-            url = dto.id
+            url = dto.id.toString()
             title = dto.name
             description = dto.description?.replace("\r\n", "\n")?.trim()
             author = dto.author?.trim()
-            thumbnail_url = dto.coverImage?.let {
-                "$cdnBaseUrl/images.php".toHttpUrl().newBuilder()
-                    .addQueryParameter("url", it)
-                    .addQueryParameter("w", "1900")
-                    .build()
-                    .toString()
-            }
+            thumbnail_url = thumbnailUrl(dto.coverImage)
             genre = buildGenreString(dto.genere, dto.tag)
             status = when (dto.status) {
                 "completed", "Completed" -> SManga.COMPLETED
@@ -151,13 +111,13 @@ abstract class MangaHoNa : HttpSource() {
         }
     }
 
-    private fun buildGenreString(genereIds: String?, tagIds: String?): String? {
+    private suspend fun buildGenreString(genereIds: String?, tagIds: String?): String? {
         val categories = fetchCategories() ?: return null
         val genres = genereIds?.split(";")?.mapNotNull { id ->
-            categories.generes.find { it.id == id.trim() }?.name
+            categories.generes.find { it.id.toString() == id.trim() }?.name
         }.orEmpty()
         val tags = tagIds?.split(";")?.mapNotNull { id ->
-            categories.tags.find { it.id == id.trim() }?.name
+            categories.tags.find { it.id.toString() == id.trim() }?.name
         }.orEmpty()
         val combined = genres + tags
         return combined.takeIf { it.isNotEmpty() }?.joinToString()
@@ -165,10 +125,10 @@ abstract class MangaHoNa : HttpSource() {
 
     private var categoriesCache: CategoriesDto? = null
 
-    private fun fetchCategories(): CategoriesDto? {
+    private suspend fun fetchCategories(): CategoriesDto? {
         if (categoriesCache != null) return categoriesCache
         return try {
-            client.newCall(GET("$apiBaseUrl/categories", headers)).execute()
+            client.get("$apiBaseUrl/categories")
                 .parseAs<CategoriesDto>()
                 .also { categoriesCache = it }
         } catch (_: Exception) {
@@ -178,41 +138,27 @@ abstract class MangaHoNa : HttpSource() {
 
     // ========================= Chapters =========================
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
-
-    override fun chapterListRequest(manga: SManga): Request {
-        if (manga.url.startsWith("/manga/")) {
-            throw Exception("Migrate from $name to $name (same extension)")
-        }
-        return GET("$apiBaseUrl/chapters/${manga.url}", headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaId = response.request.url.pathSegments.last()
-        val chapters = response.parseAs<List<ChapterDto>>()
+    private suspend fun fetchChapters(manga: SManga): List<SChapter> {
+        val chapters = client.get("$apiBaseUrl/chapters/${manga.url}").parseAs<List<ChapterDto>>()
         return chapters.map { dto ->
             SChapter.create().apply {
-                url = "/czytaj/$mangaId/${dto.chapterIndex}"
+                url = "/czytaj/${manga.url}/${dto.chapterIndex.content}"
                 name = dto.chapterName
-                date_upload = dto.date?.let { dateFormat.tryParse(it) } ?: 0L
+                date_upload = dateFormat.tryParseDateTime(dto.date)
             }
         }.reversed()
     }
 
     // ========================= Pages =========================
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.startsWith("/manga/")) {
             throw Exception("Migrate from $name to $name (same extension)")
         }
         val pathParts = chapter.url.removePrefix("/czytaj/").split("/")
         val mangaId = pathParts[0]
         val chapterIndex = pathParts[1]
-        return GET("$apiBaseUrl/chapterData/$mangaId/$chapterIndex", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterData = response.parseAs<ChapterDataDto>()
+        val chapterData = client.get("$apiBaseUrl/chapterData/$mangaId/$chapterIndex").parseAs<ChapterDataDto>()
         val pages = chapterData.data.parseAs<Map<String, PageDto>>()
         return pages.entries
             .sortedBy { it.key.toIntOrNull() ?: 0 }
@@ -221,11 +167,7 @@ abstract class MangaHoNa : HttpSource() {
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     companion object {
-        private val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
-        }
+        private val dateFormat = DateTimeFormatter.ofPattern("yyyy-M-d HH:mm:ss")
     }
 }
