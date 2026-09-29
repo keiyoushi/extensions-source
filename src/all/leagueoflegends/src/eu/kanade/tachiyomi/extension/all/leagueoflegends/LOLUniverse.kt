@@ -1,113 +1,92 @@
 package eu.kanade.tachiyomi.extension.all.leagueoflegends
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import okhttp3.Headers
+import kotlin.time.Instant
 
 @Source
-abstract class LOLUniverse : HttpSource() {
+abstract class LOLUniverse : KeiSource() {
 
     private val siteLang: String
         get() = baseUrl.substringAfter("leagueoflegends.com/").substringBefore("/comic/")
 
     override val supportsLatest = false
 
-    private val json by injectLazy<Json>()
+    override fun Headers.Builder.configureHeaders() = set("Origin", UNIVERSE_URL).set("Referer", "$UNIVERSE_URL/")
 
-    private val pageCache = mutableMapOf<String, List<Page>>()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$MEEPS_URL/$siteLang/comics/index.json")
+        .parseAs<LOLHub>()
+        .mapNotNull {
+            SManga.create().apply {
+                title = it.title ?: return@mapNotNull null
+                url = it.toString()
+                description = it.description!!.clean()
+                thumbnail_url = it.background.toString()
+                genre = it.subtitle ?: it.champions?.joinToString()
+            }
+        }.run { MangasPage(this, false) }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", UNIVERSE_URL).set("Referer", "$UNIVERSE_URL/")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int) = GET("$MEEPS_URL/$siteLang/comics/index.json", headers)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getPopularManga(page).filter(query)
 
-    override fun chapterListRequest(manga: SManga) = GET("$MEEPS_URL/$siteLang/comics/${manga.url}/index.json", headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-    override fun pageListRequest(chapter: SChapter) = GET("$COMICS_URL/$siteLang/${chapter.url}/index.json", headers)
-
-    override fun popularMangaParse(response: Response) = response.decode<LOLHub>().mapNotNull {
-        SManga.create().apply {
-            title = it.title ?: return@mapNotNull null
-            url = it.toString()
-            description = it.description!!.clean()
-            thumbnail_url = it.background.toString()
-            genre = it.subtitle ?: it.champions?.joinToString()
+        if ('/' !in manga.url) {
+            val issues = client.get("$MEEPS_URL/$siteLang/comics/${manga.url}/index.json").parseAs<LOLIssues>()
+            val updatedChapters = coroutineScope {
+                issues.map {
+                    async {
+                        SChapter.create().apply {
+                            name = it.title!!
+                            url = it.toString()
+                            chapter_number = it.index ?: -1f
+                            date_upload = fetchDate()
+                        }
+                    }
+                }.awaitAll()
+            }
+            return SMangaUpdate(manga, updatedChapters)
         }
-    }.run { MangasPage(this, false) }
 
-    override fun chapterListParse(response: Response) = response.decode<LOLIssues>().map {
-        SChapter.create().apply {
-            name = it.title!!
-            url = it.toString()
-            chapter_number = it.index ?: -1f
-            fetchPageList()
-        }
-    }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = client.newCall(popularMangaRequest(page)).asObservableSuccess()
-        .map { popularMangaParse(it).filter(query) }!!
-
-    override fun fetchMangaDetails(manga: SManga) = Observable.just(manga.apply { initialized = true })!!
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        if ('/' !in manga.url) return super.fetchChapterList(manga)
         val chapter = SChapter.create().apply {
             url = manga.url
             name = "One Shot"
             chapter_number = 0f
-            fetchPageList()
+            date_upload = fetchDate()
         }
-        return Observable.just(listOf(chapter))
+        return SMangaUpdate(manga, listOf(chapter))
     }
 
-    override fun fetchPageList(chapter: SChapter) = Observable.just(pageCache[chapter.url].orEmpty())!!
+    override suspend fun getPageList(chapter: SChapter): List<Page> = fetchPages(chapter).mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.toString())
+    }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+    private suspend fun fetchPages(chapter: SChapter) = client.get("$COMICS_URL/$siteLang/${chapter.url}/index.json").parseAs<LOLPages>()
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    private inline fun <reified T> Response.decode() = json.decodeFromString<T>(body.string())
+    // The chapter date is only available in the page list
+    private suspend fun SChapter.fetchDate() = Instant.tryParse(fetchPages(this).date)
 
     private fun String.clean() = replace("</p> ", "</p>").replace("</p>", "\n").replace("<p>", "")
-
-    private fun SChapter.fetchPageList() {
-        client.newCall(pageListRequest(this)).execute().decode<LOLPages>().let {
-            // The chapter date is only available in the page list
-            date_upload = isoDate.parse(it.date)?.time ?: 0L
-            pageCache[url] = it.mapIndexed { idx, img ->
-                Page(idx, "", img.toString())
-            }
-        }
-    }
 
     private fun MangasPage.filter(query: String) = copy(
         mangas.filter {
@@ -122,9 +101,5 @@ abstract class LOLUniverse : HttpSource() {
         private const val MEEPS_URL = "https://universe-meeps.leagueoflegends.com/v1"
 
         private const val COMICS_URL = "https://universe-comics.leagueoflegends.com/comics"
-
-        private val isoDate by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
-        }
     }
 }
