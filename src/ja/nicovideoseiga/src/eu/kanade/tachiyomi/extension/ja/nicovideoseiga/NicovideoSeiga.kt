@@ -1,78 +1,84 @@
 package eu.kanade.tachiyomi.extension.ja.nicovideoseiga
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import rx.Observable
 import kotlin.experimental.xor
 
 @Source
-abstract class NicovideoSeiga : HttpSource() {
+abstract class NicovideoSeiga : KeiSource() {
 
     override val supportsLatest: Boolean = false
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(::imageIntercept)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::imageIntercept)
 
     private val apiUrl: String = "https://api.nicomanga.jp/api/v1/app/manga"
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         // This is the only API call that doesn't use the API url
-        return GET("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page", headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val pageNumber = response.request.url.queryParameter("page")!!.toInt()
-        val mangas = response.parseAs<List<PopularManga>>()
+        val mangas = client.get("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page")
+            .parseAs<List<PopularManga>>()
 
         // The api call allows a maximum of 5 pages
         return MangasPage(
             mangas.map { it.toSManga() },
-            pageNumber < 5,
+            page < 5,
         )
     }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}", headers)
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val r = response.parseAs<ApiResponse<Manga>>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val r = client.get("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}")
+            .parseAs<ApiResponse<Manga>>()
         return MangasPage(r.data.result.map { it.toSManga() }, r.data.extra?.hasNext == true)
     }
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        // Overwrite to use the API instead of scraping the shared URL
-        return GET("$apiUrl/contents/${manga.url}", headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val r = response.parseAs<ApiResponse<Manga>>()
-        return r.data.result.first().toSManga()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (!fetchDetails) return@async manga
+            client.get("$apiUrl/contents/${manga.url}").parseAs<ApiResponse<Manga>>()
+                .data.result.first().toSManga()
+        }
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            client.get("$apiUrl/contents/${manga.url}/episodes").parseAs<ApiResponse<Chapter>>()
+                .data.result
+                // Chapter is unpublished by publishers from Niconico
+                // Either due to licensing issues or the publisher is withholding the chapter from selling
+                .filter { it.ownership.sellStatus != "publication_finished" }
+                .map { it.toSChapter() }
+                .sortedByDescending { it.chapter_number }
+        }
+        SMangaUpdate(details.await(), chapterList.await())
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -82,95 +88,66 @@ abstract class NicovideoSeiga : HttpSource() {
 
     // ============================= Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request {
-        // Overwrite to use the API instead of scraping the shared URL
-        return GET("$apiUrl/contents/${manga.url}/episodes", headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val r = response.parseAs<ApiResponse<Chapter>>()
-        return r.data.result
-            // Chapter is unpublished by publishers from Niconico
-            // Either due to licensing issues or the publisher is withholding the chapter from selling
-            .filter { it.ownership.sellStatus != "publication_finished" }
-            .map { it.toSChapter() }
-            .sortedByDescending { it.chapter_number }
-    }
-
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/watch/mg${chapter.url}"
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        // Overwrite to use the API instead of scraping the shared URL
-        return GET("$apiUrl/episodes/${chapter.url}/frames?enable_webp=true", headers)
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get("$apiUrl/episodes/${chapter.url}/frames?enable_webp=true", ensureSuccess = false)
+        // Nicovideo refuses to serve pages without login only if you are on desktop (Supposedly to provide danmaku)
+        // There's no login requirement on the mobile version of the website
+        return when (response.code) {
+            403 -> {
+                response.close()
+                // Check if the user is logged in
+                // Should return 400 if no session ID is found
+                val loginCode = client.newBuilder()
+                    .followRedirects(false)
+                    .followSslRedirects(false)
+                    .build()
+                    .get("https://account.nicovideo.jp/api/public/v2/user.json", ensureSuccess = false)
+                    .use { it.code }
+                when (loginCode) {
+                    // User needs to purchase the chapter on the official mobile app
+                    // Sidenote: Chapters can't be purchased on the site
+                    // These paid chapters only show up on the mobile app and are straight up hidden on browsers! Why!?
+                    // "Please buy from the official app"
+                    200 -> throw SecurityException("公式アプリで購入してください")
 
-    override fun pageListParse(response: Response): List<Page> {
-        val r = response.parseAs<ApiResponse<Frame>>()
-        // Map the frames to pages
-        return r.data.result.mapIndexed { i, frame -> Page(i, imageUrl = frame.meta.sourceUrl) }
-    }
+                    // User needs to log in via WebView first before accessing the chapter
+                    // "Please log in via WebView first"
+                    400 -> throw SecurityException("まず、WebViewでログインしてください")
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservable()
-        .flatMap { response ->
-            // Nicovideo refuses to serve pages without login only if you are on desktop (Supposedly to provide danmaku)
-            // There's no login requirement on the mobile version of the website
-            when (response.code) {
-                403 -> {
-                    // Check if the user is logged in
-                    // Should return 400 if no session ID is found
-                    client.newBuilder()
-                        .followRedirects(false)
-                        .followSslRedirects(false)
-                        .build()
-                        .newCall(GET("https://account.nicovideo.jp/api/public/v2/user.json"))
-                        .asObservable()
-                        .flatMap { login ->
-                            when (login.code) {
-                                200 -> {
-                                    // User needs to purchase the chapter on the official mobile app
-                                    // Sidenote: Chapters can't be purchased on the site
-                                    // These paid chapters only show up on the mobile app and are straight up hidden on browsers! Why!?
-                                    // "Please buy from the official app"
-                                    Observable.error(SecurityException("公式アプリで購入してください"))
-                                }
-
-                                400 -> {
-                                    // User needs to log in via WebView first before accessing the chapter
-                                    // "Please log in via WebView first"
-                                    Observable.error(SecurityException("まず、WebViewでログインしてください"))
-                                }
-
-                                else -> Observable.error(Exception("HTTP error ${login.code}"))
-                            }
-                        }
+                    else -> throw Exception("HTTP error $loginCode")
                 }
-                200 -> Observable.just(pageListParse(response))
-                else -> Observable.error(Exception("HTTP error ${response.code}"))
+            }
+
+            200 -> {
+                val r = response.parseAs<ApiResponse<Frame>>()
+                // Map the frames to pages
+                r.data.result.mapIndexed { i, frame -> Page(i, imageUrl = frame.meta.sourceUrl) }
+            }
+
+            else -> {
+                response.close()
+                throw Exception("HTTP error ${response.code}")
             }
         }
+    }
 
     override fun imageRequest(page: Page): Request {
         // Headers are required to avoid cache miss from server side
-        val headers = headersBuilder()
-            .set("referer", "$baseUrl/")
-            .set("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .set("pragma", "no-cache")
-            .set("cache-control", "no-cache")
-            .set("accept-encoding", "gzip, deflate, br")
-            .set("sec-fetch-dest", "image")
-            .set("sec-fetch-mode", "no-cors")
-            .set("sec-fetch-site", "cross-site")
-            .set("sec-gpc", "1")
+        return super.imageRequest(page).newBuilder()
+            .header("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+            .header("pragma", "no-cache")
+            .header("cache-control", "no-cache")
+            .header("accept-encoding", "gzip, deflate, br")
+            .header("sec-fetch-dest", "image")
+            .header("sec-fetch-mode", "no-cors")
+            .header("sec-fetch-site", "cross-site")
+            .header("sec-gpc", "1")
             .build()
-        return GET(page.imageUrl!!, headers)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Filters ==============================
 
     // ============================= Utilities =============================
 
