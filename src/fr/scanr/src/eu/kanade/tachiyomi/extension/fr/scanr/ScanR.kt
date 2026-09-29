@@ -1,86 +1,66 @@
 package eu.kanade.tachiyomi.extension.fr.scanr
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 import java.net.URI
 
 @Source
-abstract class ScanR : HttpSource() {
+abstract class ScanR : KeiSource() {
 
     val cdnUrl = "https://cdn.teamscanr.fr"
     override val supportsLatest = false
     private val seriesDataCache = mutableMapOf<String, Serie>()
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         TypeFilter(),
         StatusFilter(),
         AdultFilter(),
     )
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$cdnUrl/index.json", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val slug = url.pathSegments[0]
-            return fetchSearchManga(page, "SLUG:$slug", filters)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) {
+            return null
         }
-        return super.fetchSearchManga(page, query, filters)
+        val slug = url.pathSegments[0]
+        val filename = fetchIndex()[slug] ?: return null
+        return fetchSeriesData(filename).toDetailedSManga()
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$cdnUrl/index.json".toHttpUrl().newBuilder()
-        if (query.isNotBlank()) {
-            url.fragment(query)
-        }
         filters.filterIsInstance<UriFilter>().forEach {
             it.addToUri(url)
         }
+        val params = url.build()
 
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val series = response.parseAs<Map<String, String>>()
+        val series = fetchIndex()
         val mangaList = mutableListOf<SManga>()
 
-        val types = response.request.url.queryParameter("type") ?: "all"
-        val status = response.request.url.queryParameter("status") ?: "all"
-        val adult = response.request.url.queryParameter("adult") ?: "all"
-        val searchQuery = response.request.url.fragment ?: ""
+        val types = params.queryParameter("type") ?: "all"
+        val status = params.queryParameter("status") ?: "all"
+        val adult = params.queryParameter("adult") ?: "all"
 
-        if (searchQuery.startsWith("SLUG:")) {
-            val filename = series.get(searchQuery.removePrefix("SLUG:"))
-            if (filename != null) {
-                val serie = fetchSeriesData(filename)
-                mangaList.add(serie.toDetailedSManga())
-            }
-            return MangasPage(mangaList, false)
-        }
-
-        for ((slug, filename) in series) {
+        for ((_, filename) in series) {
             val serie = fetchSeriesData(filename)
 
-            if (searchQuery.isBlank() || serie.title.contains(searchQuery, ignoreCase = true)) {
+            if (query.isBlank() || serie.title.contains(query, ignoreCase = true)) {
                 val details = serie.toDetailedSManga()
                 if ((((serie.os && types.contains("os")) || (!serie.os && types.contains("series")) || types.contains("all"))) &&
                     ((((details.status == SManga.ONGOING) && status.contains("ongoing")) || (((details.status == SManga.COMPLETED) && status.contains("completed"))) || status.contains("all"))) &&
@@ -94,56 +74,30 @@ abstract class ScanR : HttpSource() {
         return MangasPage(mangaList, false)
     }
 
-    // Details
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val splitedPath = URI(manga.url).path.split("/")
-        val slug = splitedPath[1]
-        return client.newCall(GET("$cdnUrl/index.json", headers))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response, slug)
-            }
-    }
-
-    private fun mangaDetailsParse(response: Response, slug: String = ""): SManga {
-        val map = response.parseAs<Map<String, String>>()
-        val serie = fetchSeriesData(map.get(slug)!!, false)
-        return serie.toDetailedSManga()
+    // Details & Chapters
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val slug = URI(manga.url).path.split("/")[1]
+        val serie = fetchSeriesData(fetchIndex()[slug]!!)
+        return SMangaUpdate(serie.toDetailedSManga(), buildChapterList(serie))
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val splitedPath = URI(chapter.url).path.split("/")
         val slug = splitedPath[1]
         val chapterId = splitedPath[2]
-        val serie = getSerieFromSlug(slug)
+        val serie = fetchSeriesData(fetchIndex()[slug] ?: "")
         val chapterDetails = serie.chapters[chapterId.replace("-", ".")]
         val cubariProxy = chapterDetails!!.groups.getValue(chapterDetails.groups.keys.first())
-        return GET("https://cubari.moe$cubariProxy", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val images = response.parseAs<List<String>>()
+        val images = client.get("https://cubari.moe$cubariProxy").parseAs<List<String>>()
         return images.mapIndexed { index, pageData ->
             Page(index, imageUrl = pageData)
         }
-    }
-
-    // Chapters
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val splitedPath = URI(manga.url).path.split("/")
-        val slug = splitedPath[1]
-        return client.newCall(GET("$cdnUrl/index.json", headers))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response, slug)
-            }
-    }
-
-    private fun chapterListParse(response: Response, slug: String = ""): List<SChapter> {
-        val filename = response.parseAs<Map<String, String>>().get(slug)!!
-        val series = fetchSeriesData(filename)
-        return buildChapterList(series)
     }
 
     private fun buildChapterList(serie: Serie): List<SChapter> {
@@ -178,35 +132,14 @@ abstract class ScanR : HttpSource() {
     }
 
     // Series utils
-    private fun fetchSeriesData(filename: String, forceReload: Boolean = false): Serie {
-        val cachedSerie = seriesDataCache[filename]
-        if (!forceReload && cachedSerie != null) {
-            return cachedSerie
-        }
+    private suspend fun fetchIndex(): Map<String, String> = client.get("$cdnUrl/index.json").parseAs()
 
-        val response = client.newCall(GET("$cdnUrl/$filename", headers)).execute()
-        val seriesData = response.parseAs<Serie>()
+    private suspend fun fetchSeriesData(filename: String): Serie {
+        seriesDataCache[filename]?.let { return it }
+
+        val seriesData = client.get("$cdnUrl/$filename").parseAs<Serie>()
 
         seriesDataCache[filename] = seriesData
         return seriesData
     }
-
-    private fun getSerieFromSlug(slug: String, forceReload: Boolean = false): Serie {
-        val serieList =
-            client.newCall(GET("$cdnUrl/index.json", headers))
-                .execute().parseAs<Map<String, String>>()
-
-        return fetchSeriesData(serieList[slug] ?: "", forceReload)
-    }
-
-    // Unsupported stuff
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 }
