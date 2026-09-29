@@ -13,12 +13,12 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.double
 import okhttp3.Headers
 import okhttp3.HttpUrl
-import okhttp3.Interceptor
-import okhttp3.OkHttpClient
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Cubari : KeiSource() {
@@ -31,15 +31,18 @@ abstract class Cubari : KeiSource() {
             "Keiyoushi",
     )
 
-    // WebView interceptors replace the response body, so they must run before
-    // KeiSource's compression interceptor instead of after it.
-    private fun clientWith(interceptor: Interceptor): OkHttpClient = client.newBuilder()
-        .apply { interceptors().add(0, interceptor) }
-        .build()
-
-    private suspend fun fetchHistory(): List<HistoryEntryDto> = clientWith(RemoteStorageUtils.HomeInterceptor())
-        .get("$baseUrl/")
-        .parseAs()
+    // History and pins only exist in the site's remoteStorage cache, reachable through its own JS
+    private suspend fun fetchHistory(): List<HistoryEntryDto> = runWebView<String>(10.seconds) {
+        userAgent = headers["User-Agent"]!!
+        jsBridge("android") { resolve(it) }
+        onPageFinished {
+            evaluateJs(
+                "Promise.all([globalHistoryHandler.getAllPinnedSeries(), globalHistoryHandler.getAllUnpinnedSeries()])" +
+                    ".then(e => android.post(JSON.stringify(e.flat())))",
+            )
+        }
+        loadUrl("$baseUrl/")
+    }.parseAs()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(fetchHistory(), SortType.UNPINNED)
 
@@ -102,12 +105,22 @@ abstract class Cubari : KeiSource() {
     }
 
     private suspend fun fetchSeries(source: String, slug: String): SManga {
-        // Only tag for recently read on search
-        val series = clientWith(RemoteStorageUtils.TagInterceptor())
-            .get("$baseUrl/read/api/$source/series/$slug/")
-            .parseAs<SeriesDto>()
+        val series = client.get("$baseUrl/read/api/$source/series/$slug/").parseAs<SeriesDto>()
+        // Only tag for recently read on search; a failed tag shouldn't fail the search
+        runCatching { tagHistory(source, slug) }
 
         return series.toSManga("/read/$source/$slug")
+    }
+
+    // The series page adds itself to the site's history. tag() is re-run so that
+    // history-ready fires after our listener is attached.
+    private suspend fun tagHistory(source: String, slug: String) = runWebView<Unit>(10.seconds) {
+        userAgent = headers["User-Agent"]!!
+        jsBridge("android") { resolve(Unit) }
+        onPageFinished {
+            evaluateJs("window.addEventListener('history-ready', () => android.post(''), { once: true }); tag();")
+        }
+        loadUrl("$baseUrl/read/$source/$slug/")
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
