@@ -13,6 +13,8 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -23,13 +25,8 @@ import java.util.Locale
 @Source
 abstract class Niadd : KeiSource() {
 
-    companion object {
-        private val ALL_IMGS_URL_REGEX = Regex("""all_imgs_url\s*:\s*\[([\s\S]*?)\]""")
-        private val CLEAN_IMG_URL_REGEX = Regex("""["'\s]""")
-        private const val PAGE_IMAGE_SELECTOR = "div.pic_box img.manga_pic, div.reading-content img"
-        private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
-        private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
-    }
+    // Causes pageList 302
+    override fun Headers.Builder.configureHeaders() = removeAll("Referer")
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/Hot-Manga.html").asJsoup())
@@ -49,6 +46,17 @@ abstract class Niadd : KeiSource() {
     }
 
     // Search
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.size < 2) return null
+
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = url.encodedPath },
+            emptyList(),
+            true,
+            false,
+        ).manga
+    }
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search/".toHttpUrl().newBuilder()
             .addQueryParameter("name", query)
@@ -230,4 +238,12 @@ abstract class Niadd : KeiSource() {
     override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
         .header("Referer", page.url)
         .build()
+
+    companion object {
+        private val ALL_IMGS_URL_REGEX = Regex("""all_imgs_url\s*:\s*\[([\s\S]*?)\]""")
+        private val CLEAN_IMG_URL_REGEX = Regex("""["'\s]""")
+        private const val PAGE_IMAGE_SELECTOR = "div.pic_box img.manga_pic, div.reading-content img"
+        private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
+        private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
+    }
 }
