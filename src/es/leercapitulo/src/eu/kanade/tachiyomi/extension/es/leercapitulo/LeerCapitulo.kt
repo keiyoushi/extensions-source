@@ -68,10 +68,10 @@ abstract class LeerCapitulo : HttpSource() {
             urlBuilder.addQueryParameter("q", query)
         }
 
-        filters.firstInstanceOrNull<GenreFilter>()?.takeIf { it.state != 0 }?.let {
+        filters.firstInstanceOrNull()?.takeIf { it.state != 0 }?.let {
             urlBuilder.addQueryParameter("genre", it.toUriPart())
         }
-        filters.firstInstanceOrNull<StatusFilter>()?.takeIf { it.state != 0 }?.let {
+        filters.firstInstanceOrNull()?.takeIf { it.state != 0 }?.let {
             urlBuilder.addQueryParameter("status", it.toUriPart())
         }
 
@@ -110,7 +110,7 @@ abstract class LeerCapitulo : HttpSource() {
             title = document.selectFirst("article h1, h1")?.text()?.trim() ?: ""
 
             val altNames = document.selectFirst("article p.lc-muted")?.text()?.trim()
-            val desc = document.selectFirst("#sinopsis p, #sinopsis")?.text()?.trim()
+            val desc = document.selectFirst("#sinopsis p")?.text()?.trim()
             description = buildString {
                 if (!desc.isNullOrEmpty()) append(desc)
                 if (!altNames.isNullOrEmpty()) {
@@ -136,7 +136,7 @@ abstract class LeerCapitulo : HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun chapterListParse(response: Response): List {
         val document = response.asJsoup()
         val chapterRows = document.select("#chapterList a.lc-chapter-row")
 
@@ -158,7 +158,7 @@ abstract class LeerCapitulo : HttpSource() {
     }
 
     // 4. Eliminado el fallback genérico de imágenes para mayor seguridad
-    override fun pageListParse(response: Response): List<Page> {
+    override fun pageListParse(response: Response): List {
         val document = response.asJsoup()
         val imageElements = document.select("#lcPages img, main.lc-pages img, .lc-pages img")
 
