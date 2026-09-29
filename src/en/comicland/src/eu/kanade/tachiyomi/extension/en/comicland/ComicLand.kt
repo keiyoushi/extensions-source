@@ -1,54 +1,47 @@
 package eu.kanade.tachiyomi.extension.en.comicland
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class ComicLand : HttpSource() {
-
-    override val supportsLatest = true
+abstract class ComicLand : KeiSource() {
 
     private val apiUrl = "https://api.comicland.org/api"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
-
     // ============================== Popular ==============================
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val offset = (page - 1) * 20
-        return GET("$apiUrl/comics/popular?offset=$offset&limit=20", headers)
+        return mangaListParse("$apiUrl/comics/popular?offset=$offset&limit=20".toHttpUrl())
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val res = response.parseAs<ApiResponse<PageData>>()
+    private suspend fun mangaListParse(url: HttpUrl): MangasPage {
+        val res = client.get(url).parseAs<ApiResponse<PageData>>()
         val data = res.data ?: return MangasPage(emptyList(), false)
 
         return MangasPage(data.comics.map { it.toSManga() }, data.hasNextPage)
     }
 
     // ============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val offset = (page - 1) * 20
-        return GET("$apiUrl/comics?offset=$offset&limit=20&status=ongoing", headers)
+        return mangaListParse("$apiUrl/comics?offset=$offset&limit=20&status=ongoing".toHttpUrl())
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
     // ============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val offset = (page - 1) * 20
 
         if (query.isNotBlank()) {
@@ -58,7 +51,7 @@ abstract class ComicLand : HttpSource() {
                 .addQueryParameter("limit", "20")
                 .build()
 
-            return GET(url, headers)
+            return mangaListParse(url)
         }
 
         val categoryFilter = filters.firstInstanceOrNull<Filters>()
@@ -73,46 +66,33 @@ abstract class ComicLand : HttpSource() {
             url.addQueryParameter("status", status)
         }
 
-        return GET(url.build(), headers)
+        return mangaListParse(url.build())
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Details ==============================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/comic/detail?slug=${manga.url}", headers)
-
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val res = response.parseAs<ApiResponse<ComicDetailDto>>()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val res = client.get("$apiUrl/comic/detail?slug=${manga.url}").parseAs<ApiResponse<ComicDetailDto>>()
         val data = res.data ?: throw Exception("Failed to parse manga details")
 
-        return data.toSManga()
+        return SMangaUpdate(
+            manga = data.toSManga(),
+            chapters = data.chapters?.map { it.toSChapter(data.slug) }?.reversed() ?: emptyList(),
+        )
     }
-
-    // ============================= Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val res = response.parseAs<ApiResponse<ComicDetailDto>>()
-        val data = res.data ?: throw Exception("Failed to parse chapters")
-        val slug = data.slug
-
-        return data.chapters?.map { it.toSChapter(slug) }?.reversed() ?: emptyList()
-    }
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     // =============================== Pages ===============================
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.substringAfter("/comic/").substringBefore("/chapter/")
         val index = chapter.url.substringAfter("/chapter/")
 
-        return GET("$apiUrl/chapter/pages_by_index?slug=$slug&index=$index", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val res = response.parseAs<ApiResponse<PagesData>>()
+        val res = client.get("$apiUrl/chapter/pages_by_index?slug=$slug&index=$index").parseAs<ApiResponse<PagesData>>()
         val pages = res.data?.pages ?: emptyList()
 
         return pages.mapIndexed { index, url ->
@@ -120,10 +100,8 @@ abstract class ComicLand : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ==============================
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Text search ignores Category filter"),
         Filters(),
     )

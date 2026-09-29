@@ -5,95 +5,93 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import keiyoushi.utils.tryParseDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class DarkLegacyComics : HttpSource() {
+abstract class DarkLegacyComics : KeiSource() {
 
     override val supportsLatest = false
 
-    override fun chapterListParse(response: Response) = response.asJsoup().select(".archive_link").map {
-        val index = it.selectFirst(".index")!!.text()
-        val date = it.selectFirst(".date")!!.ownText()
-        val title = it.selectFirst(".name")!!.text()
-        val characters = it.select(".characters").text()
-        SChapter.create().apply {
-            url = "/$index"
-            name = "#$index: $title"
-            chapter_number = index.toFloat()
-            // Not actually scanlators but whatever
-            scanlator = characters.replace(" ", ", ")
-            // One of the dates is missing the year
-            date_upload = when (date) {
-                "Sep 20" -> 1442696400000L
+    override suspend fun getPopularManga(page: Int) = MangasPage(
+        listOf(
+            SManga.create().apply {
+                url = "/archive"
+                title = "Dark Legacy Comics"
+                thumbnail_url = THUMB_URL
+                status = SManga.ONGOING
+                author = AUTHOR_NAME
+                artist = AUTHOR_NAME
+            },
+            SManga.create().apply {
+                url = "/specials/1.php"
+                title = "Dark Legacy Comics Specials"
+                thumbnail_url = THUMB_URL
+                status = SManga.COMPLETED
+                author = AUTHOR_NAME
+                artist = AUTHOR_NAME
+            },
+        ),
+        false,
+    )
 
-                // Sep 20, 2015
-                else -> dateFormat.parse(date)?.time ?: 0L
-            }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = getPopularManga(page)
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
+
+        val updatedChapters = if (manga.url == "/archive") {
+            // The archive lists every comic twice (ascending and descending) for its JS reorder toggle
+            client.get(baseUrl + manga.url).asJsoup().select(".archive_link").map {
+                val index = it.selectFirst(".index")!!.text()
+                val date = it.selectFirst(".date")!!.ownText()
+                val title = it.selectFirst(".name")!!.text()
+                val characters = it.select(".characters").text()
+                SChapter.create().apply {
+                    url = "/$index"
+                    name = "#$index: $title"
+                    chapter_number = index.toFloat()
+                    // Not actually scanlators but whatever
+                    scanlator = characters.replace(" ", ", ")
+                    // One of the dates is missing the year
+                    date_upload = when (date) {
+                        "Sep 20" -> 1442696400000L
+
+                        // Sep 20, 2015
+                        else -> dateFormat.tryParseDate(date)
+                    }
+                }
+            }.distinctBy { it.url }.sortedByDescending { it.chapter_number }
+        } else {
+            specials.map {
+                SChapter.create().apply {
+                    name = it.value
+                    url = "/specials/${it.key}"
+                    chapter_number = it.key.toFloat()
+                    date_upload = SPECIALS_DATE
+                }
+            }.asReversed()
         }
+
+        return SMangaUpdate(manga, updatedChapters)
     }
 
-    override fun pageListParse(response: Response) = response.asJsoup().select(".comic > img").mapIndexed { idx, img ->
-        Page(idx, "", img.absUrl("src"))
+    override suspend fun getPageList(chapter: SChapter) = client.get(baseUrl + chapter.url).asJsoup().select(".comic > img").mapIndexed { idx, img ->
+        Page(idx, imageUrl = img.absUrl("src"))
     }
-
-    override fun fetchPopularManga(page: Int) = listOf(
-        SManga.create().apply {
-            url = "/archive"
-            title = "Dark Legacy Comics"
-            thumbnail_url = THUMB_URL
-            status = SManga.ONGOING
-            author = AUTHOR_NAME
-            artist = AUTHOR_NAME
-        },
-        SManga.create().apply {
-            url = "/specials/1.php"
-            title = "Dark Legacy Comics Specials"
-            thumbnail_url = THUMB_URL
-            status = SManga.COMPLETED
-            author = AUTHOR_NAME
-            artist = AUTHOR_NAME
-        },
-    ).let { Observable.just(MangasPage(it, false))!! }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = fetchPopularManga(page)
-
-    override fun fetchMangaDetails(manga: SManga) = Observable.just(manga.apply { initialized = true })!!
-
-    override fun fetchChapterList(manga: SManga) = if (manga.url == "/archive") {
-        super.fetchChapterList(manga)
-    } else {
-        specials.map {
-            SChapter.create().apply {
-                name = it.value
-                url = "/specials/${it.key}"
-                chapter_number = it.key.toFloat()
-                date_upload = SPECIALS_DATE
-            }
-        }.let { Observable.just(it)!! }
-    }
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private const val THUMB_URL = "https://images2.imgbox.com/5d/d8/BVxRdljH_o.png"
@@ -108,8 +106,6 @@ abstract class DarkLegacyComics : HttpSource() {
             3 to "Fan Comic",
         )
 
-        private val dateFormat by lazy {
-            SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
-        }
+        private val dateFormat = DateTimeFormatter.ofPattern("[MMMM][MMM] d, yyyy", Locale.ENGLISH)
     }
 }

@@ -3,50 +3,49 @@ package eu.kanade.tachiyomi.extension.all.xkcd
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.string
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.JsonObject
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.Serializable
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class Xkcd :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(TextInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(TextInterceptor())
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url
             if (url.host != "thumbnail") return@addInterceptor chain.proceed(request)
 
-            val image = this::class.java
+            val image = this@Xkcd::class.java
                 .getResourceAsStream("/assets/thumbnail.png")!!
                 .readBytes()
             val responseBody = image.toResponseBody("image/png".toMediaType())
@@ -58,7 +57,6 @@ abstract class Xkcd :
                 .body(responseBody)
                 .build()
         }
-        .build()
 
     private val archive: String
         get() = when (lang) {
@@ -112,21 +110,9 @@ abstract class Xkcd :
 
     private val defaultFallbackThumbnail = "https://thumbnail/xkcd.png"
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-M-d", Locale.ROOT)
 
-    private fun String.timestamp(): Long {
-        // normalize dates like "2022-2-2" to "2022-02-02"
-        val normalized = this.split("-").let { parts ->
-            if (parts.size == 3) {
-                "${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}"
-            } else {
-                this
-            }
-        }
-        return dateFormat.tryParse(normalized)
-    }
+    private fun String.timestamp(): Long = dateFormat.tryParseDate(this, ZoneOffset.UTC)
 
     private val chapterTitleFormatter: (Int, String) -> String = { number, text -> "$number: $text" }
 
@@ -174,15 +160,15 @@ abstract class Xkcd :
     private fun getChapterToKey(): (SChapter) -> String = when (getOrganizationMethod()) {
         OrganizationMethod.SINGLE -> { _ -> "SINGLE" }
         OrganizationMethod.BY_YEAR -> { chapter ->
-            val date = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(chapter.date_upload)
-            date.split("-")[0] // Extract year
+            yearFormat.format(Instant.ofEpochMilli(chapter.date_upload).atZone(ZoneId.systemDefault()))
         }
         OrganizationMethod.BY_YEAR_MONTH -> { chapter ->
-            val date = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(chapter.date_upload)
-            val parts = date.split("-")
-            "${parts[0]}-${parts[1].padStart(2, '0')}" // "2024-01"
+            yearMonthFormat.format(Instant.ofEpochMilli(chapter.date_upload).atZone(ZoneId.systemDefault()))
         }
     }
+
+    private val yearFormat = DateTimeFormatter.ofPattern("yyyy", Locale.ROOT)
+    private val yearMonthFormat = DateTimeFormatter.ofPattern("yyyy-MM", Locale.ROOT)
 
     private fun getKeyToTitleFormatter(): (String) -> String = when (getOrganizationMethod()) {
         OrganizationMethod.SINGLE -> { _ -> "xkcd" }
@@ -199,16 +185,14 @@ abstract class Xkcd :
 
     // some translations don't provide dates for their comics, but we can look up the dates
     // (of english publication) given the comic number which is shared across translations
-    private fun getComicDateMappingFromEnglishArchive(): Map<Int, String> {
+    private suspend fun getComicDateMappingFromEnglishArchive(): Map<Int, String> {
         val now = System.currentTimeMillis()
         if (comicDateMapping == null || now - comicDateMappingTime > CACHE_EXPIRY_MS) {
             comicDateMapping = try {
-                client.newCall(GET("$ENGLISH_BASE_URL/archive/", headers)).execute().use { response ->
-                    response.asJsoup().select("#middleContainer > a").associate { element ->
-                        val number = element.absUrl("href").removeSurrounding("/").toInt()
-                        val date = element.attr("title") // "2026-1-9" format
-                        number to date
-                    }
+                client.get("$ENGLISH_BASE_URL/archive/").asJsoup().select("#middleContainer > a").associate { element ->
+                    val number = element.attr("href").removeSurrounding("/").toInt()
+                    val date = element.attr("title") // "2026-1-9" format
+                    number to date
                 }
             } catch (_: Exception) {
                 emptyMap()
@@ -218,21 +202,19 @@ abstract class Xkcd :
         return comicDateMapping ?: emptyMap()
     }
 
-    private fun getAllComicsAsChapters(): List<SChapter> {
+    private suspend fun getAllComicsAsChapters(): List<SChapter> {
         val now = System.currentTimeMillis()
         if (allChaptersCache == null || now - allChaptersCacheTime > CACHE_EXPIRY_MS) {
-            client.newCall(GET(baseUrl + archive, headers)).execute().use { response ->
-                allChaptersCache = chapterListParse(response)
-            }
+            allChaptersCache = chapterListParse(client.get(baseUrl + archive))
             allChaptersCacheTime = now
         }
         return allChaptersCache!!
     }
 
-    private fun getGroupedChapters(): Map<String, List<SChapter>> = getAllComicsAsChapters().groupBy(getChapterToKey())
+    private suspend fun getGroupedChapters(): Map<String, List<SChapter>> = getAllComicsAsChapters().groupBy(getChapterToKey())
 
     // organize chapters into mangas according to the chosen key
-    private fun makeGroupedManga(page: Int, perPage: Int = 10): MangasPage {
+    private suspend fun makeGroupedManga(page: Int, perPage: Int = 10): MangasPage {
         val groupedChapters = getGroupedChapters()
         val allKeys = groupedChapters.keys.sortedDescending() // Newest first
 
@@ -255,7 +237,7 @@ abstract class Xkcd :
                 author = creator
                 description = synopsis
                 status = SManga.ONGOING
-                thumbnail_url = if (firstChapter != null) {
+                thumbnail_url = if (firstChapter != null && getOrganizationMethod() != OrganizationMethod.SINGLE) {
                     fetchThumbnailUrlForChapter(firstChapter)
                 } else {
                     defaultFallbackThumbnail
@@ -269,44 +251,41 @@ abstract class Xkcd :
 
     // ============================== Popular ==============================
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(makeGroupedManga(page))
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int): MangasPage = makeGroupedManga(page)
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
 
     // ============================== Details ==============================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val newChapters = if (fetchChapters) getGroupedChapters()[manga.url] ?: emptyList() else chapters
+        return SMangaUpdate(manga, newChapters)
+    }
 
     override fun getMangaUrl(manga: SManga): String = baseUrl
 
     // ============================= Chapters ==============================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(getGroupedChapters()[manga.url] ?: emptyList())
-
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private suspend fun chapterListParse(response: Response): List<SChapter> {
         val englishDates = getComicDateMappingFromEnglishArchive()
 
         if (lang == "zh") {
-            val root = response.parseAs<JsonObject>()
-            return root.values.map { element ->
-                val obj = element as JsonObject
-                val comicNumber = obj["id"]!!.int
-                val title = obj["title"]!!.string
+            return response.parseAs<Map<String, ZhStrip>>().values.map { strip ->
+                val comicNumber = strip.id
                 SChapter.create().apply {
                     url = "/$comicNumber"
-                    name = chapterTitleFormatter(comicNumber, title)
+                    name = chapterTitleFormatter(comicNumber, strip.title)
                     chapter_number = comicNumber.toFloat()
                     date_upload = if (englishDates.containsKey(comicNumber)) {
                         englishDates[comicNumber]!!.timestamp()
@@ -393,8 +372,8 @@ abstract class Xkcd :
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
         val container = document.selectFirst(imageSelector)
             ?: error(interactiveText)
 
@@ -426,8 +405,6 @@ abstract class Xkcd :
         return listOf(Page(0, imageUrl = image), Page(1, imageUrl = text))
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
     // ============================= Utilities =============================
 
     private fun extractImageFromContainer(container: Element): Element? = when (lang) {
@@ -436,9 +413,9 @@ abstract class Xkcd :
         else -> container
     }
 
-    private fun fetchThumbnailUrlForChapter(chapter: SChapter): String {
+    private suspend fun fetchThumbnailUrlForChapter(chapter: SChapter): String {
         return try {
-            client.newCall(GET(baseUrl + chapter.url, headers)).execute().use { response ->
+            client.get(baseUrl + chapter.url, ensureSuccess = false).use { response ->
                 if (!response.isSuccessful) {
                     return defaultFallbackThumbnail
                 }
@@ -464,3 +441,9 @@ abstract class Xkcd :
         }
     }
 }
+
+@Serializable
+class ZhStrip(
+    val id: Int,
+    val title: String,
+)
