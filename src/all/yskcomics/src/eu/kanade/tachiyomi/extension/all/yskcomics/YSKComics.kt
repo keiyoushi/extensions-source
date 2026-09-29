@@ -1,36 +1,32 @@
 package eu.kanade.tachiyomi.extension.all.yskcomics
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.lang.Exception
 
 @Source
-abstract class YSKComics : HttpSource() {
+abstract class YSKComics : KeiSource() {
     private val apiBaseUrl = "https://api.ysk-comics.com"
-    override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-        .set("x-localization", lang)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("x-localization", lang)
 
     // ---
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/home/best-comics", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<PopularDto>().data
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val data = client.get("$baseUrl/api/home/best-comics").parseAs<PopularDto>().data
         return MangasPage(
             mangas = data.map { it.toSManga(lang) },
             hasNextPage = false,
@@ -39,10 +35,8 @@ abstract class YSKComics : HttpSource() {
 
     // ---
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/home/latest-comics?page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<LatestDto>().data
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val data = client.get("$baseUrl/api/home/latest-comics?page=$page").parseAs<LatestDto>().data
         return MangasPage(
             mangas = data.dataMessages.map { it.toSManga(lang) },
             hasNextPage = data.meta.linkNext != null,
@@ -51,45 +45,26 @@ abstract class YSKComics : HttpSource() {
 
     // ---
 
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> {
-        val httpUrl = query.toHttpUrlOrNull()
-            ?: return super.fetchSearchManga(page, query, filters)
-
-        if (httpUrl.pathSegments.firstOrNull() != lang) {
-            return Observable.just(
-                MangasPage(
-                    mangas = emptyList(),
-                    hasNextPage = false,
-                ),
-            )
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != lang) {
+            return null
         }
 
         val manga = SManga.create().apply {
-            setUrlWithoutDomain(httpUrl.toString())
+            setUrlWithoutDomain(url.toString())
         }
 
-        return fetchMangaDetails(manga).map {
-            MangasPage(
-                mangas = listOf(it),
-                hasNextPage = false,
-            )
-        }
+        return fetchMangaDetails(manga)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.trim().length < 3) throw Exception("Search query must be at least 3 characters")
+
         val url = "$apiBaseUrl/api/v1/search-comics-home".toHttpUrl().newBuilder()
             .addQueryParameter("name", query)
             .build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<SearchDto>().data
+        val data = client.get(url).parseAs<SearchDto>().data
         return MangasPage(
             mangas = data.map { it.toSManga(lang) },
             hasNextPage = false,
@@ -98,70 +73,46 @@ abstract class YSKComics : HttpSource() {
 
     // ---
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = extractSlug(manga.url)
-        val url = "$baseUrl/api/comic/$slug"
-        return GET(url, headers)
+        SMangaUpdate(details.await(), chapterList.await())
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.parseAs<DetailsDto>().data
-        return data.toSManga(lang)
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val slug = extractSlug(manga.url)
+        return client.get("$baseUrl/api/comic/$slug").parseAs<DetailsDto>().data.toSManga(lang)
     }
 
     // ---
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
-        buildList {
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val slug = extractSlug(manga.url)
+        return buildList {
             var page = 1
             do {
-                val request = chapterListRequestPaged(manga, page)
-                val response = client.newCall(request).execute()
-                val chaptersPage = chapterListParsePaged(response)
-                addAll(chaptersPage.chapters)
+                val data = client.get("$baseUrl/api/comic/chapter/$slug?page=$page").parseAs<ChapterDto>().data
+                data.dataMessages.mapTo(this) { it.toSChapter(lang) }
                 page++
-            } while (chaptersPage.hasNextPage)
-        }.asReversed(),
-    )
-
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    private fun chapterListRequestPaged(manga: SManga, page: Int): Request {
-        val slug = extractSlug(manga.url)
-        val url = "$baseUrl/api/comic/chapter/$slug?page=$page"
-        return GET(url, headers)
-    }
-
-    private fun chapterListParsePaged(response: Response): ChaptersPage {
-        val data = response.parseAs<ChapterDto>().data
-        return ChaptersPage(
-            chapters = data.dataMessages.map { it.toSChapter(lang) },
-            hasNextPage = data.meta.linkNext != null,
-        )
+            } while (data.meta.linkNext != null)
+        }.asReversed()
     }
 
     // ---
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = extractSlug(chapter.url)
-        val url = "$baseUrl/api/chapters/images/$slug"
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<PageDto>().data
+        val data = client.get("$baseUrl/api/chapters/images/$slug").parseAs<PageDto>().data
         return data.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ---
 
@@ -173,9 +124,4 @@ abstract class YSKComics : HttpSource() {
             ?.lastOrNull()
             ?: throw Exception("Unable to parse URL:\n$url")
     }
-
-    private class ChaptersPage(
-        val chapters: List<SChapter>,
-        val hasNextPage: Boolean,
-    )
 }
