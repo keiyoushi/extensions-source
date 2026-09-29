@@ -1,35 +1,37 @@
 package eu.kanade.tachiyomi.extension.all.tappytoon
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.LocalDate
+import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.time.Instant
 
 @Source
-abstract class Tappytoon : HttpSource() {
-    override val supportsLatest = true
+abstract class Tappytoon : KeiSource() {
 
-    override val client = network.client.newBuilder().addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val res = chain.proceed(chain.request())
         val mime = res.headers["Content-Type"]
         if (res.isSuccessful) {
@@ -43,87 +45,74 @@ abstract class Tappytoon : HttpSource() {
         }
         // Throw JSON error if available
         if (mime == "application/json") {
-            res.body.string().let(json::parseToJsonElement).run {
-                throw IOException(jsonObject["message"]!!.jsonPrimitive.content)
-            }
+            throw IOException(res.parseAs<ErrorResponse>().message)
         }
         res.close()
         throw IOException("HTTP error ${res.code}")
-    }.build()
+    }
 
-    private val json by injectLazy<Json>()
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", System.getProperty("http.agent")!!)
+        .set("Referer", "https://www.tappytoon.com/")
+        .set("Origin", "https://www.tappytoon.com")
 
-    private val apiHeaders by lazy {
-        val res = client.newCall(GET(baseUrl, headers)).execute()
-        val data = res.asJsoup().getElementById("__NEXT_DATA__")!!
-        val obj = json.parseToJsonElement(data.data())
-            .jsonObject["props"]!!.jsonObject["initialState"]!!
-            .jsonObject["axios"]!!.jsonObject["headers"]!!.jsonObject
-        val auth = obj["Authorization"]!!.jsonPrimitive.content
-        val uuid = obj["X-Device-Uuid"]!!.jsonPrimitive.content
+    private var apiHeaders: Headers? = null
+
+    private suspend fun apiHeaders(): Headers = apiHeaders ?: run {
+        val data = client.get(baseUrl).asJsoup().getElementById("__NEXT_DATA__")!!
+        val axiosHeaders = data.data().parseAs<NextData>().props.initialState.axios.headers
         headers.newBuilder()
-            .set("Origin", "https://www.tappytoon.com")
             .set("Accept-Language", lang)
-            .set("Authorization", auth)
-            .set("X-Device-Uuid", uuid)
+            .set("Authorization", axiosHeaders.authorization)
+            .set("X-Device-Uuid", axiosHeaders.deviceUuid)
             .build()
+            .also { apiHeaders = it }
     }
 
     private var nextUrl: String? = null
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("User-Agent", System.getProperty("http.agent")!!)
-        .set("Referer", "https://www.tappytoon.com/")
-
-    override fun latestUpdatesRequest(page: Int) = apiUrl.newBuilder().run {
-        addEncodedPathSegment("comics")
-        addEncodedQueryParameter("day_of_week", day)
-        addEncodedQueryParameter("locale", lang)
-        GET(toString(), apiHeaders)
-    }
-
-    override fun popularMangaRequest(page: Int) = apiUrl.newBuilder().run {
-        addEncodedPathSegment("comics")
-        addEncodedQueryParameter("sort_by", "trending")
-        // Sort is only available for completed series
-        addEncodedQueryParameter("filter", "completed")
-        addEncodedQueryParameter("locale", lang)
-        GET(toString(), apiHeaders)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (nextUrl != null) return GET(nextUrl!!, apiHeaders)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = apiUrl.newBuilder()
-            .addEncodedPathSegments("comics")
+            .addEncodedPathSegment("comics")
+            .addEncodedQueryParameter("day_of_week", day)
             .addEncodedQueryParameter("locale", lang)
-        val genre = filters.find { it is Genre } as? Genre
-        if (genre != null && genre.state != 0) {
-            url.addEncodedQueryParameter("genre", genre.alias)
-            url.addEncodedQueryParameter("limit", "50")
-        } else if (query.isNotBlank()) {
-            url.addQueryParameter("keyword", query)
+            .build()
+
+        return parseComics(client.get(url, apiHeaders()))
+    }
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = apiUrl.newBuilder()
+            .addEncodedPathSegment("comics")
+            .addEncodedQueryParameter("sort_by", "trending")
+            // Sort is only available for completed series
+            .addEncodedQueryParameter("filter", "completed")
+            .addEncodedQueryParameter("locale", lang)
+            .build()
+
+        return parseComics(client.get(url, apiHeaders()))
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = nextUrl?.takeIf { page > 1 }?.toHttpUrl() ?: apiUrl.newBuilder().run {
+            addEncodedPathSegments("comics")
+            addEncodedQueryParameter("locale", lang)
+            val genre = filters.firstInstanceOrNull<Genre>()
+            if (genre != null && genre.state != 0) {
+                addEncodedQueryParameter("genre", genre.alias)
+                addEncodedQueryParameter("limit", "50")
+            } else if (query.isNotBlank()) {
+                addQueryParameter("keyword", query)
+            }
+            build()
         }
-        return GET(url.toString(), apiHeaders)
+
+        val response = client.get(url, apiHeaders())
+        val link = response.headers["Link"]
+        nextUrl = link?.substringAfter('<')?.substringBefore('>')
+        return parseComics(response).copy(hasNextPage = link != null)
     }
 
-    // Request the real URL for the webview
-    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/comics/${manga.slug}", headers)
-
-    override fun chapterListRequest(manga: SManga) = apiUrl.newBuilder().run {
-        addEncodedPathSegments("comics/${manga.id}/chapters")
-        addEncodedQueryParameter("locale", lang)
-        GET(toString(), apiHeaders)
-    }
-
-    override fun pageListRequest(chapter: SChapter) = apiUrl.newBuilder().run {
-        addEncodedPathSegments("content-delivery/contents")
-        addEncodedQueryParameter("chapterId", chapter.url)
-        addEncodedQueryParameter("variant", "high")
-        addEncodedQueryParameter("locale", lang)
-        GET(toString(), apiHeaders)
-    }
-
-    override fun latestUpdatesParse(response: Response) = response.parse<List<Comic>>().accessible.map {
+    private fun parseComics(response: Response) = response.parseAs<List<Comic>>().accessible.map {
         SManga.create().apply {
             url = it.toString()
             title = it.title
@@ -143,34 +132,51 @@ abstract class Tappytoon : HttpSource() {
         }
     }.run { MangasPage(this, false) }
 
-    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
+    // The real URL for the webview
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${manga.slug}"
 
-    override fun searchMangaParse(response: Response) = response.headers["Link"].let {
-        nextUrl = it?.substringAfter('<')?.substringBefore('>')
-        latestUpdatesParse(response).copy(hasNextPage = it != null)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
+
+        val url = apiUrl.newBuilder()
+            .addEncodedPathSegments("comics/${manga.id}/chapters")
+            .addEncodedQueryParameter("locale", lang)
+            .build()
+
+        val chapterList = client.get(url, apiHeaders()).parseAs<List<Chapter>>().accessible.asReversed().map {
+            SChapter.create().apply {
+                name = it.toString()
+                this.url = it.id.toString()
+                chapter_number = it.order + 1f
+                date_upload = Instant.tryParse(it.willAccessibleAt)
+            }
+        }
+
+        return SMangaUpdate(manga, chapterList)
     }
 
-    override fun chapterListParse(response: Response) = response.parse<List<Chapter>>().accessible.asReversed().map {
-        SChapter.create().apply {
-            name = it.toString()
-            url = it.id.toString()
-            chapter_number = it.order + 1f
-            date_upload = dateFormat.parse(it.willAccessibleAt)?.time ?: 0L
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = apiUrl.newBuilder()
+            .addEncodedPathSegments("content-delivery/contents")
+            .addEncodedQueryParameter("chapterId", chapter.url)
+            .addEncodedQueryParameter("variant", "high")
+            .addEncodedQueryParameter("locale", lang)
+            .build()
+
+        return client.get(url, apiHeaders()).parseAs<Media>().mapIndexed { idx, img ->
+            Page(idx, "", img.toString())
         }
     }
 
-    override fun pageListParse(response: Response) = response.parse<Media>().mapIndexed { idx, img ->
-        Page(idx, "", img.toString())
-    }
-
-    override fun fetchMangaDetails(manga: SManga) = rx.Observable.just(manga.apply { initialized = true })!!
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("NOTE: can't be used with text search!"),
         Genre(genres.keys.toTypedArray()),
     )
-
-    private inline fun <reified T> Response.parse() = json.decodeFromJsonElement<T>(json.parseToJsonElement(body.string()))
 
     class Genre(values: Array<String>) : Filter.Select<String>("Genre", values)
 
@@ -183,14 +189,13 @@ abstract class Tappytoon : HttpSource() {
     private inline val SManga.id: String
         get() = url.substringAfter('|')
 
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    private val day: String
+        get() = LocalDate.now().dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).lowercase(Locale.ENGLISH)
 
     companion object {
         private const val IMG_CONTENT_TYPE = "image/jpeg"
 
-        private val apiUrl = "https://api-global.tappytoon.com".toHttpUrl()
+        private val apiUrl: HttpUrl = "https://api-global.tappytoon.com".toHttpUrl()
 
         private val genres = mapOf(
             "<select>" to "",
@@ -203,22 +208,5 @@ abstract class Tappytoon : HttpSource() {
             "Comedy" to "comedy",
             "GL" to "gl",
         )
-
-        private val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-d'T'HH:mm:ss", Locale.ROOT)
-        }
-
-        private val day by lazy {
-            when (Calendar.getInstance()[Calendar.DAY_OF_WEEK]) {
-                Calendar.SUNDAY -> "sun"
-                Calendar.MONDAY -> "mon"
-                Calendar.TUESDAY -> "tue"
-                Calendar.WEDNESDAY -> "wed"
-                Calendar.THURSDAY -> "thu"
-                Calendar.FRIDAY -> "fri"
-                Calendar.SATURDAY -> "sat"
-                else -> error("What day is it?")
-            }
-        }
     }
 }
