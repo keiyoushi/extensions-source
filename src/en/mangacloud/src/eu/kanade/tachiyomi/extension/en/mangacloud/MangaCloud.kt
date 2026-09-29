@@ -1,88 +1,92 @@
 package eu.kanade.tachiyomi.extension.en.mangacloud
 
-import android.app.Application
-import android.util.Log
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebViewBlocking
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
-import okhttp3.Call
-import okhttp3.Callback
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import okio.IOException
-import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.io.File
-import java.lang.UnsupportedOperationException
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 
 const val DOMAIN = "mangacloud.org"
 const val API_URL = "https://api.$DOMAIN"
 const val CDN_URL = "https://pika.$DOMAIN"
 
 @Source
-abstract class MangaCloud : HttpSource() {
-    override val supportsLatest = true
+abstract class MangaCloud : KeiSource() {
 
-    override val client = network.client.newBuilder()
-        .rateLimit(1)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::handshakeInterceptor).rateLimit(1)
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    @Volatile
+    private var lastHandshake = 0L
 
-    override fun popularMangaRequest(page: Int): Request {
-        return if (page > 3) {
-            searchMangaRequest(page - 3, "", FilterList())
-        } else {
-            val time = when (page) {
-                1 -> "today"
-                2 -> "week"
-                else -> "month"
+    // every api call returns 409 until a Turnstile token is posted to /auth/handshake, which the site does on load
+    private fun handshakeInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        if (response.code != 409 || request.url.host != API_URL.toHttpUrl().host) return response
+        response.close()
+
+        val failedAt = System.currentTimeMillis()
+        synchronized(this) {
+            if (lastHandshake > failedAt) return@synchronized
+            val start = System.currentTimeMillis()
+            runWebViewBlocking<Unit>(chain.call(), 60.seconds) {
+                userAgent = headers["User-Agent"]!!
+                poll {
+                    evaluateJs("Number(localStorage.getItem('sd')) > $start") {
+                        if (it == "true") resolve(Unit)
+                    }
+                }
+                // the site skips the handshake while its last one is fresh
+                loadData(baseUrl, "<script>localStorage.removeItem('sd');location.replace('$baseUrl')</script>")
             }
-
-            return GET("$API_URL/comic-popular-view/$time", headers)
+            lastHandshake = System.currentTimeMillis()
         }
+
+        return chain.proceed(request)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = if (response.request.url.pathSegments.last() == "library") {
-        searchMangaParse(response)
-    } else {
-        val data = response.parseAs<Data<DataList<BrowseManga>>>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        if (page > 3) {
+            return getSearchMangaList(page - 3, "", FilterList())
+        }
+
+        val time = when (page) {
+            1 -> "today"
+            2 -> "week"
+            else -> "month"
+        }
+
+        val data = client.get("$API_URL/comic-popular-view/$time").parseAs<Data<DataList<BrowseManga>>>()
 
         val mangas = data.data.list.map(BrowseManga::toSManga)
 
-        MangasPage(mangas, true)
+        return MangasPage(mangas, true)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$API_URL/comic-updates"
-        val payload = PagePayload(page)
-            .toJsonString()
-            .toRequestBody(jsonMediaType)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val payload = PagePayload(page).toJsonRequestBody()
 
-        return POST(url, headers, payload)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<Data<DataList<BrowseManga>>>()
+        val data = client.post("$API_URL/comic-updates", body = payload).parseAs<Data<DataList<BrowseManga>>>()
 
         val mangas = data.data.list.map(BrowseManga::toSManga)
         val hasNextPage = data.data.list.size == 60
@@ -90,80 +94,20 @@ abstract class MangaCloud : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun fetchCachedTags(): List<Tag> {
-        val tagsFile = Injekt.get<Application>()
-            .cacheDir
-            .resolve("${name}_${id}_tmp")
-            .also { it.mkdirs() }
-            .resolve("tags.json")
+    override val supportsFilterFetching get() = true
 
-        if (tagsFile.exists()) {
-            val tags = tagsFile.readText().parseAs<Data<List<Tag>>>().data
+    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/tag/list").parseAs<Data<List<Tag>>>().data.toJsonElement()
 
-            // refresh if older than 12 hours
-            val expiry = System.currentTimeMillis() - 12.hours.inWholeMilliseconds
-            if (tagsFile.lastModified() < expiry) {
-                fetchOnlineTags(tagsFile)
-            }
-
-            return tags
-        } else {
-            fetchOnlineTags(tagsFile)
-
-            return emptyList()
-        }
-    }
-
-    private val fetchingOnlineTags = AtomicBoolean(false)
-
-    private fun fetchOnlineTags(tagsFile: File) {
-        if (!fetchingOnlineTags.compareAndSet(false, true)) return
-
-        val request = GET("$API_URL/tag/list", headers)
-
-        client.newCall(request).enqueue(
-            object : Callback {
-                override fun onResponse(call: Call, response: Response) {
-                    try {
-                        if (response.isSuccessful) {
-                            val tmpFile = File(tagsFile.absolutePath + ".tmp")
-                            response.body.byteStream().use { input ->
-                                tmpFile.outputStream().use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                            tmpFile.renameTo(tagsFile)
-                        }
-                    } finally {
-                        fetchingOnlineTags.set(false)
-                    }
-                }
-
-                override fun onFailure(call: Call, e: IOException) {
-                    Log.e(name, "Failed to fetch tags", e)
-                    fetchingOnlineTags.set(false)
-                }
-            },
-        )
-    }
-
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>(
             TypeFilter(),
             StatusFilter(),
             SortFilter(),
         )
 
-        val tags = fetchCachedTags()
+        val tags = data?.parseAs<List<Tag>>()
 
-        if (tags.isEmpty()) {
-            filters.addAll(
-                listOf(
-                    Filter.Separator(),
-                    Filter.Header("Press 'reset' to fetch tags"),
-                ),
-            )
-        } else {
+        if (tags != null) {
             val genre = TriStateGroupFilter(
                 name = "Genre",
                 options = tags.filter { it.type == "genre" }
@@ -186,9 +130,7 @@ abstract class MangaCloud : HttpSource() {
         return FilterList(filters)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$API_URL/comic/library"
-
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank() && query.length < 3) {
             throw Exception("Search query must be more than 3 characters!")
         }
@@ -201,15 +143,9 @@ abstract class MangaCloud : HttpSource() {
             includes = filters.filterIsInstance<TriStateGroupFilter>().flatMap { it.included },
             excludes = filters.filterIsInstance<TriStateGroupFilter>().flatMap { it.excluded },
             page = page,
-        )
-            .toJsonString()
-            .toRequestBody(jsonMediaType)
+        ).toJsonRequestBody()
 
-        return POST(url, headers, payload)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<Data<List<BrowseManga>>>()
+        val data = client.post("$API_URL/comic/library", body = payload).parseAs<Data<List<BrowseManga>>>()
 
         val mangas = data.data.map(BrowseManga::toSManga)
         val hasNextPage = data.data.size == 10
@@ -217,40 +153,27 @@ abstract class MangaCloud : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            val path = url.pathSegments
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val path = url.pathSegments
 
-            if (url.host == DOMAIN && path[0] == "comic" && path.size > 1) {
-                val comicId = path[1]
-
-                return client.newCall(mangaDetailsRequest(comicId))
-                    .asObservableSuccess()
-                    .map(::mangaDetailsParse)
-                    .map { MangasPage(listOf(it), false) }
-            } else {
-                throw Exception("Unsupported Url")
-            }
+        if (url.host != DOMAIN || path[0] != "comic" || path.size <= 1) {
+            return null
         }
 
-        return super.fetchSearchManga(page, query, filters)
+        return client.get("$API_URL/comic/${path[1]}").parseAs<Data<Manga>>().data.toSManga()
     }
-
-    override fun mangaDetailsRequest(manga: SManga) = mangaDetailsRequest(manga.url)
-
-    private fun mangaDetailsRequest(comicId: String) = GET("$API_URL/comic/$comicId", headers)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response) = response.parseAs<Data<Manga>>().data.toSManga()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val data = client.get("$API_URL/comic/${manga.url}").parseAs<Data<Manga>>().data
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<Data<Manga>>().data
-
-        return data.chapters.map { chapter ->
+        val updatedChapters = data.chapters.map { chapter ->
             SChapter.create().apply {
                 url = ChapterUrl(data.id, chapter.id).toJsonString()
                 name = buildString {
@@ -265,34 +188,23 @@ abstract class MangaCloud : HttpSource() {
                 date_upload = chapter.date
             }
         }
-    }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
-
-        return GET("$API_URL/chapters/$chapterId", headers)
+        return SMangaUpdate(data.toSManga(), updatedChapters)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val (comicId, chapterId) = chapter.url.parseAs<ChapterUrl>()
+        val chapterUrl = chapter.url.parseAs<ChapterUrl>()
 
-        return "$baseUrl/comic/$comicId/chapter/$chapterId"
+        return "$baseUrl/comic/${chapterUrl.comicId}/chapter/${chapterUrl.chapterId}"
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<Data<ChapterContent>>().data
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
+
+        val data = client.get("$API_URL/chapters/$chapterId").parseAs<Data<ChapterContent>>().data
 
         return data.images.mapIndexed { idx, img ->
             Page(idx, imageUrl = "$CDN_URL/${data.comicId}/${data.id}/${img.id}.${img.format}")
         }
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    private fun generateKey(): String {
-        val timestamp = (System.currentTimeMillis() / 1000).toString().reversed()
-        return timestamp.map { "${(0..9).random()}$it" }.joinToString("")
-    }
 }
-
-private val jsonMediaType = "application/json".toMediaType()
