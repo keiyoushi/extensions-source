@@ -2,11 +2,13 @@ package eu.kanade.tachiyomi.extension.en.luminaretranslations
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseZonedDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
-import java.text.SimpleDateFormat
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Serializable
@@ -35,69 +37,31 @@ class Meta(
 )
 
 @Serializable
-class DetailsResponse(
-    val data: Details,
-)
-
-@Serializable
-class Details(
-    private val title: String,
-    private val status: String?,
-    @SerialName("cover_image") private val coverImage: String?,
-    private val genres: List<String>?,
-    private val description: String?,
-    private val author: String?,
-    private val artist: String?,
-) {
-    fun toSManga() = SManga.create().apply {
-        title = this@Details.title
-        author = this@Details.author
-        artist = this@Details.artist
-        description = this@Details.description
-        genre = genres?.joinToString()
-        status = when (this@Details.status) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            "hiatus" -> SManga.ON_HIATUS
-            "dropped" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
-        thumbnail_url = coverImage
-    }
-}
-
-@Serializable
-class ChapterResponse(
-    val data: List<ChapterData>,
+class InfoRow(
+    val label: String,
+    val value: String,
 )
 
 @Serializable
 class ChapterData(
-    private val title: String?,
+    private val id: Int,
     private val number: Float,
-    private val slug: String,
+    private val title: String?,
+    private val subtitle: String?,
     @SerialName("published_at") private val publishedAt: String?,
 ) {
     fun toSChapter(entrySlug: String) = SChapter.create().apply {
         val chapterNum = if (number % 1f == 0f) number.toInt() else number
-        url = "$entrySlug/$slug"
-        name = title ?: "Chapter $chapterNum"
+        url = id.toString()
+        memo = buildJsonObject { put("seriesSlug", entrySlug) }
+        name = (title?.takeIf { it.isNotBlank() } ?: "Chapter $chapterNum") +
+            (subtitle?.takeIf { it.isNotBlank() }?.let { " - $it" } ?: "")
         chapter_number = number
-        date_upload = dateFormat.tryParse(publishedAt)
+        date_upload = dateFormat.tryParseZonedDateTime(publishedAt)
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
-
-@Serializable
-class ViewerResponse(
-    val data: ViewerData,
-)
-
-@Serializable
-class ViewerData(
-    val pages: List<String>,
-)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss[XXX][XX]", Locale.ROOT)
 
 @Serializable
 class FilterResponse(
