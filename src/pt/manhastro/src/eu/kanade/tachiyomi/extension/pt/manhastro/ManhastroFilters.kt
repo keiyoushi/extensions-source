@@ -19,13 +19,14 @@ class SortFilter :
         SORT_OPTIONS.map { it.first }.toTypedArray(),
     ) {
     val selected get() = SORT_OPTIONS[state].second
+    val order get() = SORT_OPTIONS[state].third
 
     companion object {
         private val SORT_OPTIONS = listOf(
-            "Mais Popular" to "popular",
-            "Mais Recente" to "recent",
-            "Título (A-Z)" to "alphabetical",
-            "Mais Capítulos" to "chapters",
+            Triple("Mais Popular", "views", "desc"),
+            Triple("Últimas Atualizações", "ultimo_capitulo", "desc"),
+            Triple("Mais Recente", "data", "desc"),
+            Triple("Título (A-Z)", "titulo", "asc"),
         )
     }
 }
@@ -39,11 +40,11 @@ class TypeFilter(types: List<Pair<String, String>>) :
 class TypeCheckBox(name: String, val value: String) : Filter.CheckBox(name, false)
 
 private fun getTypeList() = listOf(
-    "Manhwa" to "Manhwa",
-    "Manhua" to "Manhua",
-    "Manga" to "Manga",
-    "Webtoon" to "Webtoon",
-    "Novel" to "Novel",
+    "Manhwa" to "manhwa",
+    "Manhua" to "manhua",
+    "Manga" to "manga",
+    "Webtoon" to "webtoon",
+    "Comic" to "comic",
 )
 
 class GenreFilter(genres: List<Pair<String, String>>) :
