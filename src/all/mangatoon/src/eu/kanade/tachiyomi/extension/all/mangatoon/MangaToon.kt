@@ -1,28 +1,30 @@
 package eu.kanade.tachiyomi.extension.all.mangatoon
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class MangaToon : HttpSource() {
+abstract class MangaToon : KeiSource() {
 
     private val urlLang: String get() = if (lang == "zh") {
         "cn"
@@ -32,11 +34,7 @@ abstract class MangaToon : HttpSource() {
         lang
     }
 
-    override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 1.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 1.seconds)
 
     private val locale by lazy { Locale.forLanguageTag(lang) }
 
@@ -50,32 +48,26 @@ abstract class MangaToon : HttpSource() {
                 "Use the MangaToon official app to purchase and read it."
     }
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         // Portuguese website doesn't seem to have popular titles.
         val path = if (lang == "pt-BR") "comic" else "hot"
-        return GET("$baseUrl/$urlLang/genre/$path?type=1&page=${page - 1}", headers)
+        return mangaListParse(client.get("$baseUrl/$urlLang/genre/$path?type=1&page=${page - 1}"))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun mangaListParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("div.genre-content div.items a").map { mangaFromElement(it) }
         val hasNextPage = document.selectFirst("span.next") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$urlLang/genre/new?type=1&page=${page - 1}", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/$urlLang/genre/new?type=1&page=${page - 1}"))
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchUrl = "$baseUrl/$urlLang/search".toHttpUrl().newBuilder()
             .addQueryParameter("word", query)
-            .toString()
-        return GET(searchUrl, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+            .build()
+        val document = client.get(searchUrl).asJsoup()
         val mangas = document.select("div.comics-result div.recommend-item:has(a[abs:href^=$baseUrl])").map { element ->
             SManga.create().apply {
                 title = element.select("div.recommend-comics-title").text()
@@ -93,66 +85,60 @@ abstract class MangaToon : HttpSource() {
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            author = document.select("div.detail-author-name span").text()
-                .substringAfter(": ")
-            description = document.select("div.detail-description-short p")
-                .joinToString("\n\n") { it.text() }
-            genre = document.select("div.detail-tags-info span").text()
-                .split("/")
-                .map { it.capitalize(locale) }
-                .sorted()
-                .joinToString { it.trim() }
-            status = document.select("div.detail-status").text().toStatus()
-            val thumbnail = document.select("div.detail-img img").imgAttr().toNormalPosterUrl()
-            if (!thumbnail.contains("cartoon-big-images")) {
-                thumbnail_url = thumbnail
-            }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(manga, document), chapterListParse(document))
+    }
+
+    private fun mangaDetailsParse(manga: SManga, document: Document): SManga = SManga.create().apply {
+        title = manga.title
+        author = document.select("div.detail-author-name span").text()
+            .substringAfter(": ")
+        description = document.select("div.detail-description-short p")
+            .joinToString("\n\n") { it.text() }
+        genre = document.select("div.detail-tags-info span").text()
+            .split("/")
+            .map { it.capitalize(locale) }
+            .sorted()
+            .joinToString { it.trim() }
+        status = document.select("div.detail-status").text().toStatus()
+        val thumbnail = document.select("div.detail-img img").imgAttr().toNormalPosterUrl()
+        if (!thumbnail.contains("cartoon-big-images")) {
+            thumbnail_url = thumbnail
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "/episodes", headers)
+    // The page only renders a few episodes; the full list (with paid flags) is embedded as JSON.
+    private fun chapterListParse(document: Document): List<SChapter> {
+        val watchPath = document.selectFirst("a.episode-item-new")?.attr("href")
+            ?.substringBeforeLast("/")
+            ?: return emptyList()
+        val episodes = document.select("script").firstNotNullOfOrNull { EPISODES_REGEX.find(it.data()) }
+            ?.groupValues?.get(1)
+            ?.replace(JS_ESCAPE_REGEX, "$1")
+            ?.parseAs<List<EpisodeDto>?>()
+            .orEmpty()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapterList = document.select("a.episode-item-new").map { element ->
+        return episodes.filterNot { it.isFee }.map {
             SChapter.create().apply {
-                name = element.select("div.episode-title-new:last-child").text()
-                chapter_number = element.select("div.episode-number").text()
-                    .toFloatOrNull() ?: -1f
-                date_upload = DATE_FORMAT.tryParse(element.select("div.episode-date span.open-date").text())
-                setUrlWithoutDomain(element.absUrl("href"))
+                name = it.title
+                chapter_number = it.weight
+                date_upload = DATE_FORMAT.tryParseDate(it.openAt)
+                setUrlWithoutDomain("$watchPath/${it.id}")
             }
-        }
-
-        // Finds the last free chapter to filter the paid ones from the list.
-        // The desktop website doesn't indicate which chapters are paid in
-        // the title page, and the mobile API is heavily encrypted.
-        val firstPaid = PAID_CHECK_BREAKPOINTS.find { breakpoint ->
-            if (breakpoint > chapterList.size) {
-                return@find false
-            }
-            val pageListRequest = pageListRequest(chapterList[breakpoint - 1])
-            val pageListResponse = client.newCall(pageListRequest).execute()
-            runCatching { pageListParse(pageListResponse) }
-                .getOrDefault(emptyList()).isEmpty()
-        }
-
-        return chapterList
-            .let { if (firstPaid != null) it.take(firstPaid - 1) else it }
-            .reversed()
+        }.reversed()
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("div.pictures div img:first-child")
-            .mapIndexed { i, element -> Page(i, imageUrl = element.imgAttr()) }
-            .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private fun pageListParse(document: Document): List<Page> = document.select("div.pictures div img:first-child")
+        .mapIndexed { i, element -> Page(i, imageUrl = element.imgAttr()) }
+        .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
 
     protected open fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
@@ -186,10 +172,12 @@ abstract class MangaToon : HttpSource() {
             "fin",
         )
 
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
 
         private val POSTER_SUFFIX = "(jpg)-poster(.*)\\d+?$".toRegex()
 
-        private val PAID_CHECK_BREAKPOINTS = arrayOf(5, 10, 15, 20)
+        private val EPISODES_REGEX = """data = JSON\.parse\('(.*)'\);""".toRegex()
+
+        private val JS_ESCAPE_REGEX = """\\(["'])""".toRegex()
     }
 }
