@@ -1,54 +1,46 @@
 package eu.kanade.tachiyomi.extension.en.manhwazone
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.addJsonObject
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.put
+import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class ManhwaZone : HttpSource() {
+abstract class ManhwaZone : KeiSource() {
 
-    override val supportsLatest = true
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/series?sortBy=popularity&page=$page").asJsoup())
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/series?sortBy=latest&page=$page").asJsoup())
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || !url.encodedPath.startsWith("/series/")) return null
+
+        return parseMangaDetails(client.get(url).asJsoup()).apply {
+            this.url = url.encodedPath
+        }
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series?sortBy=popularity&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/series?sortBy=latest&page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith("https://") && query.contains(baseUrl.toHttpUrl().host)) {
-            return GET(query, headers)
-        }
-
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
@@ -77,17 +69,7 @@ abstract class ManhwaZone : HttpSource() {
             }
         }
 
-        return GET(url.build().toString(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        if (response.request.url.encodedPath.startsWith("/series/")) {
-            val manga = parseMangaDetails(document)
-            manga.url = response.request.url.encodedPath
-            return MangasPage(listOf(manga), false)
-        }
-        return parseMangaList(document)
+        return parseMangaList(client.get(url.build()).asJsoup())
     }
 
     private fun parseMangaList(document: Document): MangasPage {
@@ -102,7 +84,19 @@ abstract class ManhwaZone : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = parseMangaDetails(response.asJsoup())
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val updatedManga = parseMangaDetails(document).apply { url = manga.url }
+        val chapterList = if (fetchChapters) fetchChapterList(document) else chapters
+
+        return SMangaUpdate(updatedManga, chapterList)
+    }
 
     private fun parseMangaDetails(document: Document): SManga {
         val manga = SManga.create()
@@ -110,7 +104,7 @@ abstract class ManhwaZone : HttpSource() {
         manga.title = document.selectFirst("h1.page-title")!!.text()
         manga.description = document.selectFirst("p.page-subtitle")?.text()
         manga.thumbnail_url = document.selectFirst("img.aspect-\\[7\\/10\\], figure.relative img")?.attr("abs:src")
-        manga.genre = document.select("a.badge-genre").joinToString(", ") { it.text() }
+        manga.genre = document.select("a.badge-genre").joinToString { it.text() }
 
         val statusText = document.selectFirst("span.badge-sm, span:contains(On Going), span:contains(Completed)")?.text()?.trim()
         manga.status = when (statusText?.lowercase()) {
@@ -123,7 +117,6 @@ abstract class ManhwaZone : HttpSource() {
 
         val jsonLd = document.selectFirst("script[type=application/ld+json]")?.data()
         if (jsonLd != null) {
-            val authorRegex = """"author":\s*\[\s*\{"@type":"Person","name":"([^"]+)"""".toRegex()
             val authorMatch = authorRegex.find(jsonLd)?.groupValues?.get(1)
             if (authorMatch != null && authorMatch.lowercase() != "unknown") {
                 manga.author = authorMatch
@@ -133,115 +126,73 @@ abstract class ManhwaZone : HttpSource() {
         return manga
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private val jsonHeaders get() = headers.newBuilder()
+        .add("Accept", "application/json")
+        .build()
+
+    private suspend fun fetchChapterList(document: Document): List<SChapter> {
         val wireDiv = document.selectFirst("div[wire:snapshot][wire:id][wire:init=bootLoad]")
             ?: return emptyList()
 
         val csrfToken = document.selectFirst("meta[name=csrf-token]")?.attr("content") ?: ""
         val snapshot = wireDiv.attr("wire:snapshot")
 
-        val payload = buildJsonObject {
-            put("_token", csrfToken)
-            put(
-                "components",
-                buildJsonArray {
-                    addJsonObject {
-                        put("snapshot", snapshot)
-                        put("updates", buildJsonObject {})
-                        put(
-                            "calls",
-                            buildJsonArray {
-                                addJsonObject {
-                                    put("path", "")
-                                    put("method", "bootLoad")
-                                    put("params", buildJsonArray {})
-                                }
-                            },
-                        )
-                    }
-                },
-            )
-        }
-
-        val postHeaders = headersBuilder()
-            .add("Accept", "application/json")
-            .add("Content-Type", "application/json")
-            .build()
-
-        val postRequest = POST(
-            "$baseUrl/livewire/update",
-            postHeaders,
-            payload.toJsonString().toRequestBody("application/json".toMediaType()),
+        val payload = LivewireRequestDto(
+            token = csrfToken,
+            components = listOf(
+                LivewireRequestComponentDto(
+                    snapshot = snapshot,
+                    updates = JsonObject(emptyMap()),
+                    calls = listOf(LivewireCallDto(path = "", method = "bootLoad", params = emptyList())),
+                ),
+            ),
         )
 
-        val postResponse = client.newCall(postRequest).execute()
-        if (!postResponse.isSuccessful) return emptyList()
+        val postResponse = client.post("$baseUrl/livewire/update", jsonHeaders, payload.toJsonRequestBody(), ensureSuccess = false)
+        if (!postResponse.isSuccessful) {
+            postResponse.close()
+            return emptyList()
+        }
 
         val updateDto = postResponse.parseAs<LivewireUpdateDto>()
         val snapshotStr = updateDto.components.firstOrNull()?.snapshot ?: return emptyList()
         val snapshotDto = snapshotStr.parseAs<SnapshotDto>()
 
-        val chaptersArray = snapshotDto.data?.chapters?.jsonArray ?: return emptyList()
-        val actualChapters = chaptersArray.getOrNull(0)?.jsonArray ?: return emptyList()
+        // Livewire serializes collections as [value, meta] tuples
+        val actualChapters = snapshotDto.data?.chapters?.getOrNull(0)?.parseAs<List<List<JsonElement>>>()
+            ?: return emptyList()
 
-        val chapters = mutableListOf<SChapter>()
-        for (item in actualChapters) {
-            val chapterTuple = item.jsonArray
-            val chapterElement = chapterTuple.getOrNull(0) ?: continue
-            val chapterDto = chapterElement.parseAs<ChapterDto>()
+        return actualChapters.mapNotNull { chapterTuple ->
+            val chapterDto = chapterTuple.getOrNull(0)?.parseAs<ChapterDto>() ?: return@mapNotNull null
+            val webUrl = chapterDto.webUrl ?: return@mapNotNull null
 
-            val webUrl = chapterDto.webUrl ?: continue
-            val name = chapterDto.name ?: "Chapter"
-            val dateStr = chapterDto.published
-
-            chapters.add(
-                SChapter.create().apply {
-                    url = webUrl
-                    this.name = name
-                    date_upload = dateFormat.tryParse(dateStr)
-                },
-            )
-        }
-        return chapters
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val rsConfScript = document.selectFirst("script:containsData(__RS_CONF__)")?.data()
-
-        if (rsConfScript != null) {
-            try {
-                val jsonStr = Regex("""__RS_CONF__\s*=\s*(\{.*?\})\s*;""").find(rsConfScript)?.groupValues?.get(1)
-                if (jsonStr != null) {
-                    val rsConf = jsonStr.parseAs<RsConfDto>()
-
-                    if (rsConf.p != null && rsConf.expire != null && rsConf.signature != null && rsConf.tt != null && rsConf.tt > 0) {
-                        return (1..rsConf.tt).map { i ->
-                            val pageStr = String.format(Locale.ROOT, "%03d", i)
-                            val imageUrl = "https://img.mangalaxy.net/_img/${rsConf.p}/$pageStr.webp?e=${rsConf.expire}&s=${rsConf.signature}"
-                            Page(i - 1, "", imageUrl)
-                        }
-                    }
-                }
-            } catch (_: Exception) {
-                // Fallback to data-src fetching below if conversion fails or if tt is 0
+            SChapter.create().apply {
+                url = webUrl
+                name = chapterDto.name ?: "Chapter"
+                date_upload = dateFormat.tryParseDateTime(chapterDto.published)
             }
         }
-
-        // Fallback approach if __RS_CONF__ parsing fails or tt == 0
-        return document.select("img.lazy-image[data-src]").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:data-src"))
-        }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // The __RS_CONF__ image host (img.mangalaxy.net) no longer resolves; the page also lists the images directly
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+        .select("img.lazy-image[data-src]")
+        .mapIndexed { i, element -> Page(i, imageUrl = element.attr("abs:data-src")) }
+
+    // The image CDN answers 403 when the Referer is the site
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .removeHeader("Referer")
+        .build()
 
     // ── Filters ───────────────────────────────────────────────────────────────
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         StatusFilter(),
         GenreFilterGroup(getGenreList()),
     )
+
+    companion object {
+        private val authorRegex = """"author":\s*\[\s*\{"@type":"Person","name":"([^"]+)"""".toRegex()
+    }
 }
