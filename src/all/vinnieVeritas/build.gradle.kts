@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Vinne Veritas - CCC"
-    versionCode = 3
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf("en", "es").forEach {
         source {

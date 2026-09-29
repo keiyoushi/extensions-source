@@ -1,11 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
 
+import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import java.text.SimpleDateFormat
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -722,14 +724,13 @@ class DataExtractor(val extractionElement: Element) {
         return result
     }
 
-    private val absoluteDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    // site uses abbreviated month names ("Jul 31, 2021")
+    private val absoluteDateFormat = DateTimeFormatter.ofPattern("[MMMM d, yyyy][MMM d, yyyy]", Locale.US)
 
     private val relativeChapterDateRegex = """(\d+)\s+(years?|months?|weeks?|days?|hours?|mins?|minutes?|seconds?|sec)\s+ago""".toRegex(RegexOption.IGNORE_CASE)
 
     private fun String.tryAnalyzeChapterDate(): Long {
-        val match = relativeChapterDateRegex.matchEntire(this.trim()) ?: return absoluteDateFormat.parse(this)?.time ?: 0L
+        val match = relativeChapterDateRegex.matchEntire(this.trim()) ?: return absoluteDateFormat.tryParseDate(this.trim(), ZoneOffset.UTC)
 
         val number: Int = match.groupValues[1].toInt()
         val relativity: String = match.groupValues[2]
