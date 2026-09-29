@@ -17,6 +17,20 @@ class ApiLectorPage(
 )
 
 @Serializable
+class ChaptersResponse(
+    val chapters: List<ChapterItem>,
+    @SerialName("has_more") val hasMore: Boolean,
+)
+
+@Serializable
+class ChapterItem(
+    val number: String,
+    val title: String,
+    @SerialName("published_at") val publishedAt: String?,
+    @SerialName("is_locked") val isLocked: Boolean,
+)
+
+@Serializable
 class SearchResponseItem(
     private val id: Int,
     private val titulo: String,

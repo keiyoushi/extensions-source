@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Jeaz Scans"
-    versionCode = 68
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "es"
