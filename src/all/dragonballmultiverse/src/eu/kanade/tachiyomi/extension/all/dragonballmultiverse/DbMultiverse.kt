@@ -9,28 +9,28 @@ import android.graphics.text.LineBreaker
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import rx.Observable
 
 @Source
-abstract class DbMultiverse : HttpSource() {
+abstract class DbMultiverse : KeiSource() {
 
     private val internalLang: String
         get() = when (lang) {
@@ -75,14 +75,10 @@ abstract class DbMultiverse : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = super.client.newBuilder()
-        .addNetworkInterceptor(::drawBalloonsOnImage)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(::drawBalloonsOnImage)
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$internalLang/read.html", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/$internalLang/read.html").asJsoup()
         val mangas = document.select("#dbm-reads .dbm-read").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("h3")!!.text()
@@ -94,20 +90,29 @@ abstract class DbMultiverse : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = manga.apply {
-        initialized = true
-    }.let { Observable.just(it) }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
 
     protected open val chapterListSelector: String = ".cadrelect.chapter"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector).map {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
+
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val newChapters = document.select(chapterListSelector).map {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.selectFirst("a[href]")!!.attr("abs:href"))
                 name = it.selectFirst("h4")!!.text()
             }
         }.reversed()
+
+        return SMangaUpdate(manga, newChapters)
     }
 
     @Serializable
@@ -124,15 +129,15 @@ abstract class DbMultiverse : HttpSource() {
         val width: Float,
     )
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".pageslist a[href]").mapIndexed { index, a ->
             Page(index, url = a.attr("abs:href"))
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        val document = response.asJsoup()
+    override suspend fun getImageUrl(page: Page): String {
+        val document = client.get(page.url).asJsoup()
         val element = document.selectFirst("#balloonsimg")!!
 
         val rawImageUrl = when {
@@ -226,16 +231,4 @@ abstract class DbMultiverse : HttpSource() {
             .body(buffer.asResponseBody("image/jpeg".toMediaType(), buffer.size))
             .build()
     }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 }
