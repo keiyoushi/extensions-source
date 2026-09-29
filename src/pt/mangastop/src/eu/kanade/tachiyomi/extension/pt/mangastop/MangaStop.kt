@@ -95,11 +95,7 @@ abstract class MangaStop : KeiSource() {
         return fetchObra(mangaId).toSManga()
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        if (manga.url.isId()) return "$baseUrl/obra/${manga.url}"
-        val id = manga.memo["id"]?.stringOrNull ?: return baseUrl + manga.url
-        return "$baseUrl/obra/$id"
-    }
+    override fun getMangaUrl(manga: SManga): String = manga.knownId()?.let { "$baseUrl/obra/$it" } ?: (baseUrl + manga.url)
 
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.isId()) "$baseUrl/leitor/${chapter.url}" else baseUrl + chapter.url
 
@@ -109,7 +105,7 @@ abstract class MangaStop : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val id = resolveId(manga.url) ?: throw Exception("Obra não encontrada")
+        val id = manga.knownId() ?: resolveId(manga.url) ?: throw Exception("Obra não encontrada")
         val obra = fetchObra(id)
         return SMangaUpdate(obra.toSManga(), obra.toSChapterList())
     }
@@ -148,6 +144,8 @@ abstract class MangaStop : KeiSource() {
     }
 
     private fun String.isId() = isNotEmpty() && all { it in '0'..'9' }
+
+    private fun SManga.knownId(): String? = url.takeIf { it.isId() } ?: memo["id"]?.stringOrNull
 
     override val supportsFilterFetching get() = true
 
