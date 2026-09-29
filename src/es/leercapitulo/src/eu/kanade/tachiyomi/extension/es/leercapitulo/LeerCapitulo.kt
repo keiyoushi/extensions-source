@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -34,7 +33,6 @@ abstract class LeerCapitulo : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    // 1. Populares: Extraído directamente de la portada de la web
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -46,7 +44,6 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
-    // 2. Últimos: Extraído directamente de la portada de la web
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -58,7 +55,6 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
-    // 3. Búsqueda normal sin autocompletado
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = "$baseUrl/manga/".toHttpUrl().newBuilder()
 
@@ -66,11 +62,20 @@ abstract class LeerCapitulo : HttpSource() {
             urlBuilder.addQueryParameter("q", query)
         }
 
-        filters.firstInstanceOrNull()?.takeIf { it.state != 0 }?.let { filter ->
-            urlBuilder.addQueryParameter("genre", filter.toUriPart())
-        }
-        filters.firstInstanceOrNull()?.takeIf { it.state != 0 }?.let { filter ->
-            urlBuilder.addQueryParameter("status", filter.toUriPart())
+        filters.forEach { filter ->
+            when (filter) {
+                is GenreFilter -> {
+                    if (filter.state != 0) {
+                        urlBuilder.addQueryParameter("genre", filter.toUriPart())
+                    }
+                }
+                is StatusFilter -> {
+                    if (filter.state != 0) {
+                        urlBuilder.addQueryParameter("status", filter.toUriPart())
+                    }
+                }
+                else -> {}
+            }
         }
 
         urlBuilder.addQueryParameter("page", page.toString())
@@ -84,7 +89,6 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // Función auxiliar unificada para leer tarjetas .lc-card (búsqueda) y .lc-side-item (portada)
     private fun Element.toSManga(): SManga? {
         val link = selectFirst("a.lc-card-name") ?: selectFirst("a.lc-card-cover") ?: selectFirst("a") ?: return null
         val url = link.attr("abs:href")
