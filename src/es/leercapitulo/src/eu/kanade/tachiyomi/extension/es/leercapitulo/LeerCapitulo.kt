@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.leercapitulo
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,12 +11,10 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
@@ -37,26 +34,33 @@ abstract class LeerCapitulo : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/manga/".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "az")
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, headers)
+    // 1. Populares: Extraído directamente de la portada de la web
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        // Seleccionamos las tarjetas que están bajo el título de "Populares"
+        val mangas = document.select("h2:contains(Populares), h3:contains(Populares), .title:contains(Populares)")
+            .first()?.parent()?.select("article.lc-card")
+            ?.mapNotNull { it.toSManga() } ?: emptyList()
+        
+        return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response)
+    // 2. Últimos: Extraído directamente de la portada de la web
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/manga/".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "za")
-            .addQueryParameter("page", page.toString())
-            .build()
-        return GET(url, headers)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        // Seleccionamos las tarjetas que están bajo el título de "Últimos mangas"
+        val mangas = document.select("h2:contains(Ultimos), h3:contains(Ultimos), h2:contains(Últimos), h3:contains(Últimos)")
+            .first()?.parent()?.select("article.lc-card")
+            ?.mapNotNull { it.toSManga() } ?: emptyList()
+            
+        return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response)
-
+    // 3. Búsqueda normal sin autocompletado (eliminada la función fetchSearchManga)
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = "$baseUrl/manga/".toHttpUrl().newBuilder()
 
@@ -75,53 +79,29 @@ abstract class LeerCapitulo : HttpSource() {
         return GET(urlBuilder.build(), headers)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.isBlank()) {
-            return client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { searchMangaParse(it) }
-        }
-
-        val autocompleteUrl = "$baseUrl/search-autocomplete?term=$query"
-        return client.newCall(GET(autocompleteUrl, headers)).asObservableSuccess()
-            .map { response ->
-                val mangas = runCatching {
-                    response.parseAs<List<Dto>>().map { it.toSManga() }
-                }.getOrNull() ?: emptyList()
-
-                if (mangas.isEmpty()) throw Exception("Empty autocomplete")
-                MangasPage(mangas, false)
-            }
-            .onErrorResumeNext {
-                client.newCall(searchMangaRequest(page, query, filters))
-                    .asObservableSuccess()
-                    .map { searchMangaParse(it) }
-            }
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response)
-
-    private fun parseMangaList(response: Response): MangasPage {
+    override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("article.lc-card").mapNotNull { card ->
-            val link = card.selectFirst("a.lc-card-name") ?: card.selectFirst("a.lc-card-cover") ?: return@mapNotNull null
-            val url = link.attr("abs:href")
-            if (url.isBlank()) return@mapNotNull null
-
-            val titleText = card.selectFirst("a.lc-card-name")?.text() ?: link.text()
-            if (titleText.isBlank()) return@mapNotNull null
-
-            val img = card.selectFirst("a.lc-card-cover img")
-
-            SManga.create().apply {
-                setUrlWithoutDomain(url)
-                title = titleText.trim()
-                thumbnail_url = img?.imgAttr()
-            }
-        }.distinctBy { it.url }
-
+        val mangas = document.select("article.lc-card").mapNotNull { it.toSManga() }.distinctBy { it.url }
         val hasNextPage = document.selectFirst("ul.pagination li.active + li:not(.disabled) a") != null
         return MangasPage(mangas, hasNextPage)
+    }
+
+    // Función auxiliar para parsear las tarjetas tanto en portada como en búsqueda
+    private fun Element.toSManga(): SManga? {
+        val link = selectFirst("a.lc-card-name") ?: selectFirst("a.lc-card-cover") ?: return null
+        val url = link.attr("abs:href")
+        if (url.isBlank()) return null
+
+        val titleText = selectFirst("a.lc-card-name")?.text() ?: link.text()
+        if (titleText.isBlank()) return null
+
+        val img = selectFirst("a.lc-card-cover img")
+
+        return SManga.create().apply {
+            setUrlWithoutDomain(url)
+            title = titleText.trim()
+            thumbnail_url = img?.imgAttr()
+        }
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -177,33 +157,23 @@ abstract class LeerCapitulo : HttpSource() {
         }
     }
 
+    // 4. Eliminado el fallback genérico de imágenes para mayor seguridad
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-
-        // Extracción directa de las imágenes en el nuevo visor (#lcPages o .lc-pages)
         val imageElements = document.select("#lcPages img, main.lc-pages img, .lc-pages img")
+        
         val pages = imageElements.mapNotNull { element ->
             val src = element.imgAttr()
             if (src.startsWith("http")) src else null
         }
 
-        if (pages.isNotEmpty()) {
-            return pages.mapIndexed { i, imageUrl ->
-                Page(i, imageUrl = imageUrl)
-            }
+        if (pages.isEmpty()) {
+            throw Exception("No se encontraron páginas en este capítulo")
         }
 
-        // Fallback genérico por si cambian la clase contenedora
-        val fallbackImages = document.select("main img, #chapter-content img, .chapter-content img")
-            .mapNotNull { it.imgAttr().takeIf { src -> src.startsWith("http") } }
-
-        if (fallbackImages.isNotEmpty()) {
-            return fallbackImages.mapIndexed { i, imageUrl ->
-                Page(i, imageUrl = imageUrl)
-            }
+        return pages.mapIndexed { i, imageUrl ->
+            Page(i, imageUrl = imageUrl)
         }
-
-        throw Exception("No se encontraron páginas en este capítulo")
     }
 
     private fun Element.imgAttr(): String = when {
@@ -215,17 +185,12 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun Dto.toSManga() = SManga.create().apply {
-        setUrlWithoutDomain(link)
-        title = label
-        thumbnail_url = if (thumbnail.startsWith("http")) thumbnail else baseUrl + thumbnail
-    }
-
+    // 5. Detectores de estado actualizados al inglés
     private fun String.toStatus() = when (this.lowercase().trim()) {
-        "ongoing", "en emision" -> SManga.ONGOING
-        "completed", "finalizado" -> SManga.COMPLETED
-        "paused", "pausado" -> SManga.ON_HIATUS
-        "cancelled", "cancelado" -> SManga.CANCELLED
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "paused", "hiatus" -> SManga.ON_HIATUS
+        "cancelled" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 
