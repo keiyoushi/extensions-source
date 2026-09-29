@@ -89,9 +89,13 @@ abstract class Sacachispa : KeiSource() {
         val details = client.get("$API_URL/manga/${manga.url}").parseAs<MangaResponse>().data
 
         return SManga.create().apply {
-            // Persist the UUID so legacy slug-based entries stop resolving it on every refresh.
-            url = details.id
-            memo = buildJsonObject { put("slug", details.slug) }
+            // manga.url is immutable for existing entries, so legacy slug-based manga can't be
+            // migrated by rewriting it; keep the id in memo to avoid re-resolving on every refresh.
+            url = manga.url
+            memo = buildJsonObject {
+                put("id", details.id)
+                put("slug", details.slug)
+            }
             title = details.title
             thumbnail_url = details.covers.firstOrNull()?.image?.toCoverUrl()
             author = details.authors.joinToString { it.name }.ifEmpty { null }
@@ -107,7 +111,9 @@ abstract class Sacachispa : KeiSource() {
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         // The releases endpoint is keyed by the manga UUID; library entries created
         // before the site rewrite still hold the slug.
-        val mangaId = manga.url.takeIf { UUID_REGEX.matches(it) } ?: resolveMangaId(manga.url)
+        val mangaId = manga.url.takeIf { UUID_REGEX.matches(it) }
+            ?: manga.memo.getStringOrNull("id")
+            ?: resolveMangaId(manga.url)
 
         val chapters = mutableListOf<SChapter>()
         var page = 1
