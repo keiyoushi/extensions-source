@@ -101,5 +101,11 @@ abstract class Kiutaku : KeiSource() {
         .select("div.article-fulltext img[src]")
         .mapIndexed { index, item -> Page(index, imageUrl = item.absUrl("src")) }
 
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+        .select("div.bottom-articles .items-row")
+        .map(::mangaFromElement)
+
     private fun getPage(page: Int) = (page - 1) * 20
 }
