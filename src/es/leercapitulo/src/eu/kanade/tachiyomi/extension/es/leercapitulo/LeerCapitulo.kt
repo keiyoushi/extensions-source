@@ -63,14 +63,10 @@ abstract class LeerCapitulo : HttpSource() {
         }
 
         for (filter in filters) {
-            if (filter is GenreFilter) {
-                if (filter.state != 0) {
-                    urlBuilder.addQueryParameter("genre", filter.toUriPart())
-                }
-            } else if (filter is StatusFilter) {
-                if (filter.state != 0) {
-                    urlBuilder.addQueryParameter("status", filter.toUriPart())
-                }
+            if (filter is GenreFilter && filter.state != 0) {
+                urlBuilder.addQueryParameter("genre", filter.toUriPart())
+            } else if (filter is StatusFilter && filter.state != 0) {
+                urlBuilder.addQueryParameter("status", filter.toUriPart())
             }
         }
 
@@ -134,44 +130,34 @@ abstract class LeerCapitulo : HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response): List {
-        val document = response.asJsoup()
-        val chapterRows = document.select("#chapterList a.lc-chapter-row")
-
-        return chapterRows.mapNotNull { element ->
+    override fun chapterListParse(response: Response) = response.asJsoup()
+        .select("#chapterList a.lc-chapter-row")
+        .mapNotNull { element ->
             val url = element.attr("abs:href")
-            if (url.isBlank()) return@mapNotNull null
-
-            val nameText = element.selectFirst("span.n")?.text() ?: element.text()
-            val dateText = element.selectFirst("span.d")?.text()
-
-            SChapter.create().apply {
-                setUrlWithoutDomain(url)
-                name = nameText.trim()
-                date_upload = dateText?.let {
-                    runCatching { dateFormat.parse(it)?.time }.getOrNull()
-                } ?: 0L
+            if (url.isBlank()) null else {
+                val nameText = element.selectFirst("span.n")?.text() ?: element.text()
+                val dateText = element.selectFirst("span.d")?.text()
+                
+                SChapter.create().apply {
+                    setUrlWithoutDomain(url)
+                    name = nameText.trim()
+                    date_upload = dateText?.let {
+                        runCatching { dateFormat.parse(it)?.time }.getOrNull()
+                    } ?: 0L
+                }
             }
         }
-    }
 
-    override fun pageListParse(response: Response): List {
-        val document = response.asJsoup()
-        val imageElements = document.select("#lcPages img, main.lc-pages img, .lc-pages img")
-
-        val pages = imageElements.mapNotNull { element ->
+    override fun pageListParse(response: Response) = response.asJsoup()
+        .select("#lcPages img, main.lc-pages img, .lc-pages img")
+        .mapNotNull { element ->
             val src = element.imgAttr()
             if (src.startsWith("http")) src else null
-        }
-
-        if (pages.isEmpty()) {
-            throw Exception("No se encontraron páginas en este capítulo")
-        }
-
-        return pages.mapIndexed { i, imageUrl ->
+        }.also {
+            if (it.isEmpty()) throw Exception("No se encontraron páginas en este capítulo")
+        }.mapIndexed { i, imageUrl ->
             Page(i, imageUrl = imageUrl)
         }
-    }
 
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
