@@ -1,45 +1,41 @@
 package eu.kanade.tachiyomi.extension.es.submanhwa
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class Submanhwa : HttpSource() {
+abstract class Submanhwa : KeiSource() {
 
-    override val supportsLatest = true
+    private val dateFormat = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.ENGLISH)
 
-    private val dateFormat = SimpleDateFormat("dd MMM. yyyy", Locale.ENGLISH)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept-Language", "es-PE,es;q=0.9,en-US;q=0.8,en;q=0.7")
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Accept-Language", "es-PE,es;q=0.9,en-US;q=0.8,en;q=0.7")
-        .add("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request = GET(
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
         baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("filterList")
             addQueryParameter("page", page.toString())
             addQueryParameter("sortBy", "views")
             addQueryParameter("asc", "false")
         }.build(),
-        headers,
     )
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private suspend fun parseMangaList(url: HttpUrl): MangasPage {
+        val document = client.get(url).asJsoup()
         val mangas = document.select(".series-card").map { element ->
             SManga.create().apply {
                 title = element.selectFirst(".series-title")!!.text()
@@ -52,10 +48,8 @@ abstract class Submanhwa : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select("div[class^=manga-item]").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("h3[class^=manga-title] a")!!.text()
@@ -67,11 +61,11 @@ abstract class Submanhwa : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(
+    override suspend fun getSearchMangaList(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Request = GET(
+    ): MangasPage = parseMangaList(
         baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("filterList")
             addQueryParameter("page", page.toString())
@@ -79,14 +73,17 @@ abstract class Submanhwa : HttpSource() {
             addQueryParameter("asc", "false")
             addQueryParameter("alpha", query)
         }.build(),
-        headers,
     )
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+        val details = SManga.create().apply {
             title = document.selectFirst(".manga-title-centered")!!.text()
             thumbnail_url = document.selectFirst("img")?.absUrl("src")
             description = document.selectFirst("h5:contains(Resumen) + p")?.text()
@@ -103,11 +100,8 @@ abstract class Submanhwa : HttpSource() {
             artist = box?.selectFirst(".detail-label:contains(Artist) + .detail-value a")?.text()
             genre = box?.select(".detail-label:contains(Categor) + .detail-value a")?.joinToString { it.text() }
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(".chapters-grid [class^=chapter-card]").map { element ->
+        val chapterList = document.select(".chapters-grid [class^=chapter-card]").map { element ->
             SChapter.create().apply {
                 val a = element.selectFirst("a.chapter-link")!!
                 name = a.text()
@@ -116,13 +110,15 @@ abstract class Submanhwa : HttpSource() {
                 val date = element.selectFirst("span:has(i.glyphicon-time)")?.text()
                     ?: element.selectFirst(".chapter-preview-meta > span")?.text()
 
-                date_upload = dateFormat.tryParse(date)
+                date_upload = dateFormat.tryParseDate(date)
             }
         }
+
+        return SMangaUpdate(details, chapterList)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("#all img").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.imgAttr())
         }
@@ -132,6 +128,4 @@ abstract class Submanhwa : HttpSource() {
         hasAttr("data-src") -> attr("abs:data-src")
         else -> attr("abs:src")
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
