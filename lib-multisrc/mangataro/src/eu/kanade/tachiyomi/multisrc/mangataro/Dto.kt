@@ -114,6 +114,8 @@ class Rendered(
 @Serializable
 class ChapterList(
     val chapters: List<Chapter>,
+    @SerialName("has_more")
+    val hasMore: Boolean = false,
 )
 
 @Serializable
