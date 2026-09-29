@@ -9,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.randomua.UserAgentType
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,10 +29,8 @@ import java.util.Locale
 @Source
 abstract class Toonkor : KeiSource() {
 
-    private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-
     // The site serves a reduced 30-item listing to Android user agents.
-    override fun Headers.Builder.configureHeaders() = set("User-Agent", userAgent)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = setRandomUserAgent(UserAgentType.DESKTOP)
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl$WEBTOONS_PATH$ALL_STATUS_PATH$SORT_POPULAR"))
 
@@ -63,6 +63,8 @@ abstract class Toonkor : KeiSource() {
 
         return MangasPage(mangas, false)
     }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,

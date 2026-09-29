@@ -21,3 +21,7 @@ keiyoushi {
         }
     }
 }
+
+dependencies {
+    implementation(project(":lib:randomua"))
+}
