@@ -1,47 +1,40 @@
 package eu.kanade.tachiyomi.extension.all.xiutaku
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class Xiutaku : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+abstract class Xiutaku : KeiSource() {
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(10, 1.seconds) { it.host == baseUrlHost }
 
-    override val client = network.client.newBuilder()
-        .rateLimit(10, 1.seconds) { it.host == baseUrlHost }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .setRandomUserAgent(UserAgentType.MOBILE)
+    override fun Headers.Builder.configureHeaders() = setRandomUserAgent(UserAgentType.MOBILE)
 
     // ========================= Popular =========================
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot?start=${20 * (page - 1)}", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangasPage(response.asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/hot?start=${20 * (page - 1)}").asJsoup())
 
     private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select(".blog > div").map(::mangaFromElement)
@@ -50,31 +43,26 @@ abstract class Xiutaku : HttpSource() {
     }
 
     // ========================= Latest =========================
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?start=${20 * (page - 1)}", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/?start=${20 * (page - 1)}").asJsoup())
 
     // ========================= Search =========================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val queryUrl = query.toHttpUrlOrNull()
-        if (queryUrl != null && queryUrl.host == "xiutaku.com") {
-            return GET(query, headers)
-        }
-
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addQueryParameter("search", query)
             addQueryParameter("start", (20 * (page - 1)).toString())
         }.build()
 
-        return GET(url, headers)
+        return parseMangasPage(client.get(url).asJsoup())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
+        if (url.host != "xiutaku.com") return MangasPage(emptyList(), false)
+
+        val document = client.get(url).asJsoup()
 
         if (document.selectFirst(".article-header") != null) {
             val manga = mangaDetailsParse(document).apply {
-                url = response.request.url.newBuilder().query(null).build().encodedPath
+                this.url = document.location().toHttpUrl().newBuilder().query(null).build().encodedPath
             }
             return MangasPage(listOf(manga), false)
         }
@@ -83,7 +71,15 @@ abstract class Xiutaku : HttpSource() {
     }
 
     // ========================= Details =========================
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
+    }
 
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst(".article-header")?.text() ?: throw Exception("Title is mandatory")
@@ -97,12 +93,11 @@ abstract class Xiutaku : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     // ========================= Chapters =========================
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun chapterListParse(document: Document): List<SChapter> {
         val dateUploadStr = document.selectFirst(".article-info > small")?.text()?.removePrefix("🕒")
-        val dateUpload = DATE_FORMAT.tryParse(dateUploadStr)
+        val dateUpload = DATE_FORMAT.tryParseDateTime(dateUploadStr, ZoneOffset.UTC)
         val maxPage = document.selectFirst(".pagination-list > span:last-child > a")?.text()?.toIntOrNull() ?: 1
-        val baseUrlString = response.request.url.toString().substringBefore("?")
+        val baseUrlString = document.location().substringBefore("?")
 
         return (maxPage downTo 1).map { page ->
             SChapter.create().apply {
@@ -116,14 +111,12 @@ abstract class Xiutaku : HttpSource() {
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     // ========================= Pages =========================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
         return document.select(".article-fulltext img").mapIndexed { i, imgEl ->
             Page(i, imageUrl = imgEl.attr("abs:src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ========================= Utilities =========================
     private fun mangaFromElement(element: Element) = SManga.create().apply {
@@ -134,8 +127,6 @@ abstract class Xiutaku : HttpSource() {
     }
 
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("HH:mm dd-MM-yyyy", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("HH:mm d-M-yyyy", Locale.US)
     }
 }
