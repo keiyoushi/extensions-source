@@ -1,24 +1,22 @@
 package eu.kanade.tachiyomi.extension.en.keenspot
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import org.jsoup.nodes.Document
 import kotlin.math.min
 
 @Source
-abstract class TwoKinds : HttpSource() {
+abstract class TwoKinds : KeiSource() {
 
-    override val supportsLatest: Boolean = false
+    override val supportsLatest = false
 
     // the one and only manga entry
     fun mangaSinglePages(): SManga = SManga.create().apply {
@@ -39,55 +37,44 @@ abstract class TwoKinds : HttpSource() {
         url = "20"
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(mangaSinglePages(), manga20Pages()), false))
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(mangaSinglePages(), manga20Pages()), false)
 
     // latest Updates not used
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        // the manga is one and only, but still write the data again to avoid bugs in backup restore
+        val details = if (manga.url == "1") mangaSinglePages() else manga20Pages()
 
-    // the manga is one and only, but still write the data again to avoid bugs in backup restore
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        if (manga.url == "1") {
-            return Observable.just(mangaSinglePages())
-        } else {
-            return Observable.just(manga20Pages())
-        }
+        if (!fetchChapters) return SMangaUpdate(details, chapters)
+
+        return SMangaUpdate(details, chapterListParse(fetchArchive(), manga))
     }
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // chapter list
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
-        .asObservableSuccess()
-        .map { response ->
-            chapterListParse(response, manga)
-        }
-
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/archive/", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+    private suspend fun fetchArchive(): Document = client.get("$baseUrl/archive/").asJsoup()
 
     data class TwoKindsPage(val url: String, val name: String)
 
-    private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
-        val document = response.asJsoup()
+    private fun parseArchivePages(document: Document): List<TwoKindsPage> = document.select(".chapter-links")
+        .flatMap { season -> season.select("> a") }
+        .map { a ->
+            // /comic/1185halloween/ -> 1185halloween
+            val urlPart = a.attr("href").split("/")[2]
+            val name = a.selectFirst("span")!!.text()
 
-        val pages = document.select(".chapter-links")
-            .flatMap { season -> season.select("> a") }
-            .map { a ->
-                // /comic/1185halloween/ -> 1185halloween
-                val urlPart = a.attr("href").split("/")[2]
-                val name = a.selectFirst("span")!!.text()
+            TwoKindsPage(urlPart, name)
+        }
 
-                TwoKindsPage(urlPart, name)
-            }
+    private fun chapterListParse(document: Document, manga: SManga): List<SChapter> {
+        val pages = parseArchivePages(document)
 
         // 1 page per chapter
         if (manga.url == "1") {
@@ -112,51 +99,31 @@ abstract class TwoKinds : HttpSource() {
         return chapters.reversed()
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.startsWith("1")) {
-            return Observable.just(
-                listOf(
-                    Page(0, baseUrl + "/comic/${chapter.url.substringAfter("-")}/"),
-                ),
+            return listOf(
+                Page(0, baseUrl + "/comic/${chapter.url.substringAfter("-")}/"),
             )
         } else {
             val firstPage = chapter.url.substringAfter("-")
-            val document = client.newCall(chapterListRequest(SManga.create())).execute().asJsoup()
-
-            val pages = document.select(".chapter-links")
-                .flatMap { season -> season.select("> a") }
-                .map { a ->
-                    // /comic/1185halloween/ -> 1185halloween
-                    val urlPart = a.attr("href").split("/")[2]
-                    val name = a.selectFirst("span")!!.text()
-
-                    TwoKindsPage(urlPart, name)
-                }
+            val pages = parseArchivePages(fetchArchive())
 
             val firstPageIdx = pages.indexOfFirst { it.url == firstPage }
             val lastPageIdx = min(pages.size, firstPageIdx + 20)
 
-            return Observable.just(
-                pages
-                    .subList(firstPageIdx, lastPageIdx)
-                    .mapIndexed { idx, page ->
-                        Page(idx, baseUrl + "/comic/${page.url}/")
-                    },
-            )
+            return pages
+                .subList(firstPageIdx, lastPageIdx)
+                .mapIndexed { idx, page ->
+                    Page(idx, baseUrl + "/comic/${page.url}/")
+                }
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String {
-        val document = response.asJsoup()
+    override suspend fun getImageUrl(page: Page): String {
+        val document = client.get(page.url).asJsoup()
 
         return document.select("#content article img").first()!!.attr("src")
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw Exception("Search functionality is not available.")
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw Exception("Search functionality is not available.")
 }
