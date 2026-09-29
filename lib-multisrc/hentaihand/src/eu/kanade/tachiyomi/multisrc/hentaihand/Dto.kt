@@ -5,8 +5,10 @@ package eu.kanade.tachiyomi.multisrc.hentaihand
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
@@ -17,6 +19,13 @@ import java.util.Locale
 class ResponseDto<T>(
     val data: T,
     val next_page_url: String?,
+)
+
+@Serializable
+class LoginRequestDto(
+    private val username: String,
+    private val password: String,
+    @SerialName("remember_me") private val rememberMe: Boolean,
 )
 
 @Serializable
@@ -47,7 +56,7 @@ class ChapterDto(
     private val updated_at: String?,
 ) {
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
     }
 
     private fun parseDate(date: String?): Long = if (date == null) {
@@ -57,7 +66,7 @@ class ChapterDto(
             add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
         }.timeInMillis
     } else {
-        DATE_FORMAT.parse(date)?.time ?: 0
+        DATE_FORMAT.tryParseDate(date)
     }
 
     fun toSChapter(slug: String) = SChapter.create().also { chapter ->
