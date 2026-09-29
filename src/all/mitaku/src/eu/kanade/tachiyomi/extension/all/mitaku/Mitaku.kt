@@ -1,134 +1,77 @@
 package eu.kanade.tachiyomi.extension.all.mitaku
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
+import kotlin.time.Instant
 
 @Source
-abstract class Mitaku : HttpSource() {
+abstract class Mitaku : KeiSource() {
 
     override val supportsLatest = false
 
-    private val baseHttpUrl = baseUrl.toHttpUrl()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-
     // ========================= Popular =========================
-    override fun popularMangaRequest(page: Int): Request {
-        val url = baseHttpUrl.newBuilder()
-            .addPathSegment("category")
-            .addPathSegment("ero-cosplay")
-            .addPathSegment("page")
-            .addPathSegment(page.toString())
-            .build()
-        return GET(url, headers)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$baseUrl/category/ero-cosplay/page/$page".toHttpUrl()
+        return parseMangasPage(client.get(url).asJsoup())
     }
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangasPage(response.asJsoup())
 
     // ========================= Latest =========================
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
     // ========================= Search =========================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val deepLinkUrl = query.toHttpUrlOrNull()
-        if (page == 1 && deepLinkUrl != null && deepLinkUrl.host == baseHttpUrl.host) {
-            val pathSegments = deepLinkUrl.pathSegments.filter { it.isNotBlank() }
-            if (isMangaOrChapterPath(pathSegments)) {
-                val manga = SManga.create().apply {
-                    url = deepLinkUrl.encodedPath
-                }
-
-                return fetchMangaDetails(manga)
-                    .map { MangasPage(listOf(it), false) }
-            }
-        }
-
-        return super.fetchSearchManga(page, query, filters)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (isMangaOrChapterPath(url.pathSegments) != true) return null
+        return mangaDetailsParse(client.get(url).asJsoup())
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val deepLinkUrl = query.toHttpUrlOrNull()
-        if (deepLinkUrl != null && deepLinkUrl.host == baseHttpUrl.host) {
-            val sQuery = deepLinkUrl.queryParameter("s")
-            if (sQuery != null) {
-                val url = baseHttpUrl.newBuilder()
-                    .addPathSegment("page")
-                    .addPathSegment(page.toString())
-                    .addQueryParameter("s", sQuery)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val categoryFilter = filters.firstInstance<CategoryFilter>()
+        val tagFilter = filters.firstInstance<TagFilter>()
+
+        val url = when {
+            query.isNotBlank() ->
+                "$baseUrl/page/$page".toHttpUrl().newBuilder()
+                    .addQueryParameter("s", query.trim())
                     .build()
-                return GET(url, headers)
-            }
 
-            if (deepLinkUrl.pathSegments.any { it.isNotBlank() }) {
-                return GET(deepLinkUrl, headers)
-            }
+            categoryFilter.selected != null ->
+                "$baseUrl/category/${categoryFilter.selected}/page/$page".toHttpUrl()
+
+            tagFilter.toUriPart().isNotEmpty() ->
+                "$baseUrl/tag/${tagFilter.toUriPart()}/page/$page".toHttpUrl()
+
+            else -> return getPopularManga(page)
         }
 
-        if (query.isNotBlank()) {
-            val url = baseHttpUrl.newBuilder()
-                .addPathSegment("page")
-                .addPathSegment(page.toString())
-                .addQueryParameter("s", query.trim())
-                .build()
-            return GET(url, headers)
-        }
-
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val categoryFilter = filterList.firstInstance<CategoryFilter>()
-        val tagFilter = filterList.firstInstance<TagFilter>()
-
-        categoryFilter.selected?.let { category ->
-            val url = baseHttpUrl.newBuilder()
-                .addPathSegment("category")
-                .addPathSegment(category)
-                .addPathSegment("page")
-                .addPathSegment(page.toString())
-                .build()
-            return GET(url, headers)
-        }
-
-        val tag = tagFilter.toUriPart()
-        if (tag.isNotEmpty()) {
-            val url = baseHttpUrl.newBuilder()
-                .addPathSegment("tag")
-                .addPathSegment(tag)
-                .addPathSegment("page")
-                .addPathSegment(page.toString())
-                .build()
-            return GET(url, headers)
-        }
-
-        return popularMangaRequest(page)
+        return parseSearch(client.get(url))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    private fun parseSearch(response: Response): MangasPage {
         val document = response.asJsoup()
-        val requestPathSegments = response.request.url.pathSegments.filter { it.isNotBlank() }
+        val requestPathSegments = response.request.url.pathSegments
 
         if (isMangaOrChapterPath(requestPathSegments)) {
-            val manga = mangaDetailsParse(document).apply {
-                url = response.request.url.encodedPath
-            }
+            val manga = mangaDetailsParse(document)
             return MangasPage(listOf(manga), false)
         }
 
@@ -136,16 +79,26 @@ abstract class Mitaku : HttpSource() {
     }
 
     // ========================= Filters =========================
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("NOTE: Only one tag search"),
         Filter.Separator(),
         CategoryFilter(),
         TagFilter(),
     )
 
-    // ========================= Details =========================
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup()).apply {
-        url = response.request.url.encodedPath
+    // ======================= MangaUpdate =======================
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            mangaDetailsParse(doc),
+            parseChapters(doc),
+        )
     }
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
@@ -153,7 +106,7 @@ abstract class Mitaku : HttpSource() {
 
         title = article.selectFirst("h1")?.text()?.takeIf { it.isNotBlank() }
             ?: throw Exception("Title is mandatory")
-
+        setUrlWithoutDomain(document.location())
         val categoryGenres = article.select("span.cat-links a").joinToString { it.text() }
         val tagGenres = article.select("span.tag-links a").joinToString { it.text() }
         genre = listOf(categoryGenres, tagGenres)
@@ -165,30 +118,28 @@ abstract class Mitaku : HttpSource() {
         initialized = true
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
-
     // ========================= Chapters =========================
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun parseChapters(document: Document): List<SChapter> {
         val title = document.selectFirst("article h1")?.text() ?: ""
 
         return listOf(
             SChapter.create().apply {
-                url = response.request.url.encodedPath
+                setUrlWithoutDomain(document.location())
                 chapter_number = 1F
                 name = if (title.endsWith("(Video)")) {
                     "This post is video-only, watch it in WebView"
                 } else {
                     "Gallery"
                 }
+                val date = document.selectFirst(".entry-date")?.attr("datetime")
+                date_upload = Instant.tryParse(date)
             },
         )
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
-
     // ========================= Pages =========================
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter))
         val pages = response.asJsoup().select(PAGE_SELECTOR)
             .mapIndexedNotNull { index, element ->
                 val imageUrl = element.absUrl("data-mfp-src").ifBlank { element.absUrl("href") }
@@ -205,8 +156,6 @@ abstract class Mitaku : HttpSource() {
 
         return pages
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select(POST_SELECTOR).map(::mangaFromElement)
@@ -230,10 +179,11 @@ abstract class Mitaku : HttpSource() {
     }
 
     private fun isMangaOrChapterPath(pathSegments: List<String>): Boolean {
-        if (pathSegments.isEmpty()) return false
-        if (pathSegments.first() in NON_POST_PATH_PREFIXES) return false
+        val segments = pathSegments.filter(String::isNotBlank)
+        if (segments.isEmpty()) return false
+        if (segments.first() in NON_POST_PATH_PREFIXES) return false
 
-        return pathSegments.size >= 2
+        return segments.size >= 2
     }
 
     companion object {
