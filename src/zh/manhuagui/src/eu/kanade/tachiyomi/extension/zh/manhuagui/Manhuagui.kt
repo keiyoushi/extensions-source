@@ -4,66 +4,63 @@ import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.lzstring.LZString
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import okhttp3.Call
-import okhttp3.Callback
+import kotlinx.serialization.json.JsonElement
+import okhttp3.FormBody
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.io.IOException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Manhuagui :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
-
-    override val supportsLatest = true
 
     private val imageServer = arrayOf("https://i.hamreus.com", "https://cf.hamreus.com")
     private val mobileWebsiteUrl: String
         get() = baseUrl.replace("www.", "m.").replace("tw.", "m.")
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA)
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.CHINA)
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .apply {
-            if (getShowR18()) {
-                addNetworkInterceptor(AddCookieHeaderInterceptor())
-            }
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        if (getShowR18()) {
+            addNetworkInterceptor(AddCookieHeaderInterceptor())
         }
+    }
         .rateLimit(
             preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
             10.seconds,
@@ -71,7 +68,6 @@ abstract class Manhuagui :
         .rateLimit(
             preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
         ) { url -> url.host in imageServer.map { it.toHttpUrl().host } }
-        .build()
 
     inner class AddCookieHeaderInterceptor : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
@@ -89,22 +85,19 @@ abstract class Manhuagui :
         }
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list/view_p$page.html", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/view_p$page.html").asJsoup())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("ul#contList > li").map(::mangaFromElement)
         val hasNextPage = document.selectFirst("span.current + a") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list/update_p$page.html", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/update_p$page.html").asJsoup())
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
-            return GET("$baseUrl/s/${query}_p$page.html", headers)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = if (query.isNotEmpty()) {
+            "$baseUrl/s/${query}_p$page.html"
         } else {
             val params = filters.filterIsInstance<UriPartFilter>()
                 .filter { it !is SortFilter }
@@ -114,7 +107,7 @@ abstract class Manhuagui :
 
             val sortOrder = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: ""
 
-            val url = when {
+            when {
                 sortOrder.isEmpty() -> "$baseUrl/list${params.toPathOrEmpty()}/index_p$page.html"
                 sortOrder.startsWith(RANK_PREFIX) -> {
                     "$baseUrl/rank${params.toPathOrEmpty()}".let {
@@ -127,7 +120,27 @@ abstract class Manhuagui :
                 }
                 else -> "$baseUrl/list${params.toPathOrEmpty()}/${sortOrder}_p$page.html"
             }
-            return GET(url, headers)
+        }
+
+        val response = client.get(url)
+        val path = response.request.url.encodedPath
+        val document = response.asJsoup()
+        return when {
+            path.startsWith("/s/") -> {
+                val mangas = document.select("div.book-result > ul > li").map(::searchMangaFromElement)
+                val hasNextPage = document.selectFirst("span.current + a") != null
+                MangasPage(mangas, hasNextPage)
+            }
+            path.startsWith("/rank/") -> {
+                val mangas = document.select("td.rank-title").map {
+                    SManga.create().apply {
+                        this.url = it.selectFirst("a")?.attr("href") ?: ""
+                        title = it.selectFirst("a")?.text() ?: ""
+                    }
+                }
+                MangasPage(mangas, false)
+            }
+            else -> parseMangaList(document)
         }
     }
 
@@ -135,31 +148,6 @@ abstract class Manhuagui :
         this
     } else {
         "$prefix$this$suffix"
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        return when {
-            response.request.url.encodedPath.startsWith("/s/") -> {
-                val mangas = document.select("div.book-result > ul > li").map(::searchMangaFromElement)
-                val hasNextPage = document.selectFirst("span.current + a") != null
-                MangasPage(mangas, hasNextPage)
-            }
-            response.request.url.encodedPath.startsWith("/rank/") -> {
-                val mangas = document.select("td.rank-title").map {
-                    SManga.create().apply {
-                        url = it.selectFirst("a")?.attr("href") ?: ""
-                        title = it.selectFirst("a")?.text() ?: ""
-                    }
-                }
-                MangasPage(mangas, false)
-            }
-            else -> {
-                val mangas = document.select("ul#contList > li").map(::mangaFromElement)
-                val hasNextPage = document.selectFirst("span.current + a") != null
-                MangasPage(mangas, hasNextPage)
-            }
-        }
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -188,97 +176,80 @@ abstract class Manhuagui :
         thumbnail_url = element.selectFirst("div.book-cover > a.bcover > img")?.absUrl("src")
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(mobileWebsiteUrl + manga.url)
+    override fun getMangaUrl(manga: SManga): String = mobileWebsiteUrl + manga.url
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val call = client.newCall(GET(baseUrl + manga.url, headers))
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (!url.host.endsWith("manhuagui.com") && !url.host.endsWith("mhgui.com")) return null
+        val id = url.pathSegments.getOrNull(1) ?: return null
+
+        val document = client.get("$baseUrl/comic/$id").asJsoup()
+        return SManga.create().apply {
+            parseDetails(document)
+            this.url = "/comic/$id/"
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
         val bid = Regex("""\d+""").find(manga.url)?.value
-        if (bid != null) {
+        if (fetchDetails && bid != null) {
             GlobalScope.launch(Dispatchers.IO) {
                 delay(1000L)
-                val callback = object : Callback {
-                    override fun onFailure(call: Call, e: IOException) = e.printStackTrace()
-                    override fun onResponse(call: Call, response: Response) = response.close()
-                }
-                client.newCall(
-                    POST(
+                val ajaxHeaders = headersBuilder()
+                    .set("Referer", manga.url)
+                    .set("X-Requested-With", "XMLHttpRequest")
+                    .build()
+                runCatching {
+                    client.post(
                         "$baseUrl/tools/submit_ajax.ashx?action=user_check_login",
-                        headersBuilder()
-                            .set("Referer", manga.url)
-                            .set("X-Requested-With", "XMLHttpRequest")
-                            .build(),
-                    ),
-                ).enqueue(callback)
-
-                client.newCall(
-                    GET(
+                        ajaxHeaders,
+                        FormBody.Builder().build(),
+                        ensureSuccess = false,
+                    ).close()
+                }.onFailure { it.printStackTrace() }
+                runCatching {
+                    client.get(
                         "$baseUrl/tools/vote.ashx?act=get&bid=$bid",
-                        headersBuilder()
-                            .set("Referer", manga.url)
-                            .set("X-Requested-With", "XMLHttpRequest").build(),
-                    ),
-                ).enqueue(callback)
+                        ajaxHeaders,
+                        ensureSuccess = false,
+                    ).close()
+                }.onFailure { it.printStackTrace() }
             }
         }
-        return call
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response).apply { initialized = true }
-            }
+
+        manga.parseDetails(document)
+
+        return SMangaUpdate(manga, parseChapterList(document))
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("div.book-title > h1:nth-child(1)")?.text() ?: ""
-            description = document.selectFirst("div#intro-all")?.text() ?: ""
-            thumbnail_url = document.selectFirst("p.hcover > img")?.absUrl("src")
-            author = document.select("span:contains(漫画作者) > a , span:contains(漫畫作者) > a").text().replace(" ", ", ")
-            genre = document.select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a").text().replace(" ", ", ")
-            status = when (document.selectFirst("div.book-detail > ul.detail-list > li.status > span > span")?.text()) {
-                "连载中", "連載中" -> SManga.ONGOING
-                "已完结", "已完結" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+    private fun SManga.parseDetails(document: Document) {
+        title = document.selectFirst("div.book-title > h1:nth-child(1)")?.text() ?: ""
+        description = document.selectFirst("div#intro-all")?.text() ?: ""
+        thumbnail_url = document.selectFirst("p.hcover > img")?.absUrl("src")
+        author = document.select("span:contains(漫画作者) > a , span:contains(漫畫作者) > a").text().replace(" ", ", ")
+        genre = document.select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a").text().replace(" ", ", ")
+        status = when (document.selectFirst("div.book-detail > ul.detail-list > li.status > span > span")?.text()) {
+            "连载中", "連載中" -> SManga.ONGOING
+            "已完结", "已完結" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
     }
 
-    private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/comic/$id", headers)
-
-    private fun searchMangaByIdParse(response: Response, id: String): MangasPage {
-        val sManga = mangaDetailsParse(response)
-        sManga.url = "/comic/$id/"
-        return MangasPage(listOf(sManga), false)
-    }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (!url.host.endsWith("manhuagui.com") && !url.host.endsWith("mhgui.com")) {
-                throw Exception("Unsupported url")
-            }
-            val titleid = url.pathSegments[1]
-            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$titleid", filters)
-        }
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client.newCall(searchMangaByIdRequest(id))
-                .asObservableSuccess()
-                .map { response -> searchMangaByIdParse(response, id) }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun parseChapterList(document: Document): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
 
         val hiddenEncryptedChapterList = document.selectFirst("#__VIEWSTATE")
         if (hiddenEncryptedChapterList != null) {
             if (getShowR18()) {
                 val decodedHiddenChapterList = LZString.decompressFromBase64(hiddenEncryptedChapterList.`val`())
-                val hiddenChapterList = Jsoup.parseBodyFragment(decodedHiddenChapterList, response.request.url.toString())
+                val hiddenChapterList = Jsoup.parseBodyFragment(decodedHiddenChapterList, document.location())
 
                 document.selectFirst("#erroraudit_show")?.replaceWith(hiddenChapterList)
                 hiddenEncryptedChapterList.remove()
@@ -303,7 +274,7 @@ abstract class Manhuagui :
                     if (currentChapter.url == latestChapterHref) {
                         val dateElement = document.select("div.book-detail > ul.detail-list > li.status > span > span.red").last()
                         if (dateElement != null) {
-                            currentChapter.date_upload = dateFormat.tryParse(dateElement.text())
+                            currentChapter.date_upload = dateFormat.tryParseDate(dateElement.text())
                         }
                     }
                     chapters.add(currentChapter)
@@ -314,8 +285,8 @@ abstract class Manhuagui :
         return chapters
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         if (document.selectFirst("#erroraudit_show") != null && !getShowR18()) {
             error("R18作品显示开关未开启或未生效")
         }
@@ -339,11 +310,7 @@ abstract class Manhuagui :
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Referer", baseUrl)
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
+    override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
         .set("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -379,7 +346,7 @@ abstract class Manhuagui :
 
     private fun getShowR18(): Boolean = preferences.getBoolean(SHOW_R18_PREF, false)
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         LocaleFilter(),
         GenreFilter(),
@@ -405,7 +372,6 @@ abstract class Manhuagui :
         private const val IMAGE_CDN_RATELIMIT_DEFAULT_VALUE = "4"
 
         const val RANK_PREFIX = "rank_"
-        const val PREFIX_ID_SEARCH = "id:"
 
         private val ENTRIES_ARRAY = (1..10).map { i -> i.toString() }.toTypedArray()
 
