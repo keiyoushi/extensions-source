@@ -1,38 +1,33 @@
 package eu.kanade.tachiyomi.extension.en.ohjoysextoy
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val MULTI_SPACE_REGEX = "\\s{6,}".toRegex()
 
+private val dateFormat = DateTimeFormatter.ofPattern("M/d/yyyy", Locale.ENGLISH)
+
 @Source
-abstract class OhJoySexToy : HttpSource() {
-
-    override val supportsLatest = true
-
-    private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH)
+abstract class OhJoySexToy : KeiSource() {
 
     // Browse
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/category/comic/page/$page/", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/category/comic/page/$page/").asJsoup()
         val mangas = document.select(".comicthumbwrap").map { element ->
             SManga.create().apply {
                 val link = element.selectFirst(".comicarchiveframe > a")!!
@@ -48,10 +43,8 @@ abstract class OhJoySexToy : HttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select("#MattsRecentComicsBar > ul > div").map { element ->
             SManga.create().apply {
                 val link = element.selectFirst(".comicarchiveframe > a")!!
@@ -66,15 +59,11 @@ abstract class OhJoySexToy : HttpSource() {
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("s", query)
             .build()
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val mangas = document.select("h2.post-title").map { element ->
             SManga.create().apply {
                 val link = element.selectFirst("a")!!
@@ -86,11 +75,17 @@ abstract class OhJoySexToy : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    // Details
+    // Details & Chapters
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val details = SManga.create().apply {
             val ogTitle = document.selectFirst("meta[property=\"og:title\"]")!!.attr("content")
 
             title = ogTitle.substringBefore(" by")
@@ -104,6 +99,15 @@ abstract class OhJoySexToy : HttpSource() {
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             setUrlWithoutDomain(document.selectFirst("meta[property=\"og:url\"]")!!.absUrl("content"))
         }
+
+        val chapter = SChapter.create().apply {
+            name = document.title()
+            scanlator = document.selectFirst(".post-author a")?.text()
+            date_upload = dateFormat.tryParseDate(document.selectFirst(".post-date")?.text())
+            setUrlWithoutDomain(document.location())
+        }
+
+        return SMangaUpdate(details, listOf(chapter))
     }
 
     private fun parseDescription(document: Document): String = buildString {
@@ -129,30 +133,12 @@ abstract class OhJoySexToy : HttpSource() {
         append("(Full description and credits in WebView)")
     }
 
-    // Chapters
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val dateString = document.selectFirst(".post-date")?.text()
-
-        return listOf(
-            SChapter.create().apply {
-                name = document.title()
-                scanlator = document.selectFirst(".post-author a")?.text()
-                date_upload = dateFormat.tryParse(dateString)
-                setUrlWithoutDomain(response.request.url.toString())
-            },
-        )
-    }
-
     // Pages
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("div.comicpane img").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

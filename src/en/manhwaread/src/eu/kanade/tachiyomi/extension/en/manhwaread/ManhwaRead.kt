@@ -1,60 +1,47 @@
 package eu.kanade.tachiyomi.extension.en.manhwaread
 
 import android.util.Base64
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+
 @Source
-abstract class ManhwaRead : HttpSource() {
+abstract class ManhwaRead : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+    private val dateFormat = DateTimeFormatter.ofPattern("d/M/yyyy", Locale.ROOT)
 
     // Popular
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortByFilter.POPULAR)
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortByFilter.POPULAR)
 
     // Latest
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortByFilter.LATEST)
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", SortByFilter.LATEST)
 
     // Search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val slug = query.toHttpUrlOrNull()
-                ?.pathSegments
-                ?.getOrNull(1)
-                ?: throw Exception("Invalid URL")
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.firstOrNull() != "manhwa") return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
 
-            // Rewrite to strip suffixes after slug
-            val newUrl = "$baseUrl/manhwa/$slug/"
-            return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(newUrl) })
-                .map { manga -> MangasPage(listOf(manga), hasNextPage = false) }
-        }
-        return super.fetchSearchManga(page, query, filters)
+        // Rewrite to strip suffixes after slug
+        val manga = SManga.create().apply { this.url = "/manhwa/$slug/" }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder().apply {
             if (page > 1) {
                 addPathSegment("page")
@@ -98,11 +85,7 @@ abstract class ManhwaRead : HttpSource() {
             }
         }
 
-        return GET(urlBuilder.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(urlBuilder.build()).asJsoup()
         val mangas = document
             .select(".main-container .manga-item")
             .map(::searchMangaFromElement)
@@ -118,10 +101,14 @@ abstract class ManhwaRead : HttpSource() {
     }
 
     // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            setUrlWithoutDomain(response.request.url.toString())
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val updatedManga = manga.apply {
             title = document.selectFirst("#mangaSummary .manga-titles h1")!!.text()
             artist = document.select("#mangaSummary .text-primary:contains(Artist:) + .flex a span:first-child").joinToString { it.text() }
             author = document.select("#mangaSummary .text-primary:contains(Author:) + .flex a span:first-child").joinToString { it.text() }
@@ -192,26 +179,24 @@ abstract class ManhwaRead : HttpSource() {
 
             thumbnail_url = document.selectFirst("head meta[property=og:image]")?.absUrl("content")
         }
-    }
 
-    // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document
+        val chapterList = document
             .select("#chaptersList > a.chapter-item")
             .map(::chapterFromElement)
             .asReversed()
+
+        return SMangaUpdate(updatedManga, chapterList)
     }
 
     private fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
         name = element.selectFirst("span.chapter-item__name")!!.text()
-        date_upload = dateFormat.tryParse(element.selectFirst("span.chapter-item__date")?.text())
+        date_upload = dateFormat.tryParseDate(element.selectFirst("span.chapter-item__date")?.text())
     }
 
     // Pages
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterDataString = response.body.string()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterDataString = client.get(getChapterUrl(chapter)).use { it.body.string() }
             .let { PATTERN_CHAPTER_DATA.find(it)?.groupValues?.get(1) }
             ?: throw Exception("Chapter data not found")
 
@@ -224,10 +209,8 @@ abstract class ManhwaRead : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // Other
-    override fun getFilterList() = getFilters()
+    override fun getFilterList(data: JsonElement?) = getFilters()
 
     private fun getRatingString(rate: String, rateCount: Int): String {
         val ratingValue = rate.toDoubleOrNull() ?: 0.0
