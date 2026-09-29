@@ -59,50 +59,6 @@ class GenreFilter :
         ),
     )
 
-class AlphabeticFilter :
-    UriPartFilter(
-        "Alfabético",
-        arrayOf(
-            Pair("<Seleccionar>", ""),
-            Pair("0", "0"),
-            Pair("1", "1"),
-            Pair("2", "2"),
-            Pair("3", "3"),
-            Pair("4", "4"),
-            Pair("5", "5"),
-            Pair("6", "6"),
-            Pair("7", "7"),
-            Pair("8", "8"),
-            Pair("9", "9"),
-            Pair("A", "A"),
-            Pair("B", "B"),
-            Pair("C", "C"),
-            Pair("D", "D"),
-            Pair("E", "E"),
-            Pair("F", "F"),
-            Pair("G", "G"),
-            Pair("H", "H"),
-            Pair("I", "I"),
-            Pair("J", "J"),
-            Pair("K", "K"),
-            Pair("L", "L"),
-            Pair("M", "M"),
-            Pair("N", "N"),
-            Pair("O", "O"),
-            Pair("P", "P"),
-            Pair("Q", "Q"),
-            Pair("R", "R"),
-            Pair("S", "S"),
-            Pair("T", "T"),
-            Pair("U", "U"),
-            Pair("V", "V"),
-            Pair("W", "W"),
-            Pair("X", "X"),
-            Pair("Y", "Y"),
-            Pair("Z", "Z"),
-        ),
-    )
-
 class StatusFilter :
     UriPartFilter(
         "Estado",
