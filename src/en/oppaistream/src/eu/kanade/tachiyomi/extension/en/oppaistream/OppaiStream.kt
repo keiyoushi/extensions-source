@@ -1,66 +1,47 @@
 package eu.kanade.tachiyomi.extension.en.oppaistream
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import okhttp3.Headers
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 import java.net.URLDecoder
 import java.util.Calendar
 
 @Source
-abstract class OppaiStream : HttpSource() {
+abstract class OppaiStream : KeiSource() {
 
     private val cdnUrl = "https://myspacecat.pictures"
 
-    override val supportsLatest = true
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
     // popular
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderByFilter("views")))
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(OrderByFilter("views")))
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderByFilter("uploaded")))
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(OrderByFilter("uploaded")))
 
     // search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val slug = url.queryParameter("m")
-                ?: throw Exception("Unsupported url")
-            return fetchSearchManga(page, "$SLUG_SEARCH_PREFIX$slug", filters)
-        }
-        if (!query.startsWith(SLUG_SEARCH_PREFIX)) {
-            return super.fetchSearchManga(page, query, filters)
-        }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.queryParameter("m") ?: return null
 
-        val url = "/manhwa?m=${query.substringAfter(SLUG_SEARCH_PREFIX)}"
-        return fetchMangaDetails(SManga.create().apply { this.url = url }).map {
-            it.url = url
-            MangasPage(listOf(it), false)
-        }
+        return fetchMangaUpdate(
+            manga = SManga.create().apply { this.url = "/manhwa?m=$slug" },
+            chapters = emptyList(),
+            fetchDetails = true,
+            fetchChapters = false,
+        ).manga
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/api-search.php".toHttpUrl().newBuilder().apply {
             addQueryParameter("text", query)
             filters.firstInstanceOrNull<OrderByFilter>()?.let {
@@ -74,11 +55,7 @@ abstract class OppaiStream : HttpSource() {
             addQueryParameter("limit", "$SEARCH_LIMIT")
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val elements = document.select("div.in-grid > a")
 
         val mangas = elements.map { element ->
@@ -98,49 +75,52 @@ abstract class OppaiStream : HttpSource() {
         return MangasPage(mangas, elements.size >= SEARCH_LIMIT)
     }
 
-    // manga details
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
-        thumbnail_url = document.select(".cover-img").attr("src")
-        document.select(".manhwa-info-in").let { info ->
-            info.select("h1").run {
-                title = text().substringBeforeLast("By").trim()
-                author = select("a.red").text()
-                artist = author
+    // manga details + chapter list
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val updatedManga = manga.apply {
+            thumbnail_url = document.select(".cover-img").attr("src")
+            document.select(".manhwa-info-in").let { info ->
+                info.select("h1").run {
+                    title = text().substringBeforeLast("By").trim()
+                    author = select("a.red").text()
+                    artist = author
+                }
+                genre = info.select(".genres h5").joinToString { it.text() }
+                description = info.select(".description").text()
             }
-            genre = info.select(".genres h5").joinToString { it.text() }
-            description = info.select(".description").text()
         }
-    }
 
-    // chapter list
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(".sort-chapters > a").map { element ->
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.select("div > h4").text()
-            date_upload = element.select("div > h6").text().parseRelativeDate()
+        val chapterList = document.select(".sort-chapters > a").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.attr("href"))
+                name = element.select("div > h4").text()
+                date_upload = element.select("div > h6").text().parseRelativeDate()
+            }
         }
-    }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+        return SMangaUpdate(updatedManga, chapterList)
+    }
 
     // page list
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
         val slug = chapterUrl.queryParameter("m")
         val chapNo = chapterUrl.queryParameter("c")
 
-        return GET("$cdnUrl/manhwa/im.php?f-m=$slug&c=$chapNo", headers)
+        return client.get("$cdnUrl/manhwa/im.php?f-m=$slug&c=$chapNo").asJsoup().select("img").mapIndexed { index, img ->
+            Page(index, imageUrl = img.attr("src"))
+        }
     }
-
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("img").mapIndexed { index, img ->
-        Page(index, imageUrl = img.attr("src"))
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // filters
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         OrderByFilter(),
         GenreListFilter(getGenreList()),
     )
@@ -174,6 +154,5 @@ abstract class OppaiStream : HttpSource() {
 
     companion object {
         const val SEARCH_LIMIT = 36
-        const val SLUG_SEARCH_PREFIX = "slug:"
     }
 }

@@ -1,52 +1,53 @@
 package eu.kanade.tachiyomi.extension.es.ikuhentai
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 
 @Source
-abstract class Ikuhentai : HttpSource() {
-    override val supportsLatest = true
+abstract class Ikuhentai : KeiSource() {
 
-    private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
+    private val dateFormat = DateTimeFormatterBuilder()
+        .parseCaseInsensitive()
+        .appendPattern("MMMM d, yyyy")
+        .toFormatter(Locale("es"))
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val pagePath = if (page > 1) "page/$page/" else ""
-        return GET("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=views", headers)
+        return parseMangaList(client.get("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=views").asJsoup())
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val pagePath = if (page > 1) "page/$page/" else ""
-        return GET("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=latest", headers)
+        return parseMangaList(client.get("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=latest").asJsoup())
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("div.page-listing-item .page-item-detail, div.c-tabs-item__content").map {
             mangaFromElement(it)
         }
         val hasNextPage = document.selectFirst("a.nextpostslink, div.nav-previous > a") != null
         return MangasPage(mangas, hasNextPage)
     }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     private fun mangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -63,7 +64,7 @@ abstract class Ikuhentai : HttpSource() {
         return manga
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (page > 1) {
                 addPathSegment("page")
@@ -73,7 +74,7 @@ abstract class Ikuhentai : HttpSource() {
             addQueryParameter("s", query)
             addQueryParameter("post_type", "wp-manga")
 
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            filters.forEach { filter ->
                 when (filter) {
                     is GenreList -> {
                         filter.state.filter { it.state == Filter.TriState.STATE_INCLUDE }.forEach {
@@ -101,31 +102,43 @@ abstract class Ikuhentai : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
+        return parseMangaList(client.get(url.build()).asJsoup())
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = if (fetchDetails) async { fetchDetails(manga) } else null
+        val chapterList = if (fetchChapters) async { fetchChapterList(manga) } else null
+
+        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+    }
+
+    private suspend fun fetchDetails(manga: SManga): SManga {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val infoElement = document.selectFirst("div.site-content") ?: document
 
-        val manga = SManga.create()
-        manga.author = infoElement.select("div.author-content").text()
-        manga.artist = infoElement.select("div.artist-content").text()
+        return SManga.create().apply {
+            title = manga.title
+            author = infoElement.select("div.author-content").text()
+            artist = infoElement.select("div.artist-content").text()
 
-        val genres = infoElement.select("div.genres-content a").map { it.text() }
-        manga.genre = genres.joinToString(", ")
+            val genres = infoElement.select("div.genres-content a").map { it.text() }
+            genre = genres.joinToString(", ")
 
-        val statusText = infoElement.select("div.post-content_item:has(h5:contains(Estado)) div.summary-content").text()
-        manga.status = parseStatus(statusText)
+            val statusText = infoElement.select("div.post-content_item:has(h5:contains(Estado)) div.summary-content").text()
+            status = parseStatus(statusText)
 
-        manga.description = document.select("div.description-summary").text()
+            description = document.select("div.description-summary").text()
 
-        val img = document.selectFirst("div.summary_image img")
-        manga.thumbnail_url = img?.let {
-            it.absUrl("data-lazy-src").ifEmpty { it.absUrl("src") }
+            val img = document.selectFirst("div.summary_image img")
+            thumbnail_url = img?.let {
+                it.absUrl("data-lazy-src").ifEmpty { it.absUrl("src") }
+            }
         }
-
-        return manga
     }
 
     private fun parseStatus(element: String): Int = when {
@@ -134,50 +147,38 @@ abstract class Ikuhentai : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val url = (baseUrl + manga.url).removeSuffix("/")
-        return POST("$url/ajax/chapters/", headers)
-    }
+        val document = client.post("$url/ajax/chapters/", headers, FormBody.Builder().build()).asJsoup()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
         return document.select("li.wp-manga-chapter").map { element ->
             val urlElement = element.selectFirst("a")!!
-            val url = urlElement.absUrl("href").toHttpUrl().newBuilder().apply {
+            val chapterUrl = urlElement.absUrl("href").toHttpUrl().newBuilder().apply {
                 removeAllQueryParameters("style")
                 addQueryParameter("style", "list")
             }.build().toString()
 
             SChapter.create().apply {
-                setUrlWithoutDomain(url)
+                setUrlWithoutDomain(chapterUrl)
                 name = urlElement.text()
 
                 val dateElement = element.selectFirst("span.chapter-release-date i")
                 if (dateElement != null) {
-                    date_upload = dateFormat.tryParse(dateElement.text())
+                    date_upload = dateFormat.tryParseDate(dateElement.text())
                 }
             }
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("div.reading-content * img").mapIndexedNotNull { i, element ->
             val url = element.absUrl("data-lazy-src").ifEmpty { element.absUrl("src") }
             if (url.isNotEmpty()) Page(i, imageUrl = url) else null
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
-
-    override fun imageRequest(page: Page): Request {
-        val imgHeader = headers.newBuilder().apply {
-            add("Referer", "$baseUrl/")
-        }.build()
-        return GET(page.imageUrl!!, imgHeader)
-    }
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         TextField("Autor", "author"),
         TextField("Año de publicación", "release"),
         SortBy(),

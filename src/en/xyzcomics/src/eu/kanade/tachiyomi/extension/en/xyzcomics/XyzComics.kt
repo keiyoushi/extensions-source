@@ -1,57 +1,50 @@
 package eu.kanade.tachiyomi.extension.en.xyzcomics
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import okhttp3.Request
-import okhttp3.Response
+import kotlinx.serialization.json.JsonElement
 import org.jsoup.nodes.Element
-import rx.Observable
 
 @Source
-abstract class XyzComics : HttpSource() {
+abstract class XyzComics : KeiSource() {
 
     override val supportsLatest = false
 
     private class ArtistTagFilter : Filter.Text(ARTIST_TAG_FILTER_NAME)
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = if (page == 1) "$baseUrl/allsexkomix/" else "$baseUrl/allsexkomix/page/$page/"
-        return GET(url, headers)
+        return parseMangaList(url)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val artistTag = filters.firstInstanceOrNull<ArtistTagFilter>()?.state?.trim()
-        return if (!artistTag.isNullOrBlank()) {
+        val url = if (!artistTag.isNullOrBlank()) {
             val slug = artistTag.lowercase()
                 .replace(Regex("[^a-z0-9\\s-]"), "")
                 .replace(Regex("\\s+"), "-")
                 .trim('-')
-            val url = if (page == 1) "$baseUrl/tag/$slug/" else "$baseUrl/tag/$slug/page/$page/"
-            GET(url, headers)
+            if (page == 1) "$baseUrl/tag/$slug/" else "$baseUrl/tag/$slug/page/$page/"
         } else {
-            val url = if (page == 1) "$baseUrl/?s=$query" else "$baseUrl/page/$page/?s=$query"
-            GET(url, headers)
+            if (page == 1) "$baseUrl/?s=$query" else "$baseUrl/page/$page/?s=$query"
         }
+        return parseMangaList(url)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response)
-
-    private fun parseMangaList(response: Response): MangasPage {
-        val doc = response.asJsoup()
+    private suspend fun parseMangaList(url: String): MangasPage {
+        val doc = client.get(url).asJsoup()
         val items = doc.select("article.post").mapNotNull { popManga(it) }
         val hasNextPage = doc.selectFirst("a.nextp, .pagenav a.next, a.page-numbers.next, a[rel=next]") != null
         return MangasPage(items, hasNextPage)
@@ -70,40 +63,38 @@ abstract class XyzComics : HttpSource() {
         return manga
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val doc = response.asJsoup()
-        val manga = SManga.create()
-        manga.initialized = true
-        manga.title = doc.selectFirst("h1.post-title a, h1.post-title")?.text()
-            ?: doc.selectFirst("title")!!.text()
-        manga.thumbnail_url = doc.selectFirst(".pswp-gallery .pswp-gallery__item a[href]")
-            ?.attr("abs:href")
-        val tags = doc.select("a.post-tag-button")
-        manga.genre = tags.joinToString(", ") { it.text().trim() }.ifEmpty { "" }
-        manga.status = SManga.UNKNOWN
-        return manga
-    }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (fetchDetails) {
+            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            manga.title = doc.selectFirst("h1.post-title a, h1.post-title")?.text()
+                ?: doc.selectFirst("title")!!.text()
+            manga.thumbnail_url = doc.selectFirst(".pswp-gallery .pswp-gallery__item a[href]")
+                ?.attr("abs:href")
+            val tags = doc.select("a.post-tag-button")
+            manga.genre = tags.joinToString(", ") { it.text().trim() }.ifEmpty { "" }
+            manga.status = SManga.UNKNOWN
+        }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapter = SChapter.create().apply {
             name = "Chapter 1"
             chapter_number = 1f
             setUrlWithoutDomain(manga.url)
         }
-        return Observable.just(listOf(chapter))
+        return SMangaUpdate(manga, listOf(chapter))
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response): List<Page> {
-        val doc = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val doc = client.get(getChapterUrl(chapter)).asJsoup()
         return doc.select(".pswp-gallery .pswp-gallery__item a[href]")
-            .mapIndexed { i, link -> Page(i, "", link.attr("abs:href")) }
+            .mapIndexed { i, link -> Page(i, imageUrl = link.attr("abs:href")) }
     }
 
-    override fun imageUrlParse(response: Response): String = ""
-
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("See all artists & tags: $baseUrl/all-the-artists-and-tags/"),
         Filter.Separator(),
         ArtistTagFilter(),
