@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.zh.creativecomic
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Serializable
@@ -78,7 +78,7 @@ class ChapterDto(
         // Prepend lock emoji to name if locked
         val isReadable = isFree == 1 || isBuy == 1 || isRent == 1 || salesPlan == 0
         name = (if (isReadable) "" else "\uD83D\uDD12") + "$volName ${this@ChapterDto.name}"
-        date_upload = dateFormat.tryParse(onlineAt)
+        date_upload = dateFormat.tryParseDateTime(onlineAt)
     }
 }
 
@@ -100,9 +100,7 @@ class ImageUrlResponseDto(val data: ImageUrlDto)
 @Serializable
 class ImageUrlDto(val key: String)
 
-private val dateFormat by lazy {
-    SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.ENGLISH)
-}
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
 
 @Serializable
 class JWTClaims(val exp: Int)
