@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -34,12 +33,10 @@ abstract class LeerCapitulo : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    // 1. Populares: Extraído directamente de la portada de la web
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        // Cambiado a .lc-side-item según la corrección del revisor
         val mangas = document.select("h2:contains(Populares), h3:contains(Populares), .title:contains(Populares)")
             .first()?.parent()?.select(".lc-side-item")
             ?.mapNotNull { it.toSManga() } ?: emptyList()
@@ -47,12 +44,10 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
-    // 2. Últimos: Extraído directamente de la portada de la web
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        // Cambiado a .lc-side-item según la corrección del revisor
         val mangas = document.select("h2:contains(Ultimos), h3:contains(Ultimos), h2:contains(Últimos), h3:contains(Últimos)")
             .first()?.parent()?.select(".lc-side-item")
             ?.mapNotNull { it.toSManga() } ?: emptyList()
@@ -60,7 +55,6 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
-    // 3. Búsqueda normal sin autocompletado (eliminada la función fetchSearchManga)
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = "$baseUrl/manga/".toHttpUrl().newBuilder()
 
@@ -68,11 +62,16 @@ abstract class LeerCapitulo : HttpSource() {
             urlBuilder.addQueryParameter("q", query)
         }
 
-        filters.firstInstanceOrNull()?.takeIf { it.state != 0 }?.let {
-            urlBuilder.addQueryParameter("genre", it.toUriPart())
-        }
-        filters.firstInstanceOrNull()?.takeIf { it.state != 0 }?.let {
-            urlBuilder.addQueryParameter("status", it.toUriPart())
+        for (filter in filters) {
+            if (filter is GenreFilter) {
+                if (filter.state != 0) {
+                    urlBuilder.addQueryParameter("genre", filter.toUriPart())
+                }
+            } else if (filter is StatusFilter) {
+                if (filter.state != 0) {
+                    urlBuilder.addQueryParameter("status", filter.toUriPart())
+                }
+            }
         }
 
         urlBuilder.addQueryParameter("page", page.toString())
@@ -86,7 +85,6 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // Función auxiliar unificada para leer tarjetas .lc-card (búsqueda) y .lc-side-item (portada)
     private fun Element.toSManga(): SManga? {
         val link = selectFirst("a.lc-card-name") ?: selectFirst("a.lc-card-cover") ?: selectFirst("a") ?: return null
         val url = link.attr("abs:href")
@@ -157,7 +155,6 @@ abstract class LeerCapitulo : HttpSource() {
         }
     }
 
-    // 4. Eliminado el fallback genérico de imágenes para mayor seguridad
     override fun pageListParse(response: Response): List {
         val document = response.asJsoup()
         val imageElements = document.select("#lcPages img, main.lc-pages img, .lc-pages img")
@@ -185,7 +182,6 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // 5. Detectores de estado actualizados al inglés
     private fun String.toStatus() = when (this.lowercase().trim()) {
         "ongoing" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
