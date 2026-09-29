@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "LANraragi"
-    versionCode = 25
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "LANraragi (1)"
