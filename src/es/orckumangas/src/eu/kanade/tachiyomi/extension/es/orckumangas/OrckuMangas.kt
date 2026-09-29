@@ -25,6 +25,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter
+import java.util.Calendar
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -147,7 +148,7 @@ abstract class OrckuMangas : KeiSource() {
         SChapter.create().apply {
             name = it.selectFirst(".cap-num")!!.ownText()
             setUrlWithoutDomain(it.attr("abs:href"))
-            date_upload = dateFormat.tryParseDate(it.selectFirst(".cap-date")?.text())
+            date_upload = it.selectFirst(".cap-date")?.text().parseDate()
         }
     }
 
@@ -181,5 +182,28 @@ abstract class OrckuMangas : KeiSource() {
         "hiatus" -> SManga.ON_HIATUS
         "cancelled" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
+    }
+
+    private val nonDigitRegex = Regex("""\D""")
+
+    private fun String?.parseDate(): Long {
+        if (isNullOrEmpty() || !contains("hace", ignoreCase = true)) {
+            return dateFormat.tryParseDate(this)
+        }
+
+        val number = replace(nonDigitRegex, "").toIntOrNull() ?: return 0L
+        val calendar = Calendar.getInstance()
+
+        when {
+            contains("segundo") -> calendar.add(Calendar.SECOND, -number)
+            contains("minuto") -> calendar.add(Calendar.MINUTE, -number)
+            contains("hora") -> calendar.add(Calendar.HOUR, -number)
+            contains("día") || contains("dia") -> calendar.add(Calendar.DAY_OF_YEAR, -number)
+            contains("semana") -> calendar.add(Calendar.WEEK_OF_YEAR, -number)
+            contains("mes") -> calendar.add(Calendar.MONTH, -number)
+            contains("año") -> calendar.add(Calendar.YEAR, -number)
+        }
+
+        return calendar.timeInMillis
     }
 }
