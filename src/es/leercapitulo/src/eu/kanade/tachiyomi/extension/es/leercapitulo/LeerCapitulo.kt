@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -33,10 +34,12 @@ abstract class LeerCapitulo : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    // 1. Populares: Extraído directamente de la portada de la web
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
+        // Cambiado a .lc-side-item según la corrección del revisor
         val mangas = document.select("h2:contains(Populares), h3:contains(Populares), .title:contains(Populares)")
             .first()?.parent()?.select(".lc-side-item")
             ?.mapNotNull { it.toSManga() } ?: emptyList()
@@ -44,10 +47,12 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
+    // 2. Últimos: Extraído directamente de la portada de la web
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
+        // Cambiado a .lc-side-item según la corrección del revisor
         val mangas = document.select("h2:contains(Ultimos), h3:contains(Ultimos), h2:contains(Últimos), h3:contains(Últimos)")
             .first()?.parent()?.select(".lc-side-item")
             ?.mapNotNull { it.toSManga() } ?: emptyList()
@@ -55,6 +60,7 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
+    // 3. Búsqueda normal sin autocompletado (eliminada la función fetchSearchManga)
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = "$baseUrl/manga/".toHttpUrl().newBuilder()
 
@@ -62,12 +68,11 @@ abstract class LeerCapitulo : HttpSource() {
             urlBuilder.addQueryParameter("q", query)
         }
 
-        for (filter in filters) {
-            if (filter is GenreFilter && filter.state != 0) {
-                urlBuilder.addQueryParameter("genre", filter.toUriPart())
-            } else if (filter is StatusFilter && filter.state != 0) {
-                urlBuilder.addQueryParameter("status", filter.toUriPart())
-            }
+        filters.firstInstanceOrNull<GenreFilter>()?.takeIf { it.state != 0 }?.let {
+            urlBuilder.addQueryParameter("genre", it.toUriPart())
+        }
+        filters.firstInstanceOrNull<StatusFilter>()?.takeIf { it.state != 0 }?.let {
+            urlBuilder.addQueryParameter("status", it.toUriPart())
         }
 
         urlBuilder.addQueryParameter("page", page.toString())
@@ -81,6 +86,7 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
+    // Función auxiliar unificada para leer tarjetas .lc-card (búsqueda) y .lc-side-item (portada)
     private fun Element.toSManga(): SManga? {
         val link = selectFirst("a.lc-card-name") ?: selectFirst("a.lc-card-cover") ?: selectFirst("a") ?: return null
         val url = link.attr("abs:href")
@@ -130,34 +136,45 @@ abstract class LeerCapitulo : HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response) = response.asJsoup()
-        .select("#chapterList a.lc-chapter-row")
-        .mapNotNull { element ->
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val chapterRows = document.select("#chapterList a.lc-chapter-row")
+
+        return chapterRows.mapNotNull { element ->
             val url = element.attr("abs:href")
-            if (url.isBlank()) null else {
-                val nameText = element.selectFirst("span.n")?.text() ?: element.text()
-                val dateText = element.selectFirst("span.d")?.text()
-                
-                SChapter.create().apply {
-                    setUrlWithoutDomain(url)
-                    name = nameText.trim()
-                    date_upload = dateText?.let {
-                        runCatching { dateFormat.parse(it)?.time }.getOrNull()
-                    } ?: 0L
-                }
+            if (url.isBlank()) return@mapNotNull null
+
+            val nameText = element.selectFirst("span.n")?.text() ?: element.text()
+            val dateText = element.selectFirst("span.d")?.text()
+
+            SChapter.create().apply {
+                setUrlWithoutDomain(url)
+                name = nameText.trim()
+                date_upload = dateText?.let {
+                    runCatching { dateFormat.parse(it)?.time }.getOrNull()
+                } ?: 0L
             }
         }
+    }
 
-    override fun pageListParse(response: Response) = response.asJsoup()
-        .select("#lcPages img, main.lc-pages img, .lc-pages img")
-        .mapNotNull { element ->
+    // 4. Eliminado el fallback genérico de imágenes para mayor seguridad
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val imageElements = document.select("#lcPages img, main.lc-pages img, .lc-pages img")
+
+        val pages = imageElements.mapNotNull { element ->
             val src = element.imgAttr()
             if (src.startsWith("http")) src else null
-        }.also {
-            if (it.isEmpty()) throw Exception("No se encontraron páginas en este capítulo")
-        }.mapIndexed { i, imageUrl ->
+        }
+
+        if (pages.isEmpty()) {
+            throw Exception("No se encontraron páginas en este capítulo")
+        }
+
+        return pages.mapIndexed { i, imageUrl ->
             Page(i, imageUrl = imageUrl)
         }
+    }
 
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
@@ -168,6 +185,7 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    // 5. Detectores de estado actualizados al inglés
     private fun String.toStatus() = when (this.lowercase().trim()) {
         "ongoing" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
