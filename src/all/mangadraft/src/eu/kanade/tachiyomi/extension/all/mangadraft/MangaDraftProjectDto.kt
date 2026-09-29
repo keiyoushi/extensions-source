@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MangaDraftProjectDto(
+class MangaDraftProjectDto(
     val name: String,
     val description: String,
 
@@ -15,8 +15,6 @@ data class MangaDraftProjectDto(
 )
 
 @Serializable
-data class MangaDraftGenreDto(
-    val id: Int,
+class MangaDraftGenreDto(
     val name: String,
-    val slug: String,
 )
