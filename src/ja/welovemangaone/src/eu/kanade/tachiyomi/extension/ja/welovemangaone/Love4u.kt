@@ -1,22 +1,23 @@
 package eu.kanade.tachiyomi.extension.ja.welovemangaone
 
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
 @Source
 abstract class Love4u : FMReader() {
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga-list.html?page=$page&sort=last_update")
+    override fun latestUpdatesUrl(page: Int) = "$baseUrl/manga-list.html?page=$page&sort=last_update"
 
-    override fun chapterListRequest(manga: SManga): Request {
+    override suspend fun fetchChapterList(manga: SManga, mangaPage: Document): List<SChapter> {
         val mangaId = MID_URL_REGEX.find(manga.url)
             ?.groupValues?.get(1)
             ?: throw Exception("Could not find manga id")
@@ -25,7 +26,7 @@ abstract class Love4u : FMReader() {
             .addQueryParameter("mid", mangaId)
             .build()
 
-        return GET(xhrUrl, headers)
+        return chapterListParse(client.get(xhrUrl).asJsoup())
     }
 
     override fun chapterFromElement(element: Element, mangaTitle: String): SChapter = SChapter.create().apply {
@@ -58,10 +59,8 @@ abstract class Love4u : FMReader() {
         return chapterDate.timeInMillis
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val request = super.pageListRequest(chapter)
-        val response = client.newCall(request).execute()
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
         val chapterId = document.selectFirst("#chapter")
             ?.`val`()
@@ -71,7 +70,7 @@ abstract class Love4u : FMReader() {
             .addQueryParameter("cid", chapterId)
             .build()
 
-        return GET(xhrUrl, headers)
+        return pageListParse(client.get(xhrUrl).asJsoup())
     }
 
     companion object {
