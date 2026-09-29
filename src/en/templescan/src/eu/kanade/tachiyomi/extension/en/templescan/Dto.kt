@@ -8,15 +8,16 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // The site's React Server Components payload renames a fixed subset of field names to
-// deterministic short keys. They are derived in the site's client bundle as
-// FNV-1a("6b3ad0e8a808:<name>:<collision index>") and stay valid as long as that salt is
-// unchanged. If the site ever rotates the salt, recompute this mapping:
-//   title -> pnsk6q, series_slug -> s20a8oj, Chapter -> qmy3ca, chapter_name -> u171tuh,
-//   chapter_slug -> y26ma5t, price -> u1e8nmi, Season -> u2ytwc, images -> nu7315
+// deterministic short keys. The client bundle (module that exports the rename map) derives
+// each key from FNV-1a 32-bit of "<salt>:<name>:<i>" — incrementing i until the key is
+// unique, processing the fields in the bundle's order: series_slug, Season, Chapter, price,
+// title, chapter_name, chapter_slug, images — and encodes the hash as
+// chr(97 + hash % 26) + (hash ushr 5).toString(36). If the site rotates its salt
+// (currently "d1a803a73523"), recompute this mapping from the bundle.
 @Serializable
 class BrowseSeries(
-    @SerialName("pnsk6q") val title: String,
-    @SerialName("s20a8oj") val slug: String,
+    @SerialName("jdp5hu") val title: String,
+    @SerialName("m15392f") val slug: String,
     @SerialName("alternative_names") val alternativeNames: String? = null,
     val thumbnail: String? = null,
     val badge: String? = null,
@@ -59,23 +60,23 @@ class SeriesDataWrapper(
 ) {
     @Serializable
     class SeriesData(
-        @SerialName("u2ytwc") private val seasons: List<Season>? = null,
+        @SerialName("m21n2s7") private val seasons: List<Season>? = null,
     ) {
         val chapters: List<Chapter> get() = seasons.orEmpty().flatMap { it.chapters }
 
         @Serializable
         class Season(
-            @SerialName("qmy3ca") private val items: List<Chapter>? = null,
+            @SerialName("opez75") private val items: List<Chapter>? = null,
         ) {
             val chapters: List<Chapter> get() = items.orEmpty()
         }
 
         @Serializable
         class Chapter(
-            @SerialName("u171tuh") val name: String,
+            @SerialName("c27b2ow") val name: String,
             @SerialName("chapter_title") val title: String? = null,
-            @SerialName("y26ma5t") val slug: String,
-            @SerialName("u1e8nmi") val price: Int = 0,
+            @SerialName("m1shekt") val slug: String,
+            @SerialName("ivo8tc") val price: Int = 0,
             @SerialName("created_at") private val createdAt: String? = null,
         ) {
             val created: Long by lazy { dateFormat.tryParse(createdAt) }
@@ -85,7 +86,7 @@ class SeriesDataWrapper(
 
 @Serializable
 class PagesList(
-    @SerialName("nu7315") val images: List<String>,
+    @SerialName("xdmo0k") val images: List<String>,
 )
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
