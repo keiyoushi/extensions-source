@@ -194,7 +194,7 @@ class ResponseDto<T>(
 )
 
 @Serializable
-data class ImageRetryParamsDto(
+class ImageRetryParamsDto(
     val url: String,
     val index: Int,
 )
