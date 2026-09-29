@@ -1,25 +1,28 @@
 package eu.kanade.tachiyomi.extension.ko.navercomic
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+private val dateFormat = DateTimeFormatter.ofPattern("yy.M.d")
+private val seoulZone = ZoneId.of("Asia/Seoul")
 
 @Source
-abstract class NaverComic : HttpSource() {
+abstract class NaverComic : KeiSource() {
 
     private val mType: String get() = when (name) {
         "Naver Webtoon Best Challenge" -> "bestChallenge"
@@ -30,34 +33,25 @@ abstract class NaverComic : HttpSource() {
     private val isChallenge: Boolean get() = mType != "webtoon"
 
     internal val mobileUrl = "https://m.comic.naver.com"
-    override val supportsLatest = true
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("yy.MM.dd", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Seoul")
-        }
-    }
+    // 1.4 stored absolute m.comic.naver.com URLs for entries added from popular/latest
+    private fun SManga.titleId() = url.substringAfter("titleId=").substringBefore("&")
 
-    private val challengeDateFormat by lazy {
-        SimpleDateFormat("yyyy.MM.dd", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Seoul")
-        }
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/$mType/list?titleId=${manga.titleId()}"
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = if (isChallenge) {
-        GET("$baseUrl/api/$mType/list?order=VIEW&page=$page", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = if (isChallenge) {
+        client.get("$baseUrl/api/$mType/list?order=VIEW&page=$page").let(::parseMangaList)
     } else {
-        GET("$mobileUrl/$mType/weekday?sort=ALL_READER", headers)
+        client.get("$mobileUrl/$mType/weekday?sort=ALL_READER").let(::parseMangaList)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangaList(response: Response): MangasPage {
         return if (isChallenge) {
             val apiResponse = response.parseAs<ApiMangaChallengeResponse>()
             val mangas = apiResponse.toSMangas(mType)
 
-            // Assume there's a next page if we got results, avoiding extra synchronous network calls inside parse.
             val hasNextPage = apiResponse.pageInfo?.nextPage?.let { it != 0 } ?: mangas.isNotEmpty()
             MangasPage(mangas, hasNextPage)
         } else {
@@ -67,7 +61,7 @@ abstract class NaverComic : HttpSource() {
                 val title = element.selectFirst("strong")?.text() ?: return@mapNotNull null
 
                 SManga.create().apply {
-                    this.url = url
+                    setUrlWithoutDomain(url)
                     this.title = title
                     this.author = element.selectFirst("span.author")?.text()?.split(" / ")?.joinToString() ?: ""
                     this.thumbnail_url = element.selectFirst("img")?.attr("abs:src")
@@ -79,46 +73,63 @@ abstract class NaverComic : HttpSource() {
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = if (isChallenge) {
-        GET("$baseUrl/api/$mType/list?order=UPDATE&page=$page", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = if (isChallenge) {
+        client.get("$baseUrl/api/$mType/list?order=UPDATE&page=$page").let(::parseMangaList)
     } else {
-        GET("$mobileUrl/$mType/weekday?sort=UPDATE", headers)
+        client.get("$mobileUrl/$mType/weekday?sort=UPDATE").let(::parseMangaList)
     }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/api/search/$mType?keyword=$query&page=$page", headers)
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<ApiMangaSearchResponse>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val result = client.get("$baseUrl/api/search/$mType?keyword=$query&page=$page")
+            .parseAs<ApiMangaSearchResponse>()
         return MangasPage(result.toSMangas(mType), result.hasNextPage)
     }
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val titleId = (baseUrl + manga.url).toHttpUrl().queryParameter("titleId")
-        return GET("$baseUrl/api/article/list/info?titleId=$titleId", headers)
-    }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val titleId = manga.titleId()
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Manga>().toSManga(mType)
+        val details = if (fetchDetails) {
+            async {
+                client.get("$baseUrl/api/article/list/info?titleId=$titleId")
+                    .parseAs<Manga>()
+                    .toSManga(mType)
+                    .apply { url = manga.url }
+            }
+        } else {
+            null
+        }
+
+        val chapterList = if (fetchChapters) {
+            async { fetchChapterList(titleId) }
+        } else {
+            null
+        }
+
+        SMangaUpdate(
+            details?.await() ?: manga,
+            chapterList?.await() ?: chapters,
+        )
+    }
 
     // ============================= Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request = chapterListRequest(manga.url, 1)
-
-    private fun chapterListRequest(mangaUrl: String, page: Int): Request {
-        val titleId = (baseUrl + mangaUrl).toHttpUrl().queryParameter("titleId")
-        return GET("$baseUrl/api/article/list?titleId=$titleId&page=$page", headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        var result = response.parseAs<ApiMangaChapterListResponse>()
+    private suspend fun fetchChapterList(titleId: String): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
+        var page = 1
 
         while (true) {
+            val result = client.get("$baseUrl/api/article/list?titleId=$titleId&page=$page")
+                .parseAs<ApiMangaChapterListResponse>()
+
             chapters.addAll(
                 result.articleList.map { chapter ->
                     chapter.toSChapter(mType, result.titleId, ::parseChapterDate)
@@ -127,8 +138,7 @@ abstract class NaverComic : HttpSource() {
 
             if (!result.hasNextPage) break
 
-            val nextRequest = chapterListRequest("/$mType/list?titleId=${result.titleId}", result.pageInfo.nextPage)
-            result = client.newCall(nextRequest).execute().parseAs<ApiMangaChapterListResponse>()
+            page = result.pageInfo.nextPage
         }
 
         return chapters
@@ -137,14 +147,13 @@ abstract class NaverComic : HttpSource() {
     private fun parseChapterDate(date: String): Long = if (date.contains(":")) {
         System.currentTimeMillis()
     } else {
-        val formatter = if (name == "Naver Webtoon Challenge") challengeDateFormat else dateFormat
-        formatter.tryParse(date)
+        dateFormat.tryParseDate(date, seoulZone)
     }
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
         var urls = document.select(".wt_viewer img").map { it.attr("abs:src").ifEmpty { it.attr("src") } }
         if (urls.isEmpty()) {
@@ -155,10 +164,4 @@ abstract class NaverComic : HttpSource() {
 
         return urls.mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Filters ==============================
-
-    override fun getFilterList() = FilterList()
 }
