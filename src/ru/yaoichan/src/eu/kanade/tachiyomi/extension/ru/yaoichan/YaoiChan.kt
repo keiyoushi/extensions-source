@@ -1,17 +1,16 @@
 package eu.kanade.tachiyomi.extension.ru.yaoichan
 
 import eu.kanade.tachiyomi.multisrc.multichan.MultiChan
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 
 @Source
 abstract class YaoiChan : MultiChan() {
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
         val pageNum = page.coerceAtLeast(1)
         if (query.isNotEmpty()) {
             val url = baseUrl.toHttpUrl().newBuilder()
@@ -21,16 +20,14 @@ abstract class YaoiChan : MultiChan() {
                 .addQueryParameter("search_start", pageNum.toString())
                 .build()
                 .toString()
-            return GET(url, headers)
+            return url
         }
 
         var genres = ""
         var statusParam = true
         var status = ""
 
-        val filterList = filters.ifEmpty { getFilterList() }
-
-        filterList.forEach { filter ->
+        filters.forEach { filter ->
             when (filter) {
                 is GenreList -> {
                     filter.state.forEach { f ->
@@ -49,7 +46,7 @@ abstract class YaoiChan : MultiChan() {
             }
         }
 
-        val orderBy = filterList.firstInstanceOrNull<OrderBy>()
+        val orderBy = filters.firstInstanceOrNull<OrderBy>()
         val url = if (genres.isNotEmpty()) {
             val order = orderBy?.let {
                 if (it.state!!.ascending) {
@@ -80,10 +77,10 @@ abstract class YaoiChan : MultiChan() {
             }
         }
 
-        return GET(url, headers)
+        return url
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Status(),
         OrderBy(),
         GenreList(getGenreList()),
