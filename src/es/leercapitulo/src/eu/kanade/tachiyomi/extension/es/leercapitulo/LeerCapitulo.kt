@@ -43,7 +43,7 @@ abstract class LeerCapitulo : HttpSource() {
         val mangas = document.select("h2:contains(Populares), h3:contains(Populares), .title:contains(Populares)")
             .first()?.parent()?.select("article.lc-card")
             ?.mapNotNull { it.toSManga() } ?: emptyList()
-        
+
         return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
@@ -56,7 +56,7 @@ abstract class LeerCapitulo : HttpSource() {
         val mangas = document.select("h2:contains(Ultimos), h3:contains(Ultimos), h2:contains(Últimos), h3:contains(Últimos)")
             .first()?.parent()?.select("article.lc-card")
             ?.mapNotNull { it.toSManga() } ?: emptyList()
-            
+
         return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
@@ -161,7 +161,7 @@ abstract class LeerCapitulo : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val imageElements = document.select("#lcPages img, main.lc-pages img, .lc-pages img")
-        
+
         val pages = imageElements.mapNotNull { element ->
             val src = element.imgAttr()
             if (src.startsWith("http")) src else null
