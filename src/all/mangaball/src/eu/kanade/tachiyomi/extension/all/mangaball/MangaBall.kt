@@ -166,7 +166,11 @@ abstract class MangaBall :
         return getMangaDetails(id)
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/title-detail/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        // The slug form only server-renders a stub page, so link to the id form the site itself uses.
+        val id = manga.memo.getStringOrNull("id") ?: manga.url
+        return "$baseUrl/title-detail/$id"
+    }
 
     private suspend fun getMangaDetails(idOrSlug: String): SManga = client.get("$baseUrl/api/v1/title/detail/$idOrSlug")
         .parseAs<TitleResponse>()
