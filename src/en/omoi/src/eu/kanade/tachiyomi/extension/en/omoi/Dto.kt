@@ -5,8 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import kotlin.text.replace
+import kotlin.time.Instant
 
 @Serializable
 class DetailsDto(
@@ -83,13 +82,13 @@ class Chapter(
     @SerialName("free_unpublished_date") val freeUnpublishedDate: String?,
     @SerialName("is_upcoming") private val isUpcoming: Boolean?,
 ) {
-    fun toSChapter(slug: String, isLocked: Boolean, dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
+    fun toSChapter(slug: String, isLocked: Boolean): SChapter = SChapter.create().apply {
         url = "$uuid#$slug"
         val chapter = "Chapter $label"
         val fullTitle = if (title != null) "$chapter - $title" else chapter
         val upcoming = if (isUpcoming == true) "$fullTitle - [Upcoming]" else fullTitle
         name = if (isLocked) "🔒 $upcoming" else upcoming
-        date_upload = dateFormat.tryParse(releaseDate)
+        date_upload = Instant.tryParse(releaseDate)
     }
 }
 
