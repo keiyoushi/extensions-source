@@ -92,7 +92,7 @@ abstract class LeerCapitulo : HttpSource() {
         val url = link.attr("abs:href")
         if (url.isBlank()) return null
 
-        val titleText = selectFirst("a.lc-card-name")?.text() ?: selectFirst(".n, .title")?.text() ?: link.attr("title").takeIf { it.isNotBlank() } ?: link.text()
+        val titleText = selectFirst("a.lc-card-name, .lc-side-name")?.text() ?: selectFirst(".n, .title")?.text() ?: link.attr("title").takeIf { it.isNotBlank() } ?: link.text()
         if (titleText.isBlank()) return null
 
         val img = selectFirst("img")
