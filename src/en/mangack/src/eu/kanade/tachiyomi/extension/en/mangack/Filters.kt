@@ -108,5 +108,3 @@ internal class GenreFilterGroup(genres: List<TaxonomyOption>) :
         const val STATE_EXCLUDE = Filter.TriState.STATE_EXCLUDE
     }
 }
-
-internal class WarningHeader(message: String) : Filter.Header(message)

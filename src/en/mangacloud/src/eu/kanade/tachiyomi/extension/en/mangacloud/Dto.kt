@@ -2,14 +2,14 @@ package eu.kanade.tachiyomi.extension.en.mangacloud
 
 import android.app.Application
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.text.SimpleDateFormat
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.SimpleTimeZone
 
 @Serializable
 class Data<T>(
@@ -196,15 +196,13 @@ class Chapter(
     @SerialName("created_date")
     private val createdDate: String,
 ) {
-    val date get() = dateFormat.tryParse(createdDate)
+    val date get() = dateFormat.tryParseDateTime(createdDate.take(19), ZoneOffset.UTC)
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
-    timeZone = SimpleTimeZone.getTimeZone("UTC")
-}
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
 
 @Serializable
-data class ChapterUrl(
+class ChapterUrl(
     val comicId: String,
     val chapterId: String,
 )

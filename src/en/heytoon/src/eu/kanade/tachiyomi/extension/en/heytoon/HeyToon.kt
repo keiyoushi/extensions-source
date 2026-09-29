@@ -1,47 +1,36 @@
 package eu.kanade.tachiyomi.extension.en.heytoon
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.lang.UnsupportedOperationException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class HeyToon : HttpSource() {
-    override val supportsLatest = true
+abstract class HeyToon : KeiSource() {
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        if (page != 1) {
+            return getSearchMangaList(page - 1, "", SortFilter.popular)
+        }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = if (page == 1) {
-        super.fetchPopularManga(page)
-    } else {
-        fetchSearchManga(page - 1, "", SortFilter.popular)
-    }
-
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(baseUrl).asJsoup()
 
         val entries = document.select("section[class*=slider]:has(h2:matches((?i)popular|trending)) a").map { element ->
             SManga.create().apply {
@@ -55,28 +44,20 @@ abstract class HeyToon : HttpSource() {
         return MangasPage(entries, hasNextPage = true)
     }
 
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.latest)
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", SortFilter.latest)
 
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
-
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> = if (query.isNotEmpty()) {
-        querySearch(query)
-    } else {
-        super.fetchSearchManga(page, query, filters)
-    }
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Doesn't work with text search"),
         Filter.Separator(),
         SortFilter(),
         GenreFilter(),
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isNotEmpty()) {
+            return querySearch(query)
+        }
+
         val url = "$baseUrl/en/genres".toHttpUrl().newBuilder().apply {
             filters.firstInstanceOrNull<GenreFilter>()?.selected?.also { genre ->
                 addPathSegment(genre)
@@ -89,11 +70,7 @@ abstract class HeyToon : HttpSource() {
             }
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
 
         val entries = document.select("div[class*=comicItem] a").map { element ->
             SManga.create().apply {
@@ -110,7 +87,7 @@ abstract class HeyToon : HttpSource() {
         return MangasPage(entries, hasNextPage)
     }
 
-    private fun querySearch(query: String): Observable<MangasPage> {
+    private suspend fun querySearch(query: String): MangasPage {
         val url = "$baseUrl/api/complete-search".toHttpUrl().newBuilder()
             .addQueryParameter("keyword", query)
             .build()
@@ -119,21 +96,17 @@ abstract class HeyToon : HttpSource() {
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        return client.newCall(GET(url, ajaxHeaders))
-            .asObservableSuccess()
-            .map {
-                val data = it.parseAs<List<Comic>>()
+        val data = client.get(url, ajaxHeaders).parseAs<List<Comic>>()
 
-                val entries = data.map { comic ->
-                    SManga.create().apply {
-                        setUrlWithoutDomain(comic.url)
-                        title = comic.title
-                        thumbnail_url = comic.cover
-                    }
-                }
-
-                MangasPage(entries, hasNextPage = false)
+        val entries = data.map { comic ->
+            SManga.create().apply {
+                setUrlWithoutDomain(comic.url)
+                title = comic.title
+                thumbnail_url = comic.cover
             }
+        }
+
+        return MangasPage(entries, hasNextPage = false)
     }
 
     @Serializable
@@ -143,10 +116,15 @@ abstract class HeyToon : HttpSource() {
         @SerialName("raw_thumb") val cover: String? = null,
     )
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        return SManga.create().apply {
+        val details = SManga.create().apply {
             title = document.selectFirst("#titleSubWrapper h1.titCon")!!.text()
             description = document.selectFirst("#modal_detail .cont_area p")?.text()
             genre = document.select("#modal_detail a[href*=genres]").eachText().joinToString()
@@ -161,29 +139,25 @@ abstract class HeyToon : HttpSource() {
                 }
             }
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-
-        return document.select(".episodeListConPC a#episodeItemCon").map {
+        val chapterList = document.select(".episodeListConPC a#episodeItemCon").map {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 name = it.selectFirst(".comicInfo p.episodeStitle")!!.text()
-                date_upload = dateFormat.tryParse(it.selectFirst(".comicInfo .episodeDate")?.text())
+                date_upload = dateFormat.tryParseDate(it.selectFirst(".comicInfo .episodeDate")?.text())
             }
         }.asReversed()
+
+        return SMangaUpdate(details, chapterList)
     }
 
-    private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
+    private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
         return document.select("#comicContent img").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
