@@ -1,147 +1,129 @@
 package eu.kanade.tachiyomi.extension.en.doujins
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
-abstract class Doujins : HttpSource() {
+abstract class Doujins : KeiSource() {
 
-    override val supportsLatest: Boolean = true
-
-    private val json: Json by injectLazy()
-
-    override fun chapterListParse(response: Response): List<SChapter> = listOf(
-        SChapter.create().apply {
-            val element = response.asJsoup()
-            name = "Chapter"
-            scanlator = element.select("div.folder-message:contains(Translated)").text().substringAfter("by:").trim()
-            setUrlWithoutDomain(response.request.url.toString())
-
-            val dateAndPageCountString = element.select(".text-md-right.text-sm-left > .folder-message").text()
-
-            val date = dateAndPageCountString.substringBefore(" • ")
-            for (dateFormat in MANGA_DETAILS_DATE_FORMAT) {
-                if (date_upload == 0L) {
-                    date_upload = dateFormat.parseOrNull(date)?.time ?: 0L
-                } else {
-                    break
-                }
-            }
-        },
-    )
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = MangasPage(
-        json.decodeFromString<JsonObject>(response.body.string())["folders"]!!.jsonArray.map {
-            SManga.create().apply {
-                setUrlWithoutDomain(it.jsonObject["link"]!!.jsonPrimitive.content)
-                title = it.jsonObject["name"]!!.jsonPrimitive.content
-                artist = it.jsonObject["artistList"]!!.jsonPrimitive.content
-                author = artist
-                genre = it.jsonObject["tags"]!!.jsonArray.joinToString(", ") { it.jsonObject["tag"]!!.jsonPrimitive.content }
-                thumbnail_url = it.jsonObject["thumbnail2"]!!.jsonPrimitive.content
-            }
-        },
-        true,
-    )
-
-    private fun getLatestPageUrl(page: Int): String {
-        val endDate = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-            add(Calendar.DATE, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            add(Calendar.DATE, -PAGE_DAYS * (page - 1))
-        }
-
-        val endDateSec = endDate.timeInMillis / 1000
-        val startDateSec = endDate.apply {
-            add(Calendar.DATE, -PAGE_DAYS)
-        }.timeInMillis / 1000
-
-        return "$baseUrl/folders?start=$startDateSec&end=$endDateSec"
-    }
-
-    override fun latestUpdatesRequest(page: Int) = GET(getLatestPageUrl(page), headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get(getMangaUrl(manga))
+        val chapterUrl = response.request.url.toString()
         val document = response.asJsoup()
-        return SManga.create().apply {
+
+        manga.apply {
             title = document.select(".folder-title a").last()!!.text()
             artist = document.select(".gallery-artist a").joinToString { it.text() }
             author = artist
             genre = document.select(".tag-area").first()!!.select("a").joinToString { it.text() }
         }
+
+        val chapter = SChapter.create().apply {
+            name = "Chapter"
+            scanlator = document.select("div.folder-message:contains(Translated)").text().substringAfter("by:").trim()
+            setUrlWithoutDomain(chapterUrl)
+
+            val dateAndPageCountString = document.select(".text-md-right.text-sm-left > .folder-message").text()
+
+            val date = dateAndPageCountString.substringBefore(" • ")
+            for (dateFormat in MANGA_DETAILS_DATE_FORMAT) {
+                if (date_upload == 0L) {
+                    date_upload = dateFormat.tryParseDate(date)
+                } else {
+                    break
+                }
+            }
+        }
+
+        return SMangaUpdate(manga, listOf(chapter))
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val mangas = client.get(getLatestPageUrl(page)).parseAs<FoldersDto>().folders.map {
+            SManga.create().apply {
+                setUrlWithoutDomain(it.link)
+                title = it.name
+                artist = it.artistList
+                author = artist
+                genre = it.tags.joinToString(", ") { it.tag }
+                thumbnail_url = it.thumbnail2
+            }
+        }
+        return MangasPage(mangas, true)
+    }
+
+    private fun getLatestPageUrl(page: Int): String {
+        val endDate = LocalDate.now(ZoneOffset.UTC)
+            .plusDays(1)
+            .minusDays(PAGE_DAYS * (page - 1L))
+
+        val endDateSec = endDate.atStartOfDay(ZoneOffset.UTC).toEpochSecond()
+        val startDateSec = endDate.minusDays(PAGE_DAYS).atStartOfDay(ZoneOffset.UTC).toEpochSecond()
+
+        return "$baseUrl/folders?start=$startDateSec&end=$endDateSec"
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter))
         val pageUrl = response.request.url.toString()
+        val document = response.asJsoup()
         return document.select(".doujin").mapIndexed { i, page ->
             Page(i, "$pageUrl${page.attr("data-link")}", page.attr("data-file").replace("amp;", ""))
         }
     }
 
-    override fun popularMangaParse(response: Response) = parseGalleryPage(response.asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseGalleryPage(client.get("$baseUrl/top/month").asJsoup())
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/top/month", headers)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val seriesFilter = filters.firstInstance<SeriesFilter>()
+        val sortFilter = filters.firstInstance<SortFilter>()
+        val popularityPeriodFilter = filters.firstInstance<PopularityPeriodFilter>()
 
-    override fun searchMangaParse(response: Response) = parseGalleryPage(response.asJsoup())
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val seriesFilter = filterList.findInstance<SeriesFilter>()!!
-        val sortFilter = filterList.findInstance<SortFilter>()!!
-        val popularityPeriodFilter = filterList.findInstance<PopularityPeriodFilter>()!!
-
-        return when {
+        val url = when {
             query != "" -> {
-                val url = "$baseUrl/searches".toHttpUrl().newBuilder()
+                "$baseUrl/searches".toHttpUrl().newBuilder()
                     .addQueryParameter("words", query)
                     .addQueryParameter("page", page.toString())
                     .addQueryParameter("sort", sortFilter.toUriPart())
                     .build()
-                GET(url, headers)
             }
 
             seriesFilter.toUriPart() != "" -> {
-                val url = "$baseUrl${seriesFilter.toUriPart()}".toHttpUrl().newBuilder()
+                "$baseUrl${seriesFilter.toUriPart()}".toHttpUrl().newBuilder()
                     .addQueryParameter("sort", sortFilter.toUriPart())
                     .build()
-                GET(url, headers)
             }
 
             else -> {
-                GET("$baseUrl${popularityPeriodFilter.toUriPart()}", headers)
+                "$baseUrl${popularityPeriodFilter.toUriPart()}".toHttpUrl()
             }
         }
+
+        return parseGalleryPage(client.get(url).asJsoup())
     }
 
     private fun parseGalleryPage(document: Document): MangasPage {
@@ -165,7 +147,7 @@ abstract class Doujins : HttpSource() {
         )
     }
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Text search ignores series and period filters"),
         Filter.Separator(),
 
@@ -238,19 +220,11 @@ abstract class Doujins : HttpSource() {
         fun toUriPart() = vals[state].second
     }
 
-    private fun SimpleDateFormat.parseOrNull(string: String): Date? = try {
-        parse(string)
-    } catch (e: ParseException) {
-        null
-    }
-
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
-
     companion object {
-        private const val PAGE_DAYS = 3
+        private const val PAGE_DAYS = 3L
         private val ORDINAL_SUFFIXES = listOf("th", "st", "nd", "rd")
         private val MANGA_DETAILS_DATE_FORMAT = ORDINAL_SUFFIXES.map {
-            SimpleDateFormat("MMMM dd'$it', yyyy", Locale.US)
+            DateTimeFormatter.ofPattern("MMMM d'$it', yyyy", Locale.US)
         }
     }
 }
