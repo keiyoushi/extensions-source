@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.taddyink
 
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 object TaddyUtils {
-    private val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
-
     fun getManga(comicObj: Comic): SManga {
         val name = comicObj.name
         val sssUrl = comicObj.url
@@ -20,8 +17,8 @@ object TaddyUtils {
             ?.mapNotNull { it.name }
             ?.joinToString()
 
-        val thumbnailBaseUrl = comicObj.coverImage?.base_url ?: ""
-        val thumbnail = comicObj.coverImage?.cover_sm ?: ""
+        val thumbnailBaseUrl = comicObj.coverImage?.baseUrl ?: ""
+        val thumbnail = comicObj.coverImage?.coverSm ?: ""
         val thumbnailUrl = if (thumbnailBaseUrl.isNotEmpty() && thumbnail.isNotEmpty()) "$thumbnailBaseUrl$thumbnail" else ""
 
         return SManga.create().apply {
@@ -32,12 +29,8 @@ object TaddyUtils {
             thumbnail_url = thumbnailUrl
             status = SManga.ONGOING
             genre = genres
-            initialized = true
         }
     }
-
-    fun getTime(timeString: String): Long = runCatching { formatter.parse(timeString)?.time }
-        .getOrNull() ?: 0L
 
     val genrePairs: List<Pair<String, String>> = listOf(
         Pair("", ""),
@@ -72,58 +65,34 @@ object TaddyUtils {
 }
 
 @Serializable
-data class ComicResults(
-    val status: String,
+class ComicResults(
     val comicseries: List<Comic> = emptyList(),
 )
 
 @Serializable
-data class Comic(
-    val identifier: String? = null,
+class Comic(
     val name: String = "Unknown",
     val url: String,
     val description: String? = null,
     val genres: List<String>? = emptyList(),
     val creators: List<Creator>? = emptyList(),
     val coverImage: CoverImage? = null,
-    val bannerImage: BannerImage? = null,
-    val thumbnailImage: ThumbnailImage? = null,
-    val contentRating: String? = null,
-    val inLanguage: String? = null,
-    val seriesType: String? = null,
     val issues: List<Chapter>? = emptyList(),
 )
 
 @Serializable
-data class CoverImage(
-    val base_url: String?,
-    val cover_sm: String?,
-    val cover_md: String?,
-    val cover_lg: String?,
+class CoverImage(
+    @SerialName("base_url") val baseUrl: String?,
+    @SerialName("cover_sm") val coverSm: String?,
 )
 
 @Serializable
-data class BannerImage(
-    val base_url: String?,
-    val banner_sm: String?,
-    val banner_md: String?,
-    val banner_lg: String?,
-)
-
-@Serializable
-data class ThumbnailImage(
-    val base_url: String?,
-    val thumbnail: String?,
-)
-
-@Serializable
-data class Creator(
-    val identifier: String? = null,
+class Creator(
     val name: String? = null,
 )
 
 @Serializable
-data class Chapter(
+class Chapter(
     val identifier: String,
     val name: String,
     val datePublished: String,
@@ -131,12 +100,12 @@ data class Chapter(
 )
 
 @Serializable
-data class Story(
+class Story(
     val storyImage: StoryImage?,
 )
 
 @Serializable
-data class StoryImage(
-    val base_url: String?,
+class StoryImage(
+    @SerialName("base_url") val baseUrl: String?,
     val story: String?,
 )
