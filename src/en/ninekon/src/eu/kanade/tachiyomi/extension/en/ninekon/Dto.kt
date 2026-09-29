@@ -2,13 +2,13 @@ package eu.kanade.tachiyomi.extension.en.ninekon
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 
 @Serializable
 class BooksResponse(
@@ -61,7 +61,7 @@ class BookDetailsDto(
     fun getChapters(): List<SChapter> {
         val sChapters = chapters.map { it.toSChapter(gid) }.reversed()
         if (sChapters.isNotEmpty() && !dtUpdated.isNullOrEmpty()) {
-            sChapters[0].date_upload = dateFormat.tryParse(dtUpdated)
+            sChapters[0].date_upload = dateFormat.tryParseDateTime(dtUpdated)
         }
         return sChapters
     }
