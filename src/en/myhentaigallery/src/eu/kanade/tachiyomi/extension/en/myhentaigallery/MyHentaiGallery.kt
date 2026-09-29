@@ -1,101 +1,83 @@
 package eu.kanade.tachiyomi.extension.en.myhentaigallery
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 
 @Source
-abstract class MyHentaiGallery : HttpSource() {
-
-    override val supportsLatest = true
+abstract class MyHentaiGallery : KeiSource() {
 
     // =============================== Popular ================================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/views/$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseComicListing(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseComicListing("$baseUrl/views/$page".toHttpUrl())
 
     // =============================== Latest =================================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/gpage/$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseComicListing(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseComicListing("$baseUrl/gpage/$page".toHttpUrl())
 
     // =============================== Search =================================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val id = url.pathSegments[2]
-            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
-        }
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client.newCall(GET("$baseUrl/g/$id", headers))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response).apply { url = "/g/$id" }
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        val id = when (url.pathSegments[0]) {
+            "gallery" -> url.pathSegments.getOrNull(2)
+            "g", "a" -> url.pathSegments.getOrNull(1)
+            else -> null
+        }?.takeIf { it.all(Char::isDigit) } ?: return null
+
+        val document = client.get("$baseUrl/g/$id").asJsoup()
+        return mangaDetailsParse(SManga.create().apply { this.url = "/g/$id" }, document)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        genreSearchRequest(query, page)?.let { return it }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        genreSearchUrl(query, page)?.let { return parseComicListing(it) }
 
         if (query.isNotBlank()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addPathSegment(page.toString())
                 .addQueryParameter("query", query)
                 .build()
-            return GET(url, headers)
+            return parseComicListing(url)
         }
 
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val categoryFilter = filterList.firstInstanceOrNull<GenreFilter>()
-        val sortFilter = filterList.firstInstanceOrNull<SortFilter>()
-        val tagLookupFilter = filterList
+        val categoryFilter = filters.firstInstanceOrNull<GenreFilter>()
+        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
+        val tagLookupFilter = filters
             .filterIsInstance<TagLookupFilter>()
             .firstOrNull { it.state.isNotBlank() }
 
         if (tagLookupFilter != null) {
             val tagId = tagLookupFilter.resolveTagId()
-            return GET("$baseUrl/a/${tagLookupFilter.uriPart}/$tagId/$page", headers)
+            return parseComicListing("$baseUrl/a/${tagLookupFilter.uriPart}/$tagId/$page".toHttpUrl())
         }
 
         if (categoryFilter != null && categoryFilter.toUriPart().isNotEmpty()) {
             val catId = categoryFilter.toUriPart()
-            return GET("$baseUrl/g/category/$catId/$page", headers)
+            return parseComicListing("$baseUrl/g/category/$catId/$page".toHttpUrl())
         }
 
         val sortPath = sortFilter?.toUriPart() ?: "gpage"
-        return GET("$baseUrl/$sortPath/$page", headers)
+        return parseComicListing("$baseUrl/$sortPath/$page".toHttpUrl())
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = parseComicListing(response)
 
     // ============================== Filters =================================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),
         Filter.Separator(),
         SortFilter(),
@@ -110,8 +92,8 @@ abstract class MyHentaiGallery : HttpSource() {
 
     // =========================== Comic Listing ==============================
 
-    private fun parseComicListing(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private suspend fun parseComicListing(url: HttpUrl): MangasPage {
+        val document = client.get(url).asJsoup()
 
         val mangas = document.select("div.comic-inner").map { element ->
             SManga.create().apply {
@@ -127,16 +109,31 @@ abstract class MyHentaiGallery : HttpSource() {
 
     // =========================== Manga Details ==============================
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+        val updatedChapters = listOf(
+            SChapter.create().apply {
+                name = "Chapter"
+                url = document.location().substringAfter(baseUrl)
+            },
+        )
+
+        return SMangaUpdate(mangaDetailsParse(manga, document), updatedChapters)
+    }
+
+    private fun mangaDetailsParse(manga: SManga, document: Document): SManga {
         val info: Element = document.selectFirst("div.comic-header")!!
         val categories = info.select("div:containsOwn(categories) a").eachText()
         val artists = info.select("div:containsOwn(artists) a").eachText()
         val parodies = info.select("div:containsOwn(parodies) a").eachText()
 
-        return SManga.create().apply {
+        return manga.apply {
             title = info.selectFirst("h1")!!.text()
             genre = (
                 categories +
@@ -146,7 +143,6 @@ abstract class MyHentaiGallery : HttpSource() {
             artist = artists.joinToString()
             thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.absUrl("src")?.encodeSpaces()
             status = SManga.COMPLETED
-            initialized = true
             description = buildString {
                 info.select("div:containsOwn(groups) a")
                     .takeIf { it.isNotEmpty() }
@@ -165,31 +161,18 @@ abstract class MyHentaiGallery : HttpSource() {
         }
     }
 
-    // =========================== Chapter List ===============================
-
-    override fun chapterListParse(response: Response): List<SChapter> = listOf(
-        SChapter.create().apply {
-            name = "Chapter"
-            url = response.request.url.toString().substringAfter(baseUrl)
-        },
-    )
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
     // ============================== Page List ===============================
 
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.comic-thumb img[src]").mapIndexed { i, img ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select("div.comic-thumb img[src]").mapIndexed { i, img ->
         Page(i, imageUrl = img.absUrl("src").replace("/thumbnail/", "/original/").encodeSpaces())
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Helpers =================================
 
     private fun String.encodeSpaces(): String = replace(" ", "%20")
 
     // Routes a clicked artist/parody genre chip to its tag listing instead of a title search.
-    private fun genreSearchRequest(query: String, page: Int): Request? {
+    private suspend fun genreSearchUrl(query: String, page: Int): HttpUrl? {
         val (uriPart, name) = when {
             query.startsWith(ARTIST_GENRE_PREFIX) -> "artist" to query.removePrefix(ARTIST_GENRE_PREFIX)
             query.startsWith(PARODY_GENRE_PREFIX) -> "parody" to query.removePrefix(PARODY_GENRE_PREFIX)
@@ -197,10 +180,10 @@ abstract class MyHentaiGallery : HttpSource() {
         }
         val id = lookupTagId(uriPart, name)
             ?: throw Exception("No $uriPart \"$name\" was found.")
-        return GET("$baseUrl/a/$uriPart/$id/$page", headers)
+        return "$baseUrl/a/$uriPart/$id/$page".toHttpUrl()
     }
 
-    private fun TagLookupFilter.resolveTagId(): String {
+    private suspend fun TagLookupFilter.resolveTagId(): String {
         val value = state.trim()
         value.toLongOrNull()?.let { return it.toString() }
 
@@ -217,31 +200,28 @@ abstract class MyHentaiGallery : HttpSource() {
             ?: throw Exception("No $uriPart \"$value\" was found. Use the exact tag name, numeric ID, or full MyHentaiGallery tag URL.")
     }
 
-    private fun lookupTagId(uriPart: String, name: String): String? {
+    private suspend fun lookupTagId(uriPart: String, name: String): String? {
         val lookup = tagLookupCache.getOrPut(uriPart) { loadTagLookup(uriPart) }
         return lookup[name.normalizeTagName()]
     }
 
-    private fun loadTagLookup(uriPart: String): Map<String, String> {
+    private suspend fun loadTagLookup(uriPart: String): Map<String, String> {
         val tagUrlRegex = Regex("""/$uriPart/(\d+)(?:[/?#]|$)""", RegexOption.IGNORE_CASE)
 
-        return client.newCall(GET("$baseUrl/tag/$uriPart", headers)).execute().use { response ->
-            response.asJsoup()
-                .select("a[href*='/$uriPart/']")
-                .mapNotNull { element ->
-                    val id = tagUrlRegex.find(element.attr("href"))?.groupValues?.get(1)
-                        ?: return@mapNotNull null
-                    val name = element.text().normalizeTagName()
-                    if (name.isBlank()) null else name to id
-                }
-                .toMap()
-        }
+        return client.get("$baseUrl/tag/$uriPart").asJsoup()
+            .select("a[href*='/$uriPart/']")
+            .mapNotNull { element ->
+                val id = tagUrlRegex.find(element.attr("href"))?.groupValues?.get(1)
+                    ?: return@mapNotNull null
+                val name = element.text().normalizeTagName()
+                if (name.isBlank()) null else name to id
+            }
+            .toMap()
     }
 
     private fun String.normalizeTagName(): String = replace(TAG_COUNT_SUFFIX, "").trim().lowercase().replace(WHITESPACE_REGEX, " ")
 
     companion object {
-        const val PREFIX_ID_SEARCH = "id:"
         private const val ARTIST_GENRE_PREFIX = "Artist: "
         private const val PARODY_GENRE_PREFIX = "Parody: "
         private val TAG_URL_REGEX = Regex("""/(artist|parody)/(\d+)(?:[/?#]|$)""", RegexOption.IGNORE_CASE)
