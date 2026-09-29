@@ -39,9 +39,9 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        // Seleccionamos las tarjetas que están bajo el título de "Populares"
+        // Cambiado a .lc-side-item según la corrección del revisor
         val mangas = document.select("h2:contains(Populares), h3:contains(Populares), .title:contains(Populares)")
-            .first()?.parent()?.select("article.lc-card")
+            .first()?.parent()?.select(".lc-side-item")
             ?.mapNotNull { it.toSManga() } ?: emptyList()
 
         return MangasPage(mangas.distinctBy { it.url }, false)
@@ -52,9 +52,9 @@ abstract class LeerCapitulo : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        // Seleccionamos las tarjetas que están bajo el título de "Últimos mangas"
+        // Cambiado a .lc-side-item según la corrección del revisor
         val mangas = document.select("h2:contains(Ultimos), h3:contains(Ultimos), h2:contains(Últimos), h3:contains(Últimos)")
-            .first()?.parent()?.select("article.lc-card")
+            .first()?.parent()?.select(".lc-side-item")
             ?.mapNotNull { it.toSManga() } ?: emptyList()
 
         return MangasPage(mangas.distinctBy { it.url }, false)
@@ -86,16 +86,16 @@ abstract class LeerCapitulo : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // Función auxiliar para parsear las tarjetas tanto en portada como en búsqueda
+    // Función auxiliar unificada para leer tarjetas .lc-card (búsqueda) y .lc-side-item (portada)
     private fun Element.toSManga(): SManga? {
-        val link = selectFirst("a.lc-card-name") ?: selectFirst("a.lc-card-cover") ?: return null
+        val link = selectFirst("a.lc-card-name") ?: selectFirst("a.lc-card-cover") ?: selectFirst("a") ?: return null
         val url = link.attr("abs:href")
         if (url.isBlank()) return null
 
-        val titleText = selectFirst("a.lc-card-name")?.text() ?: link.text()
+        val titleText = selectFirst("a.lc-card-name")?.text() ?: selectFirst(".n, .title")?.text() ?: link.attr("title").takeIf { it.isNotBlank() } ?: link.text()
         if (titleText.isBlank()) return null
 
-        val img = selectFirst("a.lc-card-cover img")
+        val img = selectFirst("img")
 
         return SManga.create().apply {
             setUrlWithoutDomain(url)
