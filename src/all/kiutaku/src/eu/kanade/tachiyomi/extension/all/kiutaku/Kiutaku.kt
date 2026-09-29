@@ -11,6 +11,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -18,6 +19,8 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class Kiutaku : KeiSource() {
+    override fun Headers.Builder.configureHeaders() = removeAll("Referer")
+
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/hot".toHttpUrl().newBuilder()
             .addQueryParameter("start", getPage(page).toString())
