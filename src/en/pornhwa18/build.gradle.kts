@@ -6,13 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Pornhwa18"
+    pkgName = "id.pornhwa18"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
 
     source {
-        lang = "id"
+        lang = "en"
         baseUrl = "https://pornhwa18.com"
+        versionId = 2
+    }
+
+    deeplink {
+        path("/comic/..*")
     }
 }
