@@ -2,6 +2,7 @@ package keiyoushi.lib.speedbinb
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -10,24 +11,22 @@ private val COORD_REGEX = Regex("""^i:(\d+),(\d+)\+(\d+),(\d+)>(\d+),(\d+)$""")
 @Serializable
 class BibContentInfo(
     val result: Int,
-    val items: List<BibContentItem>,
+    // A refused request still returns an item, but with empty strings in its numeric fields
+    val items: List<JsonElement>,
 )
 
 @Serializable
 class BibContentItem(
-    @SerialName("ContentID") val contentId: String,
     @SerialName("ContentsServer") val contentServer: String,
     @SerialName("ServerType") val serverType: Int,
-    val stbl: String,
-    val ttbl: String,
     val ptbl: String,
     val ctbl: String,
-    @SerialName("p") val requestToken: String? = null,
+    @SerialName("p") val requestToken: String?,
     @SerialName("ViewMode") val viewMode: Int,
-    @SerialName("ContentDate") val contentDate: String? = null,
-    @SerialName("ShopURL") val shopUrl: String? = null,
+    @SerialName("ContentDate") val contentDate: String?,
+    @SerialName("ShopURL") val shopUrl: String?,
 ) {
-    fun getSbcUrl(readerUrl: HttpUrl, cid: String) = contentServer.toHttpUrl().newBuilder().apply {
+    fun getSbcUrl(contentInfoUrl: HttpUrl, cid: String) = contentServer.toHttpUrl().newBuilder().apply {
         when (serverType) {
             ServerType.DIRECT -> addPathSegment("content.js")
             ServerType.REST -> addPathSegment("content")
@@ -38,7 +37,7 @@ class BibContentItem(
                 setQueryParameter("q", "1")
                 setQueryParameter("vm", viewMode.toString())
                 setQueryParameter("dmytime", contentDate ?: System.currentTimeMillis().toString())
-                copyKeyParametersFrom(readerUrl)
+                copyKeyParametersFrom(contentInfoUrl)
             }
             else -> throw UnsupportedOperationException("Unsupported ServerType value $serverType")
         }
@@ -59,7 +58,6 @@ object ViewMode {
 
 @Serializable
 class PtImg(
-    @SerialName("ptimg-version") val ptImgVersion: Int,
     val resources: PtImgResources,
     val views: List<PtImgViews>,
 ) {
@@ -79,23 +77,20 @@ class PtImgResources(
 @Serializable
 class PtImgImage(
     val src: String,
-    val width: Int,
-    val height: Int,
 )
 
 @Serializable
 class PtImgViews(
     val width: Int,
     val height: Int,
-    val coords: Array<String>,
+    val coords: List<String>,
 )
 
 class PtImgTranslation(val xsrc: Int, val ysrc: Int, val width: Int, val height: Int, val xdest: Int, val ydest: Int)
 
 @Serializable
 class SBCContent(
-    @SerialName("SBCVersion") val sbcVersion: String,
     val result: Int,
     val ttx: String,
-    @SerialName("ImageClass") val imageClass: String? = null,
+    @SerialName("ImageClass") val imageClass: String?,
 )
