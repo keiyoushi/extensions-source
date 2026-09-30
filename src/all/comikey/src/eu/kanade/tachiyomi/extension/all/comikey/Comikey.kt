@@ -26,6 +26,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -311,9 +312,14 @@ abstract class Comikey :
                 .filter { it.type == "image/webp" }
                 .maxBy { it.dimension(isWebtoon) }
 
-            val url = manifestUrl.resolve(image.href)!!.newBuilder()
-                .encodedQuery(manifestUrl.encodedQuery)
-                .addQueryParameter("act", payload.act)
+            val imageUrl = manifestUrl.resolve(image.href)!!
+            val url = imageUrl.newBuilder()
+                .encodedQuery(imageUrl.encodedQuery ?: manifestUrl.encodedQuery)
+                .apply {
+                    if (imageUrl.queryParameter("act") == null) {
+                        addQueryParameter("act", payload.act)
+                    }
+                }
                 .build()
 
             Page(i, imageUrl = url.toString())
@@ -367,6 +373,18 @@ abstract class Comikey :
     }
 
     private fun webviewScript(interfaceName: String, intl: Intl) = """
+        (() => {
+            // Suwayomi's KCEF changes the HTTP User-Agent without updating navigator.userAgent.
+            // Comikey uses this value when decoding the manifest, so both must match.
+            const userAgent = ${JsonPrimitive(headers["User-Agent"]!!)};
+            if (navigator.userAgent !== userAgent) {
+                Object.defineProperty(navigator, "userAgent", {
+                    get: () => userAgent,
+                    configurable: true
+                });
+            }
+        })();
+
         document.addEventListener("DOMContentLoaded", (e) => {
             if (document.querySelector("#unlock-full")) {
                 $interfaceName.post(JSON.stringify({error: "${intl["error_locked_chapter_unlock_in_webview"]}"}));
@@ -394,12 +412,18 @@ abstract class Comikey :
                             const entries = event.target.result;
                             db.close();
 
+                            if (!Array.isArray(entries)) {
+                                reject(new Error("App Check storage did not return an array"));
+                                return;
+                            }
                             if (entries.length < 1) {
-                                postError('${intl["error_open_in_webview_then_try_again"]} (${intl["error_token_not_found"]}).');
+                                reject(new Error('${intl["error_open_in_webview_then_try_again"]} (${intl["error_token_not_found"]}).'));
+                                return;
                             }
                             const value = entries[0].value;
                             if (value.expireTimeMillis < Date.now()) {
-                                postError('${intl["error_open_in_webview_then_try_again"]} (${intl["error_token_expired"]}).');
+                                reject(new Error('${intl["error_open_in_webview_then_try_again"]} (${intl["error_token_expired"]}).'));
+                                return;
                             }
                             resolve(value.token)
                         }
