@@ -65,3 +65,4 @@ class GenreFilter(genres: List<GenreOption>) :
         "Thể loại",
         genres.map { GenreTriStateFilter(it.name, it.id) },
     )
+
