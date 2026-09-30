@@ -182,7 +182,7 @@ class LANraragi(
         }
 
         jsonResult.data.forEach {
-            archives.add(archiveToSManga(it, isRandom))
+            archives.add(archiveToSManga(it, isRandom && page > 1))
         }
 
         return MangasPage(archives, hasNext)
