@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -21,7 +22,13 @@ import kotlin.time.Instant
 abstract class Nekopost : KeiSource() {
 
     private val projectDataEndpoint get() = "$baseUrl/api/project/detail2"
-    private val fileHost = "https://www.osemocphoto.com"
+
+    /**
+     * The site splits its files across two hosts by project id. Either host answers 200 for the
+     * other's paths, but returns a placeholder or a 10-byte "Hi there!" instead of the file, so
+     * picking the wrong one fails silently.
+     */
+    private fun fileHost(projectId: Int) = if (projectId > FILE_HOST_THRESHOLD) FS_FILE_HOST else WWW_FILE_HOST
 
     private val apiHeaders get() = headersBuilder()
         .set("Accept", "*/*")
@@ -58,7 +65,7 @@ abstract class Nekopost : KeiSource() {
                     title = it.projectName
                     status = getStatus(it.status.toInt())
                     thumbnail_url =
-                        buildCoverUrl(it.pid.toString(), it.coverVersion)
+                        buildCoverUrl(it.pid, it.coverVersion)
                     initialized = false
                 }
             }
@@ -134,7 +141,7 @@ abstract class Nekopost : KeiSource() {
         author = p.authorName
         description = p.info
         status = getStatus(p.status)
-        thumbnail_url = buildCoverUrl(p.projectId.toString())
+        thumbnail_url = buildCoverUrl(p.projectId)
         genre =
             info.info.category
                 ?.joinToString(", ") { it.categoryName }
@@ -155,7 +162,7 @@ abstract class Nekopost : KeiSource() {
                     status = project.status
                     thumbnail_url =
                         buildCoverUrl(
-                            project.pid.toString(),
+                            project.pid,
                             project.coverVersion,
                         )
                     initialized = false
@@ -186,7 +193,7 @@ abstract class Nekopost : KeiSource() {
                         status = it.status
                         thumbnail_url =
                             buildCoverUrl(
-                                it.pid.toString(),
+                                it.pid,
                                 it.coverVersion,
                             )
                         initialized = false
@@ -199,8 +206,8 @@ abstract class Nekopost : KeiSource() {
         )
     }
 
-    private fun buildCoverUrl(projectId: String, coverVersion: Int? = null): String {
-        val base = "$fileHost/collectManga/$projectId/${projectId}_cover.jpg"
+    private fun buildCoverUrl(projectId: Int, coverVersion: Int? = null): String {
+        val base = "${fileHost(projectId)}/collectManga/$projectId/${projectId}_cover.jpg"
         return if (coverVersion != null) "$base?ver=$coverVersion" else base
     }
 
@@ -243,17 +250,25 @@ abstract class Nekopost : KeiSource() {
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/${chapter.url.substringBefore("/")}/${chapter.chapter_number.toString().removeSuffix(".0")}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$fileHost/collectManga/${chapter.url}")
+        val segments = chapter.url.split('/')
+        val request = ChapterInfoRequest(segments[0].toInt(), segments[1].toInt())
 
-        val info = response.parseAs<RawChapterInfo>()
-        val base = "$fileHost/collectManga/${info.projectId}/${info.chapterId}"
+        val response = client.post("$baseUrl/handler/cinfo", apiHeaders, request.toJsonRequestBody())
 
-        return info.pageItem.map {
-            Page(
-                index = it.pageNo,
-                imageUrl = "$base/${it.pageName ?: it.fileName}",
-            )
-        }
+        // Not JSON: the body is base64 of a CryptoJS payload, so it has to be read as text and
+        // decrypted before it can be parsed.
+        val decrypted = CryptoAES.decrypt(response.body.string(), CIPHER_PASSPHRASE)
+            .ifEmpty { throw Exception("Failed to decrypt chapter data") }
+
+        val info = decrypted.parseAs<RawChapterInfo>()
+        val base = "${fileHost(info.projectId.toInt())}/collectManga/${info.projectId}/${info.chapterId}"
+
+        // The site's own reader sorts by pageNo rather than trusting the returned order.
+        return info.pageItem
+            .sortedBy { it.pageNo.toInt() }
+            .mapIndexed { index, item ->
+                Page(index, imageUrl = "$base/${item.pageName ?: item.fileName}")
+            }
     }
 
     private fun getStatus(status: Int) = when (status) {
@@ -267,5 +282,14 @@ abstract class Nekopost : KeiSource() {
         private const val POPULAR_PAGE_SIZE = 15
         private const val LATEST_PAGE_SIZE = 15
         private const val SEARCH_PAGE_SIZE = 100
+
+        /** Passphrase the site's client bundle uses to decrypt the `handler/cinfo` response. */
+        private const val CIPHER_PASSPHRASE = "AeyTest"
+
+        private const val WWW_FILE_HOST = "https://www.osemocphoto.com"
+        private const val FS_FILE_HOST = "https://fs.osemocphoto.com"
+
+        /** Project ids above this are served from [FS_FILE_HOST], the rest from [WWW_FILE_HOST]. */
+        private const val FILE_HOST_THRESHOLD = 17500
     }
 }
