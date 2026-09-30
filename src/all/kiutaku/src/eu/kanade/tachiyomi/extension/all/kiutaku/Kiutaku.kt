@@ -1,42 +1,33 @@
 package eu.kanade.tachiyomi.extension.all.kiutaku
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
-import keiyoushi.network.rateLimit
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 
 @Source
-abstract class Kiutaku : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val supportsLatest = true
-
-    override val client by lazy {
-        network.client.newBuilder()
-            .rateLimit(2) { it.host == baseUrlHost }
-            .build()
-    }
+abstract class Kiutaku : KeiSource() {
+    // Image host (mitaku.net) blocks hotlinking with a kiutaku.com Referer
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Referer")
 
     // ============================== Popular ===============================
     private fun getPage(page: Int) = (page - 1) * 20
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/hot?start=${getPage(page)}", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/hot?start=${getPage(page)}").asJsoup())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("div.blog > div.items-row").map(::mangaFromElement)
         val hasNextPage = document.selectFirst("nav > a.pagination-next:not([disabled])") != null
         return MangasPage(mangas, hasNextPage)
@@ -49,61 +40,66 @@ abstract class Kiutaku : HttpSource() {
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?start=${getPage(page)}", headers)
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/?start=${getPage(page)}").asJsoup())
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
-        val url = query.toHttpUrl()
-        if (url.host != baseUrlHost) {
-            throw Exception("Unsupported url")
-        }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val id = url.pathSegments.first()
-        fetchSearchManga(page, "$PREFIX_SEARCH$id", filters)
-    } else if (query.startsWith(PREFIX_SEARCH)) {
-        val id = query.removePrefix(PREFIX_SEARCH)
-        client.newCall(GET("$baseUrl/$id"))
-            .asObservableSuccess()
-            .map(::searchMangaByIdParse)
-    } else {
-        super.fetchSearchManga(page, query, filters)
+        val document = client.get("$baseUrl/$id").asJsoup()
+        return mangaDetailsParse(
+            document,
+            SManga.create().apply {
+                this.url = "/$id"
+                initialized = true
+            },
+        )
     }
 
-    private fun searchMangaByIdParse(response: Response): MangasPage {
-        val details = mangaDetailsParse(response)
-        return MangasPage(listOf(details), false)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("search", query)
             .addQueryParameter("start", getPage(page).toString())
             .build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url).asJsoup())
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val details = mangaDetailsParse(document, manga)
+
+        val chapterList = document
+            .select("nav.pagination:first-of-type a")
+            .map(::chapterFromElement)
+            .reversed()
+
+        return SMangaUpdate(details, chapterList)
+    }
+
+    private fun mangaDetailsParse(document: Document, manga: SManga) = manga.apply {
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        title = document.selectFirst("div.article-header")?.text() ?: "Cosplay"
+        title = document.selectFirst("div.article-header")!!.text()
         genre = document.selectFirst("div.article-tags")
             ?.select("a.tag > span")
             ?.eachText()
             ?.joinToString { it.trimStart('#') }
     }
 
-    // ============================== Chapters ==============================
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup()
-        .select("nav.pagination:first-of-type a")
-        .map(::chapterFromElement)
-        .reversed()
+    override val supportsRelatedMangas = true
 
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+        .select("div.bottom-articles .items-row")
+        .map(::mangaFromElement)
+
+    // ============================== Chapters ==============================
     private fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
         val text = element.text()
@@ -112,15 +108,9 @@ abstract class Kiutaku : HttpSource() {
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
         .select("div.article-fulltext img[src]")
         .mapIndexed { index, item ->
             Page(index, imageUrl = item.absUrl("src"))
         }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    companion object {
-        const val PREFIX_SEARCH = "id:"
-    }
 }

@@ -11,34 +11,37 @@ import eu.kanade.tachiyomi.extension.all.globalcomix.dto.MangaDataDto.Companion.
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.MangasDto
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.UnknownEntity
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class GlobalComix :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     // the site's own lang codes for these differ from Tachiyomi's lang codes
@@ -60,8 +63,6 @@ abstract class GlobalComix :
             else -> lang
         }
 
-    override val supportsLatest = true
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val json = Json {
@@ -82,18 +83,14 @@ abstract class GlobalComix :
         createMessageFileName = { lang -> Intl.createDefaultMessageFileName(lang) },
     )
 
-    final override fun headersBuilder() = super.headersBuilder().apply {
-        set("Referer", "$baseUrl/")
-        set("Origin", baseUrl)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         set("x-gc-client", CLIENT_ID)
         set("x-gc-identmode", "cookie")
     }
 
-    override val client = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
-    private fun simpleQueryRequest(page: Int, orderBy: String?, query: String?): Request {
+    private suspend fun simpleQuery(page: Int, orderBy: String?, query: String?): MangasPage {
         val url = API_SEARCH_URL.toHttpUrl().newBuilder()
             .addQueryParameter("lang_id[]", extLang)
             .addQueryParameter("p", page.toString())
@@ -101,125 +98,76 @@ abstract class GlobalComix :
         orderBy?.let { url.addQueryParameter("sort", it) }
         query?.let { url.addQueryParameter("q", it) }
 
-        return GET(url.build(), headers)
-    }
-
-    override fun popularMangaRequest(page: Int): Request = simpleQueryRequest(page, orderBy = null, query = null)
-
-    override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
-
-    override fun latestUpdatesRequest(page: Int): Request = simpleQueryRequest(page, "recent", query = null)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = mangaListParse(response)
-
-    private fun mangaListParse(response: Response): MangasPage {
-        val isSingleItemLookup = response.request.url.toString().startsWith(API_MANGA_URL)
-        return if (!isSingleItemLookup) {
-            // Normally, the response is a paginated list of mangas
-            // The results property will be a JSON array
-            response.parseAs<MangasDto>().payload!!.let { dto ->
-                MangasPage(
-                    dto.results.map { it -> it.createManga() },
-                    dto.pagination.hasNextPage,
-                )
-            }
-        } else {
-            // However, when using the 'id:' query prefix (via the UrlActivity for example),
-            // the response is a single manga and the results property will be a JSON object
+        return client.get(url.build()).parseAs<MangasDto>().payload!!.let { dto ->
             MangasPage(
-                listOf(
-                    response.parseAs<MangaDto>().payload!!
-                        .results
-                        .createManga(),
-                ),
-                false,
+                dto.results.map { it -> it.createManga() },
+                dto.pagination.hasNextPage,
             )
         }
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val titleId = url.pathSegments[1]
-            return super.fetchSearchManga(page, "$PREFIX_ID_SEARCH$titleId", filters)
-        }
-        return super.fetchSearchManga(page, query, filters)
+    override suspend fun getPopularManga(page: Int): MangasPage = simpleQuery(page, orderBy = null, query = null)
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = simpleQuery(page, "recent", query = null)
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val mangaSlugId = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+
+        return fetchMangaBySlug(mangaSlugId)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // If the query is a slug ID, return the manga directly
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val mangaSlugId = query.removePrefix(PREFIX_ID_SEARCH)
-
-            if (mangaSlugId.isEmpty()) {
-                throw Exception(intl["invalid_manga_id"])
-            }
-
-            val url = API_MANGA_URL.toHttpUrl().newBuilder()
-                .addPathSegment(mangaSlugId)
-                .build()
-
-            return GET(url, headers)
-        }
-
-        return simpleQueryRequest(page, orderBy = "relevance", query)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = simpleQuery(page, orderBy = "relevance", query)
 
     override fun getMangaUrl(manga: SManga): String = "$WEB_COMIC_URL/${titleToSlug(manga.title)}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    private suspend fun fetchMangaBySlug(slug: String): SManga {
         val url = API_MANGA_URL.toHttpUrl().newBuilder()
-            .addPathSegment(titleToSlug(manga.title))
+            .addPathSegment(slug)
             .build()
 
-        return GET(url, headers)
+        return client.get(url).parseAs<MangaDto>().payload!!
+            .results
+            .createManga()
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().payload!!
-        .results
-        .createManga()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async { if (fetchDetails) fetchMangaBySlug(titleToSlug(manga.title)) else manga }
+        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
+        SMangaUpdate(details.await(), chapterList.await())
+    }
 
-    override fun chapterListRequest(manga: SManga): Request {
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val url = API_SEARCH_URL.toHttpUrl().newBuilder()
             .addPathSegment(manga.url) // manga.url contains the the comic id
             .addPathSegment("releases")
             .addQueryParameter("lang_id", extLang)
             .addQueryParameter("all", "true")
-            .toString()
+            .build()
 
-        return GET(url, headers)
+        return client.get(url).parseAs<ChaptersDto>().payload!!.results.filterNot { dto ->
+            dto.isPremium && !preferences.showLockedChapters
+        }.map { it.createChapter() }
     }
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ChaptersDto>().payload!!.results.filterNot { dto ->
-        dto.isPremium && !preferences.showLockedChapters
-    }.map { it.createChapter() }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterKey = chapter.url
-        val url = "$API_CHAPTER_URL/$chapterKey"
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterKey = response.request.url.pathSegments.last()
         val chapterWebUrl = "$WEB_CHAPTER_URL/$chapterKey"
 
-        return response.parseAs<ChapterDto>()
+        return client.get("$API_CHAPTER_URL/$chapterKey").parseAs<ChapterDto>()
             .payload!!
             .results
             .page_objects!!
             .map { dto -> if (preferences.useDataSaver) dto.mobile_image_url else dto.desktop_image_url }
             .mapIndexed { index, url -> Page(index, "$chapterWebUrl/$index", url) }
     }
-
-    override fun imageUrlParse(response: Response): String = ""
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val dataSaverPref = SwitchPreferenceCompat(screen.context).apply {
@@ -254,7 +202,6 @@ abstract class GlobalComix :
             .replace(titleSpecialCharactersRegex, "-")
 
         val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
-        val dateFormatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-            .apply { timeZone = TimeZone.getTimeZone("UTC") }
+        val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
     }
 }

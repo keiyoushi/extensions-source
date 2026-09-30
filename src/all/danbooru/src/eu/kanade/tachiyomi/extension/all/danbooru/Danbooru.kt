@@ -3,37 +3,36 @@ package eu.kanade.tachiyomi.extension.all.danbooru
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Source
 abstract class Danbooru :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest: Boolean = true
 
     // Make image requests mimic a standard browser <img> fetch to bypass CF 403s on the CDN
     private val cdnInterceptor = Interceptor { chain ->
@@ -51,33 +50,22 @@ abstract class Danbooru :
         chain.proceed(request)
     }
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(cdnInterceptor)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(cdnInterceptor)
         .rateLimit(2)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
 
     private val preference by getPreferencesLazy()
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(filterOrder("created_at")))
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(filterOrder("created_at")))
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/pools/gallery".toHttpUrl().newBuilder()
 
         url.setEncodedQueryParameter("search[category]", "series")
@@ -109,11 +97,7 @@ abstract class Danbooru :
             url.addQueryParameter("search[name_contains]", query)
         }
 
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url.build()).asJsoup()
 
         val entries = document.select("article.post-preview").map {
             searchMangaFromElement(it)
@@ -132,50 +116,54 @@ abstract class Danbooru :
             ?.substringBeforeLast(' ')?.trimStart()
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("http://") || query.startsWith("https://")) {
-            val url = query.toHttpUrlOrNull()
-            if (url != null && url.host == baseUrl.toHttpUrl().host) {
-                val path = url.pathSegments
-                if (path.size >= 2 && path[0] == "pools") {
-                    val id = path[1]
-                    val manga = SManga.create().apply {
-                        this.url = "/pools/$id"
-                    }
-                    return fetchMangaDetails(manga).map { MangasPage(listOf(it), false) }
-                }
-                throw Exception("Unsupported URL")
-            }
-        }
-        return super.fetchSearchManga(page, query, filters)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        val path = url.pathSegments
+        if (path.size < 2 || path[0] != "pools") return null
+
+        return mangaDetails(
+            SManga.create().apply {
+                this.url = "/pools/${path[1]}"
+            },
+        )
     }
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async { if (fetchDetails) mangaDetails(manga) else manga }
+        val chapterList = async { if (fetchChapters) chapterList(manga) else chapters }
 
-        setUrlWithoutDomain(document.location())
-        title = document.selectFirst(".pool-category-series, .pool-category-collection")?.text()
-            ?: document.selectFirst("h1")!!.text()
-        description = document.getElementById("description")?.wholeText()
-        author = document.selectFirst("#description a[href*=artists]")?.ownText()
-        artist = author
-        update_strategy = if (!preference.splitChaptersPref) {
-            UpdateStrategy.ONLY_FETCH_ONCE
-        } else {
-            UpdateStrategy.ALWAYS_UPDATE
+        SMangaUpdate(details.await(), chapterList.await())
+    }
+
+    private suspend fun mangaDetails(manga: SManga): SManga {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        return manga.apply {
+            title = document.selectFirst(".pool-category-series, .pool-category-collection")?.text()
+                ?: document.selectFirst("h1")!!.text()
+            description = document.getElementById("description")?.wholeText()
+            author = document.selectFirst("#description a[href*=artists]")?.ownText()
+            artist = author
+            update_strategy = if (!preference.splitChaptersPref) {
+                UpdateStrategy.ONLY_FETCH_ONCE
+            } else {
+                UpdateStrategy.ALWAYS_UPDATE
+            }
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
     // ============================= Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}.json", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<Pool>()
+    private suspend fun chapterList(manga: SManga): List<SChapter> {
+        val data = client.get("$baseUrl${manga.url}.json").parseAs<Pool>()
 
         return if (preference.splitChaptersPref) {
             data.postIds.mapIndexed { index, id ->
@@ -186,7 +174,7 @@ abstract class Danbooru :
                 }
             }.reversed().apply {
                 if (isNotEmpty()) {
-                    this[0].date_upload = dateFormat.tryParse(data.updatedAt)
+                    this[0].date_upload = Instant.tryParse(data.updatedAt)
                 }
             }
         } else {
@@ -194,43 +182,41 @@ abstract class Danbooru :
                 SChapter.create().apply {
                     url = "/pools/${data.id}"
                     name = "Oneshot"
-                    date_upload = dateFormat.tryParse(data.updatedAt)
+                    date_upload = Instant.tryParse(data.updatedAt)
                     chapter_number = 0F
                 },
             )
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}.json", headers)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = "$baseUrl${chapter.url}.json"
 
-    override fun pageListParse(response: Response): List<Page> = if (response.request.url.toString().contains("/posts/")) {
-        val data = response.parseAs<Post>()
-        val imageUrl = data.bestUrl.let { if (it.startsWith("http")) it else "$baseUrl$it" }
-        listOf(
-            Page(index = 0, imageUrl = imageUrl),
-        )
-    } else {
-        val data = response.parseAs<Pool>()
+        return if (chapter.url.contains("/posts/")) {
+            listOf(
+                Page(index = 0, imageUrl = fetchImageUrl(url)),
+            )
+        } else {
+            val data = client.get(url).parseAs<Pool>()
 
-        data.postIds.mapIndexed { index, id ->
-            Page(index, url = "/posts/$id")
+            data.postIds.mapIndexed { index, id ->
+                Page(index, url = "/posts/$id")
+            }
         }
     }
 
-    override fun imageUrlRequest(page: Page): Request = GET("$baseUrl${page.url}.json", headers)
+    override suspend fun getImageUrl(page: Page): String = fetchImageUrl("$baseUrl${page.url}.json")
 
-    override fun imageUrlParse(response: Response): String {
-        val url = response.parseAs<Post>().bestUrl
-        return if (url.startsWith("http")) url else "$baseUrl$url"
+    private suspend fun fetchImageUrl(url: String): String {
+        val imageUrl = client.get(url).parseAs<Post>().bestUrl
+        return if (imageUrl.startsWith("http")) imageUrl else "$baseUrl$imageUrl"
     }
 
     // ============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         FilterDescription(),
         FilterTags(),
         FilterIsDeleted(),
