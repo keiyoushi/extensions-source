@@ -407,6 +407,6 @@ abstract class Keyoapp :
         val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//([^/]+)""".toRegex()
         val CDN_CLEAN_REGEX = """\$\{[^}]*\}""".toRegex()
         val IMG_REGEX = """url\(['"]?([^(['")])]+)""".toRegex()
-        val RELATIVE_DATE_REGEX = """(a|one|\d+)\s*(\w+)\s*ago""".toRegex()
+        val RELATIVE_DATE_REGEX = """(a|one|\d+)\s*(\w+)\s+ago""".toRegex()
     }
 }
