@@ -1,7 +1,13 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyen
 
+import android.app.Activity
+import android.app.AlertDialog
+import android.app.Application
+import android.os.Bundle
 import android.util.Base64
 import android.webkit.WebResourceResponse
+import android.widget.EditText
+import android.widget.FrameLayout
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,13 +16,21 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -32,12 +46,14 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.lang.ref.WeakReference
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.Locale
+import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -46,6 +62,31 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MoeTruyen : KeiSource() {
+    private var currentActivity: WeakReference<Activity>? = null
+
+    init {
+        try {
+            applicationContext.registerActivityLifecycleCallbacks(
+                object : Application.ActivityLifecycleCallbacks {
+                    override fun onActivityResumed(a: Activity) {
+                        currentActivity = WeakReference(a)
+                    }
+                    override fun onActivityPaused(a: Activity) {
+                        if (currentActivity?.get() === a) currentActivity = null
+                    }
+                    override fun onActivityDestroyed(a: Activity) {
+                        if (currentActivity?.get() === a) currentActivity = null
+                    }
+                    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+                    override fun onActivityStarted(activity: Activity) = Unit
+                    override fun onActivityStopped(activity: Activity) = Unit
+                    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+                },
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(webViewImageInterceptor())
         rateLimit(3)
@@ -237,7 +278,9 @@ abstract class MoeTruyen : KeiSource() {
     private fun parseChapterList(document: Document): List<SChapter> = document.select("ul.chapter-list li.chapter a.chapter-link").map { element ->
         SChapter.create().apply {
             setUrlWithoutDomain(element.absUrl("href"))
-            name = element.selectFirst(".chapter-num")!!.text()
+            val title = element.selectFirst(".chapter-num")!!.text()
+            val locked = element.selectFirst(".chapter-lock-icon") != null
+            name = if (locked) "🔒 $title" else title
 
             val chapterTime = element.selectFirst(".chapter-time")
             val relativeDate = chapterTime?.text()
@@ -283,7 +326,16 @@ abstract class MoeTruyen : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
-        val document = client.get(chapterUrl).asJsoup()
+        var document = client.get(chapterUrl).asJsoup()
+
+        if (isCommentLocked(document)) {
+            unlockByComment(chapter, document, chapterUrl)
+            document = client.get(chapterUrl).asJsoup()
+            if (isCommentLocked(document)) {
+                throw Exception("Không thể mở khóa chương này")
+            }
+        }
+
         val allImages = readerImages(document)
         val readerPages = document.selectFirst("[data-reader-lazy-pages]")
 
@@ -306,6 +358,108 @@ abstract class MoeTruyen : KeiSource() {
             .mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
             }
+    }
+
+    private fun isCommentLocked(document: Document): Boolean {
+        if (document.selectFirst("[data-reader-lazy-pages], img.page-media") != null) return false
+        val text = document.body().text()
+        return text.contains("Bạn phải bình luận") || text.contains("yêu cầu bình luận")
+    }
+
+    private suspend fun isLoggedIn(): Boolean = client.get("$baseUrl/auth/session", ensureSuccess = false).use { response ->
+        response.isSuccessful && response.parseAs<AuthSession>().session != null
+    }
+
+    private suspend fun unlockByComment(chapter: SChapter, document: Document, chapterUrl: String) {
+        if (!isLoggedIn()) {
+            throw Exception(loginRequiredMessage)
+        }
+
+        val previousUrl = document.select("a[href*=/chapters/]")
+            .firstOrNull { it.text().contains("chương trước", ignoreCase = true) }
+            ?.absUrl("href")
+            ?.takeIf { it.isNotBlank() }
+            ?: throw Exception(loginRequiredMessage)
+
+        val comment = promptForComment(chapter.name)
+        postChapterComment(previousUrl, chapterUrl, comment)
+    }
+
+    // Some chapters require comment in previous chapter to unlock
+    private suspend fun promptForComment(chapterTitle: String): String {
+        val activity = currentActivity?.get()
+            ?: throw Exception(loginRequiredMessage)
+
+        val deferred = CompletableDeferred<String>()
+        var dialog: AlertDialog? = null
+
+        try {
+            withContext(Dispatchers.Main.immediate) {
+                val input = EditText(activity).apply {
+                    hint = "Bình luận"
+                }
+                val container = FrameLayout(activity).apply {
+                    val pad = (16 * resources.displayMetrics.density).toInt()
+                    setPadding(pad, pad / 2, pad, 0)
+                    addView(input)
+                }
+
+                dialog = AlertDialog.Builder(activity)
+                    .setTitle(chapterTitle)
+                    .setMessage("Chương này yêu cầu bình luận ở chương trước\n\nBình luận vô nghĩa tài khoản sẽ bị khoá")
+                    .setView(container)
+                    .setPositiveButton("Mở khóa") { _, _ ->
+                        val text = input.text.toString().trim()
+                        if (text.isNotBlank()) {
+                            deferred.complete(text)
+                        } else {
+                            deferred.completeExceptionally(Exception("Bình luận không được để trống"))
+                        }
+                    }
+                    .setNegativeButton("Hủy") { _, _ ->
+                        deferred.completeExceptionally(Exception("Đã hủy bình luận"))
+                    }
+                    .setOnCancelListener {
+                        deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
+                    }
+                    .setOnDismissListener {
+                        if (!deferred.isCompleted) {
+                            deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
+                        }
+                    }
+                    .show()
+            }
+
+            return deferred.await()
+        } finally {
+            withContext(NonCancellable + Dispatchers.Main.immediate) {
+                dialog?.takeIf { it.isShowing }?.dismiss()
+            }
+        }
+    }
+
+    private suspend fun postChapterComment(previousChapterUrl: String, referer: String, content: String) {
+        val requestId = UUID.randomUUID().toString()
+        val body = CommentRequest(content, requestId).toJsonRequestBody()
+        val requestHeaders = headers.newBuilder()
+            .set("Referer", referer)
+            .set("Accept", "application/json")
+            .set("Idempotency-Key", requestId)
+            .build()
+        val response = client.post("$previousChapterUrl/comments", requestHeaders, body, ensureSuccess = false)
+        if (!response.isSuccessful) {
+            val code = response.code
+            val errorBody = response.body.string()
+            val apiError = runCatching { errorBody.parseAs<ApiError>() }.getOrNull()
+            throw Exception(
+                apiError?.error?.takeIf { it.isNotBlank() }
+                    ?: when (code) {
+                        401, 403 -> loginRequiredMessage
+                        else -> "Không thể mở khóa chương ($code)"
+                    },
+            )
+        }
+        response.close()
     }
 
     private fun isImgxProtected(readerPages: Element): Boolean = readerPages.attr("data-reader-imgx-access-url").isNotBlank()
@@ -463,4 +617,21 @@ abstract class MoeTruyen : KeiSource() {
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
     private val numberRegex = Regex("""\d+""")
+    private val loginRequiredMessage = "Chương này cần đăng nhập webview bằng tài khoản phù hợp để xem"
+
+    @Serializable
+    private class CommentRequest(
+        val content: String,
+        val requestId: String,
+    )
+
+    @Serializable
+    private class AuthSession(
+        val session: JsonObject? = null,
+    )
+
+    @Serializable
+    private class ApiError(
+        val error: String? = null,
+    )
 }
