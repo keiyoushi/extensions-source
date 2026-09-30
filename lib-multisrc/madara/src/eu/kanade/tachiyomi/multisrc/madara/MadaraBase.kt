@@ -504,10 +504,11 @@ abstract class MadaraBase : KeiSource() {
         "in corso", "in arrivo", "مستمرة", "مستمر", "en curso", "emision", "curso",
         "en marcha", "publicandose", "publicándose", "en emision", "连载中", "đang làm",
         "em postagem", "devam eden", "em progresso", "atualizações semanais", "виходить",
+        "đang ra",
     )
     protected open val hiatusStatus = arrayOf(
         "on hold", "hiatus", "pausado", "en espera", "durduruldu", "beklemede",
-        "đang chờ", "متوقف", "en pause", "заморожено", "en attente",
+        "đang chờ", "متوقف", "en pause", "заморожено", "en attente", "tạm dừng",
     )
     protected open val cancelledStatus = arrayOf(
         "canceled", "cancelled", "cancelado", "iptal edildi", "đã hủy", "ملغي",
