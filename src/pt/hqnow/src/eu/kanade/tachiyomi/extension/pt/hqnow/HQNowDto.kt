@@ -4,7 +4,22 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class HqNowComicBookDto(
+class HqsByFiltersDto(val getHqsByFilters: List<HqNowComicBookDto>)
+
+@Serializable
+class RecentlyUpdatedHqsDto(val getRecentlyUpdatedHqs: List<HqNowComicBookDto>)
+
+@Serializable
+class HqsByNameDto(val getHqsByName: List<HqNowComicBookDto>)
+
+@Serializable
+class HqsByIdDto(val getHqsById: List<HqNowComicBookDto>)
+
+@Serializable
+class ChapterByIdDto(val getChapterById: HqNowChapterDto)
+
+@Serializable
+class HqNowComicBookDto(
     @SerialName("capitulos") val chapters: List<HqNowChapterDto> = emptyList(),
     @SerialName("hqCover") val cover: String? = "",
     val id: Int,
@@ -15,7 +30,7 @@ data class HqNowComicBookDto(
 )
 
 @Serializable
-data class HqNowChapterDto(
+class HqNowChapterDto(
     val id: Int = 0,
     val name: String,
     val number: String,
@@ -23,6 +38,6 @@ data class HqNowChapterDto(
 )
 
 @Serializable
-data class HqNowPageDto(
+class HqNowPageDto(
     val pictureUrl: String,
 )

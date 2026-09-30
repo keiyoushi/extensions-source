@@ -1,67 +1,62 @@
 package eu.kanade.tachiyomi.extension.ja.ganganonline
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
-abstract class GanganOnline : HttpSource() {
+abstract class GanganOnline : KeiSource() {
     override val supportsLatest = false
 
-    private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.JAPAN)
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/rensai").parseMangaList()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/rensai", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = "$baseUrl/search/result".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
                 .build()
-            return GET(url, headers)
+            return client.get(url).parseMangaList()
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments(filter.toUriPart().removePrefix("/"))
             .build()
-        return GET(url, headers)
+        return client.get(url).parseMangaList()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val url = response.request.url.toString()
+    private fun Response.parseMangaList(): MangasPage {
+        val url = request.url.toString()
         val mangas = when {
             "/search/result" in url -> {
-                val data = response.parseAsNextData<MangaListDto>()
+                val data = parseAsNextData<MangaListDto>()
                 data.sections?.flatMap { it.titleLinks }
                     ?.filter { it.isNovel != true }
                     ?.map { it.toSManga(baseUrl) }
             }
 
             "/rensai" in url || "/finish" in url -> {
-                val data = response.parseAsNextData<MangaListDto>()
+                val data = parseAsNextData<MangaListDto>()
                 data.titleSections?.flatMap { it.titles }
                     ?.filter { it.isNovel != true }
                     ?.map { it.toSManga(baseUrl) }
             }
 
             "/ga" in url -> {
-                val data = response.parseAsNextData<MangaListDto>()
+                val data = parseAsNextData<MangaListDto>()
                 val ongoing = data.ongoingTitleSection?.titles!!
                 val finished = data.finishedTitleSection?.titles!!
                 (ongoing + finished)
@@ -70,7 +65,7 @@ abstract class GanganOnline : HttpSource() {
             }
 
             "/pixiv" in url -> {
-                val data = response.parseAsNextData<PixivPageDto>()
+                val data = parseAsNextData<PixivPageDto>()
                 data.ganganTitles?.map { it.toSManga(baseUrl) }
             }
 
@@ -79,28 +74,35 @@ abstract class GanganOnline : HttpSource() {
         return MangasPage(mangas!!, false)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAsNextData<MangaDetailDto>().default.toSManga(baseUrl)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get(getMangaUrl(manga))
         val mangaUrl = response.request.url.toString()
             .substringBefore("/chapter")
             .substringAfter(baseUrl)
         val data = response.parseAsNextData<MangaDetailDto>().default
 
-        return data.chapters
-            .filter { it.status == null || it.status >= 4 }
-            .map { it.toSChapter(mangaUrl, dateFormat) }
+        return SMangaUpdate(
+            data.toSManga(baseUrl),
+            data.chapters
+                .filter { it.status == null || it.status >= 4 }
+                .map { it.toSChapter(mangaUrl) },
+        )
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAsNextData<PageListDto>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get(getChapterUrl(chapter)).parseAsNextData<PageListDto>()
         return data.pages.mapIndexed { i, page ->
             val imageUrl = (page.image ?: page.linkImage)!!.imageUrl
             Page(i, imageUrl = baseUrl + imageUrl)
         }
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         CategoryFilter(getCategoryList()),
     )
 
@@ -120,8 +122,5 @@ abstract class GanganOnline : HttpSource() {
         return script.parseAs<NextData<T>>().props.pageProps.data
     }
 
-    // Unsupported
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 }

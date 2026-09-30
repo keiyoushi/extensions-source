@@ -1,36 +1,32 @@
 package eu.kanade.tachiyomi.extension.ko.toon11
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
-import java.text.SimpleDateFormat
-import java.util.ArrayList
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class Toon11 : HttpSource() {
+abstract class Toon11 : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/bbs/board.php?bo_table=toon_c&is_over=0", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&is_over=0").asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
@@ -42,10 +38,8 @@ abstract class Toon11 : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/bbs/board.php?bo_table=toon_c&sord=&type=upd&page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&sord=&type=upd&page=$page").asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
@@ -59,31 +53,28 @@ abstract class Toon11 : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
-        val url = "$baseUrl/bbs/search_stx.php".toHttpUrl().newBuilder().apply {
-            addQueryParameter("stx", query)
-        }.build()
-        GET(url, headers)
-    } else {
-        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
-        val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
-        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val searchUrl = if (query.isNotBlank()) {
+            "$baseUrl/bbs/search_stx.php".toHttpUrl().newBuilder().apply {
+                addQueryParameter("stx", query)
+            }.build()
+        } else {
+            val sortFilter = filters.firstInstanceOrNull<SortFilter>()
+            val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
+            val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
 
-        val urlString = sortFilter?.selected ?: sortList[0].value
-        val isOver = statusFilter?.selected ?: ""
-        val genre = genreFilter?.selected ?: ""
+            val urlString = sortFilter?.selected ?: sortList[0].value
+            val isOver = statusFilter?.selected ?: ""
+            val genre = genreFilter?.selected ?: ""
 
-        val url = (baseUrl + urlString).toHttpUrl().newBuilder().apply {
-            addQueryParameter("is_over", isOver)
-            if (page > 1) addQueryParameter("page", page.toString())
-            if (genre.isNotEmpty()) addQueryParameter("sca", genre)
-        }.build()
+            (baseUrl + urlString).toHttpUrl().newBuilder().apply {
+                addQueryParameter("is_over", isOver)
+                if (page > 1) addQueryParameter("page", page.toString())
+                if (genre.isNotEmpty()) addQueryParameter("sca", genre)
+            }.build()
+        }
 
-        GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(searchUrl).asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
                 title = element.selectFirst(".homelist-title")!!.text()
@@ -98,9 +89,16 @@ abstract class Toon11 : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val details = SManga.create().apply {
+            url = manga.url
             title = document.selectFirst("h2.title")!!.text()
             thumbnail_url = document.selectFirst("img.banner")?.absUrl("src")
             document.selectFirst("span:contains(분류) + span")?.also { status = parseStatus(it.text()) }
@@ -108,6 +106,11 @@ abstract class Toon11 : HttpSource() {
             document.selectFirst("span:contains(소개) + span")?.also { description = it.text() }
             document.selectFirst("span:contains(장르) + span")?.also { genre = it.text().split(",").joinToString { s -> s.trim() } }
         }
+
+        return SMangaUpdate(
+            details,
+            if (fetchChapters) parseChapterList(document) else chapters,
+        )
     }
 
     private fun parseStatus(element: String): Int = when {
@@ -116,35 +119,22 @@ abstract class Toon11 : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val nav = document.selectFirst("span.pg")
-        val chapters = ArrayList<SChapter>()
+    private suspend fun parseChapterList(document: Document): List<SChapter> {
+        val chapters = document.select("#comic-episode-list > li").mapTo(ArrayList(), ::parseChapter)
 
-        document.select("#comic-episode-list > li").forEach {
-            chapters.add(parseChapter(it))
-        }
-
-        if (nav == null) {
+        if (document.selectFirst("span.pg") == null) {
             return chapters
         }
 
-        val pg2url = nav.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
+        var nextUrl = document.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
 
-        if (pg2url != null) {
-            parseChapters(pg2url, chapters)
+        while (!nextUrl.isNullOrBlank()) {
+            val newpage = client.get(nextUrl).asJsoup()
+            newpage.select("#comic-episode-list > li").mapTo(chapters, ::parseChapter)
+            nextUrl = newpage.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
         }
 
         return chapters
-    }
-
-    private tailrec fun parseChapters(nextURL: String, chapters: ArrayList<SChapter>) {
-        val newpage = client.newCall(GET(nextURL, headers)).execute().asJsoup()
-        newpage.select("#comic-episode-list > li").forEach {
-            chapters.add(parseChapter(it))
-        }
-        val newURL = newpage.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
-        if (!newURL.isNullOrBlank()) parseChapters(newURL, chapters)
     }
 
     private fun parseChapter(element: Element): SChapter {
@@ -156,14 +146,14 @@ abstract class Toon11 : HttpSource() {
                 url = it.attr("onclick").substringAfter("location.href='.").substringBefore("'")
                 name = it.selectFirst(".episode-title")!!.text()
             }
-            dateEl?.also { date_upload = dateFormat.tryParse(it.text()) }
+            dateEl?.also { date_upload = dateFormat.tryParseDate(it.ownText()) }
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + "/bbs" + chapter.url, headers)
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + "/bbs" + chapter.url
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val rawImageLinks = document.selectFirst("script + script[type^=text/javascript]:not([src])")!!.data()
         val imgList = extractList(rawImageLinks)
 
@@ -178,9 +168,7 @@ abstract class Toon11 : HttpSource() {
         return listString.parseAs<List<String>>()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Note: can't combine search query with filters, status filter only has effect in 인기만화"),
         Filter.Separator(),
         SortFilter(sortList, 0),
@@ -189,7 +177,7 @@ abstract class Toon11 : HttpSource() {
     )
 
     companion object {
-        private val dateFormat = SimpleDateFormat("yy.MM.dd", Locale.ENGLISH)
+        private val dateFormat = DateTimeFormatter.ofPattern("yy.MM.dd", Locale.ENGLISH)
         private val imgListRegex = """img_list\s*=\s*(\[.*?])""".toRegex(RegexOption.DOT_MATCHES_ALL)
     }
 }

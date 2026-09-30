@@ -1,40 +1,37 @@
 package eu.kanade.tachiyomi.extension.ja.twi4
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import org.jsoup.nodes.Document
 
 @Source
-abstract class Twi4 : HttpSource() {
-    override val supportsLatest: Boolean = false
+abstract class Twi4 : KeiSource() {
+    override val supportsLatest = false
 
     companion object {
-        const val SEARCH_PREFIX_SLUG = "SLUG:"
         private val TITLE_REGEX = Regex("『(.+)』.+ \\| ツイ４ \\| 最前線")
         private val CHAPTER_REGEX = Regex(".+『(.+)』 #(\\d+)")
     }
 
-    private val hostRoot by lazy { baseUrl.toHttpUrl().let { "${it.scheme}://${it.host}" } }
+    private val hostRoot get() = baseUrl.toHttpUrl().let { "${it.scheme}://${it.host}" }
 
     // Both latest and popular only lists 4 manga in total
     // As the full catalog is consists of less than 50 manga, it is not worth implementing
     // We'll just list all manga in the catalog instead
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val doc = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val doc = client.get(baseUrl).asJsoup()
         // Manga that are recently updated don't show up on the full catalog
         // So we'll need to parse the recent updates section as well
         val mangas = doc.select("#lineup_recent > div > section, #lineup > div > section:not(.zadankai):not([id])")
@@ -56,74 +53,61 @@ abstract class Twi4 : HttpSource() {
         return MangasPage(ret, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // There is no search functionality in the site
     // It is possible to implement something rudimentary for search to function
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrlOrNull() ?: throw Exception("Invalid URL")
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val slug = url.pathSegments.getOrNull(2) ?: throw Exception("Unsupported url structure")
-            return fetchSearchManga(page, "$SEARCH_PREFIX_SLUG$slug", filters)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val mp = getPopularManga(page)
+        return mp.copy(
+            mangas = mp.mangas.filter {
+                it.title.contains(query, true)
+            },
+        )
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.pathSegments.getOrNull(2) ?: return null
+        // Explicitly ignore anything that ends with .html or starts with zadankai
+        // These will include the completed manga page, about page and zadankai submissions
+        // For reasons to exclude zadankai, see getPopularManga()
+
+        // There will still be some urls that would accidentally activate the intent (like the news page),
+        // but there's no way to avoid it.
+        if (slug.endsWith("html") || slug.startsWith("zadankai") || slug.startsWith("others")) {
+            return null
         }
 
-        if (query.startsWith(SEARCH_PREFIX_SLUG)) {
-            val slug = query.drop(SEARCH_PREFIX_SLUG.length)
-            // Explicitly ignore anything that ends with .html or starts with zadankai
-            // These will include the completed manga page, about page and zadankai submissions
-            // For reasons to exclude zadankai, see parsePopularMangaRequest()
-
-            // There will still be some urls that would accidentally activate the intent (like the news page),
-            // but there's no way to avoid it.
-            if (slug.endsWith("html") || slug.startsWith("zadankai") || slug.startsWith("others")) {
-                return Observable.just(MangasPage(emptyList(), false))
-            }
-
-            val searchUrl = if (baseUrl.endsWith("/")) baseUrl + slug else "$baseUrl/$slug/"
-            return client.newCall(GET(searchUrl, headers))
-                .asObservableSuccess()
-                .map { response -> searchMangaSlug(response, searchUrl) }
-        }
-
-        return fetchPopularManga(page).map { mp ->
-            mp.copy(
-                mangas = mp.mangas.filter {
-                    it.title.contains(query, true)
-                },
-            )
+        val searchUrl = "$baseUrl/$slug/"
+        return mangaDetailsParse(client.get(searchUrl).asJsoup()).apply {
+            setUrlWithoutDomain(searchUrl)
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun getMangaUrl(manga: SManga): String = hostRoot + manga.url
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        // While the status can be obtained at the home page, there is no such info at the details page
+        val status = async {
+            if (!fetchDetails) return@async manga.status
+            parseStatus(client.get(baseUrl).asJsoup(), manga.url)
+        }
+        val document = client.get(hostRoot + manga.url).asJsoup()
+        val details = mangaDetailsParse(document)
 
-    private fun searchMangaSlug(response: Response, searchUrl: String): MangasPage {
-        val details = mangaDetailsParse(response)
-        details.setUrlWithoutDomain(searchUrl)
-        return MangasPage(listOf(details), false)
+        SMangaUpdate(
+            details.apply { this.status = status.await() },
+            chapterListParse(document),
+        )
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(hostRoot + manga.url, headers)
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val details = client.newCall(mangaDetailsRequest(manga)).asObservableSuccess().map { mangaDetailsParse(it) }
-        val statusObservable = client.newCall(GET(baseUrl, headers)).asObservableSuccess().map { parseStatus(it, manga.url) }
-
-        return Observable.zip(details, statusObservable) { d, s -> d.apply { status = s } }
-    }
-
-    private fun parseStatus(response: Response, mangaUrl: String): Int {
-        val doc = response.asJsoup()
+    private fun parseStatus(doc: Document, mangaUrl: String): Int {
         val mangas = doc.select("#lineup_recent > div > section, #lineup > div > section:not(.zadankai):not([id])")
         val entry = mangas.firstOrNull { it.selectFirst("div.hgroup > h3 > a")?.attr("href") == mangaUrl }
 
@@ -134,47 +118,40 @@ abstract class Twi4 : HttpSource() {
         }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            // We need to get the title and thumbnail again.
-            // This is only needed if you search by slug, as we have no information about the them.
-            // Interestingly the page body has no mention of the title at all. It only exists in <title>
-            val match = TITLE_REGEX.matchEntire(document.title())
-            title = match?.groups?.get(1)?.value ?: document.title()
-            // Twi4 uses the exact same thumbnail at both the main page and manga details
-            thumbnail_url = document.selectFirst("#introduction > header > div > h2 > img")?.attr("abs:src")
-            description = document.selectFirst("#introduction > div > div > p")?.text()
+    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        // We need to get the title and thumbnail again.
+        // This is only needed if you search by URL, as we have no information about the them.
+        // Interestingly the page body has no mention of the title at all. It only exists in <title>
+        val match = TITLE_REGEX.matchEntire(document.title())
+        title = match?.groups?.get(1)?.value ?: document.title()
+        // Twi4 uses the exact same thumbnail at both the main page and manga details
+        thumbnail_url = document.selectFirst("#introduction > header > div > h2 > img")?.attr("abs:src")
+        description = document.selectFirst("#introduction > div > div > p")?.text()
 
-            // Determine who are the authors and artists
-            // 作者, 原作 -> Author (Also the artist) / Original author (Such as light novel adaptation)
-            // 漫画 -> Artist only
-            // 提供, etc, etc -> Sponsors, irrelevant stuff
-            val staffs = document.select("#introduction > div > section > header > div > h3")
-            for (staff in staffs) {
-                val role = staff.selectFirst("small")?.text()?.replace("：", "")?.trim() ?: continue
-                val name = staff.selectFirst("span")?.text() ?: continue
+        // Determine who are the authors and artists
+        // 作者, 原作 -> Author (Also the artist) / Original author (Such as light novel adaptation)
+        // 漫画 -> Artist only
+        // 提供, etc, etc -> Sponsors, irrelevant stuff
+        val staffs = document.select("#introduction > div > section > header > div > h3")
+        for (staff in staffs) {
+            val role = staff.selectFirst("small")?.text()?.replace("：", "")?.trim() ?: continue
+            val name = staff.selectFirst("span")?.text() ?: continue
 
-                when (role) {
-                    "作者" -> {
-                        author = name
-                        artist = name
-                    }
-                    // If 作者 and 原作 appear at the same time, 原作 will overwrite the author field
-                    "原作" -> author = name
-                    "漫画" -> artist = name
+            when (role) {
+                "作者" -> {
+                    author = name
+                    artist = name
                 }
+                // If 作者 and 原作 appear at the same time, 原作 will overwrite the author field
+                "原作" -> author = name
+                "漫画" -> artist = name
             }
-            // While the status can be obtained at the home page, there is no such info at the details page
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET(hostRoot + manga.url, headers)
-
     // They have a <noscript> layout! This is surprising
     // Though their manga pages fails to load as it relies on JS
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.asJsoup()
+    private fun chapterListParse(doc: Document): List<SChapter> {
         val allChapters = doc.select("#backnumbers > div > ul > li")
 
         val ret = allChapters.mapNotNull { chapter ->
@@ -198,10 +175,10 @@ abstract class Twi4 : HttpSource() {
         return ret.sortedByDescending { it.chapter_number }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(hostRoot + chapter.url, headers)
+    override fun getChapterUrl(chapter: SChapter): String = hostRoot + chapter.url
 
-    override fun pageListParse(response: Response): List<Page> {
-        val doc = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val doc = client.get(hostRoot + chapter.url).asJsoup()
         // The site interprets 1 page == 1 chapter
         // There should only be 1 article in the document
         val page = doc.selectFirst("article.comic") ?: return emptyList()
@@ -209,6 +186,4 @@ abstract class Twi4 : HttpSource() {
 
         return listOf(Page(0, imageUrl = img.attr("abs:src")))
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
