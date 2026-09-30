@@ -23,7 +23,6 @@ private fun WebViewScope<String>.loadReaderChallenge(chapterUrl: String, sitekey
     jsBridge("turnstileError") { reject(TurnstileException(it)) }
     jsBridge("turnstileInteractive") { reject(TurnstileInteractiveException(it)) }
     jsBridge("turnstileReady") { evaluateJs(turnstileRender(sitekey)) }
-    // loadData(chapterUrl, """<script>window.turnstileInteractive.post("interactive")</script>""")
     loadData(chapterUrl, turnstilePage())
 }
 

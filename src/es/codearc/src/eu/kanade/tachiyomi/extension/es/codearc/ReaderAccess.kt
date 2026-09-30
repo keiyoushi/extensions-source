@@ -41,7 +41,7 @@ internal suspend fun fetchReaderPages(
     }
     val batchSize = 100
     val firstOffset = offset ?: 0
-    val url = endpoint.newBuilder().setQueryParameter("offset", firstOffset.toString()).build()
+    val url = endpoint.newBuilder().addQueryParameter("offset", firstOffset.toString()).build()
     var response = client.get(url, headers, ensureSuccess = false)
     if (response.code == 403 && !needsReaderAccess) {
         val error = response.parseAs<ReaderPagesErrorDto>().error
@@ -49,10 +49,8 @@ internal suspend fun fetchReaderPages(
         requestReaderAccess(client, headers, chapterUrl, challengeToken)
         response = client.get(url, headers, ensureSuccess = false)
     }
-    val firstBatch = response.use {
-        check(it.isSuccessful) { "Reader pages HTTP ${it.code}" }
-        it.parseAs<ReaderPagesDto>()
-    }
+    check(response.isSuccessful) { "Reader pages HTTP ${response.code}" }
+    val firstBatch = response.parseAs<ReaderPagesDto>()
     if (offset != null) return firstBatch.items
     if (firstBatch.items.size < batchSize || firstBatch.items.size >= firstBatch.total) return firstBatch.items
 
@@ -60,7 +58,7 @@ internal suspend fun fetchReaderPages(
         val remainingOffsets = batchSize until firstBatch.total step batchSize
         val pendingBatches = remainingOffsets.map { batchOffset ->
             async {
-                val batchUrl = endpoint.newBuilder().setQueryParameter("offset", batchOffset.toString()).build()
+                val batchUrl = endpoint.newBuilder().addQueryParameter("offset", batchOffset.toString()).build()
                 client.get(batchUrl, headers).parseAs<ReaderPagesDto>()
             }
         }
@@ -100,9 +98,9 @@ private suspend fun requestReaderAccess(
         }
         throw IllegalStateException(message, error)
     }
-    client.post(accessUrl, accessHeaders, ReaderAccessRequest(token).toJsonRequestBody()).use { response ->
-        check(response.parseAs<ReaderAccessDto>().ok) { "Reader verification failed" }
-    }
+    val verified = client.post(accessUrl, accessHeaders, ReaderAccessRequest(token).toJsonRequestBody())
+        .parseAs<ReaderAccessDto>()
+    check(verified.ok) { "Reader verification failed" }
 }
 
 internal fun readerPagesUrl(chapterUrl: HttpUrl): String = chapterUrl.newBuilder()

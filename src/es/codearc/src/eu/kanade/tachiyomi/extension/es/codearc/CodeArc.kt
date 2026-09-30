@@ -8,16 +8,17 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -25,65 +26,44 @@ abstract class CodeArc : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = connectTimeout(15.seconds)
         .readTimeout(30.seconds)
-        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
-        .rateLimit(1, 1.seconds) { it.host == "cdn.codearctraducciones.com" }
         .addInterceptor(ReaderPageRefresh(::client, ::headers, ::baseUrl))
 
     private val rscHeaders get() = headers.newBuilder().add("RSC", "1").build()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = popularMangaParse(client.get("$baseUrl/ranking?mode=popular&page=$page"))
-
-    private fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select("a.group.relative.min-w-0[href]").map { element ->
-            SManga.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
-                title = element.selectFirst("div.truncate.text-base")!!.text()
-                val image = element.selectFirst("img")
-                thumbnail_url = image?.absUrl("src")
-                    ?: image?.attr("srcSet")?.split(",")
-                        ?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-            }
-        }
-
-        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val hasNextPage = currentPage < POPULAR_MAX_PAGE && mangas.isNotEmpty() &&
-            document.selectFirst("a[aria-label=Pagina siguiente]:not([disabled]), button[aria-label=Pagina siguiente]:not([disabled])") != null
-        return MangasPage(mangas, hasNextPage)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$baseUrl/ranking".toHttpUrl().newBuilder()
+            .addQueryParameter("mode", "popular")
+            .addQueryParameter("page", page.toString())
+            .build()
+        val document = client.get(url).asJsoup()
+        return popularMangaParse(document, page)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = latestUpdatesParse(client.get("$baseUrl/list?page=$page"))
+    private fun popularMangaParse(document: Document, page: Int): MangasPage {
+        val mangas = document.select("a.group.relative.min-w-0[href]").map { it.mangaFromElement("div.truncate.text-base") }
+        // the site repeats page 5 indefinitely, keeping the next link enabled
+        return MangasPage(mangas, page < 5 && document.hasNextPage())
+    }
 
-    private fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select("a.group.overflow-hidden[href]").map { element ->
-            SManga.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
-                title = element.selectFirst("div.line-clamp-2")?.text()
-                    ?: element.attr("aria-label").takeIf { it.isNotEmpty() }!!
-                val image = element.selectFirst("img")
-                thumbnail_url = image?.absUrl("src")
-                    ?: image?.attr("srcSet")?.split(",")
-                        ?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-            }
-        }
-
-        val hasNextPage = mangas.isNotEmpty() &&
-            document.selectFirst("a[aria-label=Pagina siguiente]:not([disabled]), button[aria-label=Pagina siguiente]:not([disabled])") != null
-
-        return MangasPage(mangas, hasNextPage)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$baseUrl/list".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .build()
+        val document = client.get(url).asJsoup()
+        return parseMangasPage(document)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (query.isNotEmpty() && filters.none { it is UriPartFilter && it.state != 0 } &&
-            filters.none { it is GenreGroup && it.state.any { genre -> genre.state } }
-        ) {
-            val url = "$baseUrl/api/mangas/search".toHttpUrl().newBuilder()
+        val genreFilter = filters.firstInstanceOrNull<GenreGroup>()
+        val uriFilterSelected = filters.any { it is UriPartFilter && it.state != 0 }
+        val genreSelected = genreFilter?.state?.any { it.state } == true
+        if (query.isNotEmpty() && !uriFilterSelected && !genreSelected) {
+            val searchUrl = "$baseUrl/api/mangas/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .addQueryParameter("limit", "50")
-            return searchMangaParse(client.get(url.build()))
+                .build()
+            val mangas = client.get(searchUrl).parseAs<SearchResponseDto>().items.map { it.toSManga(baseUrl) }
+            return MangasPage(mangas, false)
         }
 
         val url = "$baseUrl/list".toHttpUrl().newBuilder().apply {
@@ -117,17 +97,22 @@ abstract class CodeArc : KeiSource() {
                 }
             }
         }
-        return searchMangaParse(client.get(url.build()))
+        val document = client.get(url.build()).asJsoup()
+        return parseMangasPage(document)
     }
 
-    private fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.contains("api")) {
-            val result = response.parseAs<SearchResponseDto>()
-            val mangas = result.items.map { it.toSManga(baseUrl) }
-            return MangasPage(mangas, false)
-        }
-        return latestUpdatesParse(response)
+    private fun parseMangasPage(document: Document): MangasPage {
+        val mangas = document.select("a.group.overflow-hidden[href]").map { it.mangaFromElement("div.line-clamp-2") }
+        return MangasPage(mangas, document.hasNextPage())
     }
+
+    private fun Element.mangaFromElement(titleSelector: String) = SManga.create().apply {
+        setUrlWithoutDomain(absUrl("href"))
+        title = selectFirst(titleSelector)!!.text()
+        thumbnail_url = selectFirst("img")?.absUrl("src")
+    }
+
+    private fun Document.hasNextPage() = selectFirst("*[aria-label=Pagina siguiente]:not([disabled])") != null
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
@@ -139,7 +124,7 @@ abstract class CodeArc : KeiSource() {
         }?.takeIf { it.isNotEmpty() } ?: return null
         val mangaUrl = "$baseUrl/$slug"
 
-        return client.get(mangaUrl, rscHeaders).extractNextJs<DetailsResponseDto>()?.toSManga(baseUrl)?.apply {
+        return client.get(mangaUrl, rscHeaders).extractNextJs<DetailsResponseDto>()?.toSManga()?.apply {
             setUrlWithoutDomain(mangaUrl)
             initialized = true
         }
@@ -151,14 +136,8 @@ abstract class CodeArc : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = client.get(getMangaUrl(manga), rscHeaders).extractNextJs<DetailsResponseDto>()!!.let { details ->
-        SMangaUpdate(details.toSManga(baseUrl), details.toSChapterList())
+        SMangaUpdate(details.toSManga(), details.toSChapterList())
     }
-
-    override val supportsRelatedMangas = true
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), rscHeaders)
-        .extractNextJs<RelatedResponseDto>()
-        ?.items?.map { it.toSManga() }.orEmpty()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter).toHttpUrl()
@@ -168,18 +147,21 @@ abstract class CodeArc : KeiSource() {
             Page(
                 index,
                 imageUrl = page.imagenUrl.toHttpUrl().newBuilder()
-                    .setQueryParameter("reader_slug", chapterUrl.pathSegments[1])
-                    .setQueryParameter("reader_chapter", chapterUrl.pathSegments[2])
-                    .setQueryParameter("reader_page", page.orden.toString())
+                    .addQueryParameter("reader_slug", chapterUrl.pathSegments[1])
+                    .addQueryParameter("reader_chapter", chapterUrl.pathSegments[2])
+                    .addQueryParameter("reader_page", page.orden.toString())
                     .build()
                     .toString(),
             )
         }
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
+    override val supportsRelatedMangas = true
 
-    private companion object {
-        const val POPULAR_MAX_PAGE = 5
-    }
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), rscHeaders)
+        .extractNextJs<List<RelatedItemDto>>()
+        ?.map { it.toSManga() }
+        .orEmpty()
+
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
 }

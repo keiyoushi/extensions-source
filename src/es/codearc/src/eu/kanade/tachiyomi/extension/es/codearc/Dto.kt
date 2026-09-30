@@ -2,9 +2,13 @@ package eu.kanade.tachiyomi.extension.es.codearc
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.time.Instant
+
+private const val CDN_HOST = "https://cdn.codearctraducciones.com"
 
 @Serializable
 class SearchResponseDto(
@@ -20,14 +24,11 @@ class SearchItemDto(
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = "/$slug"
         title = titulo
-        thumbnail_url = portada?.let { if (it.startsWith("http")) it else "$baseUrl$it" }
+        thumbnail_url = portada?.let {
+            if (it.startsWith("http")) it else "$baseUrl$it"
+        }
     }
 }
-
-@Serializable
-class RelatedResponseDto(
-    val items: List<RelatedItemDto>,
-)
 
 @Serializable
 class RelatedItemDto(
@@ -65,10 +66,10 @@ class DetailsResponseDto(
     private val sipnosis: String,
     private val chapters: List<ChapterDto>,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga() = SManga.create().apply {
         title = titulo
         description = sipnosis
-        thumbnail_url = "https://cdn.codearctraducciones.com${portadaUrl.removePrefix("/uploads")}"
+        thumbnail_url = "$CDN_HOST${portadaUrl.removePrefix("/uploads")}"
         genre = tagsData.joinToString { it.name }.ifEmpty { null }
 
         artist = artistaData.joinToString { it.name }.ifEmpty { null }
@@ -86,6 +87,7 @@ class DetailsResponseDto(
             url = "/reader/$mangaSlugValue/${chapter.numero}/cascade"
             name = chapter.titulo?.takeUnless { it == titulo } ?: "Capítulo ${chapter.numero}"
             chapter_number = chapter.numero.toFloatOrNull() ?: -1f
+            date_upload = Instant.tryParse(chapter.createdAt)
         }
     }
 }
@@ -97,4 +99,5 @@ class NameDto(val name: String)
 class ChapterDto(
     val numero: String,
     val titulo: String? = null,
+    @SerialName("created_at") val createdAt: String,
 )
