@@ -76,7 +76,7 @@ abstract class Comix :
             if (response.isSuccessful) return@addInterceptor response
 
             val url = request.url.toString()
-            val fallbacks = listOf("/i5/", "/si/", "/i/", "/sii/", "/ii/")
+            val fallbacks = listOf("/fcf/", "/i5/", "/si/", "/i/", "/sii/", "/ii/")
                 .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
                 .filter { it != url }
 
@@ -103,10 +103,6 @@ abstract class Comix :
 
             val urlBuilder = request.url.newBuilder()
                 .setQueryParameter("r", attempt.toString())
-
-            if (!request.url.queryParameterNames.contains("8")) {
-                urlBuilder.addQueryParameter("8", null)
-            }
 
             val retryUrl = urlBuilder.build()
             response = chain.proceed(request.newBuilder().url(retryUrl).build())
