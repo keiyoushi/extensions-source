@@ -208,10 +208,6 @@ class LANraragi(
     ): SMangaUpdate {
         val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getIDFromURL(manga.url)
 
-        if (manga.url.startsWith("/api/search/random")) {
-            randomArchiveID = getRandomID(Uri.parse(manga.url).encodedQuery.toString())
-        }
-
         val response = client.get(apiTypeByID(id).toString())
 
         val (archive, archives) = if (!id.startsWith("TANK_")) {
@@ -235,6 +231,11 @@ class LANraragi(
         }
 
         val updatedManga = archiveToSManga(archive).apply { url = manga.url }
+
+        if (manga.url.startsWith("/api/search/random")) {
+            randomArchiveID = getRandomID(Uri.parse(manga.url).encodedQuery.toString())
+            updatedManga.description = "Refresh for a new random entry.\n\n${updatedManga.description}"
+        }
 
         return SMangaUpdate(updatedManga, parseChapters(archives))
     }
