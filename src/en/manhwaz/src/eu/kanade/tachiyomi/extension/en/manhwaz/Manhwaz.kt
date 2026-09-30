@@ -57,7 +57,7 @@ class Manhwaz(
             } else {
                 when (genreId) {
                     "completed" -> addPathSegment("completed")
-                    "" -> Unit 
+                    "" -> Unit
                     else -> addPathSegments(genreId)
                 }
             }
