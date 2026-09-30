@@ -125,7 +125,8 @@ internal object XChaCha20Poly1305 {
             val authBlock = encBlock.copyOf()
             authBlock[0] = input[0]
             val c = input.copyOfRange(1, 1 + mlen)
-            val cPad = pad16(64 + mlen).takeIf { it > 0 }?.let { ByteArray(it) } ?: ByteArray(0)
+            val cPadLen = mlen % 16
+            val cPad = if (cPadLen > 0) ByteArray(cPadLen) else ByteArray(0)
             val slen = ByteArray(16)
             ByteBuffer.wrap(slen).order(ByteOrder.LITTLE_ENDIAN).apply {
                 putLong(0, ad.size.toLong())
