@@ -133,4 +133,3 @@ internal object ChaCha20Poly1305 {
         return plain
     }
 }
-

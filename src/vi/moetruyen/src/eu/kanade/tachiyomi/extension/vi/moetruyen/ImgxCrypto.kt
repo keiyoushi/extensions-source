@@ -545,4 +545,3 @@ internal object ImgxCrypto {
         return String(bytes, offset, 4, Charsets.US_ASCII)
     }
 }
-

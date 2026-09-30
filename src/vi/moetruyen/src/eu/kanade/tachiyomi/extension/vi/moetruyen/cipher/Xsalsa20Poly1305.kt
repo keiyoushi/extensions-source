@@ -201,4 +201,3 @@ internal object Xsalsa20Poly1305 {
         return m.copyOfRange(32, m.size)
     }
 }
-

@@ -179,4 +179,3 @@ internal object XChaCha20Poly1305 {
         }
     }
 }
-

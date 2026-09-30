@@ -206,4 +206,3 @@ private class BootstrapRequest(
     val bootstrapProof: String,
     val initialPageIndexes: List<Int>,
 )
-

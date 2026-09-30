@@ -192,4 +192,3 @@ internal object Aegis256 {
         return msg
     }
 }
-
