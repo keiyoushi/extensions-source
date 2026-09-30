@@ -67,7 +67,7 @@ abstract class BookLive :
                 val link = it.selectFirst("h3.title_ellipsis a")!!
                 url = link.absUrl("href").toHttpUrl().pathSegments[3]
                 title = link.text()
-                thumbnail_url = it.selectFirst("div.picture img")?.absUrl("src")?.replace("/S.jpg", "/X.jpg")
+                thumbnail_url = it.selectFirst("div.picture img")?.absUrl("src")?.toHttpUrl()?.resolve("X.jpg")?.toString()
             }
         }
         val hasNextPage = document.selectFirst(".bl-pager li.page_nav_next:not(.page_stop)") != null
@@ -93,7 +93,7 @@ abstract class BookLive :
                 document.select("#product_tag_area .tags_list a").mapTo(this) { it.textOrNull() }
             }.joinToString()
             status = if (document.select("ul.product_topic li").any { it.textOrNull() == "完結" }) SManga.COMPLETED else SManga.ONGOING
-            thumbnail_url = document.selectFirst("#product_detail_area .product_image img")?.absUrl("src")?.replace("/2L.jpg", "/X.jpg")
+            thumbnail_url = document.selectFirst("#product_detail_area .product_image img")?.absUrl("src")?.toHttpUrl()?.resolve("X.jpg")?.toString()
         }
 
         val isNovel = document.selectFirst("#product_detail_area .category-label--l, #product_detail_area .category-label--b") != null ||
