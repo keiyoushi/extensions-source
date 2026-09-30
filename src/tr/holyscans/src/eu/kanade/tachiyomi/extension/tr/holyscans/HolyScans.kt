@@ -3,35 +3,37 @@ package eu.kanade.tachiyomi.extension.tr.holyscans
 import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import rx.Observable
 import java.util.Calendar
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 @Source
 abstract class HolyScans :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
@@ -40,40 +42,44 @@ abstract class HolyScans :
 
     private val loginMutex = ReentrantLock()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::loginInterceptor)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::loginInterceptor)
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val form = FormBody.Builder()
             .add("action", "filter_manga_archive")
             .add("paged", page.toString())
             .build()
 
         val referer = "$baseUrl/manga/?m_orderby=views"
-        val popularHeaders = headersBuilder().set("Referer", referer).build()
-        return POST("$baseUrl/wp-admin/admin-ajax.php", popularHeaders, form)
+        val popularHeaders = headers.newBuilder().set("Referer", referer).build()
+        return parseAjaxMangaList(client.post("$baseUrl/wp-admin/admin-ajax.php", popularHeaders, form))
     }
-
-    override fun popularMangaParse(response: Response): MangasPage = parseAjaxMangaList(response)
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
             val form = FormBody.Builder()
                 .add("action", "holy_live_search")
                 .add("keyword", query)
                 .build()
-            return POST("$baseUrl/wp-admin/admin-ajax.php", headers, form)
+
+            val dto = client.post("$baseUrl/wp-admin/admin-ajax.php", body = form).parseAs<LiveSearchResponse>()
+            val document = Jsoup.parseBodyFragment(dto.data, baseUrl)
+            val mangas = document.select("a.holy-live-result-item").map { element ->
+                SManga.create().apply {
+                    setUrlWithoutDomain(element.absUrl("href"))
+                    title = element.select("span").text()
+                    thumbnail_url = element.select("img").attr("abs:src")
+                }
+            }
+            return MangasPage(mangas, false)
         }
 
         val genres = filters.firstInstanceOrNull<GenreFilter>()?.state?.filter { it.state }?.map { it.id } ?: emptyList()
@@ -88,28 +94,7 @@ abstract class HolyScans :
         types.forEach { form.add("types[]", it) }
         statuses.forEach { form.add("statuses[]", it) }
 
-        return POST("$baseUrl/wp-admin/admin-ajax.php", headers, form.build())
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val requestBody = response.request.body
-        if (requestBody is FormBody) {
-            val action = (0 until requestBody.size).find { requestBody.name(it) == "action" }?.let { requestBody.value(it) }
-            if (action == "holy_live_search") {
-                val dto = response.parseAs<LiveSearchResponse>()
-                val document = Jsoup.parseBodyFragment(dto.data, baseUrl)
-                val mangas = document.select("a.holy-live-result-item").map { element ->
-                    SManga.create().apply {
-                        setUrlWithoutDomain(element.absUrl("href"))
-                        title = element.select("span").text()
-                        thumbnail_url = element.select("img").attr("abs:src")
-                    }
-                }
-                return MangasPage(mangas, false)
-            }
-        }
-
-        return parseAjaxMangaList(response)
+        return parseAjaxMangaList(client.post("$baseUrl/wp-admin/admin-ajax.php", body = form.build()))
     }
 
     private fun parseAjaxMangaList(response: Response): MangasPage {
@@ -134,92 +119,84 @@ abstract class HolyScans :
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst(".manga-main-title")?.text() ?: throw Exception("Manga başlığı bulunamadı")
-            thumbnail_url = document.selectFirst(".manga-cover-area img")?.attr("abs:src")
-            author = document.selectFirst(".detail-box:contains(Yazar) .d-val")?.text()
-            artist = document.selectFirst(".detail-box:contains(Çizer) .d-val")?.text()
-            genre = document.select(".detail-box:contains(Türler) a").joinToString { it.text() }
-            status = when (document.selectFirst(".detail-box:contains(Durum) .d-val")?.text()?.lowercase()) {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        manga.apply {
+            title = document.selectFirst("h1.hs-title")?.text() ?: throw Exception("Manga başlığı bulunamadı")
+            // the cover <img> is a locked placeholder for guests, og:image always has the real cover
+            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
+            author = document.selectFirst(".hs-info-row:contains(Yazar) .val")?.text()
+            artist = document.selectFirst(".hs-info-row:contains(Çizer) .val")?.text()
+            genre = document.select(".hs-genres a").joinToString { it.text() }
+            status = when (document.selectFirst(".hs-info-row:contains(Durum) .hs-pill")?.text()?.lowercase()) {
                 "devam ediyor" -> SManga.ONGOING
                 "tamamlandı", "final" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            description = document.selectFirst(".manga-summary-content")?.text()
+            description = document.selectFirst(".hs-summary-content")?.text()
         }
-    }
 
-    // ============================= Chapters ==============================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(".manga-chapter-list-wrap .ch-list-item").map { element ->
+        val chapterList = document.select(".manga-chapter-list-wrap .ch-list-item").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
-                name = element.selectFirst(".ch-title")?.text() ?: throw Exception("Bölüm adı bulunamadı")
+                val chapterName = element.selectFirst(".ch-title")?.ownText() ?: throw Exception("Bölüm adı bulunamadı")
+                name = if (element.hasClass("ch-locked")) "🔒 $chapterName" else chapterName
                 date_upload = parseRelativeDate(element.selectFirst(".ch-date")?.text() ?: "")
             }
         }
+
+        return SMangaUpdate(manga, chapterList)
     }
 
     // =============================== Pages ===============================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .flatMap { response ->
-                val documentHtml = response.body.string()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val (chapterUrl, documentHtml) = client.get(getChapterUrl(chapter)).use {
+            it.request.url.toString() to it.body.string()
+        }
 
-                val chapterId = CHAPTER_ID_REGEX.find(documentHtml)?.groupValues?.get(1)
-                    ?: return@flatMap Observable.error(Exception("chapter_id bulunamadı"))
-                val loadTime = LOAD_TIME_REGEX.find(documentHtml)?.groupValues?.get(1)
-                    ?: return@flatMap Observable.error(Exception("load_time bulunamadı"))
-                val pageToken = PAGE_TOKEN_REGEX.find(documentHtml)?.groupValues?.get(1)
-                    ?: return@flatMap Observable.error(Exception("page_token bulunamadı"))
-                val nonce = NONCE_REGEX.find(documentHtml)?.groupValues?.get(1)
-                    ?: return@flatMap Observable.error(Exception("nonce bulunamadı"))
+        val chapterId = CHAPTER_ID_REGEX.find(documentHtml)?.groupValues?.get(1)
+            ?: throw Exception("Bu bölüm kilitli (VIP/coin), WebView üzerinden açın")
+        val loadTime = LOAD_TIME_REGEX.find(documentHtml)?.groupValues?.get(1)
+            ?: throw Exception("load_time bulunamadı")
+        val pageToken = PAGE_TOKEN_REGEX.find(documentHtml)?.groupValues?.get(1)
+            ?: throw Exception("page_token bulunamadı")
+        val nonce = NONCE_REGEX.find(documentHtml)?.groupValues?.get(1)
+            ?: throw Exception("nonce bulunamadı")
 
-                val form = FormBody.Builder()
-                    .add("action", "holy_get_chapter_images")
-                    .add("nonce", nonce)
-                    .add("chapter_id", chapterId)
-                    .add("load_time", loadTime)
-                    .add("page_token", pageToken)
-                    .build()
-
-                val ajaxHeaders = headersBuilder()
-                    .set("Referer", response.request.url.toString())
-                    .set("X-Requested-With", "XMLHttpRequest")
-                    .build()
-
-                val ajaxRequest = POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, form)
-
-                client.newCall(ajaxRequest).asObservableSuccess().map { ajaxResponse ->
-                    val dto = ajaxResponse.parseAs<PagesResponse>()
-                    dto.urls.mapIndexed { i, url ->
-                        Page(i, url = chapter.url, imageUrl = url)
-                    }
-                }
-            }
-    }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageRequest(page: Page): Request {
-        val imageHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
-            .set("Referer", baseUrl + page.url)
+        val form = FormBody.Builder()
+            .add("action", "holy_get_chapter_images")
+            .add("nonce", nonce)
+            .add("chapter_id", chapterId)
+            .add("load_time", loadTime)
+            .add("page_token", pageToken)
             .build()
-        return GET(page.imageUrl!!, imageHeaders)
+
+        val ajaxHeaders = headers.newBuilder()
+            .set("Referer", chapterUrl)
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
+
+        val dto = client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, form).parseAs<PagesResponse>()
+        return dto.urls.mapIndexed { i, url ->
+            Page(i, url = chapter.url, imageUrl = url)
+        }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Accept", "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
+        .header("Referer", baseUrl + page.url)
+        .build()
 
     // ============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         GenreFilter(getGenreList()),
         TypeFilter(getTypeList()),
         StatusFilter(getStatusList()),

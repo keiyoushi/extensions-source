@@ -75,3 +75,25 @@ class MediaChapterDto(
 
 @Serializable
 class ItemId(val id: String)
+
+@Serializable
+class SearchRequestDto(private val queries: List<SearchQueryDto>)
+
+@Serializable
+class SearchQueryDto(
+    private val indexUid: String,
+    private val q: String,
+    private val filter: List<String>,
+    private val limit: Int,
+    private val offset: Int,
+)
+
+@Serializable
+class TrpcInputDto(private val json: ChapterListInputDto)
+
+@Serializable
+class ChapterListInputDto(
+    private val mediaId: String,
+    private val page: Int,
+    private val perPage: Int,
+)

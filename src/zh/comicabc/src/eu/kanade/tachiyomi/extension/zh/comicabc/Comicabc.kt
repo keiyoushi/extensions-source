@@ -1,30 +1,27 @@
 package eu.kanade.tachiyomi.extension.zh.comicabc
 
 import app.cash.quickjs.QuickJs
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class Comicabc : HttpSource() {
-    override val supportsLatest: Boolean = true
+abstract class Comicabc : KeiSource() {
     private val chaptersBaseUrl: String = "https://articles.onemoreplace.tw"
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/comic/h-$page.html", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/comic/h-$page.html").asJsoup()
         val mangas = document.select(".container .row a.comicpic_col6").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("li.nowraphide")!!.text()
@@ -38,10 +35,8 @@ abstract class Comicabc : HttpSource() {
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comic/u-$page.html", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/comic/u-$page.html").asJsoup()
         val mangas = document.select(".container .row .cat2_list a").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("li.nowraphide")!!.text()
@@ -57,16 +52,12 @@ abstract class Comicabc : HttpSource() {
 
     // The site's own simplified->traditional fallback misses some chars, so search again
     // client-side when a keyword returns nothing (e.g. "复仇者学院").
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/member/search.aspx".toHttpUrl().newBuilder()
             .addQueryParameter("key", query)
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val mangas = document.select(".container .row a.comicpic_col6").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("li.nowraphide")!!.text()
@@ -74,16 +65,14 @@ abstract class Comicabc : HttpSource() {
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
         }
-        if (mangas.isEmpty() && response.request.url.queryParameter("page") == "1") {
-            val query = response.request.url.queryParameter("key").orEmpty()
+        if (mangas.isEmpty() && page == 1) {
             val converted = query.toTraditional()
             if (converted != query) {
-                val url = "$baseUrl/member/search.aspx".toHttpUrl().newBuilder()
+                val retryUrl = "$baseUrl/member/search.aspx".toHttpUrl().newBuilder()
                     .addQueryParameter("key", converted)
                     .addQueryParameter("page", "1")
                     .build()
-                val retryResponse = client.newCall(GET(url, headers)).execute()
-                val retryDocument = retryResponse.asJsoup()
+                val retryDocument = client.get(retryUrl).asJsoup()
                 val retryMangas = retryDocument.select(".container .row a.comicpic_col6").map { element ->
                     SManga.create().apply {
                         title = element.selectFirst("li.nowraphide")!!.text()
@@ -101,25 +90,28 @@ abstract class Comicabc : HttpSource() {
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst(".item_content_box .h2")!!.text()
-        thumbnail_url = document.selectFirst(".item-cover img")?.absUrl("src")
-        author = document.selectFirst(".item_content_box .item-info-author")?.text()?.substringAfter("作者: ")
-        artist = author
-        description = document.selectFirst(".item_content_box .item_info_detail")?.text()
-        status = when (document.selectFirst(".item_content_box .item-info-status")?.text()) {
-            "連載中" -> SManga.ONGOING
-            "已完結" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        manga.apply {
+            title = document.selectFirst(".item_content_box .h2")!!.text()
+            thumbnail_url = document.selectFirst(".item-cover img")?.absUrl("src")
+            author = document.selectFirst(".item_content_box .item-info-author")?.text()?.substringAfter("作者: ")
+            artist = author
+            description = document.selectFirst(".item_content_box .item_info_detail")?.text()
+            status = when (document.selectFirst(".item_content_box .item-info-status")?.text()) {
+                "連載中" -> SManga.ONGOING
+                "已完結" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
         }
-    }
 
-    // ============================= Chapters ==============================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("#chapters a, .comic_chapters a").map { element ->
+        val chapterList = document.select("#chapters a, .comic_chapters a").map { element ->
             SChapter.create().apply {
                 name = element.text()
                 val onclick = element.attr("onclick")
@@ -140,18 +132,16 @@ abstract class Comicabc : HttpSource() {
                 }
             }
         }.reversed()
+
+        return SMangaUpdate(manga, chapterList)
     }
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val pageListHeaders = headersBuilder().add("Referer", "$baseUrl/").build()
-        return GET(chapter.url, pageListHeaders)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(chapter.url)
         val pageUrl = response.request.url.toString()
-        val html = response.body.string()
+        val html = response.use { it.body.string() }
 
         val targetScriptContent = scriptRegex.findAll(html)
             .map { it.groupValues[1] }
@@ -189,12 +179,9 @@ abstract class Comicabc : HttpSource() {
         return emptyList()
     }
 
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder().add("Referer", "$chaptersBaseUrl/").build()
-        return GET(page.imageUrl!!, newHeaders)
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Referer", "$chaptersBaseUrl/")
+        .build()
 
     companion object {
         private val scriptRegex = Regex("""<script language="javascript">([\s\S]*?)</script>""")
