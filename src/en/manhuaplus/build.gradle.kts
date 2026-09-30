@@ -6,13 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Manhua Plus"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "en"
-        baseUrl = "https://manhuaplus.com"
+        baseUrl {
+            mirrors(
+                "https://manhuaplus.com",
+                "https://manhuaplus.top",
+            )
+        }
     }
 }
