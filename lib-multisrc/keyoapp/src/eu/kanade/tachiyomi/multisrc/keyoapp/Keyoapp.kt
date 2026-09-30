@@ -362,8 +362,6 @@ abstract class Keyoapp :
         }
 
         when (match.groupValues[1]) {
-            "s", "second", "seconds" -> now.add(Calendar.SECOND, -relativeDate)
-
             // parse: 30 seconds ago
             "m", "min", "mins", "minute", "minutes" -> now.add(Calendar.MINUTE, -relativeDate)
 
