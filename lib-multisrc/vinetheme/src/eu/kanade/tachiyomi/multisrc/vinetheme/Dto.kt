@@ -64,6 +64,7 @@ class MangaDto(
     @SerialName("coverImage")
     val coverUrl: String? = null,
     val slug: String = "",
+    val urlSlug: String = "",
     val status: String = "",
     val type: String = "",
     val origin: String = "",
@@ -84,9 +85,11 @@ class MangaDto(
         title = this@MangaDto.title
         thumbnail_url = coverUrl?.let { it.toAbsoluteUrl(baseUrl) }
         url = id
+        // Detail and chapter pages only serve real content under the canonical `urlSlug`; the
+        // plain `slug` renders a stub whose payload has no chapters.
         memo = buildJsonObject {
             put("id", id)
-            put("slug", slug)
+            put("slug", urlSlug.ifBlank { slug })
         }
         status = this@MangaDto.status.toSMangaStatus()
         author = team?.name
