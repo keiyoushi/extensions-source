@@ -356,12 +356,12 @@ abstract class Keyoapp :
 
         val match = RELATIVE_DATE_REGEX.find(this) ?: return 0L
 
-        val relativeDate = when (val d = match.groupValues[0]) {
+        val relativeDate = when (val d = match.groupValues[1]) {
             "a", "one" -> 1
             else -> d.toIntOrNull() ?: return 0L
         }
 
-        when (match.groupValues[1]) {
+        when (match.groupValues[2]) {
             // parse: 30 seconds ago
             "m", "min", "mins", "minute", "minutes" -> now.add(Calendar.MINUTE, -relativeDate)
 
