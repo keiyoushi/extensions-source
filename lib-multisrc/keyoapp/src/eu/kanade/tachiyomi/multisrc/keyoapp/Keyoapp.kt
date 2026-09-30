@@ -354,32 +354,33 @@ abstract class Keyoapp :
             set(Calendar.MILLISECOND, 0)
         }
 
-        val relativeDate = this.split(" ").firstOrNull()
-            ?.replace("one", "1")
-            ?.replace("a", "1")
-            ?.toIntOrNull()
-            ?: return 0L
+        val match = RELATIVE_DATE_REGEX.find(this) ?: return 0L
 
-        when {
-            "second" in this -> now.add(Calendar.SECOND, -relativeDate)
+        val relativeDate = when (val d = match.groupValues[0]) {
+            "a", "one" -> 1
+            else -> d.toIntOrNull() ?: return 0L
+        }
+
+        when (match.groupValues[1]) {
+            "s", "second", "seconds" -> now.add(Calendar.SECOND, -relativeDate)
 
             // parse: 30 seconds ago
-            "minute" in this -> now.add(Calendar.MINUTE, -relativeDate)
+            "m", "min", "mins", "minute", "minutes" -> now.add(Calendar.MINUTE, -relativeDate)
 
             // parses: "42 minutes ago"
-            "hour" in this -> now.add(Calendar.HOUR, -relativeDate)
+            "h", "hr", "hrs", "hour", "hours" -> now.add(Calendar.HOUR, -relativeDate)
 
             // parses: "1 hour ago" and "2 hours ago"
-            "day" in this -> now.add(Calendar.DAY_OF_YEAR, -relativeDate)
+            "d", "day", "days" -> now.add(Calendar.DAY_OF_YEAR, -relativeDate)
 
             // parses: "2 days ago"
-            "week" in this -> now.add(Calendar.WEEK_OF_YEAR, -relativeDate)
+            "w", "wk", "wks", "week", "weeks" -> now.add(Calendar.WEEK_OF_YEAR, -relativeDate)
 
             // parses: "2 weeks ago"
-            "month" in this -> now.add(Calendar.MONTH, -relativeDate)
+            "mo", "mos", "month", "months" -> now.add(Calendar.MONTH, -relativeDate)
 
             // parses: "2 months ago"
-            "year" in this -> now.add(Calendar.YEAR, -relativeDate) // parse: "2 years ago"
+            "y", "yr", "yrs", "year", "years" -> now.add(Calendar.YEAR, -relativeDate) // parse: "2 years ago"
         }
         return now.timeInMillis
     }
@@ -406,5 +407,6 @@ abstract class Keyoapp :
         val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//([^/]+)""".toRegex()
         val CDN_CLEAN_REGEX = """\$\{[^}]*\}""".toRegex()
         val IMG_REGEX = """url\(['"]?([^(['")])]+)""".toRegex()
+        val RELATIVE_DATE_REGEX = """(a|one|\d+)\s*(\w+)\s*ago""".toRegex()
     }
 }
