@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Zerobyw"
-    versionCode = 21
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "zero搬运网"
