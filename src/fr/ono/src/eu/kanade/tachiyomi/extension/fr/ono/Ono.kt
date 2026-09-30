@@ -4,25 +4,29 @@ import android.content.SharedPreferences
 import android.util.Base64
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseGraphQLAs
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import keiyoushi.utils.runWebViewBlocking
 import okhttp3.CacheControl
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.Request
+import okhttp3.OkHttpClient
+import okhttp3.RequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -30,16 +34,14 @@ import java.util.Locale
 
 @Source
 abstract class Ono :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::authInterceptor)
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::authInterceptor)
         .addInterceptor(::wafInterceptor)
         .addInterceptor(::imageRetryInterceptor)
-        .build()
 
     private val apiUrl = "https://ws.ono.live/graphql"
 
@@ -81,39 +83,61 @@ abstract class Ono :
     }
 
     private fun wafInterceptor(chain: Interceptor.Chain): Response {
-        val response = chain.proceed(chain.request())
-        if (response.code == 202 && response.header("x-amzn-waf-action") == "challenge") {
-            response.close()
+        val request = chain.request()
+        val sentToken = wafToken()
+        val response = chain.proceed(request)
+        if (!response.isWafChallenge()) return response
+        response.close()
+
+        // The aws-waf-token is only valid for a few minutes; the site's WAF SDK refreshes it,
+        // so load the site in a WebView to get a fresh one and retry once.
+        synchronized(this) {
+            if (wafToken() == sentToken) {
+                runCatching {
+                    runWebViewBlocking<Unit>(chain.call()) {
+                        headers["User-Agent"]?.let { userAgent = it }
+                        poll { if (wafToken().let { it != null && it != sentToken }) resolve(Unit) }
+                        loadUrl(baseUrl)
+                    }
+                }
+            }
+        }
+
+        val retried = chain.proceed(request)
+        if (retried.isWafChallenge()) {
+            retried.close()
             throw IOException(
                 "AWS WAF challenge déclenché. Ouvrez le site dans la WebView " +
                     "pour résoudre le défi de sécurité, puis réessayez.",
             )
         }
-        return response
+        return retried
     }
+
+    private fun Response.isWafChallenge() = code == 202 && header("x-amzn-waf-action") == "challenge"
+
+    private fun wafToken(): String? = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+        .firstOrNull { it.name == "aws-waf-token" }?.value
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    private val rscHeaders by lazy { headersBuilder().add("RSC", "1").build() }
+    private val rscHeaders: Headers get() = headers.newBuilder().add("RSC", "1").build()
 
-    private val gqlHeaders by lazy {
-        headersBuilder()
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
+    private val gqlHeaders: Headers
+        get() = headers.newBuilder()
             .add("age-confirmed", "true")
             .add("ono-platform", "website")
             .add("ono-product", "FR")
             .build()
-    }
 
     private fun contentPath(contentType: String): String = if (contentType.equals("MANGA", ignoreCase = true)) "manga" else "webtoon"
 
     // =============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = graphQLPost(apiUrl, gqlHeaders, query = RANKING_QUERY, operationName = "getCatalogRanking")
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val series = response.parseGraphQLAs<RankingData>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val body = graphQLBody(query = RANKING_QUERY, operationName = "getCatalogRanking")
+        val series = client.post(apiUrl, gqlHeaders, body)
+            .parseGraphQLAs<RankingData>()
             .getCatalogRanking?.series!!
         val mangas = series.map { s ->
             SManga.create().apply {
@@ -127,22 +151,18 @@ abstract class Ono :
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = graphQLPost(
-        apiUrl,
-        gqlHeaders,
-        query = SEARCH_QUERY,
-        operationName = "searchCatalogByTerm",
-        variables = buildJsonObject { put("term", query) },
-    )
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val series = response.parseGraphQLAs<SearchCatalogData>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val body = graphQLBody(
+            query = SEARCH_QUERY,
+            operationName = "searchCatalogByTerm",
+            variables = SearchVariables(query),
+        )
+        val series = client.post(apiUrl, gqlHeaders, body)
+            .parseGraphQLAs<SearchCatalogData>()
             .searchCatalogByTerm?.series!!
         val mangas = series.map { s ->
             SManga.create().apply {
@@ -156,25 +176,27 @@ abstract class Ono :
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
-
-    private fun seriesDetail(response: Response): SeriesDetail {
-        response.extractNextJs<SeriesDetail>()?.let { return it }
+    private suspend fun seriesDetail(manga: SManga): SeriesDetail {
+        val url = (baseUrl + manga.url).toHttpUrl()
+        client.get(url, rscHeaders).extractNextJs<SeriesDetail>()?.let { return it }
 
         // RSC payload can be partial on client-side navigation; retry cache-busted.
-        val retryUrl = response.request.url.newBuilder()
+        val retryUrl = url.newBuilder()
             .addQueryParameter("_", System.currentTimeMillis().toString())
             .build()
-        val retry = client.newCall(
-            response.request.newBuilder().url(retryUrl)
-                .cacheControl(CacheControl.FORCE_NETWORK).build(),
-        ).execute()
-        return retry.extractNextJs<SeriesDetail>()!!
+        return client.get(retryUrl, rscHeaders, CacheControl.FORCE_NETWORK).extractNextJs<SeriesDetail>()!!
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val series = seriesDetail(response)
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val series = seriesDetail(manga)
+        val path = contentPath(series.contentType)
+
+        val updatedManga = SManga.create().apply {
             title = series.title
             thumbnail_url = series.cover
             author = series.contributors.joinToString { it.name }.ifBlank { null }
@@ -187,29 +209,13 @@ abstract class Ono :
                 .mapNotNull { it.trim().takeIf { g -> g.isNotEmpty() } }
                 .joinToString { it.replaceFirstChar { c -> c.titlecase(Locale.FRENCH) } }
             status = parseStatus(series.publicationStatus)
-            setUrlWithoutDomain("/${contentPath(series.contentType)}/${series.slug}")
+            setUrlWithoutDomain("/$path/${series.slug}")
         }
-    }
 
-    private fun parseStatus(status: String?): Int = when (status?.trim()?.uppercase()) {
-        "ONGOING" -> SManga.ONGOING
-        "FINISHED" -> SManga.COMPLETED
-        "HIATUS" -> SManga.ON_HIATUS
-        "UNPUBLISHED" -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
-
-    // ============================== Chapters ==============================
-
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val series = seriesDetail(response)
-        val path = contentPath(series.contentType)
         val showPremium = preferences.getBoolean(SHOW_PREMIUM_KEY, SHOW_PREMIUM_DEFAULT)
         val showWaf = preferences.getBoolean(SHOW_WAF_KEY, SHOW_WAF_DEFAULT)
 
-        return series.seriesElements
+        val chapterList = series.seriesElements
             .mapNotNull { el ->
                 val locked = el.price != null && el.price != "0" && el.isBought != true
                 // Any non-null waitAndRead (WaitAndReadAvailable / InUse / ...) = wait-until-free eligible.
@@ -231,34 +237,26 @@ abstract class Ono :
                 }
             }
             .sortedByDescending { it.chapter_number }
+
+        return SMangaUpdate(updatedManga, chapterList)
+    }
+
+    private fun parseStatus(status: String?): Int = when (status?.trim()?.uppercase()) {
+        "ONGOING" -> SManga.ONGOING
+        "FINISHED" -> SManga.COMPLETED
+        "HIATUS" -> SManga.ON_HIATUS
+        "UNPUBLISHED" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 
     // =============================== Pages ================================
 
-    @Volatile private var lastSlug = ""
-
-    @Volatile private var lastNum = ""
-
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val segments = chapter.url.trim('/').split('/')
-        lastNum = segments.last()
-        lastSlug = segments[segments.size - 2]
-        return startReadingRequest(lastNum, lastSlug)
-    }
+        val num = segments.last()
+        val slug = segments[segments.size - 2]
 
-    private fun startReadingRequest(num: String, slug: String): Request = graphQLPost(
-        apiUrl,
-        gqlHeaders,
-        query = START_READING_QUERY,
-        operationName = "StartReadingSession",
-        variables = buildJsonObject {
-            put("num", num)
-            put("slug", slug)
-        },
-    )
-
-    override fun pageListParse(response: Response): List<Page> {
-        val payload = fetchReadingSession(lastNum, lastSlug)
+        val payload = fetchReadingSession(num, slug) { client.post(apiUrl, gqlHeaders, it) }
 
         when (payload.__typename) {
             "SessionStarted" -> {}
@@ -290,12 +288,24 @@ abstract class Ono :
         }
 
         val pages = payload.publicationMetadata?.pages!!
-        val fragment = "$lastSlug/$lastNum"
+        val fragment = "$slug/$num"
         return pages.mapIndexed { i, url -> Page(i, imageUrl = "$url#$fragment") }
     }
 
-    private fun fetchReadingSession(num: String, slug: String): ReadingSessionPayload {
-        var payload = client.newCall(startReadingRequest(num, slug)).execute()
+    // Inline so the same logic runs with suspend calls from getPageList and blocking calls
+    // from imageRetryInterceptor.
+    private inline fun fetchReadingSession(
+        num: String,
+        slug: String,
+        execute: (RequestBody) -> Response,
+    ): ReadingSessionPayload {
+        val startReadingBody = graphQLBody(
+            query = START_READING_QUERY,
+            operationName = "StartReadingSession",
+            variables = StartReadingVariables(num, slug),
+        )
+
+        var payload = execute(startReadingBody)
             .parseGraphQLAs<StartReadingSessionData>()
             .startReadingSessionBySlugAndNum!!
 
@@ -303,34 +313,28 @@ abstract class Ono :
             val wnr = payload.publicationAccessMethods
                 .firstOrNull { it.__typename == "WaitNReadAvailable" && it.publicationId != null }
             if (wnr?.publicationId != null) {
-                unlockByWaitAndRead(wnr.publicationId)
-                payload = client.newCall(startReadingRequest(num, slug)).execute()
+                val unlockBody = graphQLBody(
+                    query = UNLOCK_WNR_MUTATION,
+                    operationName = "unlockPublicationByWnR",
+                    variables = UnlockVariables(wnr.publicationId),
+                )
+                val result = execute(unlockBody)
+                    .parseGraphQLAs<UnlockData>()
+                    .unlockPublicationByWnR!!
+                if (result.success != true) {
+                    throw Exception(
+                        "Échec du déblocage 'wait until free'" +
+                            (result.code?.let { " ($it)" } ?: "") + ".",
+                    )
+                }
+
+                payload = execute(startReadingBody)
                     .parseGraphQLAs<StartReadingSessionData>()
                     .startReadingSessionBySlugAndNum!!
             }
         }
 
         return payload
-    }
-
-    private fun unlockByWaitAndRead(publicationId: String) {
-        val request = graphQLPost(
-            apiUrl,
-            gqlHeaders,
-            query = UNLOCK_WNR_MUTATION,
-            operationName = "unlockPublicationByWnR",
-            variables = buildJsonObject { put("publicationId", publicationId) },
-        )
-
-        val result = client.newCall(request).execute()
-            .parseGraphQLAs<UnlockData>()
-            .unlockPublicationByWnR!!
-        if (result.success != true) {
-            throw Exception(
-                "Échec du déblocage 'wait until free'" +
-                    (result.code?.let { " ($it)" } ?: "") + ".",
-            )
-        }
     }
 
     // CloudFront signed URLs expire. If a chapter is preloaded and read later,
@@ -347,7 +351,9 @@ abstract class Ono :
 
         response.close()
 
-        val payload = fetchReadingSession(num, slug)
+        val payload = fetchReadingSession(num, slug) {
+            client.newCall(POST(apiUrl, gqlHeaders, it)).execute()
+        }
         val freshPages = payload.publicationMetadata?.pages
             ?: throw IOException("Pas de pages dans la session rafraîchie")
 
@@ -361,8 +367,6 @@ abstract class Ono :
                 .build(),
         )
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================ Preferences =============================
 

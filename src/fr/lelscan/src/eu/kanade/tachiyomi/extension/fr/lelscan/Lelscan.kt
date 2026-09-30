@@ -1,50 +1,34 @@
 package eu.kanade.tachiyomi.extension.fr.lelscan
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 
 @Source
-abstract class Lelscan : HttpSource() {
-
-    override val supportsLatest = true
+abstract class Lelscan : KeiSource() {
 
     // A stable reader page guaranteed to carry the navigation dropdowns and latest section.
-    private val catalogPage = "$baseUrl/lecture-en-ligne-one-piece"
+    private val catalogPage get() = "$baseUrl/lecture-en-ligne-one-piece"
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request = GET(catalogPage, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("#navigation select").first()
-            ?.select("option")
-            ?.map { option ->
-                SManga.create().apply {
-                    title = option.text()
-                    setUrlWithoutDomain(option.attr("abs:value"))
-                    thumbnail_url = thumbnailFromPath(url)
-                }
-            }
-            .orEmpty()
-        return MangasPage(mangas, false)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(catalogPage).asJsoup()
+        return MangasPage(document.catalogMangas(), false)
     }
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(catalogPage, headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(catalogPage).asJsoup()
         val mangas = document.select("#main_hot_ul li").mapNotNull { li ->
             val a = li.selectFirst("a.hot_manga_img") ?: return@mapNotNull null
             SManga.create().apply {
@@ -59,49 +43,44 @@ abstract class Lelscan : HttpSource() {
     // Search
 
     // No server-side search: filter the catalog list client-side.
-    // The query is encoded as a URL fragment so it is not sent to the server
-    // but is still accessible via response.request.url.fragment.
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$catalogPage#${query.trim()}", headers)
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val query = response.request.url.fragment.orEmpty()
-        val document = response.asJsoup()
-        val mangas = document.select("#navigation select").first()
-            ?.select("option")
-            ?.filter { it.text().contains(query, ignoreCase = true) }
-            ?.map { option ->
-                SManga.create().apply {
-                    title = option.text()
-                    setUrlWithoutDomain(option.attr("abs:value"))
-                    thumbnail_url = thumbnailFromPath(url)
-                }
-            }
-            .orEmpty()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val document = client.get(catalogPage).asJsoup()
+        val mangas = document.catalogMangas().filter { it.title.contains(query.trim(), ignoreCase = true) }
         return MangasPage(mangas, false)
     }
 
-    // Details
+    private fun Document.catalogMangas(): List<SManga> = select("#navigation select").first()
+        ?.select("option")
+        ?.map { option ->
+            SManga.create().apply {
+                title = option.text()
+                setUrlWithoutDomain(option.attr("abs:value"))
+                thumbnail_url = thumbnailFromPath(url)
+            }
+        }
+        .orEmpty()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    // Details & chapters
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
         // The second breadcrumb div holds "Lecture en ligne {Title}".
         val breadcrumb = document.select("#header-image h2 div").getOrNull(1)
             ?.selectFirst("span[itemprop=title]")?.text().orEmpty()
-        return SManga.create().apply {
+        val updatedManga = manga.apply {
             title = breadcrumb.removePrefix("Lecture en ligne ")
             thumbnail_url = baseUrl + document.selectFirst("meta[property=og:image]")?.attr("content")
             status = SManga.UNKNOWN
-            initialized = true
         }
-    }
 
-    // Chapters
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
         // The second <select> in #navigation is the chapter dropdown (descending order).
-        return document.select("#navigation select").getOrNull(1)
+        val chapterList = document.select("#navigation select").getOrNull(1)
             ?.select("option")
             ?.map { option ->
                 val chapterNum = option.text().toFloatOrNull() ?: -1f
@@ -113,14 +92,14 @@ abstract class Lelscan : HttpSource() {
                 }
             }
             .orEmpty()
+
+        return SMangaUpdate(updatedManga, chapterList)
     }
 
     // Pages
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}/1", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get("$baseUrl${chapter.url}/1").asJsoup()
         return document.select("#navigation select").getOrNull(2)
             ?.select("option")
             ?.mapIndexed { index, option ->
@@ -129,7 +108,7 @@ abstract class Lelscan : HttpSource() {
             .orEmpty()
     }
 
-    override fun imageUrlParse(response: Response): String = response.asJsoup().selectFirst("#image img")?.attr("abs:src").orEmpty()
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url).asJsoup().selectFirst("#image img")?.attr("abs:src").orEmpty()
 
     // Helpers
 
