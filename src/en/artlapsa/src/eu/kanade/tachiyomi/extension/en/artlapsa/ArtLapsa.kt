@@ -11,9 +11,32 @@ import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 @Source
 abstract class ArtLapsa : Keyoapp() {
+
+    // ============================== Popular ==============================
+
+    // The home page only renders a fixed top-20 carousel, so use the paginated
+    // search listing sorted by popularity instead.
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "popular")
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return parseSearchManga(client.get(url))
+    }
+
+    // =============================== Latest ==============================
+
+    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get("$baseUrl/latest?page=$page").asJsoup())
+
+    // The next page link is only rendered while more chapters exist.
+    override fun latestUpdatesNextPageSelector() = "a[href*='?page=']"
+
+    // ============================== Search ===============================
 
     override suspend fun requestGeneres() = client.get("$baseUrl/search")
 
@@ -37,11 +60,18 @@ abstract class ArtLapsa : Keyoapp() {
         return MangasPage(mangas, hasNextPage = mangas.size >= 20)
     }
 
-    override val altNameSelector: String = "div.font-medium:containsOwn(Alternative titles) ~ div span.select-all"
-    override val statusSelector = "[alt=Status]"
-    override val typeSelector = "[alt=Type]"
+    // ====================== Details + Chapters ===========================
+
+    override val altNameSelector: String = "details[data-testid=series-other-names] li.select-all"
+    override val statusSelector = "a[aria-label=Status]"
+    override val typeSelector = "a[aria-label=Type]"
+    override val genreSelector = "div:has(>h1) a[href*='/genres/']"
+    override val authorSelector = "dt:contains(Author) + dd"
+    override val artistSelector = "dt:contains(Artist) + dd"
 
     override val paidChapterSelector = "img[alt~=Coin], img[src*=star-circle]"
+
+    // =============================== Pages ===============================
 
     override fun pageListParse(document: Document): List<Page> {
         val xData = document.selectFirst("[x-data^=immersiveReader]")!!.attr("x-data")
@@ -53,6 +83,11 @@ abstract class ArtLapsa : Keyoapp() {
             Page(i, imageUrl = page.path)
         }
     }
+
+    // ============================= Utilities =============================
+
+    // Covers are plain <img> tags since the site redesign.
+    override fun Element.getImageUrl(selector: String): String? = selectFirst("img[alt$=' cover']")?.attr("abs:src")
 }
 
 @Serializable
