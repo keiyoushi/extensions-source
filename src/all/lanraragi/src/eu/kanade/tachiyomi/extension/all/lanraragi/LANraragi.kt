@@ -402,7 +402,7 @@ class LANraragi(
         screen.addPreference(screen.editTextPreference(HOSTNAME_KEY, "Hostname", HOSTNAME_DEFAULT, baseUrl, refreshSummary = true))
         screen.addPreference(screen.editTextPreference(APIKEY_KEY, "API Key", "", "Required if No-Fun Mode is enabled.", true))
         screen.addPreference(screen.editTextPreference(CUSTOM_LABEL_KEY, "Custom Label", "", "Show the given label for the source instead of the default."))
-        screen.addPreference(screen.checkBoxPreference(RANDOM_ENTRY_SHOW_KEY, "Show Random entry", RANDOM_ENTRY_SHOW_DEFAULT, "The first item of a search will be a special entry for a single random archive. Pull down to \"refresh\" and get a new one.\n\nLibrary functionality is limited. It is recommend to start a search within this entry to get to the original archive."))
+        screen.addPreference(screen.checkBoxPreference(RANDOM_ENTRY_SHOW_KEY, "Show Random entry", RANDOM_ENTRY_SHOW_DEFAULT, "The first item of a search will be a special entry for a single random archive. Pull down to \"refresh\" and get a new one.\n\nLibrary functionality is limited. It is recommend to start a search within this entry to get to the original."))
         screen.addPreference(screen.checkBoxPreference(CLEAR_NEW_KEY, "Clear New status", CLEAR_NEW_DEFAULT, "Clear an entry's New status when its details are viewed."))
         screen.addPreference(screen.checkBoxPreference(NEW_ONLY_KEY, "Latest - New Only", NEW_ONLY_DEFAULT))
         screen.addPreference(screen.editTextPreference(SORT_BY_NS_KEY, "Latest - Sort by Namespace", SORT_BY_NS_DEFAULT, "Sort by the given namespace for Latest, such as date_added or lastread."))
