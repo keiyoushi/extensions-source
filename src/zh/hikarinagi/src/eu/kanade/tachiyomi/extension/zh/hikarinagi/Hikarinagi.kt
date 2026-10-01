@@ -51,7 +51,7 @@ abstract class Hikarinagi : KeiSource() {
     private fun parseBrowse(response: Response): MangasPage {
         val list = response.parseAs<JsonObject>().getObject("list")
         val manga = list.getArray("items").map { it.parseAs<MangaItem>().toSManga() }
-        val hasNextPage = with(list.getObject("meta")) { getString("page") < getString("total_pages") }
+        val hasNextPage = with(list.getObject("meta")) { getInt("page") < getInt("total_pages") }
         return MangasPage(manga, hasNextPage)
     }
 
