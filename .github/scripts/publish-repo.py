@@ -1,4 +1,6 @@
+import gzip
 import hashlib
+import html
 import json
 import math
 import sys
@@ -7,14 +9,7 @@ from pathlib import Path
 
 import index_pb2
 from github_utils import REPO_NAME, run_gh
-from index_utils import (
-    get_icon_url,
-    get_source_modules,
-    load_index,
-    load_release_assets,
-    prune_extensions,
-    write_repo,
-)
+from google.protobuf import json_format
 
 # Artifacts downloaded from the build jobs: one APK per extension plus the source metadata JSON
 # emitted by each assembleRelease.
@@ -23,6 +18,7 @@ ARTIFACTS_DIR = Path.home() / "apk-artifacts"
 # The checked-out `repo` branch we publish into (the working directory).
 REPO_DIR = Path.cwd()
 
+ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main"
 RELEASE_BASE_URL = f"https://github.com/{REPO_NAME}/releases/download"
 ASSET_LIMIT = 495  # Actual limit is 1000 but we upload 2 items per extension.
 UPLOAD_CHUNK_SIZE = 80
@@ -31,19 +27,30 @@ UPLOAD_CHUNK_INTERVAL = 30
 to_delete: list[str] = json.loads(sys.argv[1])
 current_sha = sys.argv[2]
 current_sha_short = current_sha[:7]
+# Every extension was rebuilt from scratch: the build output is the source of truth, so
+# nothing is carried over from the published index. This is what drops extensions deleted
+# from the source tree, which a diff against the empty tree can't see.
+full_rebuild = sys.argv[3] == "true"
 
-remote_proto = load_index(REPO_DIR)
+with REPO_DIR.joinpath("index.json").open() as f:
+    remote_proto = json_format.Parse(f.read(), index_pb2.Index())
 
 remote_extensions = {
     ext.packageName: ext for ext in remote_proto.extensionList.extensions
 }
 
-release_assets = load_release_assets(REPO_DIR)
+release_assets_path = REPO_DIR / "release-assets.json"
+if release_assets_path.exists():
+    with release_assets_path.open() as f:
+        release_assets = json.load(f)
+else:
+    release_assets = {}
 
 updated_release_assets = {
     package_name: assets
     for package_name, assets in release_assets.items()
-    if not any(package_name.endswith(f".{module}") for module in to_delete)
+    if not full_rebuild
+    and not any(package_name.endswith(f".{module}") for module in to_delete)
 }
 
 # Build index entries for the freshly built apks. Each extension's metadata comes from the
@@ -52,6 +59,20 @@ updated_release_assets = {
 new_extensions: list[tuple[index_pb2.Extension, Path, Path, bool, bool]] = []
 
 SOURCE_DIR = Path(__file__).resolve().parents[2]
+ICON_FILE = "res/mipmap-xhdpi/ic_launcher.png"
+
+
+def get_icon_url(module: str, theme: str | None) -> str:
+    module_icon = f"src/{module.replace('.', '/')}/{ICON_FILE}"
+    if (SOURCE_DIR / module_icon).exists():
+        return f"{ICON_BASE_URL}/{module_icon}"
+
+    if theme:
+        theme_icon = f"lib-multisrc/{theme}/{ICON_FILE}"
+        if (SOURCE_DIR / theme_icon).exists():
+            return f"{ICON_BASE_URL}/{theme_icon}"
+
+    return f"{ICON_BASE_URL}/core/src/main/{ICON_FILE}"
 
 
 for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
@@ -96,7 +117,7 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
         name=info["name"],
         packageName=package_name,
         resources=index_pb2.Resources(
-            iconUrl=get_icon_url(SOURCE_DIR, info["module"], info.get("theme")),
+            iconUrl=get_icon_url(info["module"], info.get("theme")),
         ),
         extensionLib=info["extensionLib"],
         versionCode=info["versionCode"],
@@ -157,15 +178,52 @@ for ext, apk, jar, apk_changed, jar_changed in new_extensions:
         ext.resources.jarUrl = old_resources.jarUrl
 
 # Merge with the already-published index, dropping the deleted/rebuilt modules.
-final_extensions = [
+final_extensions = []
+final_extensions.extend(
     ext
     for ext in remote_proto.extensionList.extensions
-    if not any(ext.packageName.endswith(f".{module}") for module in to_delete)
-]
+    if not full_rebuild
+    and not any(ext.packageName.endswith(f".{module}") for module in to_delete)
+)
 final_extensions.extend(ext for ext, _, _, _, _ in new_extensions)
-final_extensions = prune_extensions(final_extensions, set(get_source_modules(SOURCE_DIR)))
+final_extensions.sort(key=lambda ext: ext.packageName)
 
-write_repo(REPO_DIR, final_extensions, updated_release_assets)
+index = index_pb2.Index(
+    name="Keiyoushi",
+    badgeLabel="KEI",
+    signingKey="9add655a78e96c4ec7a53ef89dccb557cb5d767489fac5e785d671a5a75d4da2",
+    contact=index_pb2.Contact(
+        website="https://keiyoushi.github.io",
+        discord="https://discord.gg/3FbCpdKbdY",
+    ),
+    extensionList=index_pb2.ExtensionList(extensions=final_extensions),
+)
+
+with REPO_DIR.joinpath("index.json").open("w", encoding="utf-8") as f:
+    f.write(
+        json_format.MessageToJson(
+            index,
+            always_print_fields_with_no_presence=False,
+            preserving_proto_field_name=True,
+        )
+    )
+
+with REPO_DIR.joinpath("index.pb").open("wb") as f:
+    f.write(gzip.compress(index.SerializeToString(deterministic=True), mtime=0))
+
+with release_assets_path.open("w", encoding="utf-8") as f:
+    json.dump(updated_release_assets, f, indent=2, sort_keys=True)
+    f.write("\n")
+
+with REPO_DIR.joinpath("index.html").open("w", encoding="utf-8") as f:
+    f.write(
+        '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>apks</title>\n</head>\n<body>\n<pre>\n'
+    )
+    for ext in final_extensions:
+        apk_escaped = html.escape(ext.resources.apkUrl)
+        name_escaped = html.escape(f"Tachiyomi: {ext.name}")
+        f.write(f'<a href="{apk_escaped}">{name_escaped}</a>\n')
+    f.write("</pre>\n</body>\n</html>\n")
 
 # --- Upload assets as release ---
 if not changed_extensions:

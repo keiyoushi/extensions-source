@@ -81,7 +81,7 @@ def find_base_sha(repo: str, workflow: str, branch: str) -> str:
 
     # Only reached when no successful run exists or none of them is on the branch
     # anymore (history rewritten). A full rebuild is correct here: publish-repo.py
-    # reconciles the index against the source tree, so deletions aren't lost.
+    # then replaces the whole index with the build output, so deletions aren't lost.
     print(
         f"No successful run on '{branch}' among {seen_runs} runs; "
         "falling back to the empty tree (full rebuild)",

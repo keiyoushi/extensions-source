@@ -12,8 +12,8 @@ on:
       - '.github/workflows/build_push.yml'
   workflow_dispatch:
     inputs:
-      rebuild_index:
-        description: Only rebuild the index from existing files (drop deleted extensions, relink icons); no builds or uploads
+      full_rebuild:
+        description: Rebuild and republish every extension instead of only what changed since the last successful run
         type: boolean
         default: false
 
@@ -30,7 +30,6 @@ env:
 jobs:
   prepare:
     name: Prepare job
-    if: ${{ !inputs.rebuild_index }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -38,6 +37,7 @@ jobs:
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
+      full_rebuild: ${{ steps.base.outputs.full_rebuild }}
     steps:
       - name: Checkout main branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,9 +49,19 @@ jobs:
         name: Get last successful CI commit
         env:
           GH_TOKEN: ${{ github.token }}
+          FULL_REBUILD: ${{ inputs.full_rebuild }}
         run: |
-          sha=$(python ./.github/scripts/find-base-sha.py build_push.yml)
+          # Empty tree: every module is diffed as new, so everything gets rebuilt
+          empty_tree=$(git hash-object -t tree /dev/null)
+          if [ "$FULL_REBUILD" = "true" ]; then
+            sha=$empty_tree
+          else
+            sha=$(python ./.github/scripts/find-base-sha.py build_push.yml)
+          fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if [ "$sha" = "$empty_tree" ]; then
+            echo "full_rebuild=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - id: generate-matrices
         name: Create output matrices
@@ -156,57 +166,18 @@ jobs:
       - name: Publish and deploy repo
         env:
           DELETE: ${{ needs.prepare.outputs.delete }}
+          FULL_REBUILD: ${{ needs.prepare.outputs.full_rebuild }}
           GH_TOKEN: ${{ secrets.BOT_PAT }}
         run: |
           cd repo
           pip install protobuf
-          python -u ../main/.github/scripts/publish-repo.py "$DELETE" "$GITHUB_SHA"
+          python -u ../main/.github/scripts/publish-repo.py "$DELETE" "$GITHUB_SHA" "$FULL_REBUILD"
           git config --global user.email "156378334+keiyoushi-bot@users.noreply.github.com"
           git config --global user.name "keiyoushi-bot"
           git status
           if [ -n "$(git status --porcelain)" ]; then
             git add .
             git commit -m "Update extensions repo"
-            git push
-            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.json
-            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.pb
-          else
-            echo "No changes to commit"
-          fi
-
-  rebuild-index:
-    name: Rebuild extension index
-    if: github.repository == 'keiyoushi/extensions-source' && inputs.rebuild_index
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout main branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: main
-          path: main
-          persist-credentials: false
-
-      - name: Checkout repo branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: keiyoushi/extensions
-          token: ${{ secrets.BOT_PAT }}
-          ref: repo
-          path: repo
-          persist-credentials: true
-
-      - name: Rebuild and deploy index
-        run: |
-          cd repo
-          pip install protobuf
-          python -u ../main/.github/scripts/rebuild-index.py
-          git config --global user.email "156378334+keiyoushi-bot@users.noreply.github.com"
-          git config --global user.name "keiyoushi-bot"
-          git status
-          if [ -n "$(git status --porcelain)" ]; then
-            git add .
-            git commit -m "Rebuild extensions index"
             git push
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.json
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.pb
