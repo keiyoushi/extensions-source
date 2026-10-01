@@ -55,8 +55,8 @@ abstract class GoodToon : MadaraNoAjax() {
 
     override fun archiveUrlBuilder(page: Int, order: String, path: String, query: String) = baseUrl.toHttpUrl().resolve(path)!!.newBuilder().apply {
         if (page > 1) addQueryParameter("pg", page.toString())
-        if (order.isNotBlank()) addQueryParameter(orderQueryParameter, order)
-        if (query.isNotBlank()) addQueryParameter(searchQueryParameter, query)
+        if (order.isNotEmpty()) addQueryParameter(orderQueryParameter, order)
+        if (query.isNotEmpty()) addQueryParameter(searchQueryParameter, query)
     }
 
     override suspend fun getPopularManga(page: Int) = archivePage(page, "", "/recommend/")
