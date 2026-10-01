@@ -203,12 +203,12 @@ abstract class TempleScan :
     /**
      * Reads the RSC payload node holding [fields] and decodes it with the site's current field keys.
      *
-     * The keys are derived from a cached salt or [RscKeys.DEFAULT_SALT]. If neither matches this
-     * payload the site has rotated its salt, so it is re-read from the client bundle and the
-     * payload is decoded once more.
+     * The keys come from the table cached by [refreshRscKeys]. If they no longer match this payload
+     * the site has renamed its keys, so the table is re-read from the client bundle and the payload
+     * is decoded once more.
      */
     private suspend fun Document.mappedPayload(fields: List<String>, isList: Boolean = false): JsonElement? {
-        val keys = rscKeys()
+        val keys = cachedRscKeys() ?: refreshRscKeys(this)
         extractNextJs<JsonElement>(RscKeys.payloadPredicate(fields, keys, isList))
             ?.let { return RscKeys.remap(it, keys) }
 
@@ -217,9 +217,11 @@ abstract class TempleScan :
             ?.let { RscKeys.remap(it, refreshed) }
     }
 
-    private fun rscKeys(): Map<String, String> = RscKeys.derive(preferences.getString(PREF_RSC_SALT, null) ?: RscKeys.DEFAULT_SALT)
+    private fun cachedRscKeys(): Map<String, String>? = preferences.getString(PREF_RSC_KEYS, null)
+        ?.let(RscKeys::decode)
+        ?.takeIf { it.isNotEmpty() }
 
-    /** Re-reads the field-key salt from the site's client bundle and caches it for later runs. */
+    /** Re-reads the field rename table from the site's client bundle and caches it for later runs. */
     private suspend fun refreshRscKeys(document: Document): Map<String, String> {
         val chunks = document.select("script[src]")
             .mapNotNull { element -> element.absUrl("src").takeIf { CHUNK_PATH in it } }
@@ -227,13 +229,13 @@ abstract class TempleScan :
 
         for (chunk in chunks) {
             val source = client.get(chunk, ensureSuccess = false).use { it.body.string() }
-            val salt = RscKeys.findSalt(source) ?: continue
+            val keys = RscKeys.findTable(source) ?: continue
 
-            preferences.edit().putString(PREF_RSC_SALT, salt).apply()
-            return RscKeys.derive(salt)
+            preferences.edit().putString(PREF_RSC_KEYS, RscKeys.encode(keys)).apply()
+            return keys
         }
 
-        error("Could not determine the site's RSC field-key salt")
+        error("Could not determine the site's RSC field-key table")
     }
 
     private inline fun <reified T> Document.jsonLd(predicate: (T) -> Boolean): T? = select("script[type=application/ld+json]")
@@ -258,6 +260,6 @@ abstract class TempleScan :
         private val SERIES_FIELDS = listOf("series_slug", "Season")
 
         private const val PREF_HIDE_LOCKED_CHAPTERS = "pref_hide_locked_chapters"
-        private const val PREF_RSC_SALT = "pref_rsc_salt"
+        private const val PREF_RSC_KEYS = "pref_rsc_keys"
     }
 }
