@@ -44,6 +44,11 @@ abstract class AsmHentai : GalleryAdults() {
 
     override val mangaDetailInfoSelector = ".book_page"
 
+    /**
+     * [totalPagesSelector] only exists if pages > 10
+     */
+    override val totalPagesSelector = "t_pages"
+
     override val galleryIdSelector = "load_id"
     override val thumbnailSelector = ".preview_thumb"
 
