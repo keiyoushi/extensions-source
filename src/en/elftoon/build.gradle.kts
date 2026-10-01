@@ -14,5 +14,6 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://elftoon.net"
+        versionId = 2
     }
 }
