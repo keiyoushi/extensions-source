@@ -343,7 +343,6 @@ class LANraragi(
 
     override val supportsFilterFetching get() = true
 
-    // Network request on every filter reset? Categories aren't that hot...
     override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/categories")
         .parseAs<List<Category>>()
         .toJsonElement()
