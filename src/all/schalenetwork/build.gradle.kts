@@ -9,6 +9,7 @@ keiyoushi {
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
+    pkgName = "all.koharu"
 
     listOf("all", "en", "ja", "zh").forEach {
         source {

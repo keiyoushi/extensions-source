@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.koharu
+package eu.kanade.tachiyomi.extension.all.schalenetwork
 
 import android.app.Activity
 import android.app.AlertDialog
@@ -41,7 +41,7 @@ import java.lang.ref.WeakReference
 import kotlin.time.Duration.Companion.minutes
 
 @Source
-abstract class Koharu :
+abstract class SchaleNetwork :
     KeiSource(),
     ConfigurableSource {
 

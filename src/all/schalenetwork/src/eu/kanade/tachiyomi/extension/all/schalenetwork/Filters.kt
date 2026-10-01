@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.koharu
+package eu.kanade.tachiyomi.extension.all.schalenetwork
 
 import eu.kanade.tachiyomi.source.model.Filter
 
