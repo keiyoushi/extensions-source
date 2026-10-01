@@ -3,56 +3,48 @@ package eu.kanade.tachiyomi.extension.all.manhuarm.interceptors
 import eu.kanade.tachiyomi.extension.all.manhuarm.Dialog
 import eu.kanade.tachiyomi.extension.all.manhuarm.Language
 import eu.kanade.tachiyomi.extension.all.manhuarm.Manhuarm.Companion.PAGE_REGEX
-import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
+import eu.kanade.tachiyomi.extension.all.manhuarm.translator.TranslatorEngine
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
 class TranslationInterceptor(
-    val language: Language,
-    private val translator: TranslatorEngine,
+    private val settings: () -> Language,
+    private val translator: () -> TranslatorEngine,
 ) : Interceptor {
-
-    private val json: Json by injectLazy()
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url.toString()
+        val language = settings()
 
-        if (PAGE_REGEX.containsMatchIn(url).not() || language.target == language.origin) {
+        if (!PAGE_REGEX.containsMatchIn(url) || language.disableTranslator || language.target == language.origin) {
             return chain.proceed(request)
         }
 
         val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
             ?: return chain.proceed(request)
 
+        val engine = translator()
         val translated = runBlocking(Dispatchers.IO) {
             dialogues.map { dialog ->
                 async {
-                    dialog.replaceText(
-                        translator.translate(language.origin, language.target, dialog.text),
+                    dialog.copy(
+                        textByLanguage = mapOf("text" to engine.translate(language.origin, language.target, dialog.text)),
                     )
                 }
             }.awaitAll()
         }
 
         val newRequest = request.newBuilder()
-            .url("${url.substringBeforeLast("#")}#${json.encodeToString(translated)}")
+            .url("${url.substringBeforeLast("#")}#${translated.toJsonString()}")
             .build()
 
         return chain.proceed(newRequest)
     }
-
-    private fun Dialog.replaceText(value: String) = this.copy(
-        textByLanguage = mutableMapOf(
-            "text" to value,
-        ),
-    )
 }

@@ -1,41 +1,36 @@
 package eu.kanade.tachiyomi.extension.es.dynasty
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Source
-abstract class Dynasty : HttpSource() {
+abstract class Dynasty : KeiSource() {
 
-    override val supportsLatest = true
+    override fun Headers.Builder.configureHeaders() = add("Accept", "application/json, text/plain, */*")
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Accept", "application/json, text/plain, */*")
+    override suspend fun getPopularManga(page: Int): MangasPage = mangaPageParse("$baseUrl/api/mangas?page=$page&limit=20&sort=popular".toHttpUrl(), page)
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/mangas?page=$page&limit=20&sort=popular", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse("$baseUrl/api/mangas?page=$page&limit=20&sort=newest".toHttpUrl(), page)
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/mangas?page=$page&limit=20&sort=newest", headers)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/api/mangas".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "20")
@@ -55,12 +50,12 @@ abstract class Dynasty : HttpSource() {
             }
         }.build()
 
-        return GET(url, headers)
+        return mangaPageParse(url, page)
     }
 
-    private fun mangaPageParse(response: Response): MangasPage {
-        val result = response.parseAs<MangaPaginatedResponse>()
-        val sortType = response.request.url.queryParameter("sort")
+    private suspend fun mangaPageParse(url: HttpUrl, page: Int): MangasPage {
+        val result = client.get(url).parseAs<MangaPaginatedResponse>()
+        val sortType = url.queryParameter("sort")
 
         var mangasData = result.getMangas().filter {
             it.type?.contains("novel", ignoreCase = true) != true
@@ -68,88 +63,74 @@ abstract class Dynasty : HttpSource() {
 
         mangasData = when (sortType) {
             "popular" -> mangasData.sortedByDescending { it.views ?: 0 }
-            "newest" -> mangasData.sortedByDescending { parseDate(it.updatedAt ?: "") }
+            "newest" -> mangasData.sortedByDescending { Instant.tryParse(it.updatedAt) }
             "rating" -> mangasData.sortedByDescending { it.rating ?: 0f }
             "az" -> mangasData.sortedBy { it.title }
             else -> mangasData
         }
 
         val mangas = mangasData.map { it.toSManga() }
-        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        return MangasPage(mangas, currentPage < result.getTotalPages())
+        return MangasPage(mangas, page < result.getTotalPages())
     }
 
-    override fun popularMangaParse(response: Response) = mangaPageParse(response)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaId = manga.url.substringBefore("|")
+        val details = if (fetchDetails) async { fetchDetails(mangaId) } else null
+        val chapterList = if (fetchChapters) async { fetchChapterList(mangaId) } else null
 
-    override fun latestUpdatesParse(response: Response) = mangaPageParse(response)
-
-    override fun searchMangaParse(response: Response) = mangaPageParse(response)
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringBefore("|")
-        return GET("$baseUrl/api/mangas/$id", headers)
+        SMangaUpdate(
+            details?.await() ?: manga,
+            chapterList?.await() ?: chapters,
+        )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val json = response.parseAs<JsonElement>()
+    private suspend fun fetchDetails(mangaId: String): SManga {
+        val json = client.get("$baseUrl/api/mangas/$mangaId").parseAs<JsonElement>()
         val data = if (json is JsonObject && json.containsKey("data")) {
             json["data"]!!
         } else {
             json
         }
-        return jsonInstance.decodeFromJsonElement<MangaDto>(data).toSManga()
+        return data.parseAs<MangaDto>().toSManga()
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+    private suspend fun fetchChapterList(mangaId: String): List<SChapter> {
         val allChapters = mutableListOf<SChapter>()
-        val mangaId = manga.url.substringBefore("|")
         var page = 1
-        var totalPages = 1
+        var totalPages: Int
 
         do {
-            val response = client.newCall(
-                GET("$baseUrl/api/chapters/paginated?manga_id=$mangaId&page=$page&limit=100&sort=desc", headers),
-            ).execute()
-
-            val res = response.parseAs<ChapterPaginatedResponse>()
+            val res = client.get("$baseUrl/api/chapters/paginated?manga_id=$mangaId&page=$page&limit=100&sort=desc")
+                .parseAs<ChapterPaginatedResponse>()
             totalPages = res.getTotalPages()
             allChapters.addAll(res.getChapters().map { it.toSChapter() })
             page++
         } while (page <= totalPages)
 
-        allChapters
+        return allChapters
     }
 
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/api/chapter-pages?chapter_id=${chapter.url}", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val pages = response.parseAs<List<PageDto>>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val pages = client.get(getChapterUrl(chapter)).parseAs<List<PageDto>>()
         return pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.getUrl())
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/api/chapter-pages?chapter_id=${chapter.url}"
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.url.substringAfter("|", "")
         return if (slug.isNotEmpty()) "$baseUrl/manga/$slug" else baseUrl
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         GenreFilter(),
     )
-
-    companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-
-        fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)
-    }
 }

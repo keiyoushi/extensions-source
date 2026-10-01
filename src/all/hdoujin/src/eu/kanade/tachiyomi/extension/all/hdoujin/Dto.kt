@@ -3,10 +3,12 @@ package eu.kanade.tachiyomi.extension.all.hdoujin
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val dateFormat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
+private val dateFormat = DateTimeFormatter.ofPattern("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
 
 @Serializable
 class MangaDetail(
@@ -91,7 +93,7 @@ class MangaDetail(
             if (appended) append("\n")
 
             try {
-                append("Posted: ", dateFormat.format(created_at), "\n")
+                append("Posted: ", dateFormat.format(Instant.ofEpochMilli(created_at).atZone(ZoneId.systemDefault())), "\n")
             } catch (_: Exception) {}
 
             append("Pages: ", thumbnails.entries.size, "\n\n")

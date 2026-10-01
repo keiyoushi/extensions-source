@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.extension.es.dynasty
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 @Serializable
 class MangaPaginatedResponse(
@@ -72,7 +74,7 @@ class ChapterDto(
         }
         if (name.isEmpty()) name = "Capítulo"
         url = id.toString()
-        date_upload = createdAt?.let { Dynasty.Companion.parseDate(it) } ?: 0L
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 

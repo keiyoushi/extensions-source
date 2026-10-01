@@ -12,39 +12,33 @@ import eu.kanade.tachiyomi.multisrc.mangataro.YearFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.utils.parseAs
-import okhttp3.Request
-import rx.Observable
+import kotlinx.serialization.json.JsonElement
 
 @Source
 abstract class RoliaScan : MangaTaro() {
 
     // ========================== Search =========================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            return super.fetchSearchManga(page, query, filters)
-        }
-        return fetchMultiplePages(page) { searchMangaRequest(it, query, filters) }
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = fetchMultiplePages(page) { fetchBrowsePage(it, query, filters) }
 
     // ========================== Latest =========================
     // RoliaScan's API returns chapter-level entries with
     // blank URLs mixed in with actual manga entries.
     // Aggregate results from multiple API pages so
     // the user always gets a full page of results.
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchMultiplePages(page) { searchMangaRequest(it, "", SortFilter.latest) }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchMultiplePages(page) { fetchBrowsePage(it, "", SortFilter.latest) }
 
     // ========================== Pages ==========================
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.endsWith("/")) throw Exception("Refresh Manga to update information about chapters")
-        return super.pageListRequest(chapter)
+        return super.getPageList(chapter)
     }
 
     // ========================= Filters =========================
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SearchWithFilters(),
         Filter.Header("If unchecked, all filters will be ignored with search query"),
         Filter.Header("But will give more relevant results"),
@@ -58,39 +52,35 @@ abstract class RoliaScan : MangaTaro() {
     )
 
     // ========================= Helpers =========================
-    private fun fetchMultiplePages(
+    private suspend fun fetchMultiplePages(
         page: Int,
-        requestFactory: (apiPage: Int) -> okhttp3.Request,
-    ): Observable<MangasPage> {
+        fetchPage: suspend (apiPage: Int) -> List<BrowseManga>,
+    ): MangasPage {
         val startApiPage = (page - 1) * API_PAGES_PER_PAGE + 1
         val endApiPage = startApiPage + API_PAGES_PER_PAGE - 1
 
-        return Observable.fromCallable {
-            val allMangas = mutableListOf<SManga>()
-            val seenIds = mutableSetOf<String>()
-            var lastRawSize = 0
+        val allMangas = mutableListOf<SManga>()
+        val seenIds = mutableSetOf<String>()
+        var lastRawSize = 0
 
-            for (apiPage in startApiPage..endApiPage) {
-                val request = requestFactory(apiPage)
-                val response = client.newCall(request).execute()
-                val data = response.parseAs<List<BrowseManga>>()
-                lastRawSize = data.size
+        for (apiPage in startApiPage..endApiPage) {
+            val data = fetchPage(apiPage)
+            lastRawSize = data.size
 
-                data.filter { it.type != "Novel" && it.url.isNotBlank() }
-                    .forEach {
-                        if (seenIds.add(it.id)) {
-                            allMangas.add(browseMangaToSManga(it))
-                        }
+            data.filter { it.type != "Novel" && it.url.isNotBlank() }
+                .forEach {
+                    if (seenIds.add(it.id)) {
+                        allMangas.add(browseMangaToSManga(it))
                     }
+                }
 
-                if (data.size < 24) break
-            }
-
-            MangasPage(
-                mangas = allMangas,
-                hasNextPage = lastRawSize == 24,
-            )
+            if (data.size < 24) break
         }
+
+        return MangasPage(
+            mangas = allMangas,
+            hasNextPage = lastRawSize == 24,
+        )
     }
 
     companion object {

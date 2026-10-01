@@ -1,38 +1,29 @@
 package eu.kanade.tachiyomi.extension.fr.scantradunion
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Headers
+import keiyoushi.utils.tryParseDate
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.text.ParseException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class ScantradUnion : HttpSource() {
-
-    override val supportsLatest = true
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+abstract class ScantradUnion : KeiSource() {
 
     // ========================= Popular =========================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/projets/", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/projets/").asJsoup()
         val mangas = document.select(".index-top3-a").map { element ->
             SManga.create().apply {
                 title = formatMangaTitle(element.select(".index-top3-title").text())
@@ -47,10 +38,8 @@ abstract class ScantradUnion : HttpSource() {
 
     // ========================= Latest =========================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select(".dernieresmaj .colonne").map { element ->
             SManga.create().apply {
                 val titleLink = element.selectFirst("a.text-truncate")!!
@@ -66,28 +55,29 @@ abstract class ScantradUnion : HttpSource() {
 
     // ========================= Search =========================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith(baseUrl)) {
-            val url = query.toHttpUrlOrNull()
-            if (url != null) {
-                val segments = url.pathSegments.filter { it.isNotBlank() }
-                if (segments.isEmpty()) return latestUpdatesRequest(page)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
 
-                val firstSegment = segments[0]
-                if (firstSegment == "manga" || firstSegment == "projets") {
-                    return GET(query, headers)
-                }
+        val segments = url.pathSegments.filter { it.isNotBlank() }
+        if (segments.isEmpty()) return null
 
-                if (firstSegment == "read" && segments.size >= 2) {
-                    return GET("$baseUrl/manga/${segments[1]}/", headers)
-                }
-
-                if (segments.size == 1) {
-                    return GET("$baseUrl/manga/$firstSegment/", headers)
-                }
-            }
+        val firstSegment = segments[0]
+        val mangaUrl = when {
+            firstSegment == "manga" || firstSegment == "projets" -> url.toString()
+            firstSegment == "read" && segments.size >= 2 -> "$baseUrl/manga/${segments[1]}/"
+            segments.size == 1 -> "$baseUrl/manga/$firstSegment/"
+            else -> return null
         }
 
+        val document = client.get(mangaUrl).asJsoup()
+        if (document.selectFirst(".projet-description") == null) return null
+
+        return document.toSManga().apply {
+            setUrlWithoutDomain(document.location())
+        }
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addQueryParameter("s", query)
             addQueryParameter("asp_active", "1")
@@ -95,18 +85,7 @@ abstract class ScantradUnion : HttpSource() {
             addQueryParameter("p_asp_data", SEARCH_URL_SUFFIX_DATA)
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        if (document.selectFirst(".projet-description") != null) {
-            val manga = document.toSManga().apply {
-                setUrlWithoutDomain(response.request.url.toString())
-            }
-            return MangasPage(listOf(manga), false)
-        }
+        val document = client.get(url).asJsoup()
 
         val mangas = document.select("article.post-outer").map { element ->
             SManga.create().apply {
@@ -120,9 +99,17 @@ abstract class ScantradUnion : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    // ========================= Details =========================
+    // ========================= Details & Chapters =========================
 
-    override fun mangaDetailsParse(response: Response): SManga = response.asJsoup().toSManga()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(document.toSManga(), document.toChapterList())
+    }
 
     private fun Document.toSManga(): SManga = SManga.create().apply {
         val title = select(".projet-description h2").text()
@@ -137,36 +124,27 @@ abstract class ScantradUnion : HttpSource() {
         status = mapMangaStatusStringToConst(statusStr)
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    private fun Document.toChapterList(): List<SChapter> = select(".links-projects li").map { element ->
+        SChapter.create().apply {
+            val chapterNumberStr = element.select(".chapter-number").text()
+            val dateUploadStr = element.select(".name-chapter").first()?.children()?.getOrNull(2)?.text() ?: ""
+            val chapterName = element.select(".chapter-name").text()
+            val url = element.select(".btnlel").map { it.attr("href") }
+                .firstOrNull { it.startsWith("https://scantrad-union.com/read/") }
+                ?: element.select(".btnlel").attr("href") // Fallback
+            val chapterNumberStrFormatted = formatMangaNumber(chapterNumberStr)
 
-    // ========================= Chapters =========================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(".links-projects li").map { element ->
-            SChapter.create().apply {
-                val chapterNumberStr = element.select(".chapter-number").text()
-                val dateUploadStr = element.select(".name-chapter").first()?.children()?.getOrNull(2)?.text() ?: ""
-                val chapterName = element.select(".chapter-name").text()
-                val url = element.select(".btnlel").map { it.attr("href") }
-                    .firstOrNull { it.startsWith("https://scantrad-union.com/read/") }
-                    ?: element.select(".btnlel").attr("href") // Fallback
-                val chapterNumberStrFormatted = formatMangaNumber(chapterNumberStr)
-
-                name = listOf(chapterNumberStrFormatted, chapterName).filter(String::isNotBlank).joinToString(" - ")
-                date_upload = parseFrenchDateFromString(dateUploadStr)
-                scanlator = element.select(".btnteam").joinToString(" ") { it.text() }
-                setUrlWithoutDomain(url)
-            }
+            name = listOf(chapterNumberStrFormatted, chapterName).filter(String::isNotBlank).joinToString(" - ")
+            date_upload = DATE_FORMAT.tryParseDate(dateUploadStr)
+            scanlator = element.select(".btnteam").joinToString(" ") { it.text() }
+            setUrlWithoutDomain(url)
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
     // ========================= Pages =========================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("#webtoon a img")
             .map { imgElem ->
                 val imgElemDataSrc = imgElem.attr("data-src")
@@ -180,19 +158,11 @@ abstract class ScantradUnion : HttpSource() {
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ========================= Utils =========================
 
     private fun formatMangaNumber(value: String): String = value.removePrefix("#").trim()
 
     private fun formatMangaTitle(value: String): String = value.removePrefix("[Partenaire]").trim()
-
-    private fun parseFrenchDateFromString(value: String): Long = try {
-        DATE_FORMAT.parse(value)?.time ?: 0L
-    } catch (ex: ParseException) {
-        0L
-    }
 
     private fun mapMangaStatusStringToConst(status: String): Int = when (status.trim().lowercase(Locale.FRENCH)) {
         "en cours" -> SManga.ONGOING
@@ -204,8 +174,6 @@ abstract class ScantradUnion : HttpSource() {
     companion object {
         private const val SEARCH_URL_SUFFIX_DATA = "YXNwX2dlbiU1QiU1RD10aXRsZSZjdXN0b21zZXQlNUIlNUQ9bWFuZ2E="
 
-        private val DATE_FORMAT by lazy {
-            SimpleDateFormat("dd-MM-yyyy", Locale.FRANCE)
-        }
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("d-M-yyyy", Locale.FRANCE)
     }
 }

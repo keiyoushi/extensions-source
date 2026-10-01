@@ -1,125 +1,95 @@
 package eu.kanade.tachiyomi.extension.all.ososedki
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Source
-abstract class Ososedki : HttpSource() {
-    override val supportsLatest = true
+abstract class Ososedki : KeiSource() {
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::imageFallbackInterceptor)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::imageFallbackInterceptor)
 
     // ========================= Popular =========================
 
-    override fun popularMangaRequest(page: Int): Request = albumsApiRequest(
+    override suspend fun getPopularManga(page: Int): MangasPage = getAlbums(
         page = page,
         type = "top",
         value = "1",
     )
 
-    override fun popularMangaParse(response: Response): MangasPage = parseAlbumsResponse(response)
-
     // ========================= Latest =========================
 
-    override fun latestUpdatesRequest(page: Int): Request = albumsApiRequest(page = page)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getAlbums(page = page)
 
     // ========================= Search =========================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val deepLinkUrl = query.trim()
-            .toHttpUrlOrNull()
-            ?.takeIf { isSupportedHost(it.host) }
-
-        val albumId = deepLinkUrl
-            ?.pathSegments
-            ?.toAlbumIdOrNull()
-
-        if (albumId != null) {
-            val manga = SManga.create().apply {
-                url = albumId
-            }
-
-            return fetchMangaDetails(manga).map {
-                MangasPage(
-                    mangas = listOf(it),
-                    hasNextPage = false,
-                )
-            }
+    override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
+        if (!isSupportedHost(url.host)) {
+            return MangasPage(emptyList(), false)
         }
 
-        return super.fetchSearchManga(page, query, filters)
+        val albumId = url.pathSegments.toAlbumIdOrNull()
+        if (albumId != null) {
+            val manga = fetchMangaUpdate(
+                manga = SManga.create().apply { this.url = albumId },
+                chapters = emptyList(),
+                fetchDetails = true,
+                fetchChapters = false,
+            ).manga
+
+            return MangasPage(listOf(manga), false)
+        }
+
+        val (type, value) = url.pathSegments.toTypeAndValueOrNull()
+            ?: return MangasPage(emptyList(), false)
+
+        return getAlbums(page = page, type = type, value = value)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val trimmedQuery = query.trim()
 
-        val deepLinkUrl = trimmedQuery
-            .toHttpUrlOrNull()
-            ?.takeIf { isSupportedHost(it.host) }
-
-        val deeplinkTypeAndValue = deepLinkUrl
-            ?.pathSegments
-            ?.toTypeAndValueOrNull()
-
-        if (deeplinkTypeAndValue != null) {
-            return albumsApiRequest(
-                page = page,
-                type = deeplinkTypeAndValue.first,
-                value = deeplinkTypeAndValue.second,
-            )
-        }
-
         if (trimmedQuery.isBlank()) {
-            return popularMangaRequest(page)
+            return getPopularManga(page)
         }
 
-        return albumsApiRequest(
+        return getAlbums(
             page = page,
             type = "search",
             value = trimmedQuery,
         )
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
     // ========================= Details =========================
 
     override fun getMangaUrl(manga: SManga): String = buildPhotoUrl(manga.url).toString()
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(buildPhotoUrl(manga.url), headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val albumId = response.request.url.pathSegments.toAlbumIdOrNull()
-            ?: throw Exception("Unable to parse album id from URL: ${response.request.url}")
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(buildPhotoUrl(manga.url)).asJsoup()
+        val albumId = manga.url
 
         val modelTags = document.extractTags(AUTHOR_SELECTOR)
         val cosplayTags = document.extractTags(COSPLAY_SELECTOR)
@@ -145,7 +115,7 @@ abstract class Ososedki : HttpSource() {
             throw Exception("Title is missing for album id: $albumId")
         }
 
-        return SManga.create().apply {
+        val updatedManga = SManga.create().apply {
             url = albumId
             title = parsedTitle
             thumbnail_url = getCoverFromAlbumId(albumId)
@@ -164,35 +134,25 @@ abstract class Ososedki : HttpSource() {
             status = SManga.COMPLETED
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
+
+        val chapter = SChapter.create().apply {
+            url = albumId
+            name = "Gallery"
+            chapter_number = 0F
+            date_upload = parseUploadDate(document)
+        }
+
+        return SMangaUpdate(updatedManga, listOf(chapter))
     }
 
     // ========================= Chapters =========================
 
     override fun getChapterUrl(chapter: SChapter): String = buildPhotoUrl(chapter.url).toString()
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val albumId = response.request.url.pathSegments.toAlbumIdOrNull()
-            ?: throw Exception("Unable to parse album id from URL: ${response.request.url}")
-
-        return listOf(
-            SChapter.create().apply {
-                url = albumId
-                name = "Gallery"
-                chapter_number = 0F
-                date_upload = parseUploadDate(document)
-            },
-        )
-    }
-
     // ========================= Pages =========================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(buildPhotoUrl(chapter.url), headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(buildPhotoUrl(chapter.url)).asJsoup()
 
         val imageUrls = document.select(PAGE_SELECTOR)
             .map { it.absUrl("href") }
@@ -205,9 +165,7 @@ abstract class Ososedki : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private fun albumsApiRequest(page: Int, type: String? = null, value: String? = null): Request {
+    private suspend fun getAlbums(page: Int, type: String? = null, value: String? = null): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("api")
             .addPathSegment("albums")
@@ -220,11 +178,7 @@ abstract class Ososedki : HttpSource() {
             }
             .build()
 
-        return GET(url, headers)
-    }
-
-    private fun parseAlbumsResponse(response: Response): MangasPage {
-        val data = response.parseAs<AlbumsResponseDto>()
+        val data = client.get(url).parseAs<AlbumsResponseDto>()
         val document = Jsoup.parseBodyFragment(data.html, baseUrl)
 
         val mangas = document.select(ENTRY_SELECTOR)
@@ -306,17 +260,8 @@ abstract class Ososedki : HttpSource() {
         val dateString = DATE_PUBLISHED_REGEX.find(jsonLd)
             ?.groupValues
             ?.getOrNull(1)
-            .orEmpty()
 
-        if (dateString.isBlank()) {
-            return 0L
-        }
-
-        return try {
-            DATE_FORMAT.parse(dateString)?.time ?: 0L
-        } catch (_: ParseException) {
-            0L
-        }
+        return Instant.tryParse(dateString)
     }
 
     private fun buildPhotoUrl(albumId: String): HttpUrl = baseUrl.toHttpUrl().newBuilder()
@@ -389,7 +334,6 @@ abstract class Ososedki : HttpSource() {
         private val DATE_PUBLISHED_REGEX = "\"datePublished\":\"([^\"]+)\"".toRegex()
         private val TITLE_SUFFIX_REGEX =
             "\\s*\\(\\d+\\s+leaked\\s+photos\\)\\s+from\\s+Onlyfans,\\s+Patreon\\s+and\\s+Fansly\\s*$".toRegex(RegexOption.IGNORE_CASE)
-        private val DATE_FORMAT by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH) }
 
         private val SUPPORTED_FILTER_TYPES = setOf(
             "model",

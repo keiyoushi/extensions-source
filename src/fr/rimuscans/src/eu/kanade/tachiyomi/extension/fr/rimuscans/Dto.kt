@@ -5,13 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+import kotlin.time.Instant
 
 // ----- /api/series (listing) -----
 
@@ -63,7 +57,7 @@ class ComicSeriesLd(
             if (alts.isNotEmpty()) {
                 if (isNotEmpty()) append("\n\n")
                 append("Titres alternatifs : ")
-                append(alts.joinToString(", "))
+                append(alts.joinToString())
             }
         }.ifEmpty { null }
         author = this@ComicSeriesLd.author?.name?.trim()?.takeIf { it.isNotEmpty() }
@@ -75,7 +69,7 @@ class ComicSeriesLd(
             "annulé", "annule", "abandonné", "abandonne", "cancelled" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        genre = (listOfNotNull(typeLabel.toTypeLabel()) + this@ComicSeriesLd.genre).joinToString(", ")
+        genre = (listOfNotNull(typeLabel.toTypeLabel()) + this@ComicSeriesLd.genre).joinToString()
     }
 
     private fun String?.toTypeLabel(): String? = when (this?.lowercase()) {
@@ -117,7 +111,7 @@ class NextChapterDto(
         }
         chapter_number = number.toFloat()
         scanlator = "Rimu Scans"
-        date_upload = dateFormat.tryParse(releaseDate)
+        date_upload = Instant.tryParse(releaseDate)
     }
 }
 

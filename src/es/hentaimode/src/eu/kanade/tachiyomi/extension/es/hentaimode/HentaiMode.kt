@@ -1,42 +1,35 @@
 package eu.kanade.tachiyomi.extension.es.hentaimode
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 
 @Source
-abstract class HentaiMode : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+abstract class HentaiMode : KeiSource() {
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrlHost }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.host == baseUrlHost }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get(baseUrl).asJsoup())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("div.row div[class*=\"book-list\"] > a").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
@@ -48,54 +41,52 @@ abstract class HentaiMode : HttpSource() {
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrlHost) {
-                throw Exception("Unsupported url")
-            }
-            val item = url.pathSegments[1]
-            return fetchSearchManga(page, "$PREFIX_SEARCH$item", filters)
-        }
-        return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/g/$id", headers))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrlHost) return null
+        val id = url.pathSegments.getOrNull(1) ?: return null
+
+        val document = client.get("$baseUrl/g/$id").asJsoup()
+        return mangaDetailsParse(document).apply {
+            setUrlWithoutDomain(document.location())
         }
     }
 
-    private fun searchMangaByIdParse(response: Response): MangasPage {
-        val doc = response.asJsoup()
-        val details = mangaDetailsParse(doc).apply {
-            setUrlWithoutDomain(doc.location())
-        }
-        return MangasPage(listOf(details), false)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         require(query.length >= 3) { "Please use at least 3 characters!" }
 
         val url = "$baseUrl/buscar".toHttpUrl()
             .newBuilder()
             .addQueryParameter("s", query)
             .build()
-        return GET(url, headers)
+        return parseMangaList(client.get(url).asJsoup())
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =========================== Manga Details ============================
     private val additionalInfos = listOf("Serie", "Tipo", "Personajes", "Idioma")
 
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = if (fetchDetails) {
+            mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup())
+        } else {
+            manga
+        }
+
+        val chapter = SChapter.create().apply {
+            url = manga.url.replace("/g/", "/leer/")
+            chapter_number = 1F
+            name = "Chapter"
+        }
+
+        return SMangaUpdate(details, listOf(chapter))
+    }
 
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
         thumbnail_url = document.selectFirst("div#cover img")?.absUrl("src")
@@ -124,22 +115,9 @@ abstract class HentaiMode : HttpSource() {
         .joinToString { it.text() }
         .takeIf(String::isNotEmpty)
 
-    // ============================== Chapters ==============================
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapter = SChapter.create().apply {
-            url = manga.url.replace("/g/", "/leer/")
-            chapter_number = 1F
-            name = "Chapter"
-        }
-
-        return Observable.just(listOf(chapter))
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
     // =============================== Pages ================================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val script = document.selectFirst("script:containsData(page_image)")!!.data()
         val pagePaths = script.substringAfter("pages = [")
             .substringBefore(",]")
@@ -152,11 +130,5 @@ abstract class HentaiMode : HttpSource() {
         return pagePaths.mapIndexed { index, path ->
             Page(index, imageUrl = path)
         }
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    companion object {
-        const val PREFIX_SEARCH = "id:"
     }
 }

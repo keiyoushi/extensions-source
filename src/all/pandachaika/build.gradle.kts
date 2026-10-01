@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "PandaChaika"
-    versionCode = 4
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf(
         "all", "en", "zh", "ko", "es", "ru", "pt", "fr", "th", "vi",

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.taimumangas
 
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -103,6 +104,10 @@ class PageInfo(
     val url: String,
     val number: Int = 0,
 )
+
+internal fun LibraryResponse.toMangasPage(): MangasPage = MangasPage(items.map { it.toSManga() }, hasNextPage)
+
+internal fun UpdatesResponse.toMangasPage(): MangasPage = MangasPage(items.map { it.toSManga() }, hasMore)
 
 internal fun SeriesSummary.toSManga(): SManga = SManga.create().apply {
     url = identifier

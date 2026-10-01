@@ -1,61 +1,41 @@
 package eu.kanade.tachiyomi.extension.it.zeurelscan
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import keiyoushi.utils.tryParseDate
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Document
+import java.time.format.DateTimeFormatter
+
+private val dateFormat = DateTimeFormatter.ofPattern("d/M/yyyy")
 
 @Source
-abstract class ZeurelScan : HttpSource() {
-
-    override val supportsLatest = true
-
-    private val dateFormat = SimpleDateFormat("dd/mm/yyyy", Locale.ITALY)
-
-    // Caching results for search
-    private val mangaList: MutableList<SManga> = mutableListOf()
+abstract class ZeurelScan : KeiSource() {
 
     // Popular (not actually sorted as site has no such functionality)
 
-    override fun popularMangaRequest(page: Int): Request = GET(
-        baseUrl + "/series",
-        headers,
-    )
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchSeries(), false)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        mangaList.clear()
-        response.asJsoup().select("a.series-card").forEach {
-            val manga = SManga.create().apply {
-                setUrlWithoutDomain(it.absUrl("href"))
-                title = it.select("span.series-title").text()
-                thumbnail_url = it.select("img").attr("src")
-            }
-            mangaList.add(manga)
+    private suspend fun fetchSeries(): List<SManga> = client.get("$baseUrl/series").asJsoup().select("a.series-card").map {
+        SManga.create().apply {
+            setUrlWithoutDomain(it.absUrl("href"))
+            title = it.select("span.series-title").text()
+            thumbnail_url = it.select("img").attr("src")
         }
-        return MangasPage(mangaList, false)
     }
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(
-        baseUrl + "/ultimi",
-        headers,
-    )
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/ultimi").asJsoup()
         // Cache titles for deduplication
         val titles = mutableListOf<String>()
 
@@ -64,7 +44,8 @@ abstract class ZeurelScan : HttpSource() {
             if (!titles.any { title -> title.contains(element.select("span.latest-title").text()) }) {
                 titles += element.select("span.latest-title").text()
                 SManga.create().apply {
-                    setUrlWithoutDomain(element.absUrl("href"))
+                    // Rows link to the chapter reader (/read/<slug>/<chapter>)
+                    url = "/serie/" + element.absUrl("href").toHttpUrl().pathSegments[1]
                     title = element.select("span.latest-title").text()
                     thumbnail_url = element.select("img.latest-thumb").attr("src")
                 }
@@ -75,21 +56,24 @@ abstract class ZeurelScan : HttpSource() {
         return MangasPage(latestManga, false)
     }
 
-    // Search from results retrieved by popularMangaRequest
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(
-        MangasPage(mangaList.filter { it.title.contains(query, true) }, false),
-    )
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(fetchSeries().filter { it.title.contains(query, true) }, false)
 
     // Details
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(parseMangaDetails(document, manga.url), parseChapterList(document))
+    }
+
+    private fun parseMangaDetails(document: Document, mangaUrl: String) = SManga.create().apply {
         val info = document.selectFirst("div.series-header")!!
 
+        url = mangaUrl
         title = info.selectFirst("h1")!!.text().trim()
         author = info.selectFirst("p:contains(Autore)")!!.wholeOwnText().trim()
         artist = info.selectFirst("p:contains(Artista)")!!.wholeOwnText().trim()
@@ -108,13 +92,8 @@ abstract class ZeurelScan : HttpSource() {
 
     // Chapters
 
-    // Continue parsing even if the server returns HTTP 400
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservable()
-        .map(::pageListParse)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val list = response.asJsoup().select("div.chapter:has(a)")
+    private fun parseChapterList(document: Document): List<SChapter> {
+        val list = document.select("div.chapter:has(a)")
         var lastChapter = 0f
         return list.map {
             val str = it.selectFirst("a")!!.wholeOwnText().substringAfter("#")
@@ -143,15 +122,16 @@ abstract class ZeurelScan : HttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.selectFirst("a")!!.absUrl("href"))
                 name = title
-                date_upload = dateFormat.tryParse(it.selectFirst("span.chapter-date")!!.text())
+                // text is "dd/MM/yyyy – <views>"
+                date_upload = dateFormat.tryParseDate(it.selectFirst("span.chapter-date")!!.text().substringBefore(" "))
                 chapter_number = chapterNum
             }
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.reader img").mapIndexed { i, element ->
-        Page(i, "", element.attr("abs:src"))
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // Continue parsing even if the server returns HTTP 400
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), ensureSuccess = false).asJsoup()
+        .select("div.reader img").mapIndexed { i, element ->
+            Page(i, imageUrl = element.attr("abs:src"))
+        }
 }

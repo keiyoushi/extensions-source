@@ -1,102 +1,64 @@
 package eu.kanade.tachiyomi.extension.en.aurora
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class Aurora : HttpSource() {
+abstract class Aurora : KeiSource() {
 
     override val supportsLatest = false
-    private val authorName = "OSP-Red"
-    private val auroraGenre = "fantasy"
-    private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
+    private val dateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.US)
 
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+    /**
+     * Because the comic is updated 1 page at a time the chapters are turned into different mangas
+     * so that the pages can be turned into different chapters which can be automatically updated by
+     * Tachiyomi.
+     *
+     * @return List of all Chapters as separate mangas
+     */
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val chapterOverviewDoc = client.get("$baseUrl/archive/").asJsoup()
+        val chapterBlockElements = chapterOverviewDoc.select(".wp-block-image:has(a)")
+        val mangasFromChapters = chapterBlockElements
+            .mapIndexed { chapterIndex, chapter ->
+                val chapterOverviewLink = chapter.selectFirst("a")!!
+                val chapterOverviewUrl = chapterOverviewLink.attr("href")
+                val chapterTitle = "$name - ${chapterOverviewLink.text()}"
+                val chapterThumbnail = chapter.selectFirst("img")!!.attr("src")
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(fetchChapterListTR(baseUrl + manga.url, mutableListOf()).reversed())
-
-    private tailrec fun fetchChapterListTR(
-        currentUrl: String,
-        foundChapters: MutableList<SChapter>,
-    ): MutableList<SChapter> {
-        val currentPage = client.newCall(GET(currentUrl, headers)).execute().asJsoup()
-
-        val pagesAsChapters = currentPage.select(".post-content")
-            .map { postContent ->
-                val chapterUrl = postContent.select("a.webcomic-link").attr("href")
-                val title = postContent.select(".post-title a").text()
-                val chapterNr = title.substringAfter('.').toFloat()
-                val dateString = postContent.select(".post-date").text()
-                val date = dateFormat.parse(dateString)?.time ?: 0L
-
-                SChapter.create().apply {
-                    setUrlWithoutDomain(chapterUrl)
-                    name = title
-                    chapter_number = chapterNr
-                    date_upload = date
+                SManga.create().apply {
+                    setUrlWithoutDomain(chapterOverviewUrl)
+                    title = chapterTitle
+                    author = "OSP-Red"
+                    description = auroraDescription
+                    genre = "fantasy"
+                    // this will mark every chapter except the last one as completed
+                    status =
+                        if (chapterIndex >= chapterBlockElements.size - 1) {
+                            SManga.UNKNOWN
+                        } else {
+                            SManga.COMPLETED
+                        }
+                    thumbnail_url = chapterThumbnail
+                    initialized = true
                 }
             }
 
-        foundChapters.addAll(pagesAsChapters)
-
-        // get a potential next page of the chapter overview
-        val nextPageNavUrl = currentPage.selectFirst(".paginav-next a")?.attr("href")
-        // check if a next page actually exits and if not exit
-        return if (nextPageNavUrl == null) {
-            foundChapters
-        } else {
-            fetchChapterListTR(nextPageNavUrl, foundChapters)
-        }
-    }
-
-    override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl)
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val chapterNr = manga.title.substringAfter(' ').toFloatOrNull() ?: 0f
-
-        val updatedManga = SManga.create().apply {
-            setUrlWithoutDomain(manga.url)
-            title = manga.title
-            artist = authorName
-            author = authorName
-            description = auroraDescription
-            genre = auroraGenre
-            status = getChapterStatusForChapter(chapterNr)
-            thumbnail_url = manga.thumbnail_url
-        }
-        return Observable.just(updatedManga)
-    }
-
-    /**
-     * @param chapter chapter the status should be fetched for
-     * @return the status of the chapter (as Enum value of SManga because chapters are mangas)
-     */
-    private fun getChapterStatusForChapter(chapter: Float): Int {
-        val newestPage = client.newCall(GET(baseUrl)).execute().asJsoup()
-        val postTitle = newestPage.selectFirst(".post-title")!!.text()
-        // title is "<arc>.<chapter>.<page>"
-        val chapterOfNewestPage = postTitle.split(".")[1].toFloat()
-        return if (chapter >= chapterOfNewestPage) SManga.UNKNOWN else SManga.COMPLETED
+        return MangasPage(mangasFromChapters, false)
     }
 
     private val auroraDescription = """
@@ -107,81 +69,53 @@ abstract class Aurora : HttpSource() {
     Find Red’s general ramblings on Twitter, alongside her cohost Blue, at OSPYouTube.
     """.trimIndent()
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val singlePageChapterDoc = client.newCall(
-            GET(baseUrl + chapter.url, headers),
-        ).execute().asJsoup()
-        val imageUrl = singlePageChapterDoc.selectFirst(
-            ".webcomic-media .webcomic-link .attachment-full",
-        )!!.attr("src")
-        val singlePageChapter = Page(0, "", imageUrl)
-
-        return Observable.just(listOf(singlePageChapter))
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedChapters = if (fetchChapters) {
+            fetchChapterListTR(baseUrl + manga.url)
+        } else {
+            chapters
+        }
+        return SMangaUpdate(manga, updatedChapters)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
+    private suspend fun fetchChapterListTR(currentUrl: String): List<SChapter> {
+        val firstPage = client.get(currentUrl).asJsoup()
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+        return coroutineScope {
+            listOf(async { firstPage }) +
+                firstPage.select("#paginav a[title]").drop(1)
+                    .map { async { client.get(it.attr("href")).asJsoup() } }
+        }.awaitAll().flatMap { page ->
+            page.select(".post-content").map { postContent ->
+                val chapterUrl = postContent.select("a.webcomic-link").attr("href")
+                val title = postContent.select(".post-title a").text()
+                val chapterNo = title.substringAfter('.').substringBefore('-').toFloat()
+                val date = dateFormat.tryParseDate(
+                    postContent.select(".post-date").text(),
+                )
 
-    /**
-     * Because the comic is updated 1 page at a time the chapters are turned into different mangas
-     * so that the pages can be turned into different chapters which can be automatically updated by
-     * Tachiyomi.
-     *
-     * @return List of all Chapters as separate mangas
-     */
-    private fun fetchChaptersAsMangas(): List<SManga> {
-        val descriptionText = auroraDescription
-
-        val chapterArchiveUrl = "$baseUrl/archive/"
-
-        val chapterOverviewDoc = client.newCall(GET(chapterArchiveUrl, headers)).execute().asJsoup()
-        val chapterBlockElements = chapterOverviewDoc.select(".wp-block-image:has(a)")
-        val mangasFromChapters: List<SManga> = chapterBlockElements
-            .mapIndexed { chapterIndex, chapter ->
-                val chapterOverviewLink = chapter.selectFirst("a")!!
-                val chapterOverviewUrl = chapterOverviewLink.attr("href")
-                val chapterTitle = "$name - ${chapterOverviewLink.text()}"
-                val chapterThumbnail = chapter.selectFirst("img")!!.attr("src")
-
-                SManga.create().apply {
-                    setUrlWithoutDomain(chapterOverviewUrl)
-                    title = chapterTitle
-                    author = authorName
-                    artist = authorName
-                    description = descriptionText
-                    genre = auroraGenre
-                    // this will mark every chapter except the last one as completed
-                    status =
-                        if (chapterIndex >= chapterBlockElements.size - 1) {
-                            SManga.UNKNOWN
-                        } else {
-                            SManga.COMPLETED
-                        }
-                    thumbnail_url = chapterThumbnail
+                SChapter.create().apply {
+                    setUrlWithoutDomain(chapterUrl)
+                    name = title
+                    chapter_number = chapterNo
+                    date_upload = date
                 }
             }
-
-        return mangasFromChapters
+        }
+            .toMutableList().reversed()
     }
 
-    /**
-     * Turn the list of chapters as mangas into the mangas page that can be returned for every
-     * request.
-     */
-    private fun generateAuroraMangasPage(): MangasPage = MangasPage(fetchChaptersAsMangas(), false)
+    override suspend fun getPageList(chapter: SChapter) = client.get(baseUrl + chapter.url).asJsoup().select(
+        ".webcomic-media .webcomic-link .attachment-full",
+    ).mapIndexed { idx, page ->
+        Page(idx, imageUrl = page.attr("src"))
+    }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(generateAuroraMangasPage())
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 }

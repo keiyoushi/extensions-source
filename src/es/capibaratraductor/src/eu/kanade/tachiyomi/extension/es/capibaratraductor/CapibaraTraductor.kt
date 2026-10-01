@@ -1,61 +1,46 @@
 package eu.kanade.tachiyomi.extension.es.capibaratraductor
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class CapibaraTraductor : HttpSource() {
+abstract class CapibaraTraductor : KeiSource() {
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { it.host == baseUrlHost }
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3) { it.host == baseUrlHost }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    private fun getScanHeaders(organizationSlug: String): Headers = headersBuilder()
+    private fun getScanHeaders(organizationSlug: String): Headers = headers.newBuilder()
         .add("x-organization", organizationSlug)
         .build()
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular".toHttpUrl(), page, headers)
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=latest".toHttpUrl(), page, headers)
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=latest", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/api/manga-custom".toHttpUrl().newBuilder()
 
         url.setQueryParameter("page", page.toString())
         url.setQueryParameter("limit", PAGE_LIMIT.toString())
 
-        var headers = headersBuilder()
+        val headers = headers.newBuilder()
 
         filters.forEach { filter ->
             when (filter) {
@@ -67,12 +52,11 @@ abstract class CapibaraTraductor : HttpSource() {
 
         if (query.isNotBlank()) url.setQueryParameter("search", query)
 
-        return GET(url.build(), headers.build())
+        return parseMangaList(url.build(), page, headers.build())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val page = response.request.url.queryParameter("page")!!.toInt()
-        val result = response.parseAs<Data<SeriesListDataDto>>()
+    private suspend fun parseMangaList(url: HttpUrl, page: Int, headers: Headers): MangasPage {
+        val result = client.get(url, headers).parseAs<Data<SeriesListDataDto>>()
 
         val mangas = result.data.series.map { it.toSManga() }
         val hasNextPage = page < result.data.maxPage
@@ -80,15 +64,27 @@ abstract class CapibaraTraductor : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList(): FilterList {
-        fetchScanList()
+    override val supportsFilterFetching get() = true
 
+    override suspend fun fetchFilterData(): JsonElement {
+        val sfwScans = fetchAllScans(includeNsfw = false)
+        val nsfwScans = fetchAllScans(includeNsfw = true)
+
+        return buildList {
+            add("Todos" to "")
+            addAll(
+                (sfwScans + nsfwScans)
+                    .distinctBy { it.second }
+                    .sortedBy { it.first },
+            )
+        }.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>()
 
-        if (scanList.isEmpty()) {
-            filters.add(Filter.Header("Presione 'Restablecer' para intentar cargar la lista de scans"))
-        } else {
-            filters.add(ScanlatorFilter("Scanlator", scanList))
+        data?.parseAs<List<Pair<String, String>>>()?.also {
+            filters.add(ScanlatorFilter("Scanlator", it.toTypedArray()))
         }
 
         filters.add(SortByFilter("Ordenar por", getSortList()))
@@ -102,40 +98,7 @@ abstract class CapibaraTraductor : HttpSource() {
         Pair("A-Z", "alphabetical"),
     )
 
-    private var scanList = emptyArray<Pair<String, String>>()
-    private var fetchScansAttempts = 0
-    private var scansState = FiltersState.NOT_FETCHED
-
-    private fun fetchScanList() {
-        if (scansState != FiltersState.NOT_FETCHED || fetchScansAttempts >= 3) {
-            return
-        }
-
-        scansState = FiltersState.FETCHING
-        fetchScansAttempts++
-
-        scope.launch {
-            try {
-                val sfwScans = fetchAllScans(includeNsfw = false)
-                val nsfwScans = fetchAllScans(includeNsfw = true)
-
-                scanList = buildList {
-                    add("Todos" to "")
-                    addAll(
-                        (sfwScans + nsfwScans)
-                            .distinctBy { it.second }
-                            .sortedBy { it.first },
-                    )
-                }.toTypedArray()
-
-                scansState = FiltersState.FETCHED
-            } catch (_: Exception) {
-                scansState = FiltersState.NOT_FETCHED
-            }
-        }
-    }
-
-    private fun fetchAllScans(includeNsfw: Boolean): List<Pair<String, String>> {
+    private suspend fun fetchAllScans(includeNsfw: Boolean): List<Pair<String, String>> {
         val scans = mutableListOf<Pair<String, String>>()
         var page = 1
 
@@ -151,8 +114,7 @@ abstract class CapibaraTraductor : HttpSource() {
                 }
                 .build()
 
-            val response = client.newCall(GET(url, headers))
-                .execute()
+            val response = client.get(url)
                 .parseAs<Data<ScanListDto>>()
                 .data
 
@@ -173,14 +135,24 @@ abstract class CapibaraTraductor : HttpSource() {
         return "$baseUrl/$organizationSlug/manga/$seriesSlug"
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         val (seriesSlug, organizationSlug) = manga.url.split("/", limit = 2)
-        return GET("$baseUrl/api/manga-custom/$seriesSlug", getScanHeaders(organizationSlug))
-    }
+        val result = client.get("$baseUrl/api/manga-custom/$seriesSlug", getScanHeaders(organizationSlug))
+            .parseAs<Data<SeriesDto>>()
+            .data
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<Data<SeriesDto>>()
-        return result.data.toSMangaDetails()
+        val chapterList = result.chapters
+            ?.filter { it.isUnreleased.not() }
+            ?.map { it.toSChapter(result.manga.slug, result.organization.slug) }
+            ?.filter { it.date_upload < System.currentTimeMillis() }
+            ?: emptyList()
+
+        return SMangaUpdate(result.toSMangaDetails(), chapterList)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -189,35 +161,15 @@ abstract class CapibaraTraductor : HttpSource() {
         return "$baseUrl/$organizationSlug/manga/$seriesSlug/chapters/$chapterSlug"
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<Data<SeriesDto>>()
-        val seriesSlug = result.data.manga.slug
-        val organizationSlug = result.data.organization.slug
-        return result.data.chapters
-            ?.filter { it.isUnreleased.not() }
-            ?.map { it.toSChapter(seriesSlug, organizationSlug) }
-            ?.filter { it.date_upload < System.currentTimeMillis() }
-            ?: emptyList()
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (chapterSlug, seriesSlug, organizationSlug) = chapter.url.split("/", limit = 3)
 
-        return GET("$baseUrl/api/manga-custom/$seriesSlug/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<Data<List<PageDto>>>()
+        val result = client.get("$baseUrl/api/manga-custom/$seriesSlug/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
+            .parseAs<Data<List<PageDto>>>()
         return result.data.mapIndexed { i, page ->
             Page(i, imageUrl = page.imageUrl)
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
 
     companion object {
         private const val PAGE_LIMIT = 36

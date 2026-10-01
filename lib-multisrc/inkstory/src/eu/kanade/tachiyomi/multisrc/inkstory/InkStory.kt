@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.inkstory
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -30,6 +31,8 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 
 abstract class InkStory :
     KeiSource(),
@@ -256,12 +259,17 @@ abstract class InkStory :
                     .parseAs<List<BranchDto>>()
                     .associate { it.id to it.publisherName() }
                 val branchType = prefBranch()
-                val branchQuery = prefBranchQuery()
+                val delay = prefDelay()
                 val url = "$API_URL/chapters?bookId=$bookId&moderationStatus=APPROVED"
-                val data = client.get(url).parseAs<List<ChapterDto>>().map { it.toSChapter(branches, manga.url) }
+                val fourDaysAgo = Clock.System.now().minus(4.days).toEpochMilliseconds()
+
+                val data = client.get(url).parseAs<List<ChapterDto>>()
+                    .map { it.toSChapter(branches, manga.url) }
+                    .filter { !delay || it.date_upload <= 0L || it.date_upload <= fourDaysAgo }
                 when (branchType) {
                     "all" -> data
                     "preferred" -> {
+                        val branchQuery = prefBranchQuery()
                         val preferred = if (branchQuery.isNotBlank()) {
                             data.filter { it.scanlator?.contains(branchQuery, ignoreCase = true) == true }.ifEmpty { data }
                         } else {
@@ -395,6 +403,7 @@ abstract class InkStory :
     // ============================== Preferences ===============================
     private fun prefBranch(): String = preferences.getString(PREF_CHAPTER_BRANCH_MODE, DEFAULT_CHAPTER_BRANCH_MODE) ?: DEFAULT_CHAPTER_BRANCH_MODE
     private fun prefBranchQuery(): String = preferences.getString(PREF_PREFERRED_BRANCH_QUERY, DEFAULT_PREFERRED_BRANCH_QUERY) ?: DEFAULT_PREFERRED_BRANCH_QUERY
+    private fun prefDelay(): Boolean = preferences.getBoolean(DELAY_CHAPTERS, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -412,6 +421,14 @@ abstract class InkStory :
             dialogTitle = "Предпочитаемая ветка"
             summary = "Используется в режиме \"Предпочитаемая ветка\" (поиск по части названия команды)"
             setDefaultValue(DEFAULT_PREFERRED_BRANCH_QUERY)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = DELAY_CHAPTERS
+            title = DELAY_CHAPTERS_TITLE
+            summaryOn = DELAY_CHAPTERS_SUM_ON
+            summaryOff = DELAY_CHAPTERS_SUM_OFF
+            setDefaultValue(false)
         }.let(screen::addPreference)
     }
 
@@ -441,6 +458,10 @@ abstract class InkStory :
         private const val DEFAULT_CHAPTER_BRANCH_MODE = "all"
         private const val DEFAULT_PREFERRED_BRANCH_QUERY = ""
         private const val SECRET_KEY = "UySkp0BzPhwlvP2V"
+        private const val DELAY_CHAPTERS = "delay_chapters"
+        private const val DELAY_CHAPTERS_TITLE = "Скрывать главы"
+        private const val DELAY_CHAPTERS_SUM_ON = "Главы новее 4 дней скрыты"
+        private const val DELAY_CHAPTERS_SUM_OFF = "Показываются все главы"
         private val SECRET_KEY_BYTES = SECRET_KEY.toByteArray()
         private val BRANCH_MODE = arrayOf(
             "Все ветки" to "all",

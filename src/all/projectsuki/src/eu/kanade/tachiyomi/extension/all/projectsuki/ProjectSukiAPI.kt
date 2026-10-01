@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
 
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.network.post
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.SerialName
@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
@@ -63,10 +63,10 @@ object ProjectSukiAPI {
      * Represents the data that needs to be sent to [callpageUrl] to obtain the pages of a chapter.
      */
     @Serializable
-    data class PagesRequestData(
-        @SerialName("bookid") val bookID: BookID,
-        @SerialName("chapterid") val chapterID: ChapterID,
-        @SerialName("first") val first: String,
+    class PagesRequestData(
+        @SerialName("bookid") private val bookID: BookID,
+        @SerialName("chapterid") private val chapterID: ChapterID,
+        private val first: String,
     ) {
         init {
             if (first != "true" && first != "false") {
@@ -81,21 +81,18 @@ object ProjectSukiAPI {
     )
 
     /**
-     * Creates a [Request] for the server to send the chapter's pages.
+     * Requests the chapter's pages from the server.
      */
-    fun chapterPagesRequest(headers: Headers, bookID: BookID, chapterID: ChapterID): Request {
+    suspend fun fetchChapterPages(client: OkHttpClient, headers: Headers, bookID: BookID, chapterID: ChapterID): List<Page> {
         val newHeaders: Headers = headers.newBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
         val body = PagesRequestData(bookID, chapterID, "true").toJsonRequestBody()
-        return POST(callpageUrl.toUri().toASCIIString(), newHeaders, body)
+        return parseChapterPagesResponse(client.post(callpageUrl, newHeaders, body))
     }
 
-    /**
-     * Handles the [Response] returned from [chapterPagesRequest]'s [call][okhttp3.OkHttpClient.newCall].
-     */
-    fun parseChapterPagesResponse(response: Response): List<Page> {
+    private fun parseChapterPagesResponse(response: Response): List<Page> {
         val dto = response.parseAs<ChapterPagesResponse>()
         val rawSrc = dto.src
 
@@ -124,8 +121,8 @@ object ProjectSukiAPI {
 
     /** Represents the data that needs to be sent to [apiBookSearchUrl] to obtain the complete list of books that have chapters. */
     @Serializable
-    data class SearchRequestData(
-        @SerialName("hash") val hash: String? = null,
+    class SearchRequestData(
+        private val hash: String? = null,
     )
 
     @Serializable
@@ -139,22 +136,19 @@ object ProjectSukiAPI {
     )
 
     /**
-     * Creates a [Request] for the server to send the books.
+     * Requests the complete list of books from the server.
      */
-    fun bookSearchRequest(headers: Headers): Request {
+    suspend fun fetchBookSearch(client: OkHttpClient, headers: Headers): Map<BookID, BookTitle> {
         val newHeaders: Headers = headers.newBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
-            .add("Referer", homepageUrl.newBuilder().addPathSegment("browse").build().toUri().toASCIIString())
+            .set("Referer", homepageUrl.newBuilder().addPathSegment("browse").build().toUri().toASCIIString())
             .build()
 
         val body = SearchRequestData(null).toJsonRequestBody()
-        return POST(apiBookSearchUrl.toUri().toASCIIString(), newHeaders, body)
+        return parseBookSearchResponse(client.post(apiBookSearchUrl, newHeaders, body))
     }
 
-    /**
-     * Handles the [Response] returned from [parseBookSearchResponse]'s [call][okhttp3.OkHttpClient.newCall].
-     */
-    fun parseBookSearchResponse(response: Response): Map<BookID, BookTitle> {
+    private fun parseBookSearchResponse(response: Response): Map<BookID, BookTitle> {
         val dto = response.parseAs<SearchResponseData>()
         return dto.data.mapValues { it.value.value }
     }

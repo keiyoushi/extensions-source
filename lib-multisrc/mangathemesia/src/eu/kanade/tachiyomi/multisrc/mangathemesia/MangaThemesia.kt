@@ -213,6 +213,7 @@ abstract class MangaThemesia : KeiSource() {
             "seniman",
             "Pengarang",
             "Yazar",
+            "ผู้แต่ง",
         ),
     )
 

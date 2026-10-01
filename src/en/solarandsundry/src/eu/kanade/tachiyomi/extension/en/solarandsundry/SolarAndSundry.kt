@@ -1,39 +1,36 @@
 package eu.kanade.tachiyomi.extension.en.solarandsundry
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 private const val ACCEPT_IMAGE = "image/avif,image/webp,image/*,*/*"
 
 private const val ARCHIVE_URL = "https://sas.ewanb.me"
 
 @Source
-abstract class SolarAndSundry : HttpSource() {
+abstract class SolarAndSundry : KeiSource() {
 
     override val supportsLatest = false
 
     @Serializable
-    private data class SasPage(
-        val page_number: Int,
-        val chapter_number: Int,
-        val image_url: String,
-        val thumbnail_url: String,
+    private class SasPage(
+        @SerialName("page_number") val pageNumber: Int,
+        @SerialName("image_url") val imageUrl: String,
         val name: String,
-        val published_at: String,
+        @SerialName("published_at") val publishedAt: String,
     )
 
     private fun createManga(): SManga = SManga.create().apply {
@@ -46,74 +43,55 @@ abstract class SolarAndSundry : HttpSource() {
         thumbnail_url = "https://imagedelivery.net/zthi1l8fKrUGB5ig08mq-Q/de292ba7-f164-4f43-ec17-1876a7a44600/public"
     }
 
-    private val imgHeaders by lazy {
-        headersBuilder().set("Accept", ACCEPT_IMAGE).build()
-    }
-
-    private fun parseDate(dateStr: String): Long = runCatching { DATE_FORMATTER.parse(dateStr)?.time }
-        .getOrNull() ?: 0L
-
-    companion object {
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
-        }
-    }
-
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(createManga()), false)
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    // Details
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+    // Details & Chapters
 
     override fun getMangaUrl(manga: SManga): String = ARCHIVE_URL
 
-    // Chapters
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = if (fetchDetails) createManga() else manga
+        if (!fetchChapters) return SMangaUpdate(details, chapters)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val pages = Json.decodeFromString<List<SasPage>>(response.body.string())
-        return pages.map { page ->
+        val pages = client.get(baseUrl + manga.url).parseAs<List<SasPage>>()
+        val chapterList = pages.map { page ->
             SChapter.create().apply {
                 name = page.name
-                setUrlWithoutDomain(baseUrl + "/page/" + page.page_number)
-                chapter_number = page.page_number.toFloat()
-                date_upload = parseDate(page.published_at)
+                setUrlWithoutDomain(baseUrl + "/page/" + page.pageNumber)
+                chapter_number = page.pageNumber.toFloat()
+                date_upload = Instant.tryParse(page.publishedAt)
             }
         }.reversed()
+
+        return SMangaUpdate(details, chapterList)
     }
 
     override fun getChapterUrl(chapter: SChapter): String = ARCHIVE_URL + "/comic/" + chapter.chapter_number
 
     // Pages
 
-    override fun pageListParse(response: Response): List<Page> {
-        val page = Json.decodeFromString<SasPage>(response.body.string())
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val page = client.get(baseUrl + chapter.url).parseAs<SasPage>()
 
-        return listOf(Page(0, "", page.image_url))
+        return listOf(Page(0, "", page.imageUrl))
     }
 
-    override fun imageRequest(page: Page) = GET(page.imageUrl!!, imgHeaders)
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Accept", ACCEPT_IMAGE)
+        .build()
 }

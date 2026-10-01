@@ -6,12 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Kodansha"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl = "https://kodansha.us"
+        versionId = 2
     }
 }

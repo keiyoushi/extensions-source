@@ -5,15 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-private val dateFormat by lazy {
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-}
+import kotlin.time.Instant
 
 @Serializable
 class SeriesDto(
@@ -34,10 +26,10 @@ class SeriesDto(
 ) {
     val bookmarkCount: Int get() = count?.bookmarks ?: 0
 
-    val updatedAtMillis: Long get() = dateFormat.tryParse(updatedAt)
+    val updatedAtMillis: Long get() = Instant.tryParse(updatedAt)
 
     fun toSManga(baseUrl: String) = SManga.create().apply {
-        this.title = this@SeriesDto.title
+        this.title = this@SeriesDto.title.trim()
         this.url = slug // store only the slug
         this.thumbnail_url = this@SeriesDto.coverUrl?.let { baseUrl + it }
         this.description = this@SeriesDto.description
@@ -96,7 +88,7 @@ class ChapterDto(
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
         this.url = "$seriesSlug#$id" // store only slug#chapterId
         this.chapter_number = this@ChapterDto.number
-        this.date_upload = dateFormat.tryParse(this@ChapterDto.publishedAt)
+        this.date_upload = Instant.tryParse(this@ChapterDto.publishedAt)
         this.name = buildString {
             append("Capítulo ")
             append(this@ChapterDto.number.toString().removeSuffix(".0"))

@@ -1,47 +1,61 @@
 package eu.kanade.tachiyomi.extension.all.hennojin
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.head
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseZonedDateTime
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.select.Evaluator
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.format.DateTimeFormatter
 
 @Source
-abstract class Hennojin : HttpSource() {
+abstract class Hennojin : KeiSource() {
 
     // Popular is latest
     override val supportsLatest = false
 
-    private val httpUrl by lazy { "$baseUrl/home".toHttpUrl() }
+    private val httpUrl: HttpUrl get() = "$baseUrl/home".toHttpUrl()
 
-    override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun popularMangaRequest(page: Int) = httpUrl.request {
-        when (lang) {
-            "ja" -> {
-                addEncodedPathSegments("page/$page/")
-                addQueryParameter("archive", "raw")
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = httpUrl.newBuilder().apply {
+            when (lang) {
+                "ja" -> {
+                    addEncodedPathSegments("page/$page/")
+                    addQueryParameter("archive", "raw")
+                }
+                else -> addEncodedPathSegments("page/$page")
             }
-            else -> addEncodedPathSegments("page/$page")
-        }
+        }.build()
+
+        return parseMangaList(client.get(url))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        // The search is ignored without the current WordPress nonce, which rotates
+        val nonce = client.get(httpUrl).asJsoup().selectFirst("input#_wpnonce")!!.attr("value")
+        val url = httpUrl.newBuilder()
+            .addEncodedPathSegments("page/$page")
+            .addQueryParameter("keyword", query)
+            .addQueryParameter("_wpnonce", nonce)
+            .build()
+
+        return parseMangaList(client.get(url))
+    }
+
+    private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(".grid-items .layer-content").map { element ->
             SManga.create().apply {
@@ -56,17 +70,15 @@ abstract class Hennojin : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = httpUrl.request {
-        addEncodedPathSegments("page/$page")
-        addQueryParameter("keyword", query)
-        addQueryParameter("_wpnonce", WP_NONCE)
-    }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+        val updatedManga = manga.apply {
             description = document.select(".manga-subtitle + p + p")
                 .joinToString("\n") {
                     it
@@ -84,20 +96,17 @@ abstract class Hennojin : HttpSource() {
             author = document.selectFirst(".tags-list a[href*=/group/]")?.text() ?: artist
             status = SManga.COMPLETED
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+        if (!fetchChapters) {
+            return SMangaUpdate(updatedManga, chapters)
+        }
+
         val date = document
             .selectFirst(".manga-thumbnail > img")
             ?.absUrl("src")
-            ?.let { url ->
-                client.newCall(Request.Builder().url(url).head().build())
-                    .execute()
-                    .use { it.date }
-            }
+            ?.let { url -> client.head(url, ensureSuccess = false).use { it.date } }
 
-        return document.select("a:contains(Read Online)").map {
+        val updatedChapters = document.select("a:contains(Read Online)").map {
             SChapter.create().apply {
                 setUrlWithoutDomain(
                     it
@@ -115,29 +124,16 @@ abstract class Hennojin : HttpSource() {
                 chapter_number = -1f
             }
         }
+
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".slideshow-container > img")
             .mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private inline fun HttpUrl.request(
-        block: HttpUrl.Builder.() -> HttpUrl.Builder,
-    ) = GET(newBuilder().block().build(), headers)
-
     private inline val Response.date: Long
-        get() = headers["Last-Modified"]?.let { httpDate.tryParse(it) } ?: 0L
-
-    companion object {
-        // Let's hope this doesn't change
-        private const val WP_NONCE = "40229f97a5"
-
-        private val httpDate by lazy {
-            SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
-        }
-    }
+        get() = DateTimeFormatter.RFC_1123_DATE_TIME.tryParseZonedDateTime(headers["Last-Modified"])
 }

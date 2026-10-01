@@ -4,26 +4,24 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 
 @Source
 abstract class OnePieceFans :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
@@ -32,12 +30,10 @@ abstract class OnePieceFans :
 
     private val preferences = getPreferences()
 
-    private val defaultThumbnailUrl = "$baseUrl/images/luffy.png"
+    private val defaultThumbnailUrl get() = "$baseUrl/images/luffy.png"
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/fansubs-config.json", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<Map<String, List<Fansub>>>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.get("$baseUrl/fansubs-config.json").parseAs<Map<String, List<Fansub>>>()
 
         val mangas = result[internalLang]?.map { fansub ->
             SManga.create().apply {
@@ -51,41 +47,41 @@ abstract class OnePieceFans :
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = popularMangaRequest(page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getPopularManga(page)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/$internalLang/${manga.url}"
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
-
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/server.php?lang=$internalLang&folderName=${manga.url}", headers)
-
     protected open val chapterPrefix = "Chapter"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val folderName = response.request.url.queryParameter("folderName")
-        val chapters = response.parseAs<List<String>>()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        return chapters.map { number ->
+        val chapterNumbers = client.get("$baseUrl/server.php?lang=$internalLang&folderName=${manga.url}")
+            .parseAs<List<String>>()
+
+        val newChapters = chapterNumbers.map { number ->
             SChapter.create().apply {
                 name = "$chapterPrefix $number"
-                url = "$folderName/$number"
+                url = "${manga.url}/$number"
             }
         }
+
+        return SMangaUpdate(manga, newChapters)
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/$internalLang/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (folderName, chapterNumber) = chapter.url.split("/", limit = 2)
-        return GET("$baseUrl/server.php?lang=$internalLang&folderName=$folderName&chapter=$chapterNumber", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val folderName = response.request.url.queryParameter("folderName")
-        val chapterNumber = response.request.url.queryParameter("chapter")
-        val images = response.parseAs<List<String>>()
+        val images = client.get("$baseUrl/server.php?lang=$internalLang&folderName=$folderName&chapter=$chapterNumber")
+            .parseAs<List<String>>()
 
         return images.mapIndexed { index, fileName ->
             Page(index, imageUrl = "$baseUrl/mangafiles/$internalLang/$folderName/$chapterNumber/$fileName")
@@ -115,11 +111,6 @@ abstract class OnePieceFans :
     }
 
     private fun SharedPreferences.getThumbnailUrl(): String = getString(PREF_THUMBNAIL_URL, defaultThumbnailUrl)!!
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     @Serializable
     class Fansub(

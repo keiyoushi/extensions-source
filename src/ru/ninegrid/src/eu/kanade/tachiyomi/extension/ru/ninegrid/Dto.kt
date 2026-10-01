@@ -12,12 +12,12 @@ class SeriesListResponse(
 
 @Serializable
 class SeriesDto(
-    val id: Int,
-    val name: String,
-    val description: String? = null,
-    val publisherName: String? = null,
-    val genres: List<String> = emptyList(),
-    val status: String? = null,
+    private val id: Int,
+    private val name: String,
+    private val description: String? = null,
+    private val publisherName: String? = null,
+    private val genres: List<String> = emptyList(),
+    private val status: String? = null,
 ) {
     fun toSManga(apiBase: String): SManga = SManga.create().apply {
         url = id.toString()

@@ -5,9 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class ApiResponse<T>(
@@ -85,7 +83,7 @@ class ChapterDto(
             url = id
             name = this@ChapterDto.name ?: "Глава ${chapterNumber.toString().removeSuffix(".0")}"
             chapter_number = chapterNumber.toFloat()
-            date_upload = DATE_FORMAT.tryParse(releaseDate)
+            date_upload = Instant.tryParse(releaseDate)
             if (locked) {
                 scanlator = "🔒 Платно"
             }
@@ -101,10 +99,6 @@ class ChapterDetailDto(
 
 private const val CDN_URL = "https://tomilolib.s3.regru.cloud"
 
-private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
-
 private fun parseStatus(status: String?): Int = when (status) {
     "ongoing" -> SManga.ONGOING
     "completed" -> SManga.COMPLETED
@@ -113,7 +107,7 @@ private fun parseStatus(status: String?): Int = when (status) {
 }
 
 private fun isLockedNow(freeAt: String?): Boolean {
-    val ts = DATE_FORMAT.tryParse(freeAt)
+    val ts = Instant.tryParse(freeAt)
     return ts == 0L || ts > System.currentTimeMillis()
 }
 

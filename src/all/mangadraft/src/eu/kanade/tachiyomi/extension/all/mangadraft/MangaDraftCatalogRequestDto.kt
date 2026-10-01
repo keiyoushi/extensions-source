@@ -3,12 +3,12 @@ package eu.kanade.tachiyomi.extension.all.mangadraft.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MangaDraftCatalogResponseDto(
+class MangaDraftCatalogResponseDto(
     val data: List<MangaDraftCatalogProjectDto> = emptyList(),
 )
 
 @Serializable
-data class MangaDraftCatalogProjectDto(
+class MangaDraftCatalogProjectDto(
     val name: String,
     val avatar: String? = null,
     val genres: String? = null,

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.taddyink
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,34 +9,30 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
+import kotlin.time.Instant
 
 @Source
 abstract class TaddyInk :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val taddyLang = ""
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient by lazy {
-        network.client.newBuilder()
-            .rateLimit(4)
-            .build()
-    }
-
-    private val json: Json by injectLazy()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(4)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -49,45 +44,33 @@ abstract class TaddyInk :
         }.also(screen::addPreference)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/feeds/directory/list".toHttpUrl().newBuilder()
             .addQueryParameter("lang", taddyLang)
             .addQueryParameter("taddyType", "comicseries")
             .addQueryParameter("ua", "tc")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", POPULAR_MANGA_LIMIT.toString())
-        return GET(url.build(), headers)
+            .build()
+
+        return parseManga(client.get(url).parseAs())
     }
 
-    override fun popularMangaParse(response: Response) = parseManga(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        // pathSegments[1] is the slug used to identify the comic
+        url.pathSegments.getOrNull(1) ?: return null
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            // pathSegments[1] is the slug used to identify the comic
-            url.pathSegments.getOrNull(1) ?: throw Exception("Unsupported url")
-
-            val manga = SManga.create().apply { this.url = query }
-            return fetchMangaDetails(manga).map {
-                MangasPage(listOf(it.apply { this.url = query }), false)
-            }
-        }
-
-        return super.fetchSearchManga(page, query, filters)
+        val comic = client.get(url).parseAs<Comic>()
+        return TaddyUtils.getManga(comic).apply { this.url = url.toString() }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val shouldFilterByGenre = filterList.findInstance<GenreFilter>()?.state != 0
-        val shouldFilterByCreator = filterList.findInstance<CreatorFilter>()?.state?.isNotBlank() ?: false
-        val shouldFilterForTags = filterList.findInstance<TagFilter>()?.state?.isNotBlank() ?: false
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
+        val creatorFilter = filters.firstInstanceOrNull<CreatorFilter>()
+        val tagFilter = filters.firstInstanceOrNull<TagFilter>()
 
         val url = "$baseUrl/feeds/directory/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
@@ -97,78 +80,61 @@ abstract class TaddyInk :
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", SEARCH_MANGA_LIMIT.toString())
 
-        if (shouldFilterByGenre) {
-            filterList.findInstance<GenreFilter>()?.let { f ->
-                url.addQueryParameter("genre", f.toUriPart())
-            }
+        if (genreFilter != null && genreFilter.state != 0) {
+            url.addQueryParameter("genre", genreFilter.toUriPart())
         }
 
-        if (shouldFilterByCreator) {
-            filterList.findInstance<CreatorFilter>()?.let { name ->
-                url.addQueryParameter("creator", name.state)
-            }
+        if (creatorFilter != null && creatorFilter.state.isNotBlank()) {
+            url.addQueryParameter("creator", creatorFilter.state)
         }
 
-        if (shouldFilterForTags) {
-            filterList.findInstance<TagFilter>()?.let { tags ->
-                url.addQueryParameter("tags", tags.state)
-            }
+        if (tagFilter != null && tagFilter.state.isNotBlank()) {
+            url.addQueryParameter("tags", tagFilter.state)
         }
 
-        return GET(url.build(), headers)
+        return parseManga(client.get(url.build()).parseAs())
     }
 
-    override fun searchMangaParse(response: Response) = parseManga(response)
-
-    private fun parseManga(response: Response): MangasPage {
-        val comicSeries = json.decodeFromString<ComicResults>(response.body.string())
+    private fun parseManga(comicSeries: ComicResults): MangasPage {
         val mangas = comicSeries.comicseries.map { TaddyUtils.getManga(it) }
         val hasNextPage = comicSeries.comicseries.size == POPULAR_MANGA_LIMIT
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val comicObj = json.decodeFromString<Comic>(response.body.string())
-        return TaddyUtils.getManga(comicObj)
-    }
-
-    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val comic = json.decodeFromString<Comic>(response.body.string())
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val comic = client.get(manga.url).parseAs<Comic>()
         val sssUrl = comic.url
+        val issues = comic.issues.orEmpty()
 
-        val chapters = comic.issues.orEmpty().mapIndexed { i, chapter ->
+        val chapterList = issues.mapIndexed { i, chapter ->
             SChapter.create().apply {
                 url = "$sssUrl#${chapter.identifier}"
                 name = chapter.name
-                date_upload = TaddyUtils.getTime(chapter.datePublished)
-                chapter_number = (comic.issues.orEmpty().size - i).toFloat()
+                date_upload = Instant.tryParse(chapter.datePublished)
+                chapter_number = (issues.size - i).toFloat()
             }
         }
 
-        return chapters.reversed()
+        return SMangaUpdate(TaddyUtils.getManga(comic), chapterList.reversed())
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val requestUrl = response.request.url.toString()
-        val issueUuid = requestUrl.substringAfterLast("#")
-        val comic = json.decodeFromString<Comic>(response.body.string())
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val issueUuid = chapter.url.substringAfterLast("#")
+        val comic = client.get(chapter.url).parseAs<Comic>()
 
         val issue = comic.issues.orEmpty().firstOrNull { it.identifier == issueUuid }
 
         return issue?.stories.orEmpty().mapIndexed { index, storyObj ->
-            Page(index, "", "${storyObj.storyImage?.base_url}${storyObj.storyImage?.story}")
+            Page(index, "", "${storyObj.storyImage?.baseUrl}${storyObj.storyImage?.story}")
         }
     }
 
-    override fun imageUrlParse(response: Response) = ""
-
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         GenreFilter(),
         Filter.Separator(),
         Filter.Header("Filter by the creator or tags:"),
@@ -189,8 +155,6 @@ abstract class TaddyInk :
     private open class UriPartFilter(displayName: String, val vals: List<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
-
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
     companion object {
         private const val TITLE_PREF_KEY = "display_full_title"

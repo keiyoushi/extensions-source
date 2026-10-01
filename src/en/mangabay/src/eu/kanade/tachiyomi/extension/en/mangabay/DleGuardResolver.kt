@@ -8,9 +8,12 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import keiyoushi.utils.applicationContext
 import okhttp3.Interceptor
+import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 object DleGuardResolver {
 
@@ -19,15 +22,22 @@ object DleGuardResolver {
     private const val PARALLEL_TRUST_WINDOW_MS = 5_000L
     private const val TRUST_COOKIE = "__guard_trust"
 
-    @Volatile
+    private val lock = ReentrantLock()
     private var failedOnce = false
-
-    @Volatile
     private var lastSolveAt = 0L
 
     fun interceptor(baseUrl: String): Interceptor = Interceptor { chain ->
         val originalRequest = chain.request()
-        val response = chain.proceed(originalRequest)
+        var response = chain.proceed(originalRequest)
+        // decoy spinner page with nothing to solve, served intermittently; a plain retry usually gets through
+        if (response.isStalled()) {
+            response.close()
+            response = chain.proceed(originalRequest)
+            if (response.isStalled()) {
+                response.close()
+                throw IOException("Blocked by site protection, try again later")
+            }
+        }
         if (response.request.url.pathSegments.firstOrNull() != "_c") {
             return@Interceptor response
         }
@@ -37,13 +47,12 @@ object DleGuardResolver {
         } else {
             "$baseUrl/"
         }
-        if (!resolve(url, originalRequest.header("User-Agent"))) {
+        if (!lock.withLock { resolve(url, originalRequest.header("User-Agent")) }) {
             throw IOException("Open in WebView to bypass site protection")
         }
         chain.proceed(originalRequest)
     }
 
-    @Synchronized
     @SuppressLint("SetJavaScriptEnabled")
     private fun resolve(siteUrl: String, userAgent: String?): Boolean {
         if (failedOnce) return false
@@ -100,6 +109,8 @@ object DleGuardResolver {
         }
         return solved
     }
+
+    private fun Response.isStalled() = header("X-Guard-Stall") == "1"
 
     private fun hasTrust(cookieManager: CookieManager, url: String): Boolean {
         val cookies = cookieManager.getCookie(url) ?: return false

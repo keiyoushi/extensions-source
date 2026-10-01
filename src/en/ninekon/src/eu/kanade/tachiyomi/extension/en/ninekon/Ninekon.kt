@@ -1,49 +1,41 @@
 package eu.kanade.tachiyomi.extension.en.ninekon
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class Ninekon : HttpSource() {
+abstract class Ninekon : KeiSource() {
 
     private val apiUrl = "https://api.ninekon.com/1.0"
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
-
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/books?sort=views&page=$page", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchBooks("$apiUrl/books?sort=views&page=$page".toHttpUrl(), page)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<BooksResponse>()
-        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+    private suspend fun fetchBooks(url: HttpUrl, page: Int): MangasPage {
+        val data = client.get(url).parseAs<BooksResponse>()
         return MangasPage(data.books.map { it.toSManga() }, page < data.pages)
     }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/books?sort=dt&order=desc&page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchBooks("$apiUrl/books?sort=dt&order=desc&page=$page".toHttpUrl(), page)
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/books".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
@@ -71,46 +63,39 @@ abstract class Ninekon : HttpSource() {
             url.addQueryParameter("order", "desc")
         }
 
-        return GET(url.build(), headers)
+        return fetchBooks(url.build(), page)
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/books/${manga.url}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<BookDetailsDto>().toSManga()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val data = client.get("$apiUrl/books/${manga.url}").parseAs<BookDetailsDto>()
+        return SMangaUpdate(data.toSManga(), data.getChapters())
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/book/${manga.url}"
 
     // ============================= Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<BookDetailsDto>()
-        return data.getChapters()
-    }
-
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.replace("/books/", "/book/").replace("/chapters/", "/chapter/")
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(apiUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<PagesDto>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get(apiUrl + chapter.url).parseAs<PagesDto>()
         return data.getImages().mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         GenreFilter(),
     )

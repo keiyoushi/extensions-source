@@ -1,32 +1,34 @@
 package eu.kanade.tachiyomi.extension.all.peppercarrot
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.DEFAULT_CACHE_CONTROL
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.TextNode
 import org.jsoup.select.Evaluator
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 @Source
 abstract class PepperCarrot :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
@@ -35,7 +37,7 @@ abstract class PepperCarrot :
 
     // ============================== Popular ==============================
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         updateLangData(client, headers, preferences, baseUrl)
         val lang = preferences.lang.ifEmpty {
             throw Exception("Please select language in the filter")
@@ -44,49 +46,26 @@ abstract class PepperCarrot :
         val mangas = lang.map { key -> langMap[key]!!.toSManga() }
         val miniFantasyTheaters = lang.map { key -> langMap[key]!!.getMiniFantasyTheaterEntry() }
 
-        MangasPage(mangas + miniFantasyTheaters + getArtworkList(), false)
+        return MangasPage(mangas + miniFantasyTheaters + getArtworkList(), false)
     }
-
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.isNotEmpty()) return Observable.error(Exception("No search"))
-        if (filters.isNotEmpty()) preferences.saveFrom(filters)
-        return fetchPopularManga(page)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isNotEmpty()) throw Exception("No search")
+        preferences.saveFrom(filters)
+        return getPopularManga(page)
     }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
     // ============================== Details ==============================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.fromCallable {
-        updateLangData(client, headers, preferences, baseUrl)
+    override fun getMangaUrl(manga: SManga): String {
         val key = manga.url
-        if (key.startsWith('#')) {
-            getArtworkEntry(key.substring(1))
-        } else if (key.startsWith("miniFantasyTheater")) {
-            val langKey = key.substringAfter("#")
-            preferences.langData.find { lang -> lang.key == langKey }!!.getMiniFantasyTheaterEntry()
-        } else {
-            preferences.langData.find { lang -> lang.key == key }!!.toSManga()
-        }
-    }
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val key = manga.url
-        val url = if (key.startsWith('#')) { // artwork
+        return if (key.startsWith('#')) { // artwork
             "$baseUrl/en/files/${key.substring(1)}.html"
         } else if (key.startsWith("miniFantasyTheater")) {
             val langKey = key.substringAfter("#")
@@ -94,19 +73,35 @@ abstract class PepperCarrot :
         } else {
             "$baseUrl/$key/webcomics/peppercarrot.html"
         }
-        return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        updateLangData(client, headers, preferences, baseUrl)
+
+        val updatedManga = if (fetchDetails) getMangaDetails(manga.url) else manga
+        val updatedChapters = if (fetchChapters) getChapterList(manga.url) else chapters
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
+
+    private fun getMangaDetails(key: String): SManga = if (key.startsWith('#')) {
+        getArtworkEntry(key.substring(1))
+    } else if (key.startsWith("miniFantasyTheater")) {
+        val langKey = key.substringAfter("#")
+        preferences.langData.find { lang -> lang.key == langKey }!!.getMiniFantasyTheaterEntry()
+    } else {
+        preferences.langData.find { lang -> lang.key == key }!!.toSManga()
+    }
 
     // ============================= Chapters ==============================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable { updateLangData(client, headers, preferences, baseUrl) }
-        .flatMap { super.fetchChapterList(manga) }
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val key = manga.url
-        val url = if (key.startsWith('#')) { // artwork
+    private suspend fun getChapterList(key: String): List<SChapter> {
+        val listUrl = if (key.startsWith('#')) { // artwork
             "$baseUrl/0_sources/0ther/${key.substring(1)}/low-res/"
         } else if (key.startsWith("miniFantasyTheater")) {
             val langKey = key.substringAfter("#")
@@ -115,14 +110,14 @@ abstract class PepperCarrot :
             "$baseUrl/$key/webcomics/peppercarrot.html"
         }
         val lastUpdated = preferences.lastUpdated
-        if (lastUpdated == 0L) return GET(url, headers)
+        val cache = if (lastUpdated == 0L) {
+            DEFAULT_CACHE_CONTROL
+        } else {
+            val seconds = System.currentTimeMillis() / 1000 - lastUpdated
+            CacheControl.Builder().maxStale(seconds.toInt(), TimeUnit.SECONDS).build()
+        }
+        val response = client.get(listUrl, cache)
 
-        val seconds = System.currentTimeMillis() / 1000 - lastUpdated
-        val cache = CacheControl.Builder().maxStale(seconds.toInt(), TimeUnit.SECONDS).build()
-        return GET(url, headers, cache)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
         if (response.request.url.pathSegments[0] == "0_sources") return parseArtwork(response)
 
         val translatedChapters = response.asJsoup()
@@ -141,7 +136,7 @@ abstract class PepperCarrot :
                     }
                 }
                 date_upload = it.selectFirst(Evaluator.Tag("figcaption"))?.text()?.let { text ->
-                    dateRegex.find(text)?.value?.let { date -> dateFormat.tryParse(date) }
+                    dateRegex.find(text)?.value?.let { date -> dateFormat.tryParseDate(date, ZoneOffset.UTC) }
                 } ?: 0L
                 chapter_number = number.toFloat()
             }
@@ -150,17 +145,13 @@ abstract class PepperCarrot :
 
     // =============================== Pages ===============================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = chapter.url
-        return if (url.endsWith(".jpg")) {
-            Observable.just(listOf(Page(0, imageUrl = baseUrl + url)))
-        } else {
-            super.fetchPageList(chapter)
+        if (url.endsWith(".jpg")) {
+            return listOf(Page(0, imageUrl = baseUrl + url))
         }
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val urls =
             document.select(".webcomic-page img").map { it.attr("src") } +
                 document.select(".mft-cv-image").map { it.attr("src") }
@@ -179,17 +170,15 @@ abstract class PepperCarrot :
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
     override fun imageRequest(page: Page): Request {
         val url = page.imageUrl!!
         val newUrl = if (preferences.isHiRes) url.replace("/low-res/", "/hi-res/") else url
-        return GET(newUrl, headers)
+        return super.imageRequest(page).newBuilder().url(newUrl).build()
     }
 
     // ============================== Filters ==============================
 
-    override fun getFilterList() = getFilters(preferences)
+    override fun getFilterList(data: JsonElement?) = getFilters(preferences)
 
     // ============================= Utilities =============================
 
@@ -246,11 +235,11 @@ abstract class PepperCarrot :
             val date: Long
             if (file.length >= 10 && dateRegex.matches(file.substring(0, 10))) {
                 fileStripped = file.substring(10)
-                date = dateFormat.tryParse(file.substring(0, 10))
+                date = dateFormat.tryParseDate(file.substring(0, 10), ZoneOffset.UTC)
             } else {
                 fileStripped = file
                 val lastModified = it.nextSibling() as? TextNode
-                date = if (lastModified == null) 0 else dateFormat.tryParse(lastModified.text())
+                date = dateFormat.tryParseDate(lastModified?.text()?.let { text -> dateRegex.find(text)?.value }, ZoneOffset.UTC)
             }
             val fileNormalized = fileStripped
                 .replace('_', ' ')
@@ -272,7 +261,5 @@ abstract class PepperCarrot :
     }
 
     private val dateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
 }

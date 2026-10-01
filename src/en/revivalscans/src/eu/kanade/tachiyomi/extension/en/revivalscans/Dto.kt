@@ -4,13 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+import kotlin.time.Instant
 
 private fun parseStatus(status: String?): Int = when (status?.lowercase()) {
     "ongoing" -> SManga.ONGOING
@@ -91,7 +85,7 @@ class ChapterDto(
         val chapterName = title ?: "Chapter ${number.toString().removeSuffix(".0")}"
         name = if (isPremium) "🔒 $chapterName" else chapterName
         chapter_number = number
-        date_upload = dateFormat.tryParse(releaseDate)
+        date_upload = Instant.tryParse(releaseDate)
     }
 }
 

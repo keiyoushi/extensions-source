@@ -7,9 +7,8 @@ plugins {
 keiyoushi {
     name = "Risentoons"
     versionCode = 0
-    contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "stalkercms"
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"

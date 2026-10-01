@@ -1,46 +1,37 @@
 package eu.kanade.tachiyomi.extension.pt.bryaoi
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class BRYaoi : HttpSource() {
+abstract class BRYaoi : KeiSource() {
 
     override val supportsLatest = false
 
     // ====================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList())
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
     // ====================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ====================== Search ================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/yaoi/page/$page".toHttpUrl().newBuilder()
             .addQueryParameter("s", query)
             .build()
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val mangas = document.select(".listagem .item a").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("h2")!!.text()
@@ -53,32 +44,40 @@ abstract class BRYaoi : HttpSource() {
 
     // ====================== Details ================================
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst("h1")!!.text()
-            .substringAfter("Ler").substringBeforeLast("Online")
-            .trim()
-        thumbnail_url = document.selectFirst(".serie-capa img")?.absUrl("src")
-        description = document.select(".serie-texto p").joinToString("\n") { it.text() }
-        genre = document.select(".serie-infos a").joinToString { it.text() }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        setUrlWithoutDomain(document.location())
-    }
+        val updatedManga = SManga.create().apply {
+            title = document.selectFirst("h1")!!.text()
+                .substringAfter("Ler").substringBeforeLast("Online")
+                .trim()
+            thumbnail_url = document.selectFirst(".serie-capa img")?.absUrl("src")
+            description = document.select(".serie-texto p").joinToString("\n") { it.text() }
+            genre = document.select(".serie-infos a").joinToString { it.text() }
 
-    // ====================== Chapters ================================
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(".capitulos a").map { element ->
-        SChapter.create().apply {
-            name = element.text()
-            setUrlWithoutDomain(element.absUrl("href"))
+            setUrlWithoutDomain(document.location())
         }
-    }.reversed()
+
+        // ====================== Chapters ================================
+
+        val updatedChapters = document.select(".capitulos a").map { element ->
+            SChapter.create().apply {
+                name = element.text()
+                setUrlWithoutDomain(element.absUrl("href"))
+            }
+        }.reversed()
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
 
     // ====================== Pages ================================
 
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("#images_all img").mapIndexed { index, element ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select("#images_all img").mapIndexed { index, element ->
         Page(index, imageUrl = element.absUrl("src"))
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

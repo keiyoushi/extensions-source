@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.tappytoon
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 interface Accessible {
@@ -59,6 +60,27 @@ class Chapter(
 class Media(private val media: List<URL>) : List<URL> by media
 
 @Serializable
-class URL(private val url: String) {
-    override fun toString() = url
+class URL(private val path: String) {
+    override fun toString() = path
 }
+
+@Serializable
+class ErrorResponse(val message: String)
+
+@Serializable
+class NextData(val props: NextProps)
+
+@Serializable
+class NextProps(val initialState: InitialState)
+
+@Serializable
+class InitialState(val axios: Axios)
+
+@Serializable
+class Axios(val headers: AxiosHeaders)
+
+@Serializable
+class AxiosHeaders(
+    @SerialName("Authorization") val authorization: String,
+    @SerialName("X-Device-Uuid") val deviceUuid: String,
+)

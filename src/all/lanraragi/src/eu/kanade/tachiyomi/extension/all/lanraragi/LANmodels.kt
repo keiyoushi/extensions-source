@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.all.lanraragi
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Archive(
+class Archive(
     val arcid: String,
     val title: String,
     val tags: String?,
@@ -14,39 +14,39 @@ data class Archive(
 )
 
 @Serializable
-data class ArchiveTOCEntry(
+class ArchiveTOCEntry(
     val name: String,
     val page: Int,
 )
 
 @Serializable
-data class ArchivePage(
+class ArchivePage(
     val pages: List<String>,
 )
 
 @Serializable
-data class ArchiveSearchResult(
+class ArchiveSearchResult(
     val data: List<Archive>,
     val recordsFiltered: Int?,
     val recordsTotal: Int,
 )
 
 @Serializable
-data class Category(
+class Category(
     val id: String,
     val name: String?,
     val pinned: Int?,
 )
 
 @Serializable
-data class Tankoubon(
+class Tankoubon(
     val result: TankoubonMetadataJson?,
     val total: Int?,
     val filtered: Int?,
 )
 
 @Serializable
-data class TankoubonMetadataJson(
+class TankoubonMetadataJson(
     val id: String,
     val name: String?,
     val summary: String?,

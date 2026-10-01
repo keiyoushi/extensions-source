@@ -2,10 +2,11 @@ package eu.kanade.tachiyomi.extension.pl.mangahona
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 class MangaDto(
-    @SerialName("ID") val id: String,
+    @SerialName("ID") val id: Int,
     @SerialName("NAME") val name: String,
     @SerialName("DESCRIPTION") val description: String? = null,
     @SerialName("AUTHOR") val author: String? = null,
@@ -18,7 +19,7 @@ class MangaDto(
 @Serializable
 class ChapterDto(
     @SerialName("CHAPTER_NAME") val chapterName: String,
-    @SerialName("CHAPTER_INDEX") val chapterIndex: String,
+    @SerialName("CHAPTER_INDEX") val chapterIndex: JsonPrimitive,
     @SerialName("DATE") val date: String? = null,
 )
 
@@ -40,6 +41,6 @@ class CategoriesDto(
 
 @Serializable
 class CategoryDto(
-    @SerialName("ID") val id: String,
+    @SerialName("ID") val id: Int,
     @SerialName("NAME") val name: String,
 )

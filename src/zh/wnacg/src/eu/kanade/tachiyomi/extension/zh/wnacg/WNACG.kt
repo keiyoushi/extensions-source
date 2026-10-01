@@ -15,13 +15,17 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Source
 abstract class WNACG :
@@ -128,7 +132,7 @@ abstract class WNACG :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || !mangaUrlRegex.matches(url.encodedPath)) return null
 
-        return mangaDetailsParse(client.get(url)).apply {
+        return mangaDetailsParse(client.get(url).asJsoup()).apply {
             this.url = url.encodedPath
             initialized = true
         }
@@ -140,22 +144,11 @@ abstract class WNACG :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) {
-            mangaDetailsParse(client.get(getMangaUrl(manga))).apply { url = manga.url }
-        } else {
-            manga
-        }
-        val updatedChapters = if (fetchChapters) {
-            listOf(
-                SChapter.create().apply {
-                    url = manga.url
-                    name = "Ch. 1"
-                },
-            )
-        } else {
-            chapters
-        }
-        return SMangaUpdate(updatedManga, updatedChapters)
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            mangaDetailsParse(document).apply { url = manga.url },
+            chaptersParse(document, manga),
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(
@@ -225,16 +218,36 @@ abstract class WNACG :
 
     private fun latestUpdatesUrl(page: Int) = "$baseUrl/albums-index-page-$page.html"
 
-    private fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h2")!!.text()
-            artist = document.selectFirst("div.uwuinfo p")?.text()
-            author = document.selectFirst("div.uwuinfo p")?.text()
-            genre = document.select("a.tagshow").eachText().joinToString(", ").ifEmpty { null }
-            thumbnail_url = "http:" + document.selectFirst("div.uwthumb img")!!.attr("src")
-            description = document.selectFirst("div.asTBcell p")?.html()?.replace("<br>", "\n")
-            status = SManga.COMPLETED
+    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h2")!!.text()
+        artist = document.selectFirst("div.uwuinfo p")?.text()
+        author = document.selectFirst("div.uwuinfo p")?.text()
+        genre = document.select("div.addtags a.tagshow").eachText().joinToString().ifEmpty { null }
+        thumbnail_url = "http:" + document.selectFirst("div.uwthumb img")!!.attr("src")
+        description = document.selectFirst("div.asTBcell p")?.html()?.replace("<br>", "\n")
+        val statusText = document.selectFirst("div.uwconn label:contains(狀態)")?.text().orEmpty()
+        status = if ("連載中" in statusText) SManga.ONGOING else SManga.COMPLETED
+    }
+
+    private fun chaptersParse(document: Document, manga: SManga): List<SChapter> {
+        val chapterElements = document.select("div.sr_compact a.tagshow[data-chid]")
+        if (chapterElements.isEmpty()) {
+            return listOf(
+                SChapter.create().apply {
+                    url = manga.url
+                    name = "Ch. 1"
+                },
+            )
+        }
+        return chapterElements.map { element ->
+            SChapter.create().apply {
+                url = "/photos-index-aid-${element.attr("data-chid")}.html"
+                name = element.text()
+                date_upload = chapterDateFormat.tryParseDate(
+                    chapterDateRegex.find(element.attr("title"))?.value,
+                    chapterZone,
+                )
+            }
         }
     }
 
@@ -251,6 +264,9 @@ abstract class WNACG :
             RegexOption.IGNORE_CASE,
         )
         private val mangaUrlRegex = Regex("""/photos-index-aid-\d+\.html""")
+        private val chapterDateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
+        private val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        private val chapterZone = ZoneId.of("Asia/Taipei")
     }
 }
 

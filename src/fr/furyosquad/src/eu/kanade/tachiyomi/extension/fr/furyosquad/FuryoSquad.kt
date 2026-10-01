@@ -1,46 +1,37 @@
 package eu.kanade.tachiyomi.extension.fr.furyosquad
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class FuryoSquad : HttpSource() {
+abstract class FuryoSquad : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(10.seconds)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(10.seconds)
         .readTimeout(30.seconds)
         .rateLimit(1)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
 
     // ========================= Popular =========================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/mangas").asJsoup()
         val mangas = document.select("div#fs-tous div.fs-card-body").mapNotNull { element ->
             val titleElement = element.selectFirst("span.fs-comic-title a") ?: return@mapNotNull null
             SManga.create().apply {
@@ -55,10 +46,8 @@ abstract class FuryoSquad : HttpSource() {
 
     // ========================= Latest =========================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select("table.table-striped tr").mapNotNull { element ->
             val titleElement = element.selectFirst("span.fs-comic-title a") ?: return@mapNotNull null
             SManga.create().apply {
@@ -74,57 +63,45 @@ abstract class FuryoSquad : HttpSource() {
 
     // ========================= Search =========================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val path = query.removePrefix(PREFIX_ID_SEARCH)
-            val mangaPath = if (path.startsWith("/")) path else "/$path"
-            return fetchMangaByPath(mangaPath)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (!url.host.contains("furyosociety.com")) return null
+
+        val path = when {
+            url.pathSegments.contains("series") -> url.encodedPath
+            url.pathSegments.contains("read") -> {
+                val readIndex = url.pathSegments.indexOf("read")
+                val mangaSlug = url.pathSegments.getOrNull(readIndex + 1) ?: return null
+                "/series/$mangaSlug/"
+            }
+            else -> return null
         }
 
-        if (query.startsWith("http")) {
-            val url = query.toHttpUrlOrNull()
-            if (url != null && url.host.contains("furyosociety.com")) {
-                if (url.pathSegments.contains("series")) {
-                    return fetchMangaByPath(url.encodedPath)
-                }
-                if (url.pathSegments.contains("read")) {
-                    val readIndex = url.pathSegments.indexOf("read")
-                    if (readIndex != -1 && readIndex + 1 < url.pathSegments.size) {
-                        val mangaSlug = url.pathSegments[readIndex + 1]
-                        return fetchMangaByPath("/series/$mangaSlug/")
-                    }
-                }
-            }
-        }
-
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                val mangasPage = popularMangaParse(response)
-                val filteredMangas = mangasPage.mangas.filter { it.title.contains(query, ignoreCase = true) }
-                MangasPage(filteredMangas, false)
-            }
+        return fetchMangaUpdate(
+            manga = SManga.create().apply { this.url = path },
+            chapters = emptyList(),
+            fetchDetails = true,
+            fetchChapters = false,
+        ).manga
     }
 
-    private fun fetchMangaByPath(path: String): Observable<MangasPage> = client.newCall(GET("$baseUrl$path", headers))
-        .asObservableSuccess()
-        .map { response ->
-            val manga = mangaDetailsParse(response).apply {
-                url = path
-            }
-            MangasPage(listOf(manga), false)
-        }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(1)
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val mangasPage = getPopularManga(1)
+        val filteredMangas = mangasPage.mangas.filter { it.title.contains(query, ignoreCase = true) }
+        return MangasPage(filteredMangas, false)
+    }
 
     // ========================= Details =========================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1.fs-comic-title")?.text() ?: ""
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
+        manga.apply {
+            title = document.selectFirst("h1.fs-comic-title")?.text() ?: title
             val info = document.selectFirst("div.comic-info") ?: return@apply
             info.select("p.fs-comic-label").forEach { el ->
                 when (el.text().lowercase(Locale.ROOT)) {
@@ -136,15 +113,8 @@ abstract class FuryoSquad : HttpSource() {
             description = info.selectFirst("div.fs-comic-description")?.text()
             thumbnail_url = info.selectFirst("img.comic-cover")?.attr("abs:src")
         }
-    }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    // ========================= Chapters =========================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div.fs-chapter-list div.element").map { element ->
+        val chapterList = document.select("div.fs-chapter-list div.element").map { element ->
             SChapter.create().apply {
                 val titleElement = element.selectFirst("div.title a")!!
                 val rawUrl = titleElement.attr("href")
@@ -153,22 +123,22 @@ abstract class FuryoSquad : HttpSource() {
                 date_upload = parseChapterDate(element.selectFirst("div.meta_r")?.text() ?: "")
             }
         }
+
+        return SMangaUpdate(manga, chapterList)
     }
+
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     // ========================= Pages =========================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
         return document.select("div.fs-read img[id]").mapIndexed { i, img ->
             Page(i, "", img.attr("abs:src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList()
 
     // ========================= Utilities =========================
 
@@ -201,7 +171,7 @@ abstract class FuryoSquad : HttpSource() {
 
             else -> {
                 val dateText = DATE_EXTRACT_REGEX.find(date)?.groupValues?.get(1) ?: date
-                DATE_FORMAT.tryParse(dateText)
+                DATE_FORMAT.tryParseDate(dateText)
             }
         }
     }
@@ -233,8 +203,10 @@ abstract class FuryoSquad : HttpSource() {
     }
 
     companion object {
-        const val PREFIX_ID_SEARCH = "id:"
-        private val DATE_FORMAT = SimpleDateFormat("dd MMM yyyy", Locale.FRENCH)
+        private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .appendPattern("d MMM yyyy")
+            .toFormatter(Locale.FRENCH)
         private val RELATIVE_DATE_REGEX = Regex("""il y a (\d+) (\w+)""")
         private val DATE_EXTRACT_REGEX = Regex("""le (.*)""")
     }

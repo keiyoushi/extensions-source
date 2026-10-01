@@ -1,68 +1,60 @@
 package eu.kanade.tachiyomi.extension.zh.terrahistoricus
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
 
 @Source
-abstract class TerraHistoricus : HttpSource() {
-    override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
+abstract class TerraHistoricus : KeiSource() {
     private val topicKeys = listOf("terra-historicus", "talos-ii-historicus")
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/comic?topicKey=${topicKeys[page - 1]}", headers)
-    override fun popularMangaParse(response: Response) = MangasPage(
-        response.parseAs<List<THComic>>().map { it.toSManga() },
-        response.request.url.queryParameter("topicKey") != topicKeys.last(),
-    )
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/recentUpdate?topicKey=${topicKeys[page - 1]}", headers)
-    override fun latestUpdatesParse(response: Response) = MangasPage(
-        response.parseAs<List<THRecentUpdate>>().map { it.toSManga() },
-        response.request.url.queryParameter("topicKey") != topicKeys.last(),
-    )
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(page).map { mangasPage ->
-        val mangas = mangasPage.mangas.filter { it.title.contains(query) }
-        MangasPage(mangas, mangasPage.hasNextPage)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val topicKey = topicKeys[page - 1]
+        val comics = fetch<List<THComic>>("$baseUrl/api/comic?topicKey=$topicKey")
+        return MangasPage(comics.map { it.toSManga() }, topicKey != topicKeys.last())
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val topicKey = topicKeys[page - 1]
+        val updates = fetch<List<THRecentUpdate>>("$baseUrl/api/recentUpdate?topicKey=$topicKey")
+        return MangasPage(updates.map { it.toSManga() }, topicKey != topicKeys.last())
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val mangasPage = getPopularManga(page)
+        val mangas = mangasPage.mangas.filter { it.title.contains(query) }
+        return MangasPage(mangas, mangasPage.hasNextPage)
+    }
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.removePrefix("/api")
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.removePrefix("/api")
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(chapterListRequest(manga)).asObservableSuccess()
-        .map { response -> mangaDetailsParse(response).apply { initialized = true } }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val comic = fetch<THComic>(baseUrl + manga.url)
+        return SMangaUpdate(comic.toSManga(), comic.toSChapterList())
+    }
 
-    override fun mangaDetailsParse(response: Response) = response.parseAs<THComic>().toSManga()
-
-    override fun chapterListParse(response: Response) = response.parseAs<THComic>().toSChapterList()
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter)).asObservableSuccess().map { response ->
-        (0 until response.parseAs<THEpisode>().pageInfos!!.size).map {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val episode = fetch<THEpisode>(baseUrl + chapter.url)
+        return (0 until episode.pageInfos!!.size).map {
             Page(it, "$baseUrl${chapter.url}/page?pageNum=${it + 1}")
         }
     }
 
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getImageUrl(page: Page): String = fetch<THPage>(page.url).url
 
-    override fun imageUrlParse(response: Response) = response.parseAs<THPage>().url
-
-    private inline fun <reified T> Response.parseAs() = json.decodeFromString<THResult<T>>(this.body.string()).data
+    private suspend inline fun <reified T> fetch(url: String) = client.get(url).parseAs<THResult<T>>().data
 }

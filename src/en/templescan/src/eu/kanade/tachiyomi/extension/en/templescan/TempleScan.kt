@@ -119,7 +119,7 @@ abstract class TempleScan :
         val document = client.get("$baseUrl/comic/$slug").asJsoup()
 
         val series = document.jsonLd<ComicSeriesLd> { it.isSeries }
-        val seriesData = document.extractNextJs<SeriesDataWrapper>()?.seriesData
+        val seriesData = document.mappedPayload(SERIES_FIELDS)?.parseAs<SeriesData>()
         // The status only lives in the browse catalog; the detail page renders it without a stable hook.
         val catalogEntry = fetchCatalog().firstOrNull { it.slug == slug }
 
@@ -174,7 +174,8 @@ abstract class TempleScan :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(baseUrl + chapter.url).extractNextJs<PagesList>() ?: return emptyList()
+        val data = client.get(baseUrl + chapter.url).asJsoup().mappedPayload(listOf("images"))?.parseAs<PagesList>()
+            ?: return emptyList()
         return data.images.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
         }
@@ -193,7 +194,49 @@ abstract class TempleScan :
 
     // ============================= Utilities ==============================
 
-    private suspend fun fetchCatalog(): List<BrowseSeries> = client.get("$baseUrl/comics").extractNextJs<List<BrowseSeries>>().orEmpty()
+    private suspend fun fetchCatalog(): List<BrowseSeries> = client.get("$baseUrl/comics")
+        .asJsoup()
+        .mappedPayload(CATALOG_FIELDS, isList = true)
+        ?.parseAs<List<BrowseSeries>>()
+        .orEmpty()
+
+    /**
+     * Reads the RSC payload node holding [fields] and decodes it with the site's current field keys.
+     *
+     * The keys come from the table cached by [refreshRscKeys]. If they no longer match this payload
+     * the site has renamed its keys, so the table is re-read from the client bundle and the payload
+     * is decoded once more.
+     */
+    private suspend fun Document.mappedPayload(fields: List<String>, isList: Boolean = false): JsonElement? {
+        val keys = cachedRscKeys() ?: refreshRscKeys(this)
+        extractNextJs<JsonElement>(RscKeys.payloadPredicate(fields, keys, isList))
+            ?.let { return RscKeys.remap(it, keys) }
+
+        val refreshed = refreshRscKeys(this)
+        return extractNextJs<JsonElement>(RscKeys.payloadPredicate(fields, refreshed, isList))
+            ?.let { RscKeys.remap(it, refreshed) }
+    }
+
+    private fun cachedRscKeys(): Map<String, String>? = preferences.getString(PREF_RSC_KEYS, null)
+        ?.let(RscKeys::decode)
+        ?.takeIf { it.isNotEmpty() }
+
+    /** Re-reads the field rename table from the site's client bundle and caches it for later runs. */
+    private suspend fun refreshRscKeys(document: Document): Map<String, String> {
+        val chunks = document.select("script[src]")
+            .mapNotNull { element -> element.absUrl("src").takeIf { CHUNK_PATH in it } }
+            .distinct()
+
+        for (chunk in chunks) {
+            val source = client.get(chunk, ensureSuccess = false).use { it.body.string() }
+            val keys = RscKeys.findTable(source) ?: continue
+
+            preferences.edit().putString(PREF_RSC_KEYS, RscKeys.encode(keys)).apply()
+            return keys
+        }
+
+        error("Could not determine the site's RSC field-key table")
+    }
 
     private inline fun <reified T> Document.jsonLd(predicate: (T) -> Boolean): T? = select("script[type=application/ld+json]")
         .mapNotNull { runCatching { it.data().parseAs<T>() }.getOrNull() }
@@ -208,6 +251,15 @@ abstract class TempleScan :
         private const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 
+        private const val CHUNK_PATH = "/_next/static/chunks/"
+
+        /** Identifies the browse catalog: the two fields every series entry always carries. */
+        private val CATALOG_FIELDS = listOf("title", "series_slug")
+
+        /** Identifies a series' chapter payload. Both are renamed by the site, unlike `seriesData`. */
+        private val SERIES_FIELDS = listOf("series_slug", "Season")
+
         private const val PREF_HIDE_LOCKED_CHAPTERS = "pref_hide_locked_chapters"
+        private const val PREF_RSC_KEYS = "pref_rsc_keys"
     }
 }

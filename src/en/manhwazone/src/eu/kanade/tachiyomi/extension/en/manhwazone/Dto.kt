@@ -2,7 +2,28 @@ package eu.kanade.tachiyomi.extension.en.manhwazone
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+
+@Serializable
+class LivewireRequestDto(
+    @SerialName("_token") private val token: String,
+    private val components: List<LivewireRequestComponentDto>,
+)
+
+@Serializable
+class LivewireRequestComponentDto(
+    private val snapshot: String,
+    private val updates: JsonObject,
+    private val calls: List<LivewireCallDto>,
+)
+
+@Serializable
+class LivewireCallDto(
+    private val path: String,
+    private val method: String,
+    private val params: List<String>,
+)
 
 @Serializable
 class LivewireUpdateDto(
@@ -21,7 +42,7 @@ class SnapshotDto(
 
 @Serializable
 class SnapshotDataDto(
-    val chapters: JsonElement? = null,
+    val chapters: JsonArray? = null,
 )
 
 @Serializable
@@ -29,12 +50,4 @@ class ChapterDto(
     val name: String? = null,
     val published: String? = null,
     @SerialName("web_url") val webUrl: String? = null,
-)
-
-@Serializable
-class RsConfDto(
-    val p: String? = null,
-    val expire: String? = null,
-    val signature: String? = null,
-    val tt: Int? = null,
 )

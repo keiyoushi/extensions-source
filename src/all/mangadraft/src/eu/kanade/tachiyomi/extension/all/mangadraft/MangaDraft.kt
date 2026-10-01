@@ -3,49 +3,46 @@ import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftCatalogRespons
 import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftPageDTO
 import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftProjectDto
 import eu.kanade.tachiyomi.extension.all.mangadraft.dto.PagesByCategory
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.collections.joinToString
-import kotlin.getValue
 
 @Source
-abstract class MangaDraft : HttpSource() {
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override val supportsLatest = true
+abstract class MangaDraft : KeiSource() {
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET(
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("api")
-            addPathSegment("catalog")
-            addPathSegment("projects")
-            addQueryParameter("order", "popular")
-            addQueryParameter("type", "all")
-            addQueryParameter("page", page.toString())
-            addQueryParameter("number", "20")
-        }.build(),
-        headers,
+    override suspend fun getPopularManga(page: Int): MangasPage = catalogParse(
+        client.get(
+            baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("api")
+                addPathSegment("catalog")
+                addPathSegment("projects")
+                addQueryParameter("order", "popular")
+                addQueryParameter("type", "all")
+                addQueryParameter("page", page.toString())
+                addQueryParameter("number", "20")
+            }.build(),
+        ),
     )
-    override fun popularMangaParse(response: Response): MangasPage {
+
+    private fun catalogParse(response: Response): MangasPage {
         val result = response.parseAs<MangaDraftCatalogResponseDto>()
 
         val mangas = result.data
@@ -65,57 +62,54 @@ abstract class MangaDraft : HttpSource() {
     }
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request = GET(
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("api")
-            addPathSegment("catalog")
-            addPathSegment("projects")
-            addQueryParameter("order", "news")
-            addQueryParameter("type", "all")
-            addQueryParameter("page", page.toString())
-            addQueryParameter("number", "20")
-        }.build(),
-        headers,
-    )
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
-
-        val typeFilter = filterList.firstInstance<TypeFilter>()
-        val orderFilter = filterList.firstInstance<OrderFilter>()
-        val sectionFilter = filterList.firstInstance<SectionFilter>()
-        val genreFilter = filterList.firstInstance<GenreFilter>()
-        val formatFilter = filterList.firstInstance<FormatFilter>()
-        val languageFilter = filterList.firstInstance<LanguageFilter>()
-        val statusFilter = filterList.firstInstance<StatusFilter>()
-        val sortFilter = filterList.firstInstance<SortFilter>()
-
-        return GET(
+    override suspend fun getLatestUpdates(page: Int): MangasPage = catalogParse(
+        client.get(
             baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment("api")
                 addPathSegment("catalog")
                 addPathSegment("projects")
-                addQueryParameter("type", typeFilter.toUriPart())
-                addQueryParameter("order", orderFilter.toUriPart())
-                addQueryParameter("section", sectionFilter.toUriPart())
-                addQueryParameter("genre", genreFilter.toUriPart())
-                addQueryParameter("format", formatFilter.toUriPart())
-                addQueryParameter("language", languageFilter.toUriPart())
-                addQueryParameter("status", statusFilter.toUriPart())
-                addQueryParameter("order_all", sortFilter.toUriPart())
+                addQueryParameter("order", "news")
+                addQueryParameter("type", "all")
                 addQueryParameter("page", page.toString())
                 addQueryParameter("number", "20")
             }.build(),
-            headers,
+        ),
+    )
+
+    // Search
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val typeFilter = filters.firstInstance<TypeFilter>()
+        val orderFilter = filters.firstInstance<OrderFilter>()
+        val sectionFilter = filters.firstInstance<SectionFilter>()
+        val genreFilter = filters.firstInstance<GenreFilter>()
+        val formatFilter = filters.firstInstance<FormatFilter>()
+        val languageFilter = filters.firstInstance<LanguageFilter>()
+        val statusFilter = filters.firstInstance<StatusFilter>()
+        val sortFilter = filters.firstInstance<SortFilter>()
+
+        return catalogParse(
+            client.get(
+                baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("api")
+                    addPathSegment("catalog")
+                    addPathSegment("projects")
+                    addQueryParameter("type", typeFilter.toUriPart())
+                    addQueryParameter("order", orderFilter.toUriPart())
+                    addQueryParameter("section", sectionFilter.toUriPart())
+                    addQueryParameter("genre", genreFilter.toUriPart())
+                    addQueryParameter("format", formatFilter.toUriPart())
+                    addQueryParameter("language", languageFilter.toUriPart())
+                    addQueryParameter("status", statusFilter.toUriPart())
+                    addQueryParameter("order_all", sortFilter.toUriPart())
+                    addQueryParameter("page", page.toString())
+                    addQueryParameter("number", "20")
+                }.build(),
+            ),
         )
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-
     // filters
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         TypeFilter(),
         OrderFilter(),
@@ -128,10 +122,18 @@ abstract class MangaDraft : HttpSource() {
 
     protected val regexWindowProject = Regex("""window\.project\s*=\s*(\{.*?\})\s*;""", RegexOption.DOT_MATCHES_ALL)
 
-    // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val doc = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
+    }
 
+    // Details
+    private fun mangaDetailsParse(doc: Document): SManga {
         // Find the <script> containing window.project
         val scriptContent = doc.selectFirst("script:containsData(window.project)")?.data()
             ?: throw Exception("Unable to find project script")
@@ -165,9 +167,7 @@ abstract class MangaDraft : HttpSource() {
 
     fun chapterListSelector() = "div.mt-7 div a:not(:has(img))"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-
+    private fun chapterListParse(document: Document): List<SChapter> {
         val chapterElements = document.select(chapterListSelector())
 
         val isNotOneShot = chapterElements[0].attr("href").contains("c.")
@@ -192,34 +192,27 @@ abstract class MangaDraft : HttpSource() {
         val dateText = element.selectFirst("div>span")?.text()
         if (!dateText.isNullOrBlank()) {
             name = name.substringBefore(dateText)
-            date_upload = dateFormat.tryParse(dateText)
+            date_upload = dateFormat.tryParseDate(dateText)
         }
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        if (chapter.url.contains("c.")) {
-            val request = GET(chapter.url, headers)
+    // chapter urls are stored as absolute urls
+    override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
-            // switch base url with actual url once we try to get the pages
-            client.newCall(request).execute().use { response ->
-                // final URL after redirects
-                // get this api request with the id of the first page of the chapter after redirect
-                val responseChapterNum =
-                    response.request.url.toString().substringAfterLast('/').filter { it.isDigit() }
-                chapter.setUrlWithoutDomain("$baseUrl/api/reader/listPages?first_page=$responseChapterNum&grouped_by_category=true")
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val firstPage = if (chapter.url.contains("c.")) {
+            // the reader redirects to the id of the first page of the chapter
+            client.get(chapter.url).use { response ->
+                response.request.url.toString().substringAfterLast('/').filter { it.isDigit() }
             }
         } else {
-            val chapterNum = chapter.url.substringAfterLast('/').filter { it.isDigit() }
-            chapter.setUrlWithoutDomain("$baseUrl/api/reader/listPages?first_page=$chapterNum&grouped_by_category=true")
+            chapter.url.substringAfterLast('/').filter { it.isDigit() }
         }
 
-        return super.fetchPageList(chapter)
-    }
+        val result = client.get("$baseUrl/api/reader/listPages?first_page=$firstPage&grouped_by_category=true")
+            .parseAs<PagesByCategory>()
 
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<PagesByCategory>()
-
-        val pageList = findCategoryByPageId(result, response.request.url.toString().filter { it.isDigit() }.toLong())
+        val pageList = findCategoryByPageId(result, firstPage.toLong())
         return pageList.map {
             Page(it.number, "${it.url}?size=full", "${it.url}?size=full")
         }
@@ -228,8 +221,6 @@ abstract class MangaDraft : HttpSource() {
         .first { pageList -> pageList.any { it.id == pageId } }
 
     companion object {
-        private fun getApiDateFormat() = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH)
-
-        val dateFormat by lazy { getApiDateFormat() }
+        private val dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRENCH)
     }
 }

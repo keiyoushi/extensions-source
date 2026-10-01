@@ -5,9 +5,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.utils.asJsoup
 import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
@@ -15,7 +14,7 @@ abstract class WeLoveManga : FMReader() {
 
     override val chapterUrlSelector = ""
 
-    override fun pageListParse(response: Response): List<Page> = base64PageListParse(response.asJsoup())
+    override fun pageListParse(document: Document): List<Page> = base64PageListParse(document)
 
     // Referer needs to be chapter URL
     override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())

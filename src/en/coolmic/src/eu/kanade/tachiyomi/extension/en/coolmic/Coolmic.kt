@@ -2,54 +2,49 @@ package eu.kanade.tachiyomi.extension.en.coolmic
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.serialization.json.JsonElement
+import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 
 @Source
 abstract class Coolmic :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
 
-    private val domain = baseUrl.toHttpUrl().host
-    private val apiUrl = "$baseUrl/api/v1"
-    private val cdnUrl = "https://en-img.$domain"
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrl get() = "$baseUrl/api/v1"
+    private val cdnUrl get() = "https://en-img.$domain"
     private val preferences by getPreferencesLazy()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addCookie("is_mature" to "true")
+        addInterceptor(ImageInterceptor())
+    }
 
-    override val client = network.client.newBuilder()
-        .addCookie("is_mature" to "true")
-        .addInterceptor(ImageInterceptor())
-        .build()
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter().apply { state = 3 }))
 
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 3 }))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter().apply { state = 1 }))
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 1 }))
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val status = filters.firstInstanceOrNull<StatusFilter>()?.value
         val sort = filters.firstInstanceOrNull<SortFilter>()?.value
 
@@ -66,58 +61,61 @@ abstract class Coolmic :
                     addQueryParameter("status_filters[0][value]", number)
                 }
             }.build()
-        return GET(url, headers)
-    }
 
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        StatusFilter(),
-    )
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val page = response.request.url.queryParameter("page")!!.toInt()
-        val result = response.parseAs<SeriesResponse>()
+        val result = client.get(url).parseAs<SeriesResponse>()
         val mangas = result.results.map { it.toSManga(cdnUrl) }
         val hasNextPage = page * SEARCH_SIZE < result.total
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/titles/${manga.url}", headers)
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        SortFilter(),
+        StatusFilter(),
+    )
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parsePageObjects().title.toSManga()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/titles/${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val result = client.get(getMangaUrl(manga)).parsePageObjects()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        return response.parsePageObjects().episodes
+        val updatedChapters = result.episodes
             .filter { !hideLocked || !it.isLocked }
             .map { it.toSChapter() }
             .reversed()
+
+        return SMangaUpdate(
+            result.title.toSManga().apply { url = manga.url },
+            updatedChapters,
+        )
     }
 
     private fun Response.parsePageObjects(): DetailsResponse = asJsoup().selectFirst("title-page")!!.attr(":page-objects").parseAs()
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/episodes/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/viewer/comic/secure_episodes/${chapter.url}", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<ViewerResponse>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val result = client.get("$apiUrl/viewer/comic/secure_episodes/${chapter.url}").parseAs<ViewerResponse>()
         if (result.imageData.isNullOrEmpty()) throw Exception("Log in via WebView and purchase this chapter to read.")
         return result.imageData.map {
             Page(it.num - 1, it.path)
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        val page = response.parseAs<PageResponse>()
-        val key = fetchKey(page.kmsEncryptedDataKey, page.fileName)
-        val url = response.request.url.newBuilder().fragment("key=$key").build().toString()
-        return url
+    override suspend fun getImageUrl(page: Page): String {
+        val response = client.get(page.url)
+        val url = response.request.url
+        val result = response.parseAs<PageResponse>()
+        val key = fetchKey(result.kmsEncryptedDataKey, result.fileName)
+        return url.newBuilder().fragment("key=$key").build().toString()
     }
 
-    private fun fetchKey(encryptedKey: String, fileName: String): String {
+    private suspend fun fetchKey(encryptedKey: String, fileName: String): String {
         var response = requestKey(encryptedKey, fileName, csrfToken())
         if (!response.isSuccessful) {
             response.close()
@@ -126,27 +124,24 @@ abstract class Coolmic :
         return response.parseAs<KeyResponse>().decryptedKey
     }
 
-    private fun requestKey(encryptedKey: String, fileName: String, token: String): Response {
-        val newHeaders = headersBuilder()
-            .set("Origin", baseUrl)
+    private suspend fun requestKey(encryptedKey: String, fileName: String, token: String): Response {
+        val newHeaders = headers.newBuilder()
             .set("X-CSRF-TOKEN", token)
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
-        return client.newCall(
-            POST(
-                "$apiUrl/decryption_keys",
-                newHeaders,
-                KeyRequestBody(encryptedKey, fileName).toJsonRequestBody(),
-            ),
-        ).execute()
+        return client.post(
+            "$apiUrl/decryption_keys",
+            newHeaders,
+            KeyRequestBody(encryptedKey, fileName).toJsonRequestBody(),
+            ensureSuccess = false,
+        )
     }
 
     private var cachedCsrfToken: String? = null
 
-    @Synchronized
-    private fun csrfToken(refresh: Boolean = false): String {
+    private suspend fun csrfToken(refresh: Boolean = false): String {
         if (refresh) cachedCsrfToken = null
-        return cachedCsrfToken ?: client.newCall(GET(baseUrl, headers)).execute().asJsoup()
+        return cachedCsrfToken ?: client.get(baseUrl, CacheControl.FORCE_NETWORK).asJsoup()
             .selectFirst("meta[name=csrf-token]")!!
             .attr("content")
             .also { cachedCsrfToken = it }
