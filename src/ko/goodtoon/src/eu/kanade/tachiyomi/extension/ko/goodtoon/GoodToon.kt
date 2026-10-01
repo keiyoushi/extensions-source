@@ -10,8 +10,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getStringOrNull
+import keiyoushi.utils.ownTextOrNull
+import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -70,11 +73,11 @@ abstract class GoodToon : MadaraNoAjax() {
     }
 
     override fun parseArchive(document: Document): List<SManga> = document.select("a.card[href*='/manga/']").mapNotNull { element ->
-        val href = element.attr("abs:href").takeIf(String::isNotBlank) ?: return@mapNotNull null
+        val href = element.attrOrNull("abs:href") ?: return@mapNotNull null
         val mangaPath = href.toHttpUrl().encodedPath
         SManga.create().apply {
             url = mangaPath
-            title = element.selectFirst("div.subject")?.text()?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            title = element.selectFirst("div.subject")?.textOrNull() ?: return@mapNotNull null
             // Genre pages use a different card template whose cover has no img-responsive class;
             // in both templates the cover is the only direct img child that is not the platform icon.
             thumbnail_url = element.selectFirst("div.thumb > img:not(.platform-icon)")?.let { processThumbnail(imageFromElement(it), true) }
@@ -84,12 +87,12 @@ abstract class GoodToon : MadaraNoAjax() {
 
     override fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = super.parseDetails(document, id, preserveUrl).apply {
         status = document.selectFirst(mangaDetailsSelectorStatus)?.text()?.toStatus() ?: SManga.UNKNOWN
-        genre = document.selectFirst("div.manga-summary-genres")?.text()?.takeIf(String::isNotBlank)
+        genre = document.selectFirst("div.manga-summary-genres")?.textOrNull()
     }
 
     override fun chapterFromElement(element: Element, mangaPath: String): SChapter? = super.chapterFromElement(element, mangaPath)?.apply {
         val link = element.selectFirst(chapterUrlSelector) ?: return null
-        link.ownText().takeIf(String::isNotBlank)?.let { name = it }
+        link.ownTextOrNull()?.let { name = it }
         chapterNumberRegex.findAll(name).lastOrNull()?.groupValues?.get(1)?.toFloatOrNull()?.let { chapter_number = it }
     }
 
@@ -104,8 +107,8 @@ abstract class GoodToon : MadaraNoAjax() {
 
     override suspend fun fetchFilterData(): JsonElement = buildJsonArray {
         client.get(baseUrl).asJsoup().select("button.genre[data-genre]").forEach { element ->
-            val slug = element.attr("data-genre").takeIf(String::isNotBlank) ?: return@forEach
-            val name = element.text().takeIf(String::isNotBlank) ?: return@forEach
+            val slug = element.attrOrNull("data-genre") ?: return@forEach
+            val name = element.textOrNull() ?: return@forEach
             add(
                 buildJsonObject {
                     put("name", name)
@@ -119,8 +122,8 @@ abstract class GoodToon : MadaraNoAjax() {
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.jsonArray.orEmpty().mapNotNull { element ->
             val obj = element.jsonObject
-            val name = obj.getStringOrNull("name")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val path = obj.getStringOrNull("path")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            val name = obj.getStringOrNull("name") ?: return@mapNotNull null
+            val path = obj.getStringOrNull("path") ?: return@mapNotNull null
             name to path
         }
         return FilterList(
