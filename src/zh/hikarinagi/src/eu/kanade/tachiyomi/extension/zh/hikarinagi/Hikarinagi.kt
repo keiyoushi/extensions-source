@@ -11,21 +11,26 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getArray
+import keiyoushi.utils.getInt
 import keiyoushi.utils.getLong
 import keiyoushi.utils.getObject
 import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Response
 
 @Source
 abstract class Hikarinagi : KeiSource() {
 
     override fun getHomeUrl() = "$baseUrl/mangas"
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(MangaImageInterceptor(baseUrl))
 
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"
@@ -93,9 +98,18 @@ abstract class Hikarinagi : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/api/pages/mangas/reader/${chapter.memo.getString("cid")}/${chapter.url}", ensureSuccess = false)
-        if (response.code == 401) throw Exception("请先在 WebView 中登录")
-        val urls = response.parseAs<JsonObject>().getObject("manifest").getArray("pages").map { it.obj.getString("src") }
-        return List(urls.size) { Page(it, imageUrl = urls[it]) }
+        val cid = chapter.memo.getString("cid")
+        val response = client.get("$baseUrl/api/pages/mangas/reader/$cid/${chapter.url}", ensureSuccess = false)
+        if (!response.isSuccessful) {
+            val code = response.code
+            response.close()
+            throw Exception(if (code == 401) "请先在 WebView 中登录" else "获取章节失败（HTTP $code）")
+        }
+        // A page only carries its id; the image itself comes from an encrypted POST, see MangaImageInterceptor.
+        return response.parseAs<JsonObject>().getObject("manifest").getArray("pages").mapIndexed { index, page ->
+            with(page.obj) {
+                Page(index, imageUrl = MangaImageInterceptor.createUrl(cid, chapter.url, getInt("id").toString(), getStringOrNull("mime_type")))
+            }
+        }
     }
 }
