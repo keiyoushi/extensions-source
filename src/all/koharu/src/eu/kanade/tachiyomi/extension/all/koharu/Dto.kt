@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.koharu
 
-import eu.kanade.tachiyomi.extension.all.koharu.Koharu.Companion.dateReformat
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.Serializable
 import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class Tag(
@@ -13,21 +13,21 @@ class Tag(
 )
 
 @Serializable
-class Filter(
+class FilterDto(
     private val id: Int,
     private val name: String,
     private val namespace: Int = 0,
 ) {
     fun toTag() = when (namespace) {
-        0 -> KoharuFilters.Genre(id, name)
-        1 -> KoharuFilters.Artist(id, name)
-        2 -> KoharuFilters.Circle(id, name)
-        3 -> KoharuFilters.Parody(id, name)
-        8 -> KoharuFilters.Male(id, name)
-        9 -> KoharuFilters.Female(id, name)
-        10 -> KoharuFilters.Mixed(id, name)
-        12 -> KoharuFilters.Other(id, name)
-        else -> KoharuFilters.Tag(id, name, namespace)
+        0 -> GenreTagFilter(id, name)
+        1 -> ArtistTagFilter(id, name)
+        2 -> CircleTagFilter(id, name)
+        3 -> ParodyTagFilter(id, name)
+        8 -> MaleTagFilter(id, name)
+        9 -> FemaleTagFilter(id, name)
+        10 -> MixedTagFilter(id, name)
+        12 -> OtherTagFilter(id, name)
+        else -> FilterTag(id, name, namespace)
     }
 }
 
@@ -119,9 +119,7 @@ class MangaDetail(
 
             if (appended) append("\n")
 
-            try {
-                append("Posted: ", dateReformat.format(created_at), "\n")
-            } catch (_: Exception) {}
+            append("Posted: ", Instant.fromEpochMilliseconds(created_at).toString(), "\n")
 
             append("Pages: ", thumbnails.entries.size, "\n\n")
         }

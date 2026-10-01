@@ -1,62 +1,65 @@
 package eu.kanade.tachiyomi.extension.all.koharu
 
-import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.AlertDialog
 import android.app.Application
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
+import android.graphics.Color
+import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.artistList
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.circleList
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.femaleList
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.genreList
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.getFilters
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.maleList
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.mixedList
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.otherList
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.parodyList
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.tagsFetchAttempts
-import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.tagsFetched
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.rateLimit
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
+import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
-import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import okhttp3.RequestBody
+import java.lang.ref.WeakReference
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Koharu :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
+
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            if (response.code == 403 && request.url.queryParameter("crt") != null) {
+                response.close()
+                clearance = null
+                throw HttpException(403)
+            } else {
+                response
+            }
+        }
+    }
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -68,13 +71,9 @@ abstract class Koharu :
             else -> ""
         }
 
-    private val apiUrl = API_DOMAIN
-
-    private val apiBooksUrl = "$apiUrl/books"
-
-    override val supportsLatest = true
-
-    private val json: Json by injectLazy()
+    private val apiDomain = "schale.network"
+    private val apiUrl get() = "https://api.$apiDomain"
+    private val authUrl get() = "https://auth.$apiDomain"
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
     private fun String.shortenTitle() = replace(shortenTitleRegex, "").trim()
@@ -83,231 +82,81 @@ abstract class Koharu :
 
     private fun remadd() = preferences.getBoolean(PREF_REM_ADD, false)
 
-    private fun alwaysExcludeTags() = preferences.getString(PREF_EXCLUDE_TAGS, "")
+    private fun alwaysExcludeTags() = preferences.getString(PREF_EXCLUDE_TAGS, null)
+        ?.takeIf(String::isNotBlank)
+        ?.split(",")
+        ?.filter { it.isNotBlank() }
+        ?.map { it.trim() }
+        .orEmpty()
 
-    private var domainUrlCache: String? = null
-    private val domainUrl: String
-        get() {
-            return domainUrlCache ?: run {
-                val domain = getDomain()
-                domainUrlCache = domain
-                domain
-            }
-        }
-
-    private fun getDomain(): String {
-        try {
-            val noRedirectClient = client.newBuilder().followRedirects(false).build()
-            val host = noRedirectClient.newCall(GET(baseUrl, headers)).execute()
-                .headers["Location"]?.toHttpUrlOrNull()?.host
-                ?: return baseUrl
-            return "https://$host"
-        } catch (_: Exception) {
-            return baseUrl
-        }
-    }
-
-    private val lazyHeaders by lazy {
-        headersBuilder()
-            .set("Referer", "$domainUrl/")
-            .set("Origin", domainUrl)
-            .build()
-    }
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
-
-    private val clearanceClient = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url
-            val clearance = getClearance()
-                ?: throw IOException("Open webview to refresh token")
-
-            val newUrl = url.newBuilder()
-                .setQueryParameter("crt", clearance)
-                .build()
-            val newRequest = request.newBuilder()
-                .url(newUrl)
-                .build()
-
-            val response = chain.proceed(newRequest)
-
-            if (response.code !in listOf(400, 403)) {
-                return@addInterceptor response
-            }
-            response.close()
-            _clearance = null
-            throw IOException("Open webview to refresh token")
-        }
-        .rateLimit(3)
-        .build()
-
-    private val context: Application by injectLazy()
-    private val handler by lazy { Handler(Looper.getMainLooper()) }
-    private var _clearance: String? = null
-
-    @SuppressLint("SetJavaScriptEnabled")
-    fun getClearance(): String? {
-        _clearance?.also { return it }
-        val latch = CountDownLatch(1)
-        handler.post {
-            val webview = WebView(context)
-            with(webview.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
-            }
-            webview.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    view!!.evaluateJavascript("window.localStorage.getItem('clearance')") { clearance ->
-                        webview.stopLoading()
-                        webview.destroy()
-                        _clearance = clearance.takeUnless { it == "null" }?.removeSurrounding("\"")
-                        latch.countDown()
-                    }
-                }
-            }
-            webview.loadUrl("$domainUrl/")
-        }
-        latch.await(10, TimeUnit.SECONDS)
-        return _clearance
-    }
-
-    private fun getManga(book: Entry) = SManga.create().apply {
-        setUrlWithoutDomain("${book.id}/${book.key}")
-        title = if (remadd()) book.title.shortenTitle() else book.title
-        thumbnail_url = book.thumbnail.path
-    }
-
-    private fun getImagesByMangaData(entry: MangaData, entryId: String, entryKey: String): Pair<ImagesInfo, String> {
-        val data = entry.data
-        fun getIPK(
-            ori: DataKey?,
-            alt1: DataKey?,
-            alt2: DataKey?,
-            alt3: DataKey?,
-            alt4: DataKey?,
-        ): Pair<Int?, String?> = Pair(
-            ori?.id ?: alt1?.id ?: alt2?.id ?: alt3?.id ?: alt4?.id,
-            ori?.key ?: alt1?.key ?: alt2?.key ?: alt3?.key ?: alt4?.key,
-        )
-        val (id, public_key) = when (quality()) {
-            "1600" -> getIPK(data.`1600`, data.`1280`, data.`0`, data.`980`, data.`780`)
-            "1280" -> getIPK(data.`1280`, data.`1600`, data.`0`, data.`980`, data.`780`)
-            "980" -> getIPK(data.`980`, data.`1280`, data.`0`, data.`1600`, data.`780`)
-            "780" -> getIPK(data.`780`, data.`980`, data.`0`, data.`1280`, data.`1600`)
-            else -> getIPK(data.`0`, data.`1600`, data.`1280`, data.`980`, data.`780`)
-        }
-
-        if (id == null || public_key == null) {
-            throw Exception("No Images Found")
-        }
-
-        val realQuality = when (id) {
-            data.`1600`?.id -> "1600"
-            data.`1280`?.id -> "1280"
-            data.`980`?.id -> "980"
-            data.`780`?.id -> "780"
-            else -> "0"
-        }
-
-        val imagesResponse = clearanceClient.newCall(GET("$apiBooksUrl/data/$entryId/$entryKey/$id/$public_key/$realQuality", lazyHeaders)).execute()
-        val images = imagesResponse.parseAs<ImagesInfo>() to realQuality
-        return images
-    }
-
-    // Latest
-
-    override fun latestUpdatesRequest(page: Int) = GET(
-        apiBooksUrl.toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-
-            val terms: MutableList<String> = mutableListOf()
-            if (lang != "all") terms += "language:\"^$searchLang$\""
-            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
-                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
-            if (alwaysExcludeTags.isNotEmpty()) {
-                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
-            }
-            if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
-        }.build(),
-        lazyHeaders,
-    )
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    // Popular
-
-    override fun popularMangaRequest(page: Int) = GET(
-        apiBooksUrl.toHttpUrl().newBuilder().apply {
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
             addQueryParameter("sort", "8")
             addQueryParameter("page", page.toString())
 
             val terms: MutableList<String> = mutableListOf()
             if (lang != "all") terms += "language:\"^$searchLang$\""
-            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
-                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
-            if (alwaysExcludeTags.isNotEmpty()) {
-                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
-            }
+//            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
+//                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
+//            if (alwaysExcludeTags.isNotEmpty()) {
+//                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
+//            }
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
-        }.build(),
-        lazyHeaders,
-    )
+        }.build()
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<Books>()
-        return MangasPage(data.entries.map(::getManga), data.page * data.limit < data.total)
+        val data = client.get(url).parseAs<Books>()
+        return MangasPage(
+            data.entries.map { it.toSManga() },
+            data.page * data.limit < data.total,
+        )
     }
 
-    // Search
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
-        query.startsWith("https://") -> {
-            val url = query.toHttpUrl()
-            val id = "${url.pathSegments[1]}/${url.pathSegments[2]}"
-            fetchSearchManga(page, "$PREFIX_ID_KEY_SEARCH$id", filters)
-        }
+            val terms: MutableList<String> = mutableListOf()
+            if (lang != "all") terms += "language:\"^$searchLang$\""
+//            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
+//                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
+//            if (alwaysExcludeTags.isNotEmpty()) {
+//                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
+//            }
+            if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
+        }.build()
 
-        query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
-            val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
-            val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()
-            Observable.just(
-                MangasPage(listOf(mangaDetailsParse(response)), false),
-            )
-        }
-
-        else -> super.fetchSearchManga(page, query, filters)
+        val data = client.get(url).parseAs<Books>()
+        return MangasPage(
+            data.entries.map { it.toSManga() },
+            data.page * data.limit < data.total,
+        )
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = apiBooksUrl.toHttpUrl().newBuilder().apply {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
             val terms: MutableList<String> = mutableListOf()
             val includedTags: MutableList<Int> = mutableListOf()
             val excludedTags: MutableList<Int> = mutableListOf()
 
             if (lang != "all") terms += "language:\"^$searchLang$\""
-            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
-                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
-            if (alwaysExcludeTags.isNotEmpty()) {
-                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
-            }
+//            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
+//                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
+//            if (alwaysExcludeTags.isNotEmpty()) {
+//                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
+//            }
 
             filters.forEach { filter ->
                 when (filter) {
-                    is KoharuFilters.SortFilter -> addQueryParameter("sort", filter.getValue())
+                    is SortFilter -> addQueryParameter("sort", filter.getValue())
 
-                    is KoharuFilters.CategoryFilter -> {
+                    is CategoryFilter -> {
                         val activeFilter = filter.state.filter { it.state }
                         if (activeFilter.isNotEmpty()) {
                             addQueryParameter("cat", activeFilter.sumOf { it.value }.toString())
                         }
                     }
 
-                    is KoharuFilters.TagFilter -> {
+                    is TagFilter -> {
                         includedTags += filter.state
                             .filter { it.isIncluded() }
                             .map { it.id }
@@ -316,13 +165,13 @@ abstract class Koharu :
                             .map { it.id }
                     }
 
-                    is KoharuFilters.GenreConditionFilter -> {
+                    is TagConditionFilter -> {
                         if (filter.state > 0) {
                             addQueryParameter(filter.param, filter.toUriPart())
                         }
                     }
 
-                    is KoharuFilters.TextFilter -> {
+                    is TextFilter -> {
                         if (filter.state.isNotEmpty()) {
                             val tags = filter.state.split(",").filter(String::isNotBlank).joinToString(",")
                             if (tags.isNotBlank()) {
@@ -347,120 +196,360 @@ abstract class Koharu :
             addQueryParameter("page", page.toString())
         }.build()
 
-        return GET(url, lazyHeaders)
+        val data = client.get(url).parseAs<Books>()
+        return MangasPage(
+            data.entries.map { it.toSManga() },
+            data.page * data.limit < data.total,
+        )
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-
-    override fun getFilterList(): FilterList {
-        launchIO { fetchTags() }
-
-        return getFilters()
+    private fun Entry.toSManga() = SManga.create().apply {
+        url = "${this@toSManga.id}/$key"
+        title = if (remadd()) this@toSManga.title.shortenTitle() else this@toSManga.title
+        thumbnail_url = thumbnail.path
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+//
+//    // Search
+//
+//    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+//        query.startsWith("https://") -> {
+//            val url = query.toHttpUrl()
+//            val id = "${url.pathSegments[1]}/${url.pathSegments[2]}"
+//            fetchSearchManga(page, "$PREFIX_ID_KEY_SEARCH$id", filters)
+//        }
+//
+//        query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
+//            val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
+//            val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()
+//            Observable.just(
+//                MangasPage(listOf(mangaDetailsParse(response)), false),
+//            )
+//        }
+//
+//        else -> super.fetchSearchManga(page, query, filters)
+//    }
 
-    private fun launchIO(block: () -> Unit) = scope.launch { block() }
+    override val supportsFilterFetching get() = true
 
-    /**
-     * Fetch the genres from the source to be used in the filters.
-     */
-    private fun fetchTags() {
-        if (tagsFetchAttempts < 3 && !tagsFetched) {
-            try {
-                client.newCall(
-                    GET("$apiBooksUrl/tags/filters", lazyHeaders),
-                ).execute()
-                    .use { it.parseAs<List<Filter>>() }
-                    .also {
-                        tagsFetched = true
-                    }
-                    .takeIf { it.isNotEmpty() }
-                    ?.map { it.toTag() }
-                    ?.also { tags ->
-                        genreList = tags.filterIsInstance<KoharuFilters.Genre>()
-                        femaleList = tags.filterIsInstance<KoharuFilters.Female>()
-                        maleList = tags.filterIsInstance<KoharuFilters.Male>()
-                        artistList = tags.filterIsInstance<KoharuFilters.Artist>()
-                        circleList = tags.filterIsInstance<KoharuFilters.Circle>()
-                        parodyList = tags.filterIsInstance<KoharuFilters.Parody>()
-                        mixedList = tags.filterIsInstance<KoharuFilters.Mixed>()
-                        otherList = tags.filterIsInstance<KoharuFilters.Other>()
-                    }
-            } catch (_: Exception) {
-            } finally {
-                tagsFetchAttempts++
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/books/tags/filters").parseAs()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val tags = data?.parseAs<List<FilterDto>>()?.map { it.toTag() }.orEmpty()
+//        if (tags.isNotEmpty()) {
+//            val excluded = alwaysExcludeTags()
+//
+//            tags.onEach {
+//                it.
+//            }
+//        }
+
+        val filters = buildList {
+            addAll(
+                listOf(
+                    SortFilter(),
+                    CategoryFilter(),
+                    Filter.Separator(),
+                ),
+            )
+            if (tags.isNotEmpty()) {
+                addAll(
+                    listOf(
+                        TagFilter("Tags", tags.filterIsInstance<GenreTagFilter>()),
+                        TagFilter("Female Tags", tags.filterIsInstance<FemaleTagFilter>()),
+                        TagFilter("Male Tags", tags.filterIsInstance<MaleTagFilter>()),
+                        TagFilter("Artists", tags.filterIsInstance<ArtistTagFilter>()),
+                        TagFilter("Circles", tags.filterIsInstance<CircleTagFilter>()),
+                        TagFilter("Parodies", tags.filterIsInstance<ParodyTagFilter>()),
+                        TagFilter("Mixed", tags.filterIsInstance<MixedTagFilter>()),
+                        TagFilter("Other", tags.filterIsInstance<OtherTagFilter>()),
+                        TagIncludeCondition(),
+                        TagExcludeCondition(),
+                        Filter.Separator(),
+                    ),
+                )
             }
+            addAll(
+                listOf(
+                    Filter.Header("Separate tags with commas (,)"),
+                    Filter.Header("Prepend with dash (-) to exclude"),
+                    TextFilter("Magazines", "magazine"),
+                    TextFilter("Publishers", "publisher"),
+                    TextFilter("Characters", "character"),
+                    TextFilter("Cosplayers", "cosplayer"),
+                    Filter.Header("Filter by pages, for example: (>20)"),
+                    TextFilter("Pages", "pages"),
+                ),
+            )
         }
+
+        return FilterList(filters)
     }
 
-    // Details
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val data = client.get("$apiUrl/books/detail/${manga.url}").parseAs<MangaDetail>()
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBooksUrl/detail/${manga.url}", lazyHeaders)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val mangaDetail = response.parseAs<MangaDetail>()
-        return mangaDetail.toSManga().apply {
-            setUrlWithoutDomain("${mangaDetail.id}/${mangaDetail.key}")
-            title = if (remadd()) mangaDetail.title.shortenTitle() else mangaDetail.title
-        }
+        return SMangaUpdate(
+            data.toSManga().apply {
+                url = "${data.id}/${data.key}"
+                title = if (remadd()) data.title.shortenTitle() else data.title
+            },
+            listOf(
+                SChapter.create().apply {
+                    name = "Chapter"
+                    url = "${data.id}/${data.key}"
+                    date_upload = (data.updated_at ?: data.created_at)
+                },
+            ),
+        )
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/g/${manga.url}"
 
-    // Chapter
-
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiBooksUrl/detail/${manga.url}", lazyHeaders)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val manga = response.parseAs<MangaDetail>()
-        return listOf(
-            SChapter.create().apply {
-                name = "Chapter"
-                url = "${manga.id}/${manga.key}"
-                date_upload = (manga.updated_at ?: manga.created_at)
-            },
-        )
-    }
-
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/g/${chapter.url}"
 
-    // Page List
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val (chapterId, chapterKey) = chapter.url.split("/", limit = 2)
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = clearanceClient.newCall(pageListRequest(chapter))
-        .asObservableSuccess()
-        .map { response ->
-            pageListParse(response)
+        val data = client.post("$apiUrl/books/detail/$chapterId/$chapterKey?crt=${getClearance()}", RequestBody.EMPTY)
+            .parseAs<MangaData>().data
+
+        fun getIPK(
+            ori: DataKey?,
+            alt1: DataKey?,
+            alt2: DataKey?,
+            alt3: DataKey?,
+            alt4: DataKey?,
+        ): Pair<Int?, String?> = Pair(
+            ori?.id ?: alt1?.id ?: alt2?.id ?: alt3?.id ?: alt4?.id,
+            ori?.key ?: alt1?.key ?: alt2?.key ?: alt3?.key ?: alt4?.key,
+        )
+        val (id, publicKey) = when (quality()) {
+            "1600" -> getIPK(data.`1600`, data.`1280`, data.`0`, data.`980`, data.`780`)
+            "1280" -> getIPK(data.`1280`, data.`1600`, data.`0`, data.`980`, data.`780`)
+            "980" -> getIPK(data.`980`, data.`1280`, data.`0`, data.`1600`, data.`780`)
+            "780" -> getIPK(data.`780`, data.`980`, data.`0`, data.`1280`, data.`1600`)
+            else -> getIPK(data.`0`, data.`1600`, data.`1280`, data.`980`, data.`780`)
         }
 
-    override fun pageListRequest(chapter: SChapter): Request = POST("$apiBooksUrl/detail/${chapter.url}", lazyHeaders)
+        if (id == null || publicKey == null) {
+            return emptyList()
+        }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val mangaData = response.parseAs<MangaData>()
-        val url = response.request.url.toString()
-        val matches = Regex("""/detail/(\d+)/([a-z\d]+)""").find(url)
-        if (matches == null || matches.groupValues.size < 3) return emptyList()
-        val imagesInfo = getImagesByMangaData(mangaData, matches.groupValues[1], matches.groupValues[2])
+        val realQuality = when (id) {
+            data.`1600`?.id -> "1600"
+            data.`1280`?.id -> "1280"
+            data.`980`?.id -> "980"
+            data.`780`?.id -> "780"
+            else -> "0"
+        }
 
-        return imagesInfo.first.entries.mapIndexed { index, image ->
-            Page(index, imageUrl = "${imagesInfo.first.base}/${image.path}?w=${imagesInfo.second}")
+        val images = client.get("$apiUrl/books/data/$chapterId/$chapterKey/$id/$publicKey/$realQuality?crt=${getClearance()}").parseAs<ImagesInfo>()
+
+        return images.entries.mapIndexed { index, image ->
+            Page(index, imageUrl = "${images.base}/${image.path}?w=$realQuality")
         }
     }
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, lazyHeaders)
+    private var clearance: String?
+        get() = preferences.getString("clearance_cache", null)
+        set(value) {
+            if (value == null) {
+                preferences.edit().remove("clearance_cache").apply()
+            } else {
+                preferences.edit().putString("clearance_cache", value).apply()
+            }
+        }
+    private val mutex = Mutex()
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    private suspend fun getClearance(): String = mutex.withLock {
+        clearance?.also { return it }
 
-    override fun relatedMangaListRequest(manga: SManga) = POST("$apiBooksUrl/detail/${manga.url}", lazyHeaders)
-
-    override suspend fun fetchRelatedMangaList(manga: SManga) = clearanceClient.newCall(relatedMangaListRequest(manga))
-        .awaitSuccess()
-        .use { response ->
-            val data = response.parseAs<MangaData>()
-            data.similar.map(::getManga)
+        getLocalStorage(baseUrl, "clearance")?.also {
+            clearance = it
+            return@withLock it
         }
 
-    // Settings
+        var captcha: CaptchaDialog? = null
+        var cssHeight = 65
+
+        val challenge = try {
+            runWebView(2.minutes) {
+                userAgent = headers["User-Agent"]!!
+
+                jsBridge("turnstileToken") { resolve(it) }
+                jsBridge("turnstileError") { reject(Exception(it)) }
+
+                jsBridge("turnstileReady") {
+                    evaluateJs(
+                        """
+                        turnstile.render("#challenge", {
+                            sitekey: "0x4AAAAAAA1gtfQl-5lpZVcM",
+                            appearance: "interaction-only",
+                            callback: token => window.turnstileToken.post(token),
+                            "error-callback": error => window.turnstileError.post(error || "error"),
+                            "expired-callback": () => window.turnstileError.post("expired"),
+                            "before-interactive-callback": () => window.turnstileInteractive.post("interactive"),
+                            "after-interactive-callback": () => window.turnstileInteractiveDone.post("done"),
+                            "unsupported-callback": () => window.turnstileError.post("unsupported"),
+                            "timeout-callback": () => window.turnstileError.post("timeout"),
+                        });
+                        """.trimIndent(),
+                    )
+                }
+
+                jsBridge("turnstileResize") {
+                    it.toIntOrNull()?.let { h ->
+                        cssHeight = h
+                        captcha?.resize(h)
+                    }
+                }
+
+                jsBridge("turnstileInteractive") {
+                    val activity = currentActivity?.get()
+                    if (activity == null) {
+                        reject(Exception("Captcha needs the app in the foreground"))
+                        return@jsBridge
+                    }
+                    captcha = CaptchaDialog(activity, getWebView(), cssHeight) {
+                        reject(Exception("Captcha cancelled"))
+                    }.also { it.show() }
+                }
+
+                jsBridge("turnstileInteractiveDone") { captcha?.dismiss() }
+
+                loadData(
+                    baseUrl,
+                    """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <style>
+                            html, body { margin: 0; background: transparent; }
+                            body { display: flex; justify-content: center; align-items: flex-start; }
+                            #challenge { align-self: flex-start; }
+                        </style>
+                    </head>
+                    <body>
+                        <div id="challenge"></div>
+                        <script
+                            src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+                            onload="window.turnstileReady.post('ready')"
+                            onerror="window.turnstileError.post(event.type)"></script>
+                        <script>
+                            const challenge = document.getElementById('challenge');
+                            new ResizeObserver(() => {
+                                const h = Math.ceil(challenge.getBoundingClientRect().height);
+                                if (h > 0) window.turnstileResize.post(String(h));
+                            }).observe(challenge);
+                        </script>
+                    </body>
+                    </html>
+                    """.trimIndent(),
+                )
+            }
+        } finally {
+            captcha?.dismiss()
+        }
+
+        val authHeaders = headersBuilder()
+            .set("Accept", "*/*")
+            .set("Accept-Language", "en-US,en;q=0.9")
+            .set("Authorization", "Bearer $challenge")
+            .set("host", "auth.$apiDomain")
+            .set("Sec-Fetch-Dest", "empty")
+            .set("Sec-Fetch-Mode", "cors")
+            .set("Sec-Fetch-Site", "cross-site")
+            .build()
+
+        return client.post("$authUrl/clearance", authHeaders, RequestBody.EMPTY).body.string()
+            .also { clearance = it }
+    }
+
+    private var currentActivity: WeakReference<Activity>? = null
+
+    init {
+        applicationContext.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(a: Activity) {
+                currentActivity = WeakReference(a)
+            }
+            override fun onActivityPaused(a: Activity) {
+                if (currentActivity?.get() === a) currentActivity = null
+            }
+            override fun onActivityDestroyed(a: Activity) {
+                if (currentActivity?.get() === a) currentActivity = null
+            }
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityStopped(activity: Activity) = Unit
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+        })
+    }
+
+    private class CaptchaDialog(
+        private val activity: Activity,
+        private val webView: WebView,
+        initialCssHeight: Int,
+        private val onCancel: () -> Unit,
+    ) {
+        private var dialog: AlertDialog? = null
+        private var holder: FrameLayout? = null
+        private var closing = false
+        private val initialHeight = initialCssHeight.coerceIn(65, 400)
+
+        fun show() = activity.runOnUiThread {
+            if (dialog != null || closing) return@runOnUiThread
+
+            (webView.parent as? ViewGroup)?.removeView(webView)
+            webView.setBackgroundColor(Color.TRANSPARENT)
+
+            val frame = FrameLayout(activity).apply {
+                setPadding(dp(8), dp(8), dp(8), dp(16))
+                addView(webView, FrameLayout.LayoutParams(MATCH_PARENT, dp(initialHeight)))
+            }
+            holder = frame
+
+            dialog = AlertDialog.Builder(activity)
+                .setTitle("Captcha Required!")
+                .setView(frame)
+                .setOnDismissListener {
+                    holder?.removeView(webView)
+                    holder = null
+                    dialog = null
+                    if (!closing) onCancel()
+                }
+                .show()
+        }
+
+        fun resize(cssPx: Int) = activity.runOnUiThread {
+            webView.layoutParams = webView.layoutParams?.apply {
+                height = dp(cssPx.coerceIn(65, 400))
+            }
+        }
+
+        fun dismiss() = activity.runOnUiThread {
+            closing = true
+            dialog?.takeIf { it.isShowing }?.dismiss()
+        }
+
+        private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
+    }
+
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val token = clearance ?: return emptyList() // no need to load webview for related
+        val data = client.post("$apiUrl/books/detail/${manga.url}?crt=$token", RequestBody.EMPTY)
+            .parseAs<MangaData>()
+
+        return data.similar.map { it.toSManga() }
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -488,15 +577,10 @@ abstract class Koharu :
         }.also(screen::addPreference)
     }
 
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
-
     companion object {
         const val PREFIX_ID_KEY_SEARCH = "id:"
-        private const val API_DOMAIN = "https://api.schale.network"
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
         private const val PREF_EXCLUDE_TAGS = "pref_exclude_tags"
-
-        internal val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
     }
 }
