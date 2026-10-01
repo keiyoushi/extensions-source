@@ -8,32 +8,42 @@ import kotlinx.serialization.json.JsonObject
  * Resolves the short field names the site's Next.js RSC payload uses.
  *
  * The site renames a fixed set of fields to keys it ships in its own client bundle (module
- * `14834`) as a positional pair of lists: the logical names, then a comma-separated string of
- * keys. Reading that table from the bundle means a rebuild that renames the keys does not need
- * an extension update, unlike the key literals it replaces.
+ * `14834`): an array of the logical names next to a string holding every key concatenated into
+ * fixed-width slots, which the bundle rotates through by position. Reading that table from the
+ * bundle means a rebuild that renames the keys does not need an extension update, unlike the key
+ * literals it replaces.
  */
 internal object RscKeys {
 
-    /**
-     * The bundle's table: an array literal of logical names, then the variable holding the
-     * comma-separated keys. Names are paired with keys by position, exactly as the site does it.
-     */
+    /** Captures the logical names and the concatenated key blob of the bundle's rename table. */
     private val TABLE_REGEX = Regex(
-        """\[((?:"[A-Za-z0-9_]+",?)+)],\s*[^=;]{1,32}=\s*"([^"]*)"\.split\(","\)""",
+        """\[((?:"[A-Za-z0-9_]+",?)+)],\s*[^=;]{1,32}=\s*"([A-Za-z0-9]+)"""",
     )
 
     private val NAME_REGEX = Regex("\"([A-Za-z0-9_]+)\"")
+
+    /** The bundle lays the keys out in this many fixed-width slots and rotates through them. */
+    private const val SLOT_COUNT = 16
 
     /** Reads the rename table from a client chunk, or returns `null` if this chunk is not the one. */
     fun findTable(chunkSource: String): Map<String, String>? {
         val match = TABLE_REGEX.find(chunkSource) ?: return null
 
         val names = NAME_REGEX.findAll(match.groupValues[1]).map { it.groupValues[1] }.toList()
-        val keys = match.groupValues[2].split(",")
-        // The bundle itself throws when it cannot name every field; treat that as "not this chunk".
-        if (keys.size < names.size) return null
+        val slots = match.groupValues[2]
+        // The bundle itself throws unless the keys fill the slots exactly and name at most one
+        // field per slot; treat anything else as "not this chunk".
+        if (slots.length % SLOT_COUNT != 0 || names.size > SLOT_COUNT) return null
 
-        return names.zip(keys).toMap()
+        val keyLength = slots.length / SLOT_COUNT
+        // The bundle seeds its rotation from the blob's first character, so the name at index i
+        // lands on slot (i + rotation) % SLOT_COUNT rather than slot i.
+        val rotation = 1 + slots[0].code % (SLOT_COUNT - 1)
+
+        return names.mapIndexed { index, name ->
+            val start = (index + rotation) % SLOT_COUNT * keyLength
+            name to slots.substring(start, start + keyLength)
+        }.toMap()
     }
 
     /** Flattens [keys] into the single preference value that caches the table. */

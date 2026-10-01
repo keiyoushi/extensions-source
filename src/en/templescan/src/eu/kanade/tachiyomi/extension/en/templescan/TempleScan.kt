@@ -32,8 +32,12 @@ abstract class TempleScan :
 
     private val preferences by getPreferencesLazy()
 
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
+
     override fun OkHttpClient.Builder.configureClient() = apply {
-        rateLimit(1)
+        // Only the site itself is rate limited. The image CDN serves both the covers and the reader
+        // pages, and holding those to one request per second makes every scroll stall.
+        rateLimit(1) { it.host == baseUrlHost }
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
@@ -88,7 +92,7 @@ abstract class TempleScan :
     override fun getFilterList(data: JsonElement?) = getFilters()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "comic") {
+        if (url.host != baseUrlHost || url.pathSegments[0] != "comic") {
             return null
         }
 
