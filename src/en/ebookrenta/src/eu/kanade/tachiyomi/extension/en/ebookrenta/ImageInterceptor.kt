@@ -56,8 +56,10 @@ class ImageInterceptor : Interceptor {
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
         fun draw(part: String, x: Int, y: Int) {
+            val length = part.substringAfter(",", "0").toLong()
+            if (length == 0L) return
             val buffer = Buffer()
-            source.readFully(buffer, part.substringAfter(",").toLong())
+            source.readFully(buffer, length)
             val bitmap = BitmapFactory.decodeStream(buffer.inputStream())
             canvas.drawBitmap(bitmap, x.toFloat(), y.toFloat(), null)
             bitmap.recycle()
