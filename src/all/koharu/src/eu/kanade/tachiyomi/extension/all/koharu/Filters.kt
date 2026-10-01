@@ -56,19 +56,19 @@ class TagExcludeCondition :
         "e",
     )
 
-open class FilterTag(val id: Int, val name: String, val namespace: Int)
-class GenreTagFilter(id: Int, name: String, excluded: Boolean = false) : FilterTag(id, name, namespace = 0)
-class ArtistTagFilter(id: Int, name: String, excluded: Boolean = false) : FilterTag(id, name, namespace = 1)
-class CircleTagFilter(id: Int, name: String, excluded: Boolean = false) : FilterTag(id, name, namespace = 2)
-class ParodyTagFilter(id: Int, name: String, excluded: Boolean = false) : FilterTag(id, name, namespace = 3)
-class MaleTagFilter(id: Int, name: String, excluded: Boolean = false) : FilterTag(id, name, namespace = 8)
-class FemaleTagFilter(id: Int, name: String, excluded: Boolean = false) : FilterTag(id, name, namespace = 9)
-class MixedTagFilter(id: Int, name: String, excluded: Boolean = false) : FilterTag(id, name, namespace = 10)
-class OtherTagFilter(id: Int, name: String, excluded: Boolean = false) : FilterTag(id, name, namespace = 12)
+class TagFilter(
+    title: String,
+    tags: List<FilterDto>,
+    excludedTags: Set<String> = emptySet(),
+) : Filter.Group<TagTriState>(
+    title,
+    tags.map { tag ->
+        val state = if (tag.name.trim().lowercase() in excludedTags) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE
+        TagTriState(tag.name, tag.id, state)
+    },
+)
 
-class TagFilter(title: String, tags: List<FilterTag>) : Filter.Group<TagTriState>(title, tags.map { TagTriState(it.name, it.id) })
-
-class TagTriState(name: String, val id: Int) : Filter.TriState(name)
+class TagTriState(name: String, val id: Int, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
 
 open class UriPartFilter(
     displayName: String,

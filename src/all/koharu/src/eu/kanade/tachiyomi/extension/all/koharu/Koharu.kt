@@ -6,7 +6,6 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.os.Bundle
-import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.webkit.WebView
@@ -37,7 +36,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.RequestBody
 import java.lang.ref.WeakReference
 import kotlin.time.Duration.Companion.minutes
@@ -46,20 +44,6 @@ import kotlin.time.Duration.Companion.minutes
 abstract class Koharu :
     KeiSource(),
     ConfigurableSource {
-
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        addNetworkInterceptor { chain ->
-            val request = chain.request()
-            val response = chain.proceed(request)
-            if (response.code == 403 && request.url.queryParameter("crt") != null) {
-                response.close()
-                clearance = null
-                throw HttpException(403)
-            } else {
-                response
-            }
-        }
-    }
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -75,62 +59,40 @@ abstract class Koharu :
     private val apiUrl get() = "https://api.$apiDomain"
     private val authUrl get() = "https://auth.$apiDomain"
 
-    private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
-    private fun String.shortenTitle() = replace(shortenTitleRegex, "").trim()
+    private fun qualityPref() = preferences.getString(PREF_IMAGERES, "1280")!!
 
-    private fun quality() = preferences.getString(PREF_IMAGERES, "1280")!!
+    private fun trimTitlePref() = preferences.getBoolean(PREF_REM_ADD, false)
 
-    private fun remadd() = preferences.getBoolean(PREF_REM_ADD, false)
-
-    private fun alwaysExcludeTags() = preferences.getString(PREF_EXCLUDE_TAGS, null)
-        ?.takeIf(String::isNotBlank)
+    private fun excludeTagsPref(): Set<String> = preferences.getString(PREF_EXCLUDE_TAGS, null)
         ?.split(",")
-        ?.filter { it.isNotBlank() }
-        ?.map { it.trim() }
+        ?.mapNotNull { it.trim().lowercase().takeIf(String::isNotEmpty) }
+        ?.toSet()
         .orEmpty()
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
+    private suspend fun getBooks(page: Int, sort: String? = null): MangasPage {
         val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
-            addQueryParameter("sort", "8")
+            sort?.let { addQueryParameter("sort", it) }
             addQueryParameter("page", page.toString())
 
-            val terms: MutableList<String> = mutableListOf()
+            val terms = mutableListOf<String>()
             if (lang != "all") terms += "language:\"^$searchLang$\""
-//            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
-//                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
-//            if (alwaysExcludeTags.isNotEmpty()) {
-//                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
-//            }
+            val excluded = excludeTagsPref()
+            if (excluded.isNotEmpty()) {
+                terms += "tag:\"${excluded.joinToString(",") { "-$it" }}\""
+            }
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
         }.build()
 
         val data = client.get(url).parseAs<Books>()
         return MangasPage(
-            data.entries.map { it.toSManga() },
+            data.entries.map { it.toSManga(trimTitlePref()) },
             data.page * data.limit < data.total,
         )
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
+    override suspend fun getPopularManga(page: Int): MangasPage = getBooks(page, sort = "8")
 
-            val terms: MutableList<String> = mutableListOf()
-            if (lang != "all") terms += "language:\"^$searchLang$\""
-//            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
-//                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
-//            if (alwaysExcludeTags.isNotEmpty()) {
-//                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
-//            }
-            if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
-        }.build()
-
-        val data = client.get(url).parseAs<Books>()
-        return MangasPage(
-            data.entries.map { it.toSManga() },
-            data.page * data.limit < data.total,
-        )
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getBooks(page)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
@@ -139,11 +101,6 @@ abstract class Koharu :
             val excludedTags: MutableList<Int> = mutableListOf()
 
             if (lang != "all") terms += "language:\"^$searchLang$\""
-//            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
-//                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
-//            if (alwaysExcludeTags.isNotEmpty()) {
-//                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
-//            }
 
             filters.forEach { filter ->
                 when (filter) {
@@ -198,89 +155,46 @@ abstract class Koharu :
 
         val data = client.get(url).parseAs<Books>()
         return MangasPage(
-            data.entries.map { it.toSManga() },
+            data.entries.map { it.toSManga(trimTitlePref()) },
             data.page * data.limit < data.total,
         )
     }
-
-    private fun Entry.toSManga() = SManga.create().apply {
-        url = "${this@toSManga.id}/$key"
-        title = if (remadd()) this@toSManga.title.shortenTitle() else this@toSManga.title
-        thumbnail_url = thumbnail.path
-    }
-
-//
-//    // Search
-//
-//    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
-//        query.startsWith("https://") -> {
-//            val url = query.toHttpUrl()
-//            val id = "${url.pathSegments[1]}/${url.pathSegments[2]}"
-//            fetchSearchManga(page, "$PREFIX_ID_KEY_SEARCH$id", filters)
-//        }
-//
-//        query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
-//            val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
-//            val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()
-//            Observable.just(
-//                MangasPage(listOf(mangaDetailsParse(response)), false),
-//            )
-//        }
-//
-//        else -> super.fetchSearchManga(page, query, filters)
-//    }
 
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/books/tags/filters").parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val tags = data?.parseAs<List<FilterDto>>()?.map { it.toTag() }.orEmpty()
-//        if (tags.isNotEmpty()) {
-//            val excluded = alwaysExcludeTags()
-//
-//            tags.onEach {
-//                it.
-//            }
-//        }
+        val tags = data?.parseAs<List<FilterDto>>().orEmpty()
+        val excluded = excludeTagsPref()
 
         val filters = buildList {
-            addAll(
-                listOf(
-                    SortFilter(),
-                    CategoryFilter(),
-                    Filter.Separator(),
-                ),
-            )
+            add(SortFilter())
+            add(CategoryFilter())
+            add(Filter.Separator())
+
             if (tags.isNotEmpty()) {
-                addAll(
-                    listOf(
-                        TagFilter("Tags", tags.filterIsInstance<GenreTagFilter>()),
-                        TagFilter("Female Tags", tags.filterIsInstance<FemaleTagFilter>()),
-                        TagFilter("Male Tags", tags.filterIsInstance<MaleTagFilter>()),
-                        TagFilter("Artists", tags.filterIsInstance<ArtistTagFilter>()),
-                        TagFilter("Circles", tags.filterIsInstance<CircleTagFilter>()),
-                        TagFilter("Parodies", tags.filterIsInstance<ParodyTagFilter>()),
-                        TagFilter("Mixed", tags.filterIsInstance<MixedTagFilter>()),
-                        TagFilter("Other", tags.filterIsInstance<OtherTagFilter>()),
-                        TagIncludeCondition(),
-                        TagExcludeCondition(),
-                        Filter.Separator(),
-                    ),
-                )
+                add(TagFilter("Tags", tags.filter { it.namespace == 0 }, excluded))
+                add(TagFilter("Female Tags", tags.filter { it.namespace == 9 }, excluded))
+                add(TagFilter("Male Tags", tags.filter { it.namespace == 8 }, excluded))
+                add(TagFilter("Artists", tags.filter { it.namespace == 1 }, excluded))
+                add(TagFilter("Circles", tags.filter { it.namespace == 2 }, excluded))
+                add(TagFilter("Parodies", tags.filter { it.namespace == 3 }, excluded))
+                add(TagFilter("Mixed", tags.filter { it.namespace == 10 }, excluded))
+                add(TagFilter("Other", tags.filter { it.namespace == 12 }, excluded))
+                add(TagIncludeCondition())
+                add(TagExcludeCondition())
+                add(Filter.Separator())
             }
-            addAll(
-                listOf(
-                    Filter.Header("Separate tags with commas (,)"),
-                    Filter.Header("Prepend with dash (-) to exclude"),
-                    TextFilter("Magazines", "magazine"),
-                    TextFilter("Publishers", "publisher"),
-                    TextFilter("Characters", "character"),
-                    TextFilter("Cosplayers", "cosplayer"),
-                    Filter.Header("Filter by pages, for example: (>20)"),
-                    TextFilter("Pages", "pages"),
-                ),
-            )
+
+            add(Filter.Header("Separate tags with commas (,)"))
+            add(Filter.Header("Prepend with dash (-) to exclude"))
+            add(TextFilter("Magazines", "magazine"))
+            add(TextFilter("Publishers", "publisher"))
+            add(TextFilter("Characters", "character"))
+            add(TextFilter("Cosplayers", "cosplayer"))
+            add(Filter.Header("Filter by pages, for example: (>20)"))
+            add(TextFilter("Pages", "pages"))
         }
 
         return FilterList(filters)
@@ -295,17 +209,8 @@ abstract class Koharu :
         val data = client.get("$apiUrl/books/detail/${manga.url}").parseAs<MangaDetail>()
 
         return SMangaUpdate(
-            data.toSManga().apply {
-                url = "${data.id}/${data.key}"
-                title = if (remadd()) data.title.shortenTitle() else data.title
-            },
-            listOf(
-                SChapter.create().apply {
-                    name = "Chapter"
-                    url = "${data.id}/${data.key}"
-                    date_upload = (data.updated_at ?: data.created_at)
-                },
-            ),
+            data.toSManga(trimTitlePref()),
+            listOf(data.toSChapter()),
         )
     }
 
@@ -316,45 +221,37 @@ abstract class Koharu :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (chapterId, chapterKey) = chapter.url.split("/", limit = 2)
 
-        val data = client.post("$apiUrl/books/detail/$chapterId/$chapterKey?crt=${getClearance()}", RequestBody.EMPTY)
-            .parseAs<MangaData>().data
+        return withClearance { crt ->
+            val data = client.post("$apiUrl/books/detail/$chapterId/$chapterKey?crt=$crt", RequestBody.EMPTY)
+                .parseAs<MangaData>().data
 
-        fun getIPK(
-            ori: DataKey?,
-            alt1: DataKey?,
-            alt2: DataKey?,
-            alt3: DataKey?,
-            alt4: DataKey?,
-        ): Pair<Int?, String?> = Pair(
-            ori?.id ?: alt1?.id ?: alt2?.id ?: alt3?.id ?: alt4?.id,
-            ori?.key ?: alt1?.key ?: alt2?.key ?: alt3?.key ?: alt4?.key,
-        )
-        val (id, publicKey) = when (quality()) {
-            "1600" -> getIPK(data.`1600`, data.`1280`, data.`0`, data.`980`, data.`780`)
-            "1280" -> getIPK(data.`1280`, data.`1600`, data.`0`, data.`980`, data.`780`)
-            "980" -> getIPK(data.`980`, data.`1280`, data.`0`, data.`1600`, data.`780`)
-            "780" -> getIPK(data.`780`, data.`980`, data.`0`, data.`1280`, data.`1600`)
-            else -> getIPK(data.`0`, data.`1600`, data.`1280`, data.`980`, data.`780`)
-        }
+            val selected = data.getBestQuality(qualityPref()) ?: return@withClearance emptyList()
 
-        if (id == null || publicKey == null) {
-            return emptyList()
-        }
+            val images = client.get(
+                "$apiUrl/books/data/$chapterId/$chapterKey/${selected.id}/${selected.key}/${selected.quality}?crt=$crt",
+            ).parseAs<ImagesInfo>()
 
-        val realQuality = when (id) {
-            data.`1600`?.id -> "1600"
-            data.`1280`?.id -> "1280"
-            data.`980`?.id -> "980"
-            data.`780`?.id -> "780"
-            else -> "0"
-        }
-
-        val images = client.get("$apiUrl/books/data/$chapterId/$chapterKey/$id/$publicKey/$realQuality?crt=${getClearance()}").parseAs<ImagesInfo>()
-
-        return images.entries.mapIndexed { index, image ->
-            Page(index, imageUrl = "${images.base}/${image.path}?w=$realQuality")
+            images.entries.mapIndexed { index, image ->
+                Page(index, imageUrl = "${images.base}/${image.path}?w=${selected.quality}")
+            }
         }
     }
+
+    private suspend fun <T> withClearance(block: suspend (crt: String) -> T): T {
+        var crt = getClearance()
+        return try {
+            block(crt)
+        } catch (e: Exception) {
+            if (e.is403()) {
+                crt = getClearance(failedToken = crt)
+                block(crt)
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private fun Exception.is403(): Boolean = this is HttpException && message?.contains("403") == true
 
     private var clearance: String?
         get() = preferences.getString("clearance_cache", null)
@@ -367,12 +264,18 @@ abstract class Koharu :
         }
     private val mutex = Mutex()
 
-    private suspend fun getClearance(): String = mutex.withLock {
-        clearance?.also { return it }
+    private suspend fun getClearance(failedToken: String? = null): String = mutex.withLock {
+        if (failedToken != null && clearance == failedToken) {
+            clearance = null
+        }
 
-        getLocalStorage(baseUrl, "clearance")?.also {
-            clearance = it
-            return@withLock it
+        clearance?.takeIf { it != failedToken }?.also { return it }
+
+        if (failedToken == null) {
+            runCatching { getLocalStorage(baseUrl, "clearance") }.getOrNull()?.also {
+                clearance = it
+                return@withLock it
+            }
         }
 
         var captcha: CaptchaDialog? = null
@@ -543,13 +446,13 @@ abstract class Koharu :
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = runCatching {
         val token = clearance ?: return emptyList() // no need to load webview for related
         val data = client.post("$apiUrl/books/detail/${manga.url}?crt=$token", RequestBody.EMPTY)
             .parseAs<MangaData>()
 
-        return data.similar.map { it.toSManga() }
-    }
+        data.similar.map { it.toSManga(trimTitlePref()) }
+    }.getOrDefault(emptyList())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -573,12 +476,11 @@ abstract class Koharu :
             key = PREF_EXCLUDE_TAGS
             title = "Tags to exclude from browse/search"
             summary = "Separate tags with commas (,).\n" +
-                "Excluding: ${alwaysExcludeTags()}"
+                "Excluding: ${excludeTagsPref().joinToString(", ")}"
         }.also(screen::addPreference)
     }
 
     companion object {
-        const val PREFIX_ID_KEY_SEARCH = "id:"
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
         private const val PREF_EXCLUDE_TAGS = "pref_exclude_tags"

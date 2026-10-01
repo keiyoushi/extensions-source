@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.koharu
 
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.Locale
 import kotlin.time.Instant
@@ -14,22 +16,10 @@ class Tag(
 
 @Serializable
 class FilterDto(
-    private val id: Int,
-    private val name: String,
-    private val namespace: Int = 0,
-) {
-    fun toTag() = when (namespace) {
-        0 -> GenreTagFilter(id, name)
-        1 -> ArtistTagFilter(id, name)
-        2 -> CircleTagFilter(id, name)
-        3 -> ParodyTagFilter(id, name)
-        8 -> MaleTagFilter(id, name)
-        9 -> FemaleTagFilter(id, name)
-        10 -> MixedTagFilter(id, name)
-        12 -> OtherTagFilter(id, name)
-        else -> FilterTag(id, name, namespace)
-    }
-}
+    val id: Int,
+    val name: String,
+    val namespace: Int = 0,
+)
 
 @Serializable
 class Books(
@@ -42,22 +32,31 @@ class Books(
 @Serializable
 class Entry(
     val id: Int,
-    val key: String,
+    private val key: String,
     val title: String,
-    val thumbnail: Thumbnail,
-)
+    private val thumbnail: Thumbnail,
+) {
+    fun toSManga(removeAddInfo: Boolean = false) = SManga.create().apply {
+        url = "${this@Entry.id}/$key"
+        title = if (removeAddInfo) this@Entry.title.shortenTitle() else this@Entry.title
+        thumbnail_url = thumbnail.path
+    }
+}
+
+private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+fun String.shortenTitle() = replace(shortenTitleRegex, "").trim()
 
 @Serializable
 class MangaDetail(
-    val id: Int,
-    val title: String,
-    val key: String,
-    val created_at: Long = 0L,
-    val updated_at: Long?,
-    val thumbnails: Thumbnails,
-    val tags: List<Tag> = emptyList(),
+    private val id: Int,
+    private val title: String,
+    private val key: String,
+    @SerialName("created_at") private val createdAt: Long = 0L,
+    @SerialName("updated_at") private val updatedAt: Long? = null,
+    private val thumbnails: Thumbnails,
+    private val tags: List<Tag> = emptyList(),
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(removeAddInfo: Boolean = false) = SManga.create().apply {
         val artists = mutableListOf<String>()
         val circles = mutableListOf<String>()
         val parodies = mutableListOf<String>()
@@ -70,7 +69,7 @@ class MangaDetail(
         val language = mutableListOf<String>()
         val other = mutableListOf<String>()
         val uploaders = mutableListOf<String>()
-        val tags = mutableListOf<String>()
+        val generalTags = mutableListOf<String>()
         this@MangaDetail.tags.forEach { tag ->
             when (tag.namespace) {
                 1 -> artists.add(tag.name)
@@ -85,18 +84,20 @@ class MangaDetail(
                 10 -> mixed.add(tag.name)
                 11 -> language.add(tag.name)
                 12 -> other.add(tag.name)
-                else -> tags.add(tag.name)
+                else -> generalTags.add(tag.name)
             }
         }
 
         var appended = false
         fun List<String>.joinAndCapitalizeEach(): String? = this.emptyToNull()?.joinToString { it.capitalizeEach() }?.apply { appended = true }
 
+        url = "$id/$key"
+        title = if (removeAddInfo) this@MangaDetail.title.shortenTitle() else this@MangaDetail.title
         thumbnail_url = thumbnails.base + thumbnails.main.path
 
         author = (circles.emptyToNull() ?: artists).joinToString { it.capitalizeEach() }
         artist = artists.joinToString { it.capitalizeEach() }
-        genre = (artists + circles + parodies + magazines + characters + cosplayers + tags + females + males + mixed + other).joinToString { it.capitalizeEach() }
+        genre = (artists + circles + parodies + magazines + characters + cosplayers + generalTags + females + males + mixed + other).joinToString { it.capitalizeEach() }
         description = buildString {
             circles.joinAndCapitalizeEach()?.let {
                 append("Circles: ", it, "\n")
@@ -119,13 +120,19 @@ class MangaDetail(
 
             if (appended) append("\n")
 
-            append("Posted: ", Instant.fromEpochMilliseconds(created_at).toString(), "\n")
+            append("Posted: ", Instant.fromEpochMilliseconds(createdAt).toString(), "\n")
 
             append("Pages: ", thumbnails.entries.size, "\n\n")
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         initialized = true
+    }
+
+    fun toSChapter() = SChapter.create().apply {
+        name = "Chapter"
+        url = "$id/$key"
+        date_upload = updatedAt ?: createdAt
     }
 
     private fun String.capitalizeEach() = this.split(" ").joinToString(" ") { s ->
@@ -141,22 +148,7 @@ class MangaDetail(
 class MangaData(
     val data: Data,
     val similar: List<Entry> = emptyList(),
-) {
-    /**
-     * Return human-readable size of chapter.
-     * @param quality The quality set in PREF_IMAGERES
-     */
-    fun size(quality: String): String {
-        val dataKey = when (quality) {
-            "1600" -> data.`1600` ?: data.`1280` ?: data.`0`
-            "1280" -> data.`1280` ?: data.`1600` ?: data.`0`
-            "980" -> data.`980` ?: data.`1280` ?: data.`0`
-            "780" -> data.`780` ?: data.`980` ?: data.`0`
-            else -> data.`0`
-        }
-        return dataKey.readableSize()
-    }
-}
+)
 
 @Serializable
 class Thumbnails(
@@ -177,21 +169,43 @@ class Data(
     val `980`: DataKey? = null,
     val `1280`: DataKey? = null,
     val `1600`: DataKey? = null,
+) {
+    fun getBestQuality(preferred: String): SelectedQuality? {
+        val priorities = qualityPriorities[preferred] ?: defaultPriority
+        return priorities.firstNotNullOfOrNull { quality ->
+            val key = when (quality) {
+                "1600" -> `1600`
+                "1280" -> `1280`
+                "980" -> `980`
+                "780" -> `780`
+                "0" -> `0`
+                else -> null
+            }
+            if (key?.id != null && key.key != null) {
+                SelectedQuality(quality, key.id, key.key)
+            } else {
+                null
+            }
+        }
+    }
+}
+
+class SelectedQuality(val quality: String, val id: Int, val key: String)
+
+private val defaultPriority = listOf("1280", "1600", "980", "780", "0")
+private val qualityPriorities = mapOf(
+    "1600" to listOf("1600", "1280", "980", "780", "0"),
+    "1280" to listOf("1280", "1600", "980", "780", "0"),
+    "980" to listOf("980", "1280", "1600", "780", "0"),
+    "780" to listOf("780", "980", "1280", "1600", "0"),
+    "0" to listOf("0", "1280", "1600", "980", "780"),
 )
 
 @Serializable
 class DataKey(
     val id: Int? = null,
-    val size: Double = 0.0,
     val key: String? = null,
-) {
-    fun readableSize() = when {
-        size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
-        size >= 100 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0))} MB"
-        size >= 1000 -> "${"%.2f".format(size / (1000.0))} kB"
-        else -> "$size B"
-    }
-}
+)
 
 @Serializable
 class ImagesInfo(
