@@ -21,19 +21,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.Instant
 
 @Source
-class Manhwaz(
-    override val name: String = "ManhwaZ",
-    override val lang: String = "en",
-    override val id: Long = 0L,
-    override val baseUrl: String = "https://manhwaz.cc",
-) : KeiSource() {
+abstract class Manhwaz : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this.rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
+        // The homepage "popular" grid is static across ?page=N, so only the first page is useful.
         if (page > 1) {
             return MangasPage(emptyList(), false)
         }
@@ -93,10 +88,11 @@ class Manhwaz(
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val firstDocument = client.get(getMangaUrl(manga)).asJsoup()
-        val details = if (fetchDetails) parseMangaDetails(firstDocument) else SManga.create()
+        val details = parseMangaDetails(firstDocument)
 
         val chapterList = mutableListOf<SChapter>()
         if (fetchChapters) {
+            // Chapters are server-paginated via ?chapterPage=N; follow "Next page" until exhausted.
             var document = firstDocument
             while (true) {
                 chapterList += document.select("a.release-row").map(::releaseRowToChapter)
@@ -115,35 +111,24 @@ class Manhwaz(
             label to row.selectFirst("dd")
         }
 
-        title = document.selectFirst("section.manga-info__details h1")
-            ?.let { it.ownText().trim().ifEmpty { it.text().trim() } }
-            .orEmpty()
+        title = document.selectFirst("section.profile-manga h1")!!
+            .let { it.ownText().trim().ifEmpty { it.text().trim() } }
         author = facts["author(s)"]?.text()?.trim()
-        description = document.selectFirst("article.manga-info__summary")?.text()?.trim()
+        description = document.selectFirst("p.series-summary")?.text()?.trim()
         genre = facts["genre(s)"]?.select("a")?.joinToString(", ") { it.text().trim() }
-            ?: document.select(".genre-tags a").joinToString(", ") { it.text().trim() }
+            .takeUnless { it.isNullOrEmpty() }
         val statusText = facts["status"]?.text().orEmpty()
         status = when {
             statusText.contains("ongoing", ignoreCase = true) -> SManga.ONGOING
             statusText.contains("completed", ignoreCase = true) -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = document.selectFirst(".manga-info__cover img")?.attr("abs:src")
+        thumbnail_url = document.selectFirst("div.series-cover-frame img")?.attr("abs:src")
     }
 
     private fun releaseRowToChapter(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         name = element.selectFirst("strong")?.text()?.trim().orEmpty()
-        date_upload = element.selectFirst("time[datetime]")
-            ?.attr("datetime")
-            ?.let(::parseIsoDate)
-            ?: 0L
-    }
-
-    private fun parseIsoDate(iso: String): Long = try {
-        Instant.parse(iso).toEpochMilli()
-    } catch (_: Exception) {
-        0L
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
