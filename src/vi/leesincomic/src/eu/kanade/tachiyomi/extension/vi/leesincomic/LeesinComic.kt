@@ -22,7 +22,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -41,16 +40,7 @@ abstract class LeesinComic : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(imageRefererInterceptor())
         rateLimit(3)
-    }
-
-    private fun imageRefererInterceptor() = Interceptor { chain ->
-        val request = chain.request().newBuilder()
-            .removeHeader("Origin")
-            .header("Referer", "$baseUrl/")
-            .build()
-        chain.proceed(request)
     }
 
     // ============================== Popular ===============================
