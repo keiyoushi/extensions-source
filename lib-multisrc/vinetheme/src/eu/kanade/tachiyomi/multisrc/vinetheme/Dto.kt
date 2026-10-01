@@ -79,17 +79,17 @@ class MangaDto(
     val team: TeamDto? = null,
     val similarSeries: List<MangaDto> = emptyList(),
 ) {
-    fun toSManga(baseUrl: String): SManga = toSManga(baseUrl, SManga.create())
+    fun toSManga(baseUrl: String, manga: SManga = SManga.create(), fallbackSlug: String = ""): SManga = manga.apply {
+        val canonicalSlug = listOf(urlSlug, memo["slug"]?.string.orEmpty(), fallbackSlug)
+            .firstOrNull { it.isNotBlank() }
+            ?: slug
 
-    fun toSManga(baseUrl: String, manga: SManga): SManga = manga.apply {
         title = this@MangaDto.title
         thumbnail_url = coverUrl?.let { it.toAbsoluteUrl(baseUrl) }
         url = id
-        // Detail and chapter pages only serve real content under the canonical `urlSlug`; the
-        // plain `slug` renders a stub whose payload has no chapters.
         memo = buildJsonObject {
             put("id", id)
-            put("slug", urlSlug.ifBlank { slug })
+            put("slug", canonicalSlug)
         }
         status = this@MangaDto.status.toSMangaStatus()
         author = team?.name
