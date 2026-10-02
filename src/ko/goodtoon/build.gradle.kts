@@ -14,10 +14,7 @@ keiyoushi {
     source {
         lang = "ko"
         baseUrl {
-            mirrors(
-                "https://www.goodtoon005.com",
-                "https://www.goodtoon006.com",
-            )
+            custom("https://www.goodtoon005.com")
         }
     }
 
