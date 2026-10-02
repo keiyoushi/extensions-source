@@ -15,6 +15,14 @@ class ApiChapterData(
 )
 
 @Serializable
+class ChapterCryptoDto(
+    val keyId: String = "",
+    val key: String = "",
+    val expiresAt: Long? = null,
+    val keys: Map<String, String> = emptyMap(),
+)
+
+@Serializable
 class ApiChapter(
     val pages: String,
     val mangaID: Int,

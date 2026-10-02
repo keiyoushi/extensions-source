@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
 
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -35,6 +36,10 @@ import okhttp3.RequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.net.URLEncoder
+import java.security.GeneralSecurityException
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
@@ -49,6 +54,9 @@ abstract class MangaHub : KeiSource() {
     private val apiRegex = Regex("mhub_access=([^;]+)")
     private val spaceRegex = Regex("\\s+")
     private val apiErrorRegex = Regex("""rate\s*limit|api\s*key""")
+    private val chapterCryptoErrorRegex = Regex("""Chapter encryption unavailable|API chapter decryption failed""")
+    private val cryptoMutex = Mutex()
+    private var chapterCrypto: ChapterCrypto? = null
 
     override fun Headers.Builder.configureHeaders() = this
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
@@ -101,6 +109,39 @@ abstract class MangaHub : KeiSource() {
     }
 
     private class MangaHubCookieNotFound : IOException("mhub_access cookie not found")
+
+    private class ChapterCrypto(
+        val keyId: String,
+        val key: ByteArray,
+        val expiresAt: Long,
+        val keys: Map<String, ByteArray>,
+    )
+
+    private fun ChapterCryptoDto.toChapterCrypto(now: Long = System.currentTimeMillis()): ChapterCrypto {
+        val primary = decodeChapterCryptoKey(key)
+        if (keyId.isEmpty() || primary.size != 32) {
+            throw IOException("API chapter decryption failed")
+        }
+        return ChapterCrypto(
+            keyId = keyId,
+            key = primary,
+            expiresAt = expiresAt ?: now + 300_000,
+            keys = keys.mapValues { (_, value) ->
+                decodeChapterCryptoKey(value).also {
+                    if (it.size != 32) throw IOException("API chapter decryption failed")
+                }
+            },
+        )
+    }
+
+    private fun decodeChapterCryptoKey(value: String): ByteArray {
+        val padded = when (value.length % 4) {
+            2 -> "$value=="
+            3 -> "$value="
+            else -> value
+        }
+        return Base64.decode(padded, Base64.URL_SAFE or Base64.NO_WRAP)
+    }
 
     private val refreshMutex = Mutex()
     private var lastRefresh = 0L
@@ -281,11 +322,9 @@ abstract class MangaHub : KeiSource() {
             it[1] to it[2].substringAfter("-").toFloat()
         }
 
-        val chapterObject = fetchGraphQL(
-            pagesQuery(mangaSource, slug, number),
-            refreshUrl = "$baseUrl/chapter${chapter.url}",
-        ) { it.parseGraphQLAs<ApiChapterData>() }.chapter!!
-        val pages = chapterObject.pages.parseAs<ApiChapterPages>()
+        val refreshUrl = "$baseUrl/chapter${chapter.url}"
+        val chapterObject = fetchChapter(slug, number, refreshUrl)
+        val pages = decryptChapterPages(chapterObject.pages, refreshUrl).parseAs<ApiChapterPages>()
 
         // We'll update the cookie here to match the browser's "recently" opened chapter.
         // This mimics how the browser works and gives us more chance to receive a valid API key upon refresh
@@ -313,6 +352,82 @@ abstract class MangaHub : KeiSource() {
         return pages.images.mapIndexed { i, page ->
             Page(i, imageUrl = "$baseCdnUrl/${pages.page}$page")
         }
+    }
+
+    // The API rejects chapter queries until this same-origin endpoint has been hit,
+    // then returns pages as an enc:v1 AES-GCM payload.
+    private suspend fun fetchChapter(slug: String, number: Float, refreshUrl: String): ApiChapter {
+        val query = pagesQuery(mangaSource, slug, number)
+        return try {
+            loadChapter(query, refreshUrl)
+        } catch (e: GraphQLException) {
+            if (!chapterCryptoErrorRegex.containsMatchIn(e.message ?: "")) throw e
+            cryptoMutex.withLock { chapterCrypto = null }
+            loadChapter(query, refreshUrl)
+        }
+    }
+
+    private suspend fun loadChapter(query: String, refreshUrl: String): ApiChapter {
+        prefetchChapterCrypto(refreshUrl)
+        return fetchGraphQL(query, refreshUrl) { it.parseGraphQLAs<ApiChapterData>() }.chapter!!
+    }
+
+    private suspend fun prefetchChapterCrypto(refreshUrl: String?): ChapterCrypto {
+        freshChapterCrypto()?.let { return it }
+        if (accessCookie() == null) {
+            refreshApiKey(refreshUrl)
+        }
+        return cryptoMutex.withLock {
+            freshChapterCrypto()?.let { return@withLock it }
+            val cookie = accessCookie() ?: throw MangaHubCookieNotFound()
+            val dto = client.get(
+                "$baseUrl/api/chapter-crypto",
+                headersBuilder()
+                    .set("Accept", "application/json")
+                    .set("Referer", "$baseUrl/")
+                    .set("x-mhub-access", cookie.value)
+                    .set("Sec-Fetch-Dest", "empty")
+                    .set("Sec-Fetch-Mode", "cors")
+                    .removeAll("Upgrade-Insecure-Requests")
+                    .build(),
+            ).parseAs<ChapterCryptoDto>()
+            dto.toChapterCrypto().also { chapterCrypto = it }
+        }
+    }
+
+    private fun freshChapterCrypto(): ChapterCrypto? {
+        val cached = chapterCrypto ?: return null
+        return cached.takeIf { it.expiresAt - System.currentTimeMillis() > 30_000 }
+    }
+
+    private suspend fun decryptChapterPages(pages: String, refreshUrl: String): String {
+        if (!pages.startsWith("enc:v1:")) return pages
+        return try {
+            decryptEncV1(pages, prefetchChapterCrypto(refreshUrl))
+        } catch (e: Exception) {
+            if (e !is IOException && e !is GeneralSecurityException && e !is IllegalArgumentException) throw e
+            cryptoMutex.withLock { chapterCrypto = null }
+            decryptEncV1(pages, prefetchChapterCrypto(refreshUrl))
+        }
+    }
+
+    private fun decryptEncV1(pages: String, crypto: ChapterCrypto): String {
+        val parts = pages.split(':')
+        if (parts.size != 6 || parts[0] != "enc" || parts[1] != "v1") {
+            throw IOException("API chapter decryption failed")
+        }
+        val iv = decodeChapterCryptoKey(parts[3])
+        val tag = decodeChapterCryptoKey(parts[4])
+        val ciphertext = decodeChapterCryptoKey(parts[5])
+        if (iv.size != 12 || tag.size != 16 || ciphertext.isEmpty()) {
+            throw IOException("API chapter decryption failed")
+        }
+        val key = crypto.keys[parts[2]] ?: crypto.key.takeIf { crypto.keyId == parts[2] }
+            ?: throw IOException("API chapter decryption failed")
+        return Cipher.getInstance("AES/GCM/NoPadding").run {
+            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+            doFinal(ciphertext + tag)
+        }.toString(Charsets.UTF_8)
     }
 
     // Mimics the browser logging a chapter view
