@@ -16,7 +16,6 @@ import keiyoushi.utils.getInt
 import keiyoushi.utils.getLong
 import keiyoushi.utils.getObject
 import keiyoushi.utils.getString
-import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -102,16 +101,13 @@ abstract class Hikarinagi : KeiSource() {
         val cid = chapter.memo.getString("cid")
         val response = client.get("$baseUrl/api/pages/mangas/reader/$cid/${chapter.url}", ensureSuccess = false)
         if (!response.isSuccessful) {
-            val code = response.code
             response.close()
-            // Only the login case needs a message of its own; anything else is a plain HTTP failure.
-            if (code == 401) throw Exception("请先在 WebView 中登录")
-            throw HttpException(code)
+            if (response.code == 401) throw Exception("请先在 WebView 中登录") else throw HttpException(response.code)
         }
         // A page only carries its id; the image itself comes from an encrypted POST, see MangaImageInterceptor.
         return response.parseAs<JsonObject>().getObject("manifest").getArray("pages").mapIndexed { index, page ->
             with(page.obj) {
-                Page(index, imageUrl = MangaImageInterceptor.createUrl(cid, chapter.url, getInt("id").toString(), getStringOrNull("mime_type")))
+                Page(index, imageUrl = MangaImageInterceptor.createUrl(cid, chapter.url, getString("id"), getString("mime_type")))
             }
         }
     }

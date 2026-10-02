@@ -38,17 +38,16 @@ class MangaImageInterceptor(private val baseUrl: String) : Interceptor {
 
         val response = chain.proceed(contentRequest)
         if (!response.isSuccessful) {
-            val code = response.code
             response.close()
-            throw IOException(if (code == 401) "请先在 WebView 中登录" else "加载图片失败（HTTP $code）")
+            throw IOException(if (response.code == 401) "请先在 WebView 中登录" else "加载图片失败（HTTP ${response.code}）")
         }
 
         // The answer is decrypted while the reader reads it, so a page is never held whole in memory.
         val source = response.body.source()
         val cipher = newCipher(token, source.readByteArray(IV_SIZE.toLong()), "manga:page:$mangaId:$chapterId:$pageId")
-        val plaintextLength = response.body.contentLength().takeIf { it > 0 }?.minus(IV_SIZE + TAG_BITS / 8) ?: -1L
+        val contentLength = response.body.contentLength().takeIf { it > 0 }?.minus(IV_SIZE + TAG_BITS / 8) ?: -1L
         val page = source.cipherSource(cipher).buffer()
-            .asResponseBody((url.queryParameter("mime") ?: "image/jpeg").toMediaType(), plaintextLength)
+            .asResponseBody(url.queryParameter("mime")!!.toMediaType(), contentLength)
 
         return Response.Builder().request(request).code(200).message("OK").protocol(Protocol.HTTP_2).body(page).build()
     }
@@ -78,7 +77,7 @@ class MangaImageInterceptor(private val baseUrl: String) : Interceptor {
 
         private val random = SecureRandom()
 
-        /** Where the reader loads a page from; [mimeType] only labels the decrypted bytes. */
-        fun createUrl(mangaId: String, chapterId: String, pageId: String, mimeType: String?): String = "http://$HOST/$mangaId/$chapterId/$pageId" + (mimeType?.let { "?mime=$it" } ?: "")
+        /** Where the reader loads a page from; the type only labels the decrypted bytes. */
+        fun createUrl(mangaId: String, chapterId: String, pageId: String, mimeType: String) = "http://$HOST/$mangaId/$chapterId/$pageId?mime=$mimeType"
     }
 }
