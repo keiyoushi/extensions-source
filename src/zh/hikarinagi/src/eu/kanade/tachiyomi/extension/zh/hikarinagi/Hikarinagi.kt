@@ -30,7 +30,7 @@ abstract class Hikarinagi : KeiSource() {
 
     override fun getHomeUrl() = "$baseUrl/mangas"
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(MangaImageInterceptor(baseUrl))
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(MangaImageInterceptor())
 
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"
@@ -104,10 +104,11 @@ abstract class Hikarinagi : KeiSource() {
             response.close()
             if (response.code == 401) throw Exception("请先在 WebView 中登录") else throw HttpException(response.code)
         }
-        // A page only carries its id; the image itself comes from an encrypted POST, see MangaImageInterceptor.
+        // A page only carries its id; the image itself comes from a POST to the content endpoint, see
+        // MangaImageInterceptor. The reader is handed the site's own URL, so it follows the mirror.
         return response.parseAs<JsonObject>().getObject("manifest").getArray("pages").mapIndexed { index, page ->
             with(page.obj) {
-                Page(index, imageUrl = MangaImageInterceptor.createUrl(cid, chapter.url, getString("id"), getString("mime_type")))
+                Page(index, imageUrl = MangaImageInterceptor.createUrl(baseUrl, cid, chapter.url, getString("id"), getString("mime_type")))
             }
         }
     }
