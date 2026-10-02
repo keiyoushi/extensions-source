@@ -23,6 +23,7 @@ import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 
 @Source
@@ -31,6 +32,9 @@ abstract class Hikarinagi : KeiSource() {
     override fun getHomeUrl() = "$baseUrl/mangas"
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(MangaImageInterceptor())
+
+    /** A page is a POST the site keys with a token of our own; [MangaImageInterceptor] decrypts it. */
+    override fun imageRequest(page: Page): Request = MangaImageInterceptor.pageRequest(page, headers)
 
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"

@@ -1,12 +1,15 @@
 package eu.kanade.tachiyomi.extension.zh.hikarinagi
 
 import android.util.Base64
+import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.buffer
@@ -18,29 +21,26 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Serves a manga page. The site answers one with a POST whose body carries a token the client
- * generated itself, and the answer is `iv || AES-256-GCM(ciphertext)` keyed by that token.
+ * Serves a manga page. The site no longer hands out image URLs: it wants a POST whose body carries
+ * a token the client generated itself, and it answers with `iv || AES-256-GCM(ciphertext)` keyed by
+ * that token.
  *
- * The page list hands the reader the site's own content URL, so the browser-side request is the
- * one a mirror change is reflected in; this turns its GET into that POST and hands the decrypted
- * bytes back. The type they are labelled with rides in the fragment, where the site never sees it.
+ * The request is built by [pageRequest] and sent by `Hikarinagi.imageRequest`, so this only has to
+ * decrypt what comes back. The token it needs for that rides in the request fragment, where the
+ * site never sees it.
  */
 class MangaImageInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val url = request.url
-        // Only the reader's pages carry a fragment, and it is the type of the bytes to serve.
-        val mime = url.fragment ?: return chain.proceed(request)
+        // Only the reader's pages carry a fragment, and it is `<type>;<token>`.
+        val fragment = request.url.fragment ?: return chain.proceed(request)
+        val mime = fragment.substringBefore(';')
+        val token = Base64.decode(fragment.substringAfter(';'), TOKEN_ENCODING)
         // .../api/v3/reader/mangas/<mangaId>/chapters/<chapterId>/pages/<pageId>/content
-        val (mangaId, _, chapterId, _, pageId) = url.pathSegments.drop(4)
+        val (mangaId, _, chapterId, _, pageId) = request.url.pathSegments.drop(4)
 
-        val token = newToken()
-        val contentRequest = request.newBuilder()
-            .post(buildJsonObject { put("p", Base64.encodeToString(token, TOKEN_ENCODING)) }.toJsonRequestBody())
-            .build()
-
-        val response = chain.proceed(contentRequest)
+        val response = chain.proceed(request)
         if (!response.isSuccessful) {
             response.close()
             throw IOException(if (response.code == 401) "请先在 WebView 中登录" else "加载图片失败（HTTP ${response.code}）")
@@ -54,9 +54,6 @@ class MangaImageInterceptor : Interceptor {
 
         return Response.Builder().request(request).code(200).message("OK").protocol(Protocol.HTTP_2).body(page).build()
     }
-
-    /** The token a page request carries; the site encrypts its answer with it. */
-    private fun newToken(): ByteArray = ByteArray(TOKEN_SIZE).also(random::nextBytes)
 
     /** The cipher the answer is read through; the site puts its iv in front of the ciphertext. */
     private fun newCipher(token: ByteArray, iv: ByteArray, associatedData: String): Cipher {
@@ -78,10 +75,28 @@ class MangaImageInterceptor : Interceptor {
 
         private val random = SecureRandom()
 
+        /** The token a page request carries; the site encrypts its answer with it. */
+        private fun newToken(): ByteArray = ByteArray(TOKEN_SIZE).also(random::nextBytes)
+
         /**
-         * Where the reader loads a page from: the site's own content URL, with the type it should be
-         * labelled with in the fragment. Built here so it follows the mirror [Hikarinagi.baseUrl].
+         * Where the reader loads a page from: the site's own content URL, with the type the decrypted
+         * bytes should be labelled with in the fragment. Built here so it follows the mirror
+         * [Hikarinagi.baseUrl].
          */
         fun createUrl(baseUrl: String, mangaId: String, chapterId: String, pageId: String, mimeType: String): String = "$baseUrl/api/v3/reader/mangas/$mangaId/chapters/$chapterId/pages/$pageId/content" + "#$mimeType"
+
+        /**
+         * The request the reader sends for a page. The token it carries is also what the answer is
+         * keyed by, so it goes in the fragment too, where [intercept] picks it up and the site does
+         * not see it.
+         */
+        fun pageRequest(page: Page, headers: Headers): Request {
+            val token = Base64.encodeToString(newToken(), TOKEN_ENCODING)
+            return Request.Builder()
+                .url("${page.imageUrl!!};$token")
+                .post(buildJsonObject { put("p", token) }.toJsonRequestBody())
+                .headers(headers)
+                .build()
+        }
     }
 }
