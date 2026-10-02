@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Comic Festa"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "clipstudioreader"

@@ -102,7 +102,11 @@ private class CookieInterceptor(
         setCookies(domain, cookies)
 
         val cookieList = request.header("Cookie")?.split("; ") ?: emptyList()
-        if (cookies.all { (key, value) -> "$key=$value" in cookieList }) {
+        val isClean = cookies.all { (key, value) ->
+            val matches = cookieList.filter { it.startsWith("$key=") }
+            matches.size == 1 && matches.first() == "$key=$value"
+        }
+        if (isClean) {
             return chain.proceed(request)
         }
 
