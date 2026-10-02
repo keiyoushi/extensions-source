@@ -52,17 +52,21 @@ class SeriesListItem(
     private val firstEpisode: Permalink?,
     private val firstVolume: Permalink?,
     private val latestEpisode: LatestEpisode?,
+    private val latestVolume: LatestVolume?,
     val likeCount: Int,
 ) {
     val latestPublishedAt: Long
         get() = Instant.tryParse(latestEpisode?.publishedAt)
+
+    val isVolumeOnly: Boolean
+        get() = firstEpisode == null
 
     fun toSManga(): SManga? {
         val permalink = (firstEpisode ?: firstVolume)?.permalink ?: return null
         return SManga.create().apply {
             url = databaseId
             title = this@SeriesListItem.title
-            thumbnail_url = thumbnailUri
+            thumbnail_url = thumbnailUri ?: latestVolume?.thumbnailUri
             memo = buildJsonObject {
                 put("path", permalink.toHttpUrl().encodedPath)
             }
@@ -81,6 +85,11 @@ class LatestEpisode(
 )
 
 @Serializable
+class LatestVolume(
+    val thumbnailUri: String?,
+)
+
+@Serializable
 class SeriesResponse(
     val series: SeriesDetails,
 )
@@ -94,6 +103,7 @@ class SeriesDetails(
     private val thumbnailUri: String?,
     private val firstEpisode: Permalink?,
     private val firstVolume: Permalink?,
+    private val latestVolume: LatestVolume?,
     val episodes: TotalCount,
     val volumes: TotalCount,
 ) {
@@ -102,7 +112,7 @@ class SeriesDetails(
         title = this@SeriesDetails.title
         author = this@SeriesDetails.author?.name
         description = this@SeriesDetails.description
-        thumbnail_url = thumbnailUri
+        thumbnail_url = thumbnailUri ?: latestVolume?.thumbnailUri
         memo = buildJsonObject {
             put("path", (firstEpisode ?: firstVolume)!!.permalink.toHttpUrl().encodedPath)
         }

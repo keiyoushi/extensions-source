@@ -79,7 +79,9 @@ abstract class GigaViewer :
         if (query.isNotBlank()) {
             val mangas = client.post(apiUrl, body = graphQLBody(SEARCH_QUERY, variables = SearchVariables(query)))
                 .parseGraphQLAs<SearchResponse>().searchSeries.edges
-                .mapNotNull { it.node.toSManga() }
+                .map { it.node }
+                .sortedBy { it.isVolumeOnly }
+                .mapNotNull { it.toSManga() }
             return MangasPage(mangas, false)
         }
 
@@ -105,7 +107,7 @@ abstract class GigaViewer :
     /**
      * Sets the url of an entry from a website list. These lists only link to an episode,
      * but a series thumbnail has the series id at the start of its file name.
-     * Resized thumbnails from `cdn-scissors.gigaviewer.com` contain that url as their last path segment.
+     * Thumbnails from `cdn-scissors.gigaviewer.com` contain that url as their last path segment.
      * Without a series thumbnail, the episode path is used instead and [fetchMangaUpdate] looks up its series.
      */
     protected fun SManga.setSeriesUrl(episodeUrl: String, thumbnailUrl: String?) {

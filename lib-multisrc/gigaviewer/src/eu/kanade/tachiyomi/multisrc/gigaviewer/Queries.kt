@@ -14,6 +14,9 @@ private val SERIES_LIST_ITEM_FRAGMENT = """
       latestEpisode {
         publishedAt
       }
+      latestVolume {
+        thumbnailUri
+      }
       likeCount
     }
 """.trimIndent()
@@ -68,6 +71,9 @@ val SERIES_QUERY = $$"""
         }
         firstVolume {
           permalink
+        }
+        latestVolume {
+          thumbnailUri
         }
         episodes: readableProducts(types: [EPISODE], first: 0) {
           totalCount
