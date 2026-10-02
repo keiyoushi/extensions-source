@@ -69,7 +69,8 @@ class MangaItem(
 @Serializable
 class ChapterItem(
     val id: Int,
-    val name: String,
+    // A chapter can be served without a name; the site itself shows no title for it either.
+    val name: String?,
     @SerialName("page_count") val size: Int,
     // @SerialName("chapter_type") val chapterType: String, // SERIALIZATION - 连载 | EXTRA - 番外
     // @SerialName("chapter_number") val chapterNumber: String?,
@@ -78,7 +79,7 @@ class ChapterItem(
 ) {
     fun toSChapter(cid: String, timestamp: Long) = SChapter.create().apply {
         url = id.toString()
-        name = this@ChapterItem.name
+        name = this@ChapterItem.name.orEmpty()
         scanlator = "${size}P"
         date_upload = timestamp
         memo = buildJsonObject { put("cid", cid) }
