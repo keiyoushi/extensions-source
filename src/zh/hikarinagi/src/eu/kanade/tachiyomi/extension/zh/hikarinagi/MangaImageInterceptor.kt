@@ -8,7 +8,9 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
+import okio.cipherSource
 import java.io.IOException
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -41,25 +43,27 @@ class MangaImageInterceptor(private val baseUrl: String) : Interceptor {
             throw IOException(if (code == 401) "请先在 WebView 中登录" else "加载图片失败（HTTP $code）")
         }
 
-        val page = response.use { decrypt(token, it.body.bytes(), "manga:page:$mangaId:$chapterId:$pageId") }
-        return Response.Builder().request(request).code(200).message("OK").protocol(Protocol.HTTP_2)
-            .body(page.toResponseBody((url.queryParameter("mime") ?: "image/jpeg").toMediaType())).build()
+        // The answer is decrypted while the reader reads it, so a page is never held whole in memory.
+        val source = response.body.source()
+        val cipher = newCipher(token, source.readByteArray(IV_SIZE.toLong()), "manga:page:$mangaId:$chapterId:$pageId")
+        val plaintextLength = response.body.contentLength().takeIf { it > 0 }?.minus(IV_SIZE + TAG_BITS / 8) ?: -1L
+        val page = source.cipherSource(cipher).buffer()
+            .asResponseBody((url.queryParameter("mime") ?: "image/jpeg").toMediaType(), plaintextLength)
+
+        return Response.Builder().request(request).code(200).message("OK").protocol(Protocol.HTTP_2).body(page).build()
     }
 
     /** The token a page request carries; the site encrypts its answer with it. */
     private fun newToken(): ByteArray = ByteArray(TOKEN_SIZE).also(random::nextBytes)
 
-    /** Decrypts a page the site bound to [associatedData] with the [token] that requested it. */
-    private fun decrypt(token: ByteArray, content: ByteArray, associatedData: String): ByteArray = try {
+    /** The cipher the answer is read through; the site puts its iv in front of the ciphertext. */
+    private fun newCipher(token: ByteArray, iv: ByteArray, associatedData: String): Cipher {
         // The key is the token's two halves XORed together.
         val key = ByteArray(TOKEN_SIZE / 2) { (token[it].toInt() xor token[it + TOKEN_SIZE / 2].toInt()).toByte() }
-        Cipher.getInstance("AES/GCM/NoPadding").run {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, content, 0, IV_SIZE))
+        return Cipher.getInstance("AES/GCM/NoPadding").apply {
+            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, iv))
             updateAAD(associatedData.toByteArray(Charsets.UTF_8))
-            doFinal(content, IV_SIZE, content.size - IV_SIZE)
         }
-    } catch (e: Exception) {
-        throw IOException(DECRYPT_FAILED, e)
     }
 
     companion object {
@@ -71,7 +75,6 @@ class MangaImageInterceptor(private val baseUrl: String) : Interceptor {
         private const val TOKEN_SIZE = 64
         private const val IV_SIZE = 12
         private const val TAG_BITS = 128
-        private const val DECRYPT_FAILED = "内容解密失败，请刷新后重试"
 
         private val random = SecureRandom()
 
