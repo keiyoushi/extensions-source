@@ -6,13 +6,15 @@ plugins {
 
 keiyoushi {
     name = "Despair Manga"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "mangathemesia"
 
     source {
         lang = "ar"
-        baseUrl = "https://despair-manga.net"
+        baseUrl {
+            custom("https://despair-world.com")
+        }
     }
 }
