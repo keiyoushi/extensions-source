@@ -37,7 +37,7 @@ jobs:
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
-      full_rebuild: ${{ steps.base.outputs.full_rebuild }}
+      full_rebuild: ${{ steps.base.outputs.full_rebuild || steps.generate-matrices.outputs.full_rebuild }}
     steps:
       - name: Checkout main branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
