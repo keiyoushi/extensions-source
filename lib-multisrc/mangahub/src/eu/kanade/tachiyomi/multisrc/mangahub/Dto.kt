@@ -27,6 +27,12 @@ class ApiChapterPages(
     @SerialName("i") val images: List<String>,
 )
 
+@Serializable
+class ChapterCryptoDto(
+    val key: String? = null,
+    val keys: Map<String, String>? = null,
+)
+
 // Search, Popular, Latest
 @Serializable
 class ApiSearchObject(

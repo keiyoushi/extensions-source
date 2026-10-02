@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
 
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,16 +12,24 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLException
+import keiyoushi.utils.array
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.get
+import keiyoushi.utils.getArray
+import keiyoushi.utils.getString
 import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
+import keiyoushi.utils.string
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -35,6 +44,9 @@ import okhttp3.RequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.net.URLEncoder
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
@@ -285,7 +297,12 @@ abstract class MangaHub : KeiSource() {
             pagesQuery(mangaSource, slug, number),
             refreshUrl = "$baseUrl/chapter${chapter.url}",
         ) { it.parseGraphQLAs<ApiChapterData>() }.chapter!!
-        val pages = chapterObject.pages.parseAs<ApiChapterPages>()
+
+        val pagesString = if (chapterObject.pages.startsWith("enc:v1")) {
+            decryptPages(chapterObject.pages)
+        } else {
+            chapterObject.pages
+        }
 
         // We'll update the cookie here to match the browser's "recently" opened chapter.
         // This mimics how the browser works and gives us more chance to receive a valid API key upon refresh
@@ -310,9 +327,53 @@ abstract class MangaHub : KeiSource() {
         // Best-effort logging to further increase the chance of a valid API key
         logChapterView(slug, chapterObject.chapterNumber)
 
-        return pages.images.mapIndexed { i, page ->
-            Page(i, imageUrl = "$baseCdnUrl/${pages.page}$page")
+        val pageUrls: List<String> = when (val jsonPages = pagesString.parseAs<JsonElement>()) {
+            is JsonObject if "i" in jsonPages -> {
+                val prefix = jsonPages.getString("p")
+                jsonPages.getArray("i").map { "$prefix${it.string}" }
+            }
+            is JsonArray -> {
+                jsonPages.map { it.string }
+            }
+            is JsonObject -> {
+                jsonPages.values.map { it.string }
+            }
+            else -> {
+                emptyList()
+            }
         }
+
+        return pageUrls.mapIndexed { i, path ->
+            val url = if (path.startsWith("http://") || path.startsWith("https://")) {
+                path
+            } else {
+                "$baseCdnUrl/${path.removePrefix("/")}"
+            }
+            Page(i, imageUrl = url)
+        }
+    }
+
+    private suspend fun decryptPages(pages: String): String {
+        val cryptoParams = client.get("$baseUrl/api/chapter-crypto", apiHeaders.build())
+            .parseAs<ChapterCryptoDto>()
+
+        val parts = pages.split(":")
+        val keyId = parts[2]
+        val iv = parts[3]
+        val authTag = parts[4]
+        val ciphertext = parts[5]
+
+        val keyData = cryptoParams.keys?.get(keyId) ?: cryptoParams.key!!
+        val keyBytes = Base64.decode(keyData, Base64.URL_SAFE)
+        val ivBytes = Base64.decode(iv, Base64.URL_SAFE)
+        val authTagBytes = Base64.decode(authTag, Base64.URL_SAFE)
+        val cipherBytes = Base64.decode(ciphertext, Base64.URL_SAFE)
+
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
+            init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, ivBytes))
+        }
+
+        return cipher.doFinal(cipherBytes + authTagBytes).toString(Charsets.UTF_8)
     }
 
     // Mimics the browser logging a chapter view
