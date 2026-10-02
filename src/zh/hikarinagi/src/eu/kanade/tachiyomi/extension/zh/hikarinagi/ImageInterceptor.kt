@@ -22,7 +22,7 @@ import javax.crypto.spec.SecretKeySpec
  * The request is built by `Hikarinagi.imageRequest`, so this only has to decrypt what comes back.
  * The token it needs for that rides in the request fragment, where the site never sees it.
  */
-class MangaImageInterceptor : Interceptor {
+class ImageInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()

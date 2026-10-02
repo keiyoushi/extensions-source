@@ -35,7 +35,7 @@ abstract class Hikarinagi : KeiSource() {
 
     override fun getHomeUrl() = "$baseUrl/mangas"
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(MangaImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"
@@ -109,8 +109,6 @@ abstract class Hikarinagi : KeiSource() {
             response.close()
             if (response.code == 401) throw Exception("请先在 WebView 中登录") else throw HttpException(response.code)
         }
-        // A page only carries its id: its content URL is built here, so it follows the mirror, and
-        // imageRequest below turns it into the POST the site wants, see MangaImageInterceptor.
         return response.parseAs<JsonObject>().getObject("manifest").getArray("pages").mapIndexed { index, page ->
             with(page.obj) {
                 val pid = getString("id")
@@ -120,12 +118,8 @@ abstract class Hikarinagi : KeiSource() {
         }
     }
 
-    /**
-     * The page request: the site wants a POST keyed by a token of our own, which the fragment carries
-     * back to [MangaImageInterceptor].
-     */
     override fun imageRequest(page: Page): Request {
-        val token = MangaImageInterceptor.newToken()
+        val token = ImageInterceptor.newToken()
         return POST("${page.imageUrl!!}|$token", headers, buildJsonObject { put("p", token) }.toJsonRequestBody<JsonObject>())
     }
 }
