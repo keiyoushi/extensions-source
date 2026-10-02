@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.network.head
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -27,6 +28,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseZonedDateTime
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
@@ -46,6 +48,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
@@ -71,6 +74,7 @@ abstract class MangaDot :
                 is Boolean -> edit()
                     .putString(NSFW_MODE, if (value) "both" else "none")
                     .apply()
+
                 is String -> when (value) {
                     "0" -> edit().putString(NSFW_MODE, "none").apply()
                     "1" -> edit().putString(NSFW_MODE, "1").apply()
@@ -311,6 +315,7 @@ abstract class MangaDot :
                 if (url.pathSegments.size < 2) return null
                 url.pathSegments[1]
             }
+
             "chapter", "volume" -> {
                 if (url.pathSegments.size < 2) return null
                 val chapterUrl = ChapterUrl(
@@ -322,6 +327,7 @@ abstract class MangaDot :
                 val apiUrl = "$baseUrl/api/$segment/${chapterUrl.id}/images".toHttpUrl()
                 client.get(apiUrl).use { it.parseAs<Images>().manga.id.toString() }
             }
+
             else -> return null
         }
 
@@ -660,7 +666,7 @@ abstract class MangaDot :
         countViews(data.manga.id)
 
         val chapterPageUrl = getChapterUrl(chapter)
-        return data.images.mapIndexed { index, image ->
+        val pages = data.images.mapIndexed { index, image ->
             Page(
                 index = index,
                 url = chapterPageUrl,
@@ -673,6 +679,37 @@ abstract class MangaDot :
                 },
             )
         }.filter { it.imageUrl != null }
+
+        return if (chapterUrl.source == "user") removeOutdatedPages(pages) else pages
+    }
+
+    private suspend fun removeOutdatedPages(pages: List<Page>): List<Page> {
+        if (pages.size < 2) return pages
+
+        val imageHeaders = headers.newBuilder().set("Referer", pages.first().url).build()
+        suspend fun lastModified(index: Int): Long = client.head(pages[index].imageUrl!!, imageHeaders).use {
+            DateTimeFormatter.RFC_1123_DATE_TIME.tryParseZonedDateTime(it.header("Last-Modified"))
+        }
+
+        val firstModified = lastModified(0)
+        if (firstModified == 0L) return pages
+        val lastPageModified = lastModified(pages.lastIndex)
+        if (lastPageModified == 0L || lastPageModified >= firstModified) return pages
+
+        // Reuploads overwrite a numbered prefix but leave older pages from the previous upload behind.
+        var start = 1
+        var end = pages.lastIndex
+        while (start < end) {
+            val middle = (start + end) / 2
+            val modified = lastModified(middle)
+            if (modified == 0L) return pages
+            if (modified < firstModified) {
+                end = middle
+            } else {
+                start = middle + 1
+            }
+        }
+        return pages.take(start)
     }
 
     private fun countViews(mangaId: Int) {
@@ -769,11 +806,13 @@ abstract class MangaDot :
                     findRscObjectContaining(value, fieldName)?.let { return it }
                 }
             }
+
             is JsonArray -> {
                 for (item in element) {
                     findRscObjectContaining(item, fieldName)?.let { return it }
                 }
             }
+
             else -> {}
         }
         return null
@@ -942,12 +981,15 @@ abstract class MangaDot :
             cache[i]?.let { return if (it === nil) null else it as JsonElement }
             val result = when (val el = flat[i]) {
                 is JsonNull -> null
+
                 is JsonPrimitive -> if (el.isString) JsonPrimitive(el.content) else el
+
                 is JsonArray -> JsonArray(
                     el.map {
                         resolve((it as JsonPrimitive).int) ?: JsonNull
                     },
                 )
+
                 is JsonObject -> JsonObject(
                     el.entries.associate { (k, v) ->
                         (flat[k.removePrefix("_").toInt()] as JsonPrimitive).content to

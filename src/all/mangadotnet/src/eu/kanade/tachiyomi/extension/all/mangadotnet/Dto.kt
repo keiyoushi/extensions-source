@@ -231,7 +231,9 @@ class Manga(
         }.joinToString()
         status = when {
             "One Shot" in this@Manga.genres -> SManga.COMPLETED
+
             this@Manga.hiatus == "Yes" -> SManga.ON_HIATUS
+
             else -> when (this@Manga.status?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
