@@ -209,15 +209,9 @@ abstract class InitManga :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) return SMangaUpdate(manga, chapters)
-
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        val updatedManga = if (fetchDetails) {
-            parseMangaDetails(document).apply {
-                url = manga.url
-            }
-        } else {
-            manga
+        val updatedManga = parseMangaDetails(document).apply {
+            url = manga.url
         }
         val updatedChapters = if (fetchChapters) {
             parseChapterList(document, getMangaUrl(manga).toHttpUrl())
