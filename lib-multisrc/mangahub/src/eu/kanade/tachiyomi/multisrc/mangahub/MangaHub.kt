@@ -90,7 +90,7 @@ abstract class MangaHub : KeiSource() {
     ): T {
         return try {
             apiRequest(graphQLBody(query = query)).parseGraphQLAs<T>()
-        } catch (e: Throwable) {
+        } catch (e: GraphQLException) {
             if (!isApiError(e)) throw e
 
             val oldKey = apiKey
@@ -99,7 +99,7 @@ abstract class MangaHub : KeiSource() {
             if (apiKey != oldKey) {
                 try {
                     return apiRequest(graphQLBody(query = query)).parseGraphQLAs<T>()
-                } catch (e2: Throwable) {
+                } catch (e2: GraphQLException) {
                     if (!isApiError(e2)) throw e2
                 }
             }
@@ -109,9 +109,9 @@ abstract class MangaHub : KeiSource() {
         }
     }
 
-    private fun isApiError(e: Throwable): Boolean = e is GraphQLException && apiErrorRegex.containsMatchIn(e.message.orEmpty())
+    private fun isApiError(e: GraphQLException): Boolean = apiErrorRegex.containsMatchIn(e.message.orEmpty())
 
-    private fun generateRandomKey(): String = Random.nextBytes(16).joinToString("") { "%02x".format(it) }
+    private fun generateRandomKey(): String = Random.nextBytes(16).toHexString()
 
     private suspend fun apiRequest(body: RequestBody): Response {
         val requestHeaders = apiHeaders
@@ -370,7 +370,7 @@ abstract class MangaHub : KeiSource() {
             init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, ivBytes))
         }
 
-        return cipher.doFinal(cipherBytes + authTagBytes).toString(Charsets.UTF_8)
+        return cipher.doFinal(cipherBytes + authTagBytes).decodeToString()
     }
 
     // Filters
