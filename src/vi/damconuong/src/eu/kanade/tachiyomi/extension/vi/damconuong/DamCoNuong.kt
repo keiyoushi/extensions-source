@@ -204,9 +204,7 @@ abstract class DamCoNuong : KeiSource() {
         val document = Jsoup.parse(text, url)
         return SManga.create().apply {
             this.url = "/truyen/$slug"
-            title = document.selectFirst("h1.md-title")?.text()?.trim()
-                ?: document.selectFirst("h1")?.text()?.trim()
-                ?: slug
+            title = document.selectFirst("h1.md-title, h1")!!.text().trim()
             thumbnail_url = document.selectFirst(".md-cover img")?.absUrl("src")?.ifEmpty { null }
                 ?: document.selectFirst("meta[property=og:image]")?.attr("content")?.ifEmpty { null }
             val synopsisEl = document.selectFirst(".md-synopsis")
