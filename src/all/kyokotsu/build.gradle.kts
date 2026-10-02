@@ -20,13 +20,13 @@ keiyoushi {
     }
 
     deeplink {
-        path("/?e?n?/manga/..*")
-        path("/?e?n?/manhwa/..*")
-        path("/?e?n?/manhua/..*")
-        path("/?e?n?/comics/..*")
-        path("/?e?n?/oel-manga/..*")
-        path("/?e?n?/rumanga/..*")
-        path("/?e?n?/runet-comics/..*")
+        path("/manga/..*")
+        path("/manhwa/..*")
+        path("/manhua/..*")
+        path("/comics/..*")
+        path("/oel-manga/..*")
+        path("/rumanga/..*")
+        path("/runet-comics/..*")
     }
 }
 
