@@ -16,7 +16,7 @@ import java.io.ByteArrayOutputStream
 import kotlin.math.max
 import kotlin.math.min
 
-class SpeechBubblePainterInterceptor(baseUrl: String, id: Long) : Interceptor {
+class SpeechBubblePainterInterceptor(baseUrl: () -> String, id: Long) : Interceptor {
 
     private val fontLoader = FontLoader(baseUrl, id)
 

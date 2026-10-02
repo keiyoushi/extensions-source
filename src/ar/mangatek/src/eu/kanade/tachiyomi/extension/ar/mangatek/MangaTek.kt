@@ -36,7 +36,7 @@ import javax.crypto.spec.SecretKeySpec
 abstract class MangaTek : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        addInterceptor(SpeechBubblePainterInterceptor(baseUrl, id))
+        addInterceptor(SpeechBubblePainterInterceptor({ baseUrl }, id))
         rateLimit(3)
     }
 

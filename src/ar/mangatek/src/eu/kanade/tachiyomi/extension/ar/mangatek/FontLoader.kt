@@ -9,7 +9,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
-class FontLoader(private val baseUrl: String, private val id: Long) {
+class FontLoader(private val baseUrl: () -> String, private val id: Long) {
 
     private val typefaces = ConcurrentHashMap<String, Typeface>()
     private val lock = Any()
@@ -40,7 +40,7 @@ class FontLoader(private val baseUrl: String, private val id: Long) {
 
     private fun download(chain: Interceptor.Chain, path: String, target: File): File? {
         return try {
-            val request = Request.Builder().url("$baseUrl$path".toHttpUrl()).build()
+            val request = Request.Builder().url("${baseUrl()}$path".toHttpUrl()).build()
             chain.proceed(request).use { response ->
                 if (!response.isSuccessful) return null
 
