@@ -54,18 +54,8 @@ internal fun webtoonHooks(interfaceName: String) = $$"""
                                 // which would swallow every diagnostic the rest of the driver
                                 // emits via `console.log`).
                                 try {
-                                    var jl = window.$$interfaceName && window.$$interfaceName.log;
-                                    if (jl) {
-                                        window.__jlog = function(){
-                                            try {
-                                                var parts = [];
-                                                for (var i = 0; i < arguments.length; i++) parts.push(String(arguments[i]));
-                                                window.$$interfaceName.log(parts.join(' '));
-                                            } catch(e) {}
-                                        };
-                                    } else {
-                                        window.__jlog = function(){ try { console.log.apply(console, arguments); } catch(e) {} };
-                                    }
+                                    var nativeLog = console.log.bind(console);
+                                    window.__jlog = function(){ try { nativeLog.apply(console, arguments); } catch(e) {} };
                                 } catch(e) {
                                     window.__jlog = function(){};
                                 }
@@ -267,7 +257,7 @@ internal fun paginatedDriver(interfaceName: String) = $$"""
                                                 fr.readAsDataURL(b);
                                             });
                                             if (typeof d === 'string' && d.indexOf('data:image/') === 0) {
-                                                window.$$interfaceName.savePage(d);
+                                                window.$${interfaceName}_savePage.post(d);
                                                 return true;
                                             }
                                         } catch(e) {
@@ -354,7 +344,7 @@ internal fun paginatedDriver(interfaceName: String) = $$"""
 
                                     console.log('[japscan] done, ' + saved + ' / ' + total + ' pages saved');
                                     try {
-                                        window.$$interfaceName.passDone();
+                                        window.$${interfaceName}_passDone.post("");
                                     } catch(e) {
                                         console.log('[japscan] passDone failed: ' + e);
                                     }
@@ -598,7 +588,7 @@ internal fun webtoonDriver(interfaceName: String, urlSegment: String) = $$"""
                                             var uri = tileToDataUri(tile);
                                             if (!uri) continue;
                                             try {
-                                                window.$$interfaceName.savePage(uri);
+                                                window.$${interfaceName}_savePage.post(uri);
                                                 savedHosts.add(tile.host);
                                                 saved++;
                                                 tilesEmitted++;
@@ -640,7 +630,7 @@ internal fun webtoonDriver(interfaceName: String, urlSegment: String) = $$"""
                                         dImgContainers[i] = null;
                                     }
                                     window.__jlog('[japscan] webtoon done, ' + tilesEmitted + ' tile(s) saved across ' + total + ' d-img containers');
-                                    try { window.$$interfaceName.passDone(); } catch(e) {}
+                                    try { window.$${interfaceName}_passDone.post(""); } catch(e) {}
                                     return;
                                 }
 
@@ -651,6 +641,6 @@ internal fun webtoonDriver(interfaceName: String, urlSegment: String) = $$"""
                                 // work; if this ever fires, the fix is to reload the WebView with
                                 // the paginated hooks, not a third capture technique.
                                 window.__jlog('[japscan] MISMATCH: url hinted webtoon but the DOM mounted the paginated reader — giving up');
-                                try { window.$$interfaceName.passDone(); } catch(e) {}
+                                try { window.$${interfaceName}_passDone.post(""); } catch(e) {}
                             })();
 """.trimIndent()
