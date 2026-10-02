@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "HotComics"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://hotcomics.me"
+        baseUrl = "https://hotcomics.io"
     }
 }
