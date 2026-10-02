@@ -29,7 +29,9 @@ class ApiChapterPages(
 
 @Serializable
 class ChapterCryptoDto(
+    val keyId: String? = null,
     val key: String? = null,
+    val expiresAt: Long? = null,
     val keys: Map<String, String>? = null,
 )
 
