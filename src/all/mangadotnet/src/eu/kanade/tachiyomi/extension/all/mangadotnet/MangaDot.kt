@@ -74,7 +74,6 @@ abstract class MangaDot :
                 is Boolean -> edit()
                     .putString(NSFW_MODE, if (value) "both" else "none")
                     .apply()
-
                 is String -> when (value) {
                     "0" -> edit().putString(NSFW_MODE, "none").apply()
                     "1" -> edit().putString(NSFW_MODE, "1").apply()
@@ -315,7 +314,6 @@ abstract class MangaDot :
                 if (url.pathSegments.size < 2) return null
                 url.pathSegments[1]
             }
-
             "chapter", "volume" -> {
                 if (url.pathSegments.size < 2) return null
                 val chapterUrl = ChapterUrl(
@@ -327,7 +325,6 @@ abstract class MangaDot :
                 val apiUrl = "$baseUrl/api/$segment/${chapterUrl.id}/images".toHttpUrl()
                 client.get(apiUrl).use { it.parseAs<Images>().manga.id.toString() }
             }
-
             else -> return null
         }
 
@@ -806,13 +803,11 @@ abstract class MangaDot :
                     findRscObjectContaining(value, fieldName)?.let { return it }
                 }
             }
-
             is JsonArray -> {
                 for (item in element) {
                     findRscObjectContaining(item, fieldName)?.let { return it }
                 }
             }
-
             else -> {}
         }
         return null
@@ -981,15 +976,12 @@ abstract class MangaDot :
             cache[i]?.let { return if (it === nil) null else it as JsonElement }
             val result = when (val el = flat[i]) {
                 is JsonNull -> null
-
                 is JsonPrimitive -> if (el.isString) JsonPrimitive(el.content) else el
-
                 is JsonArray -> JsonArray(
                     el.map {
                         resolve((it as JsonPrimitive).int) ?: JsonNull
                     },
                 )
-
                 is JsonObject -> JsonObject(
                     el.entries.associate { (k, v) ->
                         (flat[k.removePrefix("_").toInt()] as JsonPrimitive).content to
