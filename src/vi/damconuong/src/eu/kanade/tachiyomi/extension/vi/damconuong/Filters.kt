@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.vi.damconuong
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import kotlinx.serialization.Serializable
 
 fun getFilters(genres: List<GenreOption>?): FilterList = FilterList(
     buildList {
@@ -57,9 +56,11 @@ class MinRatingFilter :
         "Đánh giá tối thiểu",
         arrayOf(
             Pair("Tất cả", ""),
+            Pair("Từ 1 sao", "1"),
+            Pair("Từ 2 sao", "2"),
             Pair("Từ 3 sao", "3"),
             Pair("Từ 4 sao", "4"),
-            Pair("Từ 4.5 sao", "4.5"),
+            Pair("Từ 5 sao", "5"),
         ),
     )
 
@@ -73,6 +74,3 @@ open class UriPartFilter(
 ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
     fun toUriPart() = vals[state].second
 }
-
-@Serializable
-class FilterData(val genres: List<GenreOption> = emptyList())

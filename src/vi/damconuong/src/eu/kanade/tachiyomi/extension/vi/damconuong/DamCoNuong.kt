@@ -11,90 +11,27 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
+import org.jsoup.parser.Parser
 
 @Source
 abstract class DamCoNuong : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(5)
         addInterceptor(ScrambleInterceptor())
-        addInterceptor(authInterceptor())
     }
 
     private val preferences by getPreferencesLazy()
-
-    private val authMutex = Mutex()
-
-    @Volatile private var authToken: String? = null
-
-    @Volatile private var apiHost: String? = null
-
-    private fun authInterceptor() = Interceptor { chain ->
-        val request = chain.request()
-        val token = authToken?.takeIf { it.isNotBlank() }
-        if (token != null && request.url.host == apiHost) {
-            chain.proceed(request.newBuilder().header("Authorization", "Bearer $token").build())
-        } else {
-            chain.proceed(request)
-        }
-    }
-
-    private suspend fun loadAuthToken() {
-        if (!authToken.isNullOrBlank()) return
-        authMutex.withLock {
-            if (!authToken.isNullOrBlank()) return@withLock
-            authToken = readAuthTokenFromWebView()
-        }
-    }
-
-    private suspend fun readAuthTokenFromWebView(): String? {
-        val raw = getLocalStorage(baseUrl, "auth-storage") ?: return null
-        return raw.parseAs<AuthStorage>().state?.token?.takeIf { it.isNotBlank() }
-    }
-
-    private suspend fun refreshAuthToken() {
-        authMutex.withLock {
-            authToken = readAuthTokenFromWebView()
-        }
-    }
-
-    private fun isLoginRequired(text: String): Boolean = text.contains("\"code\":\"login_required\"") || text.contains("Login required to read")
-
-    private suspend fun api(): String = ApiBase.get(client, baseUrl, preferences).also {
-        apiHost = it.toHttpUrl().host
-    }
-
-    private suspend fun fetchJson(url: String): String {
-        loadAuthToken()
-        var text = client.get(url, ensureSuccess = false).use { it.body.string() }
-        if (isLoginRequired(text)) {
-            refreshAuthToken()
-            if (authToken.isNullOrBlank()) {
-                throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
-            }
-            text = client.get(url, ensureSuccess = false).use { it.body.string() }
-            if (isLoginRequired(text)) {
-                throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
-            }
-        }
-        return text
-    }
 
     // ============================== Popular ===============================
 
@@ -130,11 +67,9 @@ abstract class DamCoNuong : KeiSource() {
             .filter { it.state == Filter.TriState.STATE_EXCLUDE }
             .joinToString(",") { it.id.toString() }
 
-        val url = "${api()}/mangas".toHttpUrl().newBuilder()
+        val url = "$baseUrl/danh-sach".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("per_page", "24")
             .addQueryParameter("sort", sort)
-            .addQueryParameter("include", "genres,artist,latest_chapter")
             .apply {
                 if (query.isNotBlank()) {
                     addQueryParameter("filter[$searchType]", query)
@@ -154,26 +89,29 @@ abstract class DamCoNuong : KeiSource() {
             }
             .build()
 
-        return client.get(url).parseAs<ListResponse>().toMangasPage()
+        return client.get(url).asJsoup().toMangasPage()
     }
 
-    private fun ListResponse.toMangasPage(): MangasPage {
-        val pagination = meta?.pagination
-        val hasNextPage = pagination != null && pagination.currentPage < pagination.lastPage
-        return MangasPage(data.map { it.toSManga() }, hasNextPage)
+    private fun Document.toMangasPage(): MangasPage {
+        val mangas = select("div.manga-vertical").mapNotNull { card ->
+            val link = card.selectFirst("h3 a[href]") ?: return@mapNotNull null
+            val path = link.absUrl("href").toHttpUrlOrNull()?.encodedPath ?: return@mapNotNull null
+            SManga.create().apply {
+                url = path
+                title = link.text().trim()
+                thumbnail_url = card.selectFirst("img.cover")?.absUrl("src")?.ifBlank { null }
+            }
+        }
+        return MangasPage(mangas, hasNextPage = selectFirst("a[aria-label=Next]") != null)
     }
 
     // =============================== Details ==============================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
-        if (url.pathSegments.firstOrNull() != "truyen") return null
-        val slug = url.pathSegments.getOrNull(1) ?: return null
-
-        return fetchJson("${api()}/mangas/$slug?include=artist,author,group,genres")
-            .parseAs<DetailResponse>()
-            .data
-            .toSMangaDetails()
+        val segments = url.pathSegments
+        if (segments.firstOrNull() != "truyen") return null
+        val slug = segments.getOrNull(1) ?: return null
+        return fetchDetails("/truyen/$slug")
     }
 
     override suspend fun fetchMangaUpdate(
@@ -182,94 +120,51 @@ abstract class DamCoNuong : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val slug = manga.url.trimStart('/').substringAfterLast('/')
+        val doc = client.get("$baseUrl${manga.url}").asJsoup()
+        doc.requireAccess()
 
-        return coroutineScope {
-            val detailsDeferred = async {
-                if (!fetchDetails) return@async manga
-                val dto = fetchJson("${api()}/mangas/$slug?include=artist,author,group,genres")
-                    .parseAs<DetailResponse>()
-                    .data
-                dto.toSMangaDetails().apply {
-                    this.url = manga.url
-                    memo = buildJsonObject {
-                        dto.group?.slug?.let { put("group_slug", it) }
-                        dto.author?.slug?.let { put("author_slug", it) }
-                        dto.artist?.slug?.let { put("artist_slug", it) }
-                        dto.genres.firstOrNull()?.slug?.let { put("genre_slug", it) }
-                    }
-                }
-            }
-            val chaptersDeferred = async {
-                if (fetchChapters) fetchChapterList(slug) else chapters
-            }
+        return SMangaUpdate(
+            manga = if (fetchDetails) doc.toSMangaDetails().apply { url = manga.url } else manga,
+            chapters = if (fetchChapters) doc.toChapterList() else chapters,
+        )
+    }
 
-            SMangaUpdate(
-                manga = detailsDeferred.await(),
-                chapters = chaptersDeferred.await(),
-            )
+    private suspend fun fetchDetails(path: String): SManga {
+        val doc = client.get("$baseUrl$path").asJsoup()
+        doc.requireAccess()
+        return doc.toSMangaDetails().apply { url = path }
+    }
+
+    private fun Document.requireAccess() {
+        if (selectFirst("h1.md-title") == null && text().contains("Yêu cầu đăng nhập")) {
+            throw Exception(LOGIN_REQUIRED_MESSAGE)
         }
     }
 
-    private suspend fun fetchChapterList(mangaSlug: String): List<SChapter> {
-        val result = mutableListOf<SChapter>()
-        var page = 1
-        var lastPage = 1
+    private fun Document.toSMangaDetails(): SManga = SManga.create().apply {
+        title = selectFirst("h1.md-title")?.text()?.trim() ?: error("title not found")
+        thumbnail_url = selectFirst("meta[property=\"og:image\"]")?.attr("content")?.ifBlank { null }
+        description = selectFirst("div.md-synopsis p")?.text()?.trim()?.ifEmpty { null }
+        status = when {
+            selectFirst("a.md-badge-ongoing") != null -> SManga.ONGOING
+            selectFirst("a.md-badge-done") != null -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+    }
 
-        do {
-            val response = fetchJson(
-                "${api()}/mangas/$mangaSlug/chapters".toHttpUrl().newBuilder()
-                    .addQueryParameter("page", page.toString())
-                    .addQueryParameter("per_page", "2000")
-                    .addQueryParameter("sort", "desc")
-                    .build()
-                    .toString(),
-            ).parseAs<ChapterListResponse>()
-
-            result += response.data.map { it.toSChapter(mangaSlug) }
-            lastPage = response.meta?.pagination?.lastPage ?: 1
-            page++
-        } while (page <= lastPage)
-
-        return result
+    private fun Document.toChapterList(): List<SChapter> = select("#md-chapter-list a.md-ch").mapNotNull { element ->
+        val href = element.absUrl("href").toHttpUrlOrNull() ?: return@mapNotNull null
+        val name = element.selectFirst(".md-ch-title")?.text()?.trim() ?: return@mapNotNull null
+        SChapter.create().apply {
+            url = href.encodedPath
+            this.name = name
+            date_upload = parseRelativeDate(element.selectFirst(".md-ch-meta > span")?.text())
+        }
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
-
-    // =============================== Related ==============================
-
-    override val supportsRelatedMangas get() = true
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val slug = manga.url.trimStart('/').substringAfterLast('/')
-        val sources = listOfNotNull(
-            manga.memo["group_slug"]?.stringOrNull?.let { "groups" to it },
-            manga.memo["author_slug"]?.stringOrNull?.let { "authors" to it },
-            manga.memo["artist_slug"]?.stringOrNull?.let { "artists" to it },
-            manga.memo["genre_slug"]?.stringOrNull?.let { "genres" to it },
-        ).ifEmpty {
-            val detail = fetchJson("${api()}/mangas/$slug?include=artist,author,group,genres")
-                .parseAs<DetailResponse>()
-                .data
-            listOfNotNull(
-                detail.group?.slug?.let { "groups" to it },
-                detail.author?.slug?.let { "authors" to it },
-                detail.artist?.slug?.let { "artists" to it },
-                detail.genres.firstOrNull()?.slug?.let { "genres" to it },
-            )
-        }
-
-        for ((type, taxonomySlug) in sources) {
-            val list = client.get("${api()}/$type/$taxonomySlug/mangas?per_page=12")
-                .parseAs<ListResponse>()
-                .data
-            val related = list.filter { it.slug != slug }.map { it.toSManga() }
-            if (related.isNotEmpty()) return related.take(12)
-        }
-        return emptyList()
-    }
 
     // =============================== Pages ================================
 
@@ -282,9 +177,12 @@ abstract class DamCoNuong : KeiSource() {
         }
 
         val path = "$mangaSlug/$chapterSlug"
-        PagesCrypto.ensureLoaded(client, baseUrl, preferences)
+        PagesCrypto.ensureLoaded(client, baseUrl, chapter.url, preferences)
         val token = PagesCrypto.token(mangaSlug, chapterSlug)
-        val response = fetchJson("${api()}/mangas/$mangaSlug/chapters/$chapterSlug/pages?_=$token")
+        val headers = headers.newBuilder()
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+        val response = client.get("$baseUrl/_c/mangas/$mangaSlug/chapters/$chapterSlug/pages?_=$token", headers)
             .parseAs<PagesResponse>()
 
         val payload = PagesCrypto.decryptPages(response.encrypted, token, path)
@@ -301,20 +199,45 @@ abstract class DamCoNuong : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val genres = mutableListOf<GenreOption>()
-        var page = 1
-        var lastPage = 1
-
-        do {
-            val response = client.get("${api()}/genres?per_page=100&page=$page")
-                .parseAs<GenreListResponse>()
-            genres += response.data
-            lastPage = response.meta?.pagination?.lastPage ?: 1
-            page++
-        } while (page <= lastPage)
+        val html = client.get("$baseUrl/tim-kiem").use { it.body.string() }
+        val genres = GENRE_BUTTON_RE.findAll(html)
+            .map { match ->
+                GenreOption(
+                    id = match.groupValues[1].toInt(),
+                    name = Parser.unescapeEntities(match.groupValues[2], false).trim(),
+                )
+            }
+            .filter { it.name.isNotEmpty() }
+            .distinctBy { it.id }
+            .toList()
 
         return genres.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<List<GenreOption>>())
+
+    private fun parseRelativeDate(text: String?): Long {
+        if (text.isNullOrBlank()) return 0
+        val match = RELATIVE_DATE_RE.find(text) ?: return 0
+        val amount = match.groupValues[1].toLongOrNull() ?: return 0
+        val unitMillis = when (match.groupValues[2]) {
+            "phút" -> 60_000L
+            "giờ" -> 3_600_000L
+            "ngày" -> 86_400_000L
+            "tuần" -> 604_800_000L
+            "tháng" -> 2_592_000_000L
+            "năm" -> 31_536_000_000L
+            else -> return 0
+        }
+        return System.currentTimeMillis() - amount * unitMillis
+    }
+
+    private companion object {
+        const val LOGIN_REQUIRED_MESSAGE =
+            "Truyện này yêu cầu đăng nhập. Hãy đăng nhập trang web trong WebView của ứng dụng rồi thử lại."
+        val GENRE_BUTTON_RE = Regex(
+            "toggleGenre\\('(\\d+)'\\)[\\s\\S]*?<span class=\"truncate\">([^<]*)</span>",
+        )
+        val RELATIVE_DATE_RE = Regex("(\\d+)\\s*(phút|giờ|ngày|tuần|tháng|năm)")
+    }
 }

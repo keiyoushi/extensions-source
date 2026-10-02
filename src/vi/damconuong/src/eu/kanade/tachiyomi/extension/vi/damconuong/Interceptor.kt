@@ -31,15 +31,8 @@ private fun OkHttpClient.getString(url: String): String {
 // =============================== Site cache ================================
 
 object SiteCache {
-    private const val KEY_API = "api_base"
     private const val KEY_SECRET = "decoder_secret"
     private const val KEY_ALPHABET = "decoder_alphabet"
-
-    fun apiBase(prefs: SharedPreferences): String? = prefs.getString(KEY_API, null)
-
-    fun saveApiBase(prefs: SharedPreferences, value: String) {
-        prefs.edit().putString(KEY_API, value).apply()
-    }
 
     fun decoderSecret(prefs: SharedPreferences): String? = prefs.getString(KEY_SECRET, null)
 
@@ -54,71 +47,10 @@ object SiteCache {
 
     fun invalidate(prefs: SharedPreferences) {
         prefs.edit()
-            .remove(KEY_API)
             .remove(KEY_SECRET)
             .remove(KEY_ALPHABET)
             .apply()
     }
-}
-
-// ============================== API discovery =============================
-
-object ApiBase {
-    @Volatile private var memory: String? = null
-
-    suspend fun get(client: OkHttpClient, baseUrl: String, prefs: SharedPreferences): String {
-        memory?.let { return it }
-        SiteCache.apiBase(prefs)?.let {
-            memory = it
-            return it
-        }
-        return resolve(client, baseUrl, prefs)
-    }
-
-    suspend fun resolve(client: OkHttpClient, baseUrl: String, prefs: SharedPreferences): String {
-        val resolved = try {
-            discover(client, baseUrl)
-        } catch (e: IOException) {
-            // Connection error: drop cache and try discovery again.
-            invalidate(prefs)
-            discover(client, baseUrl)
-        }
-        memory = resolved
-        SiteCache.saveApiBase(prefs, resolved)
-        return resolved
-    }
-
-    fun invalidate(prefs: SharedPreferences) {
-        memory = null
-        SiteCache.invalidate(prefs)
-    }
-
-    private suspend fun discover(client: OkHttpClient, baseUrl: String): String {
-        val html = client.getString(baseUrl)
-
-        val fromJs = API_V1_RE.find(html)?.value
-        val fromPreconnect = PRECONNECT_RE.find(html)?.groupValues?.get(1)
-        val resolved = when {
-            fromJs != null -> fromJs
-            fromPreconnect != null -> "${fromPreconnect.trimEnd('/')}/api/v1"
-            else -> {
-                val chunkBody = DecoderScraper.CHUNK_RE.findAll(html)
-                    .map { it.groupValues[1] }
-                    .distinct()
-                    .mapNotNull { ref ->
-                        val url = if (ref.startsWith("http")) ref else "$baseUrl/${ref.trimStart('/')}"
-                        runCatching { client.getString(url) }.getOrNull()
-                    }
-                    .firstOrNull { it.contains("/api/v1") }
-                    .orEmpty()
-                API_V1_RE.find(chunkBody)?.value ?: error("api base not found")
-            }
-        }
-        return resolved.trimEnd('/')
-    }
-
-    private val API_V1_RE = Regex("https://[A-Za-z0-9.\\-]+/api/v1")
-    private val PRECONNECT_RE = Regex("rel=\"(?:preconnect|dns-prefetch)\"\\s+href=\"(https://[^\"]+)\"")
 }
 
 // =========================== Decoder string scrape =========================
@@ -129,7 +61,12 @@ object DecoderScraper {
         val tokenAlphabet: String,
     )
 
-    suspend fun scrape(client: OkHttpClient, baseUrl: String, prefs: SharedPreferences? = null): Config {
+    fun scrape(
+        client: OkHttpClient,
+        baseUrl: String,
+        chapterUrl: String,
+        prefs: SharedPreferences? = null,
+    ): Config {
         prefs?.let { p ->
             val cachedSecret = SiteCache.decoderSecret(p)
             val cachedAlphabet = SiteCache.decoderAlphabet(p)
@@ -139,17 +76,17 @@ object DecoderScraper {
         }
 
         val config = try {
-            scrapeFromSite(client, baseUrl)
+            scrapeFromSite(client, baseUrl, chapterUrl)
         } catch (e: IOException) {
             prefs?.let { SiteCache.invalidate(it) }
-            scrapeFromSite(client, baseUrl)
+            scrapeFromSite(client, baseUrl, chapterUrl)
         }
         prefs?.let { SiteCache.saveDecoder(it, config.secret, config.tokenAlphabet) }
         return config
     }
 
-    private suspend fun scrapeFromSite(client: OkHttpClient, baseUrl: String): Config {
-        val js = fetchDecoderJs(client, baseUrl)
+    private fun scrapeFromSite(client: OkHttpClient, baseUrl: String, chapterUrl: String): Config {
+        val js = fetchDecoderJs(client, baseUrl, chapterUrl)
         val obfAlphabet = OBF_B64_RE.find(js)?.groupValues?.get(1)
             ?: error("obfuscator alphabet not found")
         val strings = decodeStringTable(js, obfAlphabet)
@@ -160,52 +97,23 @@ object DecoderScraper {
         return Config(secret, tokenAlphabet)
     }
 
-    private suspend fun fetchDecoderJs(client: OkHttpClient, baseUrl: String): String {
-        val home = client.getString(baseUrl)
-        val pending = ArrayDeque<String>()
-        val seen = HashSet<String>()
-        fun add(ref: String) {
-            if (seen.add(ref)) pending.add(ref)
-        }
-        CHUNK_RE.findAll(home).forEach { add(it.groupValues[1]) }
-        NESTED_CHUNK_RE.findAll(home).forEach { add(it.groupValues[1]) }
-
-        fun resolveUrl(ref: String): String {
-            val root = baseUrl.trimEnd('/')
-            return when {
-                ref.startsWith("http") -> ref
-                ref.startsWith("/_next/") -> root + ref
-                ref.startsWith("/") -> root + ref
-                ref.startsWith("static/") -> "$root/_next/$ref"
-                else -> "$root/_next/static/chunks/$ref"
-            }
-        }
-
-        while (pending.isNotEmpty()) {
-            val ref = pending.removeFirst()
-            val body = runCatching { client.getString(resolveUrl(ref)) }.getOrDefault("")
-            if (isDecoderBundle(body)) return body
-            NESTED_CHUNK_RE.findAll(body).forEach { add(it.groupValues[1]) }
-        }
-        error("decoder bundle not found")
-    }
-
-    private fun isDecoderBundle(body: String): Boolean {
-        if (body.isEmpty()) return false
-        return STRING_ARRAY_RE.containsMatchIn(body) &&
-            body.contains("decodeURIComponent") &&
-            body.contains("for(;;)") &&
-            body.contains("parseInt")
+    private fun fetchDecoderJs(client: OkHttpClient, baseUrl: String, chapterUrl: String): String {
+        val root = baseUrl.trimEnd('/')
+        val chapterHtml = client.getString("$root/${chapterUrl.trimStart('/')}")
+        val decoderPath = DECODER_PATH_RE.find(chapterHtml)?.groupValues?.get(1) ?: DEFAULT_DECODER_PATH
+        val decoderUrl = if (decoderPath.startsWith("http")) decoderPath else "$root/${decoderPath.trimStart('/')}"
+        return client.getString(decoderUrl)
     }
 
     private fun decodeStringTable(js: String, obfAlphabet: String): Map<String, String> {
         val arrayMatch = STRING_ARRAY_RE.find(js) ?: error("decoder string table not found")
         val rawStrings = parseJsStringArray(arrayMatch.groupValues[1])
         val pairs = PAIR_RE.findAll(js)
-            .map { it.groupValues[1].toInt() to it.groupValues[2] }
+            .map { parseIndex(it.groupValues[1]) to it.groupValues[2] }
             .distinct()
             .toList()
-        val indexOffset = INDEX_OFFSET_RE.find(js)?.groupValues?.get(1)?.toInt() ?: 127
+        val indexOffset = INDEX_OFFSET_RE.find(js)?.groupValues?.get(1)?.let(::parseIndex)
+            ?: error("decoder index offset not found")
 
         val table = ArrayList(rawStrings)
         repeat(table.size) {
@@ -226,10 +134,10 @@ object DecoderScraper {
 
     private fun parseJsStringArray(body: String): List<String> {
         val out = ArrayList<String>()
-        val re = Regex("\"((?:\\\\.|[^\"\\\\])*)\"")
-        for (m in re.findAll(body)) {
-            out += m.groupValues[1]
+        for (m in JS_STRING_RE.findAll(body)) {
+            out += m.groupValues[2]
                 .replace("\\\\", "\\")
+                .replace("\\'", "'")
                 .replace("\\\"", "\"")
                 .replace("\\n", "\n")
                 .replace("\\r", "\r")
@@ -237,6 +145,8 @@ object DecoderScraper {
         }
         return out
     }
+
+    private fun parseIndex(raw: String): Int = if (raw.startsWith("0x") || raw.startsWith("0X")) raw.substring(2).toInt(16) else raw.toInt()
 
     private class StringDecoder(
         private val table: List<String>,
@@ -278,14 +188,18 @@ object DecoderScraper {
         }
     }
 
+    private const val DEFAULT_DECODER_PATH = "/js/bookmark.js"
     private val SECRET_RE = Regex("^[A-Za-z0-9_-]{43}$")
     private val ALPHABET_RE = Regex("^[A-Za-z0-9+/_-]{64}$")
-    private val OBF_B64_RE = Regex("\"([A-Za-z0-9+/]{64}=)\"\\s*\\.indexOf")
-    private val STRING_ARRAY_RE = Regex("function \\w+\\(\\)\\{let W=(\\[.*?\\]);return", RegexOption.DOT_MATCHES_ALL)
-    private val PAIR_RE = Regex("\\w+\\((\\d+),\\s*\"([^\"]*)\"\\)")
-    private val INDEX_OFFSET_RE = Regex("function \\w+\\(\\w+,\\w+\\)\\{\\w+-=(\\d+)")
-    internal val CHUNK_RE = Regex("(?:src|href)=\"(/_next/static/chunks/[^\"]+\\.js)")
-    private val NESTED_CHUNK_RE = Regex("static/chunks/([A-Za-z0-9_\\-\\.]+\\.js)")
+    private val OBF_B64_RE = Regex("['\"]([A-Za-z0-9+/]{64}=)['\"]")
+    private val STRING_ARRAY_RE = Regex(
+        "function \\w+\\(\\)\\{const \\w+=\\[(.*?)\\];\\w+=function\\(\\)\\{return",
+        RegexOption.DOT_MATCHES_ALL,
+    )
+    private val PAIR_RE = Regex("\\w+\\((0x[0-9a-fA-F]+|\\d+),\\s*'([^']*)'\\)")
+    private val INDEX_OFFSET_RE = Regex("function \\w+\\(\\w+,\\w+\\)\\{\\w+=\\w+-(0x[0-9a-fA-F]+|\\d+)")
+    private val JS_STRING_RE = Regex("(['\"])((?:\\\\.|(?!\\1).)*)\\1")
+    private val DECODER_PATH_RE = Regex("data-cipher-decoder=\"([^\"]+)\"")
 }
 
 // ============================== Pages crypto ===============================
@@ -299,9 +213,14 @@ object PagesCrypto {
 
     fun tokenAlphabet(): String = checkNotNull(alphabet) { "PagesCrypto not loaded" }
 
-    suspend fun ensureLoaded(client: OkHttpClient, baseUrl: String, prefs: SharedPreferences? = null) {
+    fun ensureLoaded(
+        client: OkHttpClient,
+        baseUrl: String,
+        chapterUrl: String,
+        prefs: SharedPreferences? = null,
+    ) {
         if (tokKey != null) return
-        val config = DecoderScraper.scrape(client, baseUrl, prefs)
+        val config = DecoderScraper.scrape(client, baseUrl, chapterUrl, prefs)
         val secretBytes = decodeBase64Url(config.secret, config.tokenAlphabet)
             ?: error("bad decoder secret")
         alphabet = config.tokenAlphabet
