@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.hikarinagi
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -103,7 +104,9 @@ abstract class Hikarinagi : KeiSource() {
         if (!response.isSuccessful) {
             val code = response.code
             response.close()
-            throw Exception(if (code == 401) "请先在 WebView 中登录" else "获取章节失败（HTTP $code）")
+            // Only the login case needs a message of its own; anything else is a plain HTTP failure.
+            if (code == 401) throw Exception("请先在 WebView 中登录")
+            throw HttpException(code)
         }
         // A page only carries its id; the image itself comes from an encrypted POST, see MangaImageInterceptor.
         return response.parseAs<JsonObject>().getObject("manifest").getArray("pages").mapIndexed { index, page ->
