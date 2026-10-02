@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.hikarinagi
 
 import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -18,8 +19,11 @@ import keiyoushi.utils.getObject
 import keiyoushi.utils.getString
 import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -32,9 +36,6 @@ abstract class Hikarinagi : KeiSource() {
     override fun getHomeUrl() = "$baseUrl/mangas"
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(MangaImageInterceptor())
-
-    /** A page is a POST the site keys with a token of our own; [MangaImageInterceptor] decrypts it. */
-    override fun imageRequest(page: Page): Request = MangaImageInterceptor.pageRequest(page, headers)
 
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"
@@ -108,12 +109,23 @@ abstract class Hikarinagi : KeiSource() {
             response.close()
             if (response.code == 401) throw Exception("请先在 WebView 中登录") else throw HttpException(response.code)
         }
-        // A page only carries its id; the image itself comes from a POST to the content endpoint, see
-        // MangaImageInterceptor. The reader is handed the site's own URL, so it follows the mirror.
+        // A page only carries its id: its content URL is built here, so it follows the mirror, and
+        // imageRequest below turns it into the POST the site wants, see MangaImageInterceptor.
         return response.parseAs<JsonObject>().getObject("manifest").getArray("pages").mapIndexed { index, page ->
             with(page.obj) {
-                Page(index, imageUrl = MangaImageInterceptor.createUrl(baseUrl, cid, chapter.url, getString("id"), getString("mime_type")))
+                val pid = getString("id")
+                val mimeType = getString("mime_type")
+                Page(index, imageUrl = "$baseUrl/api/v3/reader/mangas/$cid/chapters/${chapter.url}/pages/$pid/content#$mimeType")
             }
         }
+    }
+
+    /**
+     * The page request: the site wants a POST keyed by a token of our own, which the fragment carries
+     * back to [MangaImageInterceptor].
+     */
+    override fun imageRequest(page: Page): Request {
+        val token = MangaImageInterceptor.newToken()
+        return POST("${page.imageUrl!!}|$token", headers, buildJsonObject { put("p", token) }.toJsonRequestBody<JsonObject>())
     }
 }
