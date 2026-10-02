@@ -5,14 +5,17 @@ plugins {
 }
 
 keiyoushi {
-    name = "Arab Hentai"
-    versionCode = 1
+    name = "Manga Bab"
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
-        name = "هنتاي العرب - نت"
+        name = "مانجا باب"
         lang = "ar"
-        baseUrl = "https://arabhentai.net"
+        baseUrl {
+            custom("https://mangabab.com")
+        }
+        id = 6899943547168982381L
     }
 }
