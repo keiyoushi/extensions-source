@@ -132,7 +132,7 @@ abstract class Kyokotsu : KeiSource() {
 
     override fun getMangaUrl(manga: SManga): String {
         val loc = if (lang != "ru") "/$lang" else ""
-        if (manga.memo["type"]?.string.isNullOrEmpty()) return "$baseUrl$loc/catalog?q=${manga.title}"
+        if (manga.memo["type"]?.stringOrNull.isNullOrEmpty()) return "$baseUrl$loc/catalog?q=${manga.title}"
         return "$baseUrl$loc/${manga.memo["type"]!!.string}/${manga.url}"
     }
 
