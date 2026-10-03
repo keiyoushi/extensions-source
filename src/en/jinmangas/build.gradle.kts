@@ -13,8 +13,6 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl {
-            custom("https://mangafree.info")
-        }
+        baseUrl = "https://mangafree.info"
     }
 }
