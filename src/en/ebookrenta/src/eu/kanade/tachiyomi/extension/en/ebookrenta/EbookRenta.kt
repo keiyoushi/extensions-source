@@ -36,7 +36,7 @@ abstract class EbookRenta :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(ImageInterceptor())
-        addCookie("r18" to "1")
+        addCookie(listOf("r18" to "1", "rbc" to "1002"))
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter().apply { state = 3 }))
@@ -106,7 +106,7 @@ abstract class EbookRenta :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/renta/sc/frm/item/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/renta/sc/jump/viewer?type=${chapter.memo["type"]!!.string}&prd_tid=9-${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/renta/sc/jump/viewer?type=${chapter.memo["type"]!!.string}&prd_tid=9-${chapter.url}&style=ch"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         var document = client.get(getChapterUrl(chapter)).asJsoup()
