@@ -14,6 +14,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 
@@ -72,6 +73,17 @@ abstract class MyAdultComics : KeiSource() {
 
         val document = client.get(url.build()).asJsoup()
         return parseMangaList(document)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.encodedPath != "/read.php") return null
+        val mangaId = url.queryParameter("i") ?: return null
+
+        val document = client.get(url).asJsoup()
+        return parseMangaDetails(document).apply {
+            setUrlWithoutDomain("$baseUrl/read.php?i=$mangaId")
+            initialized = true
+        }
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {

@@ -14,4 +14,8 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://myadultcomics.com"
     }
+
+    deeplink {
+        path("/read.php")
+    }
 }
