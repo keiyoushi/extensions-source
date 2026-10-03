@@ -5,11 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.text.LineBreaker
 import android.os.Build
-import android.text.Layout
-import android.text.StaticLayout
-import android.text.TextPaint
 import eu.kanade.tachiyomi.extension.ar.mangatek.MangaTek.Companion.PAGE_REGEX
 import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
@@ -17,8 +13,12 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
+import kotlin.math.max
+import kotlin.math.min
 
-class SpeechBubblePainterInterceptor : Interceptor {
+class SpeechBubblePainterInterceptor(baseUrl: () -> String, id: Long) : Interceptor {
+
+    private val fontLoader = FontLoader(baseUrl, id)
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -44,24 +44,14 @@ class SpeechBubblePainterInterceptor : Interceptor {
 
         val canvas = Canvas(bitmap)
 
-        val textPaint = TextPaint().apply {
-            isAntiAlias = true
-        }
-        speechBubbles.forEach { speechBubble ->
-            val pxX = speechBubble.x
-            val pxY = speechBubble.y
-            val pxWidth = speechBubble.w
-            val pxHeight = speechBubble.h
-            val pxCenterY = pxY + (pxHeight / 2f)
+        val typefaces = speechBubbles.map { it.family() }.distinct()
+            .associateWith { fontLoader.load(chain, it) }
 
-            textPaint.color = parseColorSafe(speechBubble.color, Color.BLACK)
-            textPaint.bgColor = parseColorSafe(speechBubble.strokeColor, Color.WHITE)
-            textPaint.textSize = speechBubble.fontSizePx
-            textPaint.strokeWidth = speechBubble.strokeWidthPx
-
-            val bubble = createBubble(pxHeight, pxWidth, speechBubble, textPaint)
-            val finalY = getYAxis(pxY, pxHeight, pxCenterY, textPaint, bubble)
-            canvas.draw(textPaint, bubble, speechBubble.actualAngle, pxX, finalY)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        speechBubbles.forEach { bubble ->
+            if (bubble.text.isEmpty()) return@forEach
+            paint.typeface = typefaces.getValue(bubble.family())
+            canvas.drawBubble(bubble, paint, bitmap.width.toFloat(), bitmap.height.toFloat())
         }
 
         val ext = url.substringBefore("#")
@@ -91,81 +81,98 @@ class SpeechBubblePainterInterceptor : Interceptor {
             .build()
     }
 
-    private fun getYAxis(
-        pxY: Float,
-        pxHeight: Float,
-        pxCenterY: Float,
-        textPaint: TextPaint,
-        bubble: StaticLayout,
-    ): Float {
-        val fontHeight = textPaint.fontMetrics.let { it.bottom - it.top }
-        val dialogBoxLineCount = pxHeight / fontHeight
-        return when {
-            bubble.lineCount < dialogBoxLineCount -> pxCenterY - (bubble.lineCount / 2f) * fontHeight
-            else -> pxY
-        }
-    }
+    private fun Bubble.family() = fontFamily.ifBlank { DEFAULT_FAMILY }
 
-    private fun createBubble(
-        pxHeight: Float,
-        pxWidth: Float,
-        dialog: Bubble,
-        textPaint: TextPaint,
-    ): StaticLayout {
-        var bubble = createBubbleLayout(pxWidth, dialog, textPaint)
+    private fun Canvas.drawBubble(bubble: Bubble, paint: Paint, imageWidth: Float, imageHeight: Float) {
+        val left = min(imageWidth - bubble.w, bubble.x).coerceAtLeast(0f)
+        val top = min(imageHeight - bubble.h, bubble.y).coerceAtLeast(0f)
+        val boxWidth = min(imageWidth - left, bubble.w)
+        val boxHeight = min(imageHeight - top, bubble.h)
+        if (boxWidth <= 0f || boxHeight <= 0f) return
 
-        if (bubble.height <= pxHeight) {
-            return bubble
+        val lineHeight = bubble.lineHeight.takeIf { it > 0f } ?: DEFAULT_LINE_HEIGHT
+        val maxWidth = max(1f, boxWidth - 2f)
+
+        var size = max(1f, bubble.fontSizePx)
+        var lines = wrapLines(bubble.text, paint, size, maxWidth)
+        for (i in 0 until MAX_FIT_PASSES) {
+            val scale = fitScale(lines, paint, maxWidth, boxHeight, lineHeight, size)
+            if (scale >= 0.999f) break
+            size = max(1f, size * scale)
+            lines = wrapLines(bubble.text, paint, size, maxWidth)
         }
 
-        while (bubble.height > pxHeight) {
-            textPaint.textSize -= 0.5f
-            bubble = createBubbleLayout(pxWidth, dialog, textPaint)
+        val pitch = lineHeight * size
+        val (align, x) = when (bubble.textAlign) {
+            "left" -> Paint.Align.LEFT to 0f
+            "right" -> Paint.Align.RIGHT to boxWidth
+            else -> Paint.Align.CENTER to boxWidth / 2f
         }
+        val baselineShift = -(paint.fontMetrics.ascent + paint.fontMetrics.descent) / 2f
+        val firstCenter = boxHeight / 2f - pitch * lines.size / 2f + pitch / 2f
 
-        return bubble
-    }
-
-    private fun createBubbleLayout(pxWidth: Float, dialog: Bubble, textPaint: TextPaint): StaticLayout {
-        val text = dialog.text
-
-        return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, pxWidth.toInt()).apply {
-            setAlignment(Layout.Alignment.ALIGN_CENTER)
-            setIncludePad(true)
-            setLineSpacing(0f, dialog.lineHeight.coerceAtLeast(0.5f))
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
-                setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
-            }
-        }.build()
-    }
-
-    private fun Canvas.draw(textPaint: TextPaint, layout: StaticLayout, angle: Float, x: Float, y: Float) {
         save()
-        translate(x, y)
-        rotate(angle)
-        drawTextOutline(textPaint, layout)
-        drawText(textPaint, layout)
+        translate(left, top)
+        rotate(bubble.angle, boxWidth / 2f, boxHeight / 2f)
+        clipRect(0f, 0f, boxWidth, boxHeight)
+        paint.textAlign = align
+
+        if (!bubble.strokeColor.isNullOrBlank() && bubble.strokeWidthPx > 0f) {
+            paint.style = Paint.Style.STROKE
+            paint.strokeJoin = Paint.Join.ROUND
+            paint.strokeMiter = 2f
+            paint.strokeWidth = max(1f, bubble.strokeWidthPx)
+            paint.color = parseColorSafe(bubble.strokeColor, Color.BLACK)
+            lines.forEachIndexed { i, line ->
+                drawText(line, x, firstCenter + i * pitch + baselineShift, paint)
+            }
+        }
+
+        paint.style = Paint.Style.FILL
+        paint.color = parseColorSafe(bubble.color, Color.BLACK)
+        lines.forEachIndexed { i, line ->
+            drawText(line, x, firstCenter + i * pitch + baselineShift, paint)
+        }
         restore()
     }
 
-    private fun Canvas.drawText(textPaint: TextPaint, layout: StaticLayout) {
-        textPaint.style = Paint.Style.FILL
-        textPaint.strokeWidth = 0f
-        layout.draw(this)
+    private fun wrapLines(text: String, paint: Paint, size: Float, maxWidth: Float): List<String> {
+        paint.textSize = size
+        val result = mutableListOf<String>()
+        for (line in text.split("\n")) {
+            if (paint.measureText(line) <= maxWidth * LINE_TOLERANCE || !line.contains(' ')) {
+                result.add(line)
+                continue
+            }
+            var current = ""
+            for (word in line.split(" ")) {
+                val candidate = if (current.isNotEmpty()) "$current $word" else word
+                if (current.isNotEmpty() && paint.measureText(candidate) > maxWidth) {
+                    result.add(current)
+                    current = word
+                } else {
+                    current = candidate
+                }
+            }
+            if (current.isNotEmpty()) result.add(current)
+        }
+        return result
     }
 
-    private fun Canvas.drawTextOutline(textPaint: TextPaint, layout: StaticLayout) {
-        val foregroundColor = textPaint.color
-        val style = textPaint.style
-
-        textPaint.color = textPaint.bgColor
-        textPaint.style = Paint.Style.FILL_AND_STROKE
-
-        layout.draw(this)
-
-        textPaint.color = foregroundColor
-        textPaint.style = style
+    private fun fitScale(
+        lines: List<String>,
+        paint: Paint,
+        maxWidth: Float,
+        boxHeight: Float,
+        lineHeight: Float,
+        size: Float,
+    ): Float {
+        val widest = lines.maxOfOrNull { paint.measureText(it) } ?: 0f
+        return minOf(
+            1f,
+            maxWidth / max(1f, widest),
+            boxHeight / max(1f, lineHeight * size * lines.size),
+        )
     }
 
     private fun parseColorSafe(color: String?, defaultColor: Int): Int = try {
@@ -176,5 +183,10 @@ class SpeechBubblePainterInterceptor : Interceptor {
 
     companion object {
         private val mediaType = "image/png".toMediaType()
+
+        private const val DEFAULT_FAMILY = "Hacen Samra"
+        private const val DEFAULT_LINE_HEIGHT = 1.2f
+        private const val LINE_TOLERANCE = 1.15f
+        private const val MAX_FIT_PASSES = 2
     }
 }

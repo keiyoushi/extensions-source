@@ -179,8 +179,15 @@ abstract class TruyenQQVN : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val images = document.select("img.lazy[data-src]")
 
-        return document.select("img.lazy[data-src]").mapIndexed { index, element ->
+        // Some series hide their chapters behind a Google sign-in. The session cookie set by
+        // logging in through WebView is shared with this client, so that is the way through.
+        if (images.isEmpty() && document.selectFirst("a[href*=/account/google]") != null) {
+            throw Exception("Truyện này yêu cầu đăng nhập. Mở WebView, đăng nhập bằng Google rồi thử lại.")
+        }
+
+        return images.mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("data-src"))
         }
     }
