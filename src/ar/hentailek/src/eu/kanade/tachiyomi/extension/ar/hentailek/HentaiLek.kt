@@ -94,10 +94,7 @@ abstract class HentaiLek : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        return SMangaUpdate(
-            manga = if (fetchDetails) document.parseDetails(manga.url) else manga,
-            chapters = if (fetchChapters) document.parseChapters() else chapters,
-        )
+        return SMangaUpdate(document.parseDetails(manga.url), document.parseChapters())
     }
 
     private fun Document.parseDetails(mangaUrl: String): SManga = SManga.create().apply {
