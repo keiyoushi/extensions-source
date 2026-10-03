@@ -13,7 +13,11 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -80,42 +84,59 @@ abstract class MyAdultComics : KeiSource() {
         val mangaId = url.queryParameter("i") ?: return null
 
         val document = client.get(url).asJsoup()
-        return parseMangaDetails(document).apply {
+        val pagePaths = parsePagePaths(document)
+        return parseMangaDetails(document, pagePaths).apply {
             setUrlWithoutDomain("$baseUrl/read.php?i=$mangaId")
             initialized = true
         }
     }
 
-    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1#TOP")!!.text()
-        genre = document.select("p.text_info_book:contains(Tags:) a")
-            .joinToString { it.text() }
-            .ifEmpty { null }
-        artist = document.select("p.text_info_book:contains(Artists:) a")
-            .joinToString { it.text() }
-            .ifEmpty { null }
-        author = artist
-        status = SManga.COMPLETED
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    private fun parseMangaDetails(document: Document, pagePaths: List<String>): SManga {
+        val thumbnailUrl = pagePaths.firstOrNull()?.let { imagePath ->
+            val segments = "$baseUrl$imagePath".toHttpUrl().pathSegments
+            val thumbnailName = "${segments[segments.lastIndex - 1]}.${segments.last().substringAfterLast('.')}"
+            "$baseUrl/poster/$thumbnailName"
+        }
+
+        return SManga.create().apply {
+            title = document.selectFirst("h1#TOP")!!.text()
+            genre = document.select("p.text_info_book:contains(Tags:) a")
+                .joinToString { it.text() }
+                .ifEmpty { null }
+            artist = document.select("p.text_info_book:contains(Artists:) a")
+                .joinToString { it.text() }
+                .ifEmpty { null }
+            author = artist
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            thumbnail_url = thumbnailUrl
+        }
     }
 
-    private fun parseChapterList(document: Document): List<SChapter> {
+    private fun parseChapterList(document: Document, pagePaths: List<String>): List<SChapter> {
         val chapter = SChapter.create().apply {
             setUrlWithoutDomain(document.location())
             name = "Gallery"
             date_upload = 0L
+            memo = buildJsonObject {
+                put("pages", pagePaths.toJsonElement())
+            }
         }
         return listOf(chapter)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
-        val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(let template)")?.data() ?: return emptyList()
+        val pagePaths = chapter.memo["pages"]?.parseAs<List<String>>()
+            ?: parsePagePaths(client.get(getChapterUrl(chapter)).asJsoup())
 
-        return pageRegex.findAll(script).mapIndexed { index, matchResult ->
-            Page(index, imageUrl = "$baseUrl/${matchResult.groupValues[1]}")
-        }.toList()
+        return pagePaths.mapIndexed { index, path ->
+            Page(index, imageUrl = "$baseUrl$path")
+        }
+    }
+
+    private fun parsePagePaths(document: Document): List<String> {
+        val script = document.selectFirst("script:containsData(let template)")?.data() ?: return emptyList()
+        return pageRegex.findAll(script).map { "/${it.groupValues[1]}" }.toList()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -124,10 +145,10 @@ abstract class MyAdultComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
-        val document = response.asJsoup()
-        val details = parseMangaDetails(document)
-        val chapterList = parseChapterList(document)
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val pagePaths = parsePagePaths(document)
+        val details = parseMangaDetails(document, pagePaths)
+        val chapterList = parseChapterList(document, pagePaths)
         return SMangaUpdate(details, chapterList)
     }
 
