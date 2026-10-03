@@ -13,8 +13,6 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl {
-            custom("https://madarascans.net")
-        }
+        baseUrl = "https://madarascans.net"
     }
 }
