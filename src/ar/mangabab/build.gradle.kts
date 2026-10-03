@@ -14,9 +14,7 @@ keiyoushi {
     source {
         name = "مانجا باب"
         lang = "ar"
-        baseUrl {
-            custom("https://mangabab.com")
-        }
+        baseUrl = "https://mangabab.com"
         id = 6899943547168982381L
     }
 }
