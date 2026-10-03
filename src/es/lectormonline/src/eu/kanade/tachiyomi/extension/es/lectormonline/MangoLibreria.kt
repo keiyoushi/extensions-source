@@ -3,17 +3,21 @@ package eu.kanade.tachiyomi.extension.es.lectormonline
 import android.content.SharedPreferences
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -25,31 +29,25 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
 import java.net.URLEncoder
-import java.time.OffsetDateTime
 import java.util.concurrent.TimeUnit
+import kotlin.time.Instant
 
 @Source
 abstract class MangoLibreria :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override val client = network.client.newBuilder()
-        .connectTimeout(30, TimeUnit.SECONDS)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val request = chain.request()
-            // The image CDN rejects requests with the main site's Referer header.
+            // The image proxy rejects requests with the main site's Referer header.
             val newRequest = if (request.url.host != baseUrl.toHttpUrl().host) {
                 request.newBuilder()
                     .removeHeader("Referer")
@@ -69,45 +67,34 @@ abstract class MangoLibreria :
             }
             throw lastException!!
         }
-        .build()
 
     // ============================== Popular ==============================
     // The list pages render card <img> tags without src (covers are set by JS
     // during hydration), so covers are read from SvelteKit's data endpoint instead.
-    override fun popularMangaRequest(page: Int): Request = dataJsonRequest(page, sort = "views")
-
-    override fun popularMangaParse(response: Response): MangasPage = parseDataJson(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get(dataJsonUrl(page, sort = "views")).parseAsDataJson()
 
     // ============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = dataJsonRequest(page)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseDataJson(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(dataJsonUrl(page)).parseAsDataJson()
 
     // ============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isBlank()) {
-        dataJsonRequest(page, sort = "views")
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = if (query.isBlank()) {
+        client.get(dataJsonUrl(page, sort = "views")).parseAsDataJson()
     } else {
-        dataJsonRequest(page, query = query)
+        client.get(dataJsonUrl(page, query = query)).parseAsDataJson()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseDataJson(response)
+    private fun dataJsonUrl(page: Int, sort: String? = null, query: String? = null) = "$baseUrl/comics/__data.json".toHttpUrl().newBuilder().apply {
+        addQueryParameter("x-sveltekit-invalidated", "01")
+        addQueryParameter("page", page.toString())
+        sort?.let { addQueryParameter("sort", it) }
+        query?.takeIf { it.isNotBlank() }?.let { addQueryParameter("q", it.trim()) }
+    }.build()
 
-    private fun dataJsonRequest(page: Int, sort: String? = null, query: String? = null): Request {
-        val url = "$baseUrl/comics/__data.json".toHttpUrl().newBuilder().apply {
-            addQueryParameter("x-sveltekit-invalidated", "01")
-            addQueryParameter("page", page.toString())
-            sort?.let { addQueryParameter("sort", it) }
-            query?.takeIf { it.isNotBlank() }?.let { addQueryParameter("q", it.trim()) }
-        }.build()
-
-        return GET(url, headers)
-    }
-
-    private fun parseDataJson(response: Response): MangasPage {
-        val raw = response.body.string()
-        val body = Json.parseToJsonElement(raw) as? JsonObject
+    private fun Response.parseAsDataJson(): MangasPage {
+        val raw = body.string()
+        val json = Json.parseToJsonElement(raw) as? JsonObject
             ?: return MangasPage(emptyList(), false)
-        val nodes = body["nodes"] as? JsonArray ?: return MangasPage(emptyList(), false)
+        val nodes = json["nodes"] as? JsonArray ?: return MangasPage(emptyList(), false)
         for (node in nodes) {
             val data = (node as? JsonObject)?.get("data") as? JsonArray ?: continue
             // data[0] is the request-params echo; the page payload is the object holding "comics".
@@ -125,66 +112,92 @@ abstract class MangoLibreria :
 
     // SvelteKit serializes page data with devalue: a flat array where object
     // values and array items are integer indexes pointing back into the array.
-    private fun resolveRef(data: JsonArray, index: Int, depth: Int = 0): JsonElement {
+    // The references are resolved manually here since the index graph can't be
+    // expressed as plain @Serializable field mappings. Resolved indexes are
+    // cached so shared references aren't rebuilt repeatedly.
+    private fun resolveRef(data: JsonArray, index: Int, depth: Int = 0, cache: MutableMap<Int, JsonElement> = mutableMapOf()): JsonElement {
         if (depth > 50) return JsonNull
+        cache[index]?.let { return it }
         val slot = data.getOrNull(index) ?: return JsonNull
-        return when (slot) {
+        val resolved = when (slot) {
             is JsonObject -> buildJsonObject {
                 slot.forEach { (k, v) ->
                     val ref = (v as? JsonPrimitive)?.intOrNull
-                    put(k, if (ref != null) resolveRef(data, ref, depth + 1) else v)
+                    put(k, if (ref != null) resolveRef(data, ref, depth + 1, cache) else v)
                 }
             }
             is JsonArray -> buildJsonArray {
                 slot.forEach { v ->
                     val ref = (v as? JsonPrimitive)?.intOrNull
-                    add(if (ref != null) resolveRef(data, ref, depth + 1) else v)
+                    add(if (ref != null) resolveRef(data, ref, depth + 1, cache) else v)
                 }
             }
             else -> slot
         }
+        cache[index] = resolved
+        return resolved
+    }
+
+    // Devalue encodes some values (e.g. dates) as ["Date", "..."] arrays
+    // instead of plain primitives; this reads either form as text.
+    private fun JsonElement?.asText(): String? = when (this) {
+        is JsonPrimitive -> contentOrNull
+        is JsonArray -> (getOrNull(1) as? JsonPrimitive)?.contentOrNull
+        else -> null
     }
 
     private fun JsonObject.toSManga(): SManga? {
-        val name = (get("name") as? JsonPrimitive)?.contentOrNull ?: return null
-        val urlPath = (get("urlPath") as? JsonPrimitive)?.contentOrNull ?: return null
-        val cover = (get("urlCover") as? JsonPrimitive)?.contentOrNull
-            ?: (get("coverImage") as? JsonPrimitive)?.contentOrNull
+        val name = this["name"].asText()
+        val urlPath = this["urlPath"].asText()
+        if (name.isNullOrBlank() || urlPath.isNullOrBlank()) return null
         return SManga.create().apply {
             title = name
             url = urlPath
             // The data holds direct origin URLs (blocked without the proxy),
-            // the site builds the proxied form client-side, so doing the same.
-            thumbnail_url = cover?.let(::proxyImageUrl)
+            // the site builds the proxied form client-side, so do the same.
+            thumbnail_url = (this@toSManga["urlCover"].asText() ?: this@toSManga["coverImage"].asText())?.let(::proxyImageUrl)
         }
     }
 
-    // ============================== Details ==============================
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val doc = response.asJsoup()
-        title = doc.selectFirst("h1")?.text().orEmpty()
-        thumbnail_url = doc.selectFirst("div.relative.mx-auto img")?.attr("abs:src")
-        description = doc.selectFirst("div.mt-6 > p")?.text()
-        genre = doc.select("a[href*=\"genres=\"]").joinToString { it.text() }
-        status = parseStatus(doc.selectFirst("p.text-xs.uppercase")?.text())
+    // ====================== Details & Chapters ======================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async { fetchMangaDetails(manga) }
+        val chapterList = async { fetchChapterList(manga) }
+        SMangaUpdate(details.await(), chapterList.await())
     }
 
-    // ============================= Chapters ==============================
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val doc = client.get(baseUrl + manga.url).asJsoup()
+        return SManga.create().apply {
+            url = manga.url
+            title = doc.selectFirst("h1")?.text().orEmpty()
+            thumbnail_url = doc.selectFirst("div.relative.mx-auto img")?.attr("abs:src")
+            description = doc.selectFirst("div.mt-6 > p")?.text()
+            genre = doc.select("a[href*=\"genres=\"]").joinToString { it.text() }
+            status = parseStatus(doc.selectFirst("p.text-xs.uppercase")?.text())
+        }
+    }
+
     // The detail HTML only renders the 10 most recent chapters per scan group;
     // the complete per-group lists live in the detail page's data payload.
-    override fun chapterListRequest(manga: SManga): Request {
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val slug = manga.url.substringAfter("/comics/", "").substringBefore("?").substringBefore("/")
-        if (slug.isBlank()) return GET(baseUrl + manga.url, headers)
-        val url = "$baseUrl/comics/$slug/__data.json".toHttpUrl().newBuilder()
-            .addQueryParameter("x-sveltekit-invalidated", "01")
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val raw = response.body.string()
-        val body = Json.parseToJsonElement(raw) as? JsonObject ?: return emptyList()
-        val nodes = body["nodes"] as? JsonArray ?: return emptyList()
+        val dataUrl = if (slug.isBlank()) {
+            baseUrl + manga.url
+        } else {
+            "$baseUrl/comics/$slug/__data.json".toHttpUrl().newBuilder()
+                .addQueryParameter("x-sveltekit-invalidated", "01")
+                .build()
+                .toString()
+        }
+        val raw = client.get(dataUrl).body.string()
+        val json = Json.parseToJsonElement(raw) as? JsonObject ?: return emptyList()
+        val nodes = json["nodes"] as? JsonArray ?: return emptyList()
         for (node in nodes) {
             val data = (node as? JsonObject)?.get("data") as? JsonArray ?: continue
             val comicIdx = ((data.getOrNull(0) as? JsonObject)?.get("comic") as? JsonPrimitive)?.intOrNull
@@ -195,19 +208,18 @@ abstract class MangoLibreria :
             val chapters = mutableListOf<SChapter>()
             scans.forEach { scan ->
                 val scanObj = scan as? JsonObject ?: return@forEach
-                val groupName = ((scanObj["scanGroup"] as? JsonObject)?.get("name") as? JsonPrimitive)?.contentOrNull
+                val groupName = (scanObj["scanGroup"] as? JsonObject)?.get("name").asText()
                 val chapterArr = scanObj["chapters"] as? JsonArray ?: return@forEach
                 chapterArr.forEach { ch ->
                     val c = ch as? JsonObject ?: return@forEach
-                    val numberStr = (c["chapterNumber"] as? JsonPrimitive)?.contentOrNull
-                    val path = (c["chapterPath"] as? JsonPrimitive)?.contentOrNull ?: return@forEach
+                    val path = c["chapterPath"].asText() ?: return@forEach
+                    val number = c["chapterNumber"].asText()
                     chapters += SChapter.create().apply {
                         url = path
-                        name = "Capítulo ${numberStr ?: "?"}"
-                        chapter_number = numberStr?.toFloatOrNull() ?: -1f
-                        date_upload = parseIsoDate((c["releaseDate"] as? JsonPrimitive)?.contentOrNull)
-                            ?: parseIsoDate((c["createdAt"] as? JsonPrimitive)?.contentOrNull)
-                            ?: 0L
+                        name = "Capítulo ${number ?: "?"}"
+                        chapter_number = number?.toFloatOrNull() ?: -1f
+                        date_upload = Instant.tryParse(c["releaseDate"].asText()).takeIf { it != 0L }
+                            ?: Instant.tryParse(c["createdAt"].asText())
                         scanlator = groupName
                     }
                 }
@@ -219,41 +231,29 @@ abstract class MangoLibreria :
         return emptyList()
     }
 
-    private fun parseIsoDate(text: String?): Long? {
-        if (text.isNullOrBlank()) return null
-        return try {
-            OffsetDateTime.parse(text).toInstant().toEpochMilli()
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     // =============================== Pages ===============================
     // The reader HTML only inlines real URLs for the first ~14 images; the
     // rest are rendered without src and filled in client-side from the
     // chapter's data payload, so the complete page list is read from there.
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val path = chapter.url.substringAfter(baseUrl)
-        val url = "$baseUrl$path/__data.json".toHttpUrl().newBuilder()
+        val dataUrl = "$baseUrl$path/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("x-sveltekit-invalidated", "01")
             .build()
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val raw = response.body.string()
-        val body = Json.parseToJsonElement(raw) as? JsonObject ?: return emptyList()
-        val nodes = body["nodes"] as? JsonArray ?: return emptyList()
+        val raw = client.get(dataUrl).body.string()
+        val json = Json.parseToJsonElement(raw) as? JsonObject ?: return emptyList()
+        val nodes = json["nodes"] as? JsonArray ?: return emptyList()
         for (node in nodes) {
             val data = (node as? JsonObject)?.get("data") as? JsonArray ?: continue
             val chapterIdx = ((data.getOrNull(0) as? JsonObject)?.get("chapter") as? JsonPrimitive)?.intOrNull
                 ?: data.indexOfFirst { it is JsonObject && ("url_pages" in it || "urlPages" in it) }
             if (chapterIdx == -1) continue
-            val chapter = resolveRef(data, chapterIdx) as? JsonObject ?: continue
-            val pages = (chapter["url_pages"] as? JsonArray ?: chapter["urlPages"] as? JsonArray)
+            val chapterObj = resolveRef(data, chapterIdx) as? JsonObject ?: continue
+            val pages = (chapterObj["url_pages"] as? JsonArray ?: chapterObj["urlPages"] as? JsonArray)
                 ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
                 ?.filterNot { it.contains("banner", ignoreCase = true) }
                 ?: continue
+            if (pages.isEmpty()) continue
             return pages.mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = proxyImageUrl(imageUrl))
             }
@@ -261,9 +261,11 @@ abstract class MangoLibreria :
         return emptyList()
     }
 
-    private fun proxyImageUrl(url: String): String = if (url.startsWith(PROXY_URL)) url else "$PROXY_URL${URLEncoder.encode(url, "UTF-8")}"
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private fun proxyImageUrl(url: String): String = if (url.startsWith("https://mango-proxy-image.zincbaq.workers.dev/?url=")) {
+        url
+    } else {
+        "https://mango-proxy-image.zincbaq.workers.dev/?url=${URLEncoder.encode(url, "UTF-8")}"
+    }
 
     private fun parseStatus(text: String?): Int = when {
         text == null -> SManga.UNKNOWN
@@ -304,7 +306,6 @@ abstract class MangoLibreria :
     private fun List<SChapter>.filterBlacklistedScanlators(blacklist: Set<String>): List<SChapter> = filterNot { it.scanlator?.trim()?.lowercase()?.let(blacklist::contains) == true }
 
     companion object {
-        private const val PROXY_URL = "https://mango-proxy-image.zincbaq.workers.dev/?url="
         private const val MAX_RETRIES = 3
         private const val SCANLATOR_BLACKLIST_PREF = "scanlator_blacklist_pref"
         private const val KNOWN_SCANLATORS_PREF = "known_scanlators_pref"
