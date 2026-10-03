@@ -61,6 +61,8 @@ class LANraragi(
 
     private val randomPageSizePref by lazy { getPrefRandomPageSize() }
 
+    private var randomArchiveID: String = ""
+
     override fun OkHttpClient.Builder.configureClient() = dns(Dns.SYSTEM)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
@@ -87,11 +89,7 @@ class LANraragi(
             filters.add(SortByNamespace(latestNamespacePref))
         }
 
-        if (latestSortOrderPref == "random") {
-            filters.add(RandomArchives(true))
-        } else {
-            filters.add(SortSelect(sortOrders.filter { it.first == latestSortOrderPref }.toTypedArray()))
-        }
+        filters.add(SortSelect(sortOrders.filter { it.first == latestSortOrderPref }.toTypedArray()))
 
         return getSearchMangaList(page, "", FilterList(filters))
     }
@@ -104,13 +102,7 @@ class LANraragi(
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val uri = getApiUriBuilder("/api/search")
         var startPageOffset = 0
-        val isRandom = filters.firstInstanceOrNull<RandomArchives>()?.state == true
-
-        if (isRandom) {
-            if (page > 1) return MangasPage(emptyList(), false)
-            uri.appendPath("random")
-            uri.appendQueryParameter("count", randomPageSizePref)
-        }
+        val isRandom = filters.firstInstanceOrNull<SortSelect>()?.toUriPart() == "random"
 
         if (page == 1) {
             lastResultCount = 0
@@ -139,7 +131,14 @@ class LANraragi(
 
                 is CategorySelect -> if (filter.state > 0) uri.appendQueryParameter("category", filter.toUriPart())
 
-                is SortSelect -> if (!isRandom) uri.appendQueryParameter("order", filter.toUriPart())
+                is SortSelect -> {
+                    if (filter.toUriPart() == "random") {
+                        uri.appendPath("random")
+                        uri.appendQueryParameter("count", randomPageSizePref)
+                    } else {
+                        uri.appendQueryParameter("order", filter.toUriPart())
+                    }
+                }
 
                 else -> {}
             }
@@ -152,8 +151,8 @@ class LANraragi(
             uri.appendQueryParameter("filter", query)
         }
 
-        val url = uri.toString().toHttpUrl()
-        val jsonResult = client.get(url, headers, CacheControl.FORCE_NETWORK).parseAs<ArchiveSearchResult>()
+        val searchUrl = uri.toString().toHttpUrl()
+        val jsonResult = client.get(searchUrl, headers, CacheControl.FORCE_NETWORK).parseAs<ArchiveSearchResult>()
         val archives = arrayListOf<SManga>()
 
         lastResultCount = jsonResult.data.size
@@ -161,18 +160,37 @@ class LANraragi(
         lastRecordsFiltered = jsonResult.recordsFiltered ?: -2
         totalRecords = jsonResult.recordsTotal
 
+        var hasNext = isRandom || currentStart + lastResultCount < lastRecordsFiltered
+
         // Random has no paging; applying the filter again gives a new batch
-        val hasNext = !isRandom && currentStart + lastResultCount < lastRecordsFiltered
+        if (isRandom && page > 1 && !preferences.getBoolean(REDUPE_KEY, REDUPE_DEFAULT)) {
+            hasNext = false
+        }
+
+        if (page == 1 && lastResultCount > 1 && preferences.getBoolean(RANDOM_ENTRY_SHOW_KEY, RANDOM_ENTRY_SHOW_DEFAULT)) {
+            val randQuery = searchUrl.query.toString()
+            randomArchiveID = getRandomID(randQuery)
+
+            archives.add(
+                SManga.create().apply {
+                    url = "/api/search/random?count=1&$randQuery"
+                    title = "Random"
+                    description = "Refresh for a random archive."
+                    thumbnail_url = getThumbnailUri("0".repeat(40))
+                },
+            )
+        }
 
         jsonResult.data.forEach {
-            archives.add(archiveToSManga(it))
+            archives.add(archiveToSManga(it, isRandom && page > 1))
         }
 
         return MangasPage(archives, hasNext)
     }
 
-    private fun archiveToSManga(archive: Archive) = SManga.create().apply {
+    private fun archiveToSManga(archive: Archive, isRandom: Boolean = false) = SManga.create().apply {
         url = "/reader?id=${archive.arcid}"
+        if (isRandom && preferences.getBoolean(REDUPE_KEY, REDUPE_DEFAULT)) url += "&ts" + System.currentTimeMillis()
         title = archive.title
         description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
         thumbnail_url = getThumbnailUri(archive.arcid)
@@ -188,9 +206,10 @@ class LANraragi(
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val id = getIDFromURL(manga.url)
+        val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getIDFromURL(manga.url)
 
         val response = client.get(apiTypeByID(id).toString())
+
         val (archive, archives) = if (!id.startsWith("TANK_")) {
             val archive = response.parseAs<Archive>()
             archive to listOf(archive)
@@ -212,6 +231,11 @@ class LANraragi(
         }
 
         val updatedManga = archiveToSManga(archive).apply { url = manga.url }
+
+        if (manga.url.startsWith("/api/search/random")) {
+            randomArchiveID = getRandomID(Uri.parse(manga.url).encodedQuery.toString())
+            updatedManga.description = "Refresh for a new random entry.\n\n${updatedManga.description}"
+        }
 
         return SMangaUpdate(updatedManga, parseChapters(archives))
     }
@@ -313,7 +337,6 @@ class LANraragi(
     private class NewArchivesOnly(overrideState: Boolean = false) : Filter.CheckBox("New Archives only", overrideState)
     private class UntaggedArchivesOnly : Filter.CheckBox("Untagged Archives only", false)
     private class HideCompleted : Filter.CheckBox("Hide Completed", false)
-    private class RandomArchives(state: Boolean = false) : Filter.CheckBox("Random", state)
     private class GroupByTanks : Filter.CheckBox("Group by Tankoubon", true)
     private class StartingPage(stats: String) : Filter.Text("Starting page$stats", "")
     private class SortByNamespace(defaultText: String = "") : Filter.Text("Sort by (namespace)", defaultText)
@@ -327,8 +350,6 @@ class LANraragi(
     override fun getFilterList(data: JsonElement?) = FilterList(
         CategorySelect(getCategoryPairs(data?.parseAs<List<Category>>().orEmpty())),
         SortSelect(sortOrders),
-        Filter.Header("Sort is ignored when Random is enabled"),
-        RandomArchives(),
         NewArchivesOnly(),
         UntaggedArchivesOnly(),
         HideCompleted(),
@@ -337,7 +358,7 @@ class LANraragi(
         SortByNamespace(),
     )
 
-    private val sortOrders = arrayOf(Pair("asc", "Ascending"), Pair("desc", "Descending"))
+    private val sortOrders = arrayOf(Pair("asc", "Ascending"), Pair("desc", "Descending"), Pair("random", "Random"))
 
     // Preferences
     internal val preferences: SharedPreferences by getPreferencesLazy()
@@ -352,11 +373,11 @@ class LANraragi(
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val randomPageSize = ListPreference(screen.context).apply {
             key = RANDOM_SIZE_KEY
-            title = "Random - Amount"
+            title = "Random Sort - Pagination amount"
             entries = arrayOf("25", "50", "100", "250", "1000")
             entryValues = entries
             setDefaultValue(RANDOM_SIZE_DEFAULT)
-            summary = "Request %s random entries at a time."
+            summary = "Request %s entries at a time in Random sort order. Lower may be more responsive while higher may be less disruptive.\n\n\"Ignore dedupe\" must be enabled for infinite/doomscrolling."
 
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, "Restart app to apply new setting.", Toast.LENGTH_LONG).show()
@@ -367,8 +388,8 @@ class LANraragi(
         val latestSortOrder = ListPreference(screen.context).apply {
             key = SORT_ORDER_KEY
             title = "Latest - Default Sort Order"
-            entries = sortOrders.map { it.second }.toTypedArray() + "Random"
-            entryValues = sortOrders.map { it.first }.toTypedArray() + "random"
+            entries = sortOrders.map { it.second }.toTypedArray()
+            entryValues = sortOrders.map { it.first }.toTypedArray()
             setDefaultValue(SORT_ORDER_DEFAULT)
             summary = "%s"
 
@@ -381,11 +402,13 @@ class LANraragi(
         screen.addPreference(screen.editTextPreference(HOSTNAME_KEY, "Hostname", HOSTNAME_DEFAULT, baseUrl, refreshSummary = true))
         screen.addPreference(screen.editTextPreference(APIKEY_KEY, "API Key", "", "Required if No-Fun Mode is enabled.", true))
         screen.addPreference(screen.editTextPreference(CUSTOM_LABEL_KEY, "Custom Label", "", "Show the given label for the source instead of the default."))
+        screen.addPreference(screen.checkBoxPreference(RANDOM_ENTRY_SHOW_KEY, "Show Random entry", RANDOM_ENTRY_SHOW_DEFAULT, "The first item of a search will be a special entry for a single random archive. Pull down to \"refresh\" and get a new one.\n\nLibrary functionality is limited. It is recommend to start a search within this entry to get to the original."))
         screen.addPreference(screen.checkBoxPreference(CLEAR_NEW_KEY, "Clear New status", CLEAR_NEW_DEFAULT, "Clear an entry's New status when its details are viewed."))
         screen.addPreference(screen.checkBoxPreference(NEW_ONLY_KEY, "Latest - New Only", NEW_ONLY_DEFAULT))
         screen.addPreference(screen.editTextPreference(SORT_BY_NS_KEY, "Latest - Sort by Namespace", SORT_BY_NS_DEFAULT, "Sort by the given namespace for Latest, such as date_added or lastread."))
         screen.addPreference(latestSortOrder)
         screen.addPreference(randomPageSize)
+        screen.addPreference(screen.checkBoxPreference(REDUPE_KEY, "Random Sort - Ignore dedupe", REDUPE_DEFAULT, "If enabled, ignores app's enforced deduping at the cost of spamming its database and library functionality. If disabled, there will only be one request of the pagination amount."))
         screen.addPreference(screen.editTextPreference(URL_TAG_PREFIX_KEY, "Set tag prefix to get WebView URL", URL_TAG_PREFIX_DEFAULT, "Example: 'source:' will try to get the URL from the first tag starting with 'source:' and it will open it in the WebView. Leave empty for the default behavior."))
     }
 
@@ -442,6 +465,12 @@ class LANraragi(
         },
     ).build()
 
+    private suspend fun getRandomID(query: String): String {
+        val searchRandom = client.get("$baseUrl/api/search/random?count=1&$query", headers, CacheControl.FORCE_NETWORK)
+        val result = searchRandom.parseAs<ArchiveSearchResult>() // Intermittent empty data[] on parse, but not from manual API testing
+        return result.data.firstOrNull()?.arcid ?: randomArchiveID
+    }
+
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
         fun toUriPart() = vals[state].first
     }
@@ -494,12 +523,17 @@ class LANraragi(
         // Order must match the source { } blocks in build.gradle.kts (used to label factory instances).
         private val INSTANCE_IDS = listOf(4482480338677079857L, 6188058704030343819L)
 
+        // mihonapp/mihon#2176
+        private const val REDUPE_KEY = "redupePref"
+        private const val REDUPE_DEFAULT = false
         private const val NEW_ONLY_DEFAULT = true
         private const val NEW_ONLY_KEY = "latestNewOnly"
         private const val SORT_BY_NS_DEFAULT = "date_added"
         private const val SORT_BY_NS_KEY = "latestNamespacePref"
         private const val SORT_ORDER_DEFAULT = "desc"
         private const val SORT_ORDER_KEY = "latestSortOrder"
+        private const val RANDOM_ENTRY_SHOW_KEY = "showRandomEntry"
+        private const val RANDOM_ENTRY_SHOW_DEFAULT = true
         private const val RANDOM_SIZE_DEFAULT = "100"
         private const val RANDOM_SIZE_KEY = "randomPageSize"
         private const val CLEAR_NEW_KEY = "clearNew"

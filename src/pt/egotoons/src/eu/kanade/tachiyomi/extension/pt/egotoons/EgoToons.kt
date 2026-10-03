@@ -21,9 +21,12 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import okhttp3.Request
 
 @Source
 abstract class EgoToons : KeiSource() {
+
+    private val apiUrl = "https://api.egotoons.com"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
@@ -115,12 +118,43 @@ abstract class EgoToons : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val mangaId = chapter.url.mangaId()
         val chapterNumber = chapter.url.chapterNumber()
-
-        return client.get("$baseUrl/api/obras/$mangaId/capitulos/$chapterNumber/index.js")
+        val chapterId = client.get("$baseUrl/api/obras/$mangaId/capitulos/$chapterNumber/index.js")
             .parseAs<ChapterDetailsDto>()
             .chapter
-            .toPageList(baseUrl)
+            .id
+
+        // The reader manifest and CDN pages are only served from the API host and require
+        // the chapter's reader page as Referer.
+        val readerUrl = "$baseUrl/obra/$mangaId/capitulo/$chapterNumber"
+        val headers = headersBuilder()
+            .set("Referer", readerUrl)
+            .build()
+        val cdnUrl = apiUrl.toHttpUrl()
+
+        val pages = mutableListOf<Page>()
+        var offset = 0
+        while (true) {
+            val manifest = client.get(
+                "$apiUrl/api/leitor/capitulos/$chapterId/manifest?offset=$offset&limit=$MANIFEST_PAGE_SIZE",
+                headers,
+            ).parseAs<ChapterManifestDto>()
+            manifest.pages.mapTo(pages) {
+                Page(it.index, readerUrl, imageUrl = requireNotNull(cdnUrl.resolve(it.url)).toString())
+            }
+            offset = manifest.nextOffset ?: break
+        }
+        return pages
     }
+
+    override fun imageRequest(page: Page): Request = Request.Builder()
+        .url(page.imageUrl!!)
+        .headers(
+            headersBuilder()
+                .set("Referer", page.url.ifEmpty { "$baseUrl/" })
+                .build(),
+        )
+        .get()
+        .build()
 
     override val supportsFilterFetching: Boolean get() = true
 
@@ -169,5 +203,6 @@ abstract class EgoToons : KeiSource() {
     companion object {
         private const val MANGA_PAGE_SIZE = 24
         private const val CHAPTER_PAGE_SIZE = 80
+        private const val MANIFEST_PAGE_SIZE = 24
     }
 }

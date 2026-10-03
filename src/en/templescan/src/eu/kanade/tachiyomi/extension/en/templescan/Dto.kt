@@ -8,7 +8,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // Fields the site renames to short keys are declared under their logical names; the payload is
-// remapped before decoding, so these stay valid across salt rotations. See [RscKeys].
+// remapped before decoding, so these stay valid across key rotations. See [RscKeys].
 @Serializable
 class BrowseSeries(
     val title: String,

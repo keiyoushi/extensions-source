@@ -198,7 +198,7 @@ abstract class SolarisScans :
             val document = try {
                 client.get(url).asJsoup()
             } catch (e: HttpException) {
-                if (e.code == 404) {
+                if (e.message?.contains("404") == true) {
                     break
                 }
                 throw e

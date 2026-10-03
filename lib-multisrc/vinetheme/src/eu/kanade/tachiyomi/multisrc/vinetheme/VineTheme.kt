@@ -58,7 +58,7 @@ abstract class VineTheme :
         val detail = client.get("$baseUrl/series/comic/$slug", headers = rscHeaders)
             .extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
             ?: return null
-        return detail.series.toSManga(baseUrl)
+        return detail.series.toSManga(baseUrl, fallbackSlug = slug)
     }
 
     private suspend fun getApiMangasPage(page: Int, sort: String): MangasPage {
