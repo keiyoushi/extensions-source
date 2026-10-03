@@ -15,6 +15,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -53,11 +54,6 @@ abstract class MyAdultComics : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
-
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        Filter.Header("Use the text search field along with the type below."),
-        Filters(),
-    )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchType = filters.firstInstanceOrNull<Filters>()?.selectedValue() ?: "title"
@@ -110,6 +106,9 @@ abstract class MyAdultComics : KeiSource() {
             status = SManga.COMPLETED
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             thumbnail_url = thumbnailUrl
+            memo = buildJsonObject {
+                put("relatedMangas", parseMangaList(document).mangas.map { it.toRelatedManga() }.toJsonElement())
+            }
         }
     }
 
@@ -151,6 +150,33 @@ abstract class MyAdultComics : KeiSource() {
         val chapterList = parseChapterList(document, pagePaths)
         return SMangaUpdate(details, chapterList)
     }
+
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = manga.memo["relatedMangas"]
+        ?.parseAs<List<RelatedManga>>()
+        ?.map { it.toSManga() }
+        .orEmpty()
+
+    @Serializable
+    private class RelatedManga(
+        val url: String,
+        val title: String,
+        val thumbnailUrl: String?,
+    )
+
+    private fun RelatedManga.toSManga() = SManga.create().apply {
+        setUrlWithoutDomain(this@toSManga.url)
+        title = this@toSManga.title
+        thumbnail_url = this@toSManga.thumbnailUrl
+    }
+
+    private fun SManga.toRelatedManga() = RelatedManga(url, title, thumbnail_url)
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        Filter.Header("Use the text search field along with the type below."),
+        Filters(),
+    )
 
     private val pageRegex = """src=["'](books/[^"']+)["']""".toRegex()
 }
