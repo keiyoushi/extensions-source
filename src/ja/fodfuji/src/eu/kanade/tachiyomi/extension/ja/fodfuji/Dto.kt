@@ -156,12 +156,12 @@ class ViewerResponse(
 @Serializable
 class BookData(
     @SerialName("s3_key") val s3Key: String,
-    @SerialName("imaged_reflow") val imagedReflow: Boolean?,
+    @SerialName("imaged_reflow") val imagedReflow: Boolean,
 )
 
 @Serializable
 class PagesData(
-    val keys: JsonElement?,
+    val keys: JsonElement,
 )
 
 @Serializable
