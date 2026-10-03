@@ -1,21 +1,24 @@
 package eu.kanade.tachiyomi.extension.en.darthsdroids
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.tryParseZonedDateTime
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import okhttp3.OkHttpClient
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
@@ -24,13 +27,13 @@ import kotlin.time.Duration.Companion.seconds
 // Unfortunately we can’t just download and use your Zip downloads.
 // Shall problems arise, we’ll reduce the rate limit.
 @Source
-abstract class DarthsDroids : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+abstract class DarthsDroids : KeiSource() {
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override val supportsLatest = false
-    override val client = network.client.newBuilder()
-        .rateLimit(10, 1.seconds) { it.host == baseUrlHost }
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(10, 1.seconds) { it.host == baseUrlHost }
+    }
 
     // Picks a thumbnail from the profile pictures of the »cast« pages:
     //   https://www.darthsanddroids.net/cast/
@@ -111,8 +114,6 @@ abstract class DarthsDroids : HttpSource() {
         initialized = true
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/archive.html", headers)
-
     // The book and page archive feeds are rather special for this webcomic.
     // The main archive page `/archive.html` is a combined feed for both,
     // all previous and finished books, as well as all pages of the book that
@@ -143,8 +144,8 @@ abstract class DarthsDroids : HttpSource() {
     // even worse in terms of user experience. Maybe one day we’ll have new
     // extension APIs for dealing with unique webcomic weirdnesses. ’cause
     // trust me, there’s worse.
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mainArchive = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mainArchive = client.get("$baseUrl/archive.html").asJsoup()
         val archiveData = mainArchive.select("div.text > table.text > tbody > tr")
 
         val mangas = mutableListOf<SManga>()
@@ -174,32 +175,45 @@ abstract class DarthsDroids : HttpSource() {
         return MangasPage(mangas, false)
     }
 
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val updatedManga = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val updatedChapters = async { if (fetchChapters) fetchChapterList(manga) else chapters }
+
+        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+    }
+
     // Not efficient, but the simplest way for me to refresh.
     // We also can’t really use the `mangaDetailsRequest + mangaDetailsParse`
     // approach, for we actually expect one of the books’ `url`s to change.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(0)
-        .map { mangasPage ->
-            mangasPage
-                .mangas
-                // Do not test for URL-equality, for the last book will always
-                // eventually migrate its archive page from `/archive.html` to
-                // its own page.
-                .first { it.title == manga.title }
-        }
+    private suspend fun fetchMangaDetails(manga: SManga): SManga = getPopularManga(0)
+        .mangas
+        // Do not test for URL-equality, for the last book will always
+        // eventually migrate its archive page from `/archive.html` to
+        // its own page.
+        .first { it.title == manga.title }
 
     // This implementation here is needlessly complicated, for it has to automatically detect
     // whether we’re in a date-annotated archive, the main archive, or a dateless archive.
     // All three are largely similar, there are just *some* (annoying) differences we have to
     // deal with.
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val archivePages = response.asJsoup()
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val archivePages = client.get(baseUrl + manga.url).asJsoup()
 
         // For books where all pages released the same day, there is no page date column,
         // so instead we grab the release date of the archive page itself from its footer.
         val pageDate = archivePages
             .select("""br + i""")
             .mapNotNull { EXTR_PAGE_DATE.find(it.text())?.groupValues?.getOrNull(1) }
-            .map { PAGE_DATE_FMT.parse(it)?.time }
+            .map { PAGE_DATE_FMT.tryParseZonedDateTime(it) }
             .firstOrNull()
             ?: 0L
         var i = 0
@@ -214,9 +228,7 @@ abstract class DarthsDroids : HttpSource() {
                     SChapter.create().apply {
                         name = pageAnchor!!.text()
                         chapter_number = (i++).toFloat()
-                        date_upload = runCatching {
-                            DATE_FMT.parse(pageData[0].text())!!.time
-                        }.getOrDefault(0L)
+                        date_upload = DATE_FMT.tryParseDate(pageData[0].text())
                         setUrlWithoutDomain(pageAnchor!!.absUrl("href"))
                     }
                 } else if (!pageData.hasAttr("colspan")) {
@@ -239,14 +251,14 @@ abstract class DarthsDroids : HttpSource() {
             .reversed()
     }
 
-    override fun pageListParse(response: Response): List<Page> = // Careful. For almost all images it’s `div.center>p>img`, except for pages released on
+    override suspend fun getPageList(chapter: SChapter): List<Page> = // Careful. For almost all images it’s `div.center>p>img`, except for pages released on
         // April’s Fools day, when it’s `div.center>p>a>img`. We could still add the `p` in
         // between, but it was decided to leave it out, in case yet another *almost* same
         // page layout pops up in the future.
         //
         // For example, this episode was released during April’s Fools day.
         // https://www.darthsanddroids.net/episodes/0082.html
-        response
+        client.get(getChapterUrl(chapter))
             .asJsoup()
             .select("""div.center img""")
             .mapIndexed { i, img ->
@@ -256,18 +268,9 @@ abstract class DarthsDroids : HttpSource() {
                 )
             }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     companion object {
-        private val DATE_FMT = SimpleDateFormat("EEE d MMM, yyyy", Locale.US)
+        private val DATE_FMT = DateTimeFormatter.ofPattern("EEE d MMM, yyyy", Locale.US)
         private val EXTR_PAGE_DATE = """Published\:\s+(\w+,\s+\d+\s+\w+,\s+\d+\;\s+\d+\:\d+\:\d+\s+\w+)""".toRegex()
-        private val PAGE_DATE_FMT = SimpleDateFormat("EEEEE, d MMMMM, yyyy; HH:mm:ss zzz", Locale.US)
+        private val PAGE_DATE_FMT = DateTimeFormatter.ofPattern("EEEE, d MMMM, yyyy; HH:mm:ss z", Locale.US)
     }
 }

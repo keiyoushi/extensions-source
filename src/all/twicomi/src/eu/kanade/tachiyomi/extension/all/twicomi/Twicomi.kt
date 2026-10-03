@@ -1,65 +1,48 @@
 package eu.kanade.tachiyomi.extension.all.twicomi
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.lang.IllegalArgumentException
 
 @Source
-abstract class Twicomi : HttpSource() {
+abstract class Twicomi : KeiSource() {
 
     private val apiUrl = "https://api.twicomi.com/api/v2"
 
-    override val supportsLatest = true
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("$apiUrl/manga/featured/list?page_no=$page&page_limit=24".toHttpUrl())
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList("$apiUrl/manga/list?order_by=create_time&page_no=$page&page_limit=24".toHttpUrl())
 
-    private val json: Json by injectLazy()
-
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/manga/featured/list?page_no=$page&page_limit=24")
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<TwicomiResponse<MangaListWithCount>>()
+    private suspend fun getMangaList(url: HttpUrl): MangasPage {
+        val data = client.get(url).parseAs<TwicomiResponse<MangaListWithCount>>()
         val manga = data.response.mangaList.map { it.toSManga() }
 
-        val currentPage = response.request.url.queryParameter("page_no")!!.toInt()
-        val pageLimit = response.request.url.queryParameter("page_limit")?.toInt() ?: 10
-        val hasNextPage = currentPage * pageLimit < data.response.totalCount
-
-        return MangasPage(manga, hasNextPage)
+        return MangasPage(manga, url.hasNextPage(data.response.totalCount))
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/manga/list?order_by=create_time&page_no=$page&page_limit=24")
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val searchAuthors = filters.firstInstanceOrNull<TypeSelect>()?.state == 1
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
-            when (filters.find { it is TypeSelect }?.state) {
-                1 -> {
-                    addPathSegment("author")
-                    filters.filterIsInstance<AuthorSortFilter>().firstOrNull()?.addToUrl(this)
-                }
-
-                else -> {
-                    addPathSegment("manga")
-                    filters.filterIsInstance<MangaSortFilter>().firstOrNull()?.addToUrl(this)
-                }
+            if (searchAuthors) {
+                addPathSegment("author")
+                filters.firstInstanceOrNull<AuthorSortFilter>()?.addToUrl(this)
+            } else {
+                addPathSegment("manga")
+                filters.firstInstanceOrNull<MangaSortFilter>()?.addToUrl(this)
             }
 
             addPathSegment("list")
@@ -72,24 +55,20 @@ abstract class Twicomi : HttpSource() {
             addQueryParameter("page_limit", "12")
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = when (response.request.url.toString().removePrefix(apiUrl).split("/")[1]) {
-        "author" -> {
-            val data = response.parseAs<TwicomiResponse<AuthorListWithCount>>()
-            val manga = data.response.authorList.map { it.author.toSManga() }
-
-            val currentPage = response.request.url.queryParameter("page_no")!!.toInt()
-            val pageLimit = response.request.url.queryParameter("page_limit")?.toInt() ?: 10
-            val hasNextPage = currentPage * pageLimit < data.response.totalCount
-
-            MangasPage(manga, hasNextPage)
+        if (!searchAuthors) {
+            return getMangaList(url)
         }
 
-        "manga" -> popularMangaParse(response)
+        val data = client.get(url).parseAs<TwicomiResponse<AuthorListWithCount>>()
+        val manga = data.response.authorList.map { it.author.toSManga() }
 
-        else -> throw IllegalArgumentException()
+        return MangasPage(manga, url.hasNextPage(data.response.totalCount))
+    }
+
+    private fun HttpUrl.hasNextPage(totalCount: Int): Boolean {
+        val currentPage = queryParameter("page_no")!!.toInt()
+        val pageLimit = queryParameter("page_limit")?.toInt() ?: 10
+        return currentPage * pageLimit < totalCount
     }
 
     override fun getMangaUrl(manga: SManga): String = when (manga.url.split("/")[1]) {
@@ -98,53 +77,40 @@ abstract class Twicomi : HttpSource() {
         else -> throw IllegalArgumentException()
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
-
-    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBefore("#")
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = when (manga.url.split("/")[1]) {
-        "manga" -> Observable.just(listOf(dummyChapterFromManga(manga)))
-        "author" -> super.fetchChapterList(manga)
-        else -> throw IllegalArgumentException()
-    }
-
-    override fun chapterListRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         val splitUrl = manga.url.split("/")
-        val entryType = splitUrl[1]
 
-        if (entryType == "manga") {
-            throw Exception("Can only request chapter list for authors")
+        val chapterList = when (splitUrl[1]) {
+            "manga" -> listOf(dummyChapterFromManga(manga))
+            "author" -> if (fetchChapters) getAuthorChapterList(splitUrl[2]) else chapters
+            else -> throw IllegalArgumentException()
         }
 
-        val screenName = splitUrl[2]
-        return paginatedChapterListRequest(screenName, 1)
+        return SMangaUpdate(manga, chapterList)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<TwicomiResponse<MangaListWithCount>>()
-        val results = data.response.mangaList.toMutableList()
+    private suspend fun getAuthorChapterList(screenName: String): List<SChapter> {
+        val pageLimit = 500
+        val results = mutableListOf<MangaListItem>()
+        var page = 0
+        var totalCount: Int
 
-        val screenName = response.request.url.queryParameter("screen_name")!!
-
-        val pageLimit = response.request.url.queryParameter("page_limit")?.toInt() ?: 10
-        var page = 1
-        var hasNextPage = page * pageLimit < data.response.totalCount
-
-        while (hasNextPage) {
+        do {
             page += 1
 
-            val newRequest = paginatedChapterListRequest(screenName, page)
-            val newResponse = client.newCall(newRequest).execute()
-            val newData = newResponse.parseAs<TwicomiResponse<MangaListWithCount>>()
+            val url = "$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=$page&page_limit=$pageLimit"
+            val data = client.get(url).parseAs<TwicomiResponse<MangaListWithCount>>()
 
-            results.addAll(newData.response.mangaList)
-
-            hasNextPage = page * pageLimit < data.response.totalCount
-        }
+            results.addAll(data.response.mangaList)
+            totalCount = data.response.totalCount
+        } while (page * pageLimit < totalCount)
 
         return results.mapIndexed { i, it ->
             dummyChapterFromManga(it.toSManga()).apply {
@@ -154,26 +120,18 @@ abstract class Twicomi : HttpSource() {
         }.reversed()
     }
 
-    private fun paginatedChapterListRequest(screenName: String, page: Int) = GET("$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=$page&page_limit=500")
-
     private fun dummyChapterFromManga(manga: SManga) = SChapter.create().apply {
         url = manga.url
         name = "Tweet"
         date_upload = manga.url.substringAfter("#").substringBefore(",").toLong()
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val urls = chapter.url.substringAfter("#").split(",").drop(1)
-        val pages = urls.mapIndexed { i, it -> Page(i, imageUrl = it) }
-
-        return Observable.just(pages)
+        return urls.mapIndexed { i, it -> Page(i, imageUrl = it) }
     }
 
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         TypeSelect(),
         MangaSortFilter(),
         AuthorSortFilter(),
@@ -225,6 +183,4 @@ abstract class Twicomi : HttpSource() {
             ),
             Selection(0, false),
         )
-
-    private inline fun <reified T> Response.parseAs() = json.decodeFromString<T>(body.string())
 }

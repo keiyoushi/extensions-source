@@ -1,34 +1,36 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
 
 import android.annotation.SuppressLint
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.array
 import keiyoushi.utils.int
 import keiyoushi.utils.long
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
@@ -36,23 +38,14 @@ import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class SpyFakku : HttpSource() {
-
-    override val supportsLatest = true
+abstract class SpyFakku : KeiSource() {
 
     private val baseImageUrl = "$TMP_CDN_URL/image"
 
     private val baseApiUrl get() = "$baseUrl/api"
 
-    override val client = network.client.newBuilder()
-        .addNetworkInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .header("Referer", "$baseUrl/")
-                .header("Origin", baseUrl)
-                .build()
-            chain.proceed(request)
-        }
-        .addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor { chain ->
             val url = chain.request().url
             if (url.host == TMP_CDN_DOMAIN) {
                 val (host, port) = baseUrl.toHttpUrl().let { it.host to it.port }
@@ -71,35 +64,35 @@ abstract class SpyFakku : HttpSource() {
                 chain.proceed(chain.request())
             }
         }
-        .apply {
-            val naiveTrustManager =
-                @SuppressLint("CustomX509TrustManager")
-                object : X509TrustManager {
-                    override fun getAcceptedIssuers(): Array<X509Certificate?> = emptyArray()
-                    override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-                    override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-                }
 
-            val insecureSocketFactory = SSLContext.getInstance("SSL").apply {
-                val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
-                init(null, trustAllCerts, SecureRandom())
-            }.socketFactory
+        val naiveTrustManager =
+            @SuppressLint("CustomX509TrustManager")
+            object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate?> = emptyArray()
+                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+            }
 
-            sslSocketFactory(insecureSocketFactory, naiveTrustManager)
-            hostnameVerifier { _, _ -> true }
-        }
-        .addInterceptor(AnibusInterceptor)
-        .rateLimit(2, 1.seconds)
-        .build()
+        val insecureSocketFactory = SSLContext.getInstance("SSL").apply {
+            val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
+            init(null, trustAllCerts, SecureRandom())
+        }.socketFactory
+
+        sslSocketFactory(insecureSocketFactory, naiveTrustManager)
+        hostnameVerifier { _, _ -> true }
+
+        addInterceptor(AnibusInterceptor)
+        rateLimit(2, 1.seconds)
+    }
 
     private val charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseApiUrl/library?sort=released_at&page=$page", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseApiUrl/library?sort=released_at&page=$page").toMangasPage()
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val library = response.parseAs<HentaiLib>()
+    private fun Response.toMangasPage(): MangasPage {
+        val library = parseAs<HentaiLib>()
         val mangas = library.archives.map { it.toSManga() }
         val hasNextPage = library.page * library.limit < library.total
 
@@ -108,13 +101,11 @@ abstract class SpyFakku : HttpSource() {
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseApiUrl/library?sort=created_at&page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseApiUrl/library?sort=created_at&page=$page").toMangasPage()
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseApiUrl/library".toHttpUrl().newBuilder().apply {
             val terms = mutableListOf(query.trim())
 
@@ -143,133 +134,104 @@ abstract class SpyFakku : HttpSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return GET(url, headers)
+        return client.get(url).toMangasPage()
     }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // ============================== Details ==============================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         val add = getShortHentai(manga)
 
-        return Observable.just(
-            manga.apply {
-                with(add) {
-                    val groupedTags = tags?.groupBy { it.namespace }
-                    val mangaId = manga.url.substringBefore("?").substringAfterLast("/")
+        val details = SManga.create().apply {
+            url = manga.url
+            title = manga.title
+            status = SManga.COMPLETED
+            with(add) {
+                val groupedTags = tags?.groupBy { it.namespace }
 
-                    url = "/g/$mangaId?$pages&hash=$hash"
-                    author = (groupedTags?.get("circle") ?: groupedTags?.get("artist"))?.joinToString { it.name }
-                    artist = groupedTags?.get("artist")?.joinToString { it.name }
-                    thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
-                    genre = groupedTags?.get("tag")?.joinToString { it.name }
+                author = (groupedTags?.get("circle") ?: groupedTags?.get("artist"))?.joinToString { it.name }
+                artist = groupedTags?.get("artist")?.joinToString { it.name }
+                thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
+                genre = groupedTags?.get("tag")?.joinToString { it.name }
 
-                    this@apply.description = buildString {
-                        description?.let { append(it, "\n\n") }
+                this@apply.description = buildString {
+                    description?.let { append(it, "\n\n") }
 
-                        groupedTags?.get("circle")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Circles: ", it, "\n") }
-                        groupedTags?.get("publisher")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Publishers: ", it, "\n") }
-                        groupedTags?.get("magazine")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Magazines: ", it, "\n") }
-                        groupedTags?.get("event")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Events: ", it, "\n\n") }
-                        groupedTags?.get("parody")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Parodies: ", it, "\n") }
+                    groupedTags?.get("circle")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Circles: ", it, "\n") }
+                    groupedTags?.get("publisher")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Publishers: ", it, "\n") }
+                    groupedTags?.get("magazine")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Magazines: ", it, "\n") }
+                    groupedTags?.get("event")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Events: ", it, "\n\n") }
+                    groupedTags?.get("parody")?.ifEmpty { null }?.joinToString { it.name }?.let { append("Parodies: ", it, "\n") }
 
-                        append("Pages: ", pages, "\n\n")
+                    append("Pages: ", pages, "\n\n")
 
-                        try {
-                            releasedAt?.let {
-                                releasedAtFormat.tryParse(it).takeIf { t -> t != 0L }?.let { date ->
-                                    append("Released: ", dateReformat.format(date), "\n")
-                                }
-                            }
-                        } catch (_: Exception) {}
-
-                        try {
-                            createdAt?.let {
-                                createdAtFormat.tryParse(it).takeIf { t -> t != 0L }?.let { date ->
-                                    append("Added: ", dateReformat.format(date), "\n")
-                                }
-                            }
-                        } catch (_: Exception) {}
-
-                        append(
-                            "Size: ",
-                            when {
-                                size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
-                                size >= 100 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0))} MB"
-                                size >= 1000 -> "${"%.2f".format(size / (1000.0))} kB"
-                                else -> "$size B"
-                            },
-                        )
+                    releasedAtFormat.tryParseDateTime(releasedAt?.take(19)).takeIf { it != 0L }?.let { date ->
+                        append("Released: ", dateReformat.format(Instant.ofEpochMilli(date)), "\n")
                     }
-                    update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                    initialized = true
+
+                    createdAtFormat.tryParseDateTime(createdAt).takeIf { it != 0L }?.let { date ->
+                        append("Added: ", dateReformat.format(Instant.ofEpochMilli(date)), "\n")
+                    }
+
+                    append(
+                        "Size: ",
+                        when {
+                            size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
+                            size >= 100 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0))} MB"
+                            size >= 1000 -> "${"%.2f".format(size / (1000.0))} kB"
+                            else -> "$size B"
+                        },
+                    )
                 }
+            }
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        }
+
+        val chapterList = listOf(
+            SChapter.create().apply {
+                name = "Chapter"
+                url = manga.url
+                date_upload = releasedAtFormat.tryParseDateTime(add.releasedAt?.take(19))
             },
         )
-    }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = ARCHIVE_REGEX.replace(manga.url) { "/g/${it.groupValues[1]}" }
-        return GET(baseApiUrl + url.substringBefore("?"), headers)
-    }
-
-    private fun mangaDetailsRequest2(manga: SManga): Request {
-        val url = ARCHIVE_REGEX.replace(manga.url) { "/g/${it.groupValues[1]}" }
-        return GET(baseUrl + url.substringBefore("?") + "/__data.json", headers)
+        return SMangaUpdate(details, chapterList)
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBefore("?")
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
     // ============================= Chapters ==============================
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val add = getShortHentai(manga)
-
-        return Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    name = "Chapter"
-                    url = manga.url
-                    date_upload = releasedAtFormat.tryParse(add.releasedAt)
-                },
-            ),
-        )
-    }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBefore("?")
 
-    override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
     // =============================== Pages ===============================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (!chapter.url.contains("&hash=") && !chapter.url.contains("?")) {
-            client.newCall(pageListRequest(chapter)).execute().use { response ->
+            val path = ARCHIVE_REGEX.replace(chapter.url) { "/g/${it.groupValues[1]}" }.substringBefore("?")
+
+            client.get(baseApiUrl + path, ensureSuccess = false).use { response ->
                 if (response.isSuccessful) {
                     val hentai = response.parseAs<Hentai>()
-                    return Observable.just(
-                        List(hentai.pages) { index ->
-                            Page(index, imageUrl = "$baseImageUrl/${hentai.hash}/${index + 1}")
-                        },
-                    )
+                    return List(hentai.pages) { index ->
+                        Page(index, imageUrl = "$baseImageUrl/${hentai.hash}/${index + 1}")
+                    }
                 }
             }
 
             repeat(3) {
                 try {
-                    client.newCall(pageListRequest2(chapter)).execute().use { response ->
+                    client.get("$baseUrl$path/__data.json", ensureSuccess = false).use { response ->
                         if (response.isSuccessful) {
                             val add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
-                            return Observable.just(
-                                List(add.pages) { index ->
-                                    Page(index, imageUrl = "$baseImageUrl/${add.hash}/${index + 1}")
-                                },
-                            )
+                            return List(add.pages) { index ->
+                                Page(index, imageUrl = "$baseImageUrl/${add.hash}/${index + 1}")
+                            }
                         }
                     }
                 } catch (_: Exception) {}
@@ -280,35 +242,21 @@ abstract class SpyFakku : HttpSource() {
         val hash = chapter.url.substringAfter("hash=")
         val pages = chapter.url.substringAfter("?").substringBefore("&").toInt()
 
-        return Observable.just(
-            List(pages) { index ->
-                Page(index, imageUrl = "$baseImageUrl/$hash/${index + 1}")
-            },
-        )
+        return List(pages) { index ->
+            Page(index, imageUrl = "$baseImageUrl/$hash/${index + 1}")
+        }
     }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = ARCHIVE_REGEX.replace(chapter.url) { "/g/${it.groupValues[1]}" }
-        return GET(baseApiUrl + url.substringBefore("?"), headers)
-    }
-
-    private fun pageListRequest2(chapter: SChapter): Request {
-        val url = ARCHIVE_REGEX.replace(chapter.url) { "/g/${it.groupValues[1]}" }
-        return GET(baseUrl + url.substringBefore("?") + "/__data.json", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Filters ==============================
 
-    override fun getFilterList() = getFilters()
+    override fun getFilterList(data: JsonElement?) = getFilters()
 
     // ============================= Utilities =============================
 
-    private fun getShortHentai(manga: SManga): ShortHentai {
-        client.newCall(mangaDetailsRequest(manga)).execute().use { response ->
+    private suspend fun getShortHentai(manga: SManga): ShortHentai {
+        val path = ARCHIVE_REGEX.replace(manga.url) { "/g/${it.groupValues[1]}" }.substringBefore("?")
+
+        client.get(baseApiUrl + path, ensureSuccess = false).use { response ->
             if (response.isSuccessful) {
                 return response.parseAs<ShortHentai>()
             }
@@ -316,7 +264,7 @@ abstract class SpyFakku : HttpSource() {
 
         repeat(3) {
             try {
-                client.newCall(mangaDetailsRequest2(manga)).execute().use { response ->
+                client.get("$baseUrl$path/__data.json", ensureSuccess = false).use { response ->
                     if (response.isSuccessful) {
                         return getAdditionals(response.parseAs<Nodes>().nodes.last().data)
                     }
@@ -374,19 +322,16 @@ abstract class SpyFakku : HttpSource() {
         return string.toString()
     }
 
-    override val supportsRelatedMangas = false
-
     companion object {
         private const val TMP_CDN_DOMAIN = "127.0.0.1"
         private const val TMP_CDN_URL = "http://$TMP_CDN_DOMAIN"
         private val ARCHIVE_REGEX = Regex("^/archive/(\\d+)/.*")
 
-        private val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
-        private val releasedAtFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-        private val createdAtFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
+        private val dateReformat = DateTimeFormatter.ofPattern("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
+            .withZone(ZoneId.systemDefault())
+        private val releasedAtFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
+            .withZone(ZoneOffset.UTC)
+        private val createdAtFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+            .withZone(ZoneOffset.UTC)
     }
 }

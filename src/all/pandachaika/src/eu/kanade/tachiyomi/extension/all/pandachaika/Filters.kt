@@ -19,7 +19,7 @@ fun getFilters(): FilterList = FilterList(
     TextFilter("Characters", "character"),
     Filter.Separator(),
     TextFilter("Reason", "reason"),
-    TextFilter("Uploader", "reason"),
+    TextFilter("Uploader", "uploader"),
     Filter.Separator(),
     Filter.Header("Filter by pages, for example: (>20)"),
     PageFilter("Pages"),

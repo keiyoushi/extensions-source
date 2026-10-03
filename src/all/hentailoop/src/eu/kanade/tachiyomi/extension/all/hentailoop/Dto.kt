@@ -64,7 +64,7 @@ class PagesValues(
 
 @SerialName("checkboxFilter")
 @Serializable
-class CheckboxFilter(
+class CheckboxSpecialFilter(
     private val values: CheckboxValues,
 ) : SpecialFilter
 
@@ -109,7 +109,5 @@ class SchemaGraph(
     @Serializable
     class GraphItem(
         val datePublished: String? = null,
-    ) {
-        val date get() = datePublished?.replace(Regex(":(\\d{2})$"), "$1")
-    }
+    )
 }

@@ -102,3 +102,9 @@ private object DialogListSerializer :
     private val JsonElement.isObject get() = this is JsonObject
     private val JsonElement.isString get() = this.isObject.not() && this.isArray.not() && this.jsonPrimitive.isString
 }
+
+@Serializable
+class OcrRequestDto(
+    private val cid: String,
+    private val ref: String,
+)

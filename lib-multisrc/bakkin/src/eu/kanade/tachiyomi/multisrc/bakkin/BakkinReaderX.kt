@@ -4,26 +4,23 @@ import android.os.Build
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonObject
+import keiyoushi.utils.parseAs
 import okhttp3.Headers
-import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 abstract class BakkinReaderX :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
@@ -34,70 +31,64 @@ abstract class BakkinReaderX :
 
     protected val preferences by getPreferencesLazy()
 
-    private val json by lazy { Injekt.get<Json>() }
-
     private val mainUrl: String
         get() = baseUrl + "main.php" + preferences.getString("quality", "")
 
-    private var seriesCache = emptyList<Series>()
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", userAgent)
 
-    private fun <R> observableSeries(block: (List<Series>) -> R) = if (seriesCache.isNotEmpty()) {
-        rx.Observable.just(block(seriesCache))!!
-    } else {
-        client.newCall(GET(mainUrl, headers)).asObservableSuccess().map {
-            seriesCache = json.parseToJsonElement(it.body.string())
-                .jsonObject.values.map(json::decodeFromJsonElement)
-            block(seriesCache)
-        }!!
-    }
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
-    private fun List<Series>.search(query: String) = if (query.isBlank()) this else filter { it.toString().contains(query, true) }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun headersBuilder() = Headers.Builder().add("User-Agent", userAgent)
-
-    override fun fetchPopularManga(page: Int) = fetchSearchManga(page, "", FilterList())
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = observableSeries { series ->
-        series.search(query).map {
-            SManga.create().apply {
-                url = it.dir
-                title = it.toString()
-                thumbnail_url = baseUrl + it.cover
-            }
-        }.let { MangasPage(it, false) }
-    }
-
-    override fun fetchMangaDetails(manga: SManga) = observableSeries { series ->
-        series.first { it.dir == manga.url }.let {
-            SManga.create().apply {
-                url = it.dir
-                title = it.toString()
-                thumbnail_url = baseUrl + it.cover
-                initialized = true
-                author = it.author
-                status = when (it.status) {
-                    "Ongoing" -> SManga.ONGOING
-                    "Completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val matches = fetchAllSeries().filter { series ->
+            query.isBlank() || series.toString().contains(query, ignoreCase = true)
         }
+
+        return MangasPage(matches.map { it.toSManga() }, hasNextPage = false)
     }
 
-    override fun fetchChapterList(manga: SManga) = observableSeries { series ->
-        series.first { it.dir == manga.url }.map { chapter ->
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        // Reader links look like "<baseUrl>#m=<series>&v=<volume>&c=<chapter>"
+        val seriesDir = url.fragment
+            ?.split('&')
+            ?.firstOrNull { it.startsWith("m=") }
+            ?.substringAfter("m=")
+            ?: return null
+
+        return fetchAllSeries()
+            .firstOrNull { it.dir == seriesDir }
+            ?.toSManga()
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val series = fetchSeries(manga.url)
+
+        val chapterList = series.map { chapter ->
             SChapter.create().apply {
                 url = chapter.dir
                 name = chapter.toString()
                 chapter_number = chapter.number
-                date_upload = 0L
             }
         }.reversed()
+
+        return SMangaUpdate(series.toSManga(), chapterList)
     }
 
-    override fun fetchPageList(chapter: SChapter) = observableSeries { series ->
-        series.flatten().first { it.dir == chapter.url }
-            .mapIndexed { idx, page -> Page(idx, "", baseUrl + page) }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val seriesDir = chapter.url.substringBefore('/')
+        val pages = fetchSeries(seriesDir).first { it.dir == chapter.url }
+
+        return pages.mapIndexed { index, path ->
+            Page(index, imageUrl = baseUrl + path)
+        }
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl#m=${manga.url}"
@@ -115,32 +106,32 @@ abstract class BakkinReaderX :
             entries = arrayOf("Original", "Compressed")
             entryValues = arrayOf("?fullsize", "")
             setDefaultValue("")
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(key, newValue as String).commit()
-            }
         }.let(screen::addPreference)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    private var seriesCache = emptyList<Series>()
 
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
+    private suspend fun fetchAllSeries(): List<Series> {
+        if (seriesCache.isEmpty()) {
+            seriesCache = client.get(mainUrl)
+                .parseAs<Map<String, Series>>()
+                .values
+                .toList()
+        }
+        return seriesCache
+    }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    private suspend fun fetchSeries(dir: String): Series = fetchAllSeries().first { it.dir == dir }
 
-    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    private fun Series.toSManga() = SManga.create().apply {
+        url = dir
+        title = this@toSManga.toString()
+        thumbnail_url = baseUrl + cover
+        author = this@toSManga.author
+        status = when (this@toSManga.status) {
+            "Ongoing" -> SManga.ONGOING
+            "Completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+    }
 }

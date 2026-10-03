@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Bakai"
-    versionCode = 16
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"

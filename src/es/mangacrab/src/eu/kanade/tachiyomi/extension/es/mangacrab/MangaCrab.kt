@@ -1,245 +1,319 @@
 package eu.kanade.tachiyomi.extension.es.mangacrab
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
-import keiyoushi.network.rateLimit
-import keiyoushi.utils.asJsoup
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import okhttp3.FormBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
-import java.io.InterruptedIOException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 @Source
-abstract class MangaCrab :
-    Madara(),
-    ConfigurableSource {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
+abstract class MangaCrab : KeiSource() {
 
-    override val client = super.client.newBuilder()
-        .rateLimit(5, 1.seconds)
-        .build()
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun headersBuilder() = super.headersBuilder()
-        .setRandomUserAgent()
-
-    override val mangaSubString = "series"
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-
-    override fun popularMangaSelector() = ".mv-rank-panel[data-panel=monthly] .mv-rank-item"
-    override fun searchMangaSelector() = ".catalog-card, .mv-recent-card, .manga-row, .manga__item"
-    override fun latestUpdatesSelector() = ".manga-row"
-
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/$page/", headers)
-    override fun searchMangaRequest(page: Int, query: String, filters: eu.kanade.tachiyomi.source.model.FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("page")
-            .addPathSegment(page.toString())
-            .addQueryParameter("s", query)
+    private suspend fun getMangasPage(
+        page: Int,
+        query: String = "",
+        genres: String = "",
+        feed: String = "discover",
+        ranking: String = "",
+        status: String = "",
+        origin: String = "",
+    ): MangasPage {
+        val url = "$baseUrl/api/mv/mangas"
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("per_page", PER_PAGE.toString())
+            .addQueryParameter("search", query)
+            .addQueryParameter("genres", genres)
+            .addQueryParameter("status", status)
+            .addQueryParameter("origin", origin)
+            .addQueryParameter("ranking", ranking)
+            .addQueryParameter("feed", feed)
+            .addQueryParameter("nsfw", "false")
+            .addQueryParameter("nsfw_only", "false")
             .build()
-        return GET(url, headers)
+
+        val dto = client
+            .get(url)
+            .parseAs<MangaCrabMangasDto>()
+
+        return MangasPage(
+            mangas = dto.items.map { it.asSManga() },
+            hasNextPage = dto.pagination.has_next,
+        )
     }
 
-    override fun popularMangaNextPageSelector(): String? = null
-    override fun latestUpdatesNextPageSelector() = "a.next.page-numbers, .mv-page-link a.next"
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangasPage(
+        page = page,
+        feed = "discover",
+    )
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst(".mv-rank-title")?.text() ?: link.text()
-        element.selectFirst("img")?.let {
-            thumbnail_url = imageFromElement(it)
-        }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangasPage(
+        page = page,
+        feed = "updated",
+    )
+
+    override suspend fun getSearchMangaList(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): MangasPage {
+        val genres = filters
+            .filterIsInstance<GenreFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            .orEmpty()
+
+        val feed = filters
+            .filterIsInstance<FeedFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            ?: "discover"
+
+        val ranking = filters
+            .filterIsInstance<RankingFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            .orEmpty()
+
+        val status = filters
+            .filterIsInstance<StatusFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            .orEmpty()
+
+        val origin = filters
+            .filterIsInstance<OriginFilter>()
+            .firstOrNull()
+            ?.selectedValue
+            .orEmpty()
+
+        return getMangasPage(
+            page = page,
+            query = query,
+            genres = genres,
+            feed = feed,
+            ranking = ranking,
+            status = status,
+            origin = origin,
+        )
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a.manga-row-cover")!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst("h5")?.text() ?: link.text()
-        element.selectFirst("img")?.let {
-            thumbnail_url = imageFromElement(it)
-        }
-    }
+    override fun getFilterList(
+        data: kotlinx.serialization.json.JsonElement?,
+    ) = FilterList(
+        Filter.Header("Usa los filtros para limitar el catálogo"),
+        Filter.Separator(),
+        GenreFilter(),
+        FeedFilter(),
+        RankingFilter(),
+        StatusFilter(),
+        OriginFilter(),
+    )
 
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a.mv-recent-link, a.manga-row-cover, a")!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst("strong.mv-recent-name, h5, h2")?.text() ?: link.text()
-        element.selectFirst("img")?.let {
-            thumbnail_url = imageFromElement(it)
-        }
-    }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val slug = manga.url
+            .removePrefix("/series/")
+            .removeSuffix("/")
+            .substringBefore("/")
 
-    override fun chapterListSelector() = "article.chapter-item > div > a, #mv-chapter-list a"
+        val savedMangaId = manga.memo["mangaId"]
+            ?.jsonPrimitive
+            ?.content
+            ?.toLongOrNull()
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }.distinctBy { it.url }
-        val hasNextPage = latestUpdatesNextPageSelector()?.let { document.selectFirst(it) } != null
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = mutableListOf<SChapter>()
-
-        val htmlStr = document.outerHtml()
-
-        val mangaId = document.selectFirst("#mv-chapter-list[data-manga-id]")?.attr("data-manga-id")
-            ?: MANGA_ID_REGEX.find(htmlStr)?.groupValues?.get(1)
-
-        if (mangaId == null) {
-            return document.select(chapterListSelector()).map { chapterFromElement(it) }
+        val detailsDto = if (savedMangaId == null) {
+            client
+                .get("$baseUrl/api/mv/mangas/by-slug/$slug")
+                .parseAs<MangaCrabMangaDto>()
+        } else {
+            null
         }
 
-        val nonce = NONCE_MVTHEME_REGEX.find(htmlStr)?.groupValues?.get(1)
-            ?: NONCE_FALLBACK_REGEX.find(htmlStr)?.groupValues?.get(1)
-        if (nonce == null) {
-            return document.select(chapterListSelector()).map { chapterFromElement(it) }
+        val mangaId = detailsDto?.id ?: savedMangaId
+
+        val detailsDeferred = if (savedMangaId != null && fetchDetails) {
+            async {
+                client
+                    .get("$baseUrl/api/mv/mangas/by-slug/$slug")
+                    .parseAs<MangaCrabMangaDto>()
+            }
+        } else {
+            null
         }
 
-        var page = 1
-        var hasMore = true
-        while (hasMore) {
-            val form = FormBody.Builder()
-                .add("action", "mv_get_chapters")
-                .add("nonce", nonce)
-                .add("manga_id", mangaId)
-                .add("page", page.toString())
-                .add("search", "")
-                .add("_ts", System.currentTimeMillis().toString())
-                .build()
+        val chaptersDeferred = if (fetchChapters) {
+            async {
+                client
+                    .get(
+                        "$baseUrl/api/mv/mangas/$mangaId/chapters?per_page=$CHAPTERS_PER_PAGE",
+                    )
+                    .parseAs<MangaCrabChaptersDto>()
+            }
+        } else {
+            null
+        }
 
-            val request = POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
-            try {
-                client.newCall(request).execute().use { res ->
-                    val data = res.parseAs<MvChaptersDto>()
+        val updatedDetailsDto = detailsDeferred?.await() ?: detailsDto
+        val chaptersDto = chaptersDeferred?.await()
 
-                    if (data.isSuccess) {
-                        val listHtml = data.data?.list ?: ""
-                        val listDoc = Jsoup.parseBodyFragment(listHtml, baseUrl)
-                        val elements = listDoc.select(chapterListSelector())
-                        if (elements.isEmpty()) {
-                            hasMore = false
-                        } else {
-                            val newChapters = elements.map { chapterFromElement(it) }
-                            val existingUrls = chapters.mapTo(HashSet()) { it.url }
-                            val filtered = newChapters.filterNot { it.url in existingUrls }
-
-                            if (filtered.isEmpty()) {
-                                hasMore = false
-                            } else {
-                                chapters.addAll(filtered)
-                                page++
-                            }
-                        }
-                    } else {
-                        hasMore = false
+        SMangaUpdate(
+            manga = if (updatedDetailsDto != null) {
+                if (fetchDetails) {
+                    updatedDetailsDto.asSManga().apply {
+                        memo = JsonObject(
+                            mapOf(
+                                "mangaId" to JsonPrimitive(updatedDetailsDto.id),
+                            ),
+                        )
+                    }
+                } else {
+                    manga.apply {
+                        memo = JsonObject(
+                            mapOf(
+                                "mangaId" to JsonPrimitive(updatedDetailsDto.id),
+                            ),
+                        )
                     }
                 }
-            } catch (e: InterruptedIOException) {
-                throw e
-            } catch (_: Exception) {
-                hasMore = false
+            } else {
+                manga
+            },
+            chapters = if (fetchChapters) {
+                chaptersDto
+                    ?.items
+                    ?.map { chapter ->
+                        chapter.asSChapter(requireNotNull(mangaId))
+                    }
+                    .orEmpty()
+            } else {
+                chapters
+            },
+        )
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val mangaId = chapter.memo["mangaId"]
+            ?.jsonPrimitive
+            ?.content
+            ?: throw Exception("No se pudo obtener la información del capítulo")
+
+        val chapterIndex = chapter.memo["chapterIndex"]
+            ?.jsonPrimitive
+            ?.content
+            ?: throw Exception("No se pudo obtener la información del capítulo")
+
+        val chapterDto = client
+            .get(
+                "$baseUrl/api/mv/mangas/$mangaId/chapter?cap_index=$chapterIndex",
+            )
+            .parseAs<MangaCrabChapterDto>()
+
+        if (chapterDto.is_locked || chapterDto.is_vip_chapter || !chapterDto.can_download) {
+            throw Exception("Este capítulo está bloqueado o requiere VIP")
+        }
+
+        val securityHeader = chapterDto.security
+            ?.takeIf { it.enabled == 1 }
+            ?.header
+            .orEmpty()
+
+        return chapterDto.content
+            ?.pages
+            ?.mapIndexed { index, imageUrl ->
+                val imageUrlWithHeader = if (securityHeader.isBlank()) {
+                    imageUrl
+                } else {
+                    "$imageUrl#nodeHeader=$securityHeader"
+                }
+
+                Page(
+                    index = index,
+                    imageUrl = imageUrlWithHeader,
+                )
             }
-        }
-
-        if (chapters.isEmpty()) {
-            return document.select(chapterListSelector()).map { chapterFromElement(it) }
-        }
-        return chapters
+            .orEmpty()
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = super.chapterFromElement(element)
-        if (element.tagName() == "a") {
-            chapter.url = element.attr("href").substringAfter(baseUrl)
-            chapter.name = element.text()
-        }
-        return chapter
-    }
-
-    override val mangaDetailsSelectorTitle = "h1.mb-2, h1.post-title, .post-title h1"
-    override val mangaDetailsSelectorDescription = "div.mv-synopsis, div.c-page__content div.modal-contenido"
-
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addRandomUAPreference()
-    }
-
-    override val pageListParseSelector = "img.mv-secure-img, div.page-break:not([style*='display:none']) img:not([src]), div.reader-body img, #mv-reader-body img"
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val htmlStr = document.outerHtml()
-
-        // Extract security token for image requests
-        val imgHeader = IMG_HEADER_REGEX.find(htmlStr)?.groupValues?.get(1).orEmpty()
-
-        val pages = mutableListOf<Page>()
-        document.select(pageListParseSelector).forEachIndexed { i, img: Element ->
-            val rawUrl = imageFromElement(img)
-            if (!rawUrl.isNullOrEmpty()) {
-                val finalUrl = if (imgHeader.isNotEmpty()) "$rawUrl#nodeHeader=$imgHeader" else rawUrl
-                pages.add(Page(i, imageUrl = finalUrl))
-            }
-        }
-        return pages
-    }
-
-    // Inject the "Node" security header required by the image CDN
     override fun imageRequest(page: Page): Request {
-        val url = page.imageUrl!!
-        if (url.contains("#nodeHeader=")) {
-            val pureUrl = url.substringBefore("#nodeHeader=")
-            val nodeHeader = url.substringAfter("#nodeHeader=")
-            return GET(pureUrl, headersBuilder().add("Node", nodeHeader).build())
-        }
-        return super.imageRequest(page)
+        val pageUrl = page.imageUrl.orEmpty()
+        val imageUrl = pageUrl.substringBefore("#nodeHeader=")
+        val securityHeader = pageUrl.substringAfter("#nodeHeader=", "")
+
+        return Request.Builder()
+            .url(imageUrl)
+            .apply {
+                if (securityHeader.isNotBlank()) {
+                    header("fansy", securityHeader)
+                }
+            }
+            .build()
     }
 
-    override fun imageFromElement(element: Element): String? {
-        val url = element.attributes()
-            .firstNotNullOfOrNull { attr ->
-                element.absUrl(attr.key).toHttpUrlOrNull()
-                    ?.takeIf { it.encodedQuery.toString().contains("wp-content") }
-            }
+    private fun MangaCrabMangaDto.asSManga(): SManga = SManga.create().apply {
+        title = this@asSManga.title
+        setUrlWithoutDomain(this@asSManga.permalink)
+        thumbnail_url = this@asSManga.cover
 
-        return when {
-            element.hasAttr("data-sec-src") -> element.attr("abs:data-sec-src")
-            url != null -> url.toString()
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ").trim()
-            element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
-            element.hasAttr("data-src-base64") -> element.attr("abs:data-src-base64")
-            else -> element.attr("abs:src")
+        description = this@asSManga.description
+            .replace("\r\n", "\n")
+            .replace("&quot;", "\"")
+
+        genre = this@asSManga.genres
+            .joinToString(", ") { it.name }
+
+        status = when (this@asSManga.status?.raw) {
+            "on-going", "en curso" -> SManga.ONGOING
+            "end", "finalizado" -> SManga.COMPLETED
+            "canceled" -> SManga.CANCELLED
+            "on-hold", "hiato" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
         }
+    }
+
+    private fun MangaCrabChapterDto.asSChapter(mangaId: Long): SChapter = SChapter.create().apply {
+        name = buildString {
+            if (is_locked || is_vip_chapter || !can_download) {
+                append("🔒 ")
+            }
+            append(title.ifBlank { label })
+        }
+        setUrlWithoutDomain(link)
+        memo = JsonObject(
+            mapOf(
+                "mangaId" to JsonPrimitive(mangaId),
+                "chapterIndex" to JsonPrimitive(index),
+            ),
+        )
+        date_upload = Instant
+            .parseOrNull("${date.replace(" ", "T")}Z")
+            ?.toEpochMilliseconds()
+            ?: 0L
     }
 
     companion object {
-        private val MANGA_ID_REGEX = Regex(""""manga_id"\s*:\s*"?(\d+)""")
-        private val NONCE_MVTHEME_REGEX = Regex("""var\s+mvTheme\s*=\s*\{[^}]*"nonce"\s*:\s*"([^"]+)""")
-        private val NONCE_FALLBACK_REGEX = Regex(""""nonce"\s*:\s*"([^"]+)""")
-        private val IMG_HEADER_REGEX = Regex(""""imgHeader"\s*:\s*"([^"]+)""")
+        private const val PER_PAGE = 24
+        private const val CHAPTERS_PER_PAGE = 5000
     }
 }

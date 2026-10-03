@@ -1,82 +1,53 @@
 package eu.kanade.tachiyomi.extension.ja.hachiraw
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import org.jsoup.nodes.Document
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class Hachiraw : HttpSource() {
+abstract class Hachiraw : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT)
-
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(
         page,
         "",
         FilterList(SortFilter(2)),
     )
 
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(
         page,
         "",
         FilterList(SortFilter(0)),
     )
 
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.pathSegments.getOrNull(1) ?: return null
 
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val slug = url.pathSegments[1]
-            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$slug", filters)
-        }
-
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
-            val manga = SManga.create().apply { url = "/manga/$slug" }
-
-            fetchMangaDetails(manga)
-                .map {
-                    it.url = "/manga/$slug"
-                    MangasPage(listOf(it), false)
-                }
-        } else {
-            super.fetchSearchManga(page, query, filters)
+        val mangaUrl = "/manga/$slug"
+        return mangaDetailsParse(client.get(baseUrl + mangaUrl).asJsoup()).apply {
+            this.url = mangaUrl
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = filters.ifEmpty { getFilterList() }
-        val sortFilter = filterList.firstInstanceOrNull<SortFilter>()
-        val genreFilter = filterList.firstInstanceOrNull<GenreFilter>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
+        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("list-manga")
@@ -97,31 +68,48 @@ abstract class Hachiraw : HttpSource() {
             }
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val mangas = document.select("div.ng-scope > div.top-15").map { element ->
             SManga.create().apply {
                 element.selectFirst("a.ng-binding.SeriesName")!!.let {
                     setUrlWithoutDomain(it.attr("href"))
                     title = it.text()
                 }
-                thumbnail_url = element.selectFirst("img.img-fluid")?.absUrl("src")
+                thumbnail_url = element.selectFirst("img.img-fluid")?.absUrl("src")?.fixCoverUrl()
             }
         }
         val hasNextPage = document.selectFirst("ul.pagination li:contains(→)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val row = response.asJsoup().selectFirst("div.BoxBody > div.row")!!
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val chapterList = document.select("a.ChapterLink").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.attr("href"))
+                name = element.selectFirst("span")!!.text()
+                date_upload = dateFormat.tryParseDate(
+                    element.selectFirst("span.float-right")?.text(),
+                )
+            }
+        }
+
+        return SMangaUpdate(mangaDetailsParse(document), chapterList)
+    }
+
+    private fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val row = document.selectFirst("div.BoxBody > div.row")!!
 
         title = row.selectFirst("h1")!!.text()
         author = row.selectFirst("li.list-group-item:contains(著者)")?.ownText()
         genre = row.select("li.list-group-item:contains(ジャンル) a").joinToString { it.text() }
-        thumbnail_url = row.selectFirst("img.img-fluid")?.absUrl("src")
+        thumbnail_url = row.selectFirst("img.img-fluid")?.absUrl("src")?.fixCoverUrl()
         description = buildString {
             row.select("li.list-group-item:has(span.mlabel)").forEach {
                 val key = it.selectFirst("span")!!.text().removeSuffix(":")
@@ -145,30 +133,19 @@ abstract class Hachiraw : HttpSource() {
         }.trim()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("a.ChapterLink").map { element ->
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.selectFirst("span")!!.text()
-            date_upload = dateFormat.tryParse(
-                element.selectFirst("span.float-right")?.text(),
-            )
-        }
-    }
-
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("#TopPage img").mapIndexed { i, img ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select("#TopPage img").mapIndexed { i, img ->
         Page(i, imageUrl = img.absUrl("src"))
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("タイトルで検索する場合、ジャンルフィルターは無視されます"),
         Filter.Separator(),
         SortFilter(),
         GenreFilter(),
     )
-
-    companion object {
-        internal const val PREFIX_SLUG_SEARCH = "slug:"
-    }
 }
+
+private val dateFormat = DateTimeFormatter.ofPattern("d-M-yyyy", Locale.ROOT)
+
+// Browse/details pages still point covers at an i0.wp.com proxy of cdn.kumaraw.com that now 403s; the homepage serves the same files from cdn.hachiraw.net
+private fun String.fixCoverUrl() = replace("https://i0.wp.com/cdn.kumaraw.com/", "https://cdn.hachiraw.net/")

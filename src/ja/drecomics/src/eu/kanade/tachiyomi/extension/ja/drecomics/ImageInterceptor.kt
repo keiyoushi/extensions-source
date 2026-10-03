@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.ja.drecomics
 
+import android.util.Base64
 import okhttp3.Interceptor
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.ByteString.Companion.decodeBase64
 import okio.IOException
 import okio.buffer
 import okio.cipherSource
@@ -23,9 +23,9 @@ class ImageInterceptor : Interceptor {
 
         if (fragment.isNullOrEmpty() || !fragment.contains(":")) return response
 
-        val (keyHex, ivHex) = fragment.split(":")
-        val secretKey = SecretKeySpec(keyHex.decodeBase64()!!.toByteArray(), "AES")
-        val ivSpec = IvParameterSpec(ivHex.decodeBase64()!!.toByteArray())
+        val (key, iv) = fragment.split(":")
+        val secretKey = SecretKeySpec(Base64.decode(key, Base64.DEFAULT), "AES")
+        val ivSpec = IvParameterSpec(Base64.decode(iv, Base64.DEFAULT))
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
         val body = response.body.source().cipherSource(cipher).buffer().asResponseBody(response.body.contentType())

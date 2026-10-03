@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.en.rinkocomics
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,42 +9,36 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class RinkoComics :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
 
-    private var genresList: List<Genre> = emptyList()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
 
         val entries = document.select(".comics-flex-pinned a.pinned-comic-card").mapNotNull { card ->
             val url = card.attr("abs:href").trim()
@@ -63,16 +55,15 @@ abstract class RinkoComics :
         return MangasPage(entries, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(
-        comicsUrl(page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = comicsUrl(page)
             .addQueryParameter(SORT_PARAM, SortFilter.OPTIONS.first().second)
-            .build(),
-        headers,
-    )
+            .build()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = parseComicsPage(response)
+        return parseComicsPage(client.get(url).asJsoup())
+    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = comicsUrl(page)
             .addQueryParameter("post_type", "comic")
 
@@ -95,12 +86,22 @@ abstract class RinkoComics :
             }
         }
 
-        return GET(url.build(), headers)
+        return parseComicsPage(client.get(url.build()).asJsoup())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseComicsPage(response)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val updatedManga = parseMangaDetails(document).apply { url = manga.url }
 
-    override fun mangaDetailsParse(response: Response): SManga = parseMangaDetails(response.asJsoup())
+        if (!fetchChapters) return SMangaUpdate(updatedManga, chapters)
+
+        return SMangaUpdate(updatedManga, parseChapterList(document))
+    }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
         title = requireField(
@@ -127,12 +128,9 @@ abstract class RinkoComics :
             .joinToString { it.text() }
 
         description = document.selectFirst(".comic-synopsis")?.text()?.trim()
-
-        initialized = true
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private suspend fun parseChapterList(document: Document): List<SChapter> {
         val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED, false)
 
         val chapters = LinkedHashMap<String, SChapter>()
@@ -168,8 +166,12 @@ abstract class RinkoComics :
         return chapters.values.toList()
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (chapter.url.contains(LOCK_SUFFIX)) {
+            throw Exception("This chapter is locked. Use WebView to purchase it.")
+        }
+
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val pages = document.select("img.chapter-image").mapIndexedNotNull { index, element ->
             val imageUrl = element.attr("abs:data-src").ifBlank { element.attr("abs:src") }.trim()
             if (imageUrl.isBlank()) return@mapIndexedNotNull null
@@ -183,22 +185,25 @@ abstract class RinkoComics :
         return pages
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        if (chapter.url.contains(LOCK_SUFFIX)) {
-            throw Exception("This chapter is locked. Use WebView to purchase it.")
-        }
-        return super.pageListRequest(chapter)
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get(comicsUrl(1).build()).asJsoup()
+
+        return document.select(".ac-filter-group.ac-genre input[name='genres[]']")
+            .mapNotNull { input ->
+                val slug = input.attr("value").trim()
+                val name = input.parent()?.selectFirst(".ac-option-text")?.text()?.trim().orEmpty()
+                if (slug.isBlank() || name.isBlank()) null else Pair(name, slug)
+            }
+            .toJsonElement()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>()
 
-        if (genresList.isNotEmpty()) {
-            filters += GenreFilter(genresList)
-        } else {
-            filters += Filter.Header("Press reset to load genres")
+        data?.parseAs<List<Pair<String, String>>>()?.also { genres ->
+            filters += GenreFilter(genres.map { Genre(it.first, it.second) })
         }
 
         filters += SortFilter()
@@ -224,13 +229,7 @@ abstract class RinkoComics :
         return url.toHttpUrl().newBuilder()
     }
 
-    private fun parseComicsPage(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        if (genresList.isEmpty()) {
-            genresList = parseGenres(document)
-        }
-
+    private fun parseComicsPage(document: Document): MangasPage {
         val entries = document.select("article.ac-card").mapNotNull { card ->
             val url = card.selectFirst(".ac-title a")?.attr("abs:href")?.trim().orEmpty()
             if (url.isBlank()) return@mapNotNull null
@@ -247,13 +246,6 @@ abstract class RinkoComics :
 
         return MangasPage(entries, hasNextPage)
     }
-
-    private fun parseGenres(document: Document): List<Genre> = document.select(".ac-filter-group.ac-genre input[name='genres[]']")
-        .mapNotNull { input ->
-            val slug = input.attr("value").trim()
-            val name = input.parent()?.selectFirst(".ac-option-text")?.text()?.trim().orEmpty()
-            if (slug.isBlank() || name.isBlank()) null else Genre(name, slug)
-        }
 
     private fun parseChapterElements(elements: List<Element>, hideLocked: Boolean): List<SChapter> {
         return elements.mapNotNull { element ->
@@ -272,7 +264,7 @@ abstract class RinkoComics :
             SChapter.create().apply {
                 setUrlWithoutDomain(url)
                 this.name = name?.trim().orEmpty()
-                date_upload = parseDate(dateText)
+                date_upload = dateFormat.tryParseDate(dateText)
 
                 if (locked) {
                     this.name = "$LOCK_PREFIX${this.name}"
@@ -293,7 +285,7 @@ abstract class RinkoComics :
         return element.selectFirst(".chapter_price") != null
     }
 
-    private fun fetchMoreChapters(
+    private suspend fun fetchMoreChapters(
         comicId: String,
         offset: Int,
         nonce: String,
@@ -309,8 +301,7 @@ abstract class RinkoComics :
         val xhrHeaders = headers.newBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
-        val request = POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, formBody)
-        val result = client.newCall(request).execute().parseAs<AjaxResponse>()
+        val result = client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, formBody).parseAs<AjaxResponse>()
         if (!result.success) return emptyList()
 
         val html = result.data?.html.orEmpty()
@@ -331,13 +322,6 @@ abstract class RinkoComics :
         "hiatus" -> SManga.UNKNOWN
         "cancelled", "canceled" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
-    }
-
-    private fun parseDate(date: String?): Long {
-        date ?: return 0L
-        return dateFormats.firstNotNullOfOrNull { formatter ->
-            formatter.tryParse(date).takeIf { it != 0L }
-        } ?: 0L
     }
 
     private fun imageFromElement(element: Element): String? {
@@ -374,19 +358,14 @@ abstract class RinkoComics :
         }
     }
 
-    private val dateFormats = listOf(
-        SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH),
-        SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH),
-    )
-
     @Serializable
-    private data class AjaxResponse(
+    private class AjaxResponse(
         val success: Boolean = false,
         val data: AjaxData? = null,
     )
 
     @Serializable
-    private data class AjaxData(
+    private class AjaxData(
         val html: String? = null,
     )
 
@@ -402,3 +381,5 @@ abstract class RinkoComics :
         )
     }
 }
+
+private val dateFormat = DateTimeFormatter.ofPattern("[MMMM][MMM] d, yyyy", Locale.ENGLISH)

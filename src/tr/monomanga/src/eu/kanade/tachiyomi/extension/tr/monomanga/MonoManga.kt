@@ -1,39 +1,41 @@
 package eu.kanade.tachiyomi.extension.tr.monomanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import java.util.Locale
 
 @Source
-abstract class MonoManga : HttpSource() {
+abstract class MonoManga : KeiSource() {
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
-    override val client = network.client.newBuilder()
-        .rateLimit(2)
-        .build()
+    private val rscHeaders: Headers
+        get() = headers.newBuilder().add("RSC", "1").build()
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga?page=$page&sort=most_chapters", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/manga?page=$page&sort=most_chapters".toHttpUrl())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private suspend fun parseMangaList(url: HttpUrl): MangasPage {
+        val document = client.get(url).asJsoup()
         val mangas = document.select("article.manga-card")
             .filterNot { element ->
                 element.select("span").any { it.text().lowercase(Locale.ROOT) == "novel" }
@@ -52,13 +54,11 @@ abstract class MonoManga : HttpSource() {
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga?page=$page&sort=newest", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList("$baseUrl/manga?page=$page&sort=newest".toHttpUrl())
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/manga".toHttpUrl().newBuilder()
         url.addQueryParameter("page", page.toString())
 
@@ -84,58 +84,57 @@ abstract class MonoManga : HttpSource() {
         val sort = filters.firstInstanceOrNull<SortFilter>()?.selectedValue() ?: "newest"
         url.addQueryParameter("sort", sort)
 
-        return GET(url.build(), headers)
+        return parseMangaList(url.build())
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers.newBuilder().add("RSC", "1").build())
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.extractNextJs<MangaPageDto> {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val dto = client.get(baseUrl + manga.url, rscHeaders).extractNextJs<MangaPageDto> {
             it is JsonObject && "manga" in it && "initialChapters" in it
         } ?: throw Exception("Manga detayları ayıklanamadı (Failed to extract manga details)")
 
-        return SManga.create().apply {
-            title = dto.manga.name
-            author = dto.manga.author
-            artist = dto.manga.artist
-            description = dto.manga.summary
+        val updatedChapters = if (fetchChapters) chapterListParse(dto) else chapters
 
-            val tags = dto.manga.genres?.map { it.name }?.toMutableList() ?: mutableListOf()
-            dto.manga.type?.let {
-                tags.add(
-                    it.replaceFirstChar { char ->
-                        if (char.isLowerCase()) char.titlecase(Locale.ROOT) else char.toString()
-                    },
-                )
-            }
-            genre = tags.joinToString()
+        return SMangaUpdate(mangaDetailsParse(dto), updatedChapters)
+    }
 
-            status = when (dto.manga.status?.lowercase(Locale.ROOT)) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                "hiatus" -> SManga.ON_HIATUS
-                "dropped" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
-            thumbnail_url = dto.manga.coverImage?.let {
-                if (it.startsWith("http")) it else "https://cdn.monomanga.com.tr/$it"
-            }
+    private fun mangaDetailsParse(dto: MangaPageDto): SManga = SManga.create().apply {
+        title = dto.manga.name
+        author = dto.manga.author
+        artist = dto.manga.artist
+        description = dto.manga.summary
+
+        val tags = dto.manga.genres?.map { it.name }?.toMutableList() ?: mutableListOf()
+        dto.manga.type?.let {
+            tags.add(
+                it.replaceFirstChar { char ->
+                    if (char.isLowerCase()) char.titlecase(Locale.ROOT) else char.toString()
+                },
+            )
+        }
+        genre = tags.joinToString()
+
+        status = when (dto.manga.status?.lowercase(Locale.ROOT)) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "hiatus" -> SManga.ON_HIATUS
+            "dropped" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+        thumbnail_url = dto.manga.coverImage?.let {
+            if (it.startsWith("http")) it else "https://cdn.monomanga.com.tr/$it"
         }
     }
 
     // ============================= Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = response.extractNextJs<MangaPageDto> {
-            it is JsonObject && "manga" in it && "initialChapters" in it
-        } ?: throw Exception("Bölüm listesi ayıklanamadı (Failed to extract chapter list)")
-
+    private suspend fun chapterListParse(dto: MangaPageDto): List<SChapter> {
         val chapters = dto.initialChapters.map { it.toSChapter(dto.manga.slug) }.toMutableList()
 
         if (dto.initialHasMore) {
@@ -147,9 +146,8 @@ abstract class MonoManga : HttpSource() {
                 for (volume in dto.manga.volumes.reversed()) {
                     val minCh = volume.startChapter.toString().removeSuffix(".0")
                     val maxCh = volume.endChapter.toString().removeSuffix(".0")
-                    val req = GET("$baseUrl/api/manga/${dto.manga.id}/chapters?sort=desc&minChapter=$minCh&maxChapter=$maxCh", headers)
-                    val res = client.newCall(req).execute()
-                    val apiDto = res.parseAs<ChapterListResponseDto>()
+                    val apiDto = client.get("$baseUrl/api/manga/${dto.manga.id}/chapters?sort=desc&minChapter=$minCh&maxChapter=$maxCh")
+                        .parseAs<ChapterListResponseDto>()
                     for (ch in apiDto.data) {
                         val sChapter = ch.toSChapter(dto.manga.slug)
                         if (fetchedIds.add(sChapter.url)) {
@@ -162,9 +160,8 @@ abstract class MonoManga : HttpSource() {
                 var offset = chapters.size
                 var hasMore = true
                 while (hasMore) {
-                    val req = GET("$baseUrl/api/manga/${dto.manga.id}/chapters?sort=desc&limit=100&offset=$offset", headers)
-                    val res = client.newCall(req).execute()
-                    val apiDto = res.parseAs<ChapterListResponseDto>()
+                    val apiDto = client.get("$baseUrl/api/manga/${dto.manga.id}/chapters?sort=desc&limit=100&offset=$offset")
+                        .parseAs<ChapterListResponseDto>()
                     for (ch in apiDto.data) {
                         val sChapter = ch.toSChapter(dto.manga.slug)
                         if (fetchedIds.add(sChapter.url)) {
@@ -181,10 +178,8 @@ abstract class MonoManga : HttpSource() {
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers.newBuilder().add("RSC", "1").build())
-
-    override fun pageListParse(response: Response): List<Page> {
-        val dto = response.extractNextJs<ChapterPageDto> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val dto = client.get(baseUrl + chapter.url, rscHeaders).extractNextJs<ChapterPageDto> {
             it is JsonObject && (it["chapter"] as? JsonObject)?.containsKey("content") == true
         } ?: throw Exception("Sayfa listesi ayıklanamadı (Failed to extract page list)")
 
@@ -195,11 +190,9 @@ abstract class MonoManga : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         GenreFilter(),
         StatusFilter(),
         TypeFilter(),

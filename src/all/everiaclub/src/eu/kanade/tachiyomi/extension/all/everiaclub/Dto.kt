@@ -39,3 +39,9 @@ class WPTagDto(
     val id: Int,
     val name: String,
 )
+
+@Serializable
+class FilterDataDto(
+    val categories: List<WPCategoryDto>,
+    val tags: List<WPTagDto>,
+)

@@ -8,7 +8,7 @@ keiyoushi {
     name = "Hentai3z.CC"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "manga18"
 
     source {

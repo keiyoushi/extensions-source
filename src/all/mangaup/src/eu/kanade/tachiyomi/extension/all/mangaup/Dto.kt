@@ -32,8 +32,8 @@ class MangaTitle(
     @ProtoNumber(1) private val id: Int,
     @ProtoNumber(2) private val name: String,
     @ProtoNumber(3) private val thumbnail: String?,
-    @ProtoNumber(7) val bookmarks: Int,
-    @ProtoNumber(9) private val lastUpdated: String,
+    @ProtoNumber(7) val bookmarks: Int?,
+    @ProtoNumber(9) private val lastUpdated: String?,
 ) {
     val updatedAt: Long
         get() = dateFormat.tryParseDate(lastUpdated)

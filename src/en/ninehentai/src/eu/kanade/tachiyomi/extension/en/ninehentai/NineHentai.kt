@@ -1,84 +1,71 @@
 package eu.kanade.tachiyomi.extension.en.ninehentai
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.util.Calendar
 
 @Source
-abstract class NineHentai : HttpSource() {
+abstract class NineHentai : KeiSource() {
 
-    override val supportsLatest = true
+    // The API's image_server still points old galleries at the dead i.9hentai.com host
+    private val imageBaseUrl: String
+        get() = "https://i.${baseUrl.toHttpUrl().host}/images"
+
+    private fun coverUrl(id: Int) = "$imageBaseUrl/$id/cover.jpg"
 
     // ============================== Popular ==============================
-    override fun popularMangaRequest(page: Int): Request = buildSearchRequest(page = page, sort = 1)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseSearchResponse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = search(page = page, sort = 1)
 
     // ============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = buildSearchRequest(page = page)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseSearchResponse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = search(page = page)
 
     // ============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrlOrNull()
-            if (url != null && url.host == baseUrl.toHttpUrlOrNull()?.host) {
-                val id = url.pathSegments.getOrNull(1)
-                if (id != null) {
-                    return fetchSearchManga(page, "id:$id", filters)
-                }
-            }
-            return Observable.just(MangasPage(emptyList(), false))
-        }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
 
-        if (query.startsWith("id:")) {
-            val id = query.substringAfter("id:").toIntOrNull() ?: return Observable.just(MangasPage(emptyList(), false))
-            return client.newCall(buildDetailRequest(id))
-                .asObservableSuccess()
-                .map { response -> fetchSingleManga(response) }
-        }
-
-        return super.fetchSearchManga(page, query, filters)
+        return fetchMangaById(id).let { it.toSManga(coverUrl(it.id)) }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.startsWith("id:")) {
+            val id = query.substringAfter("id:").toIntOrNull() ?: return MangasPage(emptyList(), false)
+            return MangasPage(listOf(fetchMangaById(id).let { it.toSManga(coverUrl(it.id)) }), false)
+        }
 
-        val sort = filterList.firstInstanceOrNull<SortFilter>()?.state ?: 0
-        val minPages = filterList.firstInstanceOrNull<MinPagesFilter>()?.state?.toIntOrNull() ?: 0
-        val maxPages = filterList.firstInstanceOrNull<MaxPagesFilter>()?.state?.toIntOrNull() ?: 2000
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.state ?: 0
+        val minPages = filters.firstInstanceOrNull<MinPagesFilter>()?.state?.toIntOrNull() ?: 0
+        val maxPages = filters.firstInstanceOrNull<MaxPagesFilter>()?.state?.toIntOrNull() ?: 2000
 
         val includedTags = mutableListOf<Tag>()
         val excludedTags = mutableListOf<Tag>()
 
-        filterList.firstInstanceOrNull<IncludedFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 1) }
-        filterList.firstInstanceOrNull<ExcludedFilter>()?.state?.takeIf { it.isNotBlank() }?.let { excludedTags += getTags(it, 1) }
-        filterList.firstInstanceOrNull<GroupFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 2) }
-        filterList.firstInstanceOrNull<ParodyFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 3) }
-        filterList.firstInstanceOrNull<ArtistFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 4) }
-        filterList.firstInstanceOrNull<CharacterFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 5) }
-        filterList.firstInstanceOrNull<CategoryFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 6) }
+        filters.firstInstanceOrNull<IncludedFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 1) }
+        filters.firstInstanceOrNull<ExcludedFilter>()?.state?.takeIf { it.isNotBlank() }?.let { excludedTags += getTags(it, 1) }
+        filters.firstInstanceOrNull<GroupFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 2) }
+        filters.firstInstanceOrNull<ParodyFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 3) }
+        filters.firstInstanceOrNull<ArtistFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 4) }
+        filters.firstInstanceOrNull<CharacterFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 5) }
+        filters.firstInstanceOrNull<CategoryFilter>()?.state?.takeIf { it.isNotBlank() }?.let { includedTags += getTags(it, 6) }
 
-        return buildSearchRequest(
+        return search(
             searchText = query,
             page = page,
             sort = sort,
@@ -88,62 +75,60 @@ abstract class NineHentai : HttpSource() {
         )
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseSearchResponse(response)
-
     // ============================== Details ==============================
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get(getMangaUrl(manga))
+        val path = response.request.url.encodedPath
         val document = response.asJsoup()
-        val info = document.selectFirst("div#bigcontainer") ?: return this
 
-        title = info.select("h1").text()
-        thumbnail_url = info.selectFirst("div#cover v-lazy-image")?.attr("abs:src")
-        status = SManga.COMPLETED
-        artist = info.selectTextOrNull("div.field-name:contains(Artist:) a.tag")
-        author = info.selectTextOrNull("div.field-name:contains(Group:) a.tag") ?: "Unknown circle"
-        genre = info.selectTextOrNull("div.field-name:contains(Tag:) a.tag")
+        document.selectFirst("div#bigcontainer")?.let { info ->
+            manga.apply {
+                title = info.select("h1").text()
+                thumbnail_url = manga.url.substringAfter("/g/").substringBefore("/").toIntOrNull()?.let(::coverUrl) ?: thumbnail_url
+                status = SManga.COMPLETED
+                artist = info.selectTextOrNull("div.field-name:contains(Artist:) a.tag")
+                author = info.selectTextOrNull("div.field-name:contains(Group:) a.tag") ?: "Unknown circle"
+                genre = info.selectTextOrNull("div.field-name:contains(Tag:) a.tag")
 
-        description = buildString {
-            info.selectTextOrNull("h2")?.let { append("Alternative Title: ", it, "\n\n") }
-            info.selectTextOrNull("div#info > div:contains(pages)")?.let { append("Pages: ", it, "\n\n") }
-            info.selectTextOrNull("div.field-name:contains(Parody:) a.tag")?.let { append("Parody: ", it, "\n\n") }
-            info.selectTextOrNull("div.field-name:contains(Category:) a.tag")?.let { append("Category: ", it, "\n\n") }
-            info.selectTextOrNull("div.field-name:contains(Language:) a.tag")?.let { append("Language: ", it) }
-        }.trim()
-    }
+                description = buildString {
+                    info.selectTextOrNull("h2")?.let { append("Alternative Title: ", it, "\n\n") }
+                    info.selectTextOrNull("div#info > div:contains(pages)")?.let { append("Pages: ", it, "\n\n") }
+                    info.selectTextOrNull("div.field-name:contains(Parody:) a.tag")?.let { append("Parody: ", it, "\n\n") }
+                    info.selectTextOrNull("div.field-name:contains(Category:) a.tag")?.let { append("Category: ", it, "\n\n") }
+                    info.selectTextOrNull("div.field-name:contains(Language:) a.tag")?.let { append("Language: ", it) }
+                }.trim()
+            }
+        }
 
-    // ============================= Chapters ==============================
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val time = response.asJsoup().select("div#info div time").text()
-        return listOf(
-            SChapter.create().apply {
-                name = "Chapter"
-                date_upload = parseChapterDate(time)
-                url = response.request.url.encodedPath
-            },
-        )
+        val time = document.select("div#info div time").text()
+        val chapter = SChapter.create().apply {
+            name = "Chapter"
+            date_upload = parseChapterDate(time)
+            url = path
+        }
+
+        return SMangaUpdate(manga, listOf(chapter))
     }
 
     // =============================== Pages ===============================
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val mangaId = chapter.url.substringAfter("/g/").substringBefore("/").toInt()
-        return buildDetailRequest(mangaId)
-    }
+        val imageUrl = "$imageBaseUrl/$mangaId"
+        var totalPages = fetchMangaById(mangaId).totalPage
 
-    override fun pageListParse(response: Response): List<Page> {
-        val manga = response.parseAs<SingleMangaResponse>().results
-        val imageUrl = manga.getImageUrl()
-        var totalPages = manga.totalPage
-
-        client.newCall(GET("$imageUrl/preview/${totalPages}t.jpg", headers)).execute().code.let { code ->
-            if (code == 404) totalPages--
+        client.get("$imageUrl/preview/${totalPages}t.jpg", ensureSuccess = false).use { response ->
+            if (response.code == 404) totalPages--
         }
 
         return (1..totalPages).map {
             Page(it - 1, imageUrl = "$imageUrl/$it.jpg")
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Filters ==============================
     private class SortFilter :
@@ -161,7 +146,7 @@ abstract class NineHentai : HttpSource() {
     private class CharacterFilter : Filter.Text("Character")
     private class CategoryFilter : Filter.Text("Category")
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Search by id with \"id:\" in front of query"),
         Filter.Separator(),
         SortFilter(),
@@ -177,14 +162,14 @@ abstract class NineHentai : HttpSource() {
     )
 
     // ============================= Utilities =============================
-    private fun buildSearchRequest(
+    private suspend fun search(
         searchText: String = "",
         page: Int,
         sort: Int = 0,
         range: List<Int> = listOf(0, 2000),
         includedTags: List<Tag> = emptyList(),
         excludedTags: List<Tag> = emptyList(),
-    ): Request {
+    ): MangasPage {
         val searchRequest = SearchRequest(
             text = searchText,
             page = page - 1, // Source starts counting from 0, not 1
@@ -198,24 +183,16 @@ abstract class NineHentai : HttpSource() {
             ),
         )
         val payload = SearchRequestPayload(search = searchRequest)
-        // Store the queried page into a transient URL param to be safely pulled within `parseSearchResponse`
-        return POST("$baseUrl$SEARCH_URL?req_page=$page", headers, payload.toJsonRequestBody())
+        val searchResponse = client.post("$baseUrl$SEARCH_URL", payload.toJsonRequestBody())
+            .parseAs<SearchResponse>()
+        val mangas = searchResponse.results.map { it.toSManga(coverUrl(it.id)) }
+
+        return MangasPage(mangas, searchResponse.totalCount > page)
     }
 
-    private fun parseSearchResponse(response: Response): MangasPage {
-        val reqPage = response.request.url.queryParameter("req_page")?.toIntOrNull() ?: 1
-        val searchResponse = response.parseAs<SearchResponse>()
-        val mangas = searchResponse.results.map { it.toSManga() }
-
-        return MangasPage(mangas, searchResponse.totalCount > reqPage)
-    }
-
-    private fun buildDetailRequest(id: Int): Request = POST("$baseUrl$MANGA_URL", headers, IdRequest(id).toJsonRequestBody())
-
-    private fun fetchSingleManga(response: Response): MangasPage {
-        val manga = response.parseAs<SingleMangaResponse>().results
-        return MangasPage(listOf(manga.toSManga()), false)
-    }
+    private suspend fun fetchMangaById(id: Int): Manga = client.post("$baseUrl$MANGA_URL", IdRequest(id).toJsonRequestBody())
+        .parseAs<SingleMangaResponse>()
+        .results
 
     private fun Element.selectTextOrNull(selector: String): String? {
         val list = this.select(selector)
@@ -242,13 +219,15 @@ abstract class NineHentai : HttpSource() {
         }
     }
 
-    private fun getTags(queries: String, type: Int): List<Tag> = queries.split(",")
+    private suspend fun getTags(queries: String, type: Int): List<Tag> = queries.split(",")
         .map(String::trim)
         .filter(String::isNotEmpty)
         .mapNotNull { query ->
             val request = TagRequest(query, type)
-            val response = client.newCall(POST("$baseUrl$TAG_URL", headers, request.toJsonRequestBody())).execute()
-            response.parseAs<TagResponse>().results.firstOrNull()
+            client.post("$baseUrl$TAG_URL", request.toJsonRequestBody())
+                .parseAs<TagResponse>()
+                .results
+                .firstOrNull()
         }
 
     companion object {

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ja.amebamanga
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,35 +9,38 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.array
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.get
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
 
 @Source
 abstract class AmebaManga :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
-
-    private val domain = baseUrl.toHttpUrl().host
-    private val apiUrl = "https://api.$domain/dokusho-server"
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrl get() = "https://api.$domain/dokusho-server"
     private val pageSize = 50
     private val preferences by getPreferencesLazy()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
-        .addCookie("AC" to "1")
-        .addInterceptor {
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ImageInterceptor())
+        addCookie("AC" to "1")
+        addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
             if (response.code == 500 && request.url.encodedPath.contains("/browser/bookinfo/v3")) {
@@ -46,50 +48,40 @@ abstract class AmebaManga :
             }
             response
         }
-        .build()
+    }
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val offset = (page - 1) * pageSize
         val url = "$apiUrl/rank/title/category".toHttpUrl().newBuilder()
             .addQueryParameter("ac", "1")
             .addQueryParameter("term_code", "monthly")
             .addQueryParameter("category", "page_type_all")
-            .addQueryParameter("offset", ((page - 1) * pageSize).toString())
+            .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", pageSize.toString())
             .build()
-        return GET(url, headers)
+
+        return client.get(url).toMangasPage(offset)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<RankingResponse>()
-        val mangas = result.titleRankResponses.map { it.toSManga() }
-        return MangasPage(mangas, result.hasNextPage())
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val offset = (page - 1) * pageSize
         val url = "$apiUrl/release/book/recent".toHttpUrl().newBuilder()
             .addQueryParameter("ac", "1")
             .addQueryParameter("category", "page_type_all")
             .addQueryParameter("sort", "releaseDate")
-            .addQueryParameter("offset", ((page - 1) * pageSize).toString())
+            .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", pageSize.toString())
             .build()
-        return GET(url, headers)
+
+        return client.get(url).toMangasPage(offset)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<LatestResponse>()
-        val mangas = result.books.map { it.toSManga() }
-        val limit = response.request.url.queryParameter("limit")!!.toInt()
-        val offset = response.request.url.queryParameter("offset")!!.toInt()
-        val hasNextPage = offset + limit < result.totalCount
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val offset = (page - 1) * pageSize
         val url = "$apiUrl/search/search/v2".toHttpUrl().newBuilder()
             .addQueryParameter("ac", "1")
             .addQueryParameter("word", query)
-            .addQueryParameter("offset", ((page - 1) * pageSize).toString())
+            .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", pageSize.toString())
             .apply {
                 addFilter("sort_key", filters.firstInstance<SortFilter>())
@@ -107,11 +99,18 @@ abstract class AmebaManga :
                 addFilter("has_serial", filters.firstInstance<HasSerialFilter>(), "true")
                 addFilter("start_datetime_within_days", filters.firstInstance<ReleasedThisMonthFilter>(), "30")
             }.build()
-        return GET(url, headers)
+
+        return client.get(url).toMangasPage(offset)
     }
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("Note: Search and active filters are applied together"),
+    private fun Response.toMangasPage(offset: Int): MangasPage {
+        val result = this.parseAs<TitleListResponse>()
+        val mangas = result.titles.map { it.toSManga() }
+        val hasNextPage = offset + pageSize < result.totalCount
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         GenreFilter(),
         CategoryFilter(),
@@ -130,97 +129,91 @@ abstract class AmebaManga :
         ReleasedThisMonthFilter(),
     )
 
-    override fun searchMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/titles/${manga.url}?ac=1", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsResponse>().toSManga()
-
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series_list/series_id=${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = "$apiUrl/books/by_title/v3".toHttpUrl().newBuilder()
-            .addQueryParameter("ac", "1")
-            .addQueryParameter("title_id", manga.url)
-            .addQueryParameter("sales_status", "IN_RESERVATION")
-            .addQueryParameter("sales_status", "ON_SALE")
-            .addQueryParameter("sort", "VOL_DESC")
-            .addQueryParameter("offset", "0")
-            .addQueryParameter("limit", "1000")
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val books = response.parseAs<ChapterResponse>().books
-        val ownedIds = fetchOwnedBookIds(books.map { it.id })
-        return books
-            .filter { !hideLocked || !it.isLockedFor(ownedIds) }
-            .map { it.toSChapter(ownedIds) }
-    }
-
-    private fun fetchOwnedBookIds(bookIds: List<Int>): Set<Int>? {
-        if (bookIds.isEmpty()) return null
-        val url = "$apiUrl/user_books/me/by_book/v2".toHttpUrl().newBuilder().apply {
-            bookIds.forEach { addQueryParameter("book_id", it.toString()) }
-        }.build()
-
-        return try {
-            val ownershipResponse = client.newCall(GET(url, headers)).execute()
-            if (!ownershipResponse.isSuccessful) return null
-            ownershipResponse.parseAs<OwnedResponse>().userBooks.filter { it.isOwned }.map { it.bookId }.toSet()
-        } catch (_: Exception) {
-            null
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (!fetchDetails) return@async manga
+            client.get("$apiUrl/titles/${manga.url}?ac=1").parseAs<DetailsResponse>().toSManga()
         }
+
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            val url = "$apiUrl/books/by_title/v3".toHttpUrl().newBuilder()
+                .addQueryParameter("ac", "1")
+                .addQueryParameter("title_id", manga.url)
+                .addQueryParameter("sales_status", "IN_RESERVATION")
+                .addQueryParameter("sales_status", "ON_SALE")
+                .addQueryParameter("sort", "VOL_DESC")
+                .addQueryParameter("offset", "0")
+                .addQueryParameter("limit", "1000")
+                .build()
+
+            val books = client.get(url).parseAs<ChapterResponse>().books
+            val lockedBooks = books.filter { it.isLocked }
+            val ownedUrl = "$apiUrl/user_books/me/by_book/v2".toHttpUrl().newBuilder()
+                .apply { lockedBooks.forEach { addQueryParameter("book_id", it.id.toString()) } }
+                .build()
+
+            val isLoggedIn = client.cookieJar.loadForRequest(ownedUrl).any { it.name == "AM_SESSION" }
+            val ownedIds = if (lockedBooks.isEmpty() || !isLoggedIn) {
+                emptySet()
+            } else {
+                val ownedResponse = client.get(ownedUrl, ensureSuccess = false)
+                if (ownedResponse.isSuccessful) {
+                    ownedResponse.parseAs<OwnedResponse>().userBooks.filter { it.isOwned }.map { it.bookId }.toSet()
+                } else {
+                    ownedResponse.close()
+                    emptySet()
+                }
+            }
+
+            books.filter { !hideLocked || !it.isLockedFor(ownedIds) }.map { it.toSChapter(ownedIds) }
+        }
+
+        SMangaUpdate(
+            details.await(),
+            chapterList.await(),
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/index.html?cid=${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$apiUrl/browser/bookinfo/v3".toHttpUrl().newBuilder()
             .addQueryParameter("bookId", chapter.url)
             .build()
-        return GET(url, headers)
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<ViewerResponse>().result
+        val result = client.get(url).parseAs<ViewerResponse>().result
         val guardianUrl = "${result.guardianServer}/${result.bookData.s3Key}"
-        return if (result.bookData.imagedReflow) {
-            parseNovelPages(result, guardianUrl)
-        } else {
-            parseMangaPages(result, guardianUrl)
-        }
-    }
 
-    private fun parseNovelPages(result: ViewerResult, guardianUrl: String): List<Page> {
-        val bookJsonUrl = "$guardianUrl/book.json".toHttpUrl().newBuilder()
-            .query(result.signedParams)
+        if (!result.bookData.imagedReflow) {
+            return result.keys!!.array.mapIndexed { i, key ->
+                Page(i, imageUrl = buildPageUrl(guardianUrl, "${i + 1}.jpg", result.signedParams, key.string))
+            }
+        }
+
+        val bookUrl = "$guardianUrl/book.json".toHttpUrl().newBuilder()
+            .encodedQuery(result.signedParams)
             .build()
 
-        val book = client.newCall(GET(bookJsonUrl, headers)).execute().parseAs<ReflowBook>()
-        val profile = book.reflowData?.profiles?.find { it.id == "mincho_small" }
-            ?: book.reflowData?.profiles?.firstOrNull()
-            ?: throw Exception("No profile was found.")
+        val profiles = client.get(bookUrl).parseAs<ReflowBook>().reflowData.profiles
+        val profile = profiles.find { it.id == "mincho_medium" } ?: profiles.first()
+        val key = result.keys[profile.id]!!.string
 
-        val key = result.keys?.jsonObject?.get(profile.id)?.jsonPrimitive?.content
-
-        return (0 until profile.bookInfo.pageCount).map {
+        return List(profile.bookInfo.pageCount) {
             Page(it, imageUrl = buildPageUrl(guardianUrl, "${profile.id}/${it + 1}.jpg", result.signedParams, key))
         }
     }
 
-    private fun parseMangaPages(result: ViewerResult, guardianUrl: String): List<Page> {
-        val keys = result.keys?.jsonArray?.map { it.jsonPrimitive.content } ?: throw Exception("No keys were found.")
-
-        return keys.mapIndexed { i, key ->
-            Page(i, imageUrl = buildPageUrl(guardianUrl, "${i + 1}.jpg", result.signedParams, key))
-        }
-    }
-
-    private fun buildPageUrl(guardianUrl: String, path: String, signedParams: String, key: String?): String = "$guardianUrl/$path".toHttpUrl().newBuilder()
-        .query(signedParams)
+    private fun buildPageUrl(guardianUrl: String, path: String, signedParams: String, key: String): String = "$guardianUrl/$path".toHttpUrl().newBuilder()
+        .encodedQuery(signedParams)
         .fragment(key)
         .build()
         .toString()
@@ -232,8 +225,6 @@ abstract class AmebaManga :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"

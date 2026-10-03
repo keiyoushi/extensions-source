@@ -263,7 +263,7 @@ abstract class IkigaiMangas :
         val mainContent = document.selectFirst("main")!!
         val updatedManga = SManga.create().apply {
             title = mainContent.selectFirst(".card-body .card-title")!!.text()
-            thumbnail_url = mainContent.selectFirst("img")?.attr("abs:src")
+            thumbnail_url = mainContent.selectFirst("article.card figure > img")?.attr("abs:src")
             description = mainContent.selectFirst(".card-body > p")?.text()
             status = parseStatus(mainContent.selectFirst("figure > ul a[href*=?estados]")?.text())
             genre = mainContent.select(".card-body > ul > li > a[href*=?generos]").joinToString { it.text().trim() }

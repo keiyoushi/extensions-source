@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "HentaiRead"
-    versionCode = 10
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
 
     source {
         lang = "en"

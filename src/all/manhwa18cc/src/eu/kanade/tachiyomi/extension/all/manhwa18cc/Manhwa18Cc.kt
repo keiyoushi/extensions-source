@@ -25,6 +25,7 @@ abstract class Manhwa18Cc : MadaraNoAjax() {
     override val archiveUrlSelector = "div.manga-item div.data a"
 
     override suspend fun getPopularManga(page: Int) = archivePage(page, "trending")
+    override suspend fun getLatestUpdates(page: Int) = archivePage(page, "")
 
     override fun nextPageSelector() = "ul.pagination li.next a"
 

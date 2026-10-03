@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class THResult<T>(val code: Int, val msg: String, val data: T)
+class THResult<T>(val data: T)
 
 // https://web.hycdn.cn/comic/site/umi.dee612f8.js
 @Serializable
-data class THComic(
+class THComic(
     val cid: String,
     val type: Int,
     val cover: String,
@@ -65,7 +65,7 @@ data class THComic(
 }
 
 @Serializable
-data class THRecentUpdate(
+class THRecentUpdate(
     val coverUrl: String,
     val comicCid: String,
     val title: String,
@@ -83,7 +83,7 @@ data class THRecentUpdate(
 }
 
 @Serializable
-data class THEpisode(
+class THEpisode(
     val cid: String? = null,
     val type: Int,
     val shortTitle: String?,
@@ -93,14 +93,14 @@ data class THEpisode(
 )
 
 @Serializable
-data class THPageInfo(
+class THPageInfo(
 //  val width: Int,
 //  val height: Int,
     val doublePage: Boolean,
 )
 
 @Serializable
-data class THPage(
+class THPage(
 //  val pageNum: Int,
     val url: String,
 )

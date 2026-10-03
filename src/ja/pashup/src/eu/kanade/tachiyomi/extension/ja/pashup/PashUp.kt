@@ -1,68 +1,49 @@
 package eu.kanade.tachiyomi.extension.ja.pashup
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.string
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
 abstract class PashUp :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
-
-    private val apiUrl = "$baseUrl/pageapi"
+    private val apiUrl get() = "$baseUrl/pageapi"
     private val pageLimit = 10
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(PublusInterceptor())
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(PublusInterceptor())
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/contents.php".toHttpUrl().newBuilder()
             .addQueryParameter("type", "ranking")
             .addQueryParameter("period", "daily")
             .addQueryParameter("category", "2")
             .addQueryParameter("limit", pageLimit.toString())
             .addQueryParameter("offset", ((page - 1) * pageLimit).toString())
-            .addQueryParameter("_", System.currentTimeMillis().toString())
             .build()
-        return GET(url, headers)
+        return client.get(url).toMangasPage(page)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val offset = response.request.url.queryParameter("offset")!!.toInt()
-        val limit = response.request.url.queryParameter("limit")!!.toInt()
-        val result = response.parseAs<EntryResponse>()
-        val mangas = result.contents.map { it.toSManga() }
-        val hasNextPage = result.totalResults > (offset + limit)
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/products.php".toHttpUrl().newBuilder()
             .addQueryParameter("type", "update")
             .addQueryParameter("period", "daily")
@@ -71,124 +52,75 @@ abstract class PashUp :
             .addQueryParameter("lastest", "1")
             .addQueryParameter("limit", pageLimit.toString())
             .addQueryParameter("offset", ((page - 1) * pageLimit).toString())
-            .addQueryParameter("_", System.currentTimeMillis().toString())
             .build()
-        return GET(url, headers)
+        return client.get(url).toMangasPage(page)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun Response.toMangasPage(page: Int): MangasPage {
+        val result = this.parseAs<ContentResponse>()
+        val mangas = result.contents.map { it.toSManga() }
+        val hasNextPage = result.totalResults > page * pageLimit
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/contents.php".toHttpUrl().newBuilder()
             .addQueryParameter("type", "search")
             .addQueryParameter("reserve", "1")
             .addQueryParameter("keyword", query)
             .addQueryParameter("limit", "9999")
-            .addQueryParameter("_", System.currentTimeMillis().toString())
-        return GET(url.build(), headers)
-    }
+            .build()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<EntryResponse>()
-        val mangas = result.contents.filter { it.category == "2" }.map { it.toSManga() }
+        val mangas = client.get(url).parseAs<ContentResponse>().contents
+            .filter { it.category == "2" }
+            .map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$apiUrl/products.php".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "contents")
-            .addQueryParameter("limit", "1")
-            .addQueryParameter("id", manga.url)
-            .addQueryParameter("_", System.currentTimeMillis().toString())
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<EntryResponse>().contents.first().toSManga()
-
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/content/${manga.url}"
 
-    private fun chapterListUrl(seriesId: String) = "$apiUrl/products.php".toHttpUrl().newBuilder()
-        .addQueryParameter("type", "contents")
-        .addQueryParameter("id", seriesId)
-        .addQueryParameter("unit", "2")
-        .addQueryParameter("limit", "9999")
-        .addQueryParameter("order", "nodesc")
-        .addQueryParameter("_", System.currentTimeMillis().toString())
-        .build()
-
-    private fun ChapterResponse.collectProducts(): List<Product> = collectProductPairs().map { it.second }
-
-    private fun ChapterResponse.collectProductPairs(): List<Pair<String, Product>> {
-        val allProducts = mutableListOf<Pair<String, Product>>()
-        contents.forEach { content ->
-            allProducts.add(content.seriesId to content.product)
-            content.productMinMax?.values?.forEach { minMax ->
-                minMax.min?.let { allProducts.add(content.seriesId to it) }
-                minMax.max?.let { allProducts.add(content.seriesId to it) }
-            }
-        }
-        return allProducts.distinctBy { it.second.id }
-    }
-
-    override fun chapterListRequest(manga: SManga): Request = GET(chapterListUrl(manga.url), headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val now = System.currentTimeMillis()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val url = "$apiUrl/products.php".toHttpUrl().newBuilder()
+            .addQueryParameter("type", "contents")
+            .addQueryParameter("id", manga.url)
+            .addQueryParameter("limit", "9999")
+            .addQueryParameter("order", "nodesc")
+            .build()
+        val contents = client.get(url).parseAs<ContentResponse>().contents
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val uniqueProducts = response.parseAs<ChapterResponse>()
-            .collectProductPairs()
-            .filter { (_, product) ->
-                val endTime = dateFormat.tryParse(product.endDate)
-                endTime == 0L || endTime > now
-            }
-            .filter { (_, product) ->
-                !hideLocked || !product.downloadUrl.contains("/pageapi/download")
-            }
+        val products = contents.mapNotNull { it.product }
+            .filter { it.isAvailable && (!hideLocked || !it.isLocked) }
+            .groupBy { it.salesUnit }
 
-        val grouped = uniqueProducts.groupBy { it.second.salesUnit }
-        val chapters = (grouped["1"] ?: emptyList()).sortedByDescending { dateFormat.tryParse(it.second.startDate) }
-        val volumes = (grouped["2"] ?: emptyList()).sortedByDescending { dateFormat.tryParse(it.second.startDate) }
-        return (chapters + volumes).map { it.second.toSChapter(dateFormat, it.first) }
+        val episodes = products["1"].orEmpty().map { it.toSChapter(manga.url) }.sortedByDescending { it.date_upload }
+        val volumes = products["2"].orEmpty().map { it.toSChapter(manga.url) }.sortedByDescending { it.date_upload }
+
+        return SMangaUpdate(
+            contents.first().toSManga(),
+            episodes + volumes,
+        )
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val chapterUrl = "$baseUrl/${chapter.url}".toHttpUrl()
-        val result = client.newCall(GET(chapterListUrl(chapterUrl.pathSegments.first()), headers)).execute().parseAs<ChapterResponse>()
-        return result.collectProducts().find { it.id == chapterUrl.fragment }!!.downloadUrl
-    }
+    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["viewerUrl"]?.string
+        ?: "$baseUrl/content/${chapter.memo["seriesId"]!!.string}"
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterUrl = "$baseUrl/${chapter.url}".toHttpUrl()
-        val url = chapterListUrl(chapterUrl.pathSegments.first())
-            .newBuilder()
-            .fragment(chapterUrl.fragment)
-            .build()
-        return GET(url, headers)
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val viewerUrl = chapter.memo["viewerUrl"]?.string?.toHttpUrl()
+            ?: throw Exception("Log in via WebView and purchase this product to read.")
 
-    override fun pageListParse(response: Response): List<Page> {
-        val productId = response.request.url.fragment
-        val product = response.parseAs<ChapterResponse>().collectProducts().find { it.id == productId }!!
-        if (product.downloadUrl.contains("/pageapi/download")) {
-            throw Exception("Log in via WebView and purchase this product to read.")
-        }
-
-        val cid = product.downloadUrl.toHttpUrl().queryParameter("cid")
-
-        val cUrl = "$baseUrl/pageapi/viewer/c.php".toHttpUrl().newBuilder()
-            .addQueryParameter("cid", cid)
+        val url = "$apiUrl/viewer/c.php".toHttpUrl().newBuilder()
+            .addQueryParameter("cid", viewerUrl.queryParameter("cid"))
             .build()
 
-        val cRequest = GET(cUrl, headers)
-        val cResponse = client.newCall(cRequest).execute()
-        val cPhp = try {
-            cResponse.parseAs<CPhpResponse>().url
-        } catch (_: Exception) {
-            throw Exception("Log in via WebView and purchase this product to read.")
-        }
+        val contentUrl = client.get(url).parseAs<PublusContent>().url
+            ?: throw Exception("Refresh Chapter List")
 
-        return fetchPages(cPhp, headers, client)
+        return client.fetchPages(contentUrl)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -198,8 +130,6 @@ abstract class PashUp :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    override fun imageUrlParse(response: Response): String = response.request.url.toString()
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"

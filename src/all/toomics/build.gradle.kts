@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Toomics"
-    versionCode = 10
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf("en", "zh-Hans", "zh-Hant", "es-419", "es", "it", "de", "fr", "pt-BR").forEach { langCode ->
         source {

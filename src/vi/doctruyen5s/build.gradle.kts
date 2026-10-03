@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "DocTruyen5s"
-    versionCode = 4
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "liliana"
 
     source {

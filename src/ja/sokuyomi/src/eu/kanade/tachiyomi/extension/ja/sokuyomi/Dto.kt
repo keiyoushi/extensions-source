@@ -5,38 +5,21 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
 
 // Variables
 @Suppress("unused")
 @Serializable
-class PopularVariables(
+class ListVariables(
     private val perPage: Int,
     private val pageNumber: Int,
     private val field: String,
-    private val isAdult: Boolean?,
-)
-
-@Suppress("unused")
-@Serializable
-class SearchVariables(
-    private val name: String,
-    private val authorName: String,
-    private val tagName: String,
-    private val perPage: Int,
-    private val pageNumber: Int,
-    private val field: String,
-    private val isAdult: Boolean?,
-)
-
-@Suppress("unused")
-@Serializable
-class TagFilterVariables(
-    @SerialName("tag_slug") private val tagSlug: String,
-    private val perPage: Int,
-    private val pageNumber: Int,
+    private val sort: String,
+    private val keyword: String? = null,
+    private val tagSlug: String? = null,
 )
 
 @Suppress("unused")
@@ -47,17 +30,8 @@ class DetailsVariables(
 
 @Suppress("unused")
 @Serializable
-class ChapterListVariables(
-    private val titleSlug: String,
-    private val perPage: Int,
-    private val pageNumber: Int,
-    private val sort: String,
-)
-
-@Suppress("unused")
-@Serializable
 class ViewerVariables(
-    private val volumeSlug: String,
+    private val slug: String,
 )
 
 @Suppress("unused")
@@ -120,6 +94,8 @@ class TitleCover(
 @Serializable
 class DetailsResponse(
     val getTitle: GetTitle,
+    val listVolume: ChapterList,
+    val listChapter: ChapterList,
 )
 
 @Serializable
@@ -149,7 +125,7 @@ class GetTitle(
 
             if (altTitles.isNotEmpty()) {
                 append("\n\nAlternative Titles:\n")
-                append(altTitles.joinToString("\n"))
+                append(altTitles.joinToString("\n") { "- $it" })
             }
 
             label?.publisher?.name?.takeIf { it.isNotEmpty() }?.let {
@@ -164,7 +140,7 @@ class GetTitle(
             this@GetTitle.genre?.name?.let { add(it) }
             tags?.mapTo(this) { it.name }
         }.joinToString()
-        status = if (isFinished == false) SManga.COMPLETED else SManga.ONGOING
+        status = if (isFinished == true) SManga.COMPLETED else SManga.ONGOING
         thumbnail_url = "$cdnUrl/${titleCover?.originKey}"
     }
 }
@@ -195,12 +171,7 @@ class Tag(
 )
 
 @Serializable
-class ChapterResponse(
-    val listVolume: ListVolume,
-)
-
-@Serializable
-class ListVolume(
+class ChapterList(
     val edges: List<ChapterEdge>,
 )
 
@@ -211,48 +182,47 @@ class ChapterEdge(
 
 @Serializable
 class ChapterNode(
-    @SerialName("volume_number") private val volumeNumber: Float?,
+    @JsonNames("volume_number", "chapter_number") private val number: Float?,
     private val name: String,
     @SerialName("consumption_coin") private val consumptionCoin: Int?,
     @SerialName("opend_at") private val opendAt: String?,
     private val slug: String,
     @SerialName("is_purchase") private val isPurchase: Boolean?,
     @SerialName("is_available_for_sale") private val isAvailableForSale: Boolean?,
-    @SerialName("volume_consumption_coin") private val volumeConsumptionCoin: VolumeConsumptionCoin?,
+    @JsonNames("volume_consumption_coin", "chapter_consumption_coin") private val campaignCoin: ConsumptionCoin?,
 ) {
     val isLocked: Boolean
-        get() = consumptionCoin != 0 && isPurchase != true && (volumeConsumptionCoin?.consumptionCoin != 0 || isAvailableForSale != true)
+        get() = consumptionCoin != 0 && isPurchase != true && (campaignCoin?.consumptionCoin != 0 || isAvailableForSale != true)
 
-    fun toSChapter() = SChapter.create().apply {
+    fun toSChapter(type: String) = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
         url = slug
         name = lock + this@ChapterNode.name
-        date_upload = dateFormat.tryParse(opendAt)
-        chapter_number = volumeNumber ?: -1f
+        date_upload = Instant.tryParse(opendAt)
+        chapter_number = number ?: -1f
+        memo = buildJsonObject {
+            put("type", type)
+        }
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
-}
-
 @Serializable
-class VolumeConsumptionCoin(
+class ConsumptionCoin(
     @SerialName("consumption_coin") val consumptionCoin: Int,
 )
 
 @Serializable
 class ViewerResponse(
-    val getVolumeViewer: GetVolumeViewer,
+    @JsonNames("getVolumeViewer", "getChapterViewer") val viewer: Viewer,
 )
 
 @Serializable
-class GetVolumeViewer(
-    @SerialName("volume_pages") val volumePages: List<VolumePage>,
+class Viewer(
+    @JsonNames("volume_pages", "chapter_pages") val pages: List<ViewerPage>,
 )
 
 @Serializable
-class VolumePage(
+class ViewerPage(
     @SerialName("page_number") val pageNumber: Int,
     val key: String,
 )
@@ -271,4 +241,5 @@ class RefreshResponse(
 class Signin(
     @SerialName("access_token") val accessToken: String,
     @SerialName("refresh_token") val refreshToken: String,
+    @SerialName("expires_at") val expiresAt: Long,
 )

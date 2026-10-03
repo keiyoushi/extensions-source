@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "NovelCool"
-    versionCode = 8
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     val subdomains = mapOf(
         "en" to "www",

@@ -5,15 +5,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 
 @Source
-abstract class VinnieVeritas : HttpSource() {
+abstract class VinnieVeritas : KeiSource() {
 
     override val supportsLatest = false
 
@@ -21,7 +20,9 @@ abstract class VinnieVeritas : HttpSource() {
         private val ONCLICK_REGEX = Regex("""changeToComic\("(.+?)"\)""")
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(createManga()), false)
+
+    private fun createManga(): SManga {
         val manga = SManga.create()
         manga.setUrlWithoutDomain("/archiveIndex.php")
         manga.title = if (lang == "en") {
@@ -52,25 +53,37 @@ CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la ab
         }
         manga.genre = "webcomic"
 
-        return Observable.just(MangasPage(arrayListOf(manga), false))
+        return manga
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
-        .map { it.mangas.first().apply { initialized = true } }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(".cccLeftInd .cccArchiveEntry[onclick]").map { element ->
-            SChapter.create().apply {
-                val comicName = ONCLICK_REGEX.find(element.attr("onclick"))?.groupValues?.get(1) ?: ""
-                url = "/$comicName.php"
-                name = element.text()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val chapterList = if (fetchChapters) {
+            val document = client.get(getMangaUrl(manga)).asJsoup()
+            document.select(".cccLeftInd .cccArchiveEntry[onclick]").map { element ->
+                SChapter.create().apply {
+                    val comicName = ONCLICK_REGEX.find(element.attr("onclick"))?.groupValues?.get(1) ?: ""
+                    url = "/$comicName.php"
+                    name = element.text()
+                }
             }
+        } else {
+            chapters
         }
+
+        return SMangaUpdate(if (fetchDetails) createManga() else manga, chapterList)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val imgSelector = if (lang == "en") {
             "img.cccComic.crazylan-en"
         } else {
@@ -80,22 +93,4 @@ CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la ab
             Page(i, imageUrl = image.absUrl("src"))
         }
     }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

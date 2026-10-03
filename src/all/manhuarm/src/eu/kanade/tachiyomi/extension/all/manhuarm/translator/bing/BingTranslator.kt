@@ -1,70 +1,47 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing
 
-import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.extension.all.manhuarm.translator.TranslatorEngine
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
+import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 
-class BingTranslator(private val client: OkHttpClient, private val headers: Headers) : TranslatorEngine {
-
-    private val baseUrl = "https://www.bing.com"
-
-    private val translatorUrl = "$baseUrl/translator"
-
-    private val json: Json by injectLazy()
+class BingTranslator(private val client: OkHttpClient, private val headers: () -> Headers) : TranslatorEngine {
 
     private var tokens: TokenGroup = TokenGroup()
 
-    override val capacity: Int = 1000
-
-    private val attempts = 3
-
-    override fun translate(from: String, to: String, text: String): String {
-        if (tokens.isNotValid() && refreshTokens().not()) {
+    override suspend fun translate(from: String, to: String, text: String): String {
+        if (!tokens.isValid() && !refreshTokens()) {
             return text
         }
-        val request = translatorRequest(from, to, text)
-        repeat(attempts) {
+        repeat(ATTEMPTS) {
             try {
-                return fetchTranslatedText(request)
-            } catch (e: Exception) {
+                return fetchTranslatedText(from, to, text)
+            } catch (_: Exception) {
                 refreshTokens()
             }
         }
         return text
     }
 
-    private fun fetchTranslatedText(request: Request): String = client.newCall(request).execute().parseAs<List<TranslateDto>>()
-        .firstOrNull()!!.text
-
-    private fun refreshTokens(): Boolean {
-        tokens = loadTokens()
-        return tokens.isValid()
-    }
-
-    private fun translatorRequest(from: String, to: String, text: String): Request {
-        val url = "$baseUrl/ttranslatev3".toHttpUrl().newBuilder()
+    private suspend fun fetchTranslatedText(from: String, to: String, text: String): String {
+        val url = "$BASE_URL/ttranslatev3".toHttpUrl().newBuilder()
             .addQueryParameter("isVertical", "1")
             .addQueryParameter("", "") // Present in Bing URL
             .addQueryParameter("IG", tokens.ig)
             .addQueryParameter("IID", tokens.iid)
             .build()
 
-        val headersApi = headers.newBuilder()
+        val apiHeaders = headers().newBuilder()
             .set("Accept", "*/*")
-            .set("Origin", baseUrl)
-            .set("Referer", translatorUrl)
-            .set("Alt-Used", baseUrl)
+            .set("Origin", BASE_URL)
+            .set("Referer", TRANSLATOR_URL)
+            .set("Alt-Used", BASE_URL)
             .build()
 
         val payload = FormBody.Builder()
@@ -76,20 +53,25 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
             .add("key", tokens.key)
             .build()
 
-        return POST(url.toString(), headersApi, payload)
+        return client.post(url.toString(), apiHeaders, payload).parseAs<List<TranslateDto>>().first().text
     }
 
-    private fun loadTokens(): TokenGroup {
-        val document = client.newCall(GET(translatorUrl, headers)).execute().asJsoup()
+    private suspend fun refreshTokens(): Boolean {
+        tokens = try {
+            loadTokens()
+        } catch (_: Exception) {
+            TokenGroup()
+        }
+        return tokens.isValid()
+    }
 
-        val scripts = document.select("script")
-            .map(Element::data)
+    private suspend fun loadTokens(): TokenGroup {
+        val document = client.get(TRANSLATOR_URL, headers()).asJsoup()
 
-        val scriptOne: String = scripts.firstOrNull(TOKENS_REGEX::containsMatchIn)
-            ?: return TokenGroup()
+        val scripts = document.select("script").map(Element::data)
 
-        val scriptTwo: String = scripts.firstOrNull(IG_PARAM_REGEX::containsMatchIn)
-            ?: return TokenGroup()
+        val scriptOne = scripts.firstOrNull(TOKENS_REGEX::containsMatchIn) ?: return TokenGroup()
+        val scriptTwo = scripts.firstOrNull(IG_PARAM_REGEX::containsMatchIn) ?: return TokenGroup()
 
         val matchOne = TOKENS_REGEX.find(scriptOne)?.groups
         val matchTwo = IG_PARAM_REGEX.find(scriptTwo)?.groups
@@ -102,10 +84,12 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         )
     }
 
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromStream(body.byteStream())
-
     companion object {
-        val TOKENS_REGEX = """params_AbusePreventionHelper(\s+)?=(\s+)?[^\[]\[(\d+),"([^"]+)""".toRegex()
-        val IG_PARAM_REGEX = """IG:"([^"]+)""".toRegex()
+        const val HOST = "www.bing.com"
+        private const val BASE_URL = "https://$HOST"
+        private const val TRANSLATOR_URL = "$BASE_URL/translator"
+        private const val ATTEMPTS = 3
+        private val TOKENS_REGEX = """params_AbusePreventionHelper(\s+)?=(\s+)?[^\[]\[(\d+),"([^"]+)""".toRegex()
+        private val IG_PARAM_REGEX = """IG:"([^"]+)""".toRegex()
     }
 }

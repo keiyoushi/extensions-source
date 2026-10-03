@@ -5,9 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class Data<T>(val data: T)
@@ -68,10 +66,6 @@ class SeriesAuthorDto(
     val name: String,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
-
 @Serializable
 class SeriesChapterDto(
     private val title: String,
@@ -81,7 +75,7 @@ class SeriesChapterDto(
 ) {
     fun toSChapter(seriesSlug: String, organizationSlug: String) = SChapter.create().apply {
         name = "Capítulo ${number.toString().removeSuffix(".0")} - $title"
-        date_upload = releasedAt.let { dateFormat.tryParse(it) }
+        date_upload = Instant.tryParse(releasedAt)
         url = "$number/$seriesSlug/$organizationSlug"
     }
 }

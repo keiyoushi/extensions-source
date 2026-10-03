@@ -2,11 +2,9 @@ package eu.kanade.tachiyomi.extension.ar.arabshentai
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-internal var genreList: List<Pair<String, String>> = emptyList()
-
 class FilterCheckbox(name: String, val uriPart: String) : Filter.CheckBox(name)
 
-class GenresFilter : Filter.Group<FilterCheckbox>("التصنيفات", genreList.map { FilterCheckbox(it.first, it.second) })
+class GenresFilter(genres: List<Pair<String, String>>) : Filter.Group<FilterCheckbox>("التصنيفات", genres.map { FilterCheckbox(it.first, it.second) })
 
 class GenresOpFilter :
     UriPartFilter(

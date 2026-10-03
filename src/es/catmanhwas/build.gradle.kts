@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Catoons"
-    versionCode = 53
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "es"
-        baseUrl = "https://newcat1.xyz"
+        baseUrl = "https://cattoons.org"
+    }
+
+    deeplink {
+        path("/series/..*")
     }
 }

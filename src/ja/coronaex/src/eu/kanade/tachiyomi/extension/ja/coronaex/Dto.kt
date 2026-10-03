@@ -6,9 +6,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class TitleResponse(
@@ -73,28 +71,31 @@ class Genre(
 
 @Serializable
 class ChapterDetails(
+    @SerialName("next_cursor") val nextCursor: String?,
     val resources: List<ChapterResources>,
 )
 
 @Serializable
 class ChapterResources(
     @SerialName("episode_order") private val episodeOrder: Int,
-    @SerialName("episode_status") val episodeStatus: String?,
+    @SerialName("episode_status") private val episodeStatus: String?,
     private val id: String,
     @SerialName("published_at") private val publishedAt: String,
     private val title: String,
 ) {
+    val isLocked: Boolean
+        get() = episodeStatus == "only_for_subscription"
+
     fun toSChapter(): SChapter = SChapter.create().apply {
         url = id
-        val isPaid = episodeStatus == "only_for_subscription"
-        name = if (isPaid) {
+        name = if (isLocked) {
             "\uD83D\uDCB3 $title"
         } else {
             title
         }
 
         chapter_number = episodeOrder.toFloat()
-        date_upload = dateFormat.tryParse(publishedAt)
+        date_upload = Instant.tryParse(publishedAt)
     }
 }
 
@@ -105,7 +106,6 @@ class ViewerResponse(
 
 @Serializable
 class ViewerPages(
-    @SerialName("drm_hash") val drmHash: String,
     @SerialName("page_image_url") val pageImageUrl: String,
 )
 
@@ -129,7 +129,3 @@ class LoginResponse(
     @JsonNames("id_token") val idToken: String,
     @JsonNames("refresh_token") val refreshToken: String,
 )
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
-}

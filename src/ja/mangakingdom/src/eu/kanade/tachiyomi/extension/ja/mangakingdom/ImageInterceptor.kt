@@ -5,11 +5,9 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
-import eu.kanade.tachiyomi.extension.ja.mangakingdom.MangaKingdom.Companion.stripJson
 import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
@@ -19,12 +17,11 @@ class ImageInterceptor : Interceptor {
         val request = chain.request()
         val response = chain.proceed(request)
         val fragment = request.url.fragment
-        if (!response.isSuccessful || fragment.isNullOrEmpty() || !fragment.startsWith("scene=")) {
-            return response
-        }
 
-        val sceneNo = fragment.substringAfter("scene=").toInt()
-        val content = response.parseAs<ContentResponse> { stripJson(it) }
+        if (!response.isSuccessful || fragment == null) return response
+
+        val sceneNo = fragment.toInt()
+        val content = response.parseAs<ContentResponse>()
         val image = content.scenes.first { it.sceneNo == sceneNo }.images.first()
         val rawBytes = Base64.decode(image.imgBase64, Base64.DEFAULT)
         val buffer = Buffer()
@@ -35,11 +32,7 @@ class ImageInterceptor : Interceptor {
         result.recycle()
         val body = buffer.asResponseBody(JPEG_MEDIA_TYPE, buffer.size)
 
-        return Response.Builder()
-            .request(request)
-            .protocol(Protocol.HTTP_1_1)
-            .code(200)
-            .message("OK")
+        return response.newBuilder()
             .body(body)
             .build()
     }

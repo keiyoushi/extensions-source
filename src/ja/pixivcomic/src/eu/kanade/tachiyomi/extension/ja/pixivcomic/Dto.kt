@@ -195,16 +195,6 @@ class Price(
 )
 
 @Serializable
-class SaltResponse(
-    val props: Props,
-)
-
-@Serializable
-class Props(
-    val pageProps: PageProps,
-)
-
-@Serializable
 class PageProps(
     val salt: String,
 )

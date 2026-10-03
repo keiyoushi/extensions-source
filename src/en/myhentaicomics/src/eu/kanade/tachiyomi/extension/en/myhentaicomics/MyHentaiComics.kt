@@ -1,41 +1,36 @@
 package eu.kanade.tachiyomi.extension.en.myhentaicomics
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class MyHentaiComics : HttpSource() {
-
-    override val supportsLatest = true
+abstract class MyHentaiComics : KeiSource() {
 
     // =============================== Popular ================================
 
     // Popular = most viewed
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/views/$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseComicListing(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseComicListing("$baseUrl/views/$page".toHttpUrl())
 
     // =============================== Latest =================================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/gallery/$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseComicListing(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseComicListing("$baseUrl/gallery/$page".toHttpUrl())
 
     // =============================== Search =================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
         val sortFilter = filters.firstInstanceOrNull<SortFilter>()
 
@@ -44,25 +39,23 @@ abstract class MyHentaiComics : HttpSource() {
             val url = "$baseUrl/search/$page".toHttpUrl().newBuilder()
                 .addQueryParameter("query", query)
                 .build()
-            return GET(url, headers)
+            return parseComicListing(url)
         }
 
         // Category filter
         if (categoryFilter != null && categoryFilter.toUriPart().isNotEmpty()) {
             val catId = categoryFilter.toUriPart()
-            return GET("$baseUrl/gallery/category/$catId/$page", headers)
+            return parseComicListing("$baseUrl/gallery/category/$catId/$page".toHttpUrl())
         }
 
         // Sort filter
         val sortPath = sortFilter?.toUriPart() ?: "gallery"
-        return GET("$baseUrl/$sortPath/$page", headers)
+        return parseComicListing("$baseUrl/$sortPath/$page".toHttpUrl())
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = parseComicListing(response)
 
     // ============================== Filters =================================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Note: Text search ignores all filters below"),
         Filter.Separator(),
         SortFilter(),
@@ -72,8 +65,8 @@ abstract class MyHentaiComics : HttpSource() {
 
     // =========================== Comic Listing ==============================
 
-    private fun parseComicListing(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private suspend fun parseComicListing(url: HttpUrl): MangasPage {
+        val document = client.get(url).asJsoup()
 
         val mangas = document.select("li.item:not(.image-block) .comic-inner a").map { el ->
             SManga.create().apply {
@@ -89,10 +82,13 @@ abstract class MyHentaiComics : HttpSource() {
 
     // =========================== Manga Details ==============================
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val descriptionDiv = document.selectFirst("div.comic-description")
 
         val categories = descriptionDiv
@@ -115,35 +111,28 @@ abstract class MyHentaiComics : HttpSource() {
             ?.firstOrNull { it.ownText().startsWith("Pages:") }
             ?.text()
 
-        return SManga.create().apply {
-            title = descriptionDiv?.selectFirst("h1")?.text() ?: ""
+        val updatedManga = manga.apply {
+            title = descriptionDiv?.selectFirst("h1")?.text() ?: title
             thumbnail_url = document.selectFirst("div.comic-cover img")?.absUrl("src")?.encodeSpaces()
             genre = (categories + artists + groups).joinToString(", ")
             status = SManga.COMPLETED
-            initialized = true
             description = buildString {
                 if (artists.isNotEmpty()) appendLine("Artists: ${artists.joinToString(", ")}")
                 if (groups.isNotEmpty()) appendLine("Groups: ${groups.joinToString(", ")}")
                 if (!pagesText.isNullOrEmpty()) append(pagesText)
             }.trimEnd()
         }
-    }
-
-    // =========================== Chapter List ===============================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
 
         // Extract comic ID from the "Back to gallery" / first page link on the thumbnail page
         val firstPageHref = document.selectFirst("div.comic-cover a")?.absUrl("href")
-            ?: return emptyList()
+            ?: return SMangaUpdate(updatedManga, emptyList())
 
         // href = "https://myhentaicomics.com/gallery/show/59109/1"
         val comicId = firstPageHref
             .substringAfter("/gallery/show/")
             .substringBefore("/")
 
-        return listOf(
+        val updatedChapters = listOf(
             SChapter.create().apply {
                 url = "/gallery/show/$comicId/1"
                 name = "Chapter 1"
@@ -151,18 +140,17 @@ abstract class MyHentaiComics : HttpSource() {
                 date_upload = 0L
             },
         )
-    }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
 
     // ============================== Page List ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
         // The comic ID from the request URL: /gallery/show/59109/1
-        val requestUrl = response.request.url.toString()
-        val comicId = requestUrl
+        val comicId = document.location()
             .substringAfter("/gallery/show/")
             .substringBefore("/")
 
@@ -186,8 +174,6 @@ abstract class MyHentaiComics : HttpSource() {
             Page(index, imageUrl = "${imageBase}$paddedNum.$fileExtension".encodeSpaces())
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Helpers =================================
 

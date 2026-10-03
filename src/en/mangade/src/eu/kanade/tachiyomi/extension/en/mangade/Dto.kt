@@ -4,10 +4,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 
 @Serializable
 class PayloadDto<T>(
@@ -51,7 +51,7 @@ class MangaDto(
         }
     }
 
-    fun toSChapterList(dateFormat: SimpleDateFormat): List<SChapter> = newsChapters.map { it.toSChapter(id, slug, dateFormat) }
+    fun toSChapterList(dateFormat: DateTimeFormatter): List<SChapter> = newsChapters.map { it.toSChapter(id, slug, dateFormat) }
 }
 
 @Serializable
@@ -63,11 +63,11 @@ class ChapterDto(
     @SerialName("published_date") private val publishedDate: String? = null,
     @SerialName("chapter_images") private val chapterImages: List<PageDto> = emptyList(),
 ) {
-    fun toSChapter(mangaId: String, mangaSlug: String?, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(mangaId: String, mangaSlug: String?, dateFormat: DateTimeFormatter) = SChapter.create().apply {
         name = this@ChapterDto.name
         chapter_number = this@ChapterDto.chapterNumber?.toFloatOrNull() ?: -1f
         url = "/$mangaSlug/$slug?cid=$id&mid=$mangaId"
-        date_upload = dateFormat.tryParse(publishedDate)
+        date_upload = dateFormat.tryParseDateTime(publishedDate)
     }
 
     fun toPageList(): List<Page> = chapterImages.mapIndexed { index, pageDto ->

@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.all.yellownote
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,33 +10,40 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.format.DateTimeFormatter
 
 @Source
 abstract class YellowNote :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    // img.xchina.io blocks requests that do not look like browser image loads
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
+        val request = chain.request()
+        if (request.url.host == baseUrl.toHttpUrl().host) {
+            chain.proceed(request)
+        } else {
+            chain.proceed(request.newBuilder().header("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*").build())
+        }
+    }
 
     private val intl by lazy {
         Intl(
@@ -48,14 +54,14 @@ abstract class YellowNote :
         )
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.ROOT)
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy.MM.dd")
 
     private val dateRegex = """\d{4}\.\d{2}\.\d{2}""".toRegex()
     private val styleUrlRegex = """background-image\s*:\s*url\('([^']+)'\)""".toRegex()
     private val mediaCountRegex = """\d+P( \+ \d+V)?""".toRegex()
 
     private val mangaSelector = "div.list.photo-list > div.item.photo, div.list.amateur-list > div.item.amateur"
-    private val nextPageSelector = "div.pager:first-of-type > a.pager-next"
+    private val nextPageSelector = "div.pager a.next"
     private val imageSelector = "div.list.photo-items > div.item.photo-image, div.list.amateur-items > div.item.amateur-image"
 
     // ============================== Preferences ==========================
@@ -73,19 +79,15 @@ abstract class YellowNote :
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/photos/sort-hot/$page.html", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/photos/sort-hot/$page.html"))
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/photos/$page.html", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/photos/$page.html"))
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val categorySelector = filters.firstInstance<CategorySelector>()
         val sortSelector = filters.firstInstance<SortSelector>()
         val uriPart = when {
@@ -104,56 +106,65 @@ abstract class YellowNote :
             addPathSegment("$page.html")
         }.build()
 
-        return GET(httpUrl, headers)
+        return parseMangaList(client.get(httpUrl))
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response)
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get(getMangaUrl(manga))
+        val basePageUrl = response.request.url.toString()
+            .removeSuffix(".html")
         val document = response.asJsoup()
-        return SManga.create().apply {
-            val infoCardElement = document.selectFirst("div.info-card.photo-detail")
-                ?: throw Exception("Could not find info card")
 
-            val name = parseInfoByIcon(infoCardElement, "i.fa-address-card")
-                ?: throw Exception("Could not find name")
+        return SMangaUpdate(
+            manga = mangaDetailsParse(manga, document),
+            chapters = chapterListParse(document, basePageUrl),
+        )
+    }
 
-            val mediaCount = parseInfoByIcon(infoCardElement, "i.fa-image")
-                ?: throw Exception("Could not find media count")
+    private fun mangaDetailsParse(manga: SManga, document: Document): SManga = manga.apply {
+        val infoCardElement = document.selectFirst("div.info-card.photo-detail")
+            ?: throw Exception("Could not find info card")
 
-            val no = parseInfoByIcon(infoCardElement, "i.fa-file")?.let { " $it" }.orEmpty()
-            val categories = parseInfosByIcon(infoCardElement, "i.fa-video-camera")?.filter { it != "-" }
-            val filters = parseInfosByIcon(infoCardElement, "i.fa-filter")
-            val tags = parseInfosByIcon(infoCardElement, "i.fa-tags")
+        val name = parseInfoByIcon(infoCardElement, "i.fa-address-card")
+            ?: throw Exception("Could not find name")
 
-            title = "$name$no($mediaCount)"
-            author = infoCardElement.selectFirst("div.item.floating")
-                ?.text()
-                ?: parseInfoByIcon(infoCardElement, "i.fa-circle-user")
+        val mediaCount = parseInfoByIcon(infoCardElement, "i.fa-image")
+            ?: throw Exception("Could not find media count")
 
-            genre = listOfNotNull(categories, filters, tags)
-                .flatten()
-                .takeIf { it.isNotEmpty() }
-                ?.joinToString()
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        }
+        val no = parseInfoByIcon(infoCardElement, "i.fa-file")?.let { " $it" }.orEmpty()
+        val categories = parseInfosByIcon(infoCardElement, "i.fa-video-camera")?.filter { it != "-" }
+        val filters = parseInfosByIcon(infoCardElement, "i.fa-filter")
+        val tags = parseInfosByIcon(infoCardElement, "i.fa-tags")
+
+        title = "$name$no($mediaCount)"
+        author = infoCardElement.selectFirst("div.item.floating")
+            ?.text()
+            ?: parseInfoByIcon(infoCardElement, "i.fa-circle-user")
+
+        genre = listOfNotNull(categories, filters, tags)
+            .flatten()
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString()
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
     // ============================= Chapters ==============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.asJsoup()
+    private fun chapterListParse(doc: Document, basePageUrl: String): List<SChapter> {
         val infoCardElement = doc.selectFirst("div.info-card.photo-detail")!!
         val uploadAt = parseInfoByIcon(infoCardElement, "i.fa-calendar-days")
-            ?.let { dateFormat.tryParse(it) }
+            ?.let { dateFormat.tryParseDate(it) }
             ?: parseUploadDateFromVersionInfo(doc)
             ?: 0L
         val maxPage = doc.select("div.pager:first-of-type a.pager-num").last()?.text()?.toIntOrNull() ?: 1
-        val basePageUrl = response.request.url.toString()
-            .removeSuffix(".html")
 
         return (maxPage downTo 1).map { page ->
             SChapter.create().apply {
@@ -166,8 +177,8 @@ abstract class YellowNote :
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val quality = preferences.getString("XChina::IMAGE_QUALITY", "original") ?: "original"
 
         return document.select(imageSelector)
@@ -185,11 +196,9 @@ abstract class YellowNote :
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filters.createSortSelector(intl),
         Filter.Separator(),
         Filter.Header(intl["filter.header.ignored-when-search"]),
@@ -244,7 +253,7 @@ abstract class YellowNote :
     private fun parseUploadDateFromVersionInfo(doc: Document): Long? {
         for (info in doc.select("div.tab-content > div.info-card div.text")) {
             val date = dateRegex.find(info.text()) ?: continue
-            return dateFormat.tryParse(date.value)
+            return dateFormat.tryParseDate(date.value)
         }
         return null
     }

@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Honeytoon"
-    versionCode = 3
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf("de", "en", "es", "fr", "it", "pt-BR").forEach {
         source {

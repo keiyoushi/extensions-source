@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Read Jujutsu Kaisen Manga Online"
-    versionCode = 3
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangacatalog"
 
     source {

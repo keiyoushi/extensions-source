@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.momonga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -8,49 +7,43 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SManga.Companion.COMPLETED
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class MomonGA : HttpSource() {
+abstract class MomonGA : KeiSource() {
     override val supportsLatest = false
 
     // Chapters
 
-    private val dateFormat = SimpleDateFormat("yyyy年M月d日H時", Locale.ENGLISH)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return listOf(
-            SChapter.create().apply {
-                name = "単一章"
-                url = response.request.url.encodedPath
-                date_upload = dateFormat.tryParse(document.select("#post-time").text())
-            },
-        )
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy年M月d日H時", Locale.ENGLISH)
 
     // LatestUpdate (Not supported)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
-    override fun mangaDetailsParse(response: Response): SManga {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get(baseUrl + manga.url)
+        val chapterUrl = response.request.url.encodedPath
         val document = response.asJsoup()
 
-        return SManga.create().apply {
+        val details = SManga.create().apply {
             document.select("#post-tag > div.post-tag-table").forEach { div ->
                 when (div.selectFirst("div.post-tag-title")!!.text()) {
                     "サークル" -> {
@@ -72,44 +65,47 @@ abstract class MomonGA : HttpSource() {
             thumbnail_url = document.selectFirst("#post-hentai > img")?.absUrl("src")
             status = COMPLETED
         }
+
+        val chapter = SChapter.create().apply {
+            name = "単一章"
+            url = chapterUrl
+            date_upload = dateFormat.tryParseDateTime(document.select("#post-time").text())
+        }
+
+        return SMangaUpdate(details, listOf(chapter))
     }
 
     // Pages
 
-    override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
 
-        document.select("#post-hentai > img").forEachIndexed { index, element ->
-            add(Page(index, imageUrl = element.attr("src")))
+        return document.select("#post-hentai > img").mapIndexed { index, element ->
+            Page(index, imageUrl = element.attr("src"))
         }
     }
 
     // Popular
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val lis = mutableListOf<SManga>()
-        document.select("div.post-list > a").forEach { element ->
-            lis.add(
-                SManga.create().apply {
-                    setUrlWithoutDomain(element.absUrl("href"))
-                    title = element.selectFirst("span")!!.text()
-                    thumbnail_url = element.selectFirst("div.post-list-image > img")?.absUrl("src")
-                },
-            )
+        val mangas = document.select("div.post-list > a").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.absUrl("href"))
+                title = element.selectFirst("span")!!.text()
+                thumbnail_url = element.selectFirst("div.post-list-image > img")?.absUrl("src")
+            }
         }
 
-        return MangasPage(lis, document.selectFirst("div.wp-pagenavi > a.nextpostslink") != null)
+        return MangasPage(mangas, document.selectFirst("div.wp-pagenavi > a.nextpostslink") != null)
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/popularity/", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/popularity/"))
 
     // Search
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder().apply {
             if (query != "" && !query.contains("-")) {
                 addQueryParameter("s", query)
@@ -124,12 +120,12 @@ abstract class MomonGA : HttpSource() {
             urlBuilder.addPathSegments("page/$page")
         }
 
-        return GET(urlBuilder.build().toString(), headers)
+        return parseMangaList(client.get(urlBuilder.build()))
     }
 
     // Filters
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         CategoryGroupFiler(),
     )
 

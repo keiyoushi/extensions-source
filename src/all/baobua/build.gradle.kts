@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "BaoBua"
-    versionCode = 6
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "all"

@@ -5,10 +5,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class DetailsResponse(
@@ -25,6 +25,7 @@ class DetailsResponse(
             volumes.label?.name?.let { add(it) }
             volumes.category?.name?.let { add(it) }
         }.takeIf { it.isNotEmpty() }?.joinToString()
+        status = if (series.status?.isCompletion == true) SManga.COMPLETED else SManga.ONGOING
         thumbnail_url = volumes.imageUrls?.pl
     }
 }
@@ -32,6 +33,12 @@ class DetailsResponse(
 @Serializable
 class Series(
     val title: String,
+    val status: SeriesStatus?,
+)
+
+@Serializable
+class SeriesStatus(
+    @SerialName("is_completion") val isCompletion: Boolean,
 )
 
 @Serializable
@@ -78,6 +85,12 @@ class Category(
 @Serializable
 class ChapterResponse(
     @SerialName("volume_books") val volumeBooks: List<VolumeBook>,
+    val pager: Pager,
+)
+
+@Serializable
+class Pager(
+    @SerialName("total_count") val totalCount: Int,
 )
 
 @Serializable
@@ -91,23 +104,24 @@ class VolumeBook(
     private val purchased: Purchased?,
 ) {
     val isLocked: Boolean
-        get() = purchased == null && freeStreamingUrl == null
+        get() = purchased == null && freeStreamingUrl.isNullOrEmpty()
 
     val isPreview: Boolean
-        get() = isLocked && tachiyomiUrl != null
+        get() = isLocked && !tachiyomiUrl.isNullOrEmpty()
 
-    fun toSChapter(baseUrl: String): SChapter = SChapter.create().apply {
+    fun toSChapter(seriesId: String): SChapter = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
         val preview = if (isPreview) "(Preview) " else ""
-        url = purchased?.streamingUrl ?: freeStreamingUrl?.first() ?: tachiyomiUrl ?: "$baseUrl/$contentId#locked"
+        url = contentId
         name = lock + preview + title
-        date_upload = dateFormat.tryParse(contentPublishDate)
+        date_upload = Instant.tryParse(contentPublishDate)
         chapter_number = volumeNumber?.toFloat() ?: -1f
+        memo = buildJsonObject {
+            put("seriesId", seriesId)
+            val viewerUrl = purchased?.streamingUrl ?: freeStreamingUrl?.firstOrNull() ?: tachiyomiUrl?.takeIf { it.isNotEmpty() }
+            viewerUrl?.let { put("viewerUrl", it) }
+        }
     }
-}
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
 }
 
 @Serializable

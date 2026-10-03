@@ -102,7 +102,7 @@ open class UriPartFilter(name: String, private val options: Array<Pair<String, S
     fun toUriPart() = options[this.state].second
 }
 
-val Filter.Group<Genre>.selected get() = state.filter(Genre::state).map { it.value }
+val Filter.Group<Genre>.selected get() = state.filter(Genre::state).map { it.value }.joinToString("_")
 
 class FormatGenreFilter : Filter.Group<Genre>("Format", formatGenres)
 class ContentGenreFilter : Filter.Group<Genre>("Content", contentGenres)

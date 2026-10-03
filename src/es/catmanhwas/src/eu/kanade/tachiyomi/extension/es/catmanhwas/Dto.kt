@@ -1,13 +1,14 @@
 package eu.kanade.tachiyomi.extension.es.catmanhwas
 
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import java.text.SimpleDateFormat
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class SvelteDataDto(
@@ -45,7 +46,7 @@ class SeriesDto(
     private val name: String,
     private val slug: String,
     @SerialName("cover_url") private val coverUrl: String?,
-    private val genres: List<GenreDto>?,
+    private val genres: List<GenreDto>? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
@@ -56,6 +57,37 @@ class SeriesDto(
 }
 
 @Serializable
+class LatestChaptersDto(
+    val data: List<LatestChapterDto>,
+    val pagination: PaginationDto,
+)
+
+@Serializable
+class LatestChapterDto(
+    private val serie: SeriesDto,
+) {
+    fun toSManga() = serie.toSManga()
+}
+
+@Serializable
+class SeriesPageDto(
+    private val seo: SeriesInfoDto,
+) {
+    fun toSManga() = SManga.create().apply {
+        title = seo.name
+        thumbnail_url = seo.coverUrl
+        description = seo.description
+    }
+}
+
+@Serializable
+class SeriesInfoDto(
+    val name: String,
+    val description: String? = null,
+    @SerialName("cover_url") val coverUrl: String? = null,
+)
+
+@Serializable
 class DetailsDto(
     private val status: String? = null,
     private val type: String? = null,
@@ -64,6 +96,7 @@ class DetailsDto(
     fun getStatus() = when (status) {
         "on-going" -> SManga.ONGOING
         "end" -> SManga.COMPLETED
+        "on-hold" -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 
@@ -79,14 +112,24 @@ class GenreDto(
 )
 
 @Serializable
+class ChapterPageDto(
+    private val chapter: ChapterImagesDto,
+) {
+    fun toPages() = chapter.toPages()
+}
+
+@Serializable
+class ChapterImagesDto(
+    private val images: List<String>,
+) {
+    fun toPages() = images.mapIndexed { index, url -> Page(index, imageUrl = url) }
+}
+
+@Serializable
 class ChapterDataDto(
     val data: List<ChapterDto>,
     val pagination: PaginationDto,
 )
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'").apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
 
 @Serializable
 class ChapterDto(
@@ -101,7 +144,7 @@ class ChapterDto(
             append("Capítulo ${number.toString().removeSuffix(".0")}")
             this@ChapterDto.name?.let { append(": $it") }
         }
-        date_upload = dateFormat.parse(publishedAt)?.time ?: 0L
+        date_upload = Instant.tryParse(publishedAt)
     }
 }
 

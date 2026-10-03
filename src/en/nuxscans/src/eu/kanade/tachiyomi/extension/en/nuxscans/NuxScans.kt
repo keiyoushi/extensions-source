@@ -1,23 +1,20 @@
 package eu.kanade.tachiyomi.extension.en.nuxscans
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class NuxScans : HttpSource() {
-
-    override val supportsLatest = true
+abstract class NuxScans : KeiSource() {
 
     companion object {
         private val JS_REDIRECT_REGEX = Regex("""window\.location\.replace\(['"]([^'"]+)['"]\)""")
@@ -59,17 +56,17 @@ abstract class NuxScans : HttpSource() {
         response
     }
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(bloggerMobileInterceptor) // network interceptor: runs for redirect targets too
-        .addInterceptor(jsRedirectInterceptor)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addNetworkInterceptor(bloggerMobileInterceptor) // network interceptor: runs for redirect targets too
+        addInterceptor(jsRedirectInterceptor)
+    }
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(baseUrl)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private suspend fun parseMangaList(url: String): MangasPage {
+        val document = client.get(url).asJsoup()
 
         val mangas = document.select(".index-post").map { element ->
             SManga.create().apply {
@@ -87,23 +84,26 @@ abstract class NuxScans : HttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
+    override val supportsLatest = false
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/search?q=$query", headers)
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = parseMangaList("$baseUrl/search?q=$query")
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        return SManga.create().apply {
-            title = document.selectFirst("h1.post-title")?.text() ?: ""
+        manga.apply {
+            title = document.selectFirst("h1.post-title")?.text() ?: title
             description = document.selectFirst(".post-details h3:contains(Synopsis) + p")?.text()
             thumbnail_url = document.selectFirst(".post-thumbnail img")?.attr("abs:src")
 
@@ -122,33 +122,28 @@ abstract class NuxScans : HttpSource() {
 
             genre = document.select(".post-tab-genre .post-genre a").joinToString(", ") { it.text() }
         }
-    }
 
-    // ============================== Chapters ==============================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-
-        return document.select(".row-chapters .list-item a").map { a ->
+        val chapterList = document.select(".row-chapters .list-item a").map { a ->
             SChapter.create().apply {
                 // Store the full absolute URL because chapters live on nuxscans.blogspot.com,
-                // not on baseUrl (nuxscans-comics.blogspot.com). pageListRequest below uses
-                // it directly instead of prepending baseUrl.
+                // not on baseUrl (nuxscans-comics.blogspot.com).
                 url = a.attr("abs:href")
                 val nameText = a.text()
                 name = if (nameText.toDoubleOrNull() != null) "Chapter $nameText" else nameText
             }
         }.reversed()
+
+        return SMangaUpdate(manga, chapterList)
     }
 
     // =============================== Pages ================================
 
     // chapter.url is a full absolute URL (may be on nuxscans.blogspot.com, not baseUrl),
     // so we must NOT prepend baseUrl here — use it as-is.
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
+    override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(chapter.url).asJsoup()
 
         return document.select(".post-body img, .holder img").filterNot { img ->
             val src = img.attr("abs:src").lowercase()
@@ -157,6 +152,4 @@ abstract class NuxScans : HttpSource() {
             Page(i, imageUrl = img.attr("abs:src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

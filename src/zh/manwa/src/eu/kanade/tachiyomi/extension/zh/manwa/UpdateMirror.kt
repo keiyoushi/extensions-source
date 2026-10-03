@@ -14,7 +14,6 @@ class UpdateMirror(
     private val baseUrl: String,
     private val preferences: SharedPreferences,
 ) : Interceptor {
-    @Volatile
     private var isUpdated = false
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -38,7 +37,6 @@ class UpdateMirror(
         return failedResponse.getOrThrow()
     }
 
-    @Synchronized
     private fun updateUrl(chain: Interceptor.Chain): Boolean {
         if (isUpdated) return true
 

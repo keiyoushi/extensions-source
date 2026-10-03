@@ -20,7 +20,7 @@ val POPULAR_QUERY = """
 
 val LATEST_QUERY = $$"""
     query NewWorks($after: String) {
-      newWorks2(first: 100, after: $after) {
+      newWorks2(first: 50, after: $after) {
         edges {
           node {
             id
@@ -46,7 +46,6 @@ val SEARCH_QUERY = $$"""
         after: $after
       ) {
         edges {
-          cursor
           node {
             ... on Work {
               id
@@ -104,15 +103,6 @@ val DETAILS_QUERY = $$"""
           tags {
             title
           }
-        }
-      }
-    }
-""".trimIndent()
-
-val CHAPTER_LIST_QUERY = $$"""
-    query ChapterList($id: ID!) {
-      node(id: $id) {
-        ... on Work {
           episodes(first: 1000) {
             edges {
               node {

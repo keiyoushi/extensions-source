@@ -1,31 +1,24 @@
 package eu.kanade.tachiyomi.extension.ja.nikkangecchan
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Headers
 import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 
 @Source
-abstract class Nikkangecchan : HttpSource() {
+abstract class Nikkangecchan : KeiSource() {
 
     override val supportsLatest = false
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", baseUrl)
-
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select(".contentInner > figure").mapNotNull { element ->
             val imgBox = element.selectFirst(".imgBox")
             val detailBox = element.select(".detailBox").lastOrNull()
@@ -43,34 +36,31 @@ abstract class Nikkangecchan : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = super.fetchSearchManga(page, query, filters).map { mangasPage ->
-        val filtered = mangasPage.mangas.filter { it.title.contains(query, ignoreCase = true) }
-        MangasPage(filtered, false)
+    // Does not have search, use complete list (in popular) instead.
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val filtered = getPopularManga(page).mangas.filter { it.title.contains(query, ignoreCase = true) }
+        return MangasPage(filtered, false)
     }
 
-    // Does not have search, use complete list (in popular) instead.
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(page)
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
         val detailBox = document.selectFirst("#comicDetail .detailBox")
             ?: throw Exception("Detail box not found")
 
-        return SManga.create().apply {
+        val details = SManga.create().apply {
             title = detailBox.selectFirst("h3")?.text() ?: ""
             author = detailBox.selectFirst(".author")?.text()
             artist = author
             description = document.selectFirst(".description")?.text()
             status = SManga.ONGOING
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-
-        return document.select(".episodeBox").mapNotNull { element ->
+        val chapterList = document.select(".episodeBox").mapNotNull { element ->
             val episodePage = element.selectFirst(".episode-page") ?: return@mapNotNull null
             val title = element.selectFirst("h4.episodeTitle")?.text() ?: return@mapNotNull null
             val dataTitle = episodePage.attr("data-title").substringBefore("|").trim()
@@ -84,29 +74,17 @@ abstract class Nikkangecchan : HttpSource() {
                 setUrlWithoutDomain(dataSrc.substringBeforeLast("/"))
             }
         }.reversed()
+
+        return SMangaUpdate(details, chapterList)
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(
-        listOf(
-            Page(0, url = chapter.url, imageUrl = "$baseUrl${chapter.url}/image"),
-        ),
+    override suspend fun getPageList(chapter: SChapter): List<Page> = listOf(
+        Page(0, url = chapter.url, imageUrl = "$baseUrl${chapter.url}/image"),
     )
 
-    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Referer", baseUrl + page.url.substringBeforeLast("/"))
+        .build()
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageRequest(page: Page): Request {
-        val imageHeaders = headersBuilder()
-            .set("Referer", baseUrl + page.url.substringBeforeLast("/"))
-            .build()
-
-        return GET(page.imageUrl!!, imageHeaders)
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 }

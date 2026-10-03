@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Sekte Komik"
-    versionCode = 27
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "colorlibanime"
 
     source {
         lang = "id"
-        baseUrl = "https://sektekomik.id"
+        baseUrl = "https://01.sektekomik.id"
     }
 }

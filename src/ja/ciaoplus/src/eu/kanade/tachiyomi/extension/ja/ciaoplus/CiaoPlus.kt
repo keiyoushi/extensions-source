@@ -1,195 +1,178 @@
 package eu.kanade.tachiyomi.extension.ja.ciaoplus
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import okio.ByteString.Companion.encodeUtf8
+import java.security.MessageDigest
 
 @Source
-abstract class CiaoPlus : HttpSource() {
-    override val supportsLatest = true
-
-    private val apiUrl = "https://api.ciao.shogakukan.co.jp"
+abstract class CiaoPlus : KeiSource() {
+    private val apiUrl get() = "https://api.ciao.shogakukan.co.jp"
     private val pageLimit = 25
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
-        .build()
+    override suspend fun getPopularManga(page: Int): MangasPage = getRanking("1", page)
 
-    // Popular
-    override fun popularMangaRequest(page: Int): Request = rankingRequest("1", page)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val rankingResult = response.parseAs<RankingApiResponse>()
-        val titleIds = rankingResult.rankingTitleList.map { it.id.toString().padStart(5, '0') }
-        if (titleIds.isEmpty()) {
-            return MangasPage(emptyList(), false)
-        }
-
-        val hasNextPage = titleIds.size > pageLimit
-        val mangaIdsToFetch = if (hasNextPage) titleIds.dropLast(1) else titleIds
-        val detailsUrl = "$apiUrl/title/list".toHttpUrl().newBuilder()
+    private suspend fun getRanking(rankingId: String, page: Int): MangasPage {
+        val offset = (page - 1) * pageLimit
+        val url = "$apiUrl/ranking/all".toHttpUrl().newBuilder()
             .addQueryParameter("platform", "3")
-            .addQueryParameter("title_id_list", mangaIdsToFetch.joinToString(","))
+            .addQueryParameter("ranking_id", rankingId)
+            .addQueryParameter("offset", offset.toString())
+            .addQueryParameter("limit", "26")
+            .addQueryParameter("is_top", "0")
             .build()
 
-        val detailsResponse = client.newCall(hashedGet(detailsUrl)).execute()
-        val mangas = detailsResponse.parseAs<TitleListResponse>().titleList.map { it.toSManga() }
+        val titleIds = hashedGet(url).parseAs<RankingApiResponse>().rankingTitleList
+            .map { it.id.toString().padStart(5, '0') }
+
+        if (titleIds.isEmpty()) return MangasPage(emptyList(), false)
+
+        val hasNextPage = titleIds.size > pageLimit
+        val detailsUrl = "$apiUrl/title/list".toHttpUrl().newBuilder()
+            .addQueryParameter("platform", "3")
+            .addQueryParameter("title_id_list", titleIds.take(pageLimit).joinToString(","))
+            .build()
+
+        val result = hashedGet(detailsUrl).parseAs<TitleListResponse>()
+        val mangas = result.titleList.map { it.toSManga() }
         return MangasPage(mangas, hasNextPage)
     }
 
-    // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/title/weekly".toHttpUrl().newBuilder()
             .addQueryParameter("platform", "3")
             .build()
-        return hashedGet(url)
-    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<LatestResponse>()
-        val todayIdList = result.weeklyList.first { it.weekdayIndex == result.todayWeekdayIndex }.titleIdList
-        val titleById = result.titleList.associateBy { it.titleId }
-        val mangas = todayIdList.mapNotNull { titleById[it]?.toSManga() }
+        val result = hashedGet(url).parseAs<TitleListResponse>()
+        val mangas = result.titleList
+            .sortedByDescending { it.episodeFreeUpdated }
+            .map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = "$apiUrl/search/title".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
                 .addQueryParameter("limit", "99999")
                 .addQueryParameter("platform", "3")
                 .build()
-            return hashedGet(url)
+
+            return hashedGet(url).toMangasPage()
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
-        return when (filter.type) {
-            FilterType.GENRE -> {
-                val url = "$apiUrl/search/title".toHttpUrl().newBuilder()
-                    .addQueryParameter("platform", "3")
-                    .addQueryParameter("genre_id", filter.id)
-                    .addQueryParameter("limit", "99999")
-                    .build()
-                hashedGet(url)
-            }
-            FilterType.RANKING -> rankingRequest(filter.id, page)
+        if (filter.type == FilterType.RANKING) {
+            return getRanking(filter.id, page)
         }
-    }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.first() == "search") {
-            val mangas = response.parseAs<TitleListResponse>().titleList.map { it.toSManga() }
-            return MangasPage(mangas, false)
-        }
-        return popularMangaParse(response)
-    }
-
-    private fun rankingRequest(rankingId: String, page: Int): Request {
-        val offset = (page - 1) * pageLimit
-        val url = "$apiUrl/ranking/all".toHttpUrl().newBuilder()
+        val url = "$apiUrl/search/title".toHttpUrl().newBuilder()
             .addQueryParameter("platform", "3")
-            .addQueryParameter("ranking_id", rankingId)
-            .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("limit", "51")
-            .addQueryParameter("is_top", "0")
-            .build()
-        return hashedGet(url)
-    }
-
-    // Details
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val titleId = manga.url.substringAfter("/title/")
-        val url = "$apiUrl/title/list".toHttpUrl().newBuilder()
-            .addQueryParameter("platform", "3")
-            .addQueryParameter("title_id_list", titleId)
-            .build()
-        return hashedGet(url)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<DetailResponse>().webTitle.first()
-        val genre = result.genreIdList?.takeIf { it.isNotEmpty() }?.let { fetchGenreNames(it) }
-        return result.toSManga(genre)
-    }
-
-    private fun fetchGenreNames(genreIds: List<Int>): String? {
-        val url = "$apiUrl/genre/list".toHttpUrl().newBuilder()
-            .addQueryParameter("platform", "3")
-            .addQueryParameter("genre_id_list", genreIds.joinToString(","))
+            .addQueryParameter("genre_id", filter.id)
+            .addQueryParameter("limit", "99999")
             .build()
 
-        val genreResponse = client.newCall(hashedGet(url)).execute()
-        return genreResponse.parseAs<GenreListResponse>().genreList?.joinToString { it.genreName }
+        return hashedGet(url).toMangasPage()
     }
 
-    // Chapters
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    private fun Response.toMangasPage(): MangasPage {
+        val result = this.parseAs<TitleListResponse>()
+        val mangas = result.titleList.map { it.toSManga() }
+        return MangasPage(mangas, false)
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val resultIds = response.parseAs<DetailResponse>().webTitle.first()
-        val episodeIds = resultIds.episodeIdList.map { it.toString() }
-        if (episodeIds.isEmpty()) {
-            return emptyList()
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        CategoryFilter(),
+    )
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/comics/title/${manga.url.substringAfterLast("/")}"
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val titleId = manga.url.substringAfterLast("/") // for old url compatibility
+        val title = async {
+            val url = "$apiUrl/title/list".toHttpUrl().newBuilder()
+                .addQueryParameter("platform", "3")
+                .addQueryParameter("title_id_list", titleId)
+                .build()
+            hashedGet(url).parseAs<DetailResponse>().titleList.first()
         }
 
-        val formBody = FormBody.Builder()
-            .add("platform", "3")
-            .add("episode_id_list", episodeIds.joinToString(","))
-            .build()
+        val details = async {
+            if (!fetchDetails) return@async manga
+            val result = title.await()
+            if (result.genreIdList.isNullOrEmpty()) return@async result.toSManga(null)
 
-        val params = (0 until formBody.size).associate { formBody.name(it) to formBody.value(it) }
-        val hash = generateHash(params)
-
-        val postHeaders = headersBuilder()
-            .add("X-Bambi-Hash", hash)
-            .build()
-
-        val apiRequest = POST("$apiUrl/episode/list", postHeaders, formBody)
-        val apiResponse = client.newCall(apiRequest).execute()
-        val result = apiResponse.parseAs<EpisodeListResponse>()
-        return result.episodeList.map { it.toSChapter(resultIds.titleName) }.reversed()
-    }
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    // Pages
-    override fun pageListParse(response: Response): List<Page> {
-        val apiResponse = response.parseAs<ViewerApiResponse>()
-        val seed = apiResponse.scrambleSeed
-        val fragment = if (apiResponse.scrambleVer == 2) "scramble_seed_v2" else "scramble_seed"
-        return apiResponse.pageList.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = "$imageUrl#$fragment=$seed")
+            val url = "$apiUrl/genre/list".toHttpUrl().newBuilder()
+                .addQueryParameter("platform", "3")
+                .addQueryParameter("genre_id_list", result.genreIdList.joinToString(","))
+                .build()
+            val genres = hashedGet(url).parseAs<GenreListResponse>().genreList?.joinToString { it.genreName }
+            result.toSManga(genres)
         }
+
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            val result = title.await()
+            if (result.episodeIdList.isNullOrEmpty()) return@async emptyList()
+
+            val episodeIdList = result.episodeIdList.joinToString(",")
+            val body = FormBody.Builder()
+                .add("platform", "3")
+                .add("episode_id_list", episodeIdList)
+                .build()
+
+            val params = mapOf("platform" to "3", "episode_id_list" to episodeIdList)
+            client.post("$apiUrl/episode/list", hashedHeaders(params), body)
+                .parseAs<EpisodeListResponse>().episodeList
+                .map { it.toSChapter(result.titleName) }
+                .reversed()
+        }
+
+        SMangaUpdate(
+            details.await(),
+            chapterList.await(),
+        )
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val episodeId = chapter.url.substringAfter("episode/")
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/comics/title/${chapter.memo["titleId"]!!.string}/episode/${chapter.url}"
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$apiUrl/web/episode/viewer".toHttpUrl().newBuilder()
             .addQueryParameter("platform", "3")
-            .addQueryParameter("episode_id", episodeId)
+            .addQueryParameter("episode_id", chapter.url)
             .build()
-        return hashedGet(url)
+
+        val result = hashedGet(url).parseAs<ViewerApiResponse>()
+        val fragment = if (result.scrambleVer == 2) "scramble_seed_v2" else "scramble_seed"
+        return result.pageList.mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = "$imageUrl#$fragment=${result.scrambleSeed}")
+        }
     }
 
     private fun generateHash(params: Map<String, String>): String {
@@ -197,29 +180,24 @@ abstract class CiaoPlus : HttpSource() {
             getHashedParam(key, value)
         }
         val joinedParams = paramStrings.joinToString(",")
-        val hash1 = joinedParams.encodeUtf8().sha256().hex()
-        return hash1.encodeUtf8().sha512().hex()
+        val hash1 = joinedParams.hash("SHA-256")
+        return hash1.hash("SHA-512")
     }
 
     private fun getHashedParam(key: String, value: String): String {
-        val keyHash = key.encodeUtf8().sha256().hex()
-        val valueHash = value.encodeUtf8().sha512().hex()
+        val keyHash = key.hash("SHA-256")
+        val valueHash = value.hash("SHA-512")
         return "${keyHash}_$valueHash"
     }
 
-    private fun hashedGet(url: HttpUrl): Request {
+    private fun String.hash(algorithm: String): String = MessageDigest.getInstance(algorithm).digest(toByteArray()).toHexString()
+
+    private fun hashedHeaders(params: Map<String, String>): Headers = headersBuilder()
+        .set("X-Bambi-Hash", generateHash(params))
+        .build()
+
+    private suspend fun hashedGet(url: HttpUrl): Response {
         val queryParams = url.queryParameterNames.associateWith { url.queryParameter(it)!! }
-        val hash = generateHash(queryParams)
-        val newHeaders = headersBuilder()
-            .add("X-Bambi-Hash", hash)
-            .build()
-        return GET(url, newHeaders)
+        return client.get(url, hashedHeaders(queryParams))
     }
-
-    override fun getFilterList() = FilterList(
-        CategoryFilter(),
-    )
-
-    // Unsupported
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.honkaiimpact
 
 import eu.kanade.tachiyomi.source.model.SChapter
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 
 @Serializable
 class Dto(
@@ -19,7 +19,7 @@ class Dto(
     fun toSChapter() = SChapter.create().apply {
         name = title
         url = "/book/$bookId/${chapterId.toInt()}"
-        date_upload = dateFormat.tryParse(timestamp)
+        date_upload = dateFormat.tryParseDateTime(timestamp)
         chapter_number = chapterId
     }
 }

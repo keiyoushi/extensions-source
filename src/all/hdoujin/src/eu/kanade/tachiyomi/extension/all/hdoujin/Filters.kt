@@ -6,8 +6,7 @@ fun getFilters(): FilterList = FilterList(
     SelectFilter("Sort by", getSortsList),
     CategoryFilter("Categories"),
     Filter.Separator(),
-    TagType("Tags Include Type", "i"),
-    TagType("Tags Exclude Type", "e"),
+    TagType("Tags Include Type"),
     Filter.Separator(),
     Filter.Header("Separate tags with commas (,)"),
     Filter.Header("Prepend with dash (-) to exclude"),
@@ -41,7 +40,7 @@ internal class CategoryFilter(name: String) :
         ).map { CheckBoxFilter(it.first, it.second, true) },
     )
 
-internal class TagType(title: String, val type: String) :
+internal class TagType(title: String) :
     Filter.Select<String>(
         title,
         arrayOf("AND", "OR"),

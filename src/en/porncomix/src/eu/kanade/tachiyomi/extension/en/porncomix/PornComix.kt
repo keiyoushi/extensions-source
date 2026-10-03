@@ -1,42 +1,34 @@
 package eu.kanade.tachiyomi.extension.en.porncomix
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 
 @Source
-abstract class PornComix : HttpSource() {
+abstract class PornComix : KeiSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
     // ======================== Popular ========================
 
-    override fun popularMangaRequest(page: Int): Request = if (page == 1) {
-        GET("$baseUrl/multporn-net/", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = if (page == 1) {
+        parseMangaList("$baseUrl/multporn-net/".toHttpUrl())
     } else {
-        GET("$baseUrl/multporn-net/page/$page/", headers)
+        parseMangaList("$baseUrl/multporn-net/page/$page/".toHttpUrl())
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private suspend fun parseMangaList(url: HttpUrl): MangasPage {
+        val document = client.get(url).asJsoup()
         val mangas = document.select("#loops-wrapper article").map { element ->
             SManga.create().apply {
                 val anchor = element.selectFirst("h2.post-title a")!!
@@ -56,14 +48,12 @@ abstract class PornComix : HttpSource() {
 
     // ======================== Latest (disabled) ========================
 
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ======================== Search ========================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isBlank()) return popularMangaRequest(page)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isBlank()) return getPopularManga(page)
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (page > 1) {
@@ -73,16 +63,34 @@ abstract class PornComix : HttpSource() {
             addQueryParameter("s", query.trim())
         }.build()
 
-        return GET(url, headers)
+        return parseMangaList(url)
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ======================== Details ========================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val manga = SManga.create()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = if (fetchDetails) fetchMangaDetails(manga) else manga
+        val chapterList = if (fetchChapters) {
+            listOf(
+                SChapter.create().apply {
+                    name = "CHAPTER"
+                    setUrlWithoutDomain(manga.url)
+                },
+            )
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(details, chapterList)
+    }
+
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
         manga.title = document.selectFirst("h1.post-title, h1.entry-title")!!.text()
 
@@ -112,22 +120,10 @@ abstract class PornComix : HttpSource() {
         return manga
     }
 
-    // ======================== Chapters ========================
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapter = SChapter.create().apply {
-            name = "CHAPTER"
-            setUrlWithoutDomain(manga.url)
-        }
-        return Observable.just(listOf(chapter))
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used")
-
     // ======================== Pages ========================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val pswp = document.select(".pswp-gallery__item")
 
         if (pswp.isNotEmpty()) {
@@ -147,10 +143,4 @@ abstract class PornComix : HttpSource() {
             Page(index, imageUrl = url)
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
-
-    // ======================== Filters ========================
-
-    override fun getFilterList() = FilterList()
 }

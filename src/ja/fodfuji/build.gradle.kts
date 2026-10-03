@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "FOD"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

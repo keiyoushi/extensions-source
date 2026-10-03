@@ -6,18 +6,13 @@ plugins {
 
 keiyoushi {
     name = "LectorManga.lat"
-    versionCode = 4
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
 
     source {
         lang = "es"
-        baseUrl = "https://lectormangass.com"
+        baseUrl = "https://lector-mangas.lat"
+        versionId = 2
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
 }

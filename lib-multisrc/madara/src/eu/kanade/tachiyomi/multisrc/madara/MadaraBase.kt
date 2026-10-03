@@ -137,7 +137,11 @@ abstract class MadaraBase : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val document = client.get(url).asJsoup()
-        val id = document.mangaId() ?: return null
+        val id = if (supportsPostId) {
+            document.mangaId() ?: return null
+        } else {
+            ""
+        }
         return parseDetails(document, id, preserveUrl = null).apply { initialized = true }
     }
 
@@ -152,7 +156,7 @@ abstract class MadaraBase : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val id = mangaId(manga)
+        val id = if (supportsPostId) mangaId(manga) else ""
         val path = memoPath(manga)
         val endpointCanUseMemo = chapterMode != ChapterMode.MangaPage && id != null && path != null
         if (fetchChapters && endpointCanUseMemo && !fetchDetails) {
@@ -337,13 +341,7 @@ abstract class MadaraBase : KeiSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        if (chapter.url.contains('/')) {
-            if (supportsPostId) {
-                error("Refresh the chapter list.")
-            } else {
-                return super.getChapterUrl(chapter)
-            }
-        }
+        if (chapter.url.contains('/')) error("Refresh the chapter list.")
         val mangaPath = chapter.memo["mangaPath"]?.jsonPrimitive?.content
             ?: error("Refresh the chapter list.")
         return "$baseUrl${mangaPath.trimEnd('/')}/${chapter.url}/"
@@ -506,10 +504,11 @@ abstract class MadaraBase : KeiSource() {
         "in corso", "in arrivo", "مستمرة", "مستمر", "en curso", "emision", "curso",
         "en marcha", "publicandose", "publicándose", "en emision", "连载中", "đang làm",
         "em postagem", "devam eden", "em progresso", "atualizações semanais", "виходить",
+        "đang ra",
     )
     protected open val hiatusStatus = arrayOf(
         "on hold", "hiatus", "pausado", "en espera", "durduruldu", "beklemede",
-        "đang chờ", "متوقف", "en pause", "заморожено", "en attente",
+        "đang chờ", "متوقف", "en pause", "заморожено", "en attente", "tạm dừng",
     )
     protected open val cancelledStatus = arrayOf(
         "canceled", "cancelled", "cancelado", "iptal edildi", "đã hủy", "ملغي",

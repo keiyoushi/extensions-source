@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Traducciones Moonlight"
-    versionCode = 46
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "moonlighttl"
 
     source {

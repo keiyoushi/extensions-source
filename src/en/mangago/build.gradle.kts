@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Mangago"
-    versionCode = 40
+    versionCode = 41
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

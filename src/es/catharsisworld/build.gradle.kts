@@ -6,16 +6,19 @@ plugins {
 
 keiyoushi {
     name = "Catharsis World"
-    versionCode = 14
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
 
     source {
         lang = "es"
         baseUrl {
-            custom("https://catharsisworld.dig-it.info")
+            custom("https://newcatharsis.dig-it.info")
         }
-        versionId = 2
+        versionId = 3
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

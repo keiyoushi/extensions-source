@@ -8,9 +8,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class AzuretoonsLoginRequestDto(
@@ -67,19 +65,13 @@ fun AzuretoonsMangaDto.toSManga(): SManga {
 }
 
 fun AzuretoonsChapterDto.toSChapter(slug: String): SChapter = SChapter.create().apply {
-    name = this@toSChapter.title!!
+    name = title?.takeIf { it.isNotBlank() } ?: "Capítulo ${chapterNumber.toString().removeSuffix(".0")}"
     chapter_number = chapterNumber
     url = "/obra/$slug/capitulo/$chapterNumber"
-    date_upload = dateFormat.tryParse(createdAt)
+    date_upload = Instant.tryParse(createdAt)
 }
 
 fun AzuretoonsChapterDetailDto.toPageList(): List<Page> = images
     .mapIndexed { idx, imageUrl ->
         Page(idx, imageUrl = imageUrl)
     }
-
-private val dateFormat by lazy {
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-}

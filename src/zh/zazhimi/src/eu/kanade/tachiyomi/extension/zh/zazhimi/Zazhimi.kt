@@ -1,55 +1,52 @@
 package eu.kanade.tachiyomi.extension.zh.zazhimi
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import java.lang.IllegalStateException
 
 @Source
-abstract class Zazhimi : HttpSource() {
+abstract class Zazhimi : KeiSource() {
 
     private val apiUrl = "https://android2026.zazhimi.net/api"
 
     override val supportsLatest = false
 
-    override fun headersBuilder() = super.headersBuilder().set("User-Agent", "ZaZhiMi_6.0.0")
+    override fun Headers.Builder.configureHeaders() = set("User-Agent", "ZaZhiMi_6.0.0")
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/index.php?p=$page&s=20", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<IndexResponse>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.get("$apiUrl/index.php?p=$page&s=20").parseAs<IndexResponse>()
         val mangas = result.new.map(NewItem::toSManga)
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
     // Search
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("筛选条件（搜索关键字时无效）"),
         TypeFilter(),
         BrandFilter(),
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = apiUrl.toHttpUrl().newBuilder()
         if (query.isEmpty()) {
             url.addPathSegment("lists.php")
@@ -59,59 +56,41 @@ abstract class Zazhimi : HttpSource() {
             url.addPathSegment("search.php").addQueryParameter("k", query)
         }
         url.addQueryParameter("p", page.toString()).addQueryParameter("s", "20")
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SearchResponse>()
+        val result = client.get(url.build()).parseAs<SearchResponse>()
         return MangasPage(result.magazine.map(SearchItem::toSManga), true)
     }
 
-    // Manga Detail Page
+    // Manga Detail Page / Chapters Page
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(apiUrl + manga.url, headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<ShowResponse>()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val result = client.get(apiUrl + manga.url).parseAs<ShowResponse>()
         if (result.content.isEmpty()) throw IllegalStateException("内容解析为空！")
         val item = result.content[0]
-        return SManga.create().apply {
+        val details = SManga.create().apply {
             title = item.magName
             author = item.magName.split(" ")[0]
             thumbnail_url = item.magPic
             url = "/show.php?a=${item.magId}"
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
-    }
-
-    // Manga Detail Page / Chapters Page (Separate)
-
-    override fun chapterListRequest(manga: SManga) = GET(apiUrl + manga.url, headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<ShowResponse>()
-        if (result.content.isEmpty()) return emptyList()
-        val item = result.content[0]
         val chapter = SChapter.create().apply {
             url = "/show.php?a=${item.magId}"
-            name = item.magName
+            // Mihon strips the manga title from chapter names, which left this one blank
+            name = "全本"
             chapter_number = 1F
         }
-        return listOf(chapter)
+        return SMangaUpdate(details, listOf(chapter))
     }
 
     // Manga View Page
 
-    override fun pageListRequest(chapter: SChapter) = GET(apiUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<ShowResponse>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val result = client.get(apiUrl + chapter.url).parseAs<ShowResponse>()
         return result.content.mapIndexed { i, it -> it.toPage(i) }
     }
-
-    // Image
-
-    // override fun imageRequest(page: Page) = GET(page.url, headers)
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

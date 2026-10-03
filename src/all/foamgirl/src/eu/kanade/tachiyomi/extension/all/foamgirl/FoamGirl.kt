@@ -1,41 +1,34 @@
 package eu.kanade.tachiyomi.extension.all.foamgirl
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.ParseException
-import java.text.SimpleDateFormat
+import org.jsoup.nodes.Document
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class FoamGirl : HttpSource() {
+abstract class FoamGirl : KeiSource() {
     override val supportsLatest = false
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     // ============================== Popular ======================================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/page/$page", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/page/$page").asJsoup())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select(".update_area .i_list").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.select("img").attr("data-original")
@@ -50,48 +43,47 @@ abstract class FoamGirl : HttpSource() {
 
     // ============================== Latest ======================================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ======================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
-        baseUrl.toHttpUrl().newBuilder().apply {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("page")
             addPathSegment("$page")
             addQueryParameter("post_type", "post")
             addQueryParameter("s", query)
-        }.build(),
-        headers,
-    )
+        }.build()
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+        return parseMangaList(client.get(url).asJsoup())
+    }
 
     // ============================== Details ======================================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val chapter = SChapter.create().apply {
+            setUrlWithoutDomain(document.select("link[rel=canonical]").attr("abs:href"))
+            chapter_number = 0F
+            name = "GALLERY"
+            date_upload = DATE_FORMAT.tryParseDate(document.select("span.image-info-time").text().substring(1))
+        }
 
-    // ============================== Chapters ======================================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return listOf(
-            SChapter.create().apply {
-                setUrlWithoutDomain(document.select("link[rel=canonical]").attr("abs:href"))
-                chapter_number = 0F
-                name = "GALLERY"
-                date_upload = getDate(document.select("span.image-info-time").text().substring(1))
-            },
-        )
+        return SMangaUpdate(manga, listOf(chapter))
     }
 
     // ============================== Pages ======================================
 
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val allPages = mutableListOf<Page>()
-        var document = response.asJsoup()
+        var document = client.get(getChapterUrl(chapter)).asJsoup()
         var pageIndex = 0
 
         while (true) {
@@ -104,26 +96,14 @@ abstract class FoamGirl : HttpSource() {
                 ?.takeIf { HAS_NEXT_PAGE_REGEX in it }
                 ?: break
 
-            document = client.newCall(GET(nextPageUrl, headers)).execute().asJsoup()
+            document = client.get(nextPageUrl).asJsoup()
         }
 
         return allPages
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Helpers ======================================
-
-    private fun getDate(str: String): Long = try {
-        DATE_FORMAT.parse(str)?.time ?: 0L
-    } catch (_: ParseException) {
-        0L
-    }
-
     companion object {
         private val HAS_NEXT_PAGE_REGEX = """(\d+_\d+)""".toRegex()
-        private val DATE_FORMAT by lazy {
-            SimpleDateFormat("yyyy.M.d", Locale.ENGLISH)
-        }
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy.M.d", Locale.ENGLISH)
     }
 }

@@ -4,39 +4,44 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.buffer
 import okio.cipherSource
-import rx.Observable
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class Manwa :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest: Boolean = true
     private val preferences: SharedPreferences = getPreferences()
+
+    // mirror list is fetched at runtime (see UpdateMirror), so the DSL mirrors mode can't be used
     override val baseUrl: String = getTargetUrl()
 
     private fun getTargetUrl(): String {
@@ -69,18 +74,13 @@ abstract class Manwa :
 
     private val imageSource: Interceptor = ImageSource(baseUrl, preferences)
 
-    override val client: OkHttpClient =
-        network.client.newBuilder()
-            .addNetworkInterceptor(rewriteOctetStream)
-            .addInterceptor(imageSource)
-            .addInterceptor(updateMirror)
-            .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(rewriteOctetStream)
+        .addInterceptor(imageSource)
+        .addInterceptor(updateMirror)
 
     // Popular
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/rank", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/rank").asJsoup()
         val mangas = document.select("#rankList_2 > a").map { element ->
             SManga.create().apply {
                 title = element.attr("title")
@@ -92,36 +92,29 @@ abstract class Manwa :
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/getUpdate?page=${page * 15 - 15}&date=", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val responseData = response.parseAs<LatestUpdatesDto>()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val currentOffset = page * 15 - 15
+        val responseData = client.get("$baseUrl/getUpdate?page=$currentOffset&date=").parseAs<LatestUpdatesDto>()
 
         // Get image host
-        val resp = client.newCall(
-            GET(
-                "$baseUrl/update${preferences.getString(IMAGE_HOST_KEY, "")}",
-                headers,
-            ),
-        ).execute()
-        val document = resp.asJsoup()
+        val document = client.get("$baseUrl/update${preferences.getString(IMAGE_HOST_KEY, "")}").asJsoup()
         val imgHost = document.selectFirst(".manga-list-2-cover-img")?.attr(":src")?.drop(1)?.substringBefore("'") ?: ""
 
         val mangas = responseData.books.map { it.toSManga(imgHost) }
-        val currentOffset = response.request.url.queryParameter("page")?.toIntOrNull() ?: 0
 
         return MangasPage(mangas, responseData.total > currentOffset + 15)
     }
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val isBookList = query == "" || query.contains("-")
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (query != "" && !query.contains("-")) {
+            if (!isBookList) {
                 encodedPath("/search")
                 addQueryParameter("keyword", query)
             } else {
                 encodedPath("/booklist")
-                (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+                filters.forEach { filter ->
                     when (filter) {
                         is UriPartFilter -> filter.setParamPair(this)
                         is TagCheckBoxFilterGroup -> filter.setParamPair(this)
@@ -132,39 +125,24 @@ abstract class Manwa :
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
-        }.build().toString()
+        }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = ArrayList<SManga>()
-        if (response.request.url.encodedPath == "/booklist") {
-            if (!isUpdateTag) {
-                updateTagList(document)
-            }
-
-            val lis = document.select("ul.manga-list-2 > li")
-            lis.forEach { li ->
-                mangas.add(
-                    SManga.create().apply {
-                        title = li.selectFirst("p.manga-list-2-title")?.text() ?: ""
-                        setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
-                        thumbnail_url = li.selectFirst("img")?.attr("abs:src")
-                    },
-                )
+        val document = client.get(url).asJsoup()
+        val mangas = if (isBookList) {
+            document.select("ul.manga-list-2 > li").map { li ->
+                SManga.create().apply {
+                    title = li.selectFirst("p.manga-list-2-title")?.text() ?: ""
+                    setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
+                    thumbnail_url = li.selectFirst("img")?.attr("abs:src")
+                }
             }
         } else {
-            val lis = document.select("ul.book-list > li")
-            lis.forEach { li ->
-                mangas.add(
-                    SManga.create().apply {
-                        title = li.selectFirst("p.book-list-info-title")?.text() ?: ""
-                        setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
-                        thumbnail_url = li.selectFirst("img")?.attr("abs:data-original")
-                    },
-                )
+            document.select("ul.book-list > li").map { li ->
+                SManga.create().apply {
+                    title = li.selectFirst("p.book-list-info-title")?.text() ?: ""
+                    setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
+                    thumbnail_url = li.selectFirst("img")?.attr("abs:data-original")
+                }
             }
         }
         val next = document.select("ul.pagination2 > li").lastOrNull()?.text() == "下一页"
@@ -172,34 +150,16 @@ abstract class Manwa :
         return MangasPage(mangas, next)
     }
 
-    @Volatile
-    private var isUpdateTag = false
-
-    @Synchronized
-    private fun updateTagList(doc: org.jsoup.nodes.Document) {
-        if (isUpdateTag) {
-            return
-        }
-
-        val tags = LinkedHashMap<String, String>()
-
-        val lis = doc.select("div.manga-filter-row.tags > a")
-        lis.forEach { li ->
-            tags[li.text()] = li.attr("data-val")
-        }
-        if (tags.isEmpty()) {
-            tags["全部"] = ""
-        }
-
-        val tagsJ = tags.toJsonString()
-        isUpdateTag = true
-        preferences.edit().putString(APP_TAG_LIST_KEY, tagsJ).apply()
-    }
-
-    // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    // Details & Chapters
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val details = SManga.create().apply {
+            url = manga.url
             title = document.selectFirst(".detail-main-info-title")?.text() ?: ""
             thumbnail_url = document.selectFirst("div.detail-main-cover > img")?.attr("abs:data-original")
             author = document.select("p.detail-main-info-author > span.detail-main-info-value > a").text()
@@ -212,55 +172,54 @@ abstract class Manwa :
             genre = document.select("div.detail-main-info-class > a.info-tag").eachText().joinToString(", ")
             description = document.selectFirst("#detail > p.detail-desc")?.text()
         }
-    }
-
-    // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("ul#detail-list-select > li > a").map { element ->
+        val chapterList = document.select("ul#detail-list-select > li > a").map { element ->
             SChapter.create().apply {
                 url = element.attr("href")
                 name = element.text()
             }
         }.reversed()
-    }
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        client.newCall(GET("$baseUrl/static/images/pv.gif", headers)).execute()
-        return super.fetchPageList(chapter)
+        // The site only shows the last update date of the whole manga, so it's put on the newest chapter
+        chapterList.firstOrNull()?.date_upload = DATE_FORMAT.tryParseDate(
+            document.selectFirst(".detail-list-title-3")?.text()?.substringBefore("更新"),
+        )
+        return SMangaUpdate(details, chapterList)
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request = GET(
-        "$baseUrl${chapter.url}${preferences.getString(IMAGE_HOST_KEY, "")}",
-        headers,
-    )
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        client.get("$baseUrl/static/images/pv.gif", ensureSuccess = false).close()
+        val document = client.get("$baseUrl${chapter.url}${preferences.getString(IMAGE_HOST_KEY, "")}").asJsoup()
         return document.select("#cp_img > div.img-content > img[data-r-src]").mapIndexed { index, it ->
             Page(index, imageUrl = it.attr("abs:data-r-src"))
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
-
     // Filters
-    override fun getFilterList() = FilterList(
-        EndFilter(),
-        CGenderFilter(),
-        AreaFilter(),
-        SortFilter(),
-        TagCheckBoxFilterGroup(
-            "标签(懒更新)",
-            getFilterTags(),
-        ),
-    )
+    override val supportsFilterFetching get() = true
 
-    private fun getFilterTags(): LinkedHashMap<String, String> = try {
-        preferences.getString(APP_TAG_LIST_KEY, "")!!.parseAs<LinkedHashMap<String, String>>()
-    } catch (_: Exception) {
-        linkedMapOf(Pair("全部", ""))
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/booklist").asJsoup()
+        val tags = LinkedHashMap<String, String>()
+        document.select("div.manga-filter-row.tags > a").forEach { a ->
+            tags[a.text()] = a.attr("data-val")
+        }
+        if (tags.isEmpty()) {
+            tags["全部"] = ""
+        }
+        return tags.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = mutableListOf<Filter<*>>(
+            EndFilter(),
+            CGenderFilter(),
+            AreaFilter(),
+            SortFilter(),
+        )
+        data?.parseAs<LinkedHashMap<String, String>>()?.let {
+            filters.add(TagCheckBoxFilterGroup("标签", it))
+        }
+        return FilterList(filters)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -330,6 +289,7 @@ abstract class Manwa :
                 "https://manwasy.cc",
             )
         private const val IMAGE_HOST_KEY = "IMG_HOST"
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-M-d", Locale.ROOT)
     }
 }
 
@@ -337,4 +297,3 @@ const val APP_IMAGE_SOURCE_LIST_KEY = "APP_IMAGE_SOURCE_LIST_KEY"
 const val APP_REDIRECT_URL_KEY = "APP_REDIRECT_URL_KEY"
 const val APP_URL_LIST_PREF_KEY = "APP_URL_LIST_PREF_KEY"
 const val APP_CUSTOMIZATION_URL_KEY = "APP_CUSTOMIZATION_URL_KEY"
-const val APP_TAG_LIST_KEY = "APP_TAG_LIST_KEY"

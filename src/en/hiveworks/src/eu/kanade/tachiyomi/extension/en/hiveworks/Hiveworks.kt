@@ -1,26 +1,26 @@
 package eu.kanade.tachiyomi.extension.en.hiveworks
 
 import android.net.Uri
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
-import okhttp3.Call
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
 
@@ -29,26 +29,20 @@ import kotlin.time.Duration.Companion.minutes
  * own separate extension at eu.kanade.tachiyomi.extension.en.saturdaymorningbreakfastcomics
  */
 @Source
-abstract class Hiveworks : HttpSource() {
-
-    // Info
-
-    override val supportsLatest = true
+abstract class Hiveworks : KeiSource() {
 
     // Client
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(1.minutes)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(1.minutes)
         .readTimeout(1.minutes)
         .retryOnConnectionFailure(true)
         .followRedirects(true)
-        .build()
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = comicBlocksParse(client.get(baseUrl))
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun comicBlocksParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
         val mangas = document.select(POPULAR_MANGA_SELECTOR).filterNot {
@@ -63,55 +57,41 @@ abstract class Hiveworks : HttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val day = SimpleDateFormat("EEEE", Locale.US).format(Date()).lowercase(Locale.US)
-        return GET("$baseUrl/home/update-day/$day", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val day = LocalDate.now().dayOfWeek.name.lowercase(Locale.US)
+        return comicBlocksParse(client.get("$baseUrl/home/update-day/$day"))
     }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
     // Source's website doesn't appear to have a search function; so searching locally
 
-    private lateinit var searchQuery: String
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val uri = Uri.parse(baseUrl).buildUpon()
         if (filters.isNotEmpty()) uri.appendPath("home")
         // Append uri filters
         filters.forEach { filter ->
             when (filter) {
                 is UriFilter -> filter.addToUri(uri)
-                is OriginalsFilter -> if (filter.state) return GET("$baseUrl/originals", headers)
-                is KidsFilter -> if (filter.state) return GET("$baseUrl/kids", headers)
-                is CompletedFilter -> if (filter.state) return GET("$baseUrl/completed", headers)
-                is HiatusFilter -> if (filter.state) return GET("$baseUrl/hiatus", headers)
+                is OriginalsFilter -> if (filter.state) return searchList("$baseUrl/originals", transform = ::searchOriginalMangaFromElement)
+                is KidsFilter -> if (filter.state) return searchList("$baseUrl/kids")
+                is CompletedFilter -> if (filter.state) return searchList("$baseUrl/completed")
+                is HiatusFilter -> if (filter.state) return searchList("$baseUrl/hiatus")
                 else -> { /*Do nothing*/ }
             }
         }
-        if (query.isNotEmpty()) {
-            searchQuery = query
-            uri.fragment("localSearch")
-        }
-        return GET(uri.toString(), headers)
+        return searchList(uri.toString(), query)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val url = response.request.url.toString()
-        val document = response.asJsoup()
+    private suspend fun searchList(
+        url: String,
+        query: String = "",
+        transform: (Element) -> SManga = ::mangaFromElement,
+    ): MangasPage {
+        val document = client.get(url).asJsoup()
 
-        val selectManga = document.select(SEARCH_MANGA_SELECTOR).toList()
-        val mangas = when {
-            url.endsWith("localSearch") -> {
-                selectManga.filter { it.text().contains(searchQuery, true) }.map { mangaFromElement(it) }
-            }
-            url.contains("originals") -> {
-                selectManga.map { searchOriginalMangaFromElement(it) }
-            }
-            else -> {
-                selectManga.map { mangaFromElement(it) }
-            }
-        }
+        val mangas = document.select(SEARCH_MANGA_SELECTOR)
+            .filter { query.isEmpty() || it.text().contains(query, true) }
+            .map(transform)
 
         return MangasPage(mangas, false)
     }
@@ -139,43 +119,36 @@ abstract class Hiveworks : HttpSource() {
         return manga
     }
 
+    override fun getMangaUrl(manga: SManga): String = manga.url
+
+    override fun getChapterUrl(chapter: SChapter): String = chapter.url
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
+        SMangaUpdate(details.await(), chapterList.await())
+    }
+
     // Details
     // Fetches details by calling home page again and using the existing url to find the correct comic
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val url = manga.url
-        return client.newCall(GET(baseUrl, headers)) // Bypasses mangaDetailsRequest
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response, url).apply { initialized = true }
-            }
-    }
-
-    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers) // Used to open proper page in webview
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    private fun mangaDetailsParse(response: Response, url: String): SManga {
-        val document = response.asJsoup()
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val document = getWithErrors(baseUrl).asJsoup()
         return document.select(POPULAR_MANGA_SELECTOR)
-            .firstOrNull { url == it.select("a.comiclink").first()!!.attr("abs:href") }
-            ?.let { mangaFromElement(it) } ?: SManga.create()
+            .firstOrNull { manga.url == it.select("a.comiclink").first()!!.attr("abs:href") }
+            ?.let { mangaFromElement(it) } ?: manga
     }
 
     // Chapters
 
-    // Included to call custom error codes
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = if (manga.status != SManga.LICENSED) {
-        client.newCall(chapterListRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response)
-            }
-    } else {
-        Observable.error(Exception("Licensed - No chapters to show"))
-    }
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        if (manga.status == SManga.LICENSED) throw Exception("Licensed - No chapters to show")
 
-    override fun chapterListRequest(manga: SManga): Request {
         val uri = Uri.parse(manga.url).buildUpon()
         when {
             "sssscomic" in uri.toString() -> uri.appendQueryParameter("id", "archive")
@@ -190,10 +163,10 @@ abstract class Hiveworks : HttpSource() {
                 uri.appendPath("archive")
             }
         }
-        return GET(uri.toString(), headers)
+        return chapterListParse(getWithErrors(uri.toString()))
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private fun chapterListParse(response: Response): List<SChapter> {
         val url = response.request.url.toString()
         when {
             "witchycomic" in url -> return witchyChapterListParse(response)
@@ -218,15 +191,14 @@ abstract class Hiveworks : HttpSource() {
     private fun createChapter(element: Element, baseUrl: String?) = SChapter.create().apply {
         name = element.text().substringAfter("-").trim()
         url = baseUrl + element.attr("value")
-        date_upload = DATE_FORMATTER.tryParse(element.text().substringBefore("-").trim())
+        date_upload = DATE_FORMATTER.tryParseDate(element.text().substringBefore("-").trim())
     }
 
     // Pages
 
-    override fun pageListRequest(chapter: SChapter) = GET(chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val url = response.request.url.toString()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(chapter.url)
+        val url = response.request.url
         val document = response.asJsoup()
         val pages = mutableListOf<Page>()
 
@@ -236,9 +208,9 @@ abstract class Hiveworks : HttpSource() {
 
         // Site specific pages can be added here
         when {
-            "sssscomic" in url -> {
+            "sssscomic" in url.toString() -> {
                 val urlPath = document.select("img.comicnormal").attr("src")
-                val urlimg = response.request.url.resolve("../../$urlPath").toString()
+                val urlimg = url.resolve("../../$urlPath").toString()
                 pages.add(Page(pages.size, imageUrl = urlimg))
             }
             else -> { /*Do Nothing*/ }
@@ -247,11 +219,9 @@ abstract class Hiveworks : HttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
     // Filters
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Only one filter can be used at a time"),
         Filter.Separator(),
         UpdateDay(),
@@ -278,7 +248,7 @@ abstract class Hiveworks : HttpSource() {
                     chapter_number = chapterNumber.toFloat()
                     name = "#$chapterNumber ${it.select("div.archive-title").text()} (${it.select(".archive-game").text()})"
                     url = it.select("a").attr("abs:href")
-                    date_upload = AWKWARDZOMBIE_DATE_FORMAT.tryParse(it.select(".archive-date").text().substringAfter(", "))
+                    date_upload = AWKWARDZOMBIE_DATE_FORMAT.tryParseDate(it.select(".archive-date").text().substringAfter(", "))
                 },
             )
         }
@@ -310,6 +280,7 @@ abstract class Hiveworks : HttpSource() {
      *
      */
     private fun ssssChapterListParse(response: Response): List<SChapter> {
+        val requestUrl = response.request.url
         val document = response.asJsoup()
         // Gets the adventure div's
         val advDiv = document.select("div[id^=adv]")
@@ -324,7 +295,7 @@ abstract class Hiveworks : HttpSource() {
                 chapter.name = "Adventure $i - Page ${elements[c].text()}"
                 // Uses relative paths so need to combine the initial host with the path
                 val urlPath = elements[c].attr("href")
-                chapter.url = response.request.url.resolve("../../$urlPath").toString()
+                chapter.url = requestUrl.resolve("../../$urlPath").toString()
                 // use system time as the date of the chapters are per page and takes to long to pull each one.
                 chapter.date_upload = System.currentTimeMillis()
                 chapters.add(chapter)
@@ -336,7 +307,8 @@ abstract class Hiveworks : HttpSource() {
     }
 
     // Used to throw custom error codes for http codes
-    private fun Call.asObservableSuccess(): Observable<Response> = asObservable().doOnNext { response ->
+    private suspend fun getWithErrors(url: String): Response {
+        val response = client.get(url, ensureSuccess = false)
         if (!response.isSuccessful) {
             response.close()
             when (response.code) {
@@ -344,11 +316,12 @@ abstract class Hiveworks : HttpSource() {
                 else -> throw Exception("HiveWorks Comics HTTP Error ${response.code}")
             }
         }
+        return response
     }
 
     companion object {
-        private val DATE_FORMATTER by lazy { SimpleDateFormat("MMM dd, yyyy", Locale.US) }
-        private val AWKWARDZOMBIE_DATE_FORMAT by lazy { SimpleDateFormat("MM-dd-yy", Locale.US) }
+        private val DATE_FORMATTER = DateTimeFormatter.ofPattern("[MMMM][MMM] d, yyyy", Locale.US)
+        private val AWKWARDZOMBIE_DATE_FORMAT = DateTimeFormatter.ofPattern("M-d-yy", Locale.US)
 
         private const val POPULAR_MANGA_SELECTOR = "div.comicblock"
         private const val SEARCH_MANGA_SELECTOR = "div.comicblock, div.originalsblock"

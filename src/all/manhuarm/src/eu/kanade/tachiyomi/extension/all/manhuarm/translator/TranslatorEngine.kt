@@ -1,6 +1,5 @@
-package eu.kanade.tachiyomi.multisrc.machinetranslations.translator
+package eu.kanade.tachiyomi.extension.all.manhuarm.translator
 
 interface TranslatorEngine {
-    val capacity: Int
-    fun translate(from: String, to: String, text: String): String
+    suspend fun translate(from: String, to: String, text: String): String
 }

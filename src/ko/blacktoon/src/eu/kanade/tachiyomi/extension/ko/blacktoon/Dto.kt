@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.ko.blacktoon
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.ParseException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Serializable
@@ -24,7 +24,7 @@ class SeriesItem(
     private val tagIds: String = "",
     @SerialName("c")
     private val platformId: String = "-1",
-    @SerialName("d")
+    @SerialName("pd")
     private val publishDayId: String = "-1",
     @SerialName("h")
     val hot: Int = 0,
@@ -73,12 +73,9 @@ class Chapter(
     fun toSChapter(mangaId: String) = SChapter.create().apply {
         url = "$mangaId/$id"
         name = title
-        date_upload = try {
-            dateFormat.parse(date)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+        // the old parser ignored any trailing time part
+        date_upload = dateFormat.tryParseDate(date.substringBefore(" "))
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-M-d", Locale.ENGLISH)

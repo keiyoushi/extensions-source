@@ -1,209 +1,157 @@
 package eu.kanade.tachiyomi.extension.ja.comicmeteor
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
-import keiyoushi.lib.speedbinb.SpeedBinbReader
+import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.string
+import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Source
-abstract class ComicMeteor : HttpSource() {
+abstract class ComicMeteor : KeiSource() {
+    private val apiUrl get() = "$baseUrl/api"
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy年M月d日").withZone(ZoneId.of("Asia/Tokyo"))
 
     override val supportsLatest = false
 
-    private val apiUrl = "https://kirapo.jp/api"
-    private val json = Injekt.get<Json>()
-    private val dateFormat = SimpleDateFormat("yyyy年MM月dd日", Locale.JAPAN)
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())
 
-    private var readAtTimestamp: String? = null
-    private var allFiltersList: List<FilterOption> = emptyList()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/titles").toMangasPage()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(SpeedBinbInterceptor(json))
-        .apply {
-            val interceptors = interceptors()
-            val index = interceptors.indexOfFirst { "Brotli" in it.javaClass.simpleName }
-            if (index >= 0) {
-                interceptors.add(interceptors.removeAt(index))
-            }
-        }
-        .build()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isNotBlank()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("word", query)
                 .build()
-            return GET(url, headers)
+            return client.get(url).toMangasPage()
         }
-        val filterSelect = filters.firstInstanceOrNull<AllFilter>()
-        if (filterSelect != null && filterSelect.state != 0 && allFiltersList.isNotEmpty()) {
-            val selection = allFiltersList[filterSelect.state]
-            val urlBuilder = "$baseUrl/titles".toHttpUrl().newBuilder()
-                .addQueryParameter(selection.key, selection.value)
-            return GET(urlBuilder.build(), headers)
-        }
-        return GET("$baseUrl/titles", headers)
+
+        val category = filters.firstInstanceOrNull<AllFilter>()?.selected
+        val url = "$baseUrl/titles".toHttpUrl().newBuilder().apply {
+            category?.let { addQueryParameter(it.key, it.value) }
+        }.build()
+        return client.get(url).toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().contains("/search")) {
-            val document = response.asJsoup()
-            val mangas = document.select(".content-container .grid-group .w-auto a").map { link ->
-                SManga.create().apply {
-                    setUrlWithoutDomain(link.attr("href"))
-                    val img = link.selectFirst("img")!!
-                    title = img.attr("alt")
-                    thumbnail_url = img.attr("abs:src")
-                }
-            }
-            return MangasPage(mangas, false)
-        }
-        val document = response.asJsoup()
-
-        if (allFiltersList.isEmpty()) {
-            readAtTimestamp = document.selectFirst("#more_titles_button")?.attr("data-read-at")
-
-            val filters = mutableListOf<FilterOption>()
-            filters.add(FilterOption("All", "none", "none"))
-
-            document.select("h3:contains(レーベルから選ぶ)").firstOrNull()
-                ?.nextElementSibling()?.select("a")?.forEach {
-                    filters.add(FilterOption(it.text(), "label", it.attr("href").substringAfter("=")))
-                }
-
-            document.select("h3:contains(ジャンルから選ぶ)").firstOrNull()
-                ?.nextElementSibling()?.select("a")?.forEach {
-                    filters.add(FilterOption(it.text(), "genre", it.attr("href").substringAfter("=")))
-                }
-
-            document.select("h3:contains(カテゴリから選ぶ)").firstOrNull()
-                ?.nextElementSibling()?.select("a")?.forEach {
-                    filters.add(FilterOption(it.text(), "category", it.attr("href").substringAfter("=")))
-                }
-            allFiltersList = filters
-        }
-
-        val mangaList = document.select("#titles-container a, .content-container .grid-group .w-auto a").map { link ->
+    private suspend fun Response.toMangasPage(): MangasPage {
+        val document = this.asJsoup()
+        val mangas = document.select("#titles-container a, .content-container .grid-group .w-auto a").map {
             SManga.create().apply {
-                setUrlWithoutDomain(link.attr("href"))
-                val img = link.selectFirst("img")!!
+                setUrlWithoutDomain(it.absUrl("href"))
+                val img = it.selectFirst("img")!!
                 title = img.attr("alt")
-                thumbnail_url = img.attr("abs:src")
+                thumbnail_url = img.absUrl("src")
             }
         }
 
-        val readAtTimestamp = document.selectFirst("#more_titles_button")?.attr("data-read-at")
-        if (readAtTimestamp != null) {
-            val apiUrlBuilder = "$apiUrl/title-list".toHttpUrl().newBuilder()
-                .addQueryParameter("read_at", readAtTimestamp)
+        val readAt = document.selectFirst("#more_titles_button")?.attr("data-read-at")
+            ?: return MangasPage(mangas, false)
 
-            response.request.url.queryParameterNames.forEach { param ->
-                if (param != "read_at") {
-                    response.request.url.queryParameter(param)?.let { value ->
-                        apiUrlBuilder.addQueryParameter(param, value)
-                    }
-                }
-            }
-            val apiRequest = GET(apiUrlBuilder.build(), headers)
-            val apiResponse = client.newCall(apiRequest).execute()
-            val apiResult = apiResponse.parseAs<ApiTitlesResponse>()
+        val url = "$apiUrl/title-list".toHttpUrl().newBuilder()
+            .addQueryParameter("read_at", readAt)
+            .apply { request.url.queryParameterNames.forEach { addQueryParameter(it, request.url.queryParameter(it)) } }
+            .build()
 
-            val apiMangas = apiResult.data.map { apiTitle ->
-                SManga.create().apply {
-                    title = apiTitle.name
-                    setUrlWithoutDomain(apiTitle.url)
-                    thumbnail_url = apiTitle.thumbnail
-                }
-            }
-            return MangasPage(mangaList + apiMangas, false)
-        }
-        return MangasPage(mangaList, false)
+        val apiMangas = client.get(url).parseAs<ApiTitlesResponse>().data.map { it.toSManga() }
+        return MangasPage(mangas + apiMangas, false)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val details = SManga.create().apply {
             title = document.selectFirst("main h2")!!.text()
-            thumbnail_url = thumbnail_url
-            author = document.select("a[href*=/authors/]").joinToString(", ") { it.text() }
-            description = document.selectFirst("#plot + div")?.text()
-            genre = document.select("div.pt-5 a.button-gray").joinToString(", ") { it.text() }
+            author = document.select("a[href*=/authors/]").joinToString { it.text() }
+            description = document.selectFirst("#plot + div")?.textOrNull()
+            genre = document.select("div.pt-5 a.button-gray").joinToString { it.text() }
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = document.select(".episodes-container .episode-item")
+        val chapterList = document.select(".episodes-container .episode-item")
             .filterNot { it.text().contains("未公開話") }
             .mapNotNull { item ->
                 item.selectFirst("a")?.let { link ->
                     SChapter.create().apply {
-                        setUrlWithoutDomain(link.attr("href"))
-                        name = item.selectFirst(".episode-item-left")!!.text().trim()
+                        val segments = link.absUrl("href").toHttpUrl().pathSegments
+                        url = segments[3]
+                        name = item.selectFirst(".episode-item-left")!!.text()
+                        memo = buildJsonObject {
+                            put("label", segments[1])
+                            put("slug", segments[2])
+                        }
                     }
                 }
             }
-
-        if (chapters.isNotEmpty()) {
-            return chapters
-        }
-
-        document.selectFirst(".header-side a.episode-read")?.let { oneshotLink ->
-            val chapter = SChapter.create().apply {
-                setUrlWithoutDomain(oneshotLink.attr("href"))
-                name = document.selectFirst(".latest-episode-title")?.text()?.trim()!!
-                val dateStr = document.selectFirst(".last-update")?.text()?.substringBefore("更新")
-                date_upload = dateFormat.tryParse(dateStr)
+            .ifEmpty {
+                listOfNotNull(
+                    document.selectFirst(".header-side a.episode-read")?.let { link ->
+                        SChapter.create().apply {
+                            val segments = link.absUrl("href").toHttpUrl().pathSegments
+                            url = segments[3]
+                            name = document.selectFirst(".latest-episode-title")!!.text()
+                            date_upload = dateFormat.tryParseDate(document.selectFirst(".last-update")?.text()?.substringBefore("更新"))
+                            memo = buildJsonObject {
+                                put("label", segments[1])
+                                put("slug", segments[2])
+                            }
+                        }
+                    },
+                )
             }
-            return listOf(chapter)
-        }
-        return emptyList()
+
+        return SMangaUpdate(
+            details,
+            chapterList,
+        )
     }
 
-    private val reader by lazy { SpeedBinbReader(client, headers, json) }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/pt/${chapter.memo["label"]!!.string}/${chapter.memo["slug"]!!.string}/${chapter.url}/viewer"
 
-    override fun pageListParse(response: Response): List<Page> = reader.pageListParse(response)
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.fetchPages(client.get(getChapterUrl(chapter)).asJsoup())
 
-    private class FilterOption(val name: String, val key: String, val value: String)
-    private class AllFilter(options: Array<String>) : Filter.Select<String>("Filter by", options)
+    override val supportsFilterFetching = true
 
-    override fun getFilterList(): FilterList {
-        val filterList = if (allFiltersList.isEmpty()) {
-            listOf(Filter.Header("Press 'Reset' to attempt to load filters"))
-        } else {
-            listOf(AllFilter(allFiltersList.map { it.name }.toTypedArray()))
-        }
-        return FilterList(filterList)
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/titles").asJsoup()
+        return listOf("label" to "レーベルから選ぶ", "genre" to "ジャンルから選ぶ", "category" to "カテゴリから選ぶ").flatMap { (key, heading) ->
+            document.selectFirst("h3:contains($heading)")?.nextElementSibling()?.select("a").orEmpty().map {
+                FilterOption(it.text(), key, it.attr("href").substringAfter("="))
+            }
+        }.toJsonElement()
     }
 
-    // Unsupported
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val options = data?.parseAs<List<FilterOption>>() ?: return FilterList()
+        return FilterList(AllFilter(options))
+    }
+
+    private class AllFilter(private val options: List<FilterOption>) : Filter.Select<String>("Filter by", arrayOf("All") + options.map { it.name }) {
+        val selected get() = options.getOrNull(state - 1)
+    }
 }

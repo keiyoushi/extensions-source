@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
-import java.nio.charset.StandardCharsets
+import keiyoushi.utils.rc4
 import kotlin.math.floor
 
 class PublusPageAttributes(
@@ -20,7 +20,7 @@ class PublusPageAttributes(
 
 class Decoder(private val data: String, private val filename: String = "configuration_pack.json") {
     fun decode(): DecodedResult {
-        val filenameBytes = filename.toByteArray(StandardCharsets.UTF_8)
+        val filenameBytes = filename.toByteArray()
         val filenameKey = IntArray(filenameBytes.size) { filenameBytes[it].toInt() and 0xFF }
 
         val state = mod9Base64Decode(data)
@@ -34,10 +34,9 @@ class Decoder(private val data: String, private val filename: String = "configur
         mod14Mutate(1, state)
         mod14Mutate(2, state)
         mod14Mutate(3, state)
-        mod4DecryptLoop(filenameKey, state) // tB0l
+        val json = mod4Decrypt(filenameKey, state) // tB0l
 
-        val resultStr = mod13Utf8Decode(state.payload, state.length)
-        return DecodedResult(resultStr, listOf(state.key1, state.key2, state.key3))
+        return DecodedResult(json, listOf(state.key1, state.key2, state.key3))
     }
 
     class DecodedResult(val json: String, val keys: List<IntArray>)
@@ -235,85 +234,43 @@ class Decoder(private val data: String, private val filename: String = "configur
         arr[j] = tmp
     }
 
-    private fun rc4Ksa(keyArr: IntArray): IntArray {
+    private fun rc4Ksa(key: ByteArray): IntArray {
         val s = IntArray(256) { it }
         var j = 0
         for (i in 0 until 256) {
-            j = (j + s[i] + keyArr[i % keyArr.size]) % 256
+            j = (j + s[i] + (key[i % key.size].toInt() and 0xFF)) % 256
             swap(s, i, j)
         }
         return s
     }
 
-    private fun vQmi(vararg arrays: IntArray): IntArray {
-        var size = 0
-        arrays.forEach { size += it.size }
-        val combined = IntArray(size)
+    private fun rc4Key(vararg arrays: IntArray): ByteArray {
+        val key = ByteArray(arrays.sumOf { it.size })
         var pos = 0
-        arrays.forEach {
-            System.arraycopy(it, 0, combined, pos, it.size)
-            pos += it.size
-        }
-        return rc4Ksa(combined)
+        arrays.forEach { array -> array.forEach { key[pos++] = it.toByte() } }
+        return key
     }
 
-    private fun vSmi(e: IntArray, t: IntArray, r: IntArray, n: IntArray): IntArray {
-        val combined = IntArray(t.size + r.size + n.size)
-        var pos = 0
-        System.arraycopy(t, 0, combined, pos, t.size)
-        pos += t.size
-        System.arraycopy(r, 0, combined, pos, r.size)
-        pos += r.size
-        System.arraycopy(n, 0, combined, pos, n.size)
-        return mod11XorStream(e, combined)
-    }
-
-    private fun mod11XorStream(keyToUpdate: IntArray, inputStream: IntArray): IntArray {
-        val sBox = rc4Ksa(inputStream)
-        val res = IntArray(keyToUpdate.size)
-        var i = 0
-        var j = 0
-        for (idx in keyToUpdate.indices) {
-            val b = keyToUpdate[idx]
-            i = (i + 1) % 256
-            j = (j + sBox[i]) % 256
-            swap(sBox, i, j)
-            val k = sBox[(sBox[i] + sBox[j]) % 256]
-            res[idx] = b xor k
-        }
-        return res
+    private fun IntArray.rc4(key: ByteArray): IntArray {
+        val result = ByteArray(size) { this[it].toByte() }.rc4(key)
+        return IntArray(size) { result[it].toInt() and 0xFF }
     }
 
     private fun mod6XorLoop(fnKey: IntArray, state: State) {
-        val sBox = vQmi(state.key2, fnKey, state.key3)
+        val sBox = rc4Ksa(rc4Key(state.key2, fnKey, state.key3))
         for (s in 0 until state.length) state.payload[s] = state.payload[s] xor sBox[s % 256]
     }
 
-    private fun mod10ShuffleA(fnKey: IntArray, state: State) {
-        val sIters = (state.length or 1) - 2
-        val sBox = vQmi(fnKey, state.key1, state.key2)
-        var i = 0
-        var j = 0
-        for (k in sIters downTo 0 step 2) {
-            i = (i + 1) % 256
-            j = (j + sBox[i]) % 256
-            swap(sBox, i, j)
-            val xorVal = sBox[(sBox[i] + sBox[j]) % 256]
-            if (k < state.length) state.payload[k] = state.payload[k] xor xorVal
-        }
-    }
+    private fun mod10ShuffleA(fnKey: IntArray, state: State) = xorKeystreamDown(state, (state.length or 1) - 2, rc4Key(fnKey, state.key1, state.key2))
 
-    private fun mod12ShuffleB(fnKey: IntArray, state: State) {
-        val sIters = (state.length - 1) and -2
-        val sBox = vQmi(state.key3, fnKey, state.key1)
-        var i = 0
-        var j = 0
-        for (k in sIters downTo 0 step 2) {
-            i = (i + 1) % 256
-            j = (j + sBox[i]) % 256
-            swap(sBox, i, j)
-            val xorVal = sBox[(sBox[i] + sBox[j]) % 256]
-            if (k < state.length) state.payload[k] = state.payload[k] xor xorVal
+    private fun mod12ShuffleB(fnKey: IntArray, state: State) = xorKeystreamDown(state, (state.length - 1) and -2, rc4Key(state.key3, fnKey, state.key1))
+
+    private fun xorKeystreamDown(state: State, start: Int, key: ByteArray) {
+        if (start < 0) return
+        val keystream = ByteArray(start / 2 + 1).rc4(key)
+        for (i in keystream.indices) {
+            val k = start - 2 * i
+            state.payload[k] = state.payload[k] xor (keystream[i].toInt() and 0xFF)
         }
     }
 
@@ -397,27 +354,14 @@ class Decoder(private val data: String, private val filename: String = "configur
     }
 
     private fun mod7UpdateKeys(fnKey: IntArray, state: State) {
-        state.key3 = vSmi(state.key3, state.key2, state.key1, fnKey)
-        state.key2 = vSmi(state.key2, state.key1, fnKey, state.key3)
-        state.key1 = vSmi(state.key1, fnKey, state.key3, state.key2)
+        state.key3 = state.key3.rc4(rc4Key(state.key2, state.key1, fnKey))
+        state.key2 = state.key2.rc4(rc4Key(state.key1, fnKey, state.key3))
+        state.key1 = state.key1.rc4(rc4Key(fnKey, state.key3, state.key2))
     }
 
-    private fun mod4DecryptLoop(fnKey: IntArray, state: State) {
-        val sBox = vQmi(state.key3, state.key2, fnKey)
-        var i = 0
-        var j = 0
-        for (k in 0 until state.length) {
-            i = (i + 1) % 256
-            j = (j + sBox[i]) % 256
-            swap(sBox, i, j)
-            val xorVal = sBox[(sBox[i] + sBox[j]) % 256]
-            state.payload[k] = state.payload[k] xor xorVal
-        }
-    }
-
-    private fun mod13Utf8Decode(bytesArr: IntArray, length: Int): String {
-        val bytes = ByteArray(length) { bytesArr[it].toByte() }
-        return String(bytes, StandardCharsets.UTF_8)
+    private fun mod4Decrypt(fnKey: IntArray, state: State): String {
+        val payload = ByteArray(state.length) { state.payload[it].toByte() }
+        return payload.rc4(rc4Key(state.key3, state.key2, fnKey)).decodeToString()
     }
 }
 

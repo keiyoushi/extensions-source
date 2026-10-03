@@ -4,169 +4,160 @@ import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
+import kotlin.time.Duration.Companion.hours
 
 @Source
 abstract class MangaNo :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
-
-    private val apiUrl = "$baseUrl/query"
-    private val authDomain = "googleapis.com"
-    private val loginUrl = "https://identitytoolkit.$authDomain/v1"
-    private val refreshUrl = "https://securetoken.$authDomain/v1"
+    private val apiUrl get() = "$baseUrl/query"
+    private val authDomain get() = "googleapis.com"
+    private val loginUrl get() = "https://identitytoolkit.$authDomain/v1"
+    private val refreshUrl get() = "https://securetoken.$authDomain/v1"
     private val preferences by getPreferencesLazy()
+    private val tokenMutex = Mutex()
 
     private var cursor: String? = null
-    private var bearerToken: String? = null
-    private var tokenExpiration: Long = 0L
     private var loginFailed: Boolean = false
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(GraphQLErrorInterceptor())
-        .addInterceptor {
-            val request = it.request()
-            if (request.url.host.endsWith(authDomain)) {
-                return@addInterceptor it.proceed(request)
-            }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(GraphQLErrorInterceptor())
 
-            val newRequest = request.newBuilder().apply {
-                val token = getToken()
-                if (token.isNotBlank()) {
-                    header("Authorization", "Bearer $token")
-                }
-            }.build()
-
-            it.proceed(newRequest)
-        }
-        .build()
-
-    override fun popularMangaRequest(page: Int) = graphQLPost(
-        apiUrl,
-        headers,
-        POPULAR_QUERY,
-        "RankingsMonthly",
-        EmptyVariables,
-    )
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseGraphQLAs<PopularResponse>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.post(
+            url = apiUrl,
+            headers = apiHeaders(),
+            body = graphQLBody(
+                query = POPULAR_QUERY,
+                operationName = "RankingsMonthly",
+            ),
+        ).parseGraphQLAs<PopularResponse>()
         val mangas = result.ranking.monthly2.edges.map { it.node.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         if (page == 1) cursor = null
-        return graphQLPost(
-            apiUrl,
-            headers,
-            LATEST_QUERY,
-            "NewWorks",
-            LatestVariables(cursor),
-        )
+        return client.post(
+            url = apiUrl,
+            headers = apiHeaders(),
+            body = graphQLBody(
+                query = LATEST_QUERY,
+                operationName = "NewWorks",
+                variables = LatestVariables(cursor),
+            ),
+        ).toMangasPage()
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseGraphQLAs<SeriesResponse>()
-        val mangas = result.newWorks2.edges?.map { it.node.toSManga() } ?: emptyList()
-        cursor = result.newWorks2.pageInfo.endCursor
-        return MangasPage(mangas, result.newWorks2.pageInfo.hasNextPage)
+    private fun Response.toMangasPage(): MangasPage {
+        val result = this.parseGraphQLAs<SeriesResponse>().newWorks2
+        cursor = result.pageInfo.endCursor
+        val mangas = result.edges.orEmpty().map { it.node.toSManga() }
+        return MangasPage(mangas, result.pageInfo.hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (page == 1) cursor = null
         if (query.isNotBlank()) {
-            return graphQLPost(
-                apiUrl,
-                headers,
-                SEARCH_QUERY,
-                "Search",
-                SearchVariables(query, cursor),
-            )
+            return client.post(
+                url = apiUrl,
+                headers = apiHeaders(),
+                body = graphQLBody(
+                    query = SEARCH_QUERY,
+                    operationName = "Search",
+                    variables = SearchVariables(query, cursor),
+                ),
+            ).toMangasPage()
         }
 
         val filter = filters.firstInstance<TagFilter>()
-        return graphQLPost(
-            "$apiUrl#tag",
-            headers,
-            TAG_QUERY,
-            "Tag",
-            TagFilterVariables(filter.value, 100, cursor),
-        )
+        val result = client.post(
+            url = apiUrl,
+            headers = apiHeaders(),
+            body = graphQLBody(
+                query = TAG_QUERY,
+                operationName = "Tag",
+                variables = TagFilterVariables(filter.value, 100, cursor),
+            ),
+        ).parseGraphQLAs<TagResponse>().tag.works
+        cursor = result.pageInfo.endCursor
+        val mangas = result.edges.orEmpty().map { it.node.toSManga() }
+        return MangasPage(mangas, result.pageInfo.hasNextPage)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.fragment == "tag") {
-            val result = response.parseGraphQLAs<TagResponse>()
-            val mangas = result.tag.works.edges?.map { it.node.toSManga() } ?: emptyList()
-            cursor = result.tag.works.pageInfo.endCursor
-            return MangasPage(mangas, result.tag.works.pageInfo.hasNextPage)
-        }
-        return latestUpdatesParse(response)
-    }
-
-    override fun mangaDetailsRequest(manga: SManga) = graphQLPost(
-        apiUrl,
-        headers,
-        DETAILS_QUERY,
-        "MangaDetails",
-        IdVariables(manga.url),
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        TagFilter(),
     )
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseGraphQLAs<Edge>().node.toSManga()
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/works/${manga.url}"
 
-    override fun chapterListRequest(manga: SManga) = graphQLPost(
-        apiUrl,
-        headers,
-        CHAPTER_LIST_QUERY,
-        "ChapterList",
-        IdVariables(manga.url),
-    )
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val work = client.post(
+            url = apiUrl,
+            headers = apiHeaders(),
+            body = graphQLBody(
+                query = DETAILS_QUERY,
+                operationName = "MangaDetails",
+                variables = IdVariables(manga.url),
+            ),
+        ).parseGraphQLAs<Edge>().node
 
-    override fun chapterListParse(response: Response): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        return response.parseGraphQLAs<ChapterResponse>().node.episodes.edges
+        val chapterList = work.episodes!!.edges
             .filter { !hideLocked || (!it.node.isLocked && !it.node.isPreview) }
             .map { it.node.toSChapter() }
             .reversed()
+
+        return SMangaUpdate(
+            work.toSManga(),
+            chapterList,
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/episodes/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter) = graphQLPost(
-        apiUrl,
-        headers,
-        VIEWER_QUERY,
-        "GetEpisode",
-        IdVariables(chapter.url),
-    )
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val edges = client.post(
+            url = apiUrl,
+            headers = apiHeaders(),
+            body = graphQLBody(
+                query = VIEWER_QUERY,
+                operationName = "GetEpisode",
+                variables = IdVariables(chapter.url),
+            ),
+        ).parseGraphQLAs<ViewerResponse>().node.allPagesConnection.edges
 
-    override fun pageListParse(response: Response): List<Page> {
-        val results = response.parseGraphQLAs<ViewerResponse>()
-        val edge = results.node.allPagesConnection.edges
-        if (edge.isEmpty()) {
+        if (edges.isEmpty()) {
             if (loginFailed) {
                 throw IOException("Invalid E-Mail or Password")
             }
@@ -174,101 +165,69 @@ abstract class MangaNo :
             throw Exception("Enter your credentials in Settings and purchase this chapter to read.")
         }
 
-        return edge.mapIndexed { index, page ->
+        return edges.mapIndexed { index, page ->
             Page(index, imageUrl = page.node.image.url.toHttpUrl().pathSegments.last())
         }
     }
 
-    override fun getFilterList() = FilterList(
-        TagFilter(),
-    )
+    private suspend fun apiHeaders(): Headers = headersBuilder()
+        .set("Authorization", "Bearer ${getToken()}")
+        .build()
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private suspend fun getToken(): String = tokenMutex.withLock {
+        if (System.currentTimeMillis() < preferences.getLong(EXPIRES, 0L)) return preferences.getString(TOKEN, null)!!
 
-    @Synchronized
-    private fun getToken(): String {
-        if (bearerToken != null && System.currentTimeMillis() < tokenExpiration) {
-            return bearerToken!!
+        val tokens = preferences.getString(REFRESH, null)?.let { refresh(it) }
+            ?: login()
+            ?: secureToken()
+
+        preferences.edit().apply {
+            putString(TOKEN, tokens.idToken)
+            putString(REFRESH, tokens.refreshToken)
+            putLong(EXPIRES, System.currentTimeMillis() + 1.hours.inWholeMilliseconds)
+            apply()
         }
-
-        val refreshToken = preferences.getString(REFRESH, "")!!
-        if (refreshToken.isNotEmpty()) {
-            try {
-                val newTokens = refresh(refreshToken)
-                saveTokens(newTokens)
-                return newTokens.idToken
-            } catch (_: Exception) {
-            }
-        }
-
-        val email = preferences.getString(EMAIL_PREF_KEY, "")!!
-        val password = preferences.getString(PASSWORD_PREF_KEY, "")!!
-
-        if (email.isNotEmpty() && password.isNotEmpty()) {
-            try {
-                val newTokens = login(email, password)
-                saveTokens(newTokens)
-                return newTokens.idToken
-            } catch (_: Exception) {
-                loginFailed = true
-            }
-        }
-
-        val newTokens = secureToken()
-        saveTokens(newTokens)
-        return newTokens.idToken
+        tokens.idToken
     }
 
-    private fun login(email: String, password: String): LoginResponse {
-        val body = LoginRequestBody(email, password, true).toJsonRequestBody()
+    private suspend fun login(): LoginResponse? {
+        val email = preferences.getString(EMAIL_PREF_KEY, "")!!
+        val password = preferences.getString(PASSWORD_PREF_KEY, "")!!
+        if (email.isEmpty() || password.isEmpty()) return null
         val url = "$loginUrl/accounts:signInWithPassword".toHttpUrl().newBuilder()
             .addQueryParameter("key", LOGIN_KEY)
             .build()
-            .toString()
-        val request = POST(url, headers, body)
 
-        return client.newCall(request).execute().parseAs<LoginResponse>()
-    }
-
-    private fun refresh(refreshToken: String): LoginResponse {
-        val body = RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()
-        val url = "$refreshUrl/token".toHttpUrl().newBuilder()
-            .addQueryParameter("key", LOGIN_KEY)
-            .build()
-            .toString()
-        val request = POST(url, headers, body)
-
-        return client.newCall(request).execute().parseAs<LoginResponse>()
-    }
-
-    private fun secureToken(): LoginResponse {
-        val body = SecureTokenRequestBody(true).toJsonRequestBody()
-        val url = "$loginUrl/accounts:signUp".toHttpUrl().newBuilder()
-            .addQueryParameter("key", LOGIN_KEY)
-            .build()
-            .toString()
-        val request = POST(url, headers, body)
-
-        return client.newCall(request).execute().parseAs<LoginResponse>()
-    }
-
-    private fun saveTokens(response: LoginResponse) {
-        val expiration = System.currentTimeMillis() + (3600 * 1000)
-        bearerToken = response.idToken
-        tokenExpiration = expiration
-        preferences.edit().apply {
-            putString(TOKEN, response.idToken)
-            putString(REFRESH, response.refreshToken)
-            putLong(EXPIRES, expiration)
-            apply()
+        return try {
+            client.post(url, LoginRequestBody(email, password, true).toJsonRequestBody()).parseAs<LoginResponse>()
+        } catch (_: HttpException) {
+            loginFailed = true
+            null
         }
     }
 
-    @Synchronized
+    private suspend fun refresh(refreshToken: String): LoginResponse? {
+        val url = "$refreshUrl/token".toHttpUrl().newBuilder()
+            .addQueryParameter("key", LOGIN_KEY)
+            .build()
+
+        return try {
+            client.post(url, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<LoginResponse>()
+        } catch (_: HttpException) {
+            null
+        }
+    }
+
+    private suspend fun secureToken(): LoginResponse {
+        val url = "$loginUrl/accounts:signUp".toHttpUrl().newBuilder()
+            .addQueryParameter("key", LOGIN_KEY)
+            .build()
+
+        return client.post(url, SecureTokenRequestBody(true).toJsonRequestBody()).parseAs<LoginResponse>()
+    }
+
     private fun clearTokens() {
         loginFailed = false
-        bearerToken = null
-        tokenExpiration = 0L
         preferences.edit().apply {
             remove(TOKEN)
             remove(REFRESH)

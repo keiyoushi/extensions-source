@@ -18,7 +18,7 @@ internal class Paginator<T>(
 
 /** Page model schema. */
 @Serializable
-internal data class MAPage(
+internal class MAPage(
     private val id: Int,
     val image: String,
     val number: Int,
@@ -31,7 +31,7 @@ internal data class MAPage(
 
 /** Chapter model schema. */
 @Serializable
-internal data class Chapter(
+internal class Chapter(
     val id: Int,
     val title: String,
     val number: Float,
@@ -49,7 +49,7 @@ internal data class Chapter(
 
 /** Series model schema. */
 @Serializable
-internal data class Series(
+internal class Series(
     val slug: String,
     val title: String,
     val cover: String,
