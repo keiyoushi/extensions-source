@@ -1,34 +1,36 @@
 package eu.kanade.tachiyomi.extension.en.myadultcomics
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 
 @Source
-abstract class MyAdultComics : HttpSource() {
+abstract class MyAdultComics : KeiSource() {
 
     override val supportsLatest = false
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/index.php?page=$page", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$baseUrl/index.php?page=$page")
+        return popularMangaParse(response)
+    }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("td.list_container").mapNotNull { element ->
             val link = element.selectFirst("p.text_container > a") ?: return@mapNotNull null
@@ -53,18 +55,16 @@ abstract class MyAdultComics : HttpSource() {
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ===============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Use the text search field along with the type below."),
         Filters(),
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchType = filters.firstInstanceOrNull<Filters>()?.selectedValue() ?: "title"
 
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("index.php")
@@ -80,29 +80,24 @@ abstract class MyAdultComics : HttpSource() {
         }
         url.addQueryParameter("page", page.toString())
 
-        return GET(url.build(), headers)
+        val response = client.get(url.build())
+        return popularMangaParse(response)
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-
-        return SManga.create().apply {
-            title = document.selectFirst("h1#TOP")!!.text()
-            genre = document.select("p.text_info_book:contains(Tags:) a").joinToString { it.text() }
-            artist = document.select("p.text_info_book:contains(Artists:) a").joinToString { it.text() }
-            author = artist
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        }
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1#TOP")!!.text()
+        genre = document.select("p.text_info_book:contains(Tags:) a").joinToString { it.text() }
+        artist = document.select("p.text_info_book:contains(Artists:) a").joinToString { it.text() }
+        author = artist
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
     // ============================= Chapters ==============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private fun parseChapterList(response: Response): List<SChapter> {
         val chapter = SChapter.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
             name = "Gallery"
@@ -113,7 +108,8 @@ abstract class MyAdultComics : HttpSource() {
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter))
         val document = response.asJsoup()
         val script = document.selectFirst("script:containsData(let template)")?.data() ?: return emptyList()
 
@@ -123,5 +119,18 @@ abstract class MyAdultComics : HttpSource() {
         }.toList()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override suspend fun getImageUrl(page: Page): String = throw UnsupportedOperationException()
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get(getMangaUrl(manga))
+        val document = response.asJsoup()
+        val details = if (fetchDetails) parseMangaDetails(document) else manga
+        val chapterList = if (fetchChapters) parseChapterList(response) else chapters
+        return SMangaUpdate(details, chapterList)
+    }
 }
