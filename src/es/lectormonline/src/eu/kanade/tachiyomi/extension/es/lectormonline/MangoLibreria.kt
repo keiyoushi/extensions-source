@@ -1,9 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.lectormonline
 
-import android.content.SharedPreferences
-import androidx.preference.MultiSelectListPreference
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,11 +10,15 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getArrayOrNull
+import keiyoushi.utils.getIntOrNull
+import keiyoushi.utils.getObjectOrNull
+import keiyoushi.utils.getStringOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -37,11 +37,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.time.Instant
 
 @Source
-abstract class MangoLibreria :
-    KeiSource(),
-    ConfigurableSource {
-
-    private val preferences by getPreferencesLazy()
+abstract class MangoLibreria : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -91,19 +87,17 @@ abstract class MangoLibreria :
     }.build()
 
     private fun Response.parseAsDataJson(): MangasPage {
-        val raw = body.string()
-        val json = Json.parseToJsonElement(raw) as? JsonObject
-            ?: return MangasPage(emptyList(), false)
-        val nodes = json["nodes"] as? JsonArray ?: return MangasPage(emptyList(), false)
+        val json = parseAs<JsonObject>()
+        val nodes = json.getArrayOrNull("nodes") ?: return MangasPage(emptyList(), false)
         for (node in nodes) {
-            val data = (node as? JsonObject)?.get("data") as? JsonArray ?: continue
+            val data = (node as? JsonObject)?.getArrayOrNull("data") ?: continue
             // data[0] is the request-params echo; the page payload is the object holding "comics".
             val rootIndex = data.indexOfFirst { it is JsonObject && "comics" in it }
             if (rootIndex == -1) continue
             val root = resolveRef(data, rootIndex) as? JsonObject ?: continue
-            val comics = root["comics"] as? JsonArray ?: continue
-            val page = (root["page"] as? JsonPrimitive)?.intOrNull ?: 1
-            val totalPages = (root["totalPages"] as? JsonPrimitive)?.intOrNull ?: page
+            val comics = root.getArrayOrNull("comics") ?: continue
+            val page = root.getIntOrNull("page") ?: 1
+            val totalPages = root.getIntOrNull("totalPages") ?: page
             val list = comics.mapNotNull { (it as? JsonObject)?.toSManga() }
             return MangasPage(list, page < totalPages)
         }
@@ -142,20 +136,20 @@ abstract class MangoLibreria :
     // instead of plain primitives; this reads either form as text.
     private fun JsonElement?.asText(): String? = when (this) {
         is JsonPrimitive -> contentOrNull
-        is JsonArray -> (getOrNull(1) as? JsonPrimitive)?.contentOrNull
+        is JsonArray -> getOrNull(1)?.stringOrNull
         else -> null
     }
 
     private fun JsonObject.toSManga(): SManga? {
-        val name = this["name"].asText()
-        val urlPath = this["urlPath"].asText()
+        val name = getStringOrNull("name")
+        val urlPath = getStringOrNull("urlPath")
         if (name.isNullOrBlank() || urlPath.isNullOrBlank()) return null
         return SManga.create().apply {
             title = name
             url = urlPath
             // The data holds direct origin URLs (blocked without the proxy),
             // the site builds the proxied form client-side, so do the same.
-            thumbnail_url = (this@toSManga["urlCover"].asText() ?: this@toSManga["coverImage"].asText())?.let(::proxyImageUrl)
+            thumbnail_url = (getStringOrNull("urlCover") ?: getStringOrNull("coverImage"))?.let(::proxyImageUrl)
         }
     }
 
@@ -195,25 +189,24 @@ abstract class MangoLibreria :
                 .build()
                 .toString()
         }
-        val raw = client.get(dataUrl).body.string()
-        val json = Json.parseToJsonElement(raw) as? JsonObject ?: return emptyList()
-        val nodes = json["nodes"] as? JsonArray ?: return emptyList()
+        val json = client.get(dataUrl).parseAs<JsonObject>()
+        val nodes = json.getArrayOrNull("nodes") ?: return emptyList()
         for (node in nodes) {
-            val data = (node as? JsonObject)?.get("data") as? JsonArray ?: continue
-            val comicIdx = ((data.getOrNull(0) as? JsonObject)?.get("comic") as? JsonPrimitive)?.intOrNull
+            val data = (node as? JsonObject)?.getArrayOrNull("data") ?: continue
+            val comicIdx = (data.getOrNull(0) as? JsonObject)?.getIntOrNull("comic")
                 ?: data.indexOfFirst { it is JsonObject && "comicScans" in it }
             if (comicIdx == -1) continue
             val comic = resolveRef(data, comicIdx) as? JsonObject ?: continue
-            val scans = comic["comicScans"] as? JsonArray ?: continue
+            val scans = comic.getArrayOrNull("comicScans") ?: continue
             val chapters = mutableListOf<SChapter>()
             scans.forEach { scan ->
                 val scanObj = scan as? JsonObject ?: return@forEach
-                val groupName = (scanObj["scanGroup"] as? JsonObject)?.get("name").asText()
-                val chapterArr = scanObj["chapters"] as? JsonArray ?: return@forEach
+                val groupName = scanObj.getObjectOrNull("scanGroup")?.getStringOrNull("name")
+                val chapterArr = scanObj.getArrayOrNull("chapters") ?: return@forEach
                 chapterArr.forEach { ch ->
                     val c = ch as? JsonObject ?: return@forEach
-                    val path = c["chapterPath"].asText() ?: return@forEach
-                    val number = c["chapterNumber"].asText()
+                    val path = c.getStringOrNull("chapterPath") ?: return@forEach
+                    val number = c.getStringOrNull("chapterNumber")
                     chapters += SChapter.create().apply {
                         url = path
                         name = "Capítulo ${number ?: "?"}"
@@ -225,8 +218,7 @@ abstract class MangoLibreria :
                 }
             }
             val sorted = chapters.sortedByDescending { it.chapter_number }
-            preferences.rememberScanlators(sorted.mapNotNull { it.scanlator })
-            return sorted.filterBlacklistedScanlators(preferences.scanlatorBlacklist())
+            return sorted
         }
         return emptyList()
     }
@@ -240,17 +232,16 @@ abstract class MangoLibreria :
         val dataUrl = "$baseUrl$path/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("x-sveltekit-invalidated", "01")
             .build()
-        val raw = client.get(dataUrl).body.string()
-        val json = Json.parseToJsonElement(raw) as? JsonObject ?: return emptyList()
-        val nodes = json["nodes"] as? JsonArray ?: return emptyList()
+        val json = client.get(dataUrl).parseAs<JsonObject>()
+        val nodes = json.getArrayOrNull("nodes") ?: return emptyList()
         for (node in nodes) {
-            val data = (node as? JsonObject)?.get("data") as? JsonArray ?: continue
-            val chapterIdx = ((data.getOrNull(0) as? JsonObject)?.get("chapter") as? JsonPrimitive)?.intOrNull
+            val data = (node as? JsonObject)?.getArrayOrNull("data") ?: continue
+            val chapterIdx = (data.getOrNull(0) as? JsonObject)?.getIntOrNull("chapter")
                 ?: data.indexOfFirst { it is JsonObject && ("url_pages" in it || "urlPages" in it) }
             if (chapterIdx == -1) continue
             val chapterObj = resolveRef(data, chapterIdx) as? JsonObject ?: continue
-            val pages = (chapterObj["url_pages"] as? JsonArray ?: chapterObj["urlPages"] as? JsonArray)
-                ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            val pages = (chapterObj.getArrayOrNull("url_pages") ?: chapterObj.getArrayOrNull("urlPages"))
+                ?.mapNotNull { it.stringOrNull }
                 ?.filterNot { it.contains("banner", ignoreCase = true) }
                 ?: continue
             if (pages.isEmpty()) continue
@@ -275,39 +266,7 @@ abstract class MangoLibreria :
         else -> SManga.UNKNOWN
     }
 
-    // ============================ Preferences ============================
-    // Scan groups are per-title and the site exposes no global group list,
-    // so known names are collected from chapter lists as the user browses.
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        MultiSelectListPreference(screen.context).apply {
-            key = SCANLATOR_BLACKLIST_PREF
-            title = "Scanlator blacklist"
-            summary = "Hide chapters from the selected scanlators. The list fills up automatically as you browse titles."
-            val scanlators = preferences.knownScanlatorNames().toTypedArray()
-            entries = scanlators
-            entryValues = scanlators
-            setDefaultValue(emptySet<String>())
-        }.also(screen::addPreference)
-    }
-
-    private fun SharedPreferences.scanlatorBlacklist(): Set<String> = getStringSet(SCANLATOR_BLACKLIST_PREF, emptySet()).orEmpty()
-        .mapTo(mutableSetOf()) { it.trim().lowercase() }
-
-    private fun SharedPreferences.knownScanlatorNames(): List<String> = getStringSet(KNOWN_SCANLATORS_PREF, emptySet()).orEmpty()
-        .sortedBy { it.lowercase() }
-
-    private fun SharedPreferences.rememberScanlators(names: List<String>) {
-        val known = getStringSet(KNOWN_SCANLATORS_PREF, emptySet()).orEmpty()
-        val new = names.filter { it.isNotBlank() }.toSet() - known
-        if (new.isEmpty()) return
-        edit().putStringSet(KNOWN_SCANLATORS_PREF, known + new).apply()
-    }
-
-    private fun List<SChapter>.filterBlacklistedScanlators(blacklist: Set<String>): List<SChapter> = filterNot { it.scanlator?.trim()?.lowercase()?.let(blacklist::contains) == true }
-
     companion object {
         private const val MAX_RETRIES = 3
-        private const val SCANLATOR_BLACKLIST_PREF = "scanlator_blacklist_pref"
-        private const val KNOWN_SCANLATORS_PREF = "known_scanlators_pref"
     }
 }
