@@ -142,7 +142,10 @@ abstract class Bakai : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
 
-        return document.select("img.mangaReaderImaage").mapIndexed { i, img ->
+        // The reader image class has been renamed several times
+        // (mangaReaderImage -> mangaReaderImaage -> mangaReaderV2Image),
+        // so match the stable prefix instead of the exact class.
+        return document.select("img[class*=mangaReader]").mapIndexed { i, img ->
             val url = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
             Page(i, imageUrl = url)
         }

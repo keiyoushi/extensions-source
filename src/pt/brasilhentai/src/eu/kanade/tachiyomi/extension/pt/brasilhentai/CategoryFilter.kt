@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 
 class CategoryFilter(
     displayName: String,
-    private val vals: Array<Pair<String, String>>,
+    private val vals: List<Pair<String, String>>,
 ) : Filter.Select<String>(
     displayName,
     vals.map { it.first }.toTypedArray(),
