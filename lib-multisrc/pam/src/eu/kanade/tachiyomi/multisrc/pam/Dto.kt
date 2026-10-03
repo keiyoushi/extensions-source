@@ -1,9 +1,15 @@
 package eu.kanade.tachiyomi.multisrc.pam
 
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KeepGeneratedSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonTransformingSerializer
 
 @Serializable
 class Version(
@@ -29,10 +35,20 @@ class LibraryResponse(
     }
 }
 
-@Serializable
+@OptIn(ExperimentalSerializationApi::class)
+@KeepGeneratedSerializer
+@Serializable(with = SearchResponseSerializer::class)
 class SearchResponse(
     val data: List<BrowseManga>,
 )
+
+// Queries under two characters are answered with a bare `[]` instead of `{"data":[]}`
+object SearchResponseSerializer : JsonTransformingSerializer<SearchResponse>(SearchResponse.generatedSerializer()) {
+    override fun transformDeserialize(element: JsonElement): JsonElement = when (element) {
+        is JsonArray -> JsonObject(mapOf("data" to element))
+        else -> element
+    }
+}
 
 @Serializable
 class BrowseManga(
