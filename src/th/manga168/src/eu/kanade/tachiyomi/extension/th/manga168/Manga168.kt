@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.th.manga168
 
+import android.util.Log
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,52 +11,58 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import java.time.Instant
-import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.time.Instant
 
 @Source
 abstract class Manga168 : KeiSource() {
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        rateLimit(3) { it.host == baseUrlHost }
-    }
-
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
+        rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
     }
 
     private val bangkokZone = ZoneId.of("Asia/Bangkok")
     private val dateTimeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
-    private var catalogCache: List<CatalogEntry>? = null
-
+    // The popular ranking is a fixed 15-item list, no pagination.
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val entries = getCatalog().sortedByDescending { it.views }
-        return entries.toMangasPage(page)
+        Log.d(TAG, "getPopularManga: page=$page")
+        if (page > 1) return MangasPage(emptyList(), false)
+        val dto = client.get("$baseUrl/api/manga/daily-popular?period=weekly").parseAs<PopularDto>()
+        val result = MangasPage(dto.data.map { it.toSManga() }, false)
+        Log.d(TAG, "getPopularManga: returning ${result.mangas.size} manga")
+        return result
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val entries = getCatalog().sortedByDescending { it.updatedAt }
-        return entries.toMangasPage(page)
+        Log.d(TAG, "getLatestUpdates: page=$page")
+        val dto = client.get("$baseUrl/api/manga/mangas?page=$page").parseAs<MangaListDto>()
+        val hasNext = page < (dto.pagecount.toIntOrNull() ?: page)
+        val result = MangasPage(dto.data.map { it.toSManga() }, hasNext)
+        Log.d(TAG, "getLatestUpdates: returning ${result.mangas.size} manga, hasNext=$hasNext")
+        return result
     }
 
+    // The API has no search endpoint, so search filters the bulk catalog
+    // from the /manga page in memory. Results are paginated to keep the UI responsive.
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        Log.d(TAG, "getSearchMangaList: page=$page query='$query'")
         var entries = getCatalog()
 
         if (query.isNotBlank()) {
@@ -67,7 +74,7 @@ abstract class Manga168 : KeiSource() {
 
         val genre = filters.filterIsInstance<GenreFilter>().firstOrNull()?.selectedValue
         if (!genre.isNullOrEmpty()) {
-            entries = entries.filter { entry -> entry.genres.any { it == genre } }
+            entries = entries.filter { entry -> genre in entry.genres }
         }
 
         when (filters.filterIsInstance<StatusFilter>().firstOrNull()?.state) {
@@ -80,32 +87,31 @@ abstract class Manga168 : KeiSource() {
         }
 
         entries = when (filters.filterIsInstance<SortFilter>().firstOrNull()?.state) {
-            1 -> entries.sortedByDescending { it.views }
-            else -> entries.sortedByDescending { it.updatedAt }
+            1 -> entries.sortedByDescending { it.viewsLong }
+            else -> entries.sortedByDescending { it.updatedAt.toEpochMillis() }
         }
 
-        return entries.toMangasPage(page)
+        val paged = entries.drop((page - 1) * SEARCH_PAGE_SIZE).take(SEARCH_PAGE_SIZE)
+        val result = MangasPage(paged.map { it.toSManga() }, entries.size > page * SEARCH_PAGE_SIZE)
+        Log.d(TAG, "getSearchMangaList: ${entries.size} matches, returning ${result.mangas.size}")
+        return result
     }
 
-    private fun List<CatalogEntry>.toMangasPage(page: Int): MangasPage {
-        val mangas = drop((page - 1) * PAGE_SIZE).take(PAGE_SIZE).map { it.toSManga() }
-        return MangasPage(mangas, size > page * PAGE_SIZE)
-    }
-
-    private suspend fun getCatalog(): List<CatalogEntry> {
-        catalogCache?.let { return it }
-
-        val html = client.get("$baseUrl/manga").body.string()
-        val entries = parseSeriesArray(html).mapNotNull { it.toCatalogEntry() }
-
-        catalogCache = entries
-        return entries
+    private suspend fun getCatalog(): List<SeriesDto> {
+        val start = System.currentTimeMillis()
+        Log.d(TAG, "getCatalog: fetching $baseUrl/manga")
+        val doc = client.get("$baseUrl/manga").asJsoup()
+        val page = doc.extractNextJs<SeriesPageDto> { it is JsonObject && "series" in it }
+        val series = page?.series.orEmpty()
+        Log.d(TAG, "getCatalog: ${series.size} series in ${System.currentTimeMillis() - start}ms")
+        return series
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
         val manga = SManga.create().apply { this.url = "/manga/$slug" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = true)
             .manga
             .apply { initialized = true }
     }
@@ -116,22 +122,23 @@ abstract class Manga168 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        val start = System.currentTimeMillis()
         val slug = manga.url.substringAfter("/manga/").substringBefore("/")
-        val html = client.get("$baseUrl/manga/$slug").body.string()
-        val series = parseSeriesArray(html).firstOrNull { it.slug() == slug }
-            ?: return SMangaUpdate(manga, chapters)
+        Log.d(TAG, "fetchMangaUpdate: slug=$slug")
+        val doc = client.get("$baseUrl/manga/$slug").asJsoup()
+        val series = doc.extractNextJs<SeriesPageDto> { it is JsonObject && "series" in it }
+            ?.series?.firstOrNull { it.slug == slug }
+        Log.d(TAG, "fetchMangaUpdate: series found=${series != null}, ${System.currentTimeMillis() - start}ms")
+        if (series == null) return SMangaUpdate(manga, chapters)
 
         val updatedManga = SManga.create().apply {
             url = manga.url
-            title = series.string("title").ifEmpty { manga.title }
-            thumbnail_url = series.string("coverImage").ifEmpty { null }
-            author = series.string("author").ifEmpty { null }
-            description = series.string("description").ifEmpty { null }
-            genre = series.jsonArray("genres").mapNotNull { it.jsonPrimitive.contentOrNull }
-                .filter { it.isNotBlank() }
-                .joinToString()
-                .ifEmpty { null }
-            status = when (series.string("status").lowercase()) {
+            title = series.title.ifEmpty { manga.title }
+            thumbnail_url = series.coverImage?.ifEmpty { null }
+            author = series.author?.ifEmpty { null }
+            description = series.description?.ifEmpty { null }
+            genre = series.genres.filter { it.isNotBlank() }.joinToString().ifEmpty { null }
+            status = when (series.status?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
                 "hiatus" -> SManga.ON_HIATUS
@@ -140,144 +147,52 @@ abstract class Manga168 : KeiSource() {
             }
         }
 
-        val chapterList = if (fetchChapters) {
-            series.jsonArray("chapters").mapNotNull { element ->
-                val obj = SeriesObject(element.jsonObject)
-                val id = obj.string("id")
-                val number = obj.double("number")
-                if (id.isEmpty() || number == null) return@mapNotNull null
-                SChapter.create().apply {
-                    url = "/manga/$slug/chapter/$id"
-                    name = obj.string("title").ifEmpty { "Chapter ${number.toDisplayString()}" }
-                    chapter_number = number.toFloat()
-                    date_upload = obj.string("updatedAt").toEpochMillis()
+        val chapterList = series.chapters.mapNotNull { ch ->
+            val number = ch.number ?: return@mapNotNull null
+            if (ch.id.isEmpty()) return@mapNotNull null
+            SChapter.create().apply {
+                url = "/manga/$slug/chapter/${ch.id}"
+                name = ch.title?.ifEmpty { null } ?: "Chapter ${number.toDisplayString()}"
+                chapter_number = number.toFloat()
+                date_upload = ch.updatedAt.toEpochMillis()
+                memo = buildJsonObject {
+                    put("mangaId", JsonPrimitive(series.id))
+                    put("number", JsonPrimitive(number))
                 }
-            }.sortedByDescending { it.chapter_number }
-        } else {
-            chapters
-        }
+            }
+        }.sortedByDescending { it.chapter_number }
+        Log.d(TAG, "fetchMangaUpdate: ${chapterList.size} chapters, total ${System.currentTimeMillis() - start}ms")
 
         return SMangaUpdate(updatedManga, chapterList)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val segments = chapter.url.split("/").filter { it.isNotEmpty() }
-        val slug = segments.getOrNull(1) ?: error("Unexpected chapter URL: ${chapter.url}")
-        val chapterId = segments.getOrNull(3) ?: error("Unexpected chapter URL: ${chapter.url}")
+        val start = System.currentTimeMillis()
+        Log.d(TAG, "getPageList: url=${chapter.url}")
+        val mangaId = chapter.memo["mangaId"]?.jsonPrimitive?.contentOrNull
+            ?: error("Refresh chapter list")
+        val number = chapter.memo["number"]?.jsonPrimitive?.doubleOrNull
+            ?: error("Refresh chapter list")
 
-        val html = client.get("$baseUrl/manga/$slug").body.string()
-        val series = parseSeriesArray(html).firstOrNull { it.slug() == slug }
-            ?: error("Manga not found: $slug")
-        val mangaId = series.string("id").ifEmpty { error("Manga id not found: $slug") }
-        val number = series.jsonArray("chapters")
-            .map { SeriesObject(it.jsonObject) }
-            .firstOrNull { it.string("id") == chapterId }
-            ?.double("number")
-            ?: error("Chapter not found: $chapterId")
-
-        val numberParam = number.toDisplayString()
-        val response = client.get("$baseUrl/api/manga/mangas/$mangaId/$numberParam/images")
-            .body.string()
-        val imageUrls = json.parseToJsonElement(response).jsonObject["data"]?.jsonArray.orEmpty()
-            .mapNotNull { it.jsonPrimitive.contentOrNull }
+        val imageUrls = client.get("$baseUrl/api/manga/mangas/$mangaId/${number.toDisplayString()}/images")
+            .parseAs<ImagesDto>()
+            .data
             .filter { it.isNotBlank() }
+        Log.d(TAG, "getPageList: ${imageUrls.size} pages, total ${System.currentTimeMillis() - start}ms")
 
         return imageUrls.mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 
-    private fun parseSeriesArray(html: String): List<SeriesObject> {
-        val marker = "\\\"series\\\":["
-        val start = html.indexOf(marker)
-        if (start == -1) return emptyList()
-
-        var i = start + marker.length
-        var depth = 1
-        var inString = false
-        val raw = StringBuilder()
-        while (i < html.length && depth > 0) {
-            val c = html[i]
-            if (c == '\\' && i + 1 < html.length) {
-                val next = html[i + 1]
-                if (next == '"') {
-                    inString = !inString
-                }
-                raw.append(c).append(next)
-                i += 2
-                continue
-            }
-            if (!inString) {
-                if (c == '[') {
-                    depth++
-                }
-                if (c == ']') {
-                    depth--
-                }
-            }
-            if (depth > 0) raw.append(c)
-            i++
-        }
-
-        val unescaped = json.decodeFromString<String>("\"$raw\"")
-        return json.parseToJsonElement("[$unescaped]").jsonArray
-            .map { SeriesObject(it.jsonObject) }
-    }
-
     private fun Double.toDisplayString(): String = if (this % 1.0 == 0.0) toInt().toString() else toString()
 
-    private fun String.toEpochMillis(): Long {
-        if (isBlank()) return 0L
-        runCatching {
-            return Instant.parse(this).toEpochMilli()
-        }
-        runCatching {
-            return LocalDateTime.parse(this, dateTimeFormat)
-                .atZone(bangkokZone)
-                .toInstant()
-                .toEpochMilli()
-        }
-        return 0L
+    private fun String?.toEpochMillis(): Long {
+        if (this.isNullOrBlank()) return 0L
+        return Instant.tryParse(this).takeIf { it != 0L }
+            ?: dateTimeFormat.tryParseDateTime(this, bangkokZone)
     }
 
-    private class SeriesObject(private val obj: JsonObject) {
-        fun string(key: String): String = obj[key]?.jsonPrimitive?.contentOrNull.orEmpty()
-            .takeUnless { it == "\$undefined" }.orEmpty()
-
-        fun double(key: String): Double? = obj[key]?.jsonPrimitive?.doubleOrNull
-
-        fun slug(): String = string("slug")
-
-        fun jsonArray(key: String) = obj[key]?.jsonArray.orEmpty()
-    }
-
-    private data class CatalogEntry(
-        val slug: String,
-        val title: String,
-        val coverImage: String,
-        val status: String,
-        val genres: List<String>,
-        val updatedAt: Long,
-        val views: Long,
-    ) {
-        fun toSManga() = SManga.create().apply {
-            url = "/manga/$slug"
-            title = this@CatalogEntry.title
-            thumbnail_url = coverImage.ifEmpty { null }
-        }
-    }
-
-    private fun SeriesObject.toCatalogEntry(): CatalogEntry? {
-        val slug = slug().ifEmpty { return null }
-        val title = string("title").ifEmpty { return null }
-        return CatalogEntry(
-            slug = slug,
-            title = title,
-            coverImage = string("coverImage"),
-            status = string("status"),
-            genres = jsonArray("genres").mapNotNull { it.jsonPrimitive.contentOrNull },
-            updatedAt = string("updatedAt").toEpochMillis(),
-            views = string("views").toLongOrNull() ?: 0L,
-        )
-    }
+    private val SeriesDto.viewsLong: Long
+        get() = views?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
@@ -286,6 +201,7 @@ abstract class Manga168 : KeiSource() {
     )
 
     companion object {
-        private const val PAGE_SIZE = 20
+        private const val TAG = "Manga168"
+        private const val SEARCH_PAGE_SIZE = 20
     }
 }
