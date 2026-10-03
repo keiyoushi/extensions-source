@@ -11,14 +11,13 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -27,6 +26,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -150,6 +150,7 @@ abstract class DamCoNuong : KeiSource() {
         return fetchMangaDetails(slug)
     }
 
+    // Some manga need login, api doesn't support auth, need html scraping
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -158,22 +159,70 @@ abstract class DamCoNuong : KeiSource() {
     ): SMangaUpdate {
         val slug = manga.url.trimStart('/').substringAfterLast('/')
 
-        return coroutineScope {
-            val detailsDeferred = async {
-                if (!fetchDetails) return@async manga
-                fetchMangaDetails(slug).apply {
-                    this.url = manga.url
-                }
-            }
-            val chaptersDeferred = async {
-                if (fetchChapters) fetchChapterList(slug) else chapters
-            }
-
-            SMangaUpdate(
-                manga = detailsDeferred.await(),
-                chapters = chaptersDeferred.await(),
+        if (manga.memo["needs_login"]?.booleanOrNull == true) {
+            val doc = fetchHtmlDocument(slug)
+            return SMangaUpdate(
+                manga = parseDetailsFromHtml(doc, slug).apply { this.url = manga.url },
+                chapters = parseChaptersFromHtml(doc),
             )
         }
+
+        if (!fetchDetails) {
+            if (!fetchChapters) return SMangaUpdate(manga, chapters)
+
+            val apiUrl = "$api/mangas/$slug/chapters".toHttpUrl().newBuilder()
+                .addQueryParameter("page", "1")
+                .addQueryParameter("per_page", "2000")
+                .addQueryParameter("sort", "desc")
+                .build()
+                .toString()
+
+            val firstText = client.get(apiUrl, ensureSuccess = false).use { it.body.string() }
+            if (isLoginRequired(firstText)) {
+                val doc = fetchHtmlDocument(slug)
+                return SMangaUpdate(
+                    manga = parseDetailsFromHtml(doc, slug).apply { this.url = manga.url },
+                    chapters = parseChaptersFromHtml(doc),
+                )
+            }
+
+            return SMangaUpdate(
+                manga = manga,
+                chapters = fetchChapterListFromApi(slug, firstText),
+            )
+        }
+
+        val apiUrl = "$api/mangas/$slug?include=artist,author,group,genres"
+        val responseText = client.get(apiUrl, ensureSuccess = false).use { it.body.string() }
+        if (isLoginRequired(responseText)) {
+            val doc = fetchHtmlDocument(slug)
+            return SMangaUpdate(
+                manga = parseDetailsFromHtml(doc, slug).apply { this.url = manga.url },
+                chapters = parseChaptersFromHtml(doc),
+            )
+        }
+
+        val dto = responseText.parseAs<DetailResponse>().data
+        val details = dto.toSMangaDetails().apply {
+            this.url = manga.url
+            memo = buildJsonObject {
+                dto.group?.slug?.let { put("group_slug", it) }
+                dto.author?.slug?.let { put("author_slug", it) }
+                dto.artist?.slug?.let { put("artist_slug", it) }
+                dto.genres.firstOrNull()?.slug?.let { put("genre_slug", it) }
+            }
+        }
+
+        val chapterList = if (fetchChapters) {
+            fetchChapterListFromApi(slug)
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(
+            manga = details,
+            chapters = chapterList,
+        )
     }
 
     private suspend fun fetchMangaDetails(slug: String): SManga {
@@ -190,11 +239,11 @@ abstract class DamCoNuong : KeiSource() {
                 }
             }
         }
-        return fetchMangaDetailsFromHtml(slug)
+        val doc = fetchHtmlDocument(slug)
+        return parseDetailsFromHtml(doc, slug)
     }
 
-    // Some manga need login, api doesn't support auth, need html scraping
-    private suspend fun fetchMangaDetailsFromHtml(slug: String): SManga {
+    private suspend fun fetchHtmlDocument(slug: String): Document {
         val url = "$baseUrl/truyen/$slug"
         val response = client.get(url, ensureSuccess = false)
         val text = response.use { it.body.string() }
@@ -202,29 +251,51 @@ abstract class DamCoNuong : KeiSource() {
             throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
         }
         val document = Jsoup.parse(text, url)
-        return SManga.create().apply {
-            this.url = "/truyen/$slug"
-            title = document.selectFirst("h1.md-title, h1")!!.text().trim()
-            thumbnail_url = document.selectFirst(".md-cover img")?.absUrl("src")?.ifEmpty { null }
-                ?: document.selectFirst("meta[property=og:image]")?.attr("content")?.ifEmpty { null }
-            val synopsisEl = document.selectFirst(".md-synopsis")
-            synopsisEl?.select("button, dialog")?.remove()
-            description = synopsisEl?.text()?.trim()?.ifEmpty { null }
-            author = document.select(".md-rail dt:contains(Tác giả) + dd a, .md-rail dt:contains(Tác giả) + dd span")
-                .joinToString { it.text().trim() }.ifEmpty { null }
-            artist = document.select(".md-rail dt:contains(Họa sĩ) + dd a, .md-rail dt:contains(Họa sĩ) + dd span")
-                .joinToString { it.text().trim() }.ifEmpty { null }
-            genre = document.select(".md-rail-genres a.md-chip")
-                .joinToString { it.text().trim() }.ifEmpty { null }
-            status = when {
-                document.selectFirst(".md-badge-done") != null -> SManga.COMPLETED
-                document.selectFirst(".md-badge")?.text()?.contains("hoàn thành", ignoreCase = true) == true -> SManga.COMPLETED
-                else -> SManga.ONGOING
+        if (isLoginRequired(document.text())) {
+            throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
+        }
+        return document
+    }
+
+    private fun parseDetailsFromHtml(document: Document, slug: String): SManga = SManga.create().apply {
+        this.url = "/truyen/$slug"
+        title = document.selectFirst("h1.md-title, h1")!!.text().trim()
+        thumbnail_url = document.selectFirst(".md-cover img")?.absUrl("src")?.ifEmpty { null }
+            ?: document.selectFirst("meta[property=og:image]")?.attr("content")?.ifEmpty { null }
+        val synopsisEl = document.selectFirst(".md-synopsis")
+        synopsisEl?.select("button, dialog")?.remove()
+        description = synopsisEl?.text()?.trim()?.ifEmpty { null }
+        author = document.select(".md-rail dt:contains(Tác giả) + dd a, .md-rail dt:contains(Tác giả) + dd span")
+            .joinToString { it.text().trim() }.ifEmpty { null }
+        artist = document.select(".md-rail dt:contains(Họa sĩ) + dd a, .md-rail dt:contains(Họa sĩ) + dd span")
+            .joinToString { it.text().trim() }.ifEmpty { null }
+        genre = document.select(".md-rail-genres a.md-chip")
+            .joinToString { it.text().trim() }.ifEmpty { null }
+        status = when {
+            document.selectFirst(".md-badge-done") != null -> SManga.COMPLETED
+            document.selectFirst(".md-badge")?.text()?.contains("hoàn thành", ignoreCase = true) == true -> SManga.COMPLETED
+            else -> SManga.ONGOING
+        }
+        memo = buildJsonObject {
+            put("needs_login", true)
+        }
+    }
+
+    private fun parseChaptersFromHtml(document: Document): List<SChapter> {
+        val chapterLinks = document.select("a.md-ch")
+        if (chapterLinks.isEmpty() && isLoginRequired(document.text())) {
+            throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
+        }
+        return chapterLinks.map { a ->
+            SChapter.create().apply {
+                this.url = a.absUrl("href").toHttpUrl().encodedPath
+                name = a.selectFirst(".md-ch-title")?.text()?.trim() ?: a.text().trim()
+                date_upload = parseRelativeDate(a.selectFirst(".md-ch-meta span")?.text())
             }
         }
     }
 
-    private suspend fun fetchChapterList(mangaSlug: String): List<SChapter> {
+    private suspend fun fetchChapterListFromApi(mangaSlug: String, initialJson: String? = null): List<SChapter> {
         val apiUrl = "$api/mangas/$mangaSlug/chapters".toHttpUrl().newBuilder()
             .addQueryParameter("page", "1")
             .addQueryParameter("per_page", "2000")
@@ -232,15 +303,10 @@ abstract class DamCoNuong : KeiSource() {
             .build()
             .toString()
 
-        val firstText = client.get(apiUrl, ensureSuccess = false).use { it.body.string() }
-        if (isLoginRequired(firstText)) {
-            return fetchChapterListFromHtml(mangaSlug)
-        }
-
+        var text = initialJson ?: fetchJson(apiUrl)
         val result = mutableListOf<SChapter>()
         var page = 1
         var lastPage = 1
-        var text = firstText
 
         do {
             if (page > 1) {
@@ -260,27 +326,6 @@ abstract class DamCoNuong : KeiSource() {
         } while (page <= lastPage)
 
         return result
-    }
-
-    private suspend fun fetchChapterListFromHtml(mangaSlug: String): List<SChapter> {
-        val url = "$baseUrl/truyen/$mangaSlug"
-        val response = client.get(url, ensureSuccess = false)
-        val text = response.use { it.body.string() }
-        if (response.code == 403 || isLoginRequired(text)) {
-            throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
-        }
-        val document = Jsoup.parse(text, url)
-        val chapterLinks = document.select("a.md-ch")
-        if (chapterLinks.isEmpty() && isLoginRequired(document.text())) {
-            throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
-        }
-        return chapterLinks.map { a ->
-            SChapter.create().apply {
-                this.url = a.absUrl("href").toHttpUrl().encodedPath
-                name = a.selectFirst(".md-ch-title")?.text()?.trim() ?: a.text().trim()
-                date_upload = parseRelativeDate(a.selectFirst(".md-ch-meta span")?.text())
-            }
-        }
     }
 
     private val numberRegex = Regex("""\d+""")
@@ -332,6 +377,9 @@ abstract class DamCoNuong : KeiSource() {
             manga.memo["artist_slug"]?.stringOrNull?.let { "artists" to it },
             manga.memo["genre_slug"]?.stringOrNull?.let { "genres" to it },
         ).ifEmpty {
+            if (manga.memo["needs_login"]?.booleanOrNull == true) {
+                return emptyList()
+            }
             val detail = fetchJson("$api/mangas/$slug?include=artist,author,group,genres")
                 .parseAs<DetailResponse>()
                 .data
