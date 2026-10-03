@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.sacachispa
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -22,9 +26,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
 @Source
-abstract class Sacachispa : KeiSource() {
+abstract class Sacachispa :
+    KeiSource(),
+    ConfigurableSource {
 
     override val supportsLatest = false
+
+    private val preferences by getPreferencesLazy()
 
     // ============================== Popular ==============================
 
@@ -118,12 +126,13 @@ abstract class Sacachispa : KeiSource() {
         val chapters = mutableListOf<SChapter>()
         var page = 1
         var lastPage: Int
+        val patreon = hidePatreon()
 
         do {
             val response = client.get("$API_URL/releases?mangaId=$mangaId&page=$page&limit=$CHAPTER_PAGE_SIZE")
                 .parseAs<ReleaseListResponse>()
 
-            chapters += response.data.map { it.toSChapter() }
+            chapters += response.data.mapNotNull { it.toSChapter(patreon) }
             lastPage = response.pagination.pages
             page++
         } while (page <= lastPage)
@@ -166,11 +175,15 @@ abstract class Sacachispa : KeiSource() {
         thumbnail_url = cover?.toCoverUrl()
     }
 
-    private fun ReleaseDto.toSChapter() = SChapter.create().apply {
-        url = id
-        name = "Chapter ${chapter.chapter}" + chapter.title?.takeIf { it.isNotBlank() }?.let { " - $it" }.orEmpty()
-        chapter_number = chapter.chapter.toFloatOrNull() ?: -1f
-        date_upload = Instant.tryParse(publishedAt)
+    private fun ReleaseDto.toSChapter(patreon: Boolean): SChapter? {
+        if (patreon && chapter.patreonOnly == true) return null
+        val prefix = if (chapter.patreonOnly == true) "\uD83D\uDD12 " else ""
+        return SChapter.create().apply {
+            url = id
+            name = "${prefix}Chapter ${chapter.chapter}" + chapter.title?.takeIf { it.isNotBlank() }?.let { " - $it" }.orEmpty()
+            chapter_number = chapter.chapter.toFloatOrNull() ?: -1f
+            date_upload = Instant.tryParse(publishedAt)
+        }
     }
 
     private fun String.toCoverUrl() = if (startsWith("http")) this else "$CDN_URL/${trimStart('/')}"
@@ -183,9 +196,25 @@ abstract class Sacachispa : KeiSource() {
         else -> SManga.UNKNOWN
     }
 
+    // ============================== Preferences ==============================
+    private fun hidePatreon(): Boolean = preferences.getBoolean(HIDE_LOCKED_CHAPTERS, true)
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_CHAPTERS
+            title = HIDE_LOCKED_CHAPTERS_TITLE
+            summaryOn = HIDE_LOCKED_CHAPTERS_SUM_ON
+            summaryOff = HIDE_LOCKED_CHAPTERS_SUM_OFF
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+    }
+
     private companion object {
         const val API_URL = "https://api.sacachispa.site/api"
         const val CDN_URL = "https://cdn.sacachispa.site"
+        const val HIDE_LOCKED_CHAPTERS = "hide_patreon_chapters"
+        const val HIDE_LOCKED_CHAPTERS_TITLE = "Hide Patreon-exclusive chapters"
+        const val HIDE_LOCKED_CHAPTERS_SUM_ON = "Chapters will be hidden"
+        const val HIDE_LOCKED_CHAPTERS_SUM_OFF = "Chapters will be marked with an icon: \uD83D\uDD12"
         const val PAGE_SIZE = 24
         const val CHAPTER_PAGE_SIZE = 500
         private val UUID_REGEX = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")

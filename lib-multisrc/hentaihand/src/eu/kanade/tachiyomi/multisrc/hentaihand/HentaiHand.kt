@@ -76,21 +76,64 @@ abstract class HentaiHand :
     // Search
 
     // filter query needs to be resolved to an ID
-    // Returns the first matched id, or null if there are no results
+    // Returns the exact match when present, else the first match,
+    // or null if there are no results
     private val filterIdCache = LruCache<String, Int>(100)
+    private val queryIdCache = LruCache<String, Pair<String, Int>>(20)
 
-    private suspend fun lookupFilterId(query: String, uri: String): Int? {
+    private suspend fun lookupFilterId(query: String, uri: String, exactMatchOnly: Boolean = false): Int? {
         val key = "$uri:$query"
-        filterIdCache.get(key)?.let { return it }
-        return client.get("$baseUrl/api/$uri?q=$query")
-            .parseAs<ResponseDto<List<IdDto>>>().data.firstOrNull()?.id
-            ?.also { filterIdCache.put(key, it) }
+        if (!exactMatchOnly) {
+            filterIdCache.get(key)?.let { return it }
+        }
+        val lookupUrl = "$baseUrl/api/$uri".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .build()
+        val results = client.get(lookupUrl).parseAs<ResponseDto<List<IdDto>>>().data
+        if (results.isEmpty()) {
+            return null
+        }
+        val exact = results.firstOrNull { it.name.equals(query, ignoreCase = true) }?.id
+        if (exactMatchOnly) {
+            return exact
+        }
+        return (exact ?: results.first().id).also { filterIdCache.put(key, it) }
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("q", query)
+
+        val hasLookupState = filters.any { it is LookupFilter && it.state.isNotBlank() }
+
+        // A plain text `q` search without any id filter returns HTTP 500 on some sites,
+        // which breaks tapping a genre tag (the app searches for the tag name as text).
+        // Resolve the query to a tag/artist/character id when possible and search by id instead.
+        val trimmedQuery = query.trim()
+        val cacheKey = trimmedQuery.lowercase()
+        val queryFilter: Pair<String, Int>? = if (trimmedQuery.isNotEmpty() && !hasLookupState) {
+            queryIdCache.get(cacheKey) ?: run {
+                var resolved: Pair<String, Int>? = null
+                for (uri in QUERY_LOOKUP_URIS) {
+                    val id = try {
+                        lookupFilterId(trimmedQuery, uri, exactMatchOnly = true)
+                    } catch (e: Exception) {
+                        null
+                    } ?: continue
+                    resolved = uri to id
+                    break
+                }
+                resolved?.also { queryIdCache.put(cacheKey, it) }
+            }
+        } else {
+            null
+        }
+
+        if (queryFilter != null) {
+            url.addQueryParameter("${queryFilter.first}[0]", queryFilter.second.toString())
+        } else if (trimmedQuery.isNotEmpty()) {
+            url.addQueryParameter("q", query)
+        }
 
         hhLangId.forEachIndexed { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
@@ -292,6 +335,11 @@ abstract class HentaiHand :
     )
 
     companion object {
+        private val QUERY_LOOKUP_URIS = listOf(
+            "tags",
+            "artists",
+            "characters",
+        )
         private const val USERNAME_TITLE = "Username"
         private const val USERNAME_DEFAULT = ""
         private const val PASSWORD_TITLE = "Password"

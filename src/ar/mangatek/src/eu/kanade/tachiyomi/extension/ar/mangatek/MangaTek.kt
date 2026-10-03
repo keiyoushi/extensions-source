@@ -36,7 +36,7 @@ import javax.crypto.spec.SecretKeySpec
 abstract class MangaTek : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        addInterceptor(SpeechBubblePainterInterceptor())
+        addInterceptor(SpeechBubblePainterInterceptor({ baseUrl }, id))
         rateLimit(3)
     }
 
@@ -262,7 +262,7 @@ abstract class MangaTek : KeiSource() {
     companion object {
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?[^#]*)?#\[.*?]""", RegexOption.IGNORE_CASE)
         private const val KEY = "ff453871399fe268588a0936b45376022d85ed0fd1292001d5102f6a30291dc1"
-        private const val UNLOCK_PROOF_SALT = "322c4e08571941fa05abf1a6a2b45c9a9bf7bcc94af61b66"
+        private const val UNLOCK_PROOF_SALT = "80c55d2d1f1432551b82f5304b60e1aced87f823a6ed309d"
         private const val API_BASE = "https://api.mangatek.com"
         private const val UNLOCK_API_URL = "$API_BASE/api/reader/unlock"
     }
