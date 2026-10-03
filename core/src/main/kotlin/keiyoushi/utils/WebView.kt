@@ -18,6 +18,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.annotation.Discouraged
 import keiyoushi.webview.internal.WebViewGlueBridge
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -72,6 +73,7 @@ class WebViewScope<T> internal constructor(
     internal val pageFinishedHooks = CopyOnWriteArrayList<(String) -> Unit>()
     internal val receivedErrorHooks = CopyOnWriteArrayList<(WebResourceRequest, WebResourceError) -> Unit>()
     internal val bridgeNames = CopyOnWriteArrayList<String>()
+    internal val disposeHooks = CopyOnWriteArrayList<() -> Unit>()
 
     @Volatile
     internal var interceptHook: ((WebResourceRequest) -> WebResourceResponse?)? = null
@@ -244,6 +246,14 @@ class WebViewScope<T> internal constructor(
         runOnMain { mainHandler.postDelayed(runnable, interval.inWholeMilliseconds) }
     }
 
+    /** Runs [block] on the main thread when the scope is torn down, before the WebView is destroyed. */
+    fun onDispose(block: () -> Unit) {
+        disposeHooks += block
+    }
+
+    @Discouraged("Avoid webview native methods")
+    fun getAndroidWebView(): WebView = webView
+
     private fun markLoaded() {
         check(loaded.compareAndSet(false, true)) { "load already called on this WebViewScope" }
     }
@@ -379,6 +389,7 @@ suspend fun <T> runWebView(
         }
     } finally {
         scope.destroyed = true
+        scope.disposeHooks.forEach { runCatching(it) }
         webView.stopLoading()
         webView.destroy()
     }
