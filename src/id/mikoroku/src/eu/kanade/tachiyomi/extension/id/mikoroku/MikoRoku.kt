@@ -115,26 +115,22 @@ abstract class MikoRoku : KeiSource() {
     private suspend fun fetchChaptersSubcollection(slug: String): List<SChapter> {
         val url = "https://firestore.googleapis.com/v1/projects/mikoroku/databases/(default)/documents/manga/$slug/chapters?pageSize=500"
 
-        repeat(3) { attempt ->
-            val response = client.get(url, ensureSuccess = false)
-            if (response.code == 200) {
-                return response.parseAs<FirestoreListResponse>().documents.mapNotNull { doc ->
-                    val fields = doc.fields
-                    if (fields.getBoolean("isDraft") == true) return@mapNotNull null
-                    val title = fields.getString("title")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    val key = doc.name.substringAfterLast("/")
-                    SChapter.create().apply {
-                        name = title
-                        date_upload = fields.getLong("date") ?: 0L
-                        this.url = "/manga/$slug/chapter/$key"
-                    }
-                }
-            }
+        val response = client.get(url, ensureSuccess = false)
+        if (response.code != 200) {
             response.close()
-            if (response.code != 429 || attempt == 2) return emptyList()
-            kotlinx.coroutines.delay(2000)
+            return emptyList()
         }
-        return emptyList()
+        return response.parseAs<FirestoreListResponse>().documents.mapNotNull { doc ->
+            val fields = doc.fields
+            if (fields.getBoolean("isDraft") == true) return@mapNotNull null
+            val title = fields.getString("title")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val key = doc.name.substringAfterLast("/")
+            SChapter.create().apply {
+                name = title
+                date_upload = fields.getLong("date") ?: 0L
+                this.url = "/manga/$slug/chapter/$key"
+            }
+        }
     }
 
     private fun FirestoreMap.toChapterInfos(): List<ChapterInfo> = fields
@@ -233,16 +229,13 @@ abstract class MikoRoku : KeiSource() {
 
     private suspend fun fetchFirestoreDoc(slug: String): FirestoreMap? {
         val url = "https://firestore.googleapis.com/v1/projects/mikoroku/databases/(default)/documents/manga/$slug"
-        repeat(3) { attempt ->
-            val response = client.get(url, ensureSuccess = false)
-            if (response.code == 200) {
-                return response.parseAs<FirestoreMap>()
-            }
+
+        val response = client.get(url, ensureSuccess = false)
+        if (response.code != 200) {
             response.close()
-            if (response.code != 429 || attempt == 2) return null
-            kotlinx.coroutines.delay(2000)
+            return null
         }
-        return null
+        return response.parseAs<FirestoreMap>()
     }
 
     private suspend fun searchBlogger(feedUrl: String, query: String, maxResults: Int): List<BloggerEntry> {
@@ -261,7 +254,6 @@ abstract class MikoRoku : KeiSource() {
     private fun String?.nonBlank(): String? = this?.takeIf { it.isNotBlank() }
 
     companion object {
-        private const val TAG = "MikoRoku"
         private val CHAPTER_URL_REGEX = """/manga/([^/]+)/chapter/([^/]+)""".toRegex()
         private val POST_URL_REGEX = """/manga/([^/]+)/post/([^/]+)""".toRegex()
     }
