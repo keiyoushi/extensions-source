@@ -13,8 +13,6 @@ keiyoushi {
 
     source {
         lang = "ar"
-        baseUrl {
-            custom("https://despair-world.com")
-        }
+        baseUrl = "https://despair-world.com"
     }
 }
