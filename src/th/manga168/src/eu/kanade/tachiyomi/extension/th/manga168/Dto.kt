@@ -20,9 +20,9 @@ class PopularDto(
 
 @Serializable
 class ApiMangaDto(
-    val id: String = "",
-    val slug: String = "",
-    val title: String = "",
+    val id: String,
+    val slug: String,
+    val title: String,
     val coverImage: String? = null,
     val author: String? = null,
     val description: String? = null,
@@ -50,9 +50,9 @@ class SeriesPageDto(
 
 @Serializable
 class SeriesDto(
-    val id: String = "",
-    val slug: String = "",
-    val title: String = "",
+    val id: String,
+    val slug: String,
+    val title: String,
     val coverImage: String? = null,
     val author: String? = null,
     val description: String? = null,
@@ -71,7 +71,7 @@ class SeriesDto(
 
 @Serializable
 class SeriesChapterDto(
-    val id: String = "",
+    val id: String,
     val title: String? = null,
     val number: Double? = null,
     val updatedAt: String? = null,

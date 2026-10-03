@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.th.manga168
 
-import android.util.Log
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -42,27 +41,22 @@ abstract class Manga168 : KeiSource() {
 
     // The popular ranking is a fixed 15-item list, no pagination.
     override suspend fun getPopularManga(page: Int): MangasPage {
-        Log.d(TAG, "getPopularManga: page=$page")
         if (page > 1) return MangasPage(emptyList(), false)
         val dto = client.get("$baseUrl/api/manga/daily-popular?period=weekly").parseAs<PopularDto>()
         val result = MangasPage(dto.data.map { it.toSManga() }, false)
-        Log.d(TAG, "getPopularManga: returning ${result.mangas.size} manga")
         return result
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        Log.d(TAG, "getLatestUpdates: page=$page")
         val dto = client.get("$baseUrl/api/manga/mangas?page=$page").parseAs<MangaListDto>()
         val hasNext = page < (dto.pagecount.toIntOrNull() ?: page)
         val result = MangasPage(dto.data.map { it.toSManga() }, hasNext)
-        Log.d(TAG, "getLatestUpdates: returning ${result.mangas.size} manga, hasNext=$hasNext")
         return result
     }
 
     // The API has no search endpoint, so search filters the bulk catalog
     // from the /manga page in memory. Results are paginated to keep the UI responsive.
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        Log.d(TAG, "getSearchMangaList: page=$page query='$query'")
         var entries = getCatalog()
 
         if (query.isNotBlank()) {
@@ -93,17 +87,14 @@ abstract class Manga168 : KeiSource() {
 
         val paged = entries.drop((page - 1) * SEARCH_PAGE_SIZE).take(SEARCH_PAGE_SIZE)
         val result = MangasPage(paged.map { it.toSManga() }, entries.size > page * SEARCH_PAGE_SIZE)
-        Log.d(TAG, "getSearchMangaList: ${entries.size} matches, returning ${result.mangas.size}")
         return result
     }
 
     private suspend fun getCatalog(): List<SeriesDto> {
         val start = System.currentTimeMillis()
-        Log.d(TAG, "getCatalog: fetching $baseUrl/manga")
         val doc = client.get("$baseUrl/manga").asJsoup()
         val page = doc.extractNextJs<SeriesPageDto> { it is JsonObject && "series" in it }
         val series = page?.series.orEmpty()
-        Log.d(TAG, "getCatalog: ${series.size} series in ${System.currentTimeMillis() - start}ms")
         return series
     }
 
@@ -124,11 +115,9 @@ abstract class Manga168 : KeiSource() {
     ): SMangaUpdate {
         val start = System.currentTimeMillis()
         val slug = manga.url.substringAfter("/manga/").substringBefore("/")
-        Log.d(TAG, "fetchMangaUpdate: slug=$slug")
         val doc = client.get("$baseUrl/manga/$slug").asJsoup()
         val series = doc.extractNextJs<SeriesPageDto> { it is JsonObject && "series" in it }
             ?.series?.firstOrNull { it.slug == slug }
-        Log.d(TAG, "fetchMangaUpdate: series found=${series != null}, ${System.currentTimeMillis() - start}ms")
         if (series == null) return SMangaUpdate(manga, chapters)
 
         val updatedManga = SManga.create().apply {
@@ -161,14 +150,12 @@ abstract class Manga168 : KeiSource() {
                 }
             }
         }.sortedByDescending { it.chapter_number }
-        Log.d(TAG, "fetchMangaUpdate: ${chapterList.size} chapters, total ${System.currentTimeMillis() - start}ms")
 
         return SMangaUpdate(updatedManga, chapterList)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val start = System.currentTimeMillis()
-        Log.d(TAG, "getPageList: url=${chapter.url}")
         val mangaId = chapter.memo["mangaId"]?.jsonPrimitive?.contentOrNull
             ?: error("Refresh chapter list")
         val number = chapter.memo["number"]?.jsonPrimitive?.doubleOrNull
@@ -178,7 +165,6 @@ abstract class Manga168 : KeiSource() {
             .parseAs<ImagesDto>()
             .data
             .filter { it.isNotBlank() }
-        Log.d(TAG, "getPageList: ${imageUrls.size} pages, total ${System.currentTimeMillis() - start}ms")
 
         return imageUrls.mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
@@ -201,7 +187,6 @@ abstract class Manga168 : KeiSource() {
     )
 
     companion object {
-        private const val TAG = "Manga168"
         private const val SEARCH_PAGE_SIZE = 20
     }
 }
