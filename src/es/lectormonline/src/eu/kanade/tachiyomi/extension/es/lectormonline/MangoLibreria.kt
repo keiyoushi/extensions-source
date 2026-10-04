@@ -160,8 +160,8 @@ abstract class MangoLibreria : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val details = async { fetchMangaDetails(manga) }
-        val chapterList = async { fetchChapterList(manga) }
+        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
         SMangaUpdate(details.await(), chapterList.await())
     }
 
