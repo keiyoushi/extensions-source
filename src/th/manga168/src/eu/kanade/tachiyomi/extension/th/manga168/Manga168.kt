@@ -43,15 +43,13 @@ abstract class Manga168 : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
         val dto = client.get("$baseUrl/api/manga/daily-popular?period=weekly").parseAs<PopularDto>()
-        val result = MangasPage(dto.data.map { it.toSManga() }, false)
-        return result
+        return MangasPage(dto.data.map { it.toSManga() }, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val dto = client.get("$baseUrl/api/manga/mangas?page=$page").parseAs<MangaListDto>()
         val hasNext = page < (dto.pagecount.toIntOrNull() ?: page)
-        val result = MangasPage(dto.data.map { it.toSManga() }, hasNext)
-        return result
+        return MangasPage(dto.data.map { it.toSManga() }, hasNext)
     }
 
     // The API has no search endpoint, so search filters the bulk catalog
@@ -86,16 +84,13 @@ abstract class Manga168 : KeiSource() {
         }
 
         val paged = entries.drop((page - 1) * SEARCH_PAGE_SIZE).take(SEARCH_PAGE_SIZE)
-        val result = MangasPage(paged.map { it.toSManga() }, entries.size > page * SEARCH_PAGE_SIZE)
-        return result
+        return MangasPage(paged.map { it.toSManga() }, entries.size > page * SEARCH_PAGE_SIZE)
     }
 
     private suspend fun getCatalog(): List<SeriesDto> {
-        val start = System.currentTimeMillis()
         val doc = client.get("$baseUrl/manga").asJsoup()
-        val page = doc.extractNextJs<SeriesPageDto> { it is JsonObject && "series" in it }
-        val series = page?.series.orEmpty()
-        return series
+        return doc.extractNextJs<SeriesPageDto> { it is JsonObject && "series" in it }
+            ?.series.orEmpty()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -113,12 +108,11 @@ abstract class Manga168 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val start = System.currentTimeMillis()
         val slug = manga.url.substringAfter("/manga/").substringBefore("/")
         val doc = client.get("$baseUrl/manga/$slug").asJsoup()
         val series = doc.extractNextJs<SeriesPageDto> { it is JsonObject && "series" in it }
             ?.series?.firstOrNull { it.slug == slug }
-        if (series == null) return SMangaUpdate(manga, chapters)
+            ?: return SMangaUpdate(manga, chapters)
 
         val updatedManga = SManga.create().apply {
             url = manga.url
@@ -155,7 +149,6 @@ abstract class Manga168 : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val start = System.currentTimeMillis()
         val mangaId = chapter.memo["mangaId"]?.jsonPrimitive?.contentOrNull
             ?: error("Refresh chapter list")
         val number = chapter.memo["number"]?.jsonPrimitive?.doubleOrNull
