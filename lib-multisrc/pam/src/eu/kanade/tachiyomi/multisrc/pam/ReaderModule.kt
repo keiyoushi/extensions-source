@@ -10,9 +10,8 @@ import java.io.IOException
 
 /**
  * The reader's signer as shipped by the site. Each build renames the WASM exports and reshuffles
- * the tables of the `a.b` import that unmasks the signer's secret, and sites rebuild every few
- * days, so all of it is read from the site's own bundle instead of being shipped with the
- * extension.
+ * the tables of the imports that unmask the signer's secret, and sites rebuild every few days,
+ * so all of it is read from the site's own bundle instead of being shipped with the extension.
  */
 internal class ReaderModule(
     val module: WasmModule,
@@ -20,13 +19,17 @@ internal class ReaderModule(
     val exports: Map<String, String>,
     /** The only host functions the signer may import, as module and name. */
     val resizeImport: Pair<String, String>,
-    val unmaskImport: Pair<String, String>,
-    val unmaskPermutation: IntArray,
-    val unmaskXor: IntArray,
-    val unmaskAdd: IntArray,
+    val unmaskImports: Map<Pair<String, String>, Unmask>,
 ) {
     fun export(name: String): String = exports[name] ?: throw IOException("Reader export $name missing")
 }
+
+/** Rewrites a 64-byte block in place: out[i] = (in[permutation[i]] ^ xor[i]) + add[i]. */
+internal class Unmask(
+    val permutation: IntArray,
+    val xor: IntArray,
+    val add: IntArray,
+)
 
 internal suspend fun OkHttpClient.fetchReaderModule(baseUrl: String, headers: Headers): ReaderModule {
     suspend fun asset(name: String): String = get("$baseUrl/build/assets/$name", headers).use { it.body.string() }
@@ -68,15 +71,26 @@ internal suspend fun OkHttpClient.fetchReaderModule(baseUrl: String, headers: He
         CTORS_REGEX.find(glue)?.groupValues?.get(1)?.let { put("ctors", it) }
     }
 
-    val unmask = UNMASK_REGEX.find(glue)?.groupValues ?: throw IOException("Unsupported reader signer build")
-    val tables = unmask.slice(3..5)
-        .map { group -> group.split(',').map(String::toInt).toIntArray() }
-        .takeIf { tables -> tables.all { it.size == UNMASK_SIZE } }
-        ?: throw IOException("Unsupported reader signer build")
     val (importObject, resizeName) = RESIZE_IMPORT_REGEX.find(glue)?.destructured
         ?: throw IOException("Unsupported reader signer build")
     val importModule = Regex("""var [\w$]+=\{([\w$]+):${Regex.escape(importObject)}\}""").find(glue)?.groupValues?.get(1)
         ?: throw IOException("Unsupported reader signer build")
+
+    // Builds ship one or more unmask imports, each with its own loop shape and table order.
+    val unmasks = UNMASK_REGEX.findAll(glue).associate { match ->
+        val groups = match.groupValues
+        val tables = mapOf(groups[3] to groups[4], groups[5] to groups[6], groups[7] to groups[8])
+            .mapValues { (_, values) -> values.split(',').map(String::toInt).toIntArray() }
+        if (tables.size != 3 || tables.values.any { it.size != UNMASK_SIZE }) {
+            throw IOException("Unsupported reader signer build")
+        }
+        (importModule to groups[1]) to Unmask(
+            permutation = tables[groups[11]] ?: throw IOException("Unsupported reader signer build"),
+            xor = tables[groups[12]] ?: throw IOException("Unsupported reader signer build"),
+            add = tables[groups[13]] ?: throw IOException("Unsupported reader signer build"),
+        )
+    }
+    if (unmasks.isEmpty()) throw IOException("Unsupported reader signer build")
 
     val wasm = WASM_REGEX.find(glue)?.groupValues?.get(1) ?: throw IOException("Reader signer module not found")
 
@@ -84,10 +98,7 @@ internal suspend fun OkHttpClient.fetchReaderModule(baseUrl: String, headers: He
         module = Parser.parse(Base64.decode(wasm, Base64.DEFAULT)),
         exports = exports,
         resizeImport = importModule to resizeName,
-        unmaskImport = importModule to unmask[1],
-        unmaskPermutation = tables[0],
-        unmaskXor = tables[1],
-        unmaskAdd = tables[2],
+        unmaskImports = unmasks,
     )
 }
 
@@ -111,8 +122,8 @@ private val RESIZE_IMPORT_REGEX = Regex(
     """([\w$]+)=\{([\w$]+):[\w$]+=>\{var [\w$]+=[\w$]+\.length;if\(\d+<\([\w$]+>>>=0\)\)return!1""",
 )
 
-// The import rewrites a 64-byte block in place: out[i] = (in[perm[i]] ^ xor[i]) + add[i].
+// name:function(p){var a=[..],b=[..],c=[..],q=mem.slice(p,p+64) ... mem[p+i]=(q[perm[i]]^xor[i])+add[i]&255
 private val UNMASK_REGEX = Regex(
-    """([\w$]+):function\(([\w$]+)\)\{for\(var [\w$]+=\[([\d,]+)\],[\w$]+=\[([\d,]+)\],[\w$]+=\[([\d,]+)\],[\w$]+=[\w$]+\.slice\(\2,\2\+64\),[\w$]+=0;64>[\w$]+;[\w$]+\+\+\)[\w$]+\[\2\+([\w$]+)\]=\([\w$]+\[[\w$]+\[\6\]\]\^[\w$]+\[\6\]\)\+[\w$]+\[\6\]&255\}""",
+    """([\w$]+):function\(([\w$]+)\)\{(?:for\()?var ([\w$]+)=\[([\d,]+)\],([\w$]+)=\[([\d,]+)\],([\w$]+)=\[([\d,]+)\],([\w$]+)=[\w$]+\.slice\(\2,\2\+64\)[^}]*?[\w$]+\[\2\+([\w$]+)\]=\(\9\[([\w$]+)\[\10\]\]\^([\w$]+)\[\10\]\)\+([\w$]+)\[\10\]&255""",
 )
 private val WASM_REGEX = Regex(""""(AGFzbQ[A-Za-z0-9+/=]+)"""")

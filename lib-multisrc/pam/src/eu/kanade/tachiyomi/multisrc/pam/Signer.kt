@@ -28,16 +28,18 @@ internal class Signer(private val reader: ReaderModule) {
             .map { import ->
                 if (import !is FunctionImport) throw IOException("Unsupported reader import ${import.module()}.${import.name()}")
                 val type = types.getType(import.typeIndex())
-                when (import.module() to import.name()) {
-                    reader.resizeImport -> HostFunction(import.module(), import.name(), type) { instance, args ->
+                val name = import.module() to import.name()
+                val unmask = reader.unmaskImports[name]
+                when {
+                    name == reader.resizeImport -> HostFunction(import.module(), import.name(), type) { instance, args ->
                         val memory = instance.memory()
                         val wanted = args[0].toInt().toLong() and 0xFFFFFFFFL
                         val missing = wanted - memory.pages().toLong() * PAGE_SIZE
                         val grown = missing <= 0 || memory.grow(((missing + PAGE_SIZE - 1) / PAGE_SIZE).toInt()) >= 0
                         longArrayOf(if (grown) 1 else 0)
                     }
-                    reader.unmaskImport -> HostFunction(import.module(), import.name(), type) { instance, args ->
-                        instance.memory().unmask(args[0].toInt())
+                    unmask != null -> HostFunction(import.module(), import.name(), type) { instance, args ->
+                        instance.memory().unmask(args[0].toInt(), unmask)
                         null
                     }
                     // A host function this theme does not know would be stubbed wrongly; refuse the build instead.
@@ -47,10 +49,10 @@ internal class Signer(private val reader: ReaderModule) {
             .toTypedArray()
     }
 
-    private fun Memory.unmask(ptr: Int) {
+    private fun Memory.unmask(ptr: Int, unmask: Unmask) {
         val block = readBytes(ptr, UNMASK_SIZE)
         val out = ByteArray(UNMASK_SIZE) { i ->
-            ((block[reader.unmaskPermutation[i]].toInt() and 0xFF xor reader.unmaskXor[i]) + reader.unmaskAdd[i]).toByte()
+            ((block[unmask.permutation[i]].toInt() and 0xFF xor unmask.xor[i]) + unmask.add[i]).toByte()
         }
         write(ptr, out)
     }
