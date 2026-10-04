@@ -2,7 +2,6 @@
 
 package eu.kanade.tachiyomi.extension.pt.mangadash
 
-import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -18,44 +17,45 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
-import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import org.jsoup.nodes.Document
 import java.io.File
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.minutes
 
 @Suppress("unused")
 @Source
 abstract class MangaDash :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
 
     // Retrieve the app's dedicated cache directory safely
     private val cacheDir: File by lazy {
-        File(Injekt.get<Application>().cacheDir, "mangadash_pdf_cache").apply {
+        File(applicationContext.cacheDir, "mangadash_pdf_cache").apply {
             mkdirs()
         }
     }
@@ -143,14 +143,12 @@ abstract class MangaDash :
         chain.proceed(request)
     }
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(loginInterceptor)
-        .addInterceptor(pdfInterceptor)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(loginInterceptor)
+        addInterceptor(pdfInterceptor)
+    }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Accept", "application/json, text/plain, */*")
-        .add("Referer", "$baseUrl/")
+    override fun Headers.Builder.configureHeaders() = add("Accept", "application/json, text/plain, */*")
 
     // ============================== Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -212,20 +210,27 @@ abstract class MangaDash :
     }
 
     // ============================== Popular ==============================
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/mangas/list?page=$page&q=&sort=populares&categoria=&status=&ano=&plus18=", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<MangaListDto>()
-        return MangasPage(dto.mangas, dto.hasNext)
-    }
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList(SortFilter(1)))
 
     // ============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/mangas/list?page=$page&q=&sort=recentes&categoria=&status=&ano=&plus18=", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", FilterList())
 
     // ============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.count(String::isNotBlank) < 2) return null
+
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = url.encodedPath },
+            emptyList(),
+            true,
+            false,
+        ).manga
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sort = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: "recentes"
         val category = filters.firstInstanceOrNull<CategoryFilter>()?.toUriPart() ?: ""
         val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart() ?: ""
@@ -242,54 +247,70 @@ abstract class MangaDash :
             addQueryParameter("plus18", plus18)
         }.build()
 
-        return GET(url, headers)
+        return client.get(url).parseAs<MangaListDto>().let {
+            MangasPage(
+                it.items.map {
+                    it.toSManga(baseUrl)
+                },
+                it.hasNext,
+            )
+        }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    // ============================ MangaUpdate ============================
+
+    override val supportRelatedMangasBySearch = true
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            mangaDetailsParse(doc),
+            chapterListParse(doc),
+        )
+    }
 
     // ============================== Details ==============================
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst(".neon-title")?.text()!!
-            author = document.selectFirst(".tag-author")?.text()
-            genre = document.select(".manga-tags a.tag:not(.tag-author)").joinToString { it.text() }
-            description = document.selectFirst(".manga-description")?.text()
+    private fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        setUrlWithoutDomain(document.location())
+        title = document.selectFirst(".neon-title")?.text()!!
+        thumbnail_url = document.selectFirst(".cover-3d img")?.attr("abs:src")
+        author = document.selectFirst(".tag-author")?.text()
+        genre = document.select(".manga-tags a.tag:not(.tag-author)").joinToString { it.text() }
+        description = document.selectFirst(".manga-description")?.text()
 
-            val statsText = document.select(".stats-row .stat-item").text()
-            status = when {
-                statsText.contains("Lançamento", ignoreCase = true) -> SManga.ONGOING
-                statsText.contains("Concluído", ignoreCase = true) -> SManga.COMPLETED
-                statsText.contains("Hiato", ignoreCase = true) -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
+        val statsText = document.select(".stats-row .stat-item").text()
+        status = when {
+            statsText.contains("Lançamento", ignoreCase = true) -> SManga.ONGOING
+            statsText.contains("Concluído", ignoreCase = true) -> SManga.COMPLETED
+            statsText.contains("Hiato", ignoreCase = true) -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
         }
     }
 
     // ============================= Chapters ==============================
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = document.select(".chapters-scroll-container .chapter-row").map { element ->
-            SChapter.create().apply {
-                url = element.attr("href")
-                name = element.selectFirst(".chapter-title-group h4")?.text()!!
-                val dateStr = element.selectFirst(".chapter-meta-info:has(.fa-calendar)")?.text()
-                date_upload = dateStr?.let { dateFormat.tryParse(it) } ?: 0L
+    private fun chapterListParse(document: Document) = document.select(".chapters-scroll-container .chapter-row").map { element ->
+        SChapter.create().apply {
+            url = element.attr("href")
+            name = element.selectFirst(".chapter-title-group h4")?.text()!!
+            val dateStr = element.selectFirst(".chapter-meta-info:has(.fa-calendar)")?.text()
+            date_upload = dateFormat.tryParseDate(dateStr)
 
-                // Extract chapter number for proper sorting fixing the website's alphabetical issue
-                chapter_number = name.substringAfter("Capítulo").trim().toFloatOrNull() ?: -1f
-            }
+            // Extract chapter number for proper sorting fixing the website's alphabetical issue
+            chapter_number = name.substringAfter("Capítulo").trim().toFloatOrNull() ?: -1f
         }
-
-        return chapters.sortedWith(
-            compareByDescending<SChapter> { it.chapter_number }
-                .thenByDescending { it.name },
-        )
-    }
+    }.sortedWith(
+        compareByDescending<SChapter> { it.chapter_number }
+            .thenByDescending { it.name },
+    )
 
     // =============================== Pages ===============================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val dataElement = document.selectFirst("script#chapterViewerData")
             ?: throw Exception("Dados do capítulo não encontrados")
 
@@ -356,10 +377,8 @@ abstract class MangaDash :
         throw Exception("Nenhuma imagem encontrada para este capítulo.")
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
-
     // ============================== Filters ==============================
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         CategoryFilter(),
         StatusFilter(),
@@ -371,9 +390,6 @@ abstract class MangaDash :
     companion object {
         private const val PREF_USERNAME = "pref_username"
         private const val PREF_PASSWORD = "pref_password"
-
-        private val dateFormat by lazy {
-            SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
-        }
+        private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy")
     }
 }
