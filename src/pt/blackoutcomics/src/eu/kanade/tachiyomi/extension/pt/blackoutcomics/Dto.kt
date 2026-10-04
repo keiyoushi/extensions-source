@@ -5,6 +5,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+class SearchPayload(
+    val src: String,
+)
+
+@Serializable
 class SearchResponse(
     val items: List<SearchItem> = emptyList(),
 )
