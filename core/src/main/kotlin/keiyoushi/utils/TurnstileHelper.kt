@@ -2,6 +2,7 @@ package keiyoushi.utils
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
@@ -55,10 +56,16 @@ class TurnstileHelper : ActivityTrackingHelper() {
      * @throws Exception with message `"Captcha cancelled"` if the user dismisses the dialog.
      * @throws Exception if no usable Activity is available or the dialog cannot be shown, for
      * interactive challenges only.
-     * @throws WebViewTimeoutException if no token is produced within 2 minutes.
+     * @throws WebViewTimeoutException if no token is produced within 3 minutes.
      * @throws RenderProcessGoneException if the WebView renderer crashes or is killed.
      */
-    suspend fun getTurnstileToken(url: String, siteKey: String, userAgent: String): String {
+    suspend fun getTurnstileToken(
+        url: String,
+        siteKey: String,
+        userAgent: String,
+        lang: String = "en",
+    ): String {
+        val strings = stringsForLang(lang)
         val dialogRef = AtomicReference<CaptchaDialog?>(null)
         val cssHeight = AtomicInteger(CAPTCHA_MIN_HEIGHT_DP)
         val disposed = AtomicBoolean(false)
@@ -67,6 +74,12 @@ class TurnstileHelper : ActivityTrackingHelper() {
             runWebView(3.minutes) {
                 this.userAgent = userAgent
 
+                val theme = runCatching {
+                    val night = topActivity().resources.configuration.uiMode and
+                        Configuration.UI_MODE_NIGHT_MASK
+                    if (night == Configuration.UI_MODE_NIGHT_YES) "dark" else "light"
+                }.getOrDefault("auto")
+
                 onDispose {
                     disposed.set(true)
                     dialogRef.get()?.dismiss()
@@ -74,7 +87,7 @@ class TurnstileHelper : ActivityTrackingHelper() {
 
                 jsBridge("turnstileToken") { resolve(it) }
 
-                jsBridge("turnstileError") { reject(Exception("Captcha Failed! ${turnstileErrorMessage(it)} (code: $it)")) }
+                jsBridge("turnstileError") { reject(Exception(strings.formatError(it))) }
 
                 jsBridge("turnstileResize") {
                     it.toIntOrNull()?.let { h ->
@@ -90,9 +103,10 @@ class TurnstileHelper : ActivityTrackingHelper() {
                             val dialog = CaptchaDialog(
                                 activity = topActivity(),
                                 webView = getAndroidWebView(),
+                                title = strings.title,
                                 initialCssHeight = { cssHeight.get() },
-                                onCancel = { reject(Exception("Captcha cancelled")) },
-                                onError = { reject(Exception("Captcha dialog failed", it)) },
+                                onCancel = { reject(Exception(strings.cancelled)) },
+                                onError = { reject(Exception(strings.dialogFailed, it)) },
                             )
                             dialogRef.set(dialog)
                             dialog.show()
@@ -111,6 +125,7 @@ class TurnstileHelper : ActivityTrackingHelper() {
                         """
                         turnstile.render("#challenge", {
                             sitekey: ${siteKey.toJsonString()},
+                            theme: "$theme",
                             appearance: "interaction-only",
                             callback: token => window.turnstileToken.post(token),
                             "error-callback": error => window.turnstileError.post(error || "unknown"),
@@ -161,33 +176,73 @@ class TurnstileHelper : ActivityTrackingHelper() {
     }
 
     context(source: HttpSource)
-    suspend fun getTurnstileToken(url: String, siteKey: String) = getTurnstileToken(url, siteKey, source.headers["User-Agent"]!!)
+    suspend fun getTurnstileToken(url: String, siteKey: String) = getTurnstileToken(
+        url = url,
+        siteKey = siteKey,
+        userAgent = source.headers["User-Agent"]!!,
+        lang = source.lang,
+    )
+}
 
-    private fun turnstileErrorMessage(code: String): String = when {
-        // Our own codes
-        code == "expired" -> "The captcha expired before it was used"
-        code == "timeout" -> "The captcha timed out"
-        code == "unsupported" -> "This WebView does not support the captcha"
-        code == "script_load_failed" -> "The captcha script could not be loaded (network error or blocked)"
-        code == "unknown" -> "Unknown captcha error"
+private fun stringsForLang(lang: String): TurnstileStrings {
+    val key = lang.replace('_', '-').lowercase()
+    return getStrings(key)
+        ?: getStrings(key.substringBefore('-'))
+        ?: getStrings("en")!!
+}
 
-        // Configuration errors: the site key or domain is wrong, retrying won't help
-        code == "110100" || code == "110110" || code == "400020" -> "The captcha site key was rejected (invalid or not found)"
-        code == "110200" -> "The captcha is not authorized for this domain"
+private fun getStrings(lang: String): TurnstileStrings? = when (lang) {
+    "en" -> TurnstileStrings()
+    "fr" -> TurnstileStrings(
+        title = "Captcha requis!",
+    )
+    else -> null
+}
 
-        // Timeouts (challenge / interaction), retryable
-        code.startsWith("1106") -> "The captcha challenge timed out"
+private class TurnstileStrings(
+    val title: String = "Captcha Required!",
+    val cancelled: String = "Captcha cancelled",
+    val dialogFailed: String = "Captcha dialog failed",
+    val errorFormat: String = $$"Captcha Failed! %1$s (code: %2$s)",
+    val expired: String = "The captcha expired before it was used",
+    val timeout: String = "The captcha timed out",
+    val unsupported: String = "This WebView does not support the captcha",
+    val scriptLoadFailed: String = "The captcha script could not be loaded (network error or blocked)",
+    val unknown: String = "Unknown captcha error",
+    val rejectedKey: String = "The captcha site key was rejected (invalid or not found)",
+    val unauthorizedDomain: String = "The captcha is not authorized for this domain",
+    val challengeTimeout: String = "The captcha challenge timed out",
+    val initFailed: String = "The captcha failed to initialize",
+    val invalidParams: String = "The captcha received invalid parameters",
+    val clockWrong: String = "The device clock is wrong, or the challenge was cached",
+    val frameLoadFailed: String = "The captcha frame could not load (network error or blocked)",
+    val internalError: String = "The captcha hit an internal Cloudflare error",
+    val browserFailed: String = "The captcha failed in the browser environment",
+    val notSolved: String = "The captcha challenge was not solved",
+) {
+    fun errorMessage(code: String): String = when {
+        code == "expired" -> expired
+        code == "timeout" -> timeout
+        code == "unsupported" -> unsupported
+        code == "script_load_failed" -> scriptLoadFailed
+        code == "unknown" -> unknown
 
-        code.startsWith("100") -> "The captcha failed to initialize"
-        code.startsWith("102") -> "The captcha received invalid parameters"
-        code == "200100" -> "The device clock is wrong, or the challenge was cached"
-        code == "200500" -> "The captcha frame could not load (network error or blocked)"
-        code.startsWith("120") -> "The captcha hit an internal Cloudflare error"
-        code.startsWith("300") -> "The captcha failed in the browser environment"
-        code.startsWith("600") -> "The captcha challenge was not solved"
+        code == "110100" || code == "110110" || code == "400020" -> rejectedKey
+        code == "110200" -> unauthorizedDomain
 
-        else -> "unknown error"
+        code.startsWith("1106") -> challengeTimeout
+        code.startsWith("100") -> initFailed
+        code.startsWith("102") -> invalidParams
+        code == "200100" -> clockWrong
+        code == "200500" -> frameLoadFailed
+        code.startsWith("120") -> internalError
+        code.startsWith("300") -> browserFailed
+        code.startsWith("600") -> notSolved
+
+        else -> unknown
     }
+
+    fun formatError(code: String): String = errorFormat.format(errorMessage(code), code)
 }
 
 /**
@@ -195,6 +250,7 @@ class TurnstileHelper : ActivityTrackingHelper() {
  * attaches the WebView when shown and detaches it again when the dialog closes or [dismiss] is
  * called, so the owner can safely destroy the WebView afterward.
  *
+ * @param title Dialog title.
  * @param initialCssHeight Read when the dialog is shown, so a resize that arrived earlier is not
  * lost.
  * @param onCancel Called when the user dismisses the dialog (back press, tapping outside).
@@ -204,6 +260,7 @@ class TurnstileHelper : ActivityTrackingHelper() {
 private class CaptchaDialog(
     private val activity: Activity,
     private val webView: WebView,
+    private val title: String,
     private val initialCssHeight: () -> Int,
     private val onCancel: () -> Unit,
     private val onError: (Throwable) -> Unit,
@@ -233,7 +290,7 @@ private class CaptchaDialog(
             holder = frame
 
             dialog = AlertDialog.Builder(activity)
-                .setTitle("Captcha Required!")
+                .setTitle(title)
                 .setView(frame)
                 .setOnDismissListener {
                     releaseWebView()

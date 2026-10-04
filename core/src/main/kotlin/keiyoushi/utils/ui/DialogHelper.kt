@@ -163,7 +163,7 @@ class DialogHelper : ActivityTrackingHelper() {
         configure: AlertDialog.Builder.(activity: Activity, resolve: (T) -> Unit) -> Unit,
     ): T = withContext(Dispatchers.Main) {
         val activity = topActivity()
-        if (!activity.usable()) throw Exception("Activity unavailable for dialog")
+        if (!activity.usable()) throw IllegalStateException("Activity unavailable for dialog")
 
         suspendCancellableCoroutine { cont ->
             try {

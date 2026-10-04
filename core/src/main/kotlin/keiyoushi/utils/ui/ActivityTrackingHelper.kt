@@ -28,7 +28,7 @@ abstract class ActivityTrackingHelper {
      * @throws Exception if no usable Activity is available.
      */
     protected fun topActivity(): Activity = ActivityTracker.top()
-        ?: throw Exception("No Activity found to show dialog")
+        ?: throw IllegalStateException("No Activity found to show dialog")
 
     protected fun Activity.usable(): Boolean = !isFinishing && !isDestroyed
 }
