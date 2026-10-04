@@ -31,15 +31,8 @@ private fun OkHttpClient.getString(url: String): String {
 // =============================== Site cache ================================
 
 object SiteCache {
-    private const val KEY_API = "api_base"
     private const val KEY_SECRET = "decoder_secret"
     private const val KEY_ALPHABET = "decoder_alphabet"
-
-    fun apiBase(prefs: SharedPreferences): String? = prefs.getString(KEY_API, null)
-
-    fun saveApiBase(prefs: SharedPreferences, value: String) {
-        prefs.edit().putString(KEY_API, value).apply()
-    }
 
     fun decoderSecret(prefs: SharedPreferences): String? = prefs.getString(KEY_SECRET, null)
 
@@ -54,71 +47,10 @@ object SiteCache {
 
     fun invalidate(prefs: SharedPreferences) {
         prefs.edit()
-            .remove(KEY_API)
             .remove(KEY_SECRET)
             .remove(KEY_ALPHABET)
             .apply()
     }
-}
-
-// ============================== API discovery =============================
-
-object ApiBase {
-    @Volatile private var memory: String? = null
-
-    suspend fun get(client: OkHttpClient, baseUrl: String, prefs: SharedPreferences): String {
-        memory?.let { return it }
-        SiteCache.apiBase(prefs)?.let {
-            memory = it
-            return it
-        }
-        return resolve(client, baseUrl, prefs)
-    }
-
-    suspend fun resolve(client: OkHttpClient, baseUrl: String, prefs: SharedPreferences): String {
-        val resolved = try {
-            discover(client, baseUrl)
-        } catch (e: IOException) {
-            // Connection error: drop cache and try discovery again.
-            invalidate(prefs)
-            discover(client, baseUrl)
-        }
-        memory = resolved
-        SiteCache.saveApiBase(prefs, resolved)
-        return resolved
-    }
-
-    fun invalidate(prefs: SharedPreferences) {
-        memory = null
-        SiteCache.invalidate(prefs)
-    }
-
-    private suspend fun discover(client: OkHttpClient, baseUrl: String): String {
-        val html = client.getString(baseUrl)
-
-        val fromJs = API_V1_RE.find(html)?.value
-        val fromPreconnect = PRECONNECT_RE.find(html)?.groupValues?.get(1)
-        val resolved = when {
-            fromJs != null -> fromJs
-            fromPreconnect != null -> "${fromPreconnect.trimEnd('/')}/api/v1"
-            else -> {
-                val chunkBody = DecoderScraper.CHUNK_RE.findAll(html)
-                    .map { it.groupValues[1] }
-                    .distinct()
-                    .mapNotNull { ref ->
-                        val url = if (ref.startsWith("http")) ref else "$baseUrl/${ref.trimStart('/')}"
-                        runCatching { client.getString(url) }.getOrNull()
-                    }
-                    .firstOrNull { it.contains("/api/v1") }
-                    .orEmpty()
-                API_V1_RE.find(chunkBody)?.value ?: error("api base not found")
-            }
-        }
-        return resolved.trimEnd('/')
-    }
-
-    private val API_V1_RE = Regex("https://[A-Za-z0-9.\\-]+/api/v1")
-    private val PRECONNECT_RE = Regex("rel=\"(?:preconnect|dns-prefetch)\"\\s+href=\"(https://[^\"]+)\"")
 }
 
 // =========================== Decoder string scrape =========================
@@ -161,7 +93,18 @@ object DecoderScraper {
     }
 
     private suspend fun fetchDecoderJs(client: OkHttpClient, baseUrl: String): String {
+        val bookmarkUrl = "$baseUrl/js/bookmark.js"
+        val bookmarkBody = runCatching { client.getString(bookmarkUrl) }.getOrDefault("")
+        if (isDecoderBundle(bookmarkBody)) return bookmarkBody
+
         val home = client.getString(baseUrl)
+        val decoderAttr = CIPHER_DECODER_RE.find(home)?.groupValues?.get(1)
+        if (decoderAttr != null) {
+            val url = if (decoderAttr.startsWith("http")) decoderAttr else "$baseUrl/${decoderAttr.trimStart('/')}"
+            val body = runCatching { client.getString(url) }.getOrDefault("")
+            if (isDecoderBundle(body)) return body
+        }
+
         val pending = ArrayDeque<String>()
         val seen = HashSet<String>()
         fun add(ref: String) {
@@ -169,6 +112,7 @@ object DecoderScraper {
         }
         CHUNK_RE.findAll(home).forEach { add(it.groupValues[1]) }
         NESTED_CHUNK_RE.findAll(home).forEach { add(it.groupValues[1]) }
+        SCRIPT_SRC_RE.findAll(home).forEach { add(it.groupValues[1]) }
 
         fun resolveUrl(ref: String): String {
             val root = baseUrl.trimEnd('/')
@@ -194,18 +138,37 @@ object DecoderScraper {
         if (body.isEmpty()) return false
         return STRING_ARRAY_RE.containsMatchIn(body) &&
             body.contains("decodeURIComponent") &&
-            body.contains("for(;;)") &&
+            (body.contains("for(;;)") || body.contains("while(!![])")) &&
             body.contains("parseInt")
     }
 
     private fun decodeStringTable(js: String, obfAlphabet: String): Map<String, String> {
         val arrayMatch = STRING_ARRAY_RE.find(js) ?: error("decoder string table not found")
-        val rawStrings = parseJsStringArray(arrayMatch.groupValues[1])
+        val tableContent = arrayMatch.groupValues[1].ifEmpty { arrayMatch.groupValues[2] }
+        val rawStrings = parseJsStringArray(tableContent)
         val pairs = PAIR_RE.findAll(js)
-            .map { it.groupValues[1].toInt() to it.groupValues[2] }
+            .mapNotNull { m ->
+                val idxStr = m.groupValues[1].ifEmpty { m.groupValues[3] }
+                val key = m.groupValues[2].ifEmpty { m.groupValues[4] }
+                val idx = if (idxStr.startsWith("0x", ignoreCase = true)) {
+                    idxStr.substring(2).toInt(16)
+                } else {
+                    idxStr.toIntOrNull() ?: return@mapNotNull null
+                }
+                idx to key
+            }
             .distinct()
             .toList()
-        val indexOffset = INDEX_OFFSET_RE.find(js)?.groupValues?.get(1)?.toInt() ?: 127
+        val indexOffset = INDEX_OFFSET_RE.find(js)?.let { match ->
+            val raw = match.groupValues.drop(1).firstOrNull { it.isNotEmpty() }
+            raw?.let {
+                if (it.startsWith("0x", ignoreCase = true)) {
+                    it.substring(2).toInt(16)
+                } else {
+                    it.toInt()
+                }
+            }
+        } ?: 187
 
         val table = ArrayList(rawStrings)
         repeat(table.size) {
@@ -226,11 +189,12 @@ object DecoderScraper {
 
     private fun parseJsStringArray(body: String): List<String> {
         val out = ArrayList<String>()
-        val re = Regex("\"((?:\\\\.|[^\"\\\\])*)\"")
+        val re = Regex("['\"]((?:\\\\.|[^'\"\\\\])*)['\"]")
         for (m in re.findAll(body)) {
             out += m.groupValues[1]
                 .replace("\\\\", "\\")
                 .replace("\\\"", "\"")
+                .replace("\\'", "'")
                 .replace("\\n", "\n")
                 .replace("\\r", "\r")
                 .replace("\\t", "\t")
@@ -278,12 +242,17 @@ object DecoderScraper {
         }
     }
 
-    private val SECRET_RE = Regex("^[A-Za-z0-9_-]{43}$")
+    private val CIPHER_DECODER_RE = Regex("data-cipher-decoder=\"([^\"]+)\"")
+    private val SCRIPT_SRC_RE = Regex("<script[^>]+src=\"([^\"]+\\.js[^\"]*)\"")
+    private val SECRET_RE = Regex("^[A-Za-z0-9_-]{43,44}$")
     private val ALPHABET_RE = Regex("^[A-Za-z0-9+/_-]{64}$")
-    private val OBF_B64_RE = Regex("\"([A-Za-z0-9+/]{64}=)\"\\s*\\.indexOf")
-    private val STRING_ARRAY_RE = Regex("function \\w+\\(\\)\\{let W=(\\[.*?\\]);return", RegexOption.DOT_MATCHES_ALL)
-    private val PAIR_RE = Regex("\\w+\\((\\d+),\\s*\"([^\"]*)\"\\)")
-    private val INDEX_OFFSET_RE = Regex("function \\w+\\(\\w+,\\w+\\)\\{\\w+-=(\\d+)")
+    private val OBF_B64_RE = Regex("['\"]([A-Za-z0-9+/=_-]{64,65})['\"]")
+    private val STRING_ARRAY_RE = Regex(
+        "(?:function\\s+[a-zA-Z0-9_$]+\\(\\)\\s*\\{\\s*(?:const|var|let)\\s+[a-zA-Z0-9_$]+=\\s*(\\[[^\\]]+\\])|function \\w+\\(\\)\\{let W=(\\[.*?\\]);return)",
+        RegexOption.DOT_MATCHES_ALL,
+    )
+    private val PAIR_RE = Regex("(?:_0x[a-f0-9]+|\\b[a-zA-Z0-9_$]+)\\s*\\(\\s*(0x[0-9a-fA-F]+|\\d+)\\s*,\\s*['\"]([^'\"]+)['\"]\\s*\\)|\\w+\\((\\d+),\\s*\"([^\"]*)\"\\)")
+    private val INDEX_OFFSET_RE = Regex("(?:_0x[a-f0-9]+|[a-zA-Z0-9_$]+)\\s*=\\s*(?:_0x[a-f0-9]+|[a-zA-Z0-9_$]+)\\s*-\\s*(0x[0-9a-fA-F]+|\\d+)|function \\w+\\(\\w+,\\w+\\)\\{\\w+-=(\\d+)")
     internal val CHUNK_RE = Regex("(?:src|href)=\"(/_next/static/chunks/[^\"]+\\.js)")
     private val NESTED_CHUNK_RE = Regex("static/chunks/([A-Za-z0-9_\\-\\.]+\\.js)")
 }

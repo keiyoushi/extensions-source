@@ -21,12 +21,6 @@ class PagesPayload(
 )
 
 @Serializable
-class AuthStorage(val state: AuthState? = null)
-
-@Serializable
-class AuthState(val token: String? = null)
-
-@Serializable
 class ListResponse(
     val data: List<MangaDto> = emptyList(),
     val meta: MetaDto? = null,
