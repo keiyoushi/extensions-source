@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ar.arabhentai
+package eu.kanade.tachiyomi.extension.ar.mangabab
 
 import eu.kanade.tachiyomi.source.model.Filter
 
