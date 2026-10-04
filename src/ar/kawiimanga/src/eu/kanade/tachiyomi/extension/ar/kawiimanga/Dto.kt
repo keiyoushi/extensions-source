@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.kawiimanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -72,7 +73,7 @@ class Chapter(
         val baseName = "الفصل $number"
         name = if (title == baseName) baseName else "$baseName - $title"
         chapter_number = number.toFloat()
-        date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
+        date_upload = Instant.tryParse(createdAt)
         memo = buildJsonObject { put("id", id) }
     }
 }

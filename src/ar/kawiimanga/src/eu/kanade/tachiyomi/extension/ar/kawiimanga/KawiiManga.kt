@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ar.kawiimanga
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,13 +16,16 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 @Source
 abstract class KawiiManga : KeiSource() {
     private val apiUrl = "https://manga-api.kawaii-anime.com/api/manga"
 
     private var token: String? = null
-    private var tokenExpiry = 0L
+    private var tokenExpiry: Instant? = null
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         set("x-app-key", "km_2026_live")
@@ -29,14 +33,14 @@ abstract class KawiiManga : KeiSource() {
 
     // The API rejects requests that only carry x-app-key; it also wants a short-lived token from /token.
     private suspend fun authHeaders(): Headers {
-        val current = token?.takeIf { System.currentTimeMillis() < tokenExpiry } ?: fetchToken()
+        val current = token?.takeIf { tokenExpiry?.let { Clock.System.now() < it } == true } ?: fetchToken()
         return headers.newBuilder().set("x-app-token", current).build()
     }
 
     private suspend fun fetchToken(): String {
         val data = client.get("$apiUrl/token", headers).parseAs<Token>()
         token = data.token
-        tokenExpiry = System.currentTimeMillis() + (data.expiresIn - 120) * 1000L
+        tokenExpiry = Clock.System.now() + (data.expiresIn - 120).seconds
         return data.token
     }
 
@@ -47,7 +51,7 @@ abstract class KawiiManga : KeiSource() {
             token = null
             response = client.get(url, authHeaders(), ensureSuccess = false)
         }
-        if (!response.isSuccessful) throw Exception("$url returned HTTP ${response.code}")
+        if (!response.isSuccessful) throw HttpException(response.code)
         return response
     }
 
