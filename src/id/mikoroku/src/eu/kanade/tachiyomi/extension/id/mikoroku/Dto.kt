@@ -13,8 +13,7 @@ private val POST_ID_REGEX = """post-(\d+)""".toRegex()
 
 internal fun String.chapterLabel(): String? = CHAPTER_REGEX.find(this)?.value
 
-internal fun String.chapterNumber(): Double =
-    CHAPTER_REGEX.find(this)?.groupValues?.get(1)?.toDoubleOrNull() ?: -1.0
+internal fun String.chapterNumber(): Double = CHAPTER_REGEX.find(this)?.groupValues?.get(1)?.toDoubleOrNull() ?: -1.0
 
 // Roman numerals mapped to digits so "Isekai Furin II" matches "isekai furin 2".
 // Ordered longest-first to avoid partial replacements.
