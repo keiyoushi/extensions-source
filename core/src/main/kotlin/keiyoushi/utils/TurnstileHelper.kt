@@ -193,9 +193,6 @@ private fun stringsForLang(lang: String): TurnstileStrings {
 
 private fun getStrings(lang: String): TurnstileStrings? = when (lang) {
     "en" -> TurnstileStrings()
-    "fr" -> TurnstileStrings(
-        title = "Captcha requis!",
-    )
     else -> null
 }
 
