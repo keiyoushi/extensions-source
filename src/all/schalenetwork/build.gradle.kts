@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "SchaleNetwork"
-    versionCode = 20
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
+    pkgName = "all.koharu"
 
     listOf("all", "en", "ja", "zh").forEach {
         source {
@@ -16,11 +17,8 @@ keiyoushi {
             if (it == "en") id = 1484902275639232927L
             baseUrl {
                 mirrors(
-                    "https://schale.network",
-                    "https://anchira.to",
-                    "https://gehenna.jp",
-                    "https://niyaniya.moe",
                     "https://shupogaki.moe",
+                    "https://niyaniya.moe",
                 )
             }
         }
