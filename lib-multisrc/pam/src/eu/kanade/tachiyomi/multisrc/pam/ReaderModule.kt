@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.multisrc.pam
 import android.util.Base64
 import com.dylibso.chicory.wasm.Parser
 import com.dylibso.chicory.wasm.WasmModule
-import eu.kanade.tachiyomi.network.GET
+import keiyoushi.network.get
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import java.io.IOException
@@ -28,13 +28,10 @@ internal class ReaderModule(
     fun export(name: String): String = exports[name] ?: throw IOException("Reader export $name missing")
 }
 
-internal fun OkHttpClient.fetchReaderModule(baseUrl: String, headers: Headers): ReaderModule {
-    fun asset(name: String): String = newCall(GET("$baseUrl/build/assets/$name", headers)).execute().use {
-        if (!it.isSuccessful) throw IOException("HTTP ${it.code} for reader asset $name")
-        it.body.string()
-    }
+internal suspend fun OkHttpClient.fetchReaderModule(baseUrl: String, headers: Headers): ReaderModule {
+    suspend fun asset(name: String): String = get("$baseUrl/build/assets/$name", headers).use { it.body.string() }
 
-    val home = newCall(GET(baseUrl, headers)).execute().use { it.body.string() }
+    val home = get(baseUrl, headers).use { it.body.string() }
     val entry = ENTRY_REGEX.find(home)?.groupValues?.get(1) ?: throw IOException("Reader entry script not found")
     val entryScript = asset(entry)
     val reader = READER_CHUNK_REGEX.findAll(entryScript).lastOrNull()?.groupValues
@@ -50,19 +47,18 @@ internal fun OkHttpClient.fetchReaderModule(baseUrl: String, headers: Headers): 
     val shared = (IMPORT_REGEX.findAll(asset(reader[1])).map { it.groupValues[1] } + readerDeps)
         .filter { it.endsWith(".js") && it != entry }
         .distinct()
-        .map(::asset)
-        .firstOrNull { "freeBuffer:\"" in it }
+        .toList()
+        .firstNotNullOfOrNull { name -> asset(name).takeIf { "freeBuffer:\"" in it } }
         ?: throw IOException("Reader signer bindings not found")
     val semantic = EXPORT_MAP_REGEX.find(shared)?.value
         ?.let { map -> PAIR_REGEX.findAll(map).associate { it.groupValues[1] to it.groupValues[2] } }
         ?: throw IOException("Reader export map not found")
 
     val glue = MAP_DEPS_REGEX.find(shared)?.groupValues?.get(1)
-        ?.let { deps -> DEP_REGEX.findAll(deps).map { it.groupValues[1] } }
+        ?.let { deps -> DEP_REGEX.findAll(deps).map { it.groupValues[1] }.toList() }
         .orEmpty()
         .filter { it.endsWith(".js") }
-        .map(::asset)
-        .firstOrNull { WASM_PREFIX in it }
+        .firstNotNullOfOrNull { name -> asset(name).takeIf { WASM_PREFIX in it } }
         ?: throw IOException("Reader signer module not found")
 
     val glueNames = GLUE_EXPORT_REGEX.findAll(glue).associate { it.groupValues[1] to it.groupValues[2] }

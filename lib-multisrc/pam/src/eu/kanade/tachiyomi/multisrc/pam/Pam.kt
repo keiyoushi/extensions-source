@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.multisrc.pam
 import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +14,8 @@ import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.secretstream.SecretStream
 import keiyoushi.lib.secretstream.State
 import keiyoushi.lib.secretstream.X25519
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,13 +24,13 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParseDateTime
-import okhttp3.HttpUrl
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -57,9 +57,7 @@ abstract class Pam :
     KeiSource(),
     ConfigurableSource {
 
-    protected val baseHttpUrl = baseUrl.toHttpUrl()
-
-    override val supportsLatest = true
+    protected val baseHttpUrl get() = baseUrl.toHttpUrl()
 
     private val preferences by getPreferencesLazy()
 
@@ -78,15 +76,13 @@ abstract class Pam :
 
     private var version: String? = null
     private var csrfToken: String? = null
+    private val tokenMutex = Mutex()
 
-    @Synchronized
-    private fun apiRequest(
-        url: HttpUrl,
-        body: RequestBody? = null,
+    private suspend fun apiHeaders(
         includeXSRFToken: Boolean,
         includeCSRFToken: Boolean,
         includeVersion: Boolean,
-    ): Request {
+    ): Headers = tokenMutex.withLock {
         var xsrfToken = client.cookieJar.loadForRequest(baseHttpUrl)
             .firstOrNull { it.name == "XSRF-TOKEN" }?.let { URLDecoder.decode(it.value, "UTF-8") }
 
@@ -95,14 +91,7 @@ abstract class Pam :
             (includeCSRFToken && csrfToken == null) ||
             (includeVersion && version == null)
         ) {
-            val document = client.newCall(GET(baseHttpUrl, headers)).execute()
-                .also {
-                    if (!it.isSuccessful) {
-                        it.close()
-                        throw Exception("HTTP Error ${it.code}")
-                    }
-                }
-                .asJsoup()
+            val document = client.get(baseHttpUrl).asJsoup()
 
             version = document.selectFirst("#app")!!
                 .attr("data-page")
@@ -115,7 +104,7 @@ abstract class Pam :
                 .first { it.name == "XSRF-TOKEN" }.let { URLDecoder.decode(it.value, "UTF-8") }
         }
 
-        val headers = headersBuilder().apply {
+        headersBuilder().apply {
             set("Accept", "application/json")
             set("X-Requested-With", "XMLHttpRequest")
             if (includeVersion) {
@@ -129,12 +118,6 @@ abstract class Pam :
                 set("X-CSRF-TOKEN", csrfToken!!)
             }
         }.build()
-
-        return if (body != null) {
-            POST(url.toString(), headers, body)
-        } else {
-            GET(url, headers)
-        }
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", popularFilters)
@@ -144,18 +127,24 @@ abstract class Pam :
     protected abstract val popularFilters: FilterList
     protected abstract val latestFilters: FilterList
 
-    private fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val apiHeaders = apiHeaders(
+            includeXSRFToken = true,
+            includeCSRFToken = false,
+            includeVersion = false,
+        )
+
         if (query.isNotEmpty()) {
             val url = baseHttpUrl.newBuilder().apply {
                 addPathSegments("api/v1/search/series")
                 addQueryParameter("q", query)
             }.build()
 
-            return apiRequest(
-                url,
-                includeXSRFToken = true,
-                includeCSRFToken = false,
-                includeVersion = false,
+            val data = client.get(url, apiHeaders).parseAs<SearchResponse>().data
+
+            return MangasPage(
+                mangas = data.map { it.toSManga(::createThumbnailUrl) },
+                hasNextPage = false,
             )
         }
 
@@ -191,32 +180,12 @@ abstract class Pam :
             }
         }.build()
 
-        return apiRequest(
-            url,
-            includeXSRFToken = true,
-            includeCSRFToken = false,
-            includeVersion = false,
+        val data = client.get(url, apiHeaders).parseAs<LibraryResponse>().series
+
+        return MangasPage(
+            mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
+            hasNextPage = data.meta?.let { it.current < it.last } ?: false,
         )
-    }
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val response = client.newCall(searchMangaRequest(page, query, filters)).execute()
-
-        if (response.request.url.queryParameter("q") != null) {
-            val data = response.parseAs<SearchResponse>().data
-
-            return MangasPage(
-                mangas = data.map { it.toSManga(::createThumbnailUrl) },
-                hasNextPage = false,
-            )
-        } else {
-            val data = response.parseAs<LibraryResponse>().series
-
-            return MangasPage(
-                mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
-                hasNextPage = data.meta?.let { it.current < it.last } ?: false,
-            )
-        }
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
@@ -227,13 +196,12 @@ abstract class Pam :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val request = apiRequest(
-            getMangaUrl(manga).toHttpUrl(),
+        val apiHeaders = apiHeaders(
             includeXSRFToken = true,
             includeCSRFToken = false,
             includeVersion = true,
         )
-        val data = client.newCall(request).execute().parseAs<MangaResponse>().props.serie
+        val data = client.get(getMangaUrl(manga), apiHeaders).parseAs<MangaResponse>().props.serie
 
         // Some sites leave the chapters out of the page and serve them from a paged API instead.
         val sourceChapters = when {
@@ -305,9 +273,10 @@ abstract class Pam :
     }
 
     /** Oldest first, like the inline list. */
-    private fun fetchChapterList(uid: String): List<MangaResponse.Props.Chapter> {
+    private suspend fun fetchChapterList(uid: String): List<MangaResponse.Props.Chapter> {
         val now = System.currentTimeMillis()
         val isFree = { freeAt: String -> dateFormat.tryParseDateTime(freeAt.substringBefore(".")) in 1..now }
+        val apiHeaders = apiHeaders(includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
 
         return buildList {
             var page = 1
@@ -316,9 +285,7 @@ abstract class Pam :
                     .addQueryParameter("page", page.toString())
                     .addQueryParameter("sort", "asc")
                     .build()
-                val response = client.newCall(
-                    apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false),
-                ).execute().parseAs<ChapterListResponse>()
+                val response = client.get(url, apiHeaders).parseAs<ChapterListResponse>()
 
                 response.items.mapTo(this) { it.toChapter(isFree) }
             } while (page++ < response.lastPage)
@@ -338,15 +305,17 @@ abstract class Pam :
 
     @Volatile
     private var readerModule: ReaderModule? = null
+    private val readerModuleMutex = Mutex()
 
-    @Synchronized
-    private fun readerModule(): ReaderModule = readerModule ?: client.fetchReaderModule(baseUrl, headers).also { readerModule = it }
+    private suspend fun readerModule(): ReaderModule = readerModuleMutex.withLock {
+        readerModule ?: client.fetchReaderModule(baseUrl, headers).also { readerModule = it }
+    }
 
     /**
      * The signer holds 16 MB of WASM memory, so it is built per chapter and dropped again
      * instead of being kept for the source's lifetime.
      */
-    private fun <T> withSigner(block: Signer.() -> T): T = try {
+    private suspend fun <T> withSigner(block: suspend Signer.() -> T): T = try {
         Signer(readerModule()).block()
     } catch (e: Exception) {
         // Most likely the site rebuilt its reader; pick the new one up on the next attempt.
@@ -370,11 +339,11 @@ abstract class Pam :
     )
 
     private val sessions = ConcurrentHashMap<String, ChapterSession>()
-    private val sessionLocks = ConcurrentHashMap<String, Any>()
+    private val sessionMutexes = ConcurrentHashMap<String, Mutex>()
 
     private fun sessionKey(serieSlug: String, chapterSlug: String) = "${name.take(3).lowercase()}-$serieSlug--$chapterSlug"
 
-    private fun openChapter(body: PageListResponse): ChapterState {
+    private suspend fun openChapter(body: PageListResponse): ChapterState {
         val props = body.props
         val serverPub = Base64.decode(props.serverPubkey, Base64.DEFAULT)
         require(serverPub.size == 32) { "server pubkey must be 32 bytes" }
@@ -411,10 +380,19 @@ abstract class Pam :
      * the challenge embedded in the page: only the challenge handed back by the partial
      * reload gets a token.
      */
-    private fun Signer.attest(body: PageListResponse, clientPubkeyB64: String): String {
+    private suspend fun Signer.attest(body: PageListResponse, clientPubkeyB64: String): String {
         val attestation = body.props.attestation ?: throw IOException("Missing attestation challenge")
         val device = deviceReport(attestation.webglSeed)
         var challenge = attestation.challenge
+
+        val reloadUrl = "$baseUrl/serie/${body.props.data.serie.slug}/chapter/${body.props.data.slug}"
+        val reloadHeaders = headersBuilder()
+            .set("X-Requested-With", "XMLHttpRequest")
+            .set("X-Inertia", "true")
+            .set("X-Inertia-Version", body.version)
+            .set("X-Inertia-Partial-Component", body.component)
+            .set("X-Inertia-Partial-Data", "chapter_token,attestation")
+            .build()
 
         repeat(ATTESTATION_ATTEMPTS) {
             val request = AttestationRequest(
@@ -424,39 +402,19 @@ abstract class Pam :
                 d = device,
                 pk = clientPubkeyB64,
             )
-            val minted = client.newCall(
-                apiRequest(
-                    "$baseUrl/api/v1/t".toHttpUrl(),
-                    request.toJsonRequestBody(),
-                    includeXSRFToken = true,
-                    includeCSRFToken = false,
-                    includeVersion = false,
-                ),
-            ).execute().parseAs<AttestationResponse>()
+            val apiHeaders = apiHeaders(includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
+            val minted = client.post("$baseUrl/api/v1/t", apiHeaders, request.toJsonRequestBody())
+                .parseAs<AttestationResponse>()
 
             if (!minted.supported) throw IOException("Attestation refused: device not supported")
             minted.ct?.also { return it }
 
-            val reloaded = client.newCall(attestationReloadRequest(body)).execute()
-                .parseAs<AttestationReload>().props
+            val reloaded = client.get(reloadUrl, reloadHeaders).parseAs<AttestationReload>().props
             reloaded.chapterToken?.also { return it }
             challenge = reloaded.attestation?.challenge ?: throw IOException("Attestation refused")
         }
 
         throw IOException("Attestation refused")
-    }
-
-    private fun attestationReloadRequest(body: PageListResponse): Request {
-        val url = "$baseUrl/serie/${body.props.data.serie.slug}/chapter/${body.props.data.slug}".toHttpUrl()
-        val headers = headersBuilder()
-            .set("X-Requested-With", "XMLHttpRequest")
-            .set("X-Inertia", "true")
-            .set("X-Inertia-Version", body.version)
-            .set("X-Inertia-Partial-Component", body.component)
-            .set("X-Inertia-Partial-Data", "chapter_token,attestation")
-            .build()
-
-        return GET(url, headers)
     }
 
     /**
@@ -472,7 +430,7 @@ abstract class Pam :
         """"locale":"en-US","timezone":"America/New_York","platform":"Linux armv8l",""" +
         """"canvas_hash":"${sha256Hex("attest:canvas")}","visibility_state":"visible"}"""
 
-    private fun Signer.requestManifest(uid: String, chapterToken: String, clientPubkeyB64: String): ManifestResponse {
+    private suspend fun Signer.requestManifest(uid: String, chapterToken: String, clientPubkeyB64: String): ManifestResponse {
         val ts = System.currentTimeMillis() / 1000
         val nonce = hexNonce()
         val request = ManifestRequest(
@@ -484,15 +442,13 @@ abstract class Pam :
             s = signManifest(chapterToken, MANIFEST_VERSION, uid, ts, nonce),
         )
 
-        val call = apiRequest(
-            "$baseUrl/api/v1/m".toHttpUrl(),
-            request.toJsonRequestBody(),
+        val headers = apiHeaders(
             includeXSRFToken = true,
             includeCSRFToken = false,
             includeVersion = false,
-        ).newBuilder().header("X-Client-Pubkey", clientPubkeyB64).build()
+        ).newBuilder().set("X-Client-Pubkey", clientPubkeyB64).build()
 
-        return client.newCall(call).execute().parseAs<ManifestResponse>()
+        return client.post("$baseUrl/api/v1/m", headers, request.toJsonRequestBody()).parseAs<ManifestResponse>()
     }
 
     /**
@@ -507,55 +463,43 @@ abstract class Pam :
         return deriveContentKey(privateKey, serverPubkey, segments[1], segments[2].toInt(), hint)
     }
 
-    private fun ensureSession(serieSlug: String, chapterSlug: String): ChapterSession {
+    private suspend fun ensureSession(serieSlug: String, chapterSlug: String): ChapterSession {
         val id = sessionKey(serieSlug, chapterSlug)
         sessions[id]?.let { return it }
 
-        val lock = sessionLocks[id] ?: Any().let { fresh ->
-            sessionLocks.putIfAbsent(id, fresh) ?: fresh
-        }
-        synchronized(lock) {
-            sessions[id]?.let { return it }
+        return sessionMutexes.getOrPut(id) { Mutex() }.withLock {
+            sessions[id]?.let { return@withLock it }
 
-            val url = "$baseUrl/serie/$serieSlug/chapter/$chapterSlug".toHttpUrl()
-            val req = apiRequest(
-                url,
+            val apiHeaders = apiHeaders(
                 includeXSRFToken = true,
                 includeCSRFToken = false,
                 includeVersion = true,
             )
-            val body = client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    throw IOException("Could not rebuild chapter session: HTTP ${resp.code}")
-                }
-                resp.parseAs<PageListResponse>()
-            }
+            val body = client.get("$baseUrl/serie/$serieSlug/chapter/$chapterSlug", apiHeaders)
+                .parseAs<PageListResponse>()
 
-            val sess = openChapter(body).session
-            sessions[id] = sess
-            return sess
+            openChapter(body).session.also { sessions[id] = it }
         }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val request = apiRequest(
-            "$baseUrl${chapter.url}".toHttpUrl(),
+        val apiHeaders = apiHeaders(
             includeXSRFToken = true,
             includeCSRFToken = false,
             includeVersion = true,
         )
-        val body = client.newCall(request).execute().parseAs<PageListResponse>()
+        val body = client.get("$baseUrl${chapter.url}", apiHeaders).parseAs<PageListResponse>()
         val props = body.props
         val id = sessionKey(props.data.serie.slug, props.data.slug)
         val state = openChapter(body)
         sessions[id] = state.session
 
+        // Reader v1 pages are signed right before they are loaded, see getImageUrl.
         val manifest = state.manifest
             ?: return (1..props.pageCount).map { idx ->
                 Page(
                     index = idx - 1,
-                    url = "$id#$idx",
-                    imageUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx#$id",
+                    url = "/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx",
                 )
             }
 
@@ -588,15 +532,10 @@ abstract class Pam :
     private fun sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
         .joinToString("") { "%02x".format(it) }
 
-    override fun imageRequest(page: Page): Request {
-        val parsed = page.imageUrl!!.toHttpUrl()
-        if (parsed.encodedPath.endsWith(".ece")) {
-            return GET(parsed, headers)
-        }
-
-        val seg = parsed.pathSegments
+    override suspend fun getImageUrl(page: Page): String {
+        val seg = "$baseUrl${page.url}".toHttpUrl().pathSegments
         require(seg.size >= 6 && seg[0] == "serie" && seg[2] == "chapter" && seg[4] == "page") {
-            "unexpected page URL shape: ${parsed.encodedPath}"
+            "unexpected page URL shape: ${page.url}"
         }
         val serieSlug = seg[1]
         val chapterSlug = seg[3]
@@ -609,7 +548,7 @@ abstract class Pam :
         val nonce = hexNonce()
         val sig = hmacSha256Hex(session.chapterToken, "$pageIndex$ts$nonce")
 
-        val url = baseHttpUrl.newBuilder()
+        return baseHttpUrl.newBuilder()
             .addPathSegment("serie").addPathSegment(serieSlug)
             .addPathSegment("chapter").addPathSegment(chapterSlug)
             .addPathSegment("page").addPathSegment(pageIndex.toString())
@@ -619,22 +558,15 @@ abstract class Pam :
             .addQueryParameter("sig", sig)
             .fragment(sessionId)
             .build()
-
-        val h = headersBuilder()
-            .set("X-Client-Pubkey", session.clientPubkeyB64)
-            .build()
-
-        return GET(url, h)
+            .toString()
     }
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
-
-        val sessionId = request.url.fragment ?: return response
-        val session = sessions[sessionId] ?: return response
+        val session = request.url.fragment?.let(sessions::get) ?: return chain.proceed(request)
 
         if (session.contentKey != null) {
+            val response = chain.proceed(request)
             if (!response.isSuccessful) return response
 
             return response.newBuilder()
@@ -645,6 +577,9 @@ abstract class Pam :
                 .build()
         }
 
+        val response = chain.proceed(
+            request.newBuilder().header("X-Client-Pubkey", session.clientPubkeyB64).build(),
+        )
         val pageNameRaw = response.header("X-Page-Name") ?: return response
         val keyHintB64 = response.header("X-Key-Hint") ?: return response
         val keyHint = Base64.decode(keyHintB64, Base64.DEFAULT)
