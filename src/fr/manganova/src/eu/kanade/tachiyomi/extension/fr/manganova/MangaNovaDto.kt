@@ -119,4 +119,5 @@ fun Serie.toDetailedSManga(): SManga = SManga.create().apply {
     thumbnail_url = this@toDetailedSManga.poster
     url = "/manga/${this@toDetailedSManga.slug}"
     genre = this@toDetailedSManga.genres.replace(",", ", ")
+    initialized = true
 }
