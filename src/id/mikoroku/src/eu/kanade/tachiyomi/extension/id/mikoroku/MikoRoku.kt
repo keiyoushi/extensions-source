@@ -239,17 +239,28 @@ abstract class MikoRoku : KeiSource() {
     }
 
     private suspend fun searchBlogger(feedUrl: String, query: String, maxResults: Int): List<BloggerEntry> {
+        val entries = searchBloggerWithQuery(feedUrl, query, maxResults)
+        if (entries.isNotEmpty()) return entries
+        // Blogger's q= search doesn't match "2" with "II", so retry with the
+        // trailing number/roman numeral stripped (e.g. "isekai furin 2" -> "isekai furin").
+        val stripped = query.replace(Regex("\\s+(\\d+|[ivxl]+)$", RegexOption.IGNORE_CASE), "").trim()
+        if (stripped.isNotBlank() && stripped != query) {
+            return searchBloggerWithQuery(feedUrl, stripped, maxResults)
+        }
+        return emptyList()
+    }
+
+    private suspend fun searchBloggerWithQuery(feedUrl: String, query: String, maxResults: Int): List<BloggerEntry> {
         val url = feedUrl.toHttpUrl().newBuilder()
             .addQueryParameter("alt", "json")
             .addQueryParameter("max-results", maxResults.toString())
             .addQueryParameter("q", query)
             .build()
 
-        val entries = client.get(url).parseAs<BloggerFeedResponse>().feed.entry
-        return entries
+        return client.get(url).parseAs<BloggerFeedResponse>().feed.entry
     }
 
-    private fun String.normalize(): String = lowercase().filter { it.isLetterOrDigit() }
+    private fun String.normalize(): String = normalized()
 
     private fun String?.nonBlank(): String? = this?.takeIf { it.isNotBlank() }
 
