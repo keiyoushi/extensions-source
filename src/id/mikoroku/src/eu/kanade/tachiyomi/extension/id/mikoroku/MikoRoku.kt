@@ -248,7 +248,7 @@ abstract class MikoRoku : KeiSource() {
             searchBloggerWithQuery(feedUrl, stripped, maxResults).takeIf { it.isNotEmpty() }?.let { return it }
         }
 
-        // For conversion mismatches (e.g. "konten" vs "tamashiten"), 
+        // For conversion mismatches (e.g. "konten" vs "tamashiten"),
         // trying progressively shorter queries. The titleWordsMatch filter in toSChapter will reject false positives.
         val words = query.split(Regex("\\s+")).filter { it.isNotBlank() }
         for (n in listOf(4, 3)) {
