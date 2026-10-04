@@ -156,16 +156,17 @@ abstract class YagamiProject : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
-        val webtoonsel = if (document.selectFirst(".info")?.text()?.contains("mature contents") == true) {
-            val body = FormBody.Builder().add("adult", "true").build()
-            client.post(getChapterUrl(chapter), body).asJsoup()
+        val initialDoc = client.get(getChapterUrl(chapter)).asJsoup()
+        val doc = if (initialDoc.selectFirst(".info")?.text()?.contains("mature contents") == true) {
+            client.post(getChapterUrl(chapter), adultBody).asJsoup()
         } else {
-            document
-        }.select(".web_pictures img.web_img")
+            initialDoc
+        }
+
+        val webtoonsel = doc.select(".web_pictures img.web_img")
 
         return if (webtoonsel.isEmpty()) {
-            document.select(".dropdown li a").map {
+            doc.select(".dropdown li a").map {
                 Page(it.text().substringAfter("Стр. ").toInt(), it.absUrl("href"))
             }
         } else {
@@ -192,5 +193,6 @@ abstract class YagamiProject : KeiSource() {
 
     companion object {
         private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+        private val adultBody = FormBody.Builder().add("adult", "true").build()
     }
 }
