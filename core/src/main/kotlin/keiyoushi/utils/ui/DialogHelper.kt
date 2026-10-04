@@ -2,14 +2,22 @@ package keiyoushi.utils.ui
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
 import android.text.method.PasswordTransformationMethod
+import android.view.Gravity
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -124,6 +132,35 @@ class DialogHelper : ActivityTrackingHelper() {
                 addView(input, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             }
 
+            if (password) {
+                val density = activity.resources.displayMetrics.density
+                val eye = EyeDrawable(
+                    density = density,
+                    color = input.currentTextColor and 0x00FFFFFF or 0x99000000.toInt(),
+                )
+                val toggle = ImageView(activity).apply {
+                    setImageDrawable(eye)
+                    contentDescription = "Toggle visibility"
+                    val p = (8 * density).toInt()
+                    setPadding(p, p, p, p)
+                    setOnClickListener {
+                        val wasVisible = eye.isPasswordVisible
+                        eye.isPasswordVisible = !wasVisible
+                        val start = input.selectionStart
+                        val end = input.selectionEnd
+                        input.transformationMethod = if (!wasVisible) null else PasswordTransformationMethod.getInstance()
+                        input.setSelection(start, end)
+                    }
+                }
+                val iconSize = (40 * density).toInt()
+                val lp = FrameLayout.LayoutParams(iconSize, iconSize).apply {
+                    gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                    marginEnd = (4 * density).toInt()
+                }
+                input.setPaddingRelative(input.paddingStart, input.paddingTop, iconSize + (8 * density).toInt(), input.paddingBottom)
+                container.addView(toggle, lp)
+            }
+
             setTitle(title)
             if (message != null) setMessage(message)
             setView(container)
@@ -187,4 +224,66 @@ class DialogHelper : ActivityTrackingHelper() {
             }
         }
     }
+}
+
+private class EyeDrawable(
+    private val density: Float,
+    private val color: Int,
+) : Drawable() {
+    var isPasswordVisible: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidateSelf()
+            }
+        }
+
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = this@EyeDrawable.color
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * density
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+
+    private val pupilPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = this@EyeDrawable.color
+        style = Paint.Style.FILL
+    }
+
+    override fun getIntrinsicWidth(): Int = (24 * density).toInt()
+    override fun getIntrinsicHeight(): Int = (24 * density).toInt()
+
+    override fun draw(canvas: Canvas) {
+        val cx = bounds.exactCenterX()
+        val cy = bounds.exactCenterY()
+        val w = 18f * density
+        val h = 10f * density
+
+        val path = Path().apply {
+            moveTo(cx - w / 2, cy)
+            quadTo(cx, cy - h, cx + w / 2, cy)
+            quadTo(cx, cy + h, cx - w / 2, cy)
+            close()
+        }
+        canvas.drawPath(path, strokePaint)
+        canvas.drawCircle(cx, cy, 2.5f * density, pupilPaint)
+
+        if (!isPasswordVisible) {
+            canvas.drawLine(cx - w / 2, cy - h / 1.5f, cx + w / 2, cy + h / 1.5f, strokePaint)
+        }
+    }
+
+    override fun setAlpha(alpha: Int) {
+        strokePaint.alpha = alpha
+        pupilPaint.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        strokePaint.colorFilter = colorFilter
+        pupilPaint.colorFilter = colorFilter
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
