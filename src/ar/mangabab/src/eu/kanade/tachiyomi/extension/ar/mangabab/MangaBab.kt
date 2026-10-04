@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ar.arabhentai
+package eu.kanade.tachiyomi.extension.ar.mangabab
 
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -18,13 +18,13 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
-abstract class ArabHentai : KeiSource() {
+abstract class MangaBab : KeiSource() {
 
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage = parseListing(client.get(listingUrl("11", page).toHttpUrl()).asJsoup())
 
     // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseListing(client.get(listingUrl("13", page).toHttpUrl()).asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseListing(client.get(listingUrl("-1", page).toHttpUrl()).asJsoup())
 
     // =============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
