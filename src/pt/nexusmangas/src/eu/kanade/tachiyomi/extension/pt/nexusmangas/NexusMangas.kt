@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.nexusmangas
 
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -22,6 +21,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
@@ -50,11 +50,10 @@ abstract class NexusMangas : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .add("Accept", "application/json")
 
-    private val readerHeaders by lazy {
-        headersBuilder()
+    private val readerHeaders: Headers
+        get() = headersBuilder()
             .set("x-nexus-client", "reader-v3")
             .build()
-    }
 
     private fun authorizeApi(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -78,8 +77,12 @@ abstract class NexusMangas : KeiSource() {
         if (response.code != 403 || index == null) return response
 
         response.close()
-        val body = ReadChapterRequestDto(fragment.substringBefore('/')).toJsonRequestBody()
-        val pageUrl = client.newCall(POST("$functionsUrl/read-chapter", readerHeaders, body)).execute()
+        val readRequest = Request.Builder()
+            .url("$functionsUrl/read-chapter")
+            .headers(readerHeaders)
+            .post(ReadChapterRequestDto(fragment.substringBefore('/')).toJsonRequestBody())
+            .build()
+        val pageUrl = client.newCall(readRequest).execute()
             .parseAs<ReadChapterDto>()
             .pageUrl(index)
 
@@ -139,7 +142,7 @@ abstract class NexusMangas : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "obra") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank) ?: return null
-        val manga = SManga.create().apply { this.url = "/obra/$slug" }
+        val manga = SManga.create().apply { this.url = slug }
 
         return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
             .manga
@@ -152,7 +155,7 @@ abstract class NexusMangas : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val slug = manga.url.substringAfterLast('/')
+        val slug = manga.url
         val url = "$apiUrl/works".toHttpUrl().newBuilder()
             .addQueryParameter("select", DETAIL_COLUMNS)
             .addQueryParameter("slug", "eq.$slug")
@@ -164,6 +167,8 @@ abstract class NexusMangas : KeiSource() {
 
         return SMangaUpdate(manga = work.toSManga(mediaUrl), chapters = work.chapterList)
     }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/obra/${manga.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, number) = chapter.url.split('/').takeLast(2)

@@ -27,7 +27,7 @@ class WorkDto(
     private val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga(mediaUrl: HttpUrl) = SManga.create().apply {
-        url = "/obra/$slug"
+        url = slug
         title = this@WorkDto.title
         thumbnail_url = coverUrl?.takeIf(String::isNotBlank)?.let {
             mediaUrl.newBuilder().addQueryParameter("key", it).build().toString()
