@@ -110,10 +110,15 @@ abstract class WaManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseSvelte<DetailsDto>().manga
+        val (details, related) = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseMangaDetails()
+
+        val updated = details.toSManga(baseUrl)
+        if (related != null) {
+            updated.memo = related.map { it.toSManga(baseUrl) }.toMemo()
+        }
 
         return SMangaUpdate(
-            manga = details.toSManga(baseUrl),
+            manga = updated,
             chapters = details.chapters.map { it.toSChapter(details.mangaUrl) },
         )
     }
@@ -132,6 +137,8 @@ abstract class WaManga : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        manga.relatedFromMemo()?.let { return it }
+
         val sameMangas = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseRelatedMangas()
         return sameMangas.map { it.toSManga(baseUrl) }
     }

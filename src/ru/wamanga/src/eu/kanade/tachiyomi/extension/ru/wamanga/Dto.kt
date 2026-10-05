@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -80,13 +81,22 @@ internal inline fun <reified T> Response.parseSvelte(): T {
     return first.parseAs<SvelteResponseDto>().getDataNode().decodeSvelte().parseAs<T>()
 }
 
-/** Resolves lazy `sameMangas` from the streamed chunk lines. Chunk pools decode with the same devalue logic. */
-internal fun Response.parseRelatedMangas(): List<MangaDetailsDto> {
+/**
+ * Reads manga details and the lazy `sameMangas` list from a single details response.
+ * Related is null when it couldn't be resolved.
+ */
+internal fun Response.parseMangaDetails(): Pair<MangaDetailsDto, List<MangaDetailsDto>?> {
     val raw = use { it.body.string() }
     val lines = raw.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
     if (lines.isEmpty()) throw IllegalStateException("Empty response")
 
     val details = lines.first().parseAs<SvelteResponseDto>().getDataNode().decodeSvelte().parseAs<DetailsDto>()
+    // Related is auxiliary: a failure here must not break details and chapters, so it's skipped (null).
+    val related = runCatching { resolveRelated(details, lines) }.getOrNull()
+    return details.manga to related
+}
+
+private fun resolveRelated(details: DetailsDto, lines: List<String>): List<MangaDetailsDto> {
     val inline = details.inlineRelated()
     if (inline.isNotEmpty()) return inline
 
@@ -100,6 +110,10 @@ internal fun Response.parseRelatedMangas(): List<MangaDetailsDto> {
     val data = chunk.data ?: throw IllegalStateException("Related chunk $promiseId has no data")
     return data.decodeSvelte().parseAs<List<MangaDetailsDto>>()
 }
+
+/** Resolves lazy `sameMangas` from the streamed chunk lines. */
+internal fun Response.parseRelatedMangas(): List<MangaDetailsDto> =
+    parseMangaDetails().second ?: throw IllegalStateException("Related manga list unavailable")
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Catalog
@@ -234,6 +248,19 @@ class MangaDetailsDto(
 }
 
 @Serializable
+class RelatedMangaDto(
+    val url: String,
+    val title: String,
+    val thumbnail: String? = null,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = this@RelatedMangaDto.url
+        title = this@RelatedMangaDto.title
+        thumbnail_url = this@RelatedMangaDto.thumbnail
+    }
+}
+
+@Serializable
 class ChapterDto(
     private val position: JsonPrimitive,
     private val createdAt: String? = null,
@@ -301,4 +328,17 @@ private fun formatCount(count: Int): String = when {
         if (d == 0) "${k}K" else "$k.${d}K"
     }
     else -> count.toString()
+}
+
+/** Caches the related list on the manga so opening it doesn't refetch the same details response. */
+internal fun List<SManga>.toMemo(): JsonObject = buildJsonObject {
+    put("related", map { RelatedMangaDto(it.url, it.title, it.thumbnail_url) }.toJsonElement())
+}
+
+/** Cached related list, or null when absent or unreadable. Falls back to a network fetch then, never poisons the cache. */
+internal fun SManga.relatedFromMemo(): List<SManga>? {
+    val element = memo["related"] ?: return null
+    return runCatching {
+        element.parseAs<List<RelatedMangaDto>>().map { it.toSManga() }
+    }.getOrNull()
 }
