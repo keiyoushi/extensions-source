@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.ja.firecross
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-open class CheckBox(name: String, val value: String) : Filter.CheckBox(name)
-class Label(name: String, value: String) : CheckBox(name, value)
+class Label(name: String, val value: String) : Filter.CheckBox(name)
+
 class LabelFilter :
     Filter.Group<Label>(
         "Labels",
