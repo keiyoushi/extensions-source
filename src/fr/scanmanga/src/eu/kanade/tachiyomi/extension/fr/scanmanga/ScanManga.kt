@@ -23,10 +23,12 @@ import keiyoushi.annotation.Source
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.ownTextOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -45,7 +47,7 @@ abstract class ScanManga :
     HttpSource(),
     ConfigurableSource {
 
-    private val domain = baseUrl.toHttpUrl().host
+    private val domain = baseUrl.toHttpUrl().topPrivateDomain()!!
     private val baseImageUrl = "https://static.$domain/img/manga"
     private val baseSearchUrl = "https://bqj.$domain/search/quick.json"
 
@@ -76,21 +78,30 @@ abstract class ScanManga :
             .build()
     }
 
+    // static.scan-manga.com answers 403 to covers requested without a Referer
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
         .add("upgrade-insecure-requests", "1")
-        .add(
-            "accept",
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        )
         .add("sec-fetch-site", "none")
         .add("accept-language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
         .add("X-Requested-With", "")
 
+    // Browse/search pages get a Cloudflare 403 with a browser-like `accept`, but the reader
+    // (chapter page, lel API, images) answers 503 without it.
+    private val readerHeaders by lazy {
+        headers.newBuilder()
+            .add(
+                "accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            )
+            .build()
+    }
+
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-45.html", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-47.html", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.asJsoup().select("#carouselTOPContainer > div.top").map { element ->
+        val mangas = response.asJsoup().select("#carouselTOPContainer div.top").map { element ->
             SManga.create().apply {
                 val titleElement = element.selectFirst("a.atop")!!
 
@@ -124,6 +135,20 @@ abstract class ScanManga :
     }
 
     // Search
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val url = query.toHttpUrlOrNull() ?: return super.fetchSearchManga(page, query, filters)
+        if (url.topPrivateDomain() != domain || !MANGA_PATH_REGEX.matches(url.encodedPath)) {
+            return Observable.just(MangasPage(emptyList(), false))
+        }
+
+        val manga = SManga.create().apply { this.url = url.encodedPath }
+        return fetchMangaDetails(manga).map {
+            it.url = manga.url
+            it.initialized = true
+            MangasPage(listOf(it), false)
+        }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseSearchUrl
             .toHttpUrl().newBuilder()
@@ -161,26 +186,33 @@ abstract class ScanManga :
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.select("h1.main_title[itemprop=name]").text()
-            author = document.select("div[itemprop=author]").text()
+            title = document.selectFirst("meta[itemprop=name]")!!.attr("content")
+            // The itemprop div only holds the "Auteur/Artiste" label
+            author = document.selectFirst("div[itemprop=author]")?.parent()?.ownTextOrNull()
             description = document.selectFirst("div.titres_desc[itemprop=description]")?.text()
-            genre = document.selectFirst("div.titres_souspart span[itemprop=genre]")?.text()
+            genre = document.selectFirst("span[itemprop=genre]")?.let { demo ->
+                (listOf(demo.text()) + demo.parent()?.ownText().orEmpty().split(","))
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .joinToString()
+            }
 
-            val statutText = document.selectFirst("div.titres_souspart")?.ownText()
+            val statutText = document.selectFirst("div.titres_souspart:has(div:containsOwn(Statut))")?.ownText()?.lowercase().orEmpty()
             status = when {
-                statutText?.contains("En cours", ignoreCase = true) == true -> SManga.ONGOING
-                statutText?.contains("Terminé", ignoreCase = true) == true -> SManga.COMPLETED
+                "en cours" in statutText -> SManga.ONGOING
+                "terminé" in statutText -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
 
-            thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").attr("src")
+            thumbnail_url = document.selectFirst("meta[itemprop=image]")?.absUrl("content")
         }
     }
 
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("div.chapt_m").map { element ->
+        // Licensed series also list chapters hosted by external publishers (izneo, mangaplus, ono.live).
+        val chapters = document.select("div.chapt_m:has(td.publimg a[href*=/lecture-en-ligne/])").map { element ->
             val linkEl = element.selectFirst("td.publimg span.i a")!!
             val titleEl = element.selectFirst("td.publititle")
 
@@ -192,6 +224,15 @@ abstract class ScanManga :
                 setUrlWithoutDomain(linkEl.absUrl("href"))
             }
         }
+
+        if (chapters.isEmpty() && document.selectFirst("div.chapt_m") != null) {
+            val platforms = document.select("a[href*=/plateforme-]").map { it.text() }.distinct()
+                .ifEmpty { listOf("le site de l'éditeur") }
+                .joinToString()
+            throw Exception("Licencié : chapitres disponibles uniquement sur $platforms")
+        }
+
+        return chapters
     }
 
     // Pages
@@ -260,7 +301,7 @@ abstract class ScanManga :
         val isReader = Exception().stackTrace.any { it.className.contains("reader") }
 
         fun fetch(): String? = try {
-            readerClient.newCall(GET(chapterUrl, headers)).execute().use { resp ->
+            readerClient.newCall(GET(chapterUrl, readerHeaders)).execute().use { resp ->
                 resp.body.string().takeIf { CHAPTER_INFO_REGEX.containsMatchIn(it) }
             }
         } catch (_: Exception) {
@@ -389,9 +430,9 @@ abstract class ScanManga :
 
         val requestBody = injectVariables(REQUEST_BODY, availableVariables)
         val pageListUrl = injectVariables(PAGE_LIST_URL, availableVariables)
-        val requestHeaders = headers.newBuilder()
+        val requestHeaders = readerHeaders.newBuilder()
             .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
-            .add("Referer", documentUrl.toString())
+            .set("Referer", documentUrl.toString())
             .add("Token", LEL_TOKEN)
             .build()
 
@@ -416,7 +457,7 @@ abstract class ScanManga :
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        val imgHeaders = headers.newBuilder()
+        val imgHeaders = readerHeaders.newBuilder()
             .add("Origin", baseUrl)
             .build()
 
@@ -511,6 +552,7 @@ abstract class ScanManga :
         private val SML_PARAM_REGEX = Regex("""sml\s*=\s*'([^']+)'""")
         private val SME_PARAM_REGEX = Regex("""sme\s*=\s*'([^']+)'""")
         private val CHAPTER_INFO_REGEX = Regex("""const idc = (\d+)""")
+        private val MANGA_PATH_REGEX = Regex("""/\d+(?:-\d+)?/[^/]+\.html""")
         private const val PAGE_LIST_URL = "https://bqj.{topDomain}/lel/{chapterId}.json"
         private const val REQUEST_BODY = """{"a":"{sme}","b":"{sml}","c":"{fingerprint}"}"""
         private const val LEL_TOKEN = "yf"
