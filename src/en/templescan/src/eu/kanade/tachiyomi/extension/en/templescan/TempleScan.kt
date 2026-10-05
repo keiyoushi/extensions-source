@@ -92,7 +92,8 @@ abstract class TempleScan :
             return null
         }
 
-        val mangaUrl = "/comic/${url.pathSegments[1]}"
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        val mangaUrl = "/comic/$slug"
         val manga = SManga.create().apply {
             this.url = mangaUrl
         }
