@@ -119,6 +119,7 @@ abstract class WaManga : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.size < 2) return null
 
         val manga = SManga.create().apply {
@@ -131,7 +132,7 @@ abstract class WaManga : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val sameMangas = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseSvelte<DetailsDto>().sameMangas
+        val sameMangas = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseRelatedMangas()
         return sameMangas.map { it.toSManga(baseUrl) }
     }
 
