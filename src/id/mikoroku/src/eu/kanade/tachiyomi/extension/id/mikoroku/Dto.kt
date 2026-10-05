@@ -15,7 +15,50 @@ internal fun String.chapterLabel(): String? = CHAPTER_REGEX.find(this)?.value
 
 internal fun String.chapterNumber(): Double = CHAPTER_REGEX.find(this)?.groupValues?.get(1)?.toDoubleOrNull() ?: -1.0
 
-internal fun String.normalized(): String = lowercase().filter { it.isLetterOrDigit() }
+// Roman numerals mapped to digits so "Isekai Furin II" matches "isekai furin 2".
+// Ordered longest-first to avoid partial replacements.
+private val ROMAN_TO_DIGIT = listOf(
+    "viii" to "8",
+    "vii" to "7",
+    "iii" to "3",
+    "ii" to "2",
+    "ix" to "9",
+    "iv" to "4",
+    "vi" to "6",
+    "v" to "5",
+    "x" to "10",
+    "i" to "1",
+)
+
+internal fun String.normalized(): String {
+    var s = lowercase()
+    for ((roman, digit) in ROMAN_TO_DIGIT) {
+        s = s.replace(Regex("\\b$roman\\b"), digit)
+    }
+    return s.filter { it.isLetterOrDigit() }
+}
+
+// Split into words (with Roman numerals normalized) for lenient title matching.
+// Handles conversion variants like "konten" vs "tamashiten" where only
+// one word differs between the catalog title and the Blogger post title.
+internal fun String.titleWords(): List<String> {
+    var s = lowercase()
+    for ((roman, digit) in ROMAN_TO_DIGIT) {
+        s = s.replace(Regex("\\b$roman\\b"), digit)
+    }
+    return s.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
+}
+
+internal fun titleWordsMatch(postTitle: String, mangaTitle: String): Boolean {
+    val mangaWords = mangaTitle.titleWords()
+    if (mangaWords.isEmpty()) return false
+    val postWords = postTitle.titleWords().toSet()
+    val matched = mangaWords.count { it in postWords }
+    return when {
+        mangaWords.size <= 2 -> matched == mangaWords.size
+        else -> matched >= (mangaWords.size * 0.7).toInt()
+    }
+}
 
 @Serializable
 class CatalogEntry(
@@ -88,9 +131,15 @@ class BloggerEntry(
     private val published: BloggerText? = null,
     private val content: BloggerText? = null,
 ) {
-    fun chapterLabel(mangaTitle: String): String? = title.text
-        .takeIf { it.normalized().contains(mangaTitle.normalized()) }
-        ?.chapterLabel()
+    fun chapterLabel(mangaTitle: String): String? {
+        val postNorm = title.text.normalized()
+        val mangaNorm = mangaTitle.normalized()
+        // exact substring match
+        if (postNorm.contains(mangaNorm)) return title.text.chapterLabel()
+        // Fallback: word overlap for conversion variants (e.g. "konten" vs "tamashiten")
+        if (titleWordsMatch(title.text, mangaTitle)) return title.text.chapterLabel()
+        return null
+    }
 
     fun toSChapter(slug: String, mangaTitle: String): SChapter? {
         val label = chapterLabel(mangaTitle) ?: return null

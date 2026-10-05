@@ -7,33 +7,63 @@ import kotlinx.serialization.json.JsonObject
 /**
  * Resolves the short field names the site's Next.js RSC payload uses.
  *
- * The site renames a fixed set of fields to keys it ships in its own client bundle (module
- * `14834`) as a positional pair of lists: the logical names, then a comma-separated string of
- * keys. Reading that table from the bundle means a rebuild that renames the keys does not need
- * an extension update, unlike the key literals it replaces.
+ * The site renames a fixed set of fields to keys it derives in its own client bundle (module
+ * `14834`): a positional list of the logical names, then a salt string that each name slices a
+ * key out of. Reading that table from the bundle means a rebuild that rotates the salt does not
+ * need an extension update, unlike the key literals it replaces.
  */
 internal object RscKeys {
 
     /**
-     * The bundle's table: an array literal of logical names, then the variable holding the
-     * comma-separated keys. Names are paired with keys by position, exactly as the site does it.
+     * The bundle's table: an array literal of logical names, then the variable holding the salt
+     * string, e.g. `["Chapter",...],a="o682...fk";`.
      */
     private val TABLE_REGEX = Regex(
-        """\[((?:"[A-Za-z0-9_]+",?)+)],\s*[^=;]{1,32}=\s*"([^"]*)"\.split\(","\)""",
+        """\[((?:"[A-Za-z0-9_]+",?)+)],\s*([A-Za-z0-9_$]{1,40})\s*=\s*"([A-Za-z0-9]+)"""",
     )
 
     private val NAME_REGEX = Regex("\"([A-Za-z0-9_]+)\"")
 
+    /** The rotation applied to every slot index, e.g. `l=1+a.charCodeAt(0)%15`. */
+    private val OFFSET_REGEX = Regex(
+        """([A-Za-z0-9_$]{1,40})\s*=\s*(\d+)\s*\+\s*([A-Za-z0-9_$]{1,40})\.charCodeAt\(0\)\s*%\s*(\d+)""",
+    )
+
+    /** The slot count and the per-slot slice length, e.g. `(t+l)%16*7`. */
+    private val SLOT_REGEX = Regex(
+        """\(\s*[A-Za-z0-9_$]{1,40}\s*\+\s*([A-Za-z0-9_$]{1,40})\s*\)\s*%\s*(\d+)\s*\*\s*(\d+)""",
+    )
+
+    /** How far past the names array the minified derivation may sit before it is not the one. */
+    private const val DERIVATION_WINDOW = 600
+
     /** Reads the rename table from a client chunk, or returns `null` if this chunk is not the one. */
     fun findTable(chunkSource: String): Map<String, String>? {
-        val match = TABLE_REGEX.find(chunkSource) ?: return null
+        for (match in TABLE_REGEX.findAll(chunkSource)) {
+            val names = NAME_REGEX.findAll(match.groupValues[1]).map { it.groupValues[1] }.toList()
+            val saltVar = match.groupValues[2]
+            val salt = match.groupValues[3]
 
-        val names = NAME_REGEX.findAll(match.groupValues[1]).map { it.groupValues[1] }.toList()
-        val keys = match.groupValues[2].split(",")
-        // The bundle itself throws when it cannot name every field; treat that as "not this chunk".
-        if (keys.size < names.size) return null
+            val derivation = chunkSource.substring(
+                match.range.last + 1,
+                minOf(chunkSource.length, match.range.last + 1 + DERIVATION_WINDOW),
+            )
+            val offset = OFFSET_REGEX.findAll(derivation).firstOrNull { it.groupValues[3] == saltVar } ?: continue
+            val slot = SLOT_REGEX.findAll(derivation).firstOrNull { it.groupValues[1] == offset.groupValues[1] } ?: continue
 
-        return names.zip(keys).toMap()
+            val slotCount = slot.groupValues[2].toInt()
+            val keyLength = slot.groupValues[3].toInt()
+            // The bundle's own guard: the salt must divide evenly into its slots and name every field.
+            if (salt.length != slotCount * keyLength || names.size > slotCount) continue
+
+            val start = offset.groupValues[2].toInt() + salt[0].code % offset.groupValues[4].toInt()
+            return names.mapIndexed { index, name ->
+                val position = (index + start) % slotCount * keyLength
+                name to salt.substring(position, position + keyLength)
+            }.toMap()
+        }
+
+        return null
     }
 
     /** Flattens [keys] into the single preference value that caches the table. */
