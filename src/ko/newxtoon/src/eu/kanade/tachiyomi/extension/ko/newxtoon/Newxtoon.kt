@@ -15,6 +15,7 @@ import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -134,10 +135,9 @@ abstract class Newxtoon : KeiSource() {
         WeekdayFilter(),
     )
 
-    private val jsonHeaders by lazy {
-        headers.newBuilder()
+    private val jsonHeaders: Headers
+        get() = headersBuilder()
             .set("Accept", "application/json")
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
-    }
 }
