@@ -90,44 +90,21 @@ internal class Ecies {
             )
 
             8 -> CipherSpec(
-                sha256(
-                    joinBytes(
-                        u16(clientPubRaw.size),
-                        clientPubRaw,
-                        u16(serverPubRaw.size),
-                        serverPubRaw,
-                        u16(iv.size),
-                        iv,
-                    ),
-                ),
+                sha256(joinBytes(lengthPrefixed(clientPubRaw), lengthPrefixed(serverPubRaw), lengthPrefixed(iv))),
                 "dilar.response.ecies.v8|${data.e}|${iv.toHex()}".toByteArray(),
             )
 
             9 -> CipherSpec(
                 hmac(
                     key = iv,
-                    data = joinBytes(
-                        u16(serverPubRaw.size),
-                        serverPubRaw,
-                        u16(clientPubRaw.size),
-                        clientPubRaw,
-                    ),
+                    data = joinBytes(lengthPrefixed(serverPubRaw), lengthPrefixed(clientPubRaw)),
                     algorithm = "HmacSHA512",
                 ).copyOfRange(0, 32),
                 "dilar.response.ecies.v9|${data.e}|${sha256(iv).toHex().take(16)}".toByteArray(),
             )
 
             10 -> CipherSpec(
-                sha512(
-                    joinBytes(
-                        u16(clientPubRaw.size),
-                        clientPubRaw,
-                        u16(serverPubRaw.size),
-                        serverPubRaw,
-                        u16(iv.size),
-                        iv,
-                    ),
-                ),
+                sha512(joinBytes(lengthPrefixed(clientPubRaw), lengthPrefixed(serverPubRaw), lengthPrefixed(iv))),
                 "dilar.response.ecies.v10|${data.e}|${sha512(iv).toHex().take(24)}".toByteArray(),
                 hash = "HmacSHA512",
             )
@@ -135,7 +112,7 @@ internal class Ecies {
             11 -> CipherSpec(
                 hmac(
                     key = serverPubRaw,
-                    data = joinBytes(u16(iv.size), iv, u16(clientPubRaw.size), clientPubRaw),
+                    data = joinBytes(lengthPrefixed(iv), lengthPrefixed(clientPubRaw)),
                     algorithm = "HmacSHA512",
                 ),
                 "dilar.response.ecies.v11|${data.e}|${sha384(iv).toBase64Url().take(22)}".toByteArray(),
@@ -144,24 +121,16 @@ internal class Ecies {
             )
 
             12 -> CipherSpec(
-                hmac(
-                    key = clientPubRaw,
-                    data = joinBytes(u16(serverPubRaw.size), serverPubRaw, u16(iv.size), iv),
-                    algorithm = "HmacSHA512",
-                ).copyOf(32),
-                "dilar.response.ecies.v12|${data.e}|${sha256(joinBytes(u16(iv.size), iv)).toBase64Url().take(22)}".toByteArray(),
+                clientKeyedSalt(serverPubRaw, iv).copyOf(32),
+                "dilar.response.ecies.v12|${data.e}|${sha256(lengthPrefixed(iv)).toBase64Url().take(22)}".toByteArray(),
                 hash = "HmacSHA384",
                 derivedNonce = true,
                 aad = aad("dilar.response.ecies.v12", data, serverPubRaw, iv, ct.size),
             )
 
             13 -> CipherSpec(
-                hmac(
-                    key = clientPubRaw,
-                    data = joinBytes(u16(serverPubRaw.size), serverPubRaw, u16(iv.size), iv),
-                    algorithm = "HmacSHA512",
-                ),
-                "dilar.response.ecies.v13|${data.e}|${sha512(joinBytes(u16(iv.size), iv)).toBase64Url().take(22)}".toByteArray(),
+                clientKeyedSalt(serverPubRaw, iv),
+                "dilar.response.ecies.v13|${data.e}|${sha512(lengthPrefixed(iv)).toBase64Url().take(22)}".toByteArray(),
                 hash = "HmacSHA512",
                 derivedNonce = true,
                 aad = aad("dilar.response.ecies.v13", data, serverPubRaw, iv, ct.size),
@@ -238,6 +207,13 @@ internal class Ecies {
         val chacha: Boolean = false,
     )
 
+    // Shared by v12 and v13; v12 truncates the result to 32 bytes.
+    private fun clientKeyedSalt(serverPubRaw: ByteArray, iv: ByteArray): ByteArray = hmac(
+        key = clientPubRaw,
+        data = joinBytes(lengthPrefixed(serverPubRaw), lengthPrefixed(iv)),
+        algorithm = "HmacSHA512",
+    )
+
     private fun aad(
         label: String,
         data: EncryptedResponseDto,
@@ -245,28 +221,21 @@ internal class Ecies {
         iv: ByteArray,
         ctSize: Int,
     ): ByteArray {
-        val labelBytes = label.toByteArray()
-        val version = data.v.toString().toByteArray()
-        val e = data.e.toString().toByteArray()
         val size = u32(ctSize)
 
         return sha256(
             joinBytes(
-                u16(labelBytes.size),
-                labelBytes,
-                u16(version.size),
-                version,
-                u16(e.size),
-                e,
-                u16(serverPubRaw.size),
-                serverPubRaw,
-                u16(iv.size),
-                iv,
-                u16(size.size),
-                size,
+                lengthPrefixed(label.toByteArray()),
+                lengthPrefixed(data.v.toString().toByteArray()),
+                lengthPrefixed(data.e.toString().toByteArray()),
+                lengthPrefixed(serverPubRaw),
+                lengthPrefixed(iv),
+                lengthPrefixed(size),
             ),
         )
     }
+
+    private fun lengthPrefixed(bytes: ByteArray): ByteArray = joinBytes(u16(bytes.size), bytes)
 
     private fun u16(n: Int): ByteArray = byteArrayOf(((n shr 8) and 0xFF).toByte(), (n and 0xFF).toByte())
 
