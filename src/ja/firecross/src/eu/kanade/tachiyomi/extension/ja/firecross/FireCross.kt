@@ -149,17 +149,13 @@ abstract class FireCross :
         thumbnail_url = document.selectFirst("img.ebook-series-img")?.absUrl("src")
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        if ("locked" in chapter.memo) throw Exception("Log in via WebView and purchase this chapter to read.")
-        return runBlocking { fetchReaderUrl(chapter) }
-    }
+    override fun getChapterUrl(chapter: SChapter): String = runBlocking { fetchReaderUrl(chapter) }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if ("locked" in chapter.memo) throw Exception("Log in via WebView and purchase this chapter to read.")
-        return client.fetchPages(client.get(fetchReaderUrl(chapter)).asJsoup())
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.fetchPages(client.get(fetchReaderUrl(chapter)).asJsoup())
 
     private suspend fun fetchReaderUrl(chapter: SChapter): String {
+        if ("locked" in chapter.memo) throw Exception("Log in via WebView and purchase this chapter to read.")
+
         val apiHeaders = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
