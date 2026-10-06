@@ -229,8 +229,18 @@ abstract class WNACG :
         status = if ("連載中" in statusText) SManga.ONGOING else SManga.COMPLETED
     }
 
-    private fun chaptersParse(document: Document, manga: SManga): List<SChapter> {
-        val chapterElements = document.select("div.sr_compact a.tagshow[data-chid]")
+    private suspend fun chaptersParse(document: Document, manga: SManga): List<SChapter> {
+        val chapterElements = buildList {
+            addAll(document.select("div.sr_compact a.tagshow[data-chid]"))
+
+            document.select("div.f_left.paginator a[href]")
+                .map { it.absUrl("href") }
+                .distinct()
+                .forEach { pageUrl ->
+                    addAll(client.get(pageUrl).asJsoup().select("div.sr_compact a.tagshow[data-chid]"))
+                }
+        }.distinctBy { it.attr("data-chid") }
+
         if (chapterElements.isEmpty()) {
             return listOf(
                 SChapter.create().apply {
@@ -248,7 +258,7 @@ abstract class WNACG :
                     chapterZone,
                 )
             }
-        }
+        }.reversed()
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
