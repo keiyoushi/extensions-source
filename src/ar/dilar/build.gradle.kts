@@ -18,5 +18,6 @@ keiyoushi {
 }
 
 dependencies {
+    implementation(project(":lib:ece"))
     implementation(project(":lib:secretstream"))
 }

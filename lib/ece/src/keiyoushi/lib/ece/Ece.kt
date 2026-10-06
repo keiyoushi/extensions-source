@@ -1,0 +1,125 @@
+package keiyoushi.lib.ece
+
+import java.io.ByteArrayOutputStream
+import java.math.BigInteger
+import java.nio.ByteBuffer
+import java.security.AlgorithmParameters
+import java.security.KeyFactory
+import java.security.interfaces.ECPublicKey
+import java.security.spec.ECGenParameterSpec
+import java.security.spec.ECParameterSpec
+import java.security.spec.ECPoint
+import java.security.spec.ECPublicKeySpec
+import javax.crypto.Cipher
+import javax.crypto.Mac
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
+
+private const val CURVE_NAME = "secp256r1"
+private val ECE_KEY_INFO = "Content-Encoding: aes128gcm\u0000".toByteArray()
+private val ECE_NONCE_INFO = "Content-Encoding: nonce\u0000".toByteArray()
+
+object Ece {
+
+    /**
+     * Decrypts an RFC 8188 `aes128gcm` payload with the raw input keying material [ikm].
+     */
+    fun decrypt(payload: ByteArray, ikm: ByteArray): ByteArray {
+        require(payload.size >= 21) { "ece: payload shorter than the header" }
+
+        val salt = payload.copyOfRange(0, 16)
+        val recordSize = ByteBuffer.wrap(payload, 16, 4).int
+        var pos = 21 + (payload[20].toInt() and 0xFF)
+        require(recordSize >= 18 && pos < payload.size) { "ece: malformed header" }
+
+        val key = SecretKeySpec(hkdf(ikm, salt, ECE_KEY_INFO, 16), "AES")
+        val nonce = hkdf(ikm, salt, ECE_NONCE_INFO, 12)
+        val out = ByteArrayOutputStream()
+        var sequence = 0
+
+        while (pos < payload.size) {
+            val record = payload.copyOfRange(pos, minOf(pos + recordSize, payload.size))
+            pos += record.size
+
+            val iv = nonce.copyOf()
+            var counter = sequence
+            for (i in 0..3) {
+                iv[8 + i] = (iv[8 + i].toInt() xor (counter ushr (8 * (3 - i)))).toByte()
+            }
+
+            val plain = Cipher.getInstance("AES/GCM/NoPadding").run {
+                init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+                doFinal(record)
+            }
+
+            // Records are zero-padded up to a delimiter byte: 2 on the last one, 1 elsewhere.
+            var last = plain.size - 1
+            while (last >= 0 && plain[last].toInt() == 0) last--
+            val isFinal = pos >= payload.size
+            require(last >= 0 && plain[last].toInt() == if (isFinal) 2 else 1) {
+                "ece: record $sequence has the wrong delimiter"
+            }
+
+            out.write(plain, 0, last)
+            sequence++
+        }
+
+        return out.toByteArray()
+    }
+
+    /**
+     * HKDF-SHA256. An empty [salt] is treated as HashLen zero bytes per RFC 5869.
+     */
+    private fun hkdf(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
+        val effectiveSalt = salt.takeIf { it.isNotEmpty() } ?: ByteArray(32)
+        val prk = Mac.getInstance("HmacSHA256").apply {
+            init(SecretKeySpec(effectiveSalt, "HmacSHA256"))
+        }.doFinal(ikm)
+
+        val okm = ByteArrayOutputStream()
+        var previous = ByteArray(0)
+        var counter = 1
+        while (okm.size() < length) {
+            previous = Mac.getInstance("HmacSHA256").apply {
+                init(SecretKeySpec(prk, "HmacSHA256"))
+                update(previous)
+                update(info)
+                update(counter.toByte())
+            }.doFinal()
+            okm.write(previous)
+            counter++
+        }
+        return okm.toByteArray().copyOf(length)
+    }
+
+    /**
+     * The raw uncompressed (`0x04 || X || Y`) form of a P-256 [publicKey].
+     */
+    fun publicKeyToRaw(publicKey: ECPublicKey): ByteArray = byteArrayOf(4) +
+        publicKey.w.affineX.toFixedBytes(32) +
+        publicKey.w.affineY.toFixedBytes(32)
+
+    /**
+     * Inverse of [publicKeyToRaw].
+     */
+    fun rawToPublicKey(raw: ByteArray): ECPublicKey {
+        require(raw.size == 65 && raw[0] == 0x04.toByte()) { "Invalid P-256 raw public key" }
+
+        val params = AlgorithmParameters.getInstance("EC").apply {
+            init(ECGenParameterSpec(CURVE_NAME))
+        }.getParameterSpec(ECParameterSpec::class.java)
+
+        val x = BigInteger(1, raw.copyOfRange(1, 33))
+        val y = BigInteger(1, raw.copyOfRange(33, 65))
+        return KeyFactory.getInstance("EC").generatePublic(ECPublicKeySpec(ECPoint(x, y), params)) as ECPublicKey
+    }
+}
+
+private fun BigInteger.toFixedBytes(length: Int): ByteArray {
+    val raw = toByteArray()
+    return when {
+        raw.size == length -> raw
+        raw.size > length -> raw.copyOfRange(raw.size - length, raw.size) // drop sign byte
+        else -> ByteArray(length - raw.size) + raw
+    }
+}

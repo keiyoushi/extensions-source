@@ -1,20 +1,15 @@
 package eu.kanade.tachiyomi.extension.ar.dilar
 
 import android.util.Base64
+import keiyoushi.lib.ece.Ece
 import keiyoushi.lib.secretstream.ChaCha20
 import keiyoushi.lib.secretstream.Poly1305
 import java.io.ByteArrayOutputStream
-import java.math.BigInteger
-import java.security.AlgorithmParameters
-import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
-import java.security.spec.ECParameterSpec
-import java.security.spec.ECPoint
-import java.security.spec.ECPublicKeySpec
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.Mac
@@ -27,14 +22,14 @@ internal class Ecies {
         initialize(ECGenParameterSpec(CURVE_NAME))
     }.generateKeyPair()
 
-    private val clientPubRaw: ByteArray = pointToRaw(ecKeyPair.public as ECPublicKey)
+    private val clientPubRaw: ByteArray = Ece.publicKeyToRaw(ecKeyPair.public as ECPublicKey)
 
     val clientPubB64: String =
         Base64.encodeToString(clientPubRaw, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
 
     fun decrypt(data: EncryptedResponseDto): String {
         val serverPubRaw = Base64.decode(data.epk, Base64.URL_SAFE)
-        val serverPubKey = rawToPoint(serverPubRaw)
+        val serverPubKey = Ece.rawToPublicKey(serverPubRaw)
         val iv = Base64.decode(data.iv, Base64.URL_SAFE)
         val ct = Base64.decode(data.ct, Base64.URL_SAFE)
         val tag = Base64.decode(data.tag, Base64.URL_SAFE)
@@ -256,34 +251,6 @@ internal class Ecies {
             offset += p.size
         }
         return result
-    }
-
-    private fun pointToRaw(publicKey: ECPublicKey): ByteArray {
-        val x = publicKey.w.affineX.toFixedBytes(32)
-        val y = publicKey.w.affineY.toFixedBytes(32)
-        return byteArrayOf(0x04) + x + y
-    }
-
-    private fun rawToPoint(raw: ByteArray): ECPublicKey {
-        require(raw.size == 65 && raw[0] == 0x04.toByte()) { "Invalid P-256 raw public key" }
-        val x = BigInteger(1, raw.copyOfRange(1, 33))
-        val y = BigInteger(1, raw.copyOfRange(33, 65))
-
-        val curveParams = AlgorithmParameters.getInstance("EC").apply {
-            init(ECGenParameterSpec(CURVE_NAME))
-        }.getParameterSpec(ECParameterSpec::class.java)
-
-        val spec = ECPublicKeySpec(ECPoint(x, y), curveParams)
-        return KeyFactory.getInstance("EC").generatePublic(spec) as ECPublicKey
-    }
-
-    private fun BigInteger.toFixedBytes(length: Int): ByteArray {
-        val raw = toByteArray()
-        return when {
-            raw.size == length -> raw
-            raw.size > length -> raw.copyOfRange(raw.size - length, raw.size) // drop sign byte
-            else -> ByteArray(length - raw.size) + raw
-        }
     }
 
     private fun hmac(
