@@ -40,6 +40,7 @@ object Ece {
         while (pos < payload.size) {
             val record = payload.copyOfRange(pos, minOf(pos + recordSize, payload.size))
             pos += record.size
+            require(record.size >= 18) { "ece: record $sequence too short" }
 
             val iv = nonce.copyOf()
             var counter = sequence
