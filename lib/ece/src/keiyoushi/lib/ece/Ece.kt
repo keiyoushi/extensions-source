@@ -6,6 +6,7 @@ import java.nio.ByteBuffer
 import java.security.AlgorithmParameters
 import java.security.KeyFactory
 import java.security.interfaces.ECPublicKey
+import java.security.spec.ECFieldFp
 import java.security.spec.ECGenParameterSpec
 import java.security.spec.ECParameterSpec
 import java.security.spec.ECPoint
@@ -38,8 +39,9 @@ object Ece {
         var sequence = 0
 
         while (pos < payload.size) {
-            val record = payload.copyOfRange(pos, minOf(pos + recordSize, payload.size))
-            pos += record.size
+            val end = minOf(pos.toLong() + recordSize, payload.size.toLong()).toInt()
+            val record = payload.copyOfRange(pos, end)
+            pos = end
             require(record.size >= 18) { "ece: record $sequence too short" }
 
             val iv = nonce.copyOf()
@@ -83,6 +85,8 @@ object Ece {
         mac.init(SecretKeySpec(effectiveSalt, algorithm))
         val prk = mac.doFinal(ikm)
 
+        require(length <= 255 * mac.macLength) { "hkdf: length exceeds 255 * HashLen" }
+
         mac.init(SecretKeySpec(prk, algorithm))
         val okm = ByteArrayOutputStream()
         var previous = ByteArray(0)
@@ -106,7 +110,8 @@ object Ece {
         publicKey.w.affineY.toFixedBytes(32)
 
     /**
-     * Inverse of [publicKeyToRaw].
+     * Inverse of [publicKeyToRaw]. Rejects coordinates that are not on the P-256 curve, because
+     * some providers accept an off-curve point when building the key.
      */
     fun rawToPublicKey(raw: ByteArray): ECPublicKey {
         require(raw.size == 65 && raw[0] == 0x04.toByte()) { "Invalid P-256 raw public key" }
@@ -117,6 +122,13 @@ object Ece {
 
         val x = BigInteger(1, raw.copyOfRange(1, 33))
         val y = BigInteger(1, raw.copyOfRange(33, 65))
+
+        // y^2 == x^3 + ax + b (mod p)
+        val p = (params.curve.field as ECFieldFp).p
+        val lhs = y.modPow(BigInteger.valueOf(2), p)
+        val rhs = (x.modPow(BigInteger.valueOf(3), p) + params.curve.a * x + params.curve.b).mod(p)
+        require(lhs == rhs) { "Invalid P-256 raw public key: point is not on the curve" }
+
         return KeyFactory.getInstance("EC").generatePublic(ECPublicKeySpec(ECPoint(x, y), params)) as ECPublicKey
     }
 }
