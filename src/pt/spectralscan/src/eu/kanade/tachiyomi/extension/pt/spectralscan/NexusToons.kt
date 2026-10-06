@@ -69,7 +69,7 @@ abstract class NexusToons :
         val url = "$baseUrl/api/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", "50")
-            .addQueryParameter("includeNsfw", "true")
+            .addQueryParameter("includeNsfw", noNsfw.not().toString())
 
         if (query.isNotBlank()) {
             url.addQueryParameter("search", query)
@@ -115,7 +115,8 @@ abstract class NexusToons :
         url.addQueryParameter("sortBy", sortBy)
         url.addQueryParameter("sortOrder", sortOrder)
         url.addQueryParameter("categoryMode", categoryMode)
-        if (onlyNsfw) url.addQueryParameter("onlyNsfw", "true")
+
+        if (onlyNsfw && !noNsfw) url.addQueryParameter("onlyNsfw", "true")
 
         if (statusList.isNotEmpty()) {
             url.addQueryParameter("status", statusList.joinToString(","))
@@ -229,12 +230,27 @@ abstract class NexusToons :
     private val onlyNsfw: Boolean
         get() = preferences.getBoolean(PREF_ONLY_NSFW_KEY, PREF_ONLY_NSFW_DEFAULT)
 
+    private val noNsfw: Boolean
+        get() = preferences.getBoolean(PREF_NO_NSFW_KEY, PREF_NO_NSFW_DEFAULT)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
+        val onlyNsfw = SwitchPreferenceCompat(screen.context).apply {
             key = PREF_ONLY_NSFW_KEY
             title = "Mostrar apenas conteúdo +18"
             summary = "Quando habilitado, exibe apenas conteúdo adulto nas listagens."
             setDefaultValue(PREF_ONLY_NSFW_DEFAULT)
+            setEnabled(!noNsfw)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_NO_NSFW_KEY
+            title = "Ocultar adulto (+18)"
+            summary = "Quando habilitado, oculta conteúdo adulto nas listagens."
+            setDefaultValue(PREF_NO_NSFW_DEFAULT)
+            setOnPreferenceChangeListener { _, value ->
+                onlyNsfw.setEnabled(!(value as Boolean))
+                true
+            }
         }.also(screen::addPreference)
     }
 
@@ -287,6 +303,8 @@ abstract class NexusToons :
     companion object {
         private const val PREF_ONLY_NSFW_KEY = "pref_only_nsfw"
         private const val PREF_ONLY_NSFW_DEFAULT = false
+        private const val PREF_NO_NSFW_KEY = "pref_no_nsfw"
+        private const val PREF_NO_NSFW_DEFAULT = false
         private const val CHAPTER_ENCRYPTION_KEY = "NexusToons2026SecretKeyForChapterEncryption!@#\$"
     }
 }
