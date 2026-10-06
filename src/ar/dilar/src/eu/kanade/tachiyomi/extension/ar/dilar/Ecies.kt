@@ -15,7 +15,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-// ECIES response decryption, protocol versions 1-13.
+// ECIES response decryption, protocol versions 1-14.
 internal class Ecies {
     private val ecKeyPair: KeyPair = KeyPairGenerator.getInstance("EC").apply {
         initialize(ECGenParameterSpec(CURVE_NAME))
@@ -131,6 +131,15 @@ internal class Ecies {
                 chacha = true,
             )
 
+            14 -> CipherSpec(
+                serverKeyedSalt(serverPubRaw, iv),
+                "dilar.response.ecies.v14|${data.e}|${sha512(lengthPrefixed(iv)).toBase64Url().take(22)}".toByteArray(),
+                hash = "HmacSHA512",
+                derivedNonce = true,
+                aad = aad("dilar.response.ecies.v14", data, serverPubRaw, iv, ct.size),
+                gcmsiv = true,
+            )
+
             else -> error("Unsupported encryption protocol version: ${data.v}")
         }
 
@@ -146,6 +155,10 @@ internal class Ecies {
 
         if (spec.chacha) {
             return chacha20Poly1305Decrypt(key, nonce, ct, tag, spec.aad ?: ByteArray(0)).toString(Charsets.UTF_8)
+        }
+
+        if (spec.gcmsiv) {
+            return AesGcmSiv.decrypt(key, nonce, ct + tag, spec.aad ?: ByteArray(0)).toString(Charsets.UTF_8)
         }
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
@@ -199,12 +212,20 @@ internal class Ecies {
         val derivedNonce: Boolean = false,
         val aad: ByteArray? = null,
         val chacha: Boolean = false,
+        val gcmsiv: Boolean = false,
     )
 
     // Shared by v12 and v13; v12 truncates the result to 32 bytes.
     private fun clientKeyedSalt(serverPubRaw: ByteArray, iv: ByteArray): ByteArray = hmac(
         key = clientPubRaw,
         data = joinBytes(lengthPrefixed(serverPubRaw), lengthPrefixed(iv)),
+        algorithm = "HmacSHA512",
+    )
+
+    // v14 keys the salt with the server's public key instead of the client's.
+    private fun serverKeyedSalt(serverPubRaw: ByteArray, iv: ByteArray): ByteArray = hmac(
+        key = serverPubRaw,
+        data = joinBytes(lengthPrefixed(clientPubRaw), lengthPrefixed(iv)),
         algorithm = "HmacSHA512",
     )
 
