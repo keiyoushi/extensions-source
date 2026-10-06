@@ -38,12 +38,11 @@ abstract class JellyComics : Madara() {
         else -> super.imageFromElement(element)
     }
 
-    override fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga =
-        super.parseDetails(document, id, preserveUrl).apply {
-            author = document.selectFirst("li:has(strong:containsOwn(Tác giả))")
-                ?.ownText()?.trim()
-                ?.takeIf { it.isNotEmpty() && !isUpdating(it) }
-        }
+    override fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = super.parseDetails(document, id, preserveUrl).apply {
+        author = document.selectFirst("li:has(strong:containsOwn(Tác giả))")
+            ?.ownText()?.trim()
+            ?.takeIf { it.isNotEmpty() && !isUpdating(it) }
+    }
 
     override fun chapterListSelector() = "li.wp-manga-chapter, div.chapter-item"
     override val chapterNameSelector = "p.chapter-title"
@@ -78,10 +77,9 @@ abstract class JellyComics : Madara() {
     override val chapterMode = ChapterMode.MangaAjax
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH)
 
-    override fun parsePages(document: Document): List<Page> =
-        document.select(".reading-content img.manga-page").mapIndexedNotNull { index, img ->
-            imageFromElement(img)?.let { Page(index, document.location(), it) }
-        }
+    override fun parsePages(document: Document): List<Page> = document.select(".reading-content img.manga-page").mapIndexedNotNull { index, img ->
+        imageFromElement(img)?.let { Page(index, document.location(), it) }
+    }
 
     private val noRedirectClient: OkHttpClient by lazy {
         client.newBuilder().followRedirects(false).build()
