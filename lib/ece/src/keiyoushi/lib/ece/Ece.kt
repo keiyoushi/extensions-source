@@ -39,9 +39,8 @@ object Ece {
         var sequence = 0
 
         while (pos < payload.size) {
-            val end = minOf(pos.toLong() + recordSize, payload.size.toLong()).toInt()
-            val record = payload.copyOfRange(pos, end)
-            pos = end
+            val record = payload.copyOfRange(pos, pos + minOf(recordSize, payload.size - pos))
+            pos += record.size
             require(record.size >= 18) { "ece: record $sequence too short" }
 
             val iv = nonce.copyOf()
@@ -125,9 +124,9 @@ object Ece {
 
         // y^2 == x^3 + ax + b (mod p)
         val p = (params.curve.field as ECFieldFp).p
-        val lhs = y.modPow(BigInteger.valueOf(2), p)
-        val rhs = (x.modPow(BigInteger.valueOf(3), p) + params.curve.a * x + params.curve.b).mod(p)
-        require(lhs == rhs) { "Invalid P-256 raw public key: point is not on the curve" }
+        require(y * y % p == (x * x * x + params.curve.a * x + params.curve.b) % p) {
+            "Invalid P-256 raw public key: point is not on the curve"
+        }
 
         return KeyFactory.getInstance("EC").generatePublic(ECPublicKeySpec(ECPoint(x, y), params)) as ECPublicKey
     }
