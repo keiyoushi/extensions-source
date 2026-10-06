@@ -112,8 +112,7 @@ private fun resolveRelated(details: DetailsDto, lines: List<String>): List<Manga
 }
 
 /** Resolves lazy `sameMangas` from the streamed chunk lines. */
-internal fun Response.parseRelatedMangas(): List<MangaDetailsDto> =
-    parseMangaDetails().second ?: throw IllegalStateException("Related manga list unavailable")
+internal fun Response.parseRelatedMangas(): List<MangaDetailsDto> = parseMangaDetails().second ?: throw IllegalStateException("Related manga list unavailable")
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Catalog
