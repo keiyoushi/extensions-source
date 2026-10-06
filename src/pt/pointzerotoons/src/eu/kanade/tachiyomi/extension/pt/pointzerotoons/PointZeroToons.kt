@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.pointzerotoons
 
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,7 +13,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -24,17 +20,13 @@ import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 
 @Source
-abstract class PointZeroToons :
-    KeiSource(),
-    ConfigurableSource {
-
-    private val preferences by getPreferencesLazy()
+abstract class PointZeroToons : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get(mangaListUrl(page, "updated")).asJsoup()).withoutNovels()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get(mangaListUrl(page, "updated")).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sort = sortFilterList[filters.firstInstance<SortFilter>().state].first
@@ -42,8 +34,7 @@ abstract class PointZeroToons :
         val type = typeFilterList[filters.firstInstance<TypeFilter>().state].first
         val genre = genreFilterList[filters.firstInstance<GenreFilter>().state].first
 
-        val mangasPage = parseMangaList(client.get(mangaListUrl(page, sort, query, status, type, genre)).asJsoup())
-        return if (type.isEmpty()) mangasPage.withoutNovels() else mangasPage
+        return parseMangaList(client.get(mangaListUrl(page, sort, query, status, type, genre)).asJsoup())
     }
 
     private fun mangaListUrl(
@@ -64,13 +55,15 @@ abstract class PointZeroToons :
     }
 
     private fun parseMangaList(document: Document): MangasPage {
-        val mangas = document.select("article.inkra-catalog-card").map { card ->
-            SManga.create().apply {
-                setUrlWithoutDomain(card.selectFirst("a.inkra-catalog-card__media")!!.absUrl("href"))
-                title = card.selectFirst("h3 a")!!.text()
-                thumbnail_url = card.selectFirst("img")?.absUrl("src")
+        val mangas = document.select("article.inkra-catalog-card")
+            .map { card ->
+                SManga.create().apply {
+                    setUrlWithoutDomain(card.selectFirst("a.inkra-catalog-card__media")!!.absUrl("href"))
+                    title = card.selectFirst("h3 a")!!.text()
+                    thumbnail_url = card.selectFirst("img")?.absUrl("src")
+                }
             }
-        }
+            .filterNot { it.title.contains(NOVEL_MARKER, ignoreCase = true) }
         return MangasPage(mangas, document.selectFirst("a.next.page-numbers") != null)
     }
 
@@ -128,24 +121,7 @@ abstract class PointZeroToons :
         Filter.Separator(),
         GenreFilter(genreFilterList.map { it.second }.toTypedArray()),
     )
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_HIDE_NOVELS_KEY
-            title = "Ocultar novels"
-            summary = "Oculta novels (títulos com '(Novel)') nas listas e na busca."
-            setDefaultValue(true)
-        }.let(screen::addPreference)
-    }
-
-    private fun hideNovelsPref() = preferences.getBoolean(PREF_HIDE_NOVELS_KEY, true)
-
-    // Listing cards don't expose the type, so novels are recognised by the "(Novel)" marker the site puts in their titles.
-    private fun MangasPage.withoutNovels() = if (hideNovelsPref()) copy(mangas = mangas.filterNot { NOVEL_MARKER.containsMatchIn(it.title) }) else this
-
-    companion object {
-        private const val PREF_HIDE_NOVELS_KEY = "pref_hide_novels"
-
-        private val NOVEL_MARKER = Regex("""\(\s*novel\s*\)""", RegexOption.IGNORE_CASE)
-    }
 }
+
+// Listing cards don't expose the type, so novels are only recognisable by the "(NOVEL)" marker the site puts in their titles.
+private const val NOVEL_MARKER = "(NOVEL)"

@@ -23,7 +23,6 @@ val typeFilterList = listOf(
     Pair("Manga", "Manga"),
     Pair("Manhwa", "Manhwa"),
     Pair("Manhua", "Manhua"),
-    Pair("Novel", "Novel"),
     Pair("One Shot", "One Shot"),
     Pair("Comic", "Comic"),
 )
@@ -139,7 +138,6 @@ val genreFilterList = listOf(
     Pair("mystery", "Mystery"),
     Pair("necromancia", "Necromancia"),
     Pair("ninja", "Ninja"),
-    Pair("novel", "Novel"),
     Pair("office-workers", "Office Workers"),
     Pair("one", "One"),
     Pair("oneshot", "Oneshot"),
