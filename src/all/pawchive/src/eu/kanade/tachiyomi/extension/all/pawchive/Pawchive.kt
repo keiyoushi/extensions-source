@@ -265,6 +265,14 @@ abstract class Pawchive :
                 offset += PAGE_POST_LIMIT
                 hasNextPage = page.size == PAGE_POST_LIMIT
             }
+
+            // Every post is its own chapter, so it needs a unique chapter number. Otherwise the
+            // app's "Skip duplicate chapters" setting groups them all together and only one
+            // chapter remains (breaking reader navigation). Posts arrive newest-first, so the
+            // newest gets the highest number.
+            result.forEachIndexed { index, chapter ->
+                chapter.chapter_number = (result.size - index).toFloat()
+            }
             result
         } else {
             chapters
