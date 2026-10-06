@@ -4,7 +4,6 @@ import android.util.Base64
 import keiyoushi.lib.ece.Ece
 import keiyoushi.lib.secretstream.ChaCha20
 import keiyoushi.lib.secretstream.Poly1305
-import java.io.ByteArrayOutputStream
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
@@ -75,7 +74,7 @@ internal class Ecies {
             )
 
             7 -> CipherSpec(
-                hkdf(
+                Ece.hkdf(
                     ikm = iv,
                     salt = serverPubRaw,
                     info = "dilar.response.ecies.v7.salt".toByteArray(),
@@ -135,7 +134,7 @@ internal class Ecies {
             else -> error("Unsupported encryption protocol version: ${data.v}")
         }
 
-        val keyMaterial = hkdf(
+        val keyMaterial = Ece.hkdf(
             ikm = sharedSecret,
             salt = spec.salt,
             info = spec.info,
@@ -261,32 +260,11 @@ internal class Ecies {
         init(SecretKeySpec(key, algorithm))
     }.doFinal(data)
 
-    // HKDF
-
     private fun sha256(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(data)
 
     private fun sha384(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-384").digest(data)
 
     private fun sha512(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-512").digest(data)
-
-    private fun hkdf(
-        ikm: ByteArray,
-        salt: ByteArray,
-        info: ByteArray,
-        length: Int,
-        algorithm: String = "HmacSHA256",
-    ): ByteArray {
-        val prk = hmac(salt, ikm, algorithm)
-        val okm = ByteArrayOutputStream()
-        var t = ByteArray(0)
-        var counter = 1
-        while (okm.size() < length) {
-            t = hmac(prk, t + info + byteArrayOf(counter.toByte()), algorithm)
-            okm.write(t)
-            counter++
-        }
-        return okm.toByteArray().copyOf(length)
-    }
 
     companion object {
         private const val CURVE_NAME = "secp256r1"

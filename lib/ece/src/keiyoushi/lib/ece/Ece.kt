@@ -68,24 +68,29 @@ object Ece {
     }
 
     /**
-     * HKDF-SHA256. An empty [salt] is treated as HashLen zero bytes per RFC 5869.
+     * HKDF with [algorithm]. An empty [salt] is treated as HashLen zero bytes per RFC 5869.
      */
-    fun hkdf(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
-        val effectiveSalt = salt.takeIf { it.isNotEmpty() } ?: ByteArray(32)
-        val prk = Mac.getInstance("HmacSHA256").apply {
-            init(SecretKeySpec(effectiveSalt, "HmacSHA256"))
-        }.doFinal(ikm)
+    fun hkdf(
+        ikm: ByteArray,
+        salt: ByteArray,
+        info: ByteArray,
+        length: Int,
+        algorithm: String = "HmacSHA256",
+    ): ByteArray {
+        val mac = Mac.getInstance(algorithm)
+        val effectiveSalt = salt.takeIf { it.isNotEmpty() } ?: ByteArray(mac.macLength)
+        mac.init(SecretKeySpec(effectiveSalt, algorithm))
+        val prk = mac.doFinal(ikm)
 
+        mac.init(SecretKeySpec(prk, algorithm))
         val okm = ByteArrayOutputStream()
         var previous = ByteArray(0)
         var counter = 1
         while (okm.size() < length) {
-            previous = Mac.getInstance("HmacSHA256").apply {
-                init(SecretKeySpec(prk, "HmacSHA256"))
-                update(previous)
-                update(info)
-                update(counter.toByte())
-            }.doFinal()
+            mac.update(previous)
+            mac.update(info)
+            mac.update(counter.toByte())
+            previous = mac.doFinal()
             okm.write(previous)
             counter++
         }

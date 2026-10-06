@@ -9,23 +9,17 @@ import eu.kanade.tachiyomi.extension.vi.moetruyen.cipher.AesSiv
 import eu.kanade.tachiyomi.extension.vi.moetruyen.cipher.ChaCha20Poly1305
 import eu.kanade.tachiyomi.extension.vi.moetruyen.cipher.XChaCha20Poly1305
 import eu.kanade.tachiyomi.extension.vi.moetruyen.cipher.Xsalsa20Poly1305
+import keiyoushi.lib.ece.Ece
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.readIntBigEndian
-import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.PrivateKey
-import java.security.PublicKey
 import java.security.SecureRandom
-import java.security.spec.ECFieldFp
+import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
-import java.security.spec.ECParameterSpec
-import java.security.spec.ECPoint
-import java.security.spec.ECPublicKeySpec
-import java.security.spec.EllipticCurve
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.Mac
@@ -46,23 +40,6 @@ internal object ImgxCrypto {
         return Base64.decode(padded, Base64.DEFAULT)
     }
 
-    fun hkdfSha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
-        val prk = hmacSha256(if (salt.isEmpty()) ByteArray(32) else salt, ikm)
-        val result = ByteArray(length)
-        var previous = ByteArray(0)
-        var offset = 0
-        var counter = 1
-        while (offset < length) {
-            val input = previous + info + byteArrayOf(counter.toByte())
-            previous = hmacSha256(prk, input)
-            val toCopy = minOf(previous.size, length - offset)
-            previous.copyInto(result, offset, 0, toCopy)
-            offset += toCopy
-            counter += 1
-        }
-        return result
-    }
-
     fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray = Mac.getInstance("HmacSHA256").run {
         init(SecretKeySpec(key, "HmacSHA256"))
         doFinal(data)
@@ -81,7 +58,7 @@ internal object ImgxCrypto {
         val publicKey: String get() = base64UrlEncode(publicKeyBytes)
 
         fun deriveSharedSecret(peerPublicKeyBytes: ByteArray): ByteArray {
-            val peer = decodeUncompressedP256(peerPublicKeyBytes)
+            val peer = Ece.rawToPublicKey(peerPublicKeyBytes)
             return KeyAgreement.getInstance("ECDH").run {
                 init(privateKey)
                 doPhase(peer, true)
@@ -95,38 +72,13 @@ internal object ImgxCrypto {
             initialize(ECGenParameterSpec("secp256r1"))
             generateKeyPair()
         }
-        val encoded = keyPair.public.encoded
-        val point = encoded.copyOfRange(encoded.size - 65, encoded.size)
+        val point = Ece.publicKeyToRaw(keyPair.public as ECPublicKey)
         return EcdhKeyPair(keyPair.private, point)
-    }
-
-    private fun decodeUncompressedP256(bytes: ByteArray): PublicKey {
-        require(bytes.size == 65 && bytes[0] == 0x04.toByte()) { "IMGX channel public key invalid" }
-        val x = BigInteger(1, bytes.copyOfRange(1, 33))
-        val y = BigInteger(1, bytes.copyOfRange(33, 65))
-        return KeyFactory.getInstance("EC").generatePublic(ECPublicKeySpec(ECPoint(x, y), p256Spec()))
-    }
-
-    private fun p256Spec(): ECParameterSpec {
-        val field = ECFieldFp(
-            BigInteger("FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF", 16),
-        )
-        val curve = EllipticCurve(
-            field,
-            BigInteger("FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFC", 16),
-            BigInteger("5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B", 16),
-        )
-        val g = ECPoint(
-            BigInteger("6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296", 16),
-            BigInteger("4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5", 16),
-        )
-        val n = BigInteger("FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551", 16)
-        return ECParameterSpec(curve, g, n, 1)
     }
 
     fun channelAad(ownPublic: String, peerPublic: String, proof: String): ByteArray = """["imgx-reader-channel-v1","$ownPublic","$peerPublic","$proof"]""".toByteArray(Charsets.UTF_8)
 
-    fun deriveChannelKey(sharedSecret: ByteArray, proof: String): ByteArray = hkdfSha256(
+    fun deriveChannelKey(sharedSecret: ByteArray, proof: String): ByteArray = Ece.hkdf(
         ikm = sharedSecret,
         salt = proof.toByteArray(Charsets.UTF_8),
         info = "imgx-reader-channel-v1".toByteArray(Charsets.UTF_8),
@@ -189,7 +141,7 @@ internal object ImgxCrypto {
         ck: ChannelKeys,
     ): DecryptedChannelKeys {
         require(ck.version == "IMGX-READER-PAGE-KEY-v1") { "IMGX page key version unsupported: ${ck.version}" }
-        val pageKey = hkdfSha256(
+        val pageKey = Ece.hkdf(
             shared,
             proof.toByteArray(Charsets.UTF_8),
             "IMGX-READER-PAGE-KEY-v1".toByteArray(Charsets.UTF_8),
@@ -415,7 +367,7 @@ internal object ImgxCrypto {
                 payload[4].toInt() == 4,
         ) { "IMGX v4 file invalid" }
         val header = payload.copyOfRange(0, 78)
-        val derived = hkdfSha256(
+        val derived = Ece.hkdf(
             ikm = key,
             salt = header.copyOfRange(13, 45),
             info = "IMGX-v4.envelope".toByteArray(Charsets.UTF_8),
@@ -460,7 +412,7 @@ internal object ImgxCrypto {
                 }
                 6 -> {
                     // AES-CBC + HMAC-SHA512; HKDF(contentKey, "IMGX-v4.p06") → 64B key
-                    val p06Key = hkdfSha256(
+                    val p06Key = Ece.hkdf(
                         ikm = contentKey,
                         salt = ByteArray(32),
                         info = "IMGX-v4.p06".toByteArray(Charsets.UTF_8),
@@ -478,7 +430,7 @@ internal object ImgxCrypto {
                 }
                 8 -> {
                     // AES-SIV (RFC 5297): HKDF(contentKey, "IMGX-v4.p08") → 64B key; body=tag||ct
-                    val sivKey = hkdfSha256(
+                    val sivKey = Ece.hkdf(
                         ikm = contentKey,
                         salt = ByteArray(32),
                         info = "IMGX-v4.p08".toByteArray(Charsets.UTF_8),
