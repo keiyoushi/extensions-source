@@ -25,8 +25,7 @@ abstract class HentaiFC : KeiSource() {
 
     override val supportsLatest = false
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder =
-        rateLimit(permits = 2, period = 1.seconds)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
