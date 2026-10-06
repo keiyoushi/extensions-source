@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Dilar"
-    versionCode = 15
+    versionCode = 16
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -15,4 +15,8 @@ keiyoushi {
         baseUrl = "https://dilar.tube"
         versionId = 2
     }
+}
+
+dependencies {
+    implementation(project(":lib:secretstream"))
 }
