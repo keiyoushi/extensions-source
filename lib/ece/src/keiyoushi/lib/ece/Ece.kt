@@ -70,7 +70,7 @@ object Ece {
     /**
      * HKDF-SHA256. An empty [salt] is treated as HashLen zero bytes per RFC 5869.
      */
-    private fun hkdf(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
+    fun hkdf(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
         val effectiveSalt = salt.takeIf { it.isNotEmpty() } ?: ByteArray(32)
         val prk = Mac.getInstance("HmacSHA256").apply {
             init(SecretKeySpec(effectiveSalt, "HmacSHA256"))
