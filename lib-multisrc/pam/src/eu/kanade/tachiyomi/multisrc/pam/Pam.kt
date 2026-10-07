@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.lib.ece.Ece
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.secretstream.SecretStream
 import keiyoushi.lib.secretstream.State
@@ -39,16 +40,13 @@ import okio.Timeout
 import okio.buffer
 import java.io.IOException
 import java.net.URLDecoder
-import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
-import javax.crypto.Cipher
 import javax.crypto.Mac
-import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.seconds
@@ -571,7 +569,7 @@ abstract class Pam :
 
             return response.newBuilder()
                 .body(
-                    decryptEce(response.body.bytes(), session.contentKey)
+                    Ece.decrypt(response.body.bytes(), session.contentKey)
                         .toResponseBody("image/webp".toMediaType()),
                 )
                 .build()
@@ -645,73 +643,12 @@ abstract class Pam :
             .body(decryptedSource.asResponseBody("image/jpg".toMediaType()))
             .build()
     }
-
-    /** RFC 8188 `aes128gcm`, the container reader v2 serves its pages in. */
-    private fun decryptEce(payload: ByteArray, ikm: ByteArray): ByteArray {
-        require(payload.size >= 21) { "ece: payload shorter than the header" }
-
-        val salt = payload.copyOfRange(0, 16)
-        val recordSize = ByteBuffer.wrap(payload, 16, 4).int
-        var pos = 21 + (payload[20].toInt() and 0xFF)
-        require(recordSize >= 18 && pos < payload.size) { "ece: malformed header" }
-
-        val key = SecretKeySpec(hkdf(ikm, salt, ECE_KEY_INFO, 16), "AES")
-        val nonce = hkdf(ikm, salt, ECE_NONCE_INFO, 12)
-        val out = Buffer()
-        var sequence = 0
-
-        while (pos < payload.size) {
-            val record = payload.copyOfRange(pos, minOf(pos + recordSize, payload.size))
-            pos += record.size
-            require(record.size >= 18) { "ece: record $sequence too short" }
-
-            val iv = nonce.copyOf()
-            var counter = sequence
-            for (i in 11 downTo 0) {
-                if (counter == 0) break
-                iv[i] = (iv[i].toInt() xor (counter and 0xFF)).toByte()
-                counter = counter ushr 8
-            }
-
-            val plain = Cipher.getInstance("AES/GCM/NoPadding").run {
-                init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
-                doFinal(record)
-            }
-
-            // Records are zero-padded up to a delimiter byte: 2 on the last one, 1 elsewhere.
-            var last = plain.size - 1
-            while (last >= 0 && plain[last].toInt() == 0) last--
-            val isFinal = pos >= payload.size
-            require(last >= 0 && plain[last].toInt() == if (isFinal) 2 else 1) {
-                "ece: record $sequence has the wrong delimiter"
-            }
-
-            out.write(plain, 0, last)
-            sequence++
-        }
-
-        return out.readByteArray()
-    }
-
-    private fun hkdf(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
-        val prk = Mac.getInstance("HmacSHA256").apply {
-            init(SecretKeySpec(salt, "HmacSHA256"))
-        }.doFinal(ikm)
-
-        return Mac.getInstance("HmacSHA256").apply {
-            init(SecretKeySpec(prk, "HmacSHA256"))
-            update(info)
-            update(1)
-        }.doFinal().copyOf(length)
-    }
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
 private const val ATTESTATION_ATTEMPTS = 3
 private const val MANIFEST_VERSION = 2
 private const val MAX_VARIANT_WIDTH = 2160
-private val ECE_KEY_INFO = "Content-Encoding: aes128gcm\u0000".toByteArray()
-private val ECE_NONCE_INFO = "Content-Encoding: nonce\u0000".toByteArray()
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
 private const val CHUNK_SIZE = 65536 + 17 // libsodium secretstream chunk + ABYTES
 private const val PREFIX_LENGTH = 192

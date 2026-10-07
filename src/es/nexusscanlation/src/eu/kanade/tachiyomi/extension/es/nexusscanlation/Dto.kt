@@ -91,21 +91,29 @@ class ChapterPagesDto(
     @SerialName("es_premium")
     val esPremium: Boolean = false,
     val locked: Boolean = false,
+    // ECDH-wrapped scramble seeds and page keys, only returned when the request carries an `X-Rs` public key.
+    val r: String? = null,
 )
 
 @Serializable
 class PageEntryDto(
     val url: String,
-    @SerialName("sc") val scrambledData: ScrambledDataDto? = null,
-
+    val orden: Int = 0,
+    @SerialName("sc")
+    val scrambledData: ScrambledDataDto? = null,
 )
 
 @Serializable
 class ScrambledDataDto(
     @SerialName("c") val columns: Int,
     @SerialName("r") val rows: Int,
-    @SerialName("s") val seed: Long,
     @SerialName("v") val version: Int = 1,
+)
+
+@Serializable
+class UnwrappedKeysDto(
+    val k: Map<String, String>? = null,
+    val s: Map<String, Long>? = null,
 )
 
 @Serializable
