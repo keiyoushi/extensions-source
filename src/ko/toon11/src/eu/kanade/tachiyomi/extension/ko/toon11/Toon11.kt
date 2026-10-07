@@ -20,7 +20,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
+import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -31,8 +31,8 @@ abstract class Toon11 : KeiSource() {
         val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&is_over=0").asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
                 title = element.selectFirst(".homelist-title")!!.text()
+                url = mangaUrl(title, element.attr("data-id"))
                 thumbnail_url = element.selectFirst(".homelist-thumb")?.absUrl("data-mobile-image")
             }
         }
@@ -44,8 +44,8 @@ abstract class Toon11 : KeiSource() {
         val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&sord=&type=upd&page=$page").asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
                 title = element.selectFirst(".homelist-title")!!.text()
+                url = mangaUrl(title, element.attr("data-id"))
                 element.selectFirst(".homelist-thumb")?.also {
                     thumbnail_url = "https:" + it.attr("style").substringAfter("url('").substringBefore("')")
                 }
@@ -80,8 +80,7 @@ abstract class Toon11 : KeiSource() {
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
                 title = element.selectFirst(".homelist-title")!!.text()
-                val dataId = element.attr("data-id")
-                url = "/bbs/board.php?bo_table=toons&stx=${URLEncoder.encode(title, "UTF-8")}&is=$dataId"
+                url = mangaUrl(title, element.attr("data-id"))
                 element.selectFirst(".homelist-thumb")?.also {
                     thumbnail_url = "https:" + it.attr("style").substringAfter("url('").substringBefore("')")
                 }
@@ -91,16 +90,18 @@ abstract class Toon11 : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
+    // Only "is" identifies a manga, so every listing builds the same URL the popular listing links to
+    private fun mangaUrl(title: String, id: String) = "/bbs/board.php?bo_table=toons&stx=$title&is=$id"
+
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
         if (url.queryParameter("bo_table") != "toons") return null
         val id = url.queryParameter("is") ?: return null
-        val stx = url.queryParameter("stx") ?: return null
 
-        val manga = SManga.create().apply {
-            this.url = "/bbs/board.php?bo_table=toons&stx=${URLEncoder.encode(stx, "UTF-8")}&is=$id"
+        val document = client.get("$baseUrl/bbs/board.php?bo_table=toons&is=$id").asJsoup()
+        return parseMangaDetails(document).apply {
+            this.url = mangaUrl(title, id)
         }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -111,20 +112,19 @@ abstract class Toon11 : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        val details = SManga.create().apply {
-            url = manga.url
-            title = document.selectFirst("h2.title")!!.text()
-            thumbnail_url = document.selectFirst("img.banner")?.absUrl("src")
-            document.selectFirst("span:contains(분류) + span")?.also { status = parseStatus(it.text()) }
-            document.selectFirst("span:contains(작가) + span")?.also { author = it.text() }
-            document.selectFirst("span:contains(소개) + span")?.also { description = it.text() }
-            document.selectFirst("span:contains(장르) + span")?.also { genre = it.text().split(",").joinToString { s -> s.trim() } }
-        }
-
         return SMangaUpdate(
-            details,
+            parseMangaDetails(document).apply { url = manga.url },
             if (fetchChapters) parseChapterList(document) else chapters,
         )
+    }
+
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h2.title")!!.text()
+        thumbnail_url = document.selectFirst("img.banner")?.absUrl("src")
+        document.selectFirst("span:contains(분류) + span")?.also { status = parseStatus(it.text()) }
+        document.selectFirst("span:contains(작가) + span")?.also { author = it.text() }
+        document.selectFirst("span:contains(소개) + span")?.also { description = it.text() }
+        document.selectFirst("span:contains(장르) + span")?.also { genre = it.text().split(",").joinToString { s -> s.trim() } }
     }
 
     private fun parseStatus(element: String): Int = when {
@@ -186,12 +186,17 @@ abstract class Toon11 : KeiSource() {
     // The site's viewer loads img_list and falls back to the img_list_2 mirror when an image fails
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val request = chain.request()
-        val response = chain.proceed(request)
-        val fallback = request.url.fragment
-        if (response.isSuccessful || fallback == null || !fallback.startsWith("https://")) {
-            return@addInterceptor response
+        val fallback = request.url.fragment?.takeIf { it.startsWith("https://") }
+            ?: return@addInterceptor chain.proceed(request)
+
+        val response = try {
+            chain.proceed(request)
+        } catch (_: IOException) {
+            null
         }
-        response.close()
+        if (response?.isSuccessful == true) return@addInterceptor response
+
+        response?.close()
         chain.proceed(request.newBuilder().url(fallback).build())
     }
 
