@@ -12,33 +12,69 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class LectorXd : KeiSource() {
 
-    private val baseUrlHost by lazy {
-        baseUrl.toHttpUrl().host
-    }
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(
         permits = 1,
         period = 2.seconds,
     ) { request ->
-        request.host == baseUrlHost
+        request.host == baseUrl.toHttpUrl().host
     }
 
     // ========================================================================
     // FILTROS
     // ========================================================================
+
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("catalogo")
+            .addQueryParameter("filters", "true")
+            .addQueryParameter("adult", "all")
+            .build()
+
+        return client.get(url).use { response ->
+            val document = response.asJsoup()
+            val genres = document
+                .select("#categoryOptions label[data-category-name]")
+                .mapNotNull { label ->
+                    val name = label.attr("data-category-name").trim()
+                    val id = label.selectFirst("input[name=tags]")
+                        ?.attr("value")
+                        ?.trim()
+
+                    if (name.isBlank() || id.isNullOrBlank()) {
+                        null
+                    } else {
+                        name to id
+                    }
+                }
+                .distinct()
+
+            check(genres.isNotEmpty()) {
+                "No se encontraron las categorías de LectorXD"
+            }
+
+            genres.toJsonElement()
+        }
+    }
 
     override fun getFilterList(
         data: JsonElement?,
@@ -143,15 +179,12 @@ abstract class LectorXd : KeiSource() {
             }
 
         val selectedTags = filters
-            ?.filterIsInstance<Filters.GenreGroup>()
+            ?.firstInstanceOrNull<Filters.GenresFilter>()
+            ?.state
             ?.flatMap { group ->
                 group.state
-                    .filter { tag ->
-                        tag.state
-                    }
-                    .flatMap { tag ->
-                        tag.ids
-                    }
+                    .filter { tag -> tag.state }
+                    .flatMap { tag -> tag.ids }
             }
             ?.distinct()
             .orEmpty()
@@ -256,31 +289,17 @@ abstract class LectorXd : KeiSource() {
     private fun parseMangaCards(
         document: Document,
     ): List<SManga> = document
-        .select(
-            """.manga-grid a[href^="/manga/"],
-            .manga-grid a[href^="/manhwa/"],
-            .manga-grid a[href^="/manhua/"],
-            .manga-grid a[href^="/novela/"],
-            .manga-grid a[href^="/one_shot/"]""",
-        )
+        .select(".manga-grid a[href]")
+        .filterNot { card ->
+            card.attr("href").startsWith("/novela/")
+        }
         .mapNotNull { card ->
             val url = card.attr("href").trim()
 
-            val title = card
-                .selectFirst("h4[title]")
-                ?.attr("title")
+            val title = card.selectFirst("h4")
+                ?.text()
                 ?.trim()
                 ?.takeIf { it.isNotBlank() }
-                ?: card
-                    .selectFirst("h4")
-                    ?.text()
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
-                ?: card
-                    .selectFirst("img[alt]")
-                    ?.attr("alt")
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
 
             title
                 ?.takeIf { url.isNotBlank() }
@@ -347,27 +366,13 @@ abstract class LectorXd : KeiSource() {
         ).use { response ->
             val document = response.asJsoup()
 
-            val communityRating = if (fetchDetails) {
-                fetchCommunityRating(document)
-            } else {
-                ""
-            }
-
             SMangaUpdate(
-                manga = if (fetchDetails) {
-                    parseMangaDetails(
-                        document = document,
-                        original = manga,
-                        communityRating = communityRating,
-                    )
-                } else {
-                    manga
-                },
-                chapters = if (fetchChapters) {
-                    chapterListParse(document)
-                } else {
-                    chapters
-                },
+                manga = parseMangaDetails(
+                    document = document,
+                    original = manga,
+                    communityRating = fetchCommunityRating(document),
+                ),
+                chapters = chapterListParse(document),
             )
         }
     }
@@ -384,25 +389,9 @@ abstract class LectorXd : KeiSource() {
             ?.takeIf { it.isNotBlank() }
             ?: original.title
 
-        val cover = document
-            .select(
-                "img[src*='/manga/covers/'], " +
-                    "img[data-src*='/manga/covers/'], " +
-                    "img[data-lazy-src*='/manga/covers/']",
-            )
-            .firstOrNull { image ->
-                image.attr("alt")
-                    .trim()
-                    .equals(
-                        title,
-                        ignoreCase = true,
-                    )
-            }
-            ?: document.selectFirst(
-                "img[src*='/manga/covers/'], " +
-                    "img[data-src*='/manga/covers/'], " +
-                    "img[data-lazy-src*='/manga/covers/']",
-            )
+        val cover = document.selectFirst(
+            "img.object-contain[src*='/manga/covers/']",
+        )
 
         val synopsis = document
             .selectFirst("p.leading-relaxed")
@@ -498,13 +487,15 @@ abstract class LectorXd : KeiSource() {
             return parseVisibleChapters(document)
         }
 
-        return CHAPTER_REGEX
-            .findAll(chaptersJson)
-            .map { match ->
-                val chapterNumber = match.groupValues[1]
-                val groupId = match.groupValues[2]
-                    .ifBlank { match.groupValues[3] }
-                    .takeIf { it.isNotBlank() && it != "null" }
+        return chaptersJson.parseAs<JsonElement>()
+            .jsonArray
+            .map { element ->
+                val chapter = element.jsonObject
+                val chapterNumber = chapter.getValue("chapter")
+                    .jsonPrimitive.content
+                val groupId = chapter["groupId"]
+                    ?.jsonPrimitive
+                    ?.contentOrNull
 
                 SChapter.create().apply {
                     name = "Capítulo $chapterNumber"
@@ -525,7 +516,6 @@ abstract class LectorXd : KeiSource() {
                 }
             }
             .distinctBy { it.url }
-            .toList()
             .reversed()
     }
 
@@ -610,96 +600,28 @@ abstract class LectorXd : KeiSource() {
         .distinct()
         .joinToString()
 
-    private fun parseCommunityRating(
-        document: Document,
-    ): String {
-        val community = document.selectFirst(".community")
-
-        val labelRating = community
-            ?.attr("aria-label")
-            ?.let { label ->
-                Regex(
-                    """Media:\s*([0-9]+(?:[.,][0-9]+)?)\s*de\s*5""",
-                    RegexOption.IGNORE_CASE,
-                )
-                    .find(label)
-                    ?.groupValues
-                    ?.getOrNull(1)
-            }
-
-        val rating = labelRating
-            ?: document
-                .selectFirst(".community-caption .out-of")
-                ?.text()
-                ?.substringBefore("/")
-                ?.trim()
-            ?: community
-                ?.selectFirst("strong")
-                ?.text()
-                ?.trim()
-            ?: return ""
-
-        val votes = community
-            ?.selectFirst(".count")
-            ?.text()
-            ?.removePrefix("·")
-            ?.trim()
-            .orEmpty()
-
-        val normalizedRating = rating.replace(",", ".")
-
-        return if (votes.isBlank()) {
-            "$normalizedRating/5"
-        } else {
-            "$normalizedRating/5 ($votes)"
-        }
-    }
-
-    private fun parseMangaId(
-        document: Document,
-    ): String? = document
-        .selectFirst("[aria-describedby^=rating-help-]")
-        ?.attr("aria-describedby")
-        ?.removePrefix("rating-help-")
-        ?.trim()
-        ?.takeIf { it.isNotBlank() }
-
     private suspend fun fetchCommunityRating(
         document: Document,
     ): String {
-        val mangaId = parseMangaId(document)
-            ?: return parseCommunityRating(document)
+        val mangaId = document
+            .selectFirst("footer[id^=rating-help-]")
+            ?.id()
+            ?.removePrefix("rating-help-")
+            ?: return ""
 
-        val url = baseUrl
-            .toHttpUrl()
-            .newBuilder()
+        val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("api/mangas/rating-summary")
             .addQueryParameter("id", mangaId)
             .build()
 
         return client.get(url).use { response ->
-            val body = response.body.string()
+            val data = response.body.string()
+                .parseAs<JsonElement>()
+                .jsonObject
 
-            val average = Regex(
-                """"average"\s*:\s*([0-9]+(?:\.[0-9]+)?)""",
-            )
-                .find(body)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?: return@use parseCommunityRating(document)
-
-            val count = Regex(
-                """"count"\s*:\s*(\d+)""",
-            )
-                .find(body)
-                ?.groupValues
-                ?.getOrNull(1)
-
-            if (count == null) {
-                "$average/5"
-            } else {
-                "$average/5 ($count valoraciones)"
-            }
+            data.getValue("average")
+                .jsonPrimitive.contentOrNull
+                .orEmpty()
         }
     }
 
@@ -707,27 +629,25 @@ abstract class LectorXd : KeiSource() {
         communityRating: String,
     ): String {
         val rating = communityRating
-            .substringBefore("/")
-            .trim()
-            .toDoubleOrNull()
-            ?: return communityRating
+            .toBigDecimalOrNull()
+            ?: return ""
 
-        val ratingText = BigDecimal.valueOf(rating)
-            .setScale(2, RoundingMode.DOWN)
+        if (rating.signum() < 0 || rating > 5.toBigDecimal()) {
+            return ""
+        }
+
+        val ratingText = rating
+            .setScale(1, RoundingMode.DOWN)
             .toPlainString()
 
-        val filledStars = rating
-            .toInt()
-            .coerceIn(0, 5)
-
-        val emptyStars = 5 - filledStars
+        val filledStars = rating.toInt()
 
         return buildString {
             append("★".repeat(filledStars))
-            append("☆".repeat(emptyStars))
+            append("☆".repeat(5 - filledStars))
             append(" ")
             append(ratingText)
-            append(" / 5")
+            append("/5.0")
         }
     }
 
@@ -774,10 +694,6 @@ abstract class LectorXd : KeiSource() {
         private val CHAPTERS_LIST_REGEX = Regex(
             """const\s+chaptersList\s*=\s*(\[.*?]);""",
             RegexOption.DOT_MATCHES_ALL,
-        )
-
-        private val CHAPTER_REGEX = Regex(
-            """"chapter"\s*:\s*"([^"]+)"\s*,\s*"groupId"\s*:\s*(?:null|"([^"]+)"|(\d+))""",
         )
     }
 }
