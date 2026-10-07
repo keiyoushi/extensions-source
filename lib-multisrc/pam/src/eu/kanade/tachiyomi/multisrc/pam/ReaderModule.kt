@@ -24,11 +24,22 @@ internal class ReaderModule(
     fun export(name: String): String = exports[name] ?: throw IOException("Reader export $name missing")
 }
 
-/** Rewrites a 64-byte block in place: out[i] = (in[permutation[i]] ^ xor[i]) + add[i]. */
+/**
+ * Rewrites a 64-byte block in place. Each step picks a byte through [permutation] and folds a
+ * table-driven value into a running byte; the tables, the fold and the loop shape are reshuffled
+ * per build, so all of it is read from the site's glue.
+ */
 internal class Unmask(
     val permutation: IntArray,
     val xor: IntArray,
     val add: IntArray,
+    val rotate: IntArray,
+    val mode: IntArray,
+    val seed: Int,
+    val passes: Int,
+    val ascending: Boolean,
+    /** Rotate-left amount folded into each step; `-1` folds with XOR instead. */
+    val foldRotate: Int,
 )
 
 internal suspend fun OkHttpClient.fetchReaderModule(baseUrl: String, headers: Headers): ReaderModule {
@@ -76,18 +87,28 @@ internal suspend fun OkHttpClient.fetchReaderModule(baseUrl: String, headers: He
     val importModule = Regex("""var [\w$]+=\{([\w$]+):${Regex.escape(importObject)}\}""").find(glue)?.groupValues?.get(1)
         ?: throw IOException("Unsupported reader signer build")
 
-    // Builds ship one or more unmask imports, each with its own loop shape and table order.
+    // Builds ship one or more unmask imports, each with its own tables, loop shape and fold.
     val unmasks = UNMASK_REGEX.findAll(glue).associate { match ->
         val groups = match.groupValues
-        val tables = mapOf(groups[3] to groups[4], groups[5] to groups[6], groups[7] to groups[8])
+        val tables = (3..11 step 2)
+            .associate { groups[it] to groups[it + 1] }
             .mapValues { (_, values) -> values.split(',').map(String::toInt).toIntArray() }
-        if (tables.size != 3 || tables.values.any { it.size != UNMASK_SIZE }) {
-            throw IOException("Unsupported reader signer build")
-        }
+        if (tables.values.any { it.size != UNMASK_SIZE }) throw IOException("Unsupported reader signer build")
+
+        val expression = groups[27]
+        fun table(name: String?): IntArray = name?.let(tables::get) ?: throw IOException("Unsupported reader signer build")
+        val roles = UNMASK_ROLE_REGEX.findAll(expression).associate { it.groupValues[1] to it.groupValues[2] }
+
         (importModule to groups[1]) to Unmask(
-            permutation = tables[groups[11]] ?: throw IOException("Unsupported reader signer build"),
-            xor = tables[groups[12]] ?: throw IOException("Unsupported reader signer build"),
-            add = tables[groups[13]] ?: throw IOException("Unsupported reader signer build"),
+            permutation = table(groups[25]),
+            xor = table(roles["^"]),
+            add = table(roles["+"]),
+            rotate = table(roles["<<"]),
+            mode = table(roles["=="]),
+            seed = groups[18].toInt(),
+            passes = groups[13].toInt(),
+            ascending = groups[23] == "++",
+            foldRotate = if ("^=" in expression) -1 else UNMASK_FOLD_REGEX.find(expression)?.groupValues?.get(1)?.toInt() ?: 0,
         )
     }
     if (unmasks.isEmpty()) throw IOException("Unsupported reader signer build")
@@ -122,8 +143,15 @@ private val RESIZE_IMPORT_REGEX = Regex(
     """([\w$]+)=\{([\w$]+):[\w$]+=>\{var [\w$]+=[\w$]+\.length;if\(\d+<\([\w$]+>>>=0\)\)return!1""",
 )
 
-// name:function(p){var a=[..],b=[..],c=[..],q=mem.slice(p,p+64) ... mem[p+i]=(q[perm[i]]^xor[i])+add[i]&255
+// name:function(p){for(var a=[..],b=[..],c=[..],d=[..],e=[..],f=0;n>f;f++)for(var
+//   g=mem.slice(p,p+64),h=seed,i=start;cond;i++){var j=g[a[i]];h<fold>,mem[p+i]=h
 private val UNMASK_REGEX = Regex(
-    """([\w$]+):function\(([\w$]+)\)\{(?:for\()?var ([\w$]+)=\[([\d,]+)\],([\w$]+)=\[([\d,]+)\],([\w$]+)=\[([\d,]+)\],([\w$]+)=[\w$]+\.slice\(\2,\2\+64\)[^}]*?[\w$]+\[\2\+([\w$]+)\]=\(\9\[([\w$]+)\[\10\]\]\^([\w$]+)\[\10\]\)\+([\w$]+)\[\10\]&255""",
+    """([\w$]+):function\(([\w$]+)\)\{for\(var ([\w$]+)=\[([\d,]+)\],([\w$]+)=\[([\d,]+)\],([\w$]+)=\[([\d,]+)\],([\w$]+)=\[([\d,]+)\],([\w$]+)=\[([\d,]+)\],[\w$]+=0;(\d+)>[\w$]+;[\w$]+\+\+\)for\(var ([\w$]+)=[\w$]+\.slice\(([\w$]+),([\w$]+)\+64\),([\w$]+)=(\d+),([\w$]+)=(\d+);([^;]+);([\w$]+)(\+\+|--)\)\{var [\w$]+=([\w$]+)\[([\w$]+)\[([\w$]+)\]\];([^,]*)""",
 )
+
+// Which of the function's five tables each part of the step expression reads.
+private val UNMASK_ROLE_REGEX = Regex("""(\^|\+|<<|==)([\w$]+)\[""")
+
+// `(255&(o<<6|o>>2))`: the running byte rotated before it is added back.
+private val UNMASK_FOLD_REGEX = Regex("""\(255&\([\w$]+<<(\d+)\|""")
 private val WASM_REGEX = Regex(""""(AGFzbQ[A-Za-z0-9+/=]+)"""")

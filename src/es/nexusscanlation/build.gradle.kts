@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "NexusScanlation"
-    versionCode = 5
+    versionCode = 6
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -20,4 +20,8 @@ keiyoushi {
         host("www.nexusscanlation.com")
         path("/series/.*")
     }
+}
+
+dependencies {
+    implementation(project(":lib:ece"))
 }
