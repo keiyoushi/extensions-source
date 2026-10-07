@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.shadowmanga
 
+import android.content.Context
 import android.util.Base64
 import eu.kanade.tachiyomi.extension.es.shadowmanga.interceptor.ImageFallbackInterceptor
 import eu.kanade.tachiyomi.source.model.Filter
@@ -13,6 +14,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -25,6 +27,14 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class ShadowManga : KeiSource() {
     private val isNsfw by lazy { name.contains("+18") }
+
+    // Reads the host app's global content warning setting; older Tachiyomi/Mihon builds used "show_nsfw_source".
+    private val showAdultContent: Boolean
+        get() {
+            val appPreferences = applicationContext.getSharedPreferences("${applicationContext.packageName}_preferences", Context.MODE_PRIVATE)
+            return appPreferences.getStringSet("enabled_content_warnings", null)?.contains("NSFW")
+                ?: appPreferences.getBoolean("show_nsfw_source", true)
+        }
 
     private val cdnHosts = listOf(
         "media.shademanga.com",
@@ -130,7 +140,7 @@ abstract class ShadowManga : KeiSource() {
 
         val url = "$baseUrl/api/series-locales/search-candidates".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
-            .addQueryParameter("includeAdult", "false")
+            .addQueryParameter("includeAdult", showAdultContent.toString())
             .addQueryParameter("showSinPortada", "false")
             .addQueryParameter("take", MAX_RESULTS.toString())
 
