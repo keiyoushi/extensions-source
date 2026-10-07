@@ -171,7 +171,7 @@ abstract class LoneSeal : KeiSource() {
 
     protected open fun onEmptyPages(dto: ChapterPagesResponseDto) = Unit
 
-    protected open fun toPageList(dto: ChapterPagesResponseDto) = dto.chapter.pages.mapIndexed { index, page -> Page(index, imageUrl = page.imageUrl) }
+    protected open fun toPageList(dto: ChapterPagesResponseDto) = dto.chapter.pages.mapIndexed { index, page -> Page(index, imageUrl = page.imageUrl.toFullResolutionImageUrl()) }
 
     override val supportsFilterFetching = true
 
@@ -211,6 +211,17 @@ abstract class LoneSeal : KeiSource() {
         val (seriesSlug, chapterSlug) = chapterParts(chapter.url)
         return "$baseUrl/$mangaUrlDirectory/$seriesSlug/chapter/$chapterSlug"
     }
+}
+
+// Blogger/Googleusercontent caps the longest side of an image via a path segment
+// (`/s1600/`) or a query (`=s1600`). That shrinks tall webtoon strips to a few hundred
+// pixels wide, so request the original upload (`s0`) instead.
+private val bloggerSizeQueryRegex = """=[swh]\d+[^/?]*($|\?)""".toRegex(RegexOption.IGNORE_CASE)
+private val bloggerSizePathRegex = """/[swh]\d+[^/]*/""".toRegex(RegexOption.IGNORE_CASE)
+
+fun String.toFullResolutionImageUrl(): String {
+    if (!contains("googleusercontent.com") && !contains("bp.blogspot.com")) return this
+    return replace(bloggerSizeQueryRegex, "=s0$1").replace(bloggerSizePathRegex, "/s0/")
 }
 
 private fun <T> List<List<T>>.interleave(): List<T> {
