@@ -15,7 +15,9 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -89,6 +91,18 @@ abstract class Toon11 : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
+        if (url.queryParameter("bo_table") != "toons") return null
+        val id = url.queryParameter("is") ?: return null
+        val stx = url.queryParameter("stx") ?: return null
+
+        val manga = SManga.create().apply {
+            this.url = "/bbs/board.php?bo_table=toons&stx=${URLEncoder.encode(stx, "UTF-8")}&is=$id"
+        }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -154,18 +168,31 @@ abstract class Toon11 : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
-        val rawImageLinks = document.selectFirst("script + script[type^=text/javascript]:not([src])")!!.data()
-        val imgList = extractList(rawImageLinks)
+        val script = document.selectFirst("script:containsData(img_list)")?.data() ?: return emptyList()
+        val imgList = extractList(imgListRegex, script)
+        val fallbackList = extractList(imgList2Regex, script)
 
         return imgList.mapIndexed { i, img ->
-            Page(i, imageUrl = "https:$img")
+            val fallback = fallbackList.getOrNull(i)?.let { "#https:$it" }.orEmpty()
+            Page(i, imageUrl = "https:$img$fallback")
         }
     }
 
-    private fun extractList(jsString: String): List<String> {
-        val matchResult = imgListRegex.find(jsString)
-        val listString = matchResult?.groupValues?.get(1) ?: return emptyList()
+    private fun extractList(regex: Regex, jsString: String): List<String> {
+        val listString = regex.find(jsString)?.groupValues?.get(1) ?: return emptyList()
         return listString.parseAs<List<String>>()
+    }
+
+    // The site's viewer loads img_list and falls back to the img_list_2 mirror when an image fails
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
+        val request = chain.request()
+        val response = chain.proceed(request)
+        val fallback = request.url.fragment
+        if (response.isSuccessful || fallback == null || !fallback.startsWith("https://")) {
+            return@addInterceptor response
+        }
+        response.close()
+        chain.proceed(request.newBuilder().url(fallback).build())
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -179,5 +206,6 @@ abstract class Toon11 : KeiSource() {
     companion object {
         private val dateFormat = DateTimeFormatter.ofPattern("yy.MM.dd", Locale.ENGLISH)
         private val imgListRegex = """img_list\s*=\s*(\[.*?])""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        private val imgList2Regex = """img_list_2\s*=\s*(\[.*?])""".toRegex(RegexOption.DOT_MATCHES_ALL)
     }
 }
