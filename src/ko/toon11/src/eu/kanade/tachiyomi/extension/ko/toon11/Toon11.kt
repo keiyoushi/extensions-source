@@ -101,6 +101,7 @@ abstract class Toon11 : KeiSource() {
         val document = client.get("$baseUrl/bbs/board.php?bo_table=toons&is=$id").asJsoup()
         return parseMangaDetails(document).apply {
             this.url = mangaUrl(title, id)
+            initialized = true
         }
     }
 
