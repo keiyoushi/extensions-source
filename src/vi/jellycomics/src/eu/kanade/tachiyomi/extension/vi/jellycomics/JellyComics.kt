@@ -49,9 +49,6 @@ abstract class JellyComics : Madara() {
     override val chapterDateSelector = "span.chapter-release-date, p.chapter-meta i:last-child"
 
     override suspend fun fetchChapters(mangaPath: String, id: String, mangaPage: Document?): List<SChapter> {
-        if (chapterMode != ChapterMode.MangaAjax) {
-            return super.fetchChapters(mangaPath, id, mangaPage)
-        }
         // Chapters are embedded in the manga page as .chapter-item divs with
         // correct URLs. Fall back to the AJAX endpoint if the page has none.
         val document = mangaPage ?: client.get("$baseUrl$mangaPath").asJsoup()
@@ -78,7 +75,7 @@ abstract class JellyComics : Madara() {
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH)
 
     override fun parsePages(document: Document): List<Page> = document.select(".reading-content img.manga-page").mapIndexedNotNull { index, img ->
-        imageFromElement(img)?.let { Page(index, document.location(), it) }
+        imageFromElement(img)?.let { Page(index, imageUrl = it) }
     }
 
     private val noRedirectClient: OkHttpClient by lazy {
