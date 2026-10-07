@@ -25,12 +25,42 @@ abstract class Submanhwa : KeiSource() {
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept-Language", "es-PE,es;q=0.9,en-US;q=0.8,en;q=0.7")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
+
+        val mangas = document.select("article.up-card").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst("a.up-title")!!.text()
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+            }
+        }
+        return MangasPage(mangas, false)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.count(String::isNotBlank) < 2) return null
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = url.encodedPath },
+            emptyList(),
+            true,
+            false,
+        ).manga
+    }
+
+    override suspend fun getSearchMangaList(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): MangasPage = parseMangaList(
         baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("filterList")
             addQueryParameter("page", page.toString())
             addQueryParameter("sortBy", "views")
             addQueryParameter("asc", "false")
+            addQueryParameter("alpha", query)
         }.build(),
     )
 
@@ -48,32 +78,7 @@ abstract class Submanhwa : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
-        val mangas = document.select("div[class^=manga-item]").map { element ->
-            SManga.create().apply {
-                title = element.selectFirst("h3[class^=manga-title] a")!!.text()
-                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-                thumbnail_url = element.selectFirst("img")!!.absUrl("src")
-            }
-        }
-
-        return MangasPage(mangas, false)
-    }
-
-    override suspend fun getSearchMangaList(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): MangasPage = parseMangaList(
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("filterList")
-            addQueryParameter("page", page.toString())
-            addQueryParameter("sortBy", "views")
-            addQueryParameter("asc", "false")
-            addQueryParameter("alpha", query)
-        }.build(),
-    )
+    override val supportRelatedMangasBySearch = true
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -84,6 +89,7 @@ abstract class Submanhwa : KeiSource() {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
         val details = SManga.create().apply {
+            url = manga.url
             title = document.selectFirst(".manga-title-centered")!!.text()
             thumbnail_url = document.selectFirst("img")?.absUrl("src")
             description = document.selectFirst("h5:contains(Resumen) + p")?.text()
