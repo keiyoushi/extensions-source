@@ -73,18 +73,17 @@ context(source: HttpSource)
 suspend fun OkHttpClient.fetchPages(viewerUrl: HttpUrl): List<Page> = fetchPages(viewerUrl, source.headers)
 
 private suspend fun OkHttpClient.fetchComicPages(cgi: HttpUrl, param: String, trial: String?, headers: Headers): List<Page> {
-    val timeKeyUrl = cgi.newBuilder()
-        .addQueryParameter("mode", MODE_TIME_KEY)
-        .addQueryParameter("reqtype", "1")
-        .addQueryParameter("vm", VIEWER_MODE)
-        .addQueryParameter("param", param)
-        .build()
-
-    val timeKey = get(timeKeyUrl, headers).asJsoup(Parser.xmlParser())
-    if (timeKey.selectFirst("Code")?.text() != "1000") throw Exception("Viewer error: ${timeKey.text()}")
+    var viewMode = VIEW_MODE_HYBRID
+    var timeKey = fetchTimeKey(cgi, param, viewMode, headers)
+    // some webtoons only open in the vertical view mode
+    if (timeKey.selectFirst("Code")?.text() == CODE_VIEW_MODE_ERROR) {
+        viewMode = VIEW_MODE_VERTICAL
+        timeKey = fetchTimeKey(cgi, param, viewMode, headers)
+    }
+    if (timeKey.selectFirst("Code")?.text() != CODE_SUCCESS) throw Exception("Viewer error: ${timeKey.text()}")
     val key = timeKey.selectFirst("Content")!!.text()
 
-    val face = get(cgi.fileUrl(MODE_FACE_XML, "face.xml", key), headers).asJsoup(Parser.xmlParser())
+    val face = get(cgi.fileUrl(MODE_FACE_XML, "face.xml", viewMode, key), headers).asJsoup(Parser.xmlParser())
     val totalPages = face.selectFirst("TotalPage")!!.text().toInt()
     val gridWidth = face.selectFirst("Scramble > Width")!!.text()
     val gridHeight = face.selectFirst("Scramble > Height")!!.text()
@@ -92,12 +91,35 @@ private suspend fun OkHttpClient.fetchComicPages(cgi: HttpUrl, param: String, tr
     val pageNumbers = trial?.split('_')?.takeIf { it.size == 2 }?.let { (first, last) -> first.toInt()..last.toInt() }
         ?: 0..<totalPages
 
-    return pageNumbers.mapIndexed { i, pageNumber ->
-        val pageUrl = cgi.fileUrl(MODE_PAGE_XML, pageNumber.toString().padStart(4, '0') + ".xml", key).newBuilder()
-            .fragment("$PAGE_FRAGMENT,$gridWidth,$gridHeight")
-            .build()
-        Page(i, imageUrl = pageUrl.toString())
+    // Omf books store two pages per sheet, the others list single pages like covers or webtoon slices
+    val spreads = if ("Omf" in face.selectFirst("OptionId")?.text().orEmpty()) {
+        face.selectFirst("DoublePagesMap")?.text().orEmpty().split(',').mapNotNullTo(HashSet()) { it.trim().toIntOrNull() }
+    } else {
+        emptySet()
     }
+
+    // right-to-left books (binding 0) start with the right half
+    val halves = if (face.selectFirst("Binding")?.text() == "1") listOf(HALF_LEFT, HALF_RIGHT) else listOf(HALF_RIGHT, HALF_LEFT)
+    val fragment = "$PAGE_FRAGMENT,$gridWidth,$gridHeight"
+    val spreadFragments = halves.map { "$fragment,$it" }
+
+    return pageNumbers.flatMap { pageNumber ->
+        val pageUrl = cgi.fileUrl(MODE_PAGE_XML, pageNumber.toString().padStart(4, '0') + ".xml", viewMode, key)
+        val fragments = if (pageNumber in spreads) spreadFragments else listOf(fragment)
+        fragments.map { pageUrl.newBuilder().fragment(it).build().toString() }
+    }.mapIndexed { i, imageUrl ->
+        Page(i, imageUrl = imageUrl)
+    }
+}
+
+private suspend fun OkHttpClient.fetchTimeKey(cgi: HttpUrl, param: String, viewMode: String, headers: Headers): Document {
+    val url = cgi.newBuilder()
+        .addQueryParameter("mode", MODE_TIME_KEY)
+        .addQueryParameter("reqtype", "1")
+        .addQueryParameter("vm", viewMode)
+        .addQueryParameter("param", param)
+        .build()
+    return get(url, headers).asJsoup(Parser.xmlParser())
 }
 
 private suspend fun OkHttpClient.fetchEpubPages(viewerUrl: HttpUrl, headers: Headers): List<Page> = coroutineScope {
@@ -135,10 +157,10 @@ private suspend fun OkHttpClient.fetchEpubPages(viewerUrl: HttpUrl, headers: Hea
     }
 }
 
-internal fun HttpUrl.fileUrl(mode: String, file: String, key: String): HttpUrl = newBuilder()
+private fun HttpUrl.fileUrl(mode: String, file: String, viewMode: String, key: String): HttpUrl = newBuilder()
     .addQueryParameter("mode", mode)
     .addQueryParameter("reqtype", "0")
-    .addQueryParameter("vm", VIEWER_MODE)
+    .addQueryParameter("vm", viewMode)
     .addQueryParameter("file", file)
     .addQueryParameter("param", key)
     .build()
@@ -148,7 +170,12 @@ private fun Headers.withBearer(token: String) = newBuilder().set("Authorization"
 private const val MODE_FACE_XML = "7"
 private const val MODE_PAGE_XML = "8"
 private const val MODE_TIME_KEY = "999"
-private const val VIEWER_MODE = "4"
+private const val VIEW_MODE_VERTICAL = "2"
+private const val VIEW_MODE_HYBRID = "4"
+private const val CODE_SUCCESS = "1000"
+private const val CODE_VIEW_MODE_ERROR = "2005"
 
 internal const val PAGE_FRAGMENT = "csr-page"
 internal const val EPUB_FRAGMENT = "csr-epub"
+internal const val HALF_LEFT = "L"
+internal const val HALF_RIGHT = "R"

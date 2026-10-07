@@ -28,7 +28,10 @@ class ClipStudioReaderInterceptor : Interceptor {
 
     private fun interceptComicPage(chain: Interceptor.Chain, fragment: String): Response {
         val request = chain.request()
-        val (gridWidth, gridHeight) = fragment.substringAfter(',').split(',', limit = 2).map { it.toInt() }
+        val params = fragment.split(',')
+        val gridWidth = params[1].toInt()
+        val gridHeight = params[2].toInt()
+        val half = params.getOrNull(3)
 
         val response = chain.proceed(request)
         if (!response.isSuccessful) return response
@@ -44,10 +47,11 @@ class ClipStudioReaderInterceptor : Interceptor {
             .build()
 
         val image = chain.proceed(request.newBuilder().url(imageUrl).build())
-        if (!image.isSuccessful || part.attr("scramble") != "1") return image
+        val isScrambled = part.attr("scramble") == "1"
+        if (!image.isSuccessful || (!isScrambled && half == null)) return image
 
-        val mapping = page.selectFirst("Scramble")!!.text().split(',').map { it.toInt() }
-        val bitmap = image.use { unscramble(BitmapFactory.decodeStream(it.body.byteStream()), mapping, gridWidth, gridHeight) }
+        val mapping = if (isScrambled) page.selectFirst("Scramble")!!.text().split(',').map { it.toInt() } else emptyList()
+        val bitmap = image.use { unscramble(BitmapFactory.decodeStream(it.body.byteStream()), mapping, gridWidth, gridHeight, half) }
         val buffer = Buffer()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
         bitmap.recycle()
@@ -57,34 +61,43 @@ class ClipStudioReaderInterceptor : Interceptor {
             .build()
     }
 
-    private fun unscramble(image: Bitmap, mapping: List<Int>, gridWidth: Int, gridHeight: Int): Bitmap {
+    private fun unscramble(image: Bitmap, mapping: List<Int>, gridWidth: Int, gridHeight: Int, half: String?): Bitmap {
         val height = image.height
         val width = image.width
-        val pieceWidth = width / gridWidth / 8 * 8
-        val pieceHeight = height / gridHeight / 8 * 8
-        if (pieceWidth == 0 || pieceHeight == 0) return image
-
-        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
-        val src = Rect()
-        val dst = Rect()
-
-        mapping.forEachIndexed { i, piece ->
-            val dstX = i % gridWidth * pieceWidth
-            val dstY = i / gridWidth * pieceHeight
-            val srcX = piece % gridWidth * pieceWidth
-            val srcY = piece / gridWidth * pieceHeight
-            src.set(srcX, srcY, srcX + pieceWidth, srcY + pieceHeight)
-            dst.set(dstX, dstY, dstX + pieceWidth, dstY + pieceHeight)
-            canvas.drawBitmap(image, src, dst, null)
+        val (left, right) = when (half) {
+            HALF_LEFT -> 0 to width / 2
+            HALF_RIGHT -> width / 2 to width
+            else -> 0 to width
         }
 
-        val gridRight = pieceWidth * gridWidth
-        val gridBottom = pieceHeight * gridHeight
-        src.set(gridRight, 0, width, height)
-        canvas.drawBitmap(image, src, src, null)
-        src.set(0, gridBottom, gridRight, height)
-        canvas.drawBitmap(image, src, src, null)
+        val result = Bitmap.createBitmap(right - left, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        canvas.translate(-left.toFloat(), 0f)
+
+        val pieceWidth = width / gridWidth / 8 * 8
+        val pieceHeight = height / gridHeight / 8 * 8
+        if (mapping.isEmpty() || pieceWidth == 0 || pieceHeight == 0) {
+            canvas.drawBitmap(image, 0f, 0f, null)
+        } else {
+            val src = Rect()
+            val dst = Rect()
+            mapping.forEachIndexed { i, piece ->
+                val dstX = i % gridWidth * pieceWidth
+                val dstY = i / gridWidth * pieceHeight
+                val srcX = piece % gridWidth * pieceWidth
+                val srcY = piece / gridWidth * pieceHeight
+                src.set(srcX, srcY, srcX + pieceWidth, srcY + pieceHeight)
+                dst.set(dstX, dstY, dstX + pieceWidth, dstY + pieceHeight)
+                canvas.drawBitmap(image, src, dst, null)
+            }
+
+            val gridRight = pieceWidth * gridWidth
+            val gridBottom = pieceHeight * gridHeight
+            src.set(gridRight, 0, width, height)
+            canvas.drawBitmap(image, src, src, null)
+            src.set(0, gridBottom, gridRight, height)
+            canvas.drawBitmap(image, src, src, null)
+        }
 
         image.recycle()
         return result
