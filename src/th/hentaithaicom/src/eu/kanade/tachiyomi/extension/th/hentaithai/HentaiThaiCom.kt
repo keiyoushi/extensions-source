@@ -14,7 +14,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 
 @Source
-abstract class HentaiThai : KeiSource() {
+abstract class HentaiThaiCom : KeiSource() {
 
     override val supportsLatest = true
 
