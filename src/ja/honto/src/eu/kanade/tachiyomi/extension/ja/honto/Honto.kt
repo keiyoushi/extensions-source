@@ -50,6 +50,15 @@ abstract class Honto :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addCookie("safeSrchFlg" to "0")
         addInterceptor(ClipStudioReaderInterceptor())
+        // pages answer 403 without a session cookie, which the top page hands out
+        addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            if (response.code != 403 || request.url.host != baseUrl.toHttpUrl().host) return@addInterceptor response
+            response.close()
+            chain.proceed(request.newBuilder().url(baseUrl).head().build()).close()
+            chain.proceed(request)
+        }
     }
 
     // load desktop selectors and avoid session mismatch due to different UAs
