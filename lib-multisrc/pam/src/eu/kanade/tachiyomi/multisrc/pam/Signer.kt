@@ -50,11 +50,27 @@ internal class Signer(private val reader: ReaderModule) {
     }
 
     private fun Memory.unmask(ptr: Int, unmask: Unmask) {
-        val block = readBytes(ptr, UNMASK_SIZE)
-        val out = ByteArray(UNMASK_SIZE) { i ->
-            ((block[unmask.permutation[i]].toInt() and 0xFF xor unmask.xor[i]) + unmask.add[i]).toByte()
+        repeat(unmask.passes) {
+            val block = readBytes(ptr, UNMASK_SIZE)
+            val out = ByteArray(UNMASK_SIZE)
+            val order = if (unmask.ascending) 0 until UNMASK_SIZE else UNMASK_SIZE - 1 downTo 0
+            var running = unmask.seed
+            for (i in order) {
+                val o = block[unmask.permutation[i]].toInt() and 0xFF
+                val step = when (unmask.mode[i]) {
+                    0 -> ((o xor unmask.xor[i]) + unmask.add[i]) and 0xFF
+                    1 -> ((o + unmask.add[i]) and 0xFF) xor unmask.xor[i]
+                    else -> (((o shl unmask.rotate[i]) or (o shr (8 - unmask.rotate[i]))) and 0xFF) xor unmask.xor[i]
+                }
+                running = if (unmask.foldRotate < 0) {
+                    running xor step
+                } else {
+                    (step + ((running shl unmask.foldRotate) or (running shr (8 - unmask.foldRotate))).and(0xFF)) and 0xFF
+                }
+                out[i] = running.toByte()
+            }
+            write(ptr, out)
         }
-        write(ptr, out)
     }
 
     fun signAttestation(challenge: String, payload: String): String {

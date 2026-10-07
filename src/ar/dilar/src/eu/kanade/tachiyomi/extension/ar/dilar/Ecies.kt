@@ -1,40 +1,34 @@
 package eu.kanade.tachiyomi.extension.ar.dilar
 
 import android.util.Base64
+import keiyoushi.lib.ece.Ece
 import keiyoushi.lib.secretstream.ChaCha20
 import keiyoushi.lib.secretstream.Poly1305
-import java.io.ByteArrayOutputStream
-import java.math.BigInteger
-import java.security.AlgorithmParameters
-import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
-import java.security.spec.ECParameterSpec
-import java.security.spec.ECPoint
-import java.security.spec.ECPublicKeySpec
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-// ECIES response decryption, protocol versions 1-13.
+// ECIES response decryption, protocol versions 1-14.
 internal class Ecies {
     private val ecKeyPair: KeyPair = KeyPairGenerator.getInstance("EC").apply {
         initialize(ECGenParameterSpec(CURVE_NAME))
     }.generateKeyPair()
 
-    private val clientPubRaw: ByteArray = pointToRaw(ecKeyPair.public as ECPublicKey)
+    private val clientPubRaw: ByteArray = Ece.publicKeyToRaw(ecKeyPair.public as ECPublicKey)
 
     val clientPubB64: String =
         Base64.encodeToString(clientPubRaw, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
 
     fun decrypt(data: EncryptedResponseDto): String {
         val serverPubRaw = Base64.decode(data.epk, Base64.URL_SAFE)
-        val serverPubKey = rawToPoint(serverPubRaw)
+        val serverPubKey = Ece.rawToPublicKey(serverPubRaw)
         val iv = Base64.decode(data.iv, Base64.URL_SAFE)
         val ct = Base64.decode(data.ct, Base64.URL_SAFE)
         val tag = Base64.decode(data.tag, Base64.URL_SAFE)
@@ -80,7 +74,7 @@ internal class Ecies {
             )
 
             7 -> CipherSpec(
-                hkdf(
+                Ece.hkdf(
                     ikm = iv,
                     salt = serverPubRaw,
                     info = "dilar.response.ecies.v7.salt".toByteArray(),
@@ -137,10 +131,19 @@ internal class Ecies {
                 chacha = true,
             )
 
+            14 -> CipherSpec(
+                serverKeyedSalt(serverPubRaw, iv),
+                "dilar.response.ecies.v14|${data.e}|${sha512(lengthPrefixed(iv)).toBase64Url().take(22)}".toByteArray(),
+                hash = "HmacSHA512",
+                derivedNonce = true,
+                aad = aad("dilar.response.ecies.v14", data, serverPubRaw, iv, ct.size),
+                gcmsiv = true,
+            )
+
             else -> error("Unsupported encryption protocol version: ${data.v}")
         }
 
-        val keyMaterial = hkdf(
+        val keyMaterial = Ece.hkdf(
             ikm = sharedSecret,
             salt = spec.salt,
             info = spec.info,
@@ -152,6 +155,10 @@ internal class Ecies {
 
         if (spec.chacha) {
             return chacha20Poly1305Decrypt(key, nonce, ct, tag, spec.aad ?: ByteArray(0)).toString(Charsets.UTF_8)
+        }
+
+        if (spec.gcmsiv) {
+            return AesGcmSiv.decrypt(key, nonce, ct + tag, spec.aad ?: ByteArray(0)).toString(Charsets.UTF_8)
         }
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
@@ -205,12 +212,20 @@ internal class Ecies {
         val derivedNonce: Boolean = false,
         val aad: ByteArray? = null,
         val chacha: Boolean = false,
+        val gcmsiv: Boolean = false,
     )
 
     // Shared by v12 and v13; v12 truncates the result to 32 bytes.
     private fun clientKeyedSalt(serverPubRaw: ByteArray, iv: ByteArray): ByteArray = hmac(
         key = clientPubRaw,
         data = joinBytes(lengthPrefixed(serverPubRaw), lengthPrefixed(iv)),
+        algorithm = "HmacSHA512",
+    )
+
+    // v14 keys the salt with the server's public key instead of the client's.
+    private fun serverKeyedSalt(serverPubRaw: ByteArray, iv: ByteArray): ByteArray = hmac(
+        key = serverPubRaw,
+        data = joinBytes(lengthPrefixed(clientPubRaw), lengthPrefixed(iv)),
         algorithm = "HmacSHA512",
     )
 
@@ -258,34 +273,6 @@ internal class Ecies {
         return result
     }
 
-    private fun pointToRaw(publicKey: ECPublicKey): ByteArray {
-        val x = publicKey.w.affineX.toFixedBytes(32)
-        val y = publicKey.w.affineY.toFixedBytes(32)
-        return byteArrayOf(0x04) + x + y
-    }
-
-    private fun rawToPoint(raw: ByteArray): ECPublicKey {
-        require(raw.size == 65 && raw[0] == 0x04.toByte()) { "Invalid P-256 raw public key" }
-        val x = BigInteger(1, raw.copyOfRange(1, 33))
-        val y = BigInteger(1, raw.copyOfRange(33, 65))
-
-        val curveParams = AlgorithmParameters.getInstance("EC").apply {
-            init(ECGenParameterSpec(CURVE_NAME))
-        }.getParameterSpec(ECParameterSpec::class.java)
-
-        val spec = ECPublicKeySpec(ECPoint(x, y), curveParams)
-        return KeyFactory.getInstance("EC").generatePublic(spec) as ECPublicKey
-    }
-
-    private fun BigInteger.toFixedBytes(length: Int): ByteArray {
-        val raw = toByteArray()
-        return when {
-            raw.size == length -> raw
-            raw.size > length -> raw.copyOfRange(raw.size - length, raw.size) // drop sign byte
-            else -> ByteArray(length - raw.size) + raw
-        }
-    }
-
     private fun hmac(
         key: ByteArray,
         data: ByteArray,
@@ -294,32 +281,11 @@ internal class Ecies {
         init(SecretKeySpec(key, algorithm))
     }.doFinal(data)
 
-    // HKDF
-
     private fun sha256(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(data)
 
     private fun sha384(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-384").digest(data)
 
     private fun sha512(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-512").digest(data)
-
-    private fun hkdf(
-        ikm: ByteArray,
-        salt: ByteArray,
-        info: ByteArray,
-        length: Int,
-        algorithm: String = "HmacSHA256",
-    ): ByteArray {
-        val prk = hmac(salt, ikm, algorithm)
-        val okm = ByteArrayOutputStream()
-        var t = ByteArray(0)
-        var counter = 1
-        while (okm.size() < length) {
-            t = hmac(prk, t + info + byteArrayOf(counter.toByte()), algorithm)
-            okm.write(t)
-            counter++
-        }
-        return okm.toByteArray().copyOf(length)
-    }
 
     companion object {
         private const val CURVE_NAME = "secp256r1"

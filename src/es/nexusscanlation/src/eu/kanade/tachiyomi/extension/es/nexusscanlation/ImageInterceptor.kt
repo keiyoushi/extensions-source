@@ -4,22 +4,22 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
+import keiyoushi.lib.ece.Ece
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
+import java.util.Base64
 
 class ImageInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
-
-        val fragment = request.url.fragment ?: return response
+        val fragment = request.url.fragment ?: return chain.proceed(request)
 
         if (!fragment.startsWith("scramble=")) {
-            return response
+            return chain.proceed(request)
         }
 
         val parts = fragment
@@ -30,19 +30,29 @@ class ImageInterceptor : Interceptor {
         val rows = parts[1].toInt()
         val seed = parts[2].toUInt()
         val version = parts.getOrNull(3)?.toIntOrNull() ?: 1
+        val pageKey = parts.getOrNull(4)?.takeIf { it.isNotEmpty() }
 
-        val body = response.body
+        val response = chain.proceed(request)
+        if (!response.isSuccessful) return response
 
-        val bitmap = body.byteStream().use { BitmapFactory.decodeStream(it) } ?: return response
+        val raw = response.body.bytes()
+        val bytes = pageKey
+            ?.let { Ece.decrypt(raw, Base64.getUrlDecoder().decode(it)) }
+            ?: raw
 
-        val decoded = descramble(
-            bitmap = bitmap,
-            cols = cols,
-            rows = rows,
-            seed = seed,
-            version = version,
-        )
-        bitmap.recycle()
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return response
+
+        val decoded = if (cols > 0 && rows > 0) {
+            descramble(
+                bitmap = bitmap,
+                cols = cols,
+                rows = rows,
+                seed = seed,
+                version = version,
+            ).also { bitmap.recycle() }
+        } else {
+            bitmap
+        }
 
         val buffer = Buffer()
 

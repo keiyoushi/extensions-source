@@ -5,9 +5,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import kotlin.time.Instant
 
 internal fun String.replaceB2Uri(): String = replace("b2://", "https://b2.yomumangas.com/")
+
+@Serializable
+class LatestUpdatesResponse(
+    val medias: List<MangaDto> = emptyList(),
+)
 
 @Serializable
 class SearchResponse(
@@ -81,7 +86,7 @@ class ChapterDto(
     private val title: String? = null,
     @SerialName("uploaded_at") private val uploadedAt: String? = null,
 ) {
-    fun toSChapter(mangaId: String, mangaSlug: String, dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaId: String, mangaSlug: String): SChapter = SChapter.create().apply {
         url = "/mangas/$mangaId/$mangaSlug/$chapterNumber"
         val parsedTitle = title?.trim()?.removePrefix("-")?.trim()
         name = if (!parsedTitle.isNullOrEmpty()) {
@@ -89,6 +94,18 @@ class ChapterDto(
         } else {
             "Capítulo $chapterNumber"
         }
-        date_upload = dateFormat.tryParse(uploadedAt)
+        date_upload = Instant.tryParse(uploadedAt)
     }
+}
+
+@Serializable
+class FilterData(
+    val tags: List<Filter> = emptyList(),
+    val genres: List<Filter> = emptyList(),
+) {
+    @Serializable
+    class Filter(
+        val id: Int,
+        val name: String,
+    )
 }
