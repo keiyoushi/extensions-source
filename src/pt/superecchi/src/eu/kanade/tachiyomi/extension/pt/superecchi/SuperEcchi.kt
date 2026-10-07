@@ -37,7 +37,9 @@ abstract class SuperEcchi : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
-    // The site only publishes a "latest releases" listing, so it is served in Popular tab.
+    // ============================== Popular ===============================
+
+    // The site only publishes a "latest releases" listing, so it is served here.
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/index.php?pageId=$page").asJsoup()
         val mangas = document.select(LISTING_SELECTOR).map(::parseListingEntry)
@@ -45,7 +47,11 @@ abstract class SuperEcchi : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
+    // ============================== Latest ================================
+
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    // ============================== Search =================================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
         if (page > 1 || query.isBlank()) return@coroutineScope MangasPage(emptyList(), false)
@@ -81,43 +87,36 @@ abstract class SuperEcchi : KeiSource() {
 
     private suspend fun fetchListingEntries(url: String): List<SManga> = client.get(url).asJsoup().select(LISTING_SELECTOR).map(::parseListingEntry)
 
+    // ============================== Details ================================
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        if (!fetchDetails && !fetchChapters) return@coroutineScope SMangaUpdate(manga, chapters)
+    ): SMangaUpdate {
         val document = client.get("$baseUrl/${manga.url}").asJsoup()
 
-        val updatedManga = async {
-            if (!fetchDetails) return@async manga
-            manga.apply {
-                val rawTitle = document.selectFirst("h1")?.text().orEmpty()
-                    .removePrefix("Album:").trim()
-                check(rawTitle.isNotBlank()) { "Empty title for ${manga.url}" }
-                title = rawTitle
-                author = document.detailField("Autor")
-                artist = author
-                description = document.selectFirst(".sinopse-completa")?.text()
-                    ?.removePrefix("Sinopse:")?.trim()?.ifEmpty { null }
-                genre = document.select("td.relatedtags a").eachText()
-                    .joinToString(", ").ifEmpty { null }
-                thumbnail_url = document.selectFirst(".dj-img1 img")?.attr("abs:src")?.ifEmpty { null }
-                status = if (document.detailField("Tipo")?.contains("one-shot", ignoreCase = true) == true) {
-                    SManga.COMPLETED
-                } else {
-                    SManga.ONGOING
-                }
+        val updatedManga = manga.apply {
+            val rawTitle = document.selectFirst("h1")?.text().orEmpty()
+                .removePrefix("Album:").trim()
+            check(rawTitle.isNotBlank()) { "Empty title for ${manga.url}" }
+            title = rawTitle
+            author = document.detailField("Autor")
+            artist = author
+            description = document.selectFirst(".sinopse-completa")?.text()
+                ?.removePrefix("Sinopse:")?.trim()?.ifEmpty { null }
+            genre = document.select("td.relatedtags a").eachText()
+                .joinToString(", ").ifEmpty { null }
+            thumbnail_url = document.selectFirst(".dj-img1 img")?.attr("abs:src")?.ifEmpty { null }
+            status = if (document.detailField("Tipo")?.contains("one-shot", ignoreCase = true) == true) {
+                SManga.COMPLETED
+            } else {
+                SManga.ONGOING
             }
         }
 
-        val updatedChapters = async {
-            if (!fetchChapters) return@async chapters
-            parseChapters(document)
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+        return SMangaUpdate(updatedManga, parseChapters(document))
     }
 
     private fun parseChapters(document: Document): List<SChapter> {
@@ -141,13 +140,13 @@ abstract class SuperEcchi : KeiSource() {
             .sortedByDescending { it.chapter_number }
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = try {
-        client.get("$baseUrl/${chapter.url}").asJsoup()
-            .select("#gerar_pdf img[src^=mangas/]")
-            .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:src")) }
-    } catch (_: Exception) {
-        emptyList()
-    }
+    // ============================== Pages ==================================
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}").asJsoup()
+        .select("#gerar_pdf img[src^=mangas/]")
+        .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:src")) }
+
+    // ============================== Helpers ================================
 
     private fun parseListingEntry(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("h2 a.titulo-linhas")!!
