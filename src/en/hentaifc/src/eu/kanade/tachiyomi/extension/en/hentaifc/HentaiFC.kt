@@ -11,8 +11,6 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
@@ -57,36 +55,27 @@ abstract class HentaiFC : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        if (!fetchDetails && !fetchChapters) return@coroutineScope SMangaUpdate(manga, chapters)
+    ): SMangaUpdate {
         val document = client.get("$baseUrl/${manga.url}").asJsoup()
 
-        val updatedManga = async {
-            if (!fetchDetails) return@async manga
-            manga.apply {
-                val rawTitle = document.selectFirst("h1.heading")?.text().orEmpty().trim()
-                check(rawTitle.isNotBlank()) { "Empty title for ${manga.url}" }
-                title = rawTitle
-                author = document.select(".d-cell.value.authors a.author").eachText()
-                    .joinToString(", ").ifEmpty { null }
-                artist = author
-                genre = document.select(".genres a[href*=/tag/]").eachText()
-                    .joinToString(", ").ifEmpty { null }
-                if (thumbnail_url.isNullOrEmpty()) {
-                    thumbnail_url = document.selectFirst(".thumbs .wrap_item img")
-                        ?.let { it.attr("data-src").ifEmpty { it.attr("src") } }
-                        ?.ifEmpty { null }
-                }
-                status = SManga.COMPLETED
+        val updatedManga = manga.apply {
+            val rawTitle = document.selectFirst("h1.heading")?.text().orEmpty().trim()
+            check(rawTitle.isNotBlank()) { "Empty title for ${manga.url}" }
+            title = rawTitle
+            author = document.select(".d-cell.value.authors a.author").eachText()
+                .joinToString(", ").ifEmpty { null }
+            artist = author
+            genre = document.select(".genres a[href*=/tag/]").eachText()
+                .joinToString(", ").ifEmpty { null }
+            if (thumbnail_url.isNullOrEmpty()) {
+                thumbnail_url = document.selectFirst(".thumbs .wrap_item img")
+                    ?.let { it.attr("data-src").ifEmpty { it.attr("src") } }
+                    ?.ifEmpty { null }
             }
+            status = SManga.COMPLETED
         }
 
-        val updatedChapters = async {
-            if (!fetchChapters) return@async chapters
-            parseChapters(document, manga.url)
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+        return SMangaUpdate(updatedManga, parseChapters(document, manga.url))
     }
 
     private fun parseChapters(document: Document, galleryUrl: String): List<SChapter> {
@@ -100,7 +89,7 @@ abstract class HentaiFC : KeiSource() {
             .mapNotNull { href ->
                 val number = href.substringAfterLast("/c").toFloatOrNull() ?: return@mapNotNull null
                 SChapter.create().apply {
-                    url = href.removePrefix("$baseUrl/")
+                    url = href.toHttpUrl().encodedPath.removePrefix("/")
                     name = "Chapter ${number.toInt()}"
                     chapter_number = number
                     date_upload = date
@@ -112,30 +101,26 @@ abstract class HentaiFC : KeiSource() {
     // The reader page itself is JS-rendered, so page images are read from the
     // gallery page's thumbnail grid, which carries the full image list.
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        return try {
-            val chapterNumber = chapter.url.substringAfterLast("/c")
-            val galleryUrl = chapter.url.substringBeforeLast("/c")
-            client.get("$baseUrl/$galleryUrl").asJsoup()
-                .select(".thumbs .wrap_item")
-                .mapNotNull { item ->
-                    val href = item.selectFirst("a[href]")?.attr("abs:href")
-                        ?.substringBefore("#")?.substringBefore("?") ?: return@mapNotNull null
-                    if (href.substringAfterLast("/c") != chapterNumber) return@mapNotNull null
-                    val imageUrl = item.selectFirst("img")?.let {
-                        it.attr("data-src").ifEmpty { it.attr("src") }
-                    }.orEmpty()
-                    if (imageUrl.isEmpty()) return@mapNotNull null
-                    imageUrl
-                }
-                .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
-        } catch (_: Exception) {
-            emptyList()
-        }
+        val chapterNumber = chapter.url.substringAfterLast("/c")
+        val galleryUrl = chapter.url.substringBeforeLast("/c")
+        return client.get("$baseUrl/$galleryUrl").asJsoup()
+            .select(".thumbs .wrap_item")
+            .mapNotNull { item ->
+                val href = item.selectFirst("a[href]")?.attr("abs:href")
+                    ?.substringBefore("#")?.substringBefore("?") ?: return@mapNotNull null
+                if (href.substringAfterLast("/c") != chapterNumber) return@mapNotNull null
+                val imageUrl = item.selectFirst("img")?.let {
+                    it.attr("data-src").ifEmpty { it.attr("src") }
+                }.orEmpty()
+                if (imageUrl.isEmpty()) return@mapNotNull null
+                imageUrl
+            }
+            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
     private fun parseEntry(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("h3.title a")!!
-        url = link.attr("abs:href").removePrefix("$baseUrl/")
+        url = link.attr("abs:href").toHttpUrl().encodedPath.removePrefix("/")
         val rawTitle = link.text().trim()
         check(rawTitle.isNotBlank()) { "Empty title for entry: $url" }
         title = rawTitle
