@@ -12,6 +12,7 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl
 import java.time.LocalDate
+import java.time.ZoneId
 
 @Serializable
 private class WorldJournalPage(
@@ -76,7 +77,7 @@ abstract class WorldJournal : KeiSource() {
             SChapter.create().apply {
                 url = it.toString()
                 name = it.toString()
-                date_upload = it.toEpochDay() * 86_400_000L
+                date_upload = it.atStartOfDay(ZoneId.of("America/New_York")).toInstant().toEpochMilli()
             }
         }
 
