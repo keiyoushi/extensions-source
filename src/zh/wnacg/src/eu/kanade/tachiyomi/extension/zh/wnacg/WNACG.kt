@@ -147,7 +147,7 @@ abstract class WNACG :
         val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(document).apply { url = manga.url },
-            chaptersParse(document, manga),
+            if (fetchChapters) chaptersParse(document, manga) else chapters,
         )
     }
 
