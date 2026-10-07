@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -25,12 +27,18 @@ class SvelteResponseDto(
 ) {
     /** The page's own payload is the last `data` node; earlier ones belong to layouts. */
     fun getDataNode(): JsonArray = nodes.lastOrNull { it.type == "data" }?.data
-        ?: throw IllegalStateException("Data node not found in SvelteKit response")
+        ?: throw IllegalStateException("Data node not found in SvelteKit response (manga likely removed or url changed)")
 }
 
 @Serializable
 class SvelteNodeDto(
     val type: String,
+    val data: JsonArray? = null,
+)
+
+@Serializable
+class SvelteChunkDto(
+    val id: Int = -1,
     val data: JsonArray? = null,
 )
 
@@ -65,7 +73,46 @@ private fun resolveRef(pool: JsonArray, element: JsonElement): JsonElement {
     }
 }
 
-internal inline fun <reified T> Response.parseSvelte(): T = parseAs<SvelteResponseDto>().getDataNode().decodeSvelte().parseAs<T>()
+internal inline fun <reified T> Response.parseSvelte(): T {
+    // SvelteKit streams `data` + `chunk` objects newline-separated.
+    // Only the first line holds the page payload; the rest resolves lazy Promises.
+    val raw = use { it.body.string() }
+    val first = raw.lineSequence().first { it.isNotBlank() }
+    return first.parseAs<SvelteResponseDto>().getDataNode().decodeSvelte().parseAs<T>()
+}
+
+/**
+ * Reads manga details and the lazy `sameMangas` list from a single details response.
+ * Related is null when it couldn't be resolved.
+ */
+internal fun Response.parseMangaDetails(): Pair<MangaDetailsDto, List<MangaDetailsDto>?> {
+    val raw = use { it.body.string() }
+    val lines = raw.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+    if (lines.isEmpty()) throw IllegalStateException("Empty response")
+
+    val details = lines.first().parseAs<SvelteResponseDto>().getDataNode().decodeSvelte().parseAs<DetailsDto>()
+    // Related is auxiliary: a failure here must not break details and chapters, so it's skipped (null).
+    val related = runCatching { resolveRelated(details, lines) }.getOrNull()
+    return details.manga to related
+}
+
+private fun resolveRelated(details: DetailsDto, lines: List<String>): List<MangaDetailsDto> {
+    val inline = details.inlineRelated()
+    if (inline.isNotEmpty()) return inline
+
+    // No lazy placeholder, so there is nothing to resolve in the chunk lines.
+    val promiseId = details.relatedPromiseId() ?: return emptyList()
+
+    val chunks = lines.drop(1).map { it.parseAs<SvelteChunkDto>() }
+    val chunk = chunks.firstOrNull { it.id == promiseId }
+        ?: throw IllegalStateException("Related chunk $promiseId not found")
+
+    val data = chunk.data ?: throw IllegalStateException("Related chunk $promiseId has no data")
+    return data.decodeSvelte().parseAs<List<MangaDetailsDto>>()
+}
+
+/** Resolves lazy `sameMangas` from the streamed chunk lines. */
+internal fun Response.parseRelatedMangas(): List<MangaDetailsDto> = parseMangaDetails().second ?: throw IllegalStateException("Related manga list unavailable")
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Catalog
@@ -97,8 +144,27 @@ class MangaDto(
 @Serializable
 class DetailsDto(
     val manga: MangaDetailsDto,
-    val sameMangas: List<MangaDetailsDto> = emptyList(),
-)
+    private val sameMangas: JsonElement? = null,
+) {
+    /**
+     * Only the lazy `["Promise", id]` placeholder maps to empty here;
+     * the real list then lives in the chunk lines. Anything else parses
+     * strictly so shape errors stay visible.
+     */
+    fun inlineRelated(): List<MangaDetailsDto> {
+        if (sameMangas == null || sameMangas is JsonNull) return emptyList()
+        if (relatedPromiseId() != null) return emptyList()
+        return sameMangas.parseAs<List<MangaDetailsDto>>()
+    }
+
+    /** Chunk id from the lazy `["Promise", id]` placeholder, or null when the list is inline/absent. */
+    fun relatedPromiseId(): Int? {
+        val arr = sameMangas as? JsonArray ?: return null
+        if (arr.size != 2) return null
+        if ((arr[0] as? JsonPrimitive)?.takeIf { it.isString }?.content != "Promise") return null
+        return (arr[1] as? JsonPrimitive)?.intOrNull
+    }
+}
 
 @Serializable
 class MangaDetailsDto(
@@ -181,6 +247,19 @@ class MangaDetailsDto(
 }
 
 @Serializable
+class RelatedMangaDto(
+    val url: String,
+    val title: String,
+    val thumbnail: String? = null,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = this@RelatedMangaDto.url
+        title = this@RelatedMangaDto.title
+        thumbnail_url = this@RelatedMangaDto.thumbnail
+    }
+}
+
+@Serializable
 class ChapterDto(
     private val position: JsonPrimitive,
     private val createdAt: String? = null,
@@ -189,7 +268,7 @@ class ChapterDto(
         url = "$mangaUrl/${position.content}"
         name = "Глава ${position.content}"
         chapter_number = position.content.toFloatOrNull() ?: -1f
-        date_upload = createdAt?.let { Instant.parseOrNull(it) }?.toEpochMilliseconds() ?: 0L
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
@@ -248,4 +327,17 @@ private fun formatCount(count: Int): String = when {
         if (d == 0) "${k}K" else "$k.${d}K"
     }
     else -> count.toString()
+}
+
+/** Caches the related list on the manga so opening it doesn't refetch the same details response. */
+internal fun List<SManga>.toMemo(): JsonObject = buildJsonObject {
+    put("related", map { RelatedMangaDto(it.url, it.title, it.thumbnail_url) }.toJsonElement())
+}
+
+/** Cached related list, or null when absent or unreadable. Falls back to a network fetch then, never poisons the cache. */
+internal fun SManga.relatedFromMemo(): List<SManga>? {
+    val element = memo["related"] ?: return null
+    return runCatching {
+        element.parseAs<List<RelatedMangaDto>>().map { it.toSManga() }
+    }.getOrNull()
 }
