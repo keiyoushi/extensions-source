@@ -22,8 +22,8 @@ class GenreFilter(genres: List<Genre>) :
     }
 }
 
-data class Country(val name: String, val id: Int) {
-    override fun toString(): String = name
+class Country(val name: String, val id: Int) {
+    override fun toString() = name
 }
 
 open class EnhancedSelect<T>(name: String, values: Array<T>) : Filter.Select<T>(name, values) {
@@ -31,8 +31,8 @@ open class EnhancedSelect<T>(name: String, values: Array<T>) : Filter.Select<T>(
         get() = values[state]
 }
 
-class CountryFilter(countries: List<Country>) :
-    EnhancedSelect<Country>("Nacionalidade", countries.toTypedArray()),
+class CountryFilter :
+    EnhancedSelect<Country>("Nacionalidade", countryList),
     UrlQueryFilter {
 
     override fun addQueryParameter(url: HttpUrl.Builder) {
@@ -42,12 +42,12 @@ class CountryFilter(countries: List<Country>) :
     }
 }
 
-data class Status(val name: String, val id: Int) {
-    override fun toString(): String = name
+class Status(val name: String, val id: Int) {
+    override fun toString() = name
 }
 
-class StatusFilter(statuses: List<Status>) :
-    EnhancedSelect<Status>("Status", statuses.toTypedArray()),
+class StatusFilter :
+    EnhancedSelect<Status>("Status", statusList),
     UrlQueryFilter {
 
     override fun addQueryParameter(url: HttpUrl.Builder) {
@@ -57,11 +57,9 @@ class StatusFilter(statuses: List<Status>) :
     }
 }
 
-data class SortProperty(val name: String, val slug: String) {
-    override fun toString(): String = name
-}
+class SortProperty(val name: String, val slug: String)
 
-class SortByFilter(val sortProperties: List<SortProperty>) :
+class SortByFilter :
     Filter.Sort(
         name = "Ordenar por",
         values = sortProperties.map { it.name }.toTypedArray(),
@@ -76,3 +74,31 @@ class SortByFilter(val sortProperties: List<SortProperty>) :
         url.setQueryParameter("sortDirection", sortDirection)
     }
 }
+
+internal val countryList = arrayOf(
+    Country("Todas", 0),
+    Country("Brasil", 32),
+    Country("China", 45),
+    Country("Coréia do Sul", 115),
+    Country("Espanha", 199),
+    Country("Estados Unidos da América", 1),
+    Country("Japão", 109),
+    Country("Portugal", 173),
+)
+
+internal val statusList = arrayOf(
+    Status("Todos", 0),
+    Status("Cancelado", 5),
+    Status("Concluído", 1),
+    Status("Dropado", 6),
+    Status("Em Andamento", 2),
+    Status("Hiato", 4),
+    Status("Pausado", 3),
+)
+
+internal val sortProperties = listOf(
+    SortProperty("Título", "title"),
+    SortProperty("Quantidade de capítulos", "releases_count"),
+    SortProperty("Visualizações", "pageviews"),
+    SortProperty("Data de criação", "created_at"),
+)
