@@ -32,7 +32,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
-import java.net.URLEncoder
+import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
 import kotlin.time.Instant
 
@@ -43,10 +43,12 @@ abstract class MangoLibreria : KeiSource() {
         .readTimeout(30, TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val request = chain.request()
-            // The image proxy rejects requests with the main site's Referer header.
+            // The image CDN blocks requests without a browser Sec-Fetch header and
+            // serves a placeholder when a Referer is present, so both are fixed here.
             val newRequest = if (request.url.host != baseUrl.toHttpUrl().host) {
                 request.newBuilder()
                     .removeHeader("Referer")
+                    .header("Sec-Fetch-Dest", "image")
                     .build()
             } else {
                 request
@@ -147,9 +149,8 @@ abstract class MangoLibreria : KeiSource() {
         return SManga.create().apply {
             title = name
             url = urlPath
-            // The data holds direct origin URLs (blocked without the proxy),
-            // the site builds the proxied form client-side, so do the same.
-            thumbnail_url = (getStringOrNull("urlCover") ?: getStringOrNull("coverImage"))?.let(::proxyImageUrl)
+            // The data holds direct CDN URLs; the site's own image proxy is gone.
+            thumbnail_url = getStringOrNull("urlCover") ?: getStringOrNull("coverImage")
         }
     }
 
@@ -170,7 +171,11 @@ abstract class MangoLibreria : KeiSource() {
         return SManga.create().apply {
             url = manga.url
             title = doc.selectFirst("h1")?.text().orEmpty()
-            thumbnail_url = doc.selectFirst("div.relative.mx-auto img")?.attr("abs:src")
+            thumbnail_url = doc.selectFirst("div.relative.mx-auto img")?.attr("abs:src")?.let { url ->
+                // Rendered HTML still wraps covers in the site's (now dead) image proxy.
+                val proxy = "https://mango-proxy-image.zincbaq.workers.dev/?url="
+                if (url.startsWith(proxy)) URLDecoder.decode(url.removePrefix(proxy), "UTF-8") else url
+            }
             description = doc.selectFirst("div.mt-6 > p")?.text()
             genre = doc.select("a[href*=\"genres=\"]").joinToString { it.text() }
             status = parseStatus(doc.selectFirst("p.text-xs.uppercase")?.text())
@@ -246,16 +251,10 @@ abstract class MangoLibreria : KeiSource() {
                 ?: continue
             if (pages.isEmpty()) continue
             return pages.mapIndexed { index, imageUrl ->
-                Page(index, imageUrl = proxyImageUrl(imageUrl))
+                Page(index, imageUrl = imageUrl)
             }
         }
         return emptyList()
-    }
-
-    private fun proxyImageUrl(url: String): String = if (url.startsWith("https://mango-proxy-image.zincbaq.workers.dev/?url=")) {
-        url
-    } else {
-        "https://mango-proxy-image.zincbaq.workers.dev/?url=${URLEncoder.encode(url, "UTF-8")}"
     }
 
     private fun parseStatus(text: String?): Int = when {
