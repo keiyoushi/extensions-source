@@ -103,19 +103,12 @@ class Komga(
         set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
         if (apiKey.isNotBlank()) {
             set("X-API-Key", apiKey)
+        } else if (username.isNotBlank()) {
+            set("Authorization", Credentials.basic(username, password))
         }
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        authenticator { _, response ->
-            if (apiKey.isNotBlank() || response.request.header("Authorization") != null) {
-                null // Give up if API key is set or we've already failed to authenticate.
-            } else {
-                response.request.newBuilder()
-                    .addHeader("Authorization", Credentials.basic(username, password))
-                    .build()
-            }
-        }
         dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
     }
 
