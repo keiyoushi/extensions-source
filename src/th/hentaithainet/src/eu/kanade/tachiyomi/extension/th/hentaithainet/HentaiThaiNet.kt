@@ -27,7 +27,7 @@ abstract class HentaiThaiNet : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-// Site has show all comics so, putting that to latest section, 
+// Site has show all comics so, putting that to latest section,
 // in descending order from latest to past updates.
 
     private var maxPageCache: Int? = null
