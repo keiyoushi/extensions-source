@@ -103,10 +103,10 @@ abstract class Webnex : KeiSource() {
         // The default list keeps one upload per chapter, so list every group's uploads separately.
         val groups = document.select("select[name=source] option:not([value=''])").map { it.attr("value") }
         val chapterList = if (groups.isEmpty()) {
-            parseChapters(document)
+            fetchChapters(manga, null, document)
         } else {
             coroutineScope {
-                groups.map { async { fetchGroupChapters(manga, it) } }.awaitAll().flatten()
+                groups.map { async { fetchChapters(manga, it) } }.awaitAll().flatten()
             }
         }
 
@@ -114,13 +114,13 @@ abstract class Webnex : KeiSource() {
         return SMangaUpdate(details, chapterList.sortedWith(compareByDescending<SChapter> { it.chapter_number }.thenByDescending { it.date_upload }))
     }
 
-    private suspend fun fetchGroupChapters(manga: SManga, group: String): List<SChapter> {
+    private suspend fun fetchChapters(manga: SManga, group: String?, firstPage: Document? = null): List<SChapter> {
         fun pageUrl(page: Int) = getMangaUrl(manga).toHttpUrl().newBuilder().apply {
-            addQueryParameter("source", group)
+            group?.let { addQueryParameter("source", it) }
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        val document = client.get(pageUrl(1)).asDocument()
+        val document = firstPage ?: client.get(pageUrl(1)).asDocument()
         val lastPage = document.select(".pagination-page a[href$=#chapters]").mapNotNull { it.text().toIntOrNull() }.maxOrNull() ?: 1
 
         return parseChapters(document) + coroutineScope {
