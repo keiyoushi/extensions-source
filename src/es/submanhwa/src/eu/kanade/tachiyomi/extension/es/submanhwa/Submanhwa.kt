@@ -90,21 +90,30 @@ abstract class Submanhwa : KeiSource() {
 
         val details = SManga.create().apply {
             url = manga.url
-            title = document.selectFirst(".manga-title-centered")!!.text()
-            thumbnail_url = document.selectFirst("img")?.absUrl("src")
-            description = document.selectFirst("h5:contains(Resumen) + p")?.text()
+            title = document.selectFirst(".sr-info > h1")!!.text()
+            thumbnail_url = document.selectFirst("img.sr-cover")?.absUrl("src")
+            val info = document.selectFirst(".sr-info")
+            val meta = info?.selectFirst(".sr-meta")
 
-            val box = document.selectFirst(".main-content > .boxed-modern")
+            description = buildString {
+                append(info?.select(".sr-stats .sr-stat")?.joinToString(" | ") { it.text() })
+                append("\n\n${document.selectFirst(".sr-summary > p")?.text()}")
 
-            status = when (box?.selectFirst(".detail-label:contains(Estado) + .detail-value span")?.text()?.lowercase()) {
-                "completa" -> SManga.COMPLETED
-                "en curso" -> SManga.ONGOING
+                info?.selectFirst(".sr-alt")?.text()?.split(ALT_DELIMITER)?.let {
+                    append("\n\nAlternative names\n")
+                    it.forEach { name -> append("- ${name.trim()}\n") }
+                }
+            }
+
+            status = when {
+                info?.selectFirst(".ongoing") != null -> SManga.ONGOING
+                info?.selectFirst(".ended") != null -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
 
-            author = box?.selectFirst(".detail-label:contains(Autor) + .detail-value a")?.text()
-            artist = box?.selectFirst(".detail-label:contains(Artist) + .detail-value a")?.text()
-            genre = box?.select(".detail-label:contains(Categor) + .detail-value a")?.joinToString { it.text() }
+            author = meta?.select("dt:contains(Autor(es)) + dd a")?.joinToString { it.text() }
+            artist = meta?.select("dt:contains(Artist(s)) + dd a")?.joinToString { it.text() }
+            genre = info?.select(".sr-badge.type, .sr-cat, .sr-tag")?.joinToString { it.text() }
         }
 
         val chapterList = document.select(".chapters-grid [class^=chapter-card]").map { element ->
@@ -113,10 +122,8 @@ abstract class Submanhwa : KeiSource() {
                 name = a.text()
                 setUrlWithoutDomain(a.absUrl("href"))
 
-                val date = element.selectFirst("span:has(i.glyphicon-time)")?.text()
-                    ?: element.selectFirst(".chapter-preview-meta > span")?.text()
-
-                date_upload = dateFormat.tryParseDate(date)
+                val date = element.selectFirst(".ch-date")?.text()
+                date_upload = dateFormat.tryParseDate(date?.removePrefix("🕒 "))
             }
         }
 
@@ -133,5 +140,8 @@ abstract class Submanhwa : KeiSource() {
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
         else -> attr("abs:src")
+    }
+    companion object {
+        private val ALT_DELIMITER = Regex("""[|/•,;]""")
     }
 }
