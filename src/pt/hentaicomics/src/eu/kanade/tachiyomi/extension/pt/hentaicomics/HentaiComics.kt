@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -15,8 +16,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class HentaiComics : KeiSource() {
-
-    override val supportsLatest = true
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/top-hentais/").asJsoup()
@@ -77,6 +76,7 @@ abstract class HentaiComics : KeiSource() {
             thumbnail_url = document.select("div.single-post img[src*=\"/wp-content/uploads/\"]")
                 .firstOrNull()
                 ?.attr("src")?.ifEmpty { null }
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
 
         val updatedChapters = listOf(
