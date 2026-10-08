@@ -155,9 +155,12 @@ abstract class Newtoki : KeiSource() {
     // Image URLs are only issued to the site's own viewer script (fingerprint session + ad check),
     // so the chapter is rendered in a WebView and the resulting <img> sources are collected.
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val storeKey = (1..16).map { ('a'..'z').random() }.joinToString("")
+        val script = COLLECT_IMAGES_JS.replace(STORE_KEY_PLACEHOLDER, storeKey)
         val pages = runWebView<List<String>>(timeout = 60.seconds) {
+            userAgent = headers["User-Agent"]!!
             poll(500.milliseconds) {
-                evaluateJs(COLLECT_IMAGES_JS) { result ->
+                evaluateJs(script) { result ->
                     val state = result.parseAs<String>().parseAs<ViewerState>()
                     if (state.ready) resolve(state.pages)
                 }
@@ -195,6 +198,8 @@ abstract class Newtoki : KeiSource() {
         private val dateFormat = DateTimeFormatter.ofPattern("yy.MM.dd")
         private val seoul = ZoneId.of("Asia/Seoul")
 
+        private const val STORE_KEY_PLACEHOLDER = "__STORE_KEY__"
+
         // The viewer may virtualize long chapters, so collected sources are kept across polls
         // and the last mounted image is scrolled into view until every page has been seen.
         private const val COLLECT_IMAGES_JS = """
@@ -202,7 +207,7 @@ abstract class Newtoki : KeiSource() {
               var area = document.querySelector('.vw-imgs[data-viewer-image-count]');
               if (!area) return JSON.stringify({ready: false});
               var expected = parseInt(area.getAttribute('data-viewer-image-count'), 10) || 0;
-              var store = window.__keiPages || (window.__keiPages = {});
+              var store = window['__STORE_KEY__'] || (window['__STORE_KEY__'] = {});
               var nodes = area.querySelectorAll('img[alt]');
               var last = null;
               for (var i = 0; i < nodes.length; i++) {
