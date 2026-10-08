@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.shadowmanga
 
-import android.content.Context
 import android.util.Base64
 import eu.kanade.tachiyomi.extension.es.shadowmanga.interceptor.ImageFallbackInterceptor
 import eu.kanade.tachiyomi.source.model.Filter
@@ -14,7 +13,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -27,14 +25,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class ShadowManga : KeiSource() {
     private val isNsfw by lazy { name.contains("+18") }
-
-    // Reads the host app's global content warning setting; older Tachiyomi/Mihon builds used "show_nsfw_source".
-    private val showAdultContent: Boolean
-        get() {
-            val appPreferences = applicationContext.getSharedPreferences("${applicationContext.packageName}_preferences", Context.MODE_PRIVATE)
-            return appPreferences.getStringSet("enabled_content_warnings", null)?.contains("NSFW")
-                ?: appPreferences.getBoolean("show_nsfw_source", true)
-        }
 
     private val cdnHosts = listOf(
         "media.shademanga.com",
@@ -138,9 +128,10 @@ abstract class ShadowManga : KeiSource() {
             return MangasPage(mangas, hasNextPage)
         }
 
+        val includeAdult = filters.firstInstanceOrNull<AdultContentFilter>()?.state ?: false
         val url = "$baseUrl/api/series-locales/search-candidates".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
-            .addQueryParameter("includeAdult", showAdultContent.toString())
+            .addQueryParameter("includeAdult", includeAdult.toString())
             .addQueryParameter("showSinPortada", "false")
             .addQueryParameter("take", MAX_RESULTS.toString())
 
@@ -248,9 +239,15 @@ abstract class ShadowManga : KeiSource() {
             )
         } else {
             if (tags.isEmpty()) {
-                FilterList(Filter.Header("Presione 'Reiniciar' para intentar cargar los filtros."))
+                FilterList(
+                    AdultContentFilter(),
+                    Filter.Header("Presione 'Reiniciar' para intentar cargar los filtros."),
+                )
             } else {
-                FilterList(GenreFilter(tags.sorted()))
+                FilterList(
+                    AdultContentFilter(),
+                    GenreFilter(tags.sorted()),
+                )
             }
         }
     }
