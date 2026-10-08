@@ -1,134 +1,97 @@
-package eu.kanade.tachiyomi.extension.en.cartoonpornto
+package eu.kanade.tachiyomi.extension.en.cartoonporn
 
-import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.post
-import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.parseAs
-import okhttp3.FormBody
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
-abstract class CartoonPorn : KeiSource() {
+abstract class CartoonPorn : Madara() {
 
-    override val supportsLatest = true
+    override val mangaSubString = "porncomic"
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = buildListUrl(page, "views")
-        val document = client.get(url).asJsoup()
-        val mangas = document.select("a[href*=\"/porncomic/\"]")
-            .filter { it.attr("abs:href").isComicUrl() }
-            .distinctBy { it.attr("abs:href") }
-            .map(::listingParse)
-        return MangasPage(mangas, document.selectFirst("a[href*=\"/porncomic/page/${page + 1}/\"]") != null)
-    }
+    override val supportsPostId = false
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = buildListUrl(page, "recent")
-        val document = client.get(url).asJsoup()
-        val mangas = document.select("a[href*=\"/porncomic/\"]")
-            .filter { it.attr("abs:href").isComicUrl() }
-            .distinctBy { it.attr("abs:href") }
-            .map(::listingParse)
-        return MangasPage(mangas, document.selectFirst("a[href*=\"/porncomic/page/${page + 1}/\"]") != null)
-    }
+    override val supportsLatest = false
 
-    private fun buildListUrl(page: Int, orderBy: String): String {
-        val base = if (page == 1) "$baseUrl/porncomic/" else "$baseUrl/porncomic/page/$page/"
-        return base.toHttpUrl().newBuilder()
+    override fun archiveSelector() = "div.item_content, div.item-thumb"
+
+    override suspend fun getPopularManga(page: Int): MangasPage = htmlList(page, "views")
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = htmlList(page, "recent")
+
+    private suspend fun htmlList(page: Int, orderBy: String): MangasPage {
+        val path = if (page == 1) "/porncomic/" else "/porncomic/page/$page/"
+        val url = "$baseUrl$path".toHttpUrl().newBuilder()
             .addQueryParameter("m_orderby", orderBy)
             .apply { if (orderBy == "views") addQueryParameter("m_order", "desc") }
-            .build().toString()
-    }
-
-    private fun String.isComicUrl(): Boolean {
-        val path = try {
-            toHttpUrl().encodedPath
-        } catch (_: Exception) {
-            return false
-        }
-        val segments = path.trim('/').split('/')
-        return segments.size == 2 && segments[0] == "porncomic"
-    }
-
-    private fun listingParse(element: Element): SManga = SManga.create().apply {
-        url = element.attr("abs:href").toHttpUrl().encodedPath.removePrefix("/")
-        val rawTitle = element.attr("title").ifBlank {
-            element.selectFirst("img")?.attr("alt").orEmpty()
-        }.trim()
-        check(rawTitle.isNotBlank()) { "Empty title for entry: $url" }
-        title = rawTitle
-        thumbnail_url = element.selectFirst("img")?.attr("src")?.ifEmpty { null }
-    }
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page > 1 || query.isBlank()) return MangasPage(emptyList(), false)
-        val body = FormBody.Builder()
-            .add("action", "wp-manga-search-manga")
-            .add("title", query)
             .build()
-        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", body).parseAs<SearchResponse>()
-        val mangas = response.data.map {
-            SManga.create().apply {
-                url = it.url.toHttpUrl().encodedPath.removePrefix("/")
-                title = it.title
-            }
-        }
-        return MangasPage(mangas, false)
+        val document = client.get(url).asJsoup()
+        val mangas = document.select(archiveSelector()).mapNotNull { archiveManga(it, "") }
+        val hasNext = document.selectFirst("a[href*='/porncomic/page/${page + 1}/']") != null
+        return MangasPage(mangas, hasNext)
     }
 
-    override suspend fun fetchMangaUpdate(
-        manga: SManga,
-        chapters: List<SChapter>,
-        fetchDetails: Boolean,
-        fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}").asJsoup()
-
-        val updatedManga = manga.apply {
-            val rawTitle = document.selectFirst("h1")?.text()?.trim().orEmpty()
-            check(rawTitle.isNotBlank()) { "Empty title for ${manga.url}" }
-            title = rawTitle
-            thumbnail_url = document.selectFirst(".comic-hero__image-wrap img")
-                ?.attr("src")?.ifEmpty { null }
+    override fun archiveManga(element: Element, id: String): SManga? {
+        val link = element.selectFirst("a[href*='/porncomic/']") ?: return null
+        val href = link.attr("abs:href").takeIf(String::isNotBlank) ?: return null
+        val mangaPath = href.toHttpUrl().encodedPath
+        return SManga.create().apply {
+            url = mangaPath
+            title = link.attr("title").ifBlank { link.text() }.trim()
+            thumbnail_url = element.selectFirst("img")?.let { imageFromElement(it) }
         }
+    }
 
-        val updatedChapters = document.select("a[href*=\"/porncomic/\"]")
+    override val mangaDetailsSelectorTitle = "h1.comic-hero__title"
+
+    override val mangaDetailsSelectorThumbnail = ".comic-hero__image-wrap img"
+
+    override val mangaDetailsSelectorArtist = ".meta-tag--artist"
+
+    override val mangaDetailsSelectorGenre = ".meta-tag--genre"
+
+    override fun parseChapterList(document: Document, mangaPath: String): List<SChapter> {
+        val comicSlug = mangaPath.trim('/').substringAfterLast('/')
+        return document.select("a[href*=\"/porncomic/\"]")
             .map { it.attr("abs:href") }
             .filter { href ->
-                val path = try {
-                    href.toHttpUrl().encodedPath
+                val segments = try {
+                    href.toHttpUrl().encodedPath.trim('/').split('/')
                 } catch (_: Exception) {
                     return@filter false
                 }
-                val segments = path.trim('/').split('/')
-                segments.size == 3 && segments[0] == "porncomic" && segments[1] == manga.url.trim('/').split('/').last()
+                segments.size == 3 && segments[0] == mangaSubString && segments[1] == comicSlug
             }
             .distinct()
-            .map { href ->
-                SChapter.create().apply {
-                    url = href.toHttpUrl().encodedPath.removePrefix("/")
-                    name = href.trim('/').split('/').last()
-                        .replace('-', ' ')
-                        .replaceFirstChar { it.uppercase() }
-                }
-            }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
+            .mapNotNull { chapterFromElement(it, mangaPath) }
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}").asJsoup()
-        .select("img.manga-img")
-        .map { it.attr("src").ifEmpty { it.attr("data-src") } }
-        .filter { it.isNotBlank() }
+    private fun chapterFromElement(href: String, mangaPath: String): SChapter? {
+        val slug = try {
+            href.toHttpUrl().encodedPath.trimEnd('/').substringAfterLast('/')
+        } catch (_: Exception) {
+            return null
+        }
+        return SChapter.create().apply {
+            url = slug
+            name = slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
+            memo = buildJsonObject { put("mangaPath", mangaPath) }
+        }
+    }
+
+    override fun parsePages(document: Document): List<Page> = document.select("img.manga-img")
+        .mapNotNull { imageFromElement(it) }
+        .filter { it.contains("/WP-manga/data/") }
         .distinct()
-        .mapIndexed { index, url -> Page(index, imageUrl = url) }
+        .mapIndexed { index, url -> Page(index, document.location(), url) }
 }
