@@ -75,7 +75,7 @@ abstract class NexusToons :
             url.addQueryParameter("search", query)
         }
 
-        var sortBy = "updatedAt"
+        var sortBy = "lastChapterAt"
         var sortOrder = "desc"
         var categoryMode = "or"
         val statusList = mutableListOf<String>()
