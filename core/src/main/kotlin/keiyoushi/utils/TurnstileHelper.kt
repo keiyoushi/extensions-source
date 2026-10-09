@@ -26,6 +26,8 @@ suspend fun getTurnstileToken(
     url: String,
     siteKey: String,
     userAgent: String,
+    action: String? = null,
+    cData: String? = null,
     timeout: Duration = 2.minutes,
 ): String {
     val activity = topActivity().takeIf { it.usable() }
@@ -98,7 +100,7 @@ suspend fun getTurnstileToken(
                 <div id="challenge"></div>
                 <script>
                     function onTurnstileLoad() {
-                        turnstile.render('#challenge', {
+                        const options = {
                             sitekey: ${siteKey.toJsonString()},
                             theme: '$theme',
                             appearance: 'interaction-only',
@@ -120,7 +122,15 @@ suspend fun getTurnstileToken(
                             'timeout-callback': function () {
                                 window.turnstileError.post('timeout');
                             },
-                        });
+                        };
+
+                        const action = ${action.toJsonString()};
+                        if (action !== null) options.action = action;
+
+                        const cData = ${cData.toJsonString()};
+                        if (cData !== null) options.cData = cData;
+
+                        turnstile.render('#challenge', options);
                     }
 
                     document.body.addEventListener('click', function (e) {
@@ -146,11 +156,15 @@ context(source: HttpSource)
 suspend fun getTurnstileToken(
     url: String,
     siteKey: String,
+    action: String? = null,
+    cData: String? = null,
     timeout: Duration = 2.minutes,
 ): String = getTurnstileToken(
     url = url,
     siteKey = siteKey,
     userAgent = source.headers["User-Agent"]!!,
+    action = action,
+    cData = cData,
     timeout = timeout,
 )
 
