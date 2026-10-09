@@ -77,9 +77,10 @@ abstract class BullyManga : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
+        // details and chapters come from the same page, so parse both regardless of the flags
         return SMangaUpdate(
-            manga = if (fetchDetails) document.parseDetails(manga) else manga,
-            chapters = if (fetchChapters) document.parseChapters() else chapters,
+            manga = document.parseDetails(manga),
+            chapters = document.parseChapters(),
         )
     }
 
