@@ -166,7 +166,7 @@ abstract class ParadiseScans :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = chapter.memo["id"]?.string ?: resolveChapterId(chapter.url)
+        val chapterId = chapter.memo["id"]?.string ?: throw Exception("Refresh Chapter List")
         val response = client.get("$baseUrl/api/chapters/$chapterId/pages")
         val pages = response.parseAs<List<PageDto>>()
 
@@ -177,15 +177,6 @@ abstract class ParadiseScans :
             }
     }
 
-    // chapters saved before this rewrite have no memo; resolve their id from the reader URL
-    private suspend fun resolveChapterId(url: String): String {
-        val match = CHAPTER_URL_REGEX.find(url) ?: throw Exception("Unknown chapter URL: $url")
-        val (slug, number) = match.destructured
-        val chapters = client.get("$baseUrl/api/series/$slug/chapters").parseAs<List<ChapterDto>>()
-        return chapters.firstOrNull { it.number?.let(::formatNumber) == number }?.id
-            ?: throw Exception("Chapter not found: $url")
-    }
-
     private fun formatNumber(number: Double): String = if (number % 1.0 == 0.0) number.toInt().toString() else number.toString()
 
     override fun getFilterList(data: kotlinx.serialization.json.JsonElement?): FilterList = getFilters()
@@ -194,5 +185,3 @@ abstract class ParadiseScans :
 }
 
 private const val SHOW_LOCKED_CHAPTERS_PREF = "pref_show_locked_chap"
-
-private val CHAPTER_URL_REGEX = Regex("""/series/([^/]+)/chapter/(.+)""")
