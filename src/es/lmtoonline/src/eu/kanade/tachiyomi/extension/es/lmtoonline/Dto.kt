@@ -9,6 +9,8 @@ import kotlin.time.Instant
 @Serializable
 class MangaList(
     val mangas: List<Manga>,
+    val total: Int,
+    val pageSize: Int,
 )
 
 @Serializable
@@ -23,15 +25,11 @@ class Manga(
     val alternativeTitles: List<String>? = null,
     private val description: String? = null,
     private val coverImage: String? = null,
-    val isAdult: Boolean = false,
     val type: String? = null,
     val status: String? = null,
-    val demographic: String? = null,
     val genres: List<String>? = null,
     val author: String? = null,
     val artist: String? = null,
-    val latestChapterCreatedAt: String? = null,
-    val totalViews: Int? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         url = slug
