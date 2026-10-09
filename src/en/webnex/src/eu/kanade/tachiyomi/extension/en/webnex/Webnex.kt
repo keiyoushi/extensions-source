@@ -24,6 +24,10 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 @Source
@@ -100,49 +104,54 @@ abstract class Webnex : KeiSource() {
         }
         if (!fetchChapters) return SMangaUpdate(details, chapters)
 
-        // The default list keeps one upload per chapter, so list every group's uploads separately.
-        val groups = document.select("select[name=source] option:not([value=''])").map { it.attr("value") }
-        val chapterList = if (groups.isEmpty()) {
-            fetchChapters(manga, null, document)
-        } else {
-            coroutineScope {
-                groups.map { async { fetchChapters(manga, it) } }.awaitAll().flatten()
-            }
-        }
-
-        // Groups are listed one after another, so interleave them by number and then date.
-        return SMangaUpdate(details, chapterList.sortedWith(compareByDescending<SChapter> { it.chapter_number }.thenByDescending { it.date_upload }))
-    }
-
-    private suspend fun fetchChapters(manga: SManga, group: String?, firstPage: Document? = null): List<SChapter> {
-        fun pageUrl(page: Int) = getMangaUrl(manga).toHttpUrl().newBuilder().apply {
-            group?.let { addQueryParameter("source", it) }
-            if (page > 1) addQueryParameter("page", page.toString())
-        }.build()
-
-        val document = firstPage ?: client.get(pageUrl(1)).asDocument()
         val lastPage = document.select(".pagination-page a[href$=#chapters]").mapNotNull { it.text().toIntOrNull() }.maxOrNull() ?: 1
-
-        return parseChapters(document) + coroutineScope {
+        val mangaUrl = getMangaUrl(manga).toHttpUrl()
+        val otherPages = coroutineScope {
             (2..lastPage).map { page ->
-                async { parseChapters(client.get(pageUrl(page)).asDocument()) }
-            }.awaitAll().flatten()
+                async { client.get(mangaUrl.newBuilder().addQueryParameter("page", page.toString()).build()).asDocument() }
+            }.awaitAll()
         }
+
+        // Dropdown uploads only have a relative time, so keep the date estimated when they were first seen.
+        val knownDates = chapters.associate { it.url to it.date_upload }
+        return SMangaUpdate(details, (listOf(document) + otherPages).flatMap { parseChapters(it, knownDates) })
     }
 
-    private fun parseChapters(document: Document): List<SChapter> = document.select("li.ch-row").map { element ->
-        SChapter.create().apply {
-            val link = element.selectFirst("a.ch-link")!!
+    // Each row is one chapter: the upload the site picked, plus the other groups' uploads in its dropdown.
+    private fun parseChapters(document: Document, knownDates: Map<String, Long>): List<SChapter> = document.select("li.ch-row").flatMap { element ->
+        val link = element.selectFirst("a.ch-link")!!
+        val number = link.selectFirst(".ch-num")!!
+        val title = link.selectFirst(".ch-title")!!
+        // A plain title is the full display name, e.g. "Chapter 48" or an unnumbered extra.
+        val chapterName = if (title.hasClass("is-plain")) title.text() else listOfNotNull(number.textOrNull(), title.text()).joinToString(": ")
+
+        val picked = SChapter.create().apply {
             url = link.absUrl("href").toHttpUrl().pathSegments[1]
-            val number = link.selectFirst(".ch-num")!!
-            val title = link.selectFirst(".ch-title")!!
-            // A plain title is the full display name, e.g. "Chapter 48" or an unnumbered extra.
-            name = if (title.hasClass("is-plain")) title.text() else listOfNotNull(number.textOrNull(), title.text()).joinToString(": ")
-            number.ownText().toFloatOrNull()?.let { chapter_number = it }
+            name = chapterName
             // Rows with a single upload use .ch-source, rows with several put the group in a dropdown trigger.
             scanlator = element.selectFirst(".ch-source, .ch-source-name")?.textOrNull()
             date_upload = Instant.tryParse(element.selectFirst("time.ch-time")?.attr("datetime"))
         }
+        val others = element.select(".ch-sources-menu a.ch-sources-item").map { item ->
+            SChapter.create().apply {
+                url = item.absUrl("href").toHttpUrl().pathSegments[1]
+                name = chapterName
+                scanlator = item.selectFirst(".ch-sources-name")?.textOrNull()
+                date_upload = knownDates[url]?.takeIf { it != 0L } ?: item.selectFirst(".ch-sources-time")?.text().parseTimeAgo()
+            }
+        }
+        listOf(picked) + others
+    }
+
+    // Inverts the site's timeAgo(): "4w ago" means 4 weeks up to the 30 days where "1mo" takes over, so take the middle.
+    private fun String?.parseTimeAgo(): Long {
+        if (this == "just now") return System.currentTimeMillis()
+        val match = TIME_AGO_REGEX.matchEntire(this ?: return 0L) ?: return 0L
+        val index = TIME_AGO_UNITS.indexOfFirst { it.first == match.groupValues[2] }
+        val unit = TIME_AGO_UNITS[index].second
+        val count = match.groupValues[1].toInt()
+        val upper = minOf(unit * (count + 1), TIME_AGO_UNITS.getOrNull(index - 1)?.second ?: Duration.INFINITE)
+        return System.currentTimeMillis() - ((unit * count + upper) / 2).inWholeMilliseconds
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
@@ -197,5 +206,12 @@ abstract class Webnex : KeiSource() {
                 }
             }
         }
+    }
+
+    companion object {
+        private val TIME_AGO_REGEX = Regex("""(\d+)(mo|y|w|d|h|m) ago""")
+
+        // Largest first, as the site's timeAgo() checks them.
+        private val TIME_AGO_UNITS = listOf("y" to 365.days, "mo" to 30.days, "w" to 7.days, "d" to 1.days, "h" to 1.hours, "m" to 1.minutes)
     }
 }
