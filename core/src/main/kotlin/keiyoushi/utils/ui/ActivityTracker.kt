@@ -113,3 +113,26 @@ private object ActivityTracker {
         }.getOrNull()
     }
 }
+
+/**
+ * Runs [block] once when this Activity is destroyed. Returns a function that
+ * unregisters the hook (safe to call multiple times or after destroy).
+ */
+internal fun Activity.onDestroyed(block: () -> Unit): () -> Unit {
+    val callbacks = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityDestroyed(a: Activity) {
+            if (a !== this@onDestroyed) return
+            application.unregisterActivityLifecycleCallbacks(this)
+            block()
+        }
+
+        override fun onActivityResumed(a: Activity) = Unit
+        override fun onActivityPaused(a: Activity) = Unit
+        override fun onActivitySaveInstanceState(a: Activity, outState: Bundle) = Unit
+        override fun onActivityStarted(a: Activity) = Unit
+        override fun onActivityStopped(a: Activity) = Unit
+        override fun onActivityCreated(a: Activity, savedInstanceState: Bundle?) = Unit
+    }
+    application.registerActivityLifecycleCallbacks(callbacks)
+    return { application.unregisterActivityLifecycleCallbacks(callbacks) }
+}

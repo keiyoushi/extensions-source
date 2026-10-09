@@ -10,6 +10,7 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowManager
 import android.webkit.WebView
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.ui.onDestroyed
 import keiyoushi.utils.ui.topActivity
 import keiyoushi.utils.ui.usable
 import kotlin.time.Duration
@@ -174,6 +175,7 @@ private class CaptchaOverlayDialog(
     private val onCancel: () -> Unit,
 ) {
     private var dialog: Dialog? = null
+    private var unhook: (() -> Unit)? = null
 
     fun show() = activity.runOnUiThread {
         if (dialog != null || activity.isFinishing || activity.isDestroyed) return@runOnUiThread
@@ -194,6 +196,10 @@ private class CaptchaOverlayDialog(
                 setOnDismissListener { onCancel() }
             }
             dialog = d
+            unhook = activity.onDestroyed {
+                dismiss()
+                onCancel()
+            }
             d.show()
         } catch (_: Throwable) {
             onCancel()
@@ -203,30 +209,32 @@ private class CaptchaOverlayDialog(
     fun dismiss() = activity.runOnUiThread {
         val d = dialog ?: return@runOnUiThread
         dialog = null
+        unhook?.invoke()
+        unhook = null
         try {
             d.setOnDismissListener(null)
             d.setOnCancelListener(null)
-            if (d.isShowing) d.dismiss()
+            runCatching { if (d.isShowing) d.dismiss() }
         } finally {
-            (webView.parent as? ViewGroup)?.removeView(webView)
+            runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
         }
     }
 }
 
 private fun turnstileErrorMessage(code: String): String = when {
-    code == "expired" -> "The captcha expired before it was used"
-    code == "timeout" -> "The captcha timed out"
-    code == "unsupported" -> "This WebView does not support the captcha"
-    code == "script_load_failed" -> "The captcha script could not be loaded (network error or blocked)"
-    code == "110100" || code == "110110" || code == "400020" -> "The captcha site key was rejected (invalid or not found)"
-    code == "110200" -> "The captcha is not authorized for this domain"
-    code.startsWith("1106") -> "The captcha challenge timed out"
-    code.startsWith("100") -> "The captcha failed to initialize"
-    code.startsWith("102") -> "The captcha received invalid parameters"
-    code == "200100" -> "The device clock is wrong, or the challenge was cached"
-    code == "200500" -> "The captcha frame could not load (network error or blocked)"
-    code.startsWith("120") -> "The captcha hit an internal Cloudflare error"
-    code.startsWith("300") -> "The captcha failed in the browser environment"
-    code.startsWith("600") -> "The captcha challenge was not solved"
-    else -> "Captcha error"
+    code == "expired" -> "Expired"
+    code == "timeout" -> "Timed out"
+    code == "unsupported" -> "WebView doesn't support captcha"
+    code == "script_load_failed" -> "Script not loaded"
+    code == "110100" || code == "110110" || code == "400020" -> "Sitekey rejected"
+    code == "110200" -> "Not authorized for this domain"
+    code.startsWith("1106") -> "Timed out"
+    code.startsWith("100") -> "Failed to initialize"
+    code.startsWith("102") -> "Invalid parameters"
+    code == "200100" -> "Wrong Device clock"
+    code == "200500" -> "Captcha didn't load"
+    code.startsWith("120") -> "Internal Cloudflare error"
+    code.startsWith("300") -> "Challenge failed in this browser"
+    code.startsWith("600") -> "Challenge not solved"
+    else -> "Unknown error"
 }

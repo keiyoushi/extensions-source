@@ -397,7 +397,7 @@ private suspend fun <T> runWebViewInternal(
         }
     } finally {
         scope.destroyed = true
-        (webView.parent as? ViewGroup)?.removeView(webView)
+        runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
         webView.stopLoading()
         webView.destroy()
     }

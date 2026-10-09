@@ -246,20 +246,26 @@ private suspend fun <T> showDialog(
     suspendCancellableCoroutine { cont ->
         try {
             var resolved = false
+            var unhook: (() -> Unit)? = null
             val builder = AlertDialog.Builder(activity)
             builder.configure(activity) { value ->
                 resolved = true
                 if (cont.isActive) cont.resume(value)
             }
             builder.setOnDismissListener {
+                unhook?.invoke()
+                unhook = null
                 if (cont.isActive && !resolved) {
                     runCatching(onDismissed).fold(cont::resume, cont::resumeWithException)
                 }
             }
 
             val dialog = builder.show()
+            unhook = activity.onDestroyed {
+                runCatching { if (dialog.isShowing) dialog.dismiss() }
+            }
             cont.invokeOnCancellation {
-                activity.runOnUiThread { if (dialog.isShowing) dialog.dismiss() }
+                activity.runOnUiThread { runCatching { if (dialog.isShowing) dialog.dismiss() } }
             }
             onShown(dialog)
         } catch (t: Throwable) {
