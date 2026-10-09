@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.sirenscans
+package eu.kanade.tachiyomi.multisrc.keyoappv2
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -9,7 +9,7 @@ class ChaptersResponseDto(
 )
 
 @Serializable
-class GenreDto(val name: String, val slug: String)
-
-@Serializable
-class GenreResponseDto(val genres: List<GenreDto>)
+class AjaxSearchResponseDto(
+    val html: String,
+    @SerialName("has_more") val hasMore: Boolean,
+)

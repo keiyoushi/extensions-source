@@ -1,12 +1,6 @@
-package eu.kanade.tachiyomi.extension.en.sirenscans
+package eu.kanade.tachiyomi.multisrc.keyoappv2
 
 import eu.kanade.tachiyomi.source.model.Filter
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import org.jsoup.nodes.Document
 
 class StatusFilter :
     Filter.Select<String>(
@@ -43,6 +37,7 @@ class SortFilter :
         )
     }
 }
+
 class TypeFilter :
     Filter.Select<String>(
         "Type",
@@ -64,29 +59,8 @@ class TypeFilter :
 
 class GenreCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
-class GenreFilter(genres: List<Genre>) :
+class GenreFilter(genres: List<String>) :
     Filter.Group<GenreCheckBox>(
         "Genres",
-        genres.map { GenreCheckBox(it.name, it.value) },
+        genres.map { GenreCheckBox(it.replaceFirstChar(Char::uppercase), it) },
     )
-
-class Genre(val name: String, val value: String)
-
-fun parseGenreData(document: Document): JsonElement {
-    val genres = document.select("div#search-genres-list a.genre-tag[data-tag]").map { el ->
-        buildJsonObject {
-            put("name", el.text().trim().replaceFirstChar { it.uppercase() })
-            put("slug", el.attr("data-tag"))
-        }
-    }
-    return buildJsonObject { put("genres", JsonArray(genres)) }
-}
-
-fun getGenreList(data: JsonElement? = null): List<Genre> {
-    val items = data
-        ?.let { runCatching { it.parseAs<GenreResponseDto>() }.getOrNull() }
-        ?.genres
-        .orEmpty()
-
-    return items.map { item -> Genre(name = item.name, value = item.slug) }
-}
