@@ -39,3 +39,9 @@ class MangaItemDto(
     val url: String,
     val image: String,
 )
+
+@Serializable
+class WebViewChapterDto(
+    val name: String,
+    val url: String,
+)
