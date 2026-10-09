@@ -10,11 +10,10 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.TurnstileHelper
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getString
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.ui.HtmlDialogHelper
 import keiyoushi.utils.ui.askConfirm
 import keiyoushi.utils.ui.askPassword
 import keiyoushi.utils.ui.askSelectOption
@@ -72,25 +71,22 @@ abstract class Crunchyscan : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manhwa/${chapter.memo.getString("mangaSlug")}/${chapter.url}"
 
-    private val turnstileHelper = TurnstileHelper()
-    private val dialogHelper = HtmlDialogHelper()
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        dialogHelper.askPassword()
+        askPassword()
 
-        dialogHelper.askConfirm("are you sure?", "")
+        askConfirm("are you sure?", "")
 
-        dialogHelper.askSelectOption("select", listOf("proceed", "cancel"))
+        askSelectOption("select", listOf("proceed", "cancel"))
 
-        turnstileHelper.getTurnstileToken(getChapterUrl(chapter), "3x00000000000000000000FF")
+        getTurnstileToken(getChapterUrl(chapter), "3x00000000000000000000FF")
 
-        turnstileHelper.getTurnstileToken(getChapterUrl(chapter), "1x00000000000000000000AA")
+        getTurnstileToken(getChapterUrl(chapter), "1x00000000000000000000AA")
 
         val url = getChapterUrl(chapter)
         var doc = client.get(url).asJsoup()
 
         doc.selectFirst("div.cf-turnstile")?.also {
-            val token = turnstileHelper.getTurnstileToken(url, it.attr("data-sitekey"))
+            val token = getTurnstileToken(url, it.attr("data-sitekey"))
 
             client.post(
                 "$baseUrl/api/verify-turnstile",

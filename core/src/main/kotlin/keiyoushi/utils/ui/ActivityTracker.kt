@@ -10,28 +10,14 @@ import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Base class for helpers that need to show UI (dialogs) on top of whatever Activity is
- * currently in the foreground.
- *
- * Activity tracking is shared process-wide, so creating many helpers registers lifecycle
- * callbacks only once.
+ * The foreground Activity, ready to host a dialog.
+ * Must be called on the main thread.
+ * @throws IllegalStateException if no usable Activity is available.
  */
-abstract class ActivityTrackingHelper {
+fun topActivity(): Activity = ActivityTracker.top()
+    ?: throw IllegalStateException("No Activity found to show dialog")
 
-    init {
-        ActivityTracker.ensureRegistered()
-    }
-
-    /**
-     * The foreground Activity, ready to host a dialog.
-     * Must be called on the main thread.
-     * @throws Exception if no usable Activity is available.
-     */
-    protected fun topActivity(): Activity = ActivityTracker.top()
-        ?: throw IllegalStateException("No Activity found to show dialog")
-
-    protected fun Activity.usable(): Boolean = !isFinishing && !isDestroyed
-}
+fun Activity.usable(): Boolean = !isFinishing && !isDestroyed
 
 private object ActivityTracker {
     private const val SHARED_KEY = "keiyoushi.activity-tracker.current"
@@ -92,14 +78,13 @@ private object ActivityTracker {
     }
 
     fun top(): Activity? {
+        ensureRegistered()
         val holder = current ?: return null
         holder.get()?.get()?.takeIf { it.usable() }?.let { return it }
         return findResumedActivity()
             ?.takeIf { it.usable() }
             ?.also { holder.set(WeakReference(it)) }
     }
-
-    private fun Activity.usable() = !isFinishing && !isDestroyed
 
     @SuppressLint("PrivateApi", "DiscouragedPrivateApi")
     private fun findResumedActivity(): Activity? {
