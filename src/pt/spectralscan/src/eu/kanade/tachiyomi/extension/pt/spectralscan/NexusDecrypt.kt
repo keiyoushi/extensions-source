@@ -133,7 +133,7 @@ object NexusDecrypt {
                 return@Interceptor response
             }
 
-            val body = response.body?.string() ?: return@Interceptor response
+            val body = response.body.string()
 
             val decryptedBody = if (isEncryptedResponse(body)) {
                 try {

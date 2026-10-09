@@ -93,7 +93,6 @@ class PawchivePostDto(
             }
             "Post from $postDateString"
         }
-        chapter_number = -2f
     }
 
     companion object {

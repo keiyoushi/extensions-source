@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.id.ainzscansid
 import eu.kanade.tachiyomi.multisrc.loneseal.ChapterPagesResponseDto
 import eu.kanade.tachiyomi.multisrc.loneseal.LoneSeal
 import eu.kanade.tachiyomi.multisrc.loneseal.UrlLayout
+import eu.kanade.tachiyomi.multisrc.loneseal.toFullResolutionImageUrl
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -42,11 +43,7 @@ abstract class AinzScansID : LoneSeal() {
     private fun String.cleanUp(): String {
         var url = if (startsWith("http")) this else "https://api.ainzscans01.com$this"
 
-        // Fix for older chapters using Blogger/Googleusercontent compressed images
-        if (url.contains("googleusercontent.com") || url.contains("bp.blogspot.com")) {
-            url = url.replace(Regex("""=[swh]\d+[^/?]*($|\?)""", RegexOption.IGNORE_CASE), "=s0$1")
-                .replace(Regex("""/[swh]\d+[^/]*/""", RegexOption.IGNORE_CASE), "/s0/")
-        }
+        url = url.toFullResolutionImageUrl()
 
         // Clean up common CMS resizing query parameters
         url.toHttpUrlOrNull()?.let { httpUrl ->

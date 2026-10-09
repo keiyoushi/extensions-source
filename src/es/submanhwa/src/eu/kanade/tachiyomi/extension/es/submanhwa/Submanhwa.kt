@@ -25,12 +25,42 @@ abstract class Submanhwa : KeiSource() {
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept-Language", "es-PE,es;q=0.9,en-US;q=0.8,en;q=0.7")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
+
+        val mangas = document.select("article.up-card").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst("a.up-title")!!.text()
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+            }
+        }
+        return MangasPage(mangas, false)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.count(String::isNotBlank) < 2) return null
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = url.encodedPath },
+            emptyList(),
+            true,
+            false,
+        ).manga
+    }
+
+    override suspend fun getSearchMangaList(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): MangasPage = parseMangaList(
         baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("filterList")
             addQueryParameter("page", page.toString())
             addQueryParameter("sortBy", "views")
             addQueryParameter("asc", "false")
+            addQueryParameter("alpha", query)
         }.build(),
     )
 
@@ -48,32 +78,7 @@ abstract class Submanhwa : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
-        val mangas = document.select("div[class^=manga-item]").map { element ->
-            SManga.create().apply {
-                title = element.selectFirst("h3[class^=manga-title] a")!!.text()
-                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-                thumbnail_url = element.selectFirst("img")!!.absUrl("src")
-            }
-        }
-
-        return MangasPage(mangas, false)
-    }
-
-    override suspend fun getSearchMangaList(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): MangasPage = parseMangaList(
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("filterList")
-            addQueryParameter("page", page.toString())
-            addQueryParameter("sortBy", "views")
-            addQueryParameter("asc", "false")
-            addQueryParameter("alpha", query)
-        }.build(),
-    )
+    override val supportRelatedMangasBySearch = true
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -84,21 +89,31 @@ abstract class Submanhwa : KeiSource() {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
         val details = SManga.create().apply {
-            title = document.selectFirst(".manga-title-centered")!!.text()
-            thumbnail_url = document.selectFirst("img")?.absUrl("src")
-            description = document.selectFirst("h5:contains(Resumen) + p")?.text()
+            url = manga.url
+            title = document.selectFirst(".sr-info > h1")!!.text()
+            thumbnail_url = document.selectFirst("img.sr-cover")?.absUrl("src")
+            val info = document.selectFirst(".sr-info")
+            val meta = info?.selectFirst(".sr-meta")
 
-            val box = document.selectFirst(".main-content > .boxed-modern")
+            description = buildString {
+                append(info?.select(".sr-stats .sr-stat")?.joinToString(" | ") { it.text() })
+                append("\n\n${document.selectFirst(".sr-summary > p")?.text()}")
 
-            status = when (box?.selectFirst(".detail-label:contains(Estado) + .detail-value span")?.text()?.lowercase()) {
-                "completa" -> SManga.COMPLETED
-                "en curso" -> SManga.ONGOING
+                info?.selectFirst(".sr-alt")?.text()?.split(ALT_DELIMITER)?.let {
+                    append("\n\nAlternative names\n")
+                    it.forEach { name -> append("- ${name.trim()}\n") }
+                }
+            }
+
+            status = when {
+                info?.selectFirst(".ongoing") != null -> SManga.ONGOING
+                info?.selectFirst(".ended") != null -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
 
-            author = box?.selectFirst(".detail-label:contains(Autor) + .detail-value a")?.text()
-            artist = box?.selectFirst(".detail-label:contains(Artist) + .detail-value a")?.text()
-            genre = box?.select(".detail-label:contains(Categor) + .detail-value a")?.joinToString { it.text() }
+            author = meta?.select("dt:contains(Autor(es)) + dd a")?.joinToString { it.text() }
+            artist = meta?.select("dt:contains(Artist(s)) + dd a")?.joinToString { it.text() }
+            genre = info?.select(".sr-badge.type, .sr-cat, .sr-tag")?.joinToString { it.text() }
         }
 
         val chapterList = document.select(".chapters-grid [class^=chapter-card]").map { element ->
@@ -107,10 +122,8 @@ abstract class Submanhwa : KeiSource() {
                 name = a.text()
                 setUrlWithoutDomain(a.absUrl("href"))
 
-                val date = element.selectFirst("span:has(i.glyphicon-time)")?.text()
-                    ?: element.selectFirst(".chapter-preview-meta > span")?.text()
-
-                date_upload = dateFormat.tryParseDate(date)
+                val date = element.selectFirst(".ch-date")?.text()
+                date_upload = dateFormat.tryParseDate(date?.removePrefix("🕒 "))
             }
         }
 
@@ -127,5 +140,8 @@ abstract class Submanhwa : KeiSource() {
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
         else -> attr("abs:src")
+    }
+    companion object {
+        private val ALT_DELIMITER = Regex("""[|/•,;]""")
     }
 }

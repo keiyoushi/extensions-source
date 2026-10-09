@@ -361,7 +361,7 @@ class ChapterResponse(
 
     @Serializable
     class Pages(
-        val baseUrl: String,
+        val baseUrl: String = "",
         val items: List<PageDto>,
     )
 

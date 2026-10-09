@@ -128,9 +128,10 @@ abstract class ShadowManga : KeiSource() {
             return MangasPage(mangas, hasNextPage)
         }
 
+        val includeAdult = filters.firstInstanceOrNull<AdultContentFilter>()?.state ?: false
         val url = "$baseUrl/api/series-locales/search-candidates".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
-            .addQueryParameter("includeAdult", "false")
+            .addQueryParameter("includeAdult", includeAdult.toString())
             .addQueryParameter("showSinPortada", "false")
             .addQueryParameter("take", MAX_RESULTS.toString())
 
@@ -238,9 +239,15 @@ abstract class ShadowManga : KeiSource() {
             )
         } else {
             if (tags.isEmpty()) {
-                FilterList(Filter.Header("Presione 'Reiniciar' para intentar cargar los filtros."))
+                FilterList(
+                    AdultContentFilter(),
+                    Filter.Header("Presione 'Reiniciar' para intentar cargar los filtros."),
+                )
             } else {
-                FilterList(GenreFilter(tags.sorted()))
+                FilterList(
+                    AdultContentFilter(),
+                    GenreFilter(tags.sorted()),
+                )
             }
         }
     }
