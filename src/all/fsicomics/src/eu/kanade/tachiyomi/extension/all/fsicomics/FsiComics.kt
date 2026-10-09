@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.fsicomics
 
+import android.util.LruCache
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -20,7 +21,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.jsoup.nodes.Document
 import kotlin.time.Instant
 
 @Source
@@ -40,6 +40,8 @@ abstract class FsiComics : KeiSource() {
         "en" -> 318
         else -> 0
     }
+
+    private val tagIdCache = LruCache<String, String>(20)
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
@@ -88,40 +90,26 @@ abstract class FsiComics : KeiSource() {
 
     // ============================== Search ==============================
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = getMangasByUrl(url, 1).mangas.firstOrNull()
-
-    override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
-        if (url.host != baseUrl.toHttpUrl().host) return MangasPage(emptyList(), false)
-
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments.filter { it.isNotEmpty() }
-        if (segments.isEmpty()) return MangasPage(emptyList(), false)
-
-        if (segments.size > 1 || segments[0] == "tag" || segments[0] == "search") {
-            val paginatedUrl = url.newBuilder().apply {
-                val pageIndex = url.pathSegments.indexOf("page")
-                if (pageIndex != -1) {
-                    setPathSegment(pageIndex + 1, page.toString())
-                } else {
-                    addPathSegment("page")
-                    addPathSegment(page.toString())
-                }
-            }.build()
-            return parseCards(client.get(paginatedUrl).asJsoup())
-        }
+        if (segments.size != 1) return null
 
         val document = client.get(url).asJsoup()
-        val manga = SManga.create().apply {
+        return SManga.create().apply {
             this.url = url.encodedPath
             title = document.selectFirst("h1.s-title")?.text() ?: throw Exception("Title is mandatory")
             thumbnail_url = document.selectFirst("meta[property=\"og:image\"]")?.attr("content")
         }
-        return MangasPage(listOf(manga), false)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val genre = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart()?.takeIf { it.isNotEmpty() }
         val tagQuery = filters.firstInstanceOrNull<TagFilter>()?.state?.takeIf { it.isNotBlank() }
-        val tag = tagQuery?.let { runCatching { resolveTagId(it) }.getOrNull() }
+        val tag = tagQuery?.let {
+            val key = it.trim().lowercase()
+            tagIdCache[key] ?: runCatching { resolveTagId(it) }.getOrNull()?.also { id -> tagIdCache.put(key, id) }
+        }
         if (tagQuery != null && tag == null) return MangasPage(emptyList(), false)
         val sort = filters.firstInstanceOrNull<SortFilter>()?.state
         val sorted = query.isNotEmpty() || (sort?.index ?: 0) != 0 || sort?.ascending == true
@@ -154,19 +142,6 @@ abstract class FsiComics : KeiSource() {
         ).parseAs<List<WPTagDto>>()
         return (tags.firstOrNull { it.name.lowercase() == norm || it.slug == norm } ?: tags.firstOrNull())
             ?.id?.toString()
-    }
-
-    private fun parseCards(document: Document): MangasPage {
-        val mangas = document.select(".p-wrap").mapNotNull { element ->
-            val link = element.selectFirst(".entry-title a") ?: return@mapNotNull null
-            val title = link.text().ifBlank { return@mapNotNull null }
-            SManga.create().apply {
-                this.title = title
-                setUrlWithoutDomain(link.attr("abs:href"))
-                thumbnail_url = element.selectFirst(".p-featured img")?.attr("abs:src")
-            }
-        }
-        return MangasPage(mangas, document.selectFirst("link[rel=next]") != null)
     }
 
     // ============================== Details ==============================
