@@ -43,9 +43,9 @@ abstract class ScanManga :
     KeiSource(),
     ConfigurableSource {
 
-    private val domain = baseUrl.toHttpUrl().topPrivateDomain()!!
-    private val baseImageUrl = "https://static.$domain/img/manga"
-    private val baseSearchUrl = "https://bqj.$domain/search/quick.json"
+    private val domain get() = baseUrl.toHttpUrl().topPrivateDomain()!!
+    private val baseImageUrl get() = "https://static.$domain/img/manga"
+    private val baseSearchUrl get() = "https://bqj.$domain/search/quick.json"
 
     private val preferences by getPreferencesLazy()
 
@@ -77,14 +77,13 @@ abstract class ScanManga :
 
     // Browse/search pages get a Cloudflare 403 with a browser-like `accept`, but the reader
     // (chapter page, lel API, images) answers 503 without it.
-    private val readerHeaders by lazy {
-        headers.newBuilder()
+    private val readerHeaders: Headers
+        get() = headersBuilder()
             .add(
                 "accept",
                 "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
             )
             .build()
-    }
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -410,7 +409,8 @@ abstract class ScanManga :
 
     companion object {
         private const val PACKED_SCRIPT_SELECTOR = "script:containsData(eval\\(function \\()"
-        private val HUNTER_OBFUSCATION_REGEX = Regex("""eval\s*\(\s*function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""")
+        private val HUNTER_OBFUSCATION_REGEX =
+            Regex("""eval\s*\(\s*function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""")
         private val SML_PARAM_REGEX = Regex("""sml\s*=\s*'([^']+)'""")
         private val SME_PARAM_REGEX = Regex("""sme\s*=\s*'([^']+)'""")
         private val CHAPTER_INFO_REGEX = Regex("""const idc = (\d+)""")
