@@ -6,14 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Paradise Scans"
-    versionCode = 1
+    versionCode = 23
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "keyoapp"
 
     source {
         lang = "en"
         baseUrl = "https://paradisescans.com"
         id = 5928300995303689257L
+    }
+
+    deeplink {
+        path("/series/..*")
     }
 }

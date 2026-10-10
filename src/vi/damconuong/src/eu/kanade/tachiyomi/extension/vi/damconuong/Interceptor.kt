@@ -251,7 +251,7 @@ object DecoderScraper {
         "(?:function\\s+[a-zA-Z0-9_$]+\\(\\)\\s*\\{\\s*(?:const|var|let)\\s+[a-zA-Z0-9_$]+=\\s*(\\[[^\\]]+\\])|function \\w+\\(\\)\\{let W=(\\[.*?\\]);return)",
         RegexOption.DOT_MATCHES_ALL,
     )
-    private val PAIR_RE = Regex("(?:_0x[a-f0-9]+|\\b[a-zA-Z0-9_$]+)\\s*\\(\\s*(0x[0-9a-fA-F]+|\\d+)\\s*,\\s*['\"]([^'\"]+)['\"]\\s*\\)|\\w+\\((\\d+),\\s*\"([^\"]*)\"\\)")
+    private val PAIR_RE = Regex("(?:_0x[a-f0-9]+|\\b[a-zA-Z0-9_$]+)\\s*\\(\\s*(0x[0-9a-fA-F]+|\n\\d+)\\s*,\\s*['\"]([^'\"]+)['\"]\\s*\\)|\\w+\\((\\d+),\\s*\"([^\"]*)\"\\)")
     private val INDEX_OFFSET_RE = Regex("(?:_0x[a-f0-9]+|[a-zA-Z0-9_$]+)\\s*=\\s*(?:_0x[a-f0-9]+|[a-zA-Z0-9_$]+)\\s*-\\s*(0x[0-9a-fA-F]+|\\d+)|function \\w+\\(\\w+,\\w+\\)\\{\\w+-=(\\d+)")
     internal val CHUNK_RE = Regex("(?:src|href)=\"(/_next/static/chunks/[^\"]+\\.js)")
     private val NESTED_CHUNK_RE = Regex("static/chunks/([A-Za-z0-9_\\-\\.]+\\.js)")

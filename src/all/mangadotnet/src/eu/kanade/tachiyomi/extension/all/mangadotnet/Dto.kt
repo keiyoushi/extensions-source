@@ -123,7 +123,7 @@ class MangaData(
 
 @Serializable
 class RelatedData(
-    val suggestions: List<BrowseManga> = emptyList(),
+    val suggestions: List<BrowseManga>? = null,
     val relationsData: RelationsData? = null,
 ) {
     @Serializable

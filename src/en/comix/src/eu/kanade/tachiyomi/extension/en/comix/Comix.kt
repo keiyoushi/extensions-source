@@ -44,6 +44,7 @@ import okhttp3.Response
 import okio.Buffer
 import org.json.JSONObject
 import org.jsoup.nodes.Document
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -69,8 +70,10 @@ abstract class Comix :
     }
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(Descrambler.interceptor)
+        .addInterceptor(::altHostFallback)
         .addInterceptor { chain ->
             val request = chain.request()
+            if (request.url.fragment?.startsWith(ALT_HOSTS_FRAGMENT) == true) return@addInterceptor chain.proceed(request)
 
             var response = proceedWithRetry(chain, request)
             if (response.isSuccessful) return@addInterceptor response
@@ -90,6 +93,44 @@ abstract class Comix :
             response
         }
         .rateLimit(5)
+
+    // Retry failed images on alt hosts, like the site's reader
+    private fun altHostFallback(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val altHosts = request.url.altHosts()
+        if (altHosts.isEmpty()) return chain.proceed(request)
+
+        val urls = listOf(request.url) + altHosts.mapIndexed { i, host ->
+            request.url.newBuilder()
+                .host(host)
+                .setQueryParameter("r", (i + 1).toString())
+                .build()
+        }
+        var failed: Response? = null
+        var error: IOException? = null
+        for (url in urls) {
+            if (failed != null) {
+                failed.close()
+                failed = null
+                runCatching { Thread.sleep(2000) }
+            }
+            try {
+                val response = chain.proceed(request.newBuilder().url(url).build())
+                if (response.isSuccessful) return response
+                failed = response
+            } catch (e: IOException) {
+                if (chain.call().isCanceled()) throw e
+                error = e
+            }
+        }
+        return failed ?: throw error!!
+    }
+
+    private fun HttpUrl.altHosts(): List<String> = fragment
+        ?.takeIf { it.startsWith(ALT_HOSTS_FRAGMENT) }
+        ?.removePrefix(ALT_HOSTS_FRAGMENT)
+        ?.split(',')
+        .orEmpty()
 
     private fun proceedWithRetry(chain: Interceptor.Chain, request: Request): Response {
         var response = chain.proceed(request)
@@ -532,20 +573,24 @@ abstract class Comix :
                                 const mainResponse = await fetch(mainScriptUrl);
                                 if (!mainResponse.ok) throw new Error('Could not load main bundle');
                                 const mainJavaScript = await mainResponse.text();
-                                const environmentFile = mainJavaScript.match(
-                                    /from\s*["']\.\/(env-[^"']+\.js)["']/
-                                )?.[1];
-                                if (!environmentFile) throw new Error('Could not find environment bundle');
+                                const bundleFiles = Array.from(
+                                    mainJavaScript.matchAll(/from\s*["']\.\/([^"']+\.js)["']/g),
+                                    match => match[1]
+                                );
 
                                 const importBundle = new Function('url', 'return import(url)');
-                                const environment = await importBundle(
-                                    new URL(environmentFile, mainScriptUrl).href
-                                );
-                                const mangaApi = Object.values(environment).find(value =>
-                                    value &&
-                                    typeof value === 'object' &&
-                                    typeof value.chapters === 'function'
-                                );
+                                let mangaApi = null;
+                                for (const bundleFile of bundleFiles) {
+                                    const bundle = await importBundle(
+                                        new URL(bundleFile, mainScriptUrl).href
+                                    );
+                                    mangaApi = Object.values(bundle).find(value =>
+                                        value &&
+                                        typeof value === 'object' &&
+                                        typeof value.chapters === 'function'
+                                    );
+                                    if (mangaApi) break;
+                                }
                                 if (!mangaApi) throw new Error('Could not find manga API');
 
                                 const items = [];
@@ -670,12 +715,11 @@ abstract class Comix :
     // Comix image domains block any image requests with Referer/Origin
     override fun imageRequest(page: Page): Request {
         val imageUrl = page.imageUrl ?: return super.imageRequest(page)
-        val urlWithoutFragment = imageUrl.substringBefore('#')
         val requestHeaders = headersBuilder()
             .removeAll("Origin")
             .removeAll("Referer")
             .build()
-        return GET(urlWithoutFragment, requestHeaders)
+        return GET(imageUrl, requestHeaders)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -733,20 +777,16 @@ abstract class Comix :
         val base = pages.baseUrl.trimEnd('/')
 
         return pages.items.mapIndexed { index, img ->
-            val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
+            val full = (if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}").toHttpUrl()
             // V3 pages need the query flag so the server returns grid-scramble headers.
-            // Legacy byte-XOR pages: add #scrambled so imageRequest keeps Origin for x-enc-seed
-            val isV3 = img.s == 1 || full.contains("?v3")
-            val isLegacyScramble = !isV3 && (index + 1) % 4 == 0
-            val url = when {
-                isV3 -> full.toHttpUrl().newBuilder().apply {
-                    if (!full.toHttpUrl().queryParameterNames.contains("v3")) {
-                        addQueryParameter("v3", null)
-                    }
-                }.build().toString()
-                isLegacyScramble -> "$full#scrambled"
-                else -> full
-            }
+            val isV3 = img.s == 1 || "v3" in full.queryParameterNames
+            val url = full.newBuilder().apply {
+                if (isV3 && "v3" !in full.queryParameterNames) {
+                    addQueryParameter("v3", null)
+                }
+                val altHosts = pages.altHosts(full.host, index)
+                if (altHosts.isNotEmpty()) fragment(ALT_HOSTS_FRAGMENT + altHosts.joinToString(","))
+            }.build().toString()
             Page(index, imageUrl = url)
         }
     }
@@ -1097,5 +1137,6 @@ abstract class Comix :
         private const val TAG_ID_CACHE_SIZE = 50
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
+        private const val ALT_HOSTS_FRAGMENT = "alt="
     }
 }

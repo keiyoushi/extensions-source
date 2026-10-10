@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.atsumaru
 
+import androidx.preference.EditTextPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -298,7 +299,27 @@ abstract class Atsumaru :
 
         val updatedChapters = if (fetchChapters && chaptersDto != null) {
             val scanlatorMap = details?.scanlators?.associate { it.id to it.name }.orEmpty()
-            chaptersDto.chapters.map {
+            val blacklist = scanlatorBlacklist
+            val filteredChapters = if (blacklist.isEmpty()) {
+                chaptersDto.chapters
+            } else {
+                chaptersDto.chapters.filter { chapter ->
+                    val name = chapter.scanlationMangaId?.let(scanlatorMap::get)
+                    name == null || name.trim().lowercase() !in blacklist
+                }
+            }
+            val chapterDtos = if (deduplicateChapters) {
+                val scores = details?.scanlators?.associate { it.id to it.score }.orEmpty()
+                filteredChapters.groupBy { it.number }.map { (_, uploads) ->
+                    uploads.maxWith(
+                        compareBy<ChapterDto> { scores[it.scanlationMangaId] ?: Int.MIN_VALUE }
+                            .thenBy { it.dateUploadMillis() },
+                    )
+                }
+            } else {
+                filteredChapters
+            }
+            chapterDtos.map {
                 it.toSChapter(manga.url, it.scanlationMangaId?.let { id -> scanlatorMap[id] })
             }.sortedWith(
                 compareByDescending<SChapter> { it.chapter_number }
@@ -364,6 +385,16 @@ abstract class Atsumaru :
         return "&excludedTags=${ids.joinToString(",")}"
     }
 
+    private val deduplicateChapters: Boolean
+        get() = prefs.getBoolean(PREF_DEDUPLICATE_CHAPTERS, false)
+
+    private val scanlatorBlacklist: Set<String>
+        get() = prefs.getString(PREF_SCANLATOR_BLACKLIST, "").orEmpty()
+            .split(",")
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_18
@@ -406,11 +437,28 @@ abstract class Atsumaru :
                 true
             }
         }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_DEDUPLICATE_CHAPTERS
+            title = "Deduplicate chapters"
+            summary = "Show one upload per chapter, from the highest rated group that has it"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = PREF_SCANLATOR_BLACKLIST
+            title = "Excluded scanlators"
+            summary = "Comma-separated group names to exclude from the chapter list"
+            dialogTitle = "Excluded scanlators"
+            setDefaultValue("")
+        }.let(screen::addPreference)
     }
 
     companion object {
         private const val PREF_SHOW_18 = "pref_18_mode"
         private const val PREF_EXCLUDE_GENRES = "pref_exclude_genres"
+        private const val PREF_DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
+        private const val PREF_SCANLATOR_BLACKLIST = "pref_scanlator_blacklist"
         private const val BROWSE_LIMIT = 40
 
         private val PROTOCOL_REGEX = Regex("^https?:?//")

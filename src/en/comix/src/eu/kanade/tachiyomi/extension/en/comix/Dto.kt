@@ -363,7 +363,19 @@ class ChapterResponse(
     class Pages(
         val baseUrl: String = "",
         val items: List<PageDto>,
-    )
+        private val alt: List<String>? = null,
+        private val node: String? = null,
+    ) {
+        // Alt hosts in the site reader's retry order
+        fun altHosts(host: String, index: Int): List<String> {
+            if (alt.isNullOrEmpty()) return emptyList()
+            val label = host.substringBefore('.')
+            val start = index % alt.size
+            val domains = alt.drop(start) + alt.take(start)
+            val hosts = domains.map { "$label.$it" } + domains.map { "${node ?: label}.$it" }
+            return List(6) { hosts[it % hosts.size] }
+        }
+    }
 
     @Serializable
     class PageDto(
