@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.keyoapp
 
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,14 +7,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.get
-import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -25,27 +19,8 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
-abstract class KeyoappV2 :
-    KeiSource(),
-    ConfigurableSource {
-
-    private val preferences = getPreferences()
-
-    private val showLockedChapters: Boolean
-        get() = preferences.getBoolean(SHOW_LOCKED_CHAPTERS_PREF, false)
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_LOCKED_CHAPTERS_PREF
-            title = "Show locked chapters"
-            summaryOn = "Locked chapters will be shown in the chapter list"
-            summaryOff = "Locked chapters will be hidden from the chapter list"
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-    }
+abstract class KeyoappV2 : Keyoapp() {
 
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int) = fetchMangaListPage(page, sort = "popular")
@@ -169,12 +144,7 @@ abstract class KeyoappV2 :
         genre = document.select("a[href*=\"?browse&tag\"]").eachText().joinToString().ifBlank { null }
         author = metaValue(document, "Author")
         artist = metaValue(document, "Artist")
-        status = when (document.selectFirst("div.text-xs:containsOwn(Status) + div span.text-sm")?.text()?.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            "hiatus" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+        status = document.selectFirst("div.text-xs:containsOwn(Status) + div span.text-sm").parseStatus()
     }
 
     private fun metaValue(document: Document, label: String): String? = document.selectFirst("span.text-xs:containsOwn($label)")
@@ -192,14 +162,14 @@ abstract class KeyoappV2 :
         val rowsDocument = data.rowsHtml.asJsoup(baseUrl)
 
         return rowsDocument.select("a.chapter-row[href]")
-            .filter { showLockedChapters || it.attr("data-ch-locked") != "1" }
+            .filter { showPaidChapters || it.attr("data-ch-locked") != "1" }
             .map { element ->
                 val locked = element.attr("data-ch-locked") == "1"
                 val label = element.attr("data-ch-label")
                 SChapter.create().apply {
                     setUrlWithoutDomain(element.absUrl("href"))
                     name = if (locked) "🔒 $label" else label
-                    date_upload = DATE_FORMAT.tryParseDate(element.selectFirst(".ch-date-row span:last-child")?.textOrNull())
+                    date_upload = element.selectFirst(".ch-date-row span:last-child")?.text()?.parseDate() ?: 0L
                 }
             }
     }
@@ -210,8 +180,6 @@ abstract class KeyoappV2 :
         .mapIndexed { i, element -> Page(i, imageUrl = element.absUrl("src")) }
 
     // ========================= Filters =========================
-    override val supportsFilterFetching = true
-
     override suspend fun fetchFilterData(): JsonElement {
         val url = baseUrl.toHttpUrl().newBuilder().addQueryParameter("browse", "1").build()
         val document = client.get(url).asJsoup()
@@ -231,10 +199,5 @@ abstract class KeyoappV2 :
                 if (genres.isNotEmpty()) add(GenreTagFilter(genres))
             },
         )
-    }
-
-    companion object {
-        private const val SHOW_LOCKED_CHAPTERS_PREF = "pref_show_locked_chap"
-        private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
     }
 }
