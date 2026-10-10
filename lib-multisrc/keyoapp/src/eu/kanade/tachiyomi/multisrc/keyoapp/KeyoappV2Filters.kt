@@ -1,8 +1,8 @@
-package eu.kanade.tachiyomi.multisrc.keyoappv2
+package eu.kanade.tachiyomi.multisrc.keyoapp
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class StatusFilter :
+class StatusSelectFilter :
     Filter.Select<String>(
         "Status",
         ENTRIES.map { it.first }.toTypedArray(),
@@ -38,7 +38,7 @@ class SortFilter :
     }
 }
 
-class TypeFilter :
+class TypeSelectFilter :
     Filter.Select<String>(
         "Type",
         ENTRIES.map { it.first }.toTypedArray(),
@@ -59,7 +59,7 @@ class TypeFilter :
 
 class GenreCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
-class GenreFilter(genres: List<String>) :
+class GenreTagFilter(genres: List<String>) :
     Filter.Group<GenreCheckBox>(
         "Genres",
         genres.map { GenreCheckBox(it.replaceFirstChar(Char::uppercase), it) },

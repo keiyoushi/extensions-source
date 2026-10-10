@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.keyoappv2
+package eu.kanade.tachiyomi.multisrc.keyoapp
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -86,10 +86,10 @@ abstract class KeyoappV2 :
 
             filters.forEach { filter ->
                 when (filter) {
-                    is TypeFilter -> if (filter.state > 0) addQueryParameter("type", filter.selected)
-                    is StatusFilter -> if (filter.state > 0) addQueryParameter("status", filter.selected)
+                    is TypeSelectFilter -> if (filter.state > 0) addQueryParameter("type", filter.selected)
+                    is StatusSelectFilter -> if (filter.state > 0) addQueryParameter("status", filter.selected)
                     is SortFilter -> if (filter.state != 0) addQueryParameter("sort", filter.selected)
-                    is GenreFilter ->
+                    is GenreTagFilter ->
                         filter.state
                             .filterIsInstance<GenreCheckBox>()
                             .filter { it.state }
@@ -225,10 +225,10 @@ abstract class KeyoappV2 :
 
         return FilterList(
             buildList {
-                add(TypeFilter())
-                add(StatusFilter())
+                add(TypeSelectFilter())
+                add(StatusSelectFilter())
                 add(SortFilter())
-                if (genres.isNotEmpty()) add(GenreFilter(genres))
+                if (genres.isNotEmpty()) add(GenreTagFilter(genres))
             },
         )
     }

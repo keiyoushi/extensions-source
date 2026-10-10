@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.keyoappv2
+package eu.kanade.tachiyomi.multisrc.keyoapp
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
