@@ -18,10 +18,13 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 
@@ -30,22 +33,13 @@ abstract class TempleScan :
     KeiSource(),
     ConfigurableSource {
 
-    private val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy {
+        edit().remove("pref_rsc_keys").apply()
+    }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1)
-    }
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        // Cloudflare rejects the app's default User-Agent (both for pages and for the image CDN),
-        // so a full browser fingerprint is required.
-        set("User-Agent", USER_AGENT)
-        set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-        set("Accept-Language", "en-US,en;q=0.9")
-        set("Sec-Fetch-Dest", "document")
-        set("Sec-Fetch-Mode", "navigate")
-        set("Sec-Fetch-Site", "none")
-        set("Upgrade-Insecure-Requests", "1")
+        addInterceptor(ChallengeInterceptor())
     }
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
@@ -120,7 +114,7 @@ abstract class TempleScan :
         val document = client.get("$baseUrl/comic/$slug").asJsoup()
 
         val series = document.jsonLd<ComicSeriesLd> { it.isSeries }
-        val seriesData = document.mappedPayload(SERIES_FIELDS)?.parseAs<SeriesData>()
+        val seriesData = document.mappedPayload<SeriesData>(SERIES_FIELDS)
         // The status only lives in the browse catalog; the detail page renders it without a stable hook.
         val catalogEntry = fetchCatalog().firstOrNull { it.slug == slug }
 
@@ -175,7 +169,7 @@ abstract class TempleScan :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(baseUrl + chapter.url).asJsoup().mappedPayload(listOf("images"))?.parseAs<PagesList>()
+        val data = client.get(baseUrl + chapter.url).asJsoup().mappedPayload<PagesList>(PAGE_FIELDS)
             ?: return emptyList()
         return data.images.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
@@ -197,46 +191,59 @@ abstract class TempleScan :
 
     private suspend fun fetchCatalog(): List<BrowseSeries> = client.get("$baseUrl/comics")
         .asJsoup()
-        .mappedPayload(CATALOG_FIELDS, isList = true)
-        ?.parseAs<List<BrowseSeries>>()
+        .mappedPayload<List<BrowseSeries>>(CATALOG_FIELDS, isList = true)
         .orEmpty()
 
     /**
      * Reads the RSC payload node holding [fields] and decodes it with the site's current field keys.
      *
-     * The keys come from the table cached by [refreshRscKeys]. If they no longer match this payload
-     * the site has renamed its keys, so the table is re-read from the client bundle and the payload
-     * is decoded once more.
+     * The keys come from the table cached by [refreshRscKeys]. If they do not match this payload,
+     * or match but decode wrongly because the site swapped keys between fields, the table is re-read
+     * from the client bundle once.
      */
-    private suspend fun Document.mappedPayload(fields: List<String>, isList: Boolean = false): JsonElement? {
-        val keys = cachedRscKeys() ?: refreshRscKeys(this)
-        extractNextJs<JsonElement>(RscKeys.payloadPredicate(fields, keys, isList))
-            ?.let { return RscKeys.remap(it, keys) }
-
-        val refreshed = refreshRscKeys(this)
-        return extractNextJs<JsonElement>(RscKeys.payloadPredicate(fields, refreshed, isList))
-            ?.let { RscKeys.remap(it, refreshed) }
-    }
-
-    private fun cachedRscKeys(): Map<String, String>? = preferences.getString(PREF_RSC_KEYS, null)
-        ?.let(RscKeys::decode)
-        ?.takeIf { it.isNotEmpty() }
-
-    /** Re-reads the field rename table from the site's client bundle and caches it for later runs. */
-    private suspend fun refreshRscKeys(document: Document): Map<String, String> {
-        val chunks = document.select("script[src]")
-            .mapNotNull { element -> element.absUrl("src").takeIf { CHUNK_PATH in it } }
-            .distinct()
-
-        for (chunk in chunks) {
-            val source = client.get(chunk, ensureSuccess = false).use { it.body.string() }
-            val keys = RscKeys.findTable(source) ?: continue
-
-            preferences.edit().putString(PREF_RSC_KEYS, RscKeys.encode(keys)).apply()
-            return keys
+    private suspend inline fun <reified T> Document.mappedPayload(fields: List<String>, isList: Boolean = false): T? {
+        cachedRscKeys()?.let { keys ->
+            try {
+                decodePayload<T>(fields, keys, isList)?.let { return it }
+            } catch (_: SerializationException) {
+            }
         }
 
-        error("Could not determine the site's RSC field-key table")
+        return decodePayload<T>(fields, refreshRscKeys(this), isList)
+    }
+
+    private inline fun <reified T> Document.decodePayload(fields: List<String>, keys: Map<String, String>, isList: Boolean): T? = extractNextJs<JsonElement>(RscKeys.payloadPredicate(fields, keys, isList))
+        ?.let { RscKeys.remap(it, keys).parseAs<T>() }
+
+    private fun cachedRscKeys(): Map<String, String>? = preferences.getString(PREF_RSC_KEYS, null)
+        ?.parseAs<Map<String, String>>()
+        ?.takeIf { it.isNotEmpty() }
+
+    /** Decodes this page's payload keys with the site's client bundle and caches them for later runs. */
+    private suspend fun refreshRscKeys(document: Document): Map<String, String> {
+        val cached = cachedRscKeys().orEmpty()
+        // Known keys let the decoder be found on pages that rename nothing, such as locked chapters.
+        val payloadKeys = buildSet {
+            addAll(cached.values)
+            document.extractNextJs<JsonElement> { element ->
+                if (element is JsonObject) addAll(element.keys)
+                false
+            }
+        }
+        val host = baseUrl.toHttpUrl().host
+        val chunks = document.select("script[src]")
+            .mapNotNull { element -> element.absUrl("src").toHttpUrlOrNull() }
+            .filter { it.host == host && it.encodedPath.startsWith(CHUNK_PATH) }
+            .map { it.toString() }
+            .distinct()
+
+        val decoded = RscKeys.decodeTable(baseUrl, chunks, payloadKeys, RSC_FIELDS)
+            ?: error("Could not determine the site's RSC field-key table")
+        // A key the site has given to another field must not keep its old name.
+        val keys = cached.filterValues { it !in decoded.values } + decoded
+
+        preferences.edit().putString(PREF_RSC_KEYS, keys.toJsonString()).apply()
+        return keys
     }
 
     private inline fun <reified T> Document.jsonLd(predicate: (T) -> Boolean): T? = select("script[type=application/ld+json]")
@@ -249,9 +256,6 @@ abstract class TempleScan :
     }?.takeIf { it.isNotBlank() }
 
     companion object {
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-
         private const val CHUNK_PATH = "/_next/static/chunks/"
 
         /** Identifies the browse catalog: the two fields every series entry always carries. */
@@ -260,7 +264,12 @@ abstract class TempleScan :
         /** Identifies a series' chapter payload. Both are renamed by the site, unlike `seriesData`. */
         private val SERIES_FIELDS = listOf("series_slug", "Season")
 
+        private val PAGE_FIELDS = listOf("images")
+
+        /** Every field looked up through the table; identifies the site's decoder. */
+        private val RSC_FIELDS = (CATALOG_FIELDS + SERIES_FIELDS + PAGE_FIELDS).distinct()
+
         private const val PREF_HIDE_LOCKED_CHAPTERS = "pref_hide_locked_chapters"
-        private const val PREF_RSC_KEYS = "pref_rsc_keys"
+        private const val PREF_RSC_KEYS = "pref_rsc_key_table"
     }
 }
