@@ -6,19 +6,22 @@ plugins {
 
 keiyoushi {
     name = "Lura Toon"
-    versionCode = 59
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"
         baseUrl = "https://luratoons.net"
         versionId = 2
     }
+
+    deeplink {
+        path("/..*")
+    }
 }
 
 dependencies {
-
-    implementation(project(":lib:randomua"))
-    implementation(project(":lib:zipinterceptor"))
+    compileOnlyApi("ca.mpreg:imagedecoder:16")
+    compileOnlyApi("com.github.tachiyomiorg:image-decoder:e08e9be535")
 }
