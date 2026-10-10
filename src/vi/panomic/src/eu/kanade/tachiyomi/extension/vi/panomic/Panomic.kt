@@ -1,12 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.panomic
 
-import android.app.Activity
-import android.app.AlertDialog
-import android.app.Application
-import android.os.Bundle
-import android.text.InputType
-import android.widget.EditText
-import android.widget.FrameLayout
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -19,16 +12,13 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.ui.askPassword
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -40,41 +30,12 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.lang.ref.WeakReference
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class Panomic : KeiSource() {
-    private var currentActivity: WeakReference<Activity>? = null
-
-    init {
-        try {
-            applicationContext.registerActivityLifecycleCallbacks(
-                object : Application.ActivityLifecycleCallbacks {
-                    override fun onActivityResumed(a: Activity) {
-                        currentActivity = WeakReference(a)
-                    }
-
-                    override fun onActivityPaused(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-
-                    override fun onActivityDestroyed(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-
-                    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-                    override fun onActivityStarted(activity: Activity) = Unit
-                    override fun onActivityStopped(activity: Activity) = Unit
-                    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-                },
-            )
-        } catch (_: Throwable) {
-        }
-    }
 
     private val preferences by getPreferencesLazy()
 
@@ -294,17 +255,8 @@ abstract class Panomic : KeiSource() {
         return trailingPart.ifEmpty { rawName.trim() }
     }
 
-    private fun parseChapterDate(date: String): Long = runCatching {
-        LocalDate.parse(date, dateFormatShort)
-            .atStartOfDay(dateZone)
-            .toInstant()
-            .toEpochMilli()
-    }.recoverCatching {
-        LocalDate.parse(date, dateFormatLong)
-            .atStartOfDay(dateZone)
-            .toInstant()
-            .toEpochMilli()
-    }.getOrDefault(0L)
+    private fun parseChapterDate(date: String): Long = dateFormatShort.tryParseDate(date, dateZone).takeIf { it != 0L }
+        ?: dateFormatLong.tryParseDate(date, dateZone)
 
     // =============================== Pages ================================
 
@@ -322,7 +274,16 @@ abstract class Panomic : KeiSource() {
         if ("entered_secret_code" in html) {
             val document = Jsoup.parse(html, chapterUrl)
             val hint = document.selectFirst(".gate-box p")?.text()
-            val password = promptForPassword(chapter.name, hint)
+            val message = if (!hint.isNullOrBlank()) {
+                "Chương này yêu cầu mã bí mật\n\n$hint"
+            } else {
+                "Chương này yêu cầu mã bí mật"
+            }
+            val password = askPassword(
+                title = chapter.name,
+                message = message,
+                hint = "Mã bí mật",
+            ) ?: throw Exception("Đã hủy nhập mã bí mật")
 
             val lockForm = document.selectFirst("form:has(input[name=entered_secret_code])")
             val postAction = lockForm?.absUrl("action")?.ifEmpty { chapterUrl } ?: chapterUrl
@@ -361,65 +322,6 @@ abstract class Panomic : KeiSource() {
         val imageUrls = ImageDecryptor.extractImageUrls(html, chapterUrl)
         return imageUrls.distinct().mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
-        }
-    }
-
-    private suspend fun promptForPassword(chapterTitle: String, hintText: String? = null): String {
-        val activity = currentActivity?.get()
-            ?: throw Exception("Mở chương trong WebView để nhập mã bí mật")
-
-        val deferred = CompletableDeferred<String>()
-        var dialog: AlertDialog? = null
-
-        try {
-            withContext(Dispatchers.Main.immediate) {
-                val input = EditText(activity).apply {
-                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                    hint = "Mã bí mật"
-                }
-                val container = FrameLayout(activity).apply {
-                    val pad = (16 * resources.displayMetrics.density).toInt()
-                    setPadding(pad, pad / 2, pad, 0)
-                    addView(input)
-                }
-
-                val message = if (!hintText.isNullOrBlank()) {
-                    "Chương này yêu cầu mã bí mật\n\n$hintText"
-                } else {
-                    "Chương này yêu cầu mã bí mật"
-                }
-
-                dialog = AlertDialog.Builder(activity)
-                    .setTitle(chapterTitle)
-                    .setMessage(message)
-                    .setView(container)
-                    .setPositiveButton("Mở khóa") { _, _ ->
-                        val text = input.text.toString().trim()
-                        if (text.isNotBlank()) {
-                            deferred.complete(text)
-                        } else {
-                            deferred.completeExceptionally(Exception("Mã bí mật không được để trống"))
-                        }
-                    }
-                    .setNegativeButton("Hủy") { _, _ ->
-                        deferred.completeExceptionally(Exception("Đã hủy nhập mã bí mật"))
-                    }
-                    .setOnCancelListener {
-                        deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                    }
-                    .setOnDismissListener {
-                        if (!deferred.isCompleted) {
-                            deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                        }
-                    }
-                    .show()
-            }
-
-            return deferred.await()
-        } finally {
-            withContext(NonCancellable + Dispatchers.Main.immediate) {
-                dialog?.takeIf { it.isShowing }?.dismiss()
-            }
         }
     }
 
