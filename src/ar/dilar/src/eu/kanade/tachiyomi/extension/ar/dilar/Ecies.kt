@@ -15,7 +15,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-// ECIES response decryption, protocol versions 1-14.
+// ECIES response decryption, protocol versions 1-15.
 internal class Ecies {
     private val ecKeyPair: KeyPair = KeyPairGenerator.getInstance("EC").apply {
         initialize(ECGenParameterSpec(CURVE_NAME))
@@ -140,6 +140,16 @@ internal class Ecies {
                 gcmsiv = true,
             )
 
+            15 -> CipherSpec(
+                ivKeyedSalt(serverPubRaw, iv),
+                "dilar.response.ecies.v15|${data.e}|${sha512(joinBytes(lengthPrefixed(iv), lengthPrefixed(serverPubRaw))).toBase64Url().take(22)}".toByteArray(),
+                hash = "HmacSHA512",
+                derivedNonce = true,
+                aad = aad("dilar.response.ecies.v15", data, serverPubRaw, iv, ct.size),
+                aessiv = true,
+                keyBytes = 64,
+            )
+
             else -> error("Unsupported encryption protocol version: ${data.v}")
         }
 
@@ -147,11 +157,11 @@ internal class Ecies {
             ikm = sharedSecret,
             salt = spec.salt,
             info = spec.info,
-            length = if (spec.derivedNonce) 44 else 32,
+            length = if (spec.derivedNonce) spec.keyBytes + 12 else 32,
             algorithm = spec.hash,
         )
-        val key = keyMaterial.copyOf(32)
-        val nonce = if (spec.derivedNonce) keyMaterial.copyOfRange(32, 44) else iv
+        val key = keyMaterial.copyOf(spec.keyBytes)
+        val nonce = if (spec.derivedNonce) keyMaterial.copyOfRange(spec.keyBytes, spec.keyBytes + 12) else iv
 
         if (spec.chacha) {
             return chacha20Poly1305Decrypt(key, nonce, ct, tag, spec.aad ?: ByteArray(0)).toString(Charsets.UTF_8)
@@ -159,6 +169,10 @@ internal class Ecies {
 
         if (spec.gcmsiv) {
             return AesGcmSiv.decrypt(key, nonce, ct + tag, spec.aad ?: ByteArray(0)).toString(Charsets.UTF_8)
+        }
+
+        if (spec.aessiv) {
+            return AesSiv.decrypt(key, tag + ct, spec.aad ?: ByteArray(0), nonce).toString(Charsets.UTF_8)
         }
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
@@ -213,6 +227,8 @@ internal class Ecies {
         val aad: ByteArray? = null,
         val chacha: Boolean = false,
         val gcmsiv: Boolean = false,
+        val aessiv: Boolean = false,
+        val keyBytes: Int = 32,
     )
 
     // Shared by v12 and v13; v12 truncates the result to 32 bytes.
@@ -226,6 +242,13 @@ internal class Ecies {
     private fun serverKeyedSalt(serverPubRaw: ByteArray, iv: ByteArray): ByteArray = hmac(
         key = serverPubRaw,
         data = joinBytes(lengthPrefixed(clientPubRaw), lengthPrefixed(iv)),
+        algorithm = "HmacSHA512",
+    )
+
+    // v15 keys the salt with the iv instead of public keys.
+    private fun ivKeyedSalt(serverPubRaw: ByteArray, iv: ByteArray): ByteArray = hmac(
+        key = iv,
+        data = joinBytes(lengthPrefixed(clientPubRaw), lengthPrefixed(serverPubRaw)),
         algorithm = "HmacSHA512",
     )
 
