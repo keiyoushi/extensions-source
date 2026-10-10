@@ -20,7 +20,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-abstract class KeyoappV2 : Keyoapp() {
+abstract class KeyoappV2 : KeyoappBase() {
 
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int) = fetchMangaListPage(page, sort = "popular")
