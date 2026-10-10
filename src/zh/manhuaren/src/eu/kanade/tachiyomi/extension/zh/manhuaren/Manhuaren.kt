@@ -1,44 +1,43 @@
 package eu.kanade.tachiyomi.extension.zh.manhuaren
 
-import android.content.SharedPreferences
 import android.os.Build
 import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.utils.getPreferences
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.Buffer
-import org.json.JSONArray
-import org.json.JSONObject
+import okio.ByteString.Companion.encodeUtf8
 import java.net.URLEncoder
 import java.security.KeyFactory
-import java.security.MessageDigest
 import java.security.spec.X509EncodedKeySpec
-import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Date
-import java.util.Locale
 import java.util.UUID
 import javax.crypto.Cipher
 import kotlin.random.Random
@@ -47,29 +46,32 @@ import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Manhuaren :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
 
     private val pageSize = 20
     private val baseHttpUrl = baseUrl.toHttpUrl()
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences by getPreferencesLazy()
+    private val timeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd+HH:mm:ss")
+    private val leadingZeros = "^0+".toRegex()
+    private val mangaIdRegex = Regex("""DM5_COMIC_MID\s*=\s*(\d+)""")
+    private val webHosts = setOf("www.manhuaren.com", "www.dm5.com", "m.dm5.com")
 
     private val gsnSalt = "4e0a48e1c0b54041bce9c8f0e036124d"
     private val encodedPublicKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmFCg289dTws27v8GtqIffkP4zgFR+MYIuUIeVO5AGiBV0rfpRh5gg7i8RrT12E9j6XwKoe3xJz1khDnPc65P5f7CJcNJ9A8bj7Al5K4jYGxz+4Q+n0YzSllXPit/Vz/iW5jFdlP6CTIgUVwvIoGEL2sS4cqqqSpCDKHSeiXh9CtMsktc6YyrSN+8mQbBvoSSew18r/vC07iQiaYkClcs7jIPq9tuilL//2uR9kWn5jsp8zHKVjmXuLtHDhM9lObZGCVJwdlN2KDKTh276u/pzQ1s5u8z/ARtK26N8e5w8mNlGcHcHfwyhjfEQurvrnkqYH37+12U3jGk5YNHGyOPcwIDAQAB"
-    private val imei: String by lazy { generateIMEI() }
-    private val lastUsedTime: String by lazy { generateLastUsedTime() }
+    private val imei by lazy { generateIMEI() }
+    private val lastUsedTime by lazy { generateLastUsedTime() }
 
     companion object {
+        private const val WEBSITE_URL = "https://www.manhuaren.com"
+        private const val PACKAGE_NAME = "com.ilike.cartoon"
         const val USER_ID_PREF = "userId"
         const val TOKEN_PREF = "token"
     }
 
-    override val client: OkHttpClient = network.client
-        .newBuilder()
-        .apply { interceptors().removeAll { it.javaClass.simpleName == "BrotliInterceptor" } }
-        .addInterceptor(ErrorResponseInterceptor(baseUrl, preferences))
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(ErrorResponseInterceptor(baseUrl, preferences))
+    }
 
     private fun randomString(length: Int, pool: String): String = (1..length)
         .map { Random.nextInt(0, pool.length).let { pool[it] } }
@@ -102,40 +104,15 @@ abstract class Manhuaren :
 
     private fun generateIMEI(): String = addLuhnCheckDigit(randomNumber(14))
 
-    // private fun generateSimSerialNumber(): String {
-    //     return addLuhnCheckDigit("891253${randomNumber(12)}")
-    // }
-
-    @Serializable
-    data class TokenResult(
-        val parameter: String,
-        val scheme: String,
-    )
-
-    @Serializable
-    data class TokenResponse(
-        val initDeviceKey: String,
-        val nickName: String,
-        val tokenResult: TokenResult,
-        val userId: Long,
-        val userName: String,
-    )
-
-    @Serializable
-    data class GetAnonyUserBody(
-        val response: TokenResponse,
-    )
-
-    private fun fetchToken(): String {
+    private suspend fun fetchToken(): String {
         var token = preferences.getString(TOKEN_PREF, "")!!
         var userId = preferences.getString(USER_ID_PREF, "")!!
         if (token.isEmpty() || userId.isEmpty()) {
-            val res = client.newCall(getAnonyUser()).execute()
-            val tokenResponse = Json.decodeFromString<GetAnonyUserBody>(res.body.string()).response
-            val tokenResult = tokenResponse.tokenResult
+            val response = getAnonyUser()
+                .parseAs<ManhuarenResponse<TokenResponse>>().response
 
-            token = "${tokenResult.scheme} ${tokenResult.parameter}"
-            userId = tokenResponse.userId.toString()
+            token = "${response.tokenResult.scheme} ${response.tokenResult.parameter}"
+            userId = response.userId.toString()
 
             preferences.edit().apply {
                 putString(TOKEN_PREF, token)
@@ -158,61 +135,25 @@ abstract class Manhuaren :
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
-    private fun getAnonyUser(): Request {
+    private suspend fun getAnonyUser(): Response {
         val url = baseHttpUrl.newBuilder()
             .addPathSegments("v1/user/createAnonyUser2")
             .build()
 
-        // val simSerialNumber = generateSimSerialNumber()
-        // val mac = Random.nextUBytes(6)
-        //     .joinToString(":") { it.toString(16).padStart(2, '0') }
         val androidId = Random.nextUBytes(8)
             .joinToString("") { it.toString(16).padStart(2, '0') }
-            .replaceFirst("^0+".toRegex(), "")
+            .replaceFirst(leadingZeros, "")
             .uppercase()
 
-        val keysMap = ArrayList<HashMap<String, Any?>>().apply {
-            add(
-                HashMap<String, Any?>().apply {
-                    put("key", encrypt(imei))
-                    put("keyType", "0")
-                },
-            )
-            // add(
-            //     HashMap<String, Any?>().apply {
-            //         put("key", encrypt("mac: $mac"))
-            //         put("keyType", "1")
-            //     },
-            // )
-            add(
-                HashMap<String, Any?>().apply {
-                    put("key", encrypt(androidId)) // https://developer.android.com/reference/android/provider/Settings.Secure#ANDROID_ID
-                    put("keyType", "2")
-                },
-            )
-            // add(
-            //     HashMap<String, Any?>().apply {
-            //         put("key", encrypt(simSerialNumber)) // https://developer.android.com/reference/android/telephony/TelephonyManager#getSimSerialNumber()
-            //         put("keyType", "3")
-            //     },
-            // )
-            add(
-                HashMap<String, Any?>().apply {
-                    put("key", encrypt(UUID.randomUUID().toString()))
-                    put("keyType", "-1")
-                },
-            )
-        }
-        val bodyMap = HashMap<String, Any?>().apply {
-            put("keys", keysMap)
-        }
-
-        return myPost(
-            url,
-            JSONObject(bodyMap).toString()
-                .replaceFirst("^/+".toRegex(), "")
-                .toRequestBody("application/json".toMediaTypeOrNull()),
+        val body = AnonyUserRequest(
+            listOf(
+                AnonyUserKey(encrypt(imei), "0"),
+                AnonyUserKey(encrypt(androidId), "2"),
+                AnonyUserKey(encrypt(UUID.randomUUID().toString()), "-1"),
+            ),
         )
+
+        return myPost(url, body.toJsonRequestBody())
     }
 
     private fun addGsnHash(request: Request): Request {
@@ -234,7 +175,7 @@ abstract class Manhuaren :
         }
         str += gsnSalt
 
-        val gsn = hashString("MD5", str)
+        val gsn = str.encodeUtf8().md5().hex()
         val newUrl = request.url.newBuilder()
             .addQueryParameter("gsn", gsn)
             .build()
@@ -245,7 +186,7 @@ abstract class Manhuaren :
     }
 
     private fun myRequest(url: HttpUrl, method: String, body: RequestBody?): Request {
-        val now = SimpleDateFormat("yyyy-MM-dd+HH:mm:ss", Locale.US).format(Date())
+        val now = timeFormat.format(LocalDateTime.now())
         val userId = preferences.getString(USER_ID_PREF, "-1")!!
         val newUrl = url.newBuilder()
             .setQueryParameter("gsm", "md5")
@@ -268,7 +209,7 @@ abstract class Manhuaren :
             .setQueryParameter("gfcl", "dm5") // Umeng channel config
             .setQueryParameter("gfut", lastUsedTime) // first used time
             .setQueryParameter("glut", lastUsedTime) // last used time
-            .setQueryParameter("gpt", "com.mhr.mangamini") // package name
+            .setQueryParameter("gpt", PACKAGE_NAME) // package name
             .setQueryParameter("gciso", "us") // https://developer.android.com/reference/android/telephony/TelephonyManager#getSimCountryIso()
             .setQueryParameter("glot", "") // longitude
             .setQueryParameter("glat", "") // latitude
@@ -293,20 +234,22 @@ abstract class Manhuaren :
         )
     }
 
-    private fun myPost(url: HttpUrl, body: RequestBody?): Request = myRequest(url, "POST", body).newBuilder()
-        .cacheControl(CacheControl.Builder().noCache().noStore().build())
-        .build()
-
-    private fun myGet(url: HttpUrl): Request {
-        val authorization = fetchToken()
-        return myRequest(url, "GET", null).newBuilder()
-            .addHeader("Authorization", authorization)
-            .cacheControl(CacheControl.Builder().maxAge(10.minutes).build())
-            .build()
+    private suspend fun myPost(url: HttpUrl, body: RequestBody): Response {
+        val request = myRequest(url, "POST", body)
+        return client.post(request.url, request.headers, body)
     }
 
-    override fun headersBuilder(): Headers.Builder {
-        val yqciMap = HashMap<String, Any?>().apply {
+    private suspend fun myGet(url: HttpUrl): Response {
+        val authorization = fetchToken()
+        val request = myRequest(url, "GET", null)
+        val headers = request.headers.newBuilder()
+            .add("Authorization", authorization)
+            .build()
+        return client.get(request.url, headers, CacheControl.Builder().maxAge(10.minutes).build())
+    }
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        val yqci = buildJsonObject {
             put("at", -1)
             put("av", "7.0.1") // app version
             put("ciso", "us") // https://developer.android.com/reference/android/telephony/TelephonyManager#getSimCountryIso()
@@ -324,11 +267,11 @@ abstract class Manhuaren :
             put("nt", 3)
             put("os", 1) // OS (int)
             put("ov", "33_13") // "{Build.VERSION.SDK_INT}_{Build.VERSION.RELEASE}"
-            put("pt", "com.mhr.mangamini") // package name
+            put("pt", PACKAGE_NAME) // package name
             put("rn", "1080x1920") // screen "{width}x{height}"
             put("st", 0)
         }
-        val yqppMap = HashMap<String, Any?>().apply {
+        val yqpp = buildJsonObject {
             put("ciso", "us") // https://developer.android.com/reference/android/telephony/TelephonyManager#getSimCountryIso()
             put("laut", "0") // is allow location ("0" or "1")
             put("lot", "") // longitude
@@ -345,30 +288,11 @@ abstract class Manhuaren :
         }
 
         val userId = preferences.getString(USER_ID_PREF, "-1")!!
-        return Headers.Builder().apply {
-            add("X-Yq-Yqci", JSONObject(yqciMap).toString())
-            add("X-Yq-Key", userId)
-            add("yq_is_anonymous", "1")
-            add("x-request-id", UUID.randomUUID().toString())
-            add("X-Yq-Yqpp", JSONObject(yqppMap).toString())
-            add("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 13; ${Build.MODEL} Build/${Build.ID})")
-        }
-    }
-
-    private fun hashString(type: String, input: String): String {
-        val hexChars = "0123456789abcdef"
-        val bytes = MessageDigest
-            .getInstance(type)
-            .digest(input.toByteArray())
-        val result = StringBuilder(bytes.size * 2)
-
-        bytes.forEach {
-            val i = it.toInt()
-            result.append(hexChars[i shr 4 and 0x0f])
-            result.append(hexChars[i and 0x0f])
-        }
-
-        return result.toString()
+        add("X-Yq-Yqci", yqci.toString())
+        add("X-Yq-Key", userId)
+        add("yq_is_anonymous", "1")
+        add("x-request-id", UUID.randomUUID().toString())
+        add("X-Yq-Yqpp", yqpp.toString())
     }
 
     private fun urlEncode(str: String?): String = URLEncoder.encode(str ?: "", "UTF-8")
@@ -376,35 +300,9 @@ abstract class Manhuaren :
         .replace("%7E", "~")
         .replace("*", "%2A")
 
-    private fun mangasFromJSONArray(arr: JSONArray): MangasPage {
-        val ret = ArrayList<SManga>(arr.length())
-        for (i in 0 until arr.length()) {
-            val obj = arr.getJSONObject(i)
-            val id = obj.getInt("mangaId")
-            ret.add(
-                SManga.create().apply {
-                    title = obj.getString("mangaName")
-                    thumbnail_url = obj.getString("mangaCoverimageUrl")
-                    author = obj.optString("mangaAuthor")
-                    status = when (obj.getInt("mangaIsOver")) {
-                        1 -> SManga.COMPLETED
-                        0 -> SManga.ONGOING
-                        else -> SManga.UNKNOWN
-                    }
-                    url = "/v1/manga/getDetail?mangaId=$id"
-                },
-            )
-        }
-        return MangasPage(ret, arr.length() != 0)
-    }
+    private fun mangasPageParse(response: Response): MangasPage = response.parseAs<ManhuarenResponse<MangaListDto>>().response.toMangasPage()
 
-    private fun mangasPageParse(response: Response): MangasPage {
-        val res = response.body.string()
-        val arr = JSONObject(res).getJSONObject("response").getJSONArray("mangas")
-        return mangasFromJSONArray(arr)
-    }
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseHttpUrl.newBuilder()
             .addQueryParameter("subCategoryType", "0")
             .addQueryParameter("subCategoryId", "0")
@@ -413,10 +311,10 @@ abstract class Manhuaren :
             .addQueryParameter("sort", "0")
             .addPathSegments("v2/manga/getCategoryMangas")
             .build()
-        return myGet(url)
+        return mangasPageParse(myGet(url))
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = baseHttpUrl.newBuilder()
             .addQueryParameter("subCategoryType", "0")
             .addQueryParameter("subCategoryId", "0")
@@ -425,14 +323,10 @@ abstract class Manhuaren :
             .addQueryParameter("sort", "1")
             .addPathSegments("v2/manga/getCategoryMangas")
             .build()
-        return myGet(url)
+        return mangasPageParse(myGet(url))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = mangasPageParse(response)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = mangasPageParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         var url = baseHttpUrl.newBuilder()
             .addQueryParameter("start", (pageSize * (page - 1)).toString())
             .addQueryParameter("limit", pageSize.toString())
@@ -456,124 +350,45 @@ abstract class Manhuaren :
             }
             url = url.addPathSegments("v2/manga/getCategoryMangas")
         }
-        return myGet(url.build())
+        return mangasPageParse(myGet(url.build()))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val res = response.body.string()
-        val obj = JSONObject(res).getJSONObject("response")
-        return mangasFromJSONArray(
-            obj.getJSONArray(
-                if (obj.has("result")) "result" else "mangas",
-            ),
-        )
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val dto = myGet((baseUrl + manga.url).toHttpUrl())
+            .parseAs<ManhuarenResponse<MangaDetailDto>>().response
+        dto.toSManga(manga)
+        return SMangaUpdate(manga, dto.toChapterList())
     }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val res = response.body.string()
-        val obj = JSONObject(res).getJSONObject("response")
-        title = obj.getString("mangaName")
-        thumbnail_url = ""
-        obj.optString("mangaCoverimageUrl").let {
-            if (it != "") {
-                thumbnail_url = it
-            }
-        }
-        if (thumbnail_url == "" || thumbnail_url == "http://mhfm5.tel.cdndm5.com/tag/category/nopic.jpg") {
-            obj.optString("mangaPicimageUrl").let {
-                if (it != "") {
-                    thumbnail_url = it
-                }
-            }
-        }
-        if (thumbnail_url == "") {
-            obj.optString("shareIcon").let {
-                if (it != "") {
-                    thumbnail_url = it
-                }
-            }
-        }
+    override fun getHomeUrl(): String = "$WEBSITE_URL/"
 
-        val arr = obj.getJSONArray("mangaAuthors")
-        val tmparr = ArrayList<String>(arr.length())
-        for (i in 0 until arr.length()) {
-            tmparr.add(arr.getString(i))
-        }
-        author = tmparr.joinToString(", ")
+    override fun getMangaUrl(manga: SManga): String = "$WEBSITE_URL/showcomic/?id=" + (baseUrl + manga.url).toHttpUrl().queryParameter("mangaId").orEmpty()
 
-        genre = obj.getString("mangaTheme").replace(" ", ", ")
+    override fun getChapterUrl(chapter: SChapter): String = "$WEBSITE_URL/m" + (baseUrl + chapter.url).toHttpUrl().queryParameter("mangaSectionId").orEmpty() + "/"
 
-        status = when (obj.getInt("mangaIsOver")) {
-            1 -> SManga.COMPLETED
-            0 -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
-
-        description = obj.getString("mangaIntro")
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host !in webHosts) return null
+        val id = url.queryParameter("id")
+            ?: client.get(url).body.string()
+                .let { mangaIdRegex.find(it)?.groupValues?.get(1) }
+            ?: return null
+        val manga = SManga.create().apply { this.url = "/v1/manga/getDetail?mangaId=$id" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = myGet((baseUrl + manga.url).toHttpUrl())
-
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    private fun getChapterName(type: String, name: String, title: String): String = (if (type == "mangaEpisode") "[番外] " else "") + name + (if (title == "") "" else ": $title")
-
-    private fun chaptersFromJSONArray(type: String, arr: JSONArray): List<SChapter> {
-        val ret = ArrayList<SChapter>()
-        for (i in 0 until arr.length()) {
-            val obj = arr.getJSONObject(i)
-            ret.add(
-                SChapter.create().apply {
-                    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                    name = if (obj.getInt("isMustPay") == 1) {
-                        "(锁) "
-                    } else {
-                        ""
-                    } + getChapterName(type, obj.getString("sectionName"), obj.getString("sectionTitle"))
-                    date_upload = dateFormat.parse(obj.getString("releaseTime"))?.time ?: 0L
-                    chapter_number = obj.getInt("sectionSort").toFloat()
-                    url = "/v1/manga/getRead?mangaSectionId=${obj.getInt("sectionId")}"
-                },
-            )
-        }
-        return ret
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val res = response.body.string()
-        val obj = JSONObject(res).getJSONObject("response")
-        val ret = ArrayList<SChapter>()
-        listOf("mangaEpisode", "mangaWords", "mangaRolls").forEach {
-            if (obj.has(it)) {
-                ret.addAll(chaptersFromJSONArray(it, obj.getJSONArray(it)))
-            }
-        }
-        return ret
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val res = response.body.string()
-        val obj = JSONObject(res).getJSONObject("response")
-        val ret = ArrayList<Page>()
-        val host = obj.getJSONArray("hostList").getString(0)
-        val arr = obj.getJSONArray("mangaSectionImages")
-        val query = obj.getString("query")
-        for (i in 0 until arr.length()) {
-            ret.add(Page(i, "$host${arr.getString(i)}$query", "$host${arr.getString(i)}$query"))
-        }
-        return ret
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = (baseUrl + chapter.url).toHttpUrl().newBuilder()
             .addQueryParameter("netType", "4")
             .addQueryParameter("loadreal", "1")
             .addQueryParameter("imageQuality", "2")
             .build()
-        return myGet(url)
+        return myGet(url).parseAs<ManhuarenResponse<PageListDto>>().response.toPageList()
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
@@ -583,86 +398,7 @@ abstract class Manhuaren :
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun getFilterList() = FilterList(
-        SortFilter(
-            "状态",
-            arrayOf(
-                Pair("热门", "0"),
-                Pair("更新", "1"),
-                Pair("新作", "2"),
-                Pair("完结", "3"),
-            ),
-        ),
-        CategoryFilter(
-            "分类",
-            arrayOf(
-                Category("全部", "0", "0"),
-                Category("热血", "0", "31"),
-                Category("恋爱", "0", "26"),
-                Category("校园", "0", "1"),
-                Category("百合", "0", "3"),
-                Category("耽美", "0", "27"),
-                Category("伪娘", "0", "5"),
-                Category("冒险", "0", "2"),
-                Category("职场", "0", "6"),
-                Category("后宫", "0", "8"),
-                Category("治愈", "0", "9"),
-                Category("科幻", "0", "25"),
-                Category("励志", "0", "10"),
-                Category("生活", "0", "11"),
-                Category("战争", "0", "12"),
-                Category("悬疑", "0", "17"),
-                Category("推理", "0", "33"),
-                Category("搞笑", "0", "37"),
-                Category("奇幻", "0", "14"),
-                Category("魔法", "0", "15"),
-                Category("恐怖", "0", "29"),
-                Category("神鬼", "0", "20"),
-                Category("萌系", "0", "21"),
-                Category("历史", "0", "4"),
-                Category("美食", "0", "7"),
-                Category("同人", "0", "30"),
-                Category("运动", "0", "34"),
-                Category("绅士", "0", "36"),
-                Category("机甲", "0", "40"),
-                Category("限制级", "0", "61"),
-                Category("少年向", "1", "1"),
-                Category("少女向", "1", "2"),
-                Category("青年向", "1", "3"),
-                Category("港台", "2", "35"),
-                Category("日韩", "2", "36"),
-                Category("大陆", "2", "37"),
-                Category("欧美", "2", "52"),
-            ),
-        ),
-    )
-
-    private data class Category(val name: String, val type: String, val id: String)
-
-    private class SortFilter(
-        name: String,
-        val vals: Array<Pair<String, String>>,
-        state: Int = 0,
-    ) : Filter.Select<String>(
-        name,
-        vals.map { it.first }.toTypedArray(),
-        state,
-    ) {
-        fun getId() = vals[state].second
-    }
-
-    private class CategoryFilter(
-        name: String,
-        val vals: Array<Category>,
-        state: Int = 0,
-    ) : Filter.Select<String>(
-        name,
-        vals.map { it.name }.toTypedArray(),
-        state,
-    ) {
-        fun getId() = vals[state].id
-        fun getType() = vals[state].type
-    }
+    override fun getFilterList(data: JsonElement?) = getFilters()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
