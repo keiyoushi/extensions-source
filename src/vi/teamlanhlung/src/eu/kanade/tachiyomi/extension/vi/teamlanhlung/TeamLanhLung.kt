@@ -1,12 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.teamlanhlung
 
-import android.app.Activity
-import android.app.AlertDialog
-import android.app.Application
-import android.os.Bundle
-import android.text.InputType
-import android.widget.EditText
-import android.widget.FrameLayout
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -18,15 +11,12 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.ui.askPassword
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -37,42 +27,12 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.lang.ref.WeakReference
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class TeamLanhLung : KeiSource() {
-
-    private var currentActivity: WeakReference<Activity>? = null
-
-    init {
-        try {
-            applicationContext.registerActivityLifecycleCallbacks(
-                object : Application.ActivityLifecycleCallbacks {
-                    override fun onActivityResumed(a: Activity) {
-                        currentActivity = WeakReference(a)
-                    }
-
-                    override fun onActivityPaused(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-
-                    override fun onActivityDestroyed(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-
-                    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-                    override fun onActivityStarted(activity: Activity) = Unit
-                    override fun onActivityStopped(activity: Activity) = Unit
-                    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-                },
-            )
-        } catch (_: Throwable) {
-        }
-    }
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
@@ -305,11 +265,8 @@ abstract class TeamLanhLung : KeiSource() {
         return rawName.substringAfterLast("–").substringAfterLast("-").trim()
     }
 
-    private fun parseChapterDate(date: String): Long = runCatching {
-        LocalDate.parse(date, dateFormatFull).atStartOfDay(dateZone).toInstant().toEpochMilli()
-    }.recoverCatching {
-        LocalDate.parse(date, dateFormatShort).atStartOfDay(dateZone).toInstant().toEpochMilli()
-    }.getOrDefault(0L)
+    private fun parseChapterDate(date: String): Long = dateFormatFull.tryParseDate(date, dateZone).takeIf { it != 0L }
+        ?: dateFormatShort.tryParseDate(date, dateZone)
 
     // ============================== Pages ===============================
 
@@ -321,7 +278,12 @@ abstract class TeamLanhLung : KeiSource() {
 
         val lockForm = document.selectFirst("form.post-password-form")
         if (lockForm != null) {
-            val password = promptForPassword(chapter.name)
+            val password = askPassword(
+                title = chapter.name,
+                message = "Chương này yêu cầu mật khẩu",
+                hint = "Mật khẩu",
+            ) ?: throw Exception("Đã hủy nhập mật khẩu")
+
             val postAction = lockForm.absUrl("action").ifEmpty {
                 "$baseUrl/wp-login.php?action=postpass"
             }
@@ -353,59 +315,6 @@ abstract class TeamLanhLung : KeiSource() {
 
         return ImageDecryptor.extractImageUrls(html).mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
-        }
-    }
-
-    private suspend fun promptForPassword(chapterTitle: String): String {
-        val activity = currentActivity?.get()
-            ?: throw Exception(passwordWebviewMessage)
-
-        val deferred = CompletableDeferred<String>()
-        var dialog: AlertDialog? = null
-
-        try {
-            withContext(Dispatchers.Main.immediate) {
-                val input = EditText(activity).apply {
-                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                    hint = "Mật khẩu"
-                }
-                val container = FrameLayout(activity).apply {
-                    val pad = (16 * resources.displayMetrics.density).toInt()
-                    setPadding(pad, pad / 2, pad, 0)
-                    addView(input)
-                }
-
-                dialog = AlertDialog.Builder(activity)
-                    .setTitle(chapterTitle)
-                    .setMessage("Chương này yêu cầu mật khẩu")
-                    .setView(container)
-                    .setPositiveButton("Mở khóa") { _, _ ->
-                        val text = input.text.toString().trim()
-                        if (text.isNotBlank()) {
-                            deferred.complete(text)
-                        } else {
-                            deferred.completeExceptionally(Exception("Mật khẩu không được để trống"))
-                        }
-                    }
-                    .setNegativeButton("Hủy") { _, _ ->
-                        deferred.completeExceptionally(Exception("Đã hủy nhập mật khẩu"))
-                    }
-                    .setOnCancelListener {
-                        deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                    }
-                    .setOnDismissListener {
-                        if (!deferred.isCompleted) {
-                            deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                        }
-                    }
-                    .show()
-            }
-
-            return deferred.await()
-        } finally {
-            withContext(NonCancellable + Dispatchers.Main.immediate) {
-                dialog?.takeIf { it.isShowing }?.dismiss()
-            }
         }
     }
 
@@ -458,5 +367,4 @@ abstract class TeamLanhLung : KeiSource() {
     private val chapterWordRegex = Regex("chap", RegexOption.IGNORE_CASE)
     private val multiSpaceRegex = Regex("\\s+")
     private val smallThumbnailRegex = Regex("-150x150(\\.[a-zA-Z]+)$")
-    private val passwordWebviewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
 }
