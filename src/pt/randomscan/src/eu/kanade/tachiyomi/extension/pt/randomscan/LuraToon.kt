@@ -29,7 +29,7 @@ abstract class LuraToon : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addNetworkInterceptor(::pageHeadersInterceptor)
-        addInterceptor(LuraZipInterceptor()::zipImageInterceptor)
+        addInterceptor(ZipInterceptor()::zipImageInterceptor)
         addInterceptor(::loggedVerifyInterceptor)
         rateLimit(3)
     }
