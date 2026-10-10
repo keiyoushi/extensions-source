@@ -49,6 +49,7 @@ import okhttp3.Dns
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -103,13 +104,51 @@ class Komga(
         set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
         if (apiKey.isNotBlank()) {
             set("X-API-Key", apiKey)
-        } else if (username.isNotBlank()) {
-            set("Authorization", Credentials.basic(username, password))
         }
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(::authenticate)
         dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
+    }
+
+    // Cookies are shared between Komga sources on the same host, so the session goes in a header
+    @Volatile
+    private var session: Pair<String, String>? = null
+    private val loginLock = Any()
+
+    private fun authenticate(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (apiKey.isNotBlank() || username.isBlank()) {
+            return chain.proceed(request)
+        }
+
+        val credentials = Credentials.basic(username, password)
+        val token = session?.takeIf { it.first == credentials }?.second
+        if (token != null) {
+            val response = chain.proceed(request.newBuilder().header("X-Auth-Token", token).build())
+            if (response.code != 401) {
+                return response
+            }
+            response.close()
+        }
+
+        val newToken = synchronized(loginLock) {
+            // Another request may have logged in while this one waited
+            val latest = session?.takeIf { it.first == credentials && it.second != token }?.second
+            if (latest == null) {
+                val response = chain.proceed(
+                    request.newBuilder()
+                        .header("Authorization", credentials)
+                        .header("X-Auth-Token", "")
+                        .build(),
+                )
+                session = response.header("X-Auth-Token")?.let { credentials to it }
+                return response
+            }
+            latest
+        }
+        return chain.proceed(request.newBuilder().header("X-Auth-Token", newToken).build())
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {

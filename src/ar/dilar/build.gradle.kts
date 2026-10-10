@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Dilar"
-    versionCode = 17
+    versionCode = 18
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -18,6 +18,7 @@ keiyoushi {
 }
 
 dependencies {
+    implementation(project(":lib:aessiv"))
     implementation(project(":lib:ece"))
     implementation(project(":lib:secretstream"))
 }

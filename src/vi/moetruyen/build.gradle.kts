@@ -5,12 +5,13 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":lib:aessiv"))
     implementation(project(":lib:ece"))
 }
 
 keiyoushi {
     name = "MoeTruyen"
-    versionCode = 17
+    versionCode = 18
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
