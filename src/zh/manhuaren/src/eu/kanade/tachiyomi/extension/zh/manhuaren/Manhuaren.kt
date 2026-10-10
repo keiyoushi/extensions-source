@@ -5,7 +5,6 @@ import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,6 +13,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -107,7 +108,7 @@ abstract class Manhuaren :
         var token = preferences.getString(TOKEN_PREF, "")!!
         var userId = preferences.getString(USER_ID_PREF, "")!!
         if (token.isEmpty() || userId.isEmpty()) {
-            val response = client.newCall(getAnonyUser()).await()
+            val response = getAnonyUser()
                 .parseAs<ManhuarenResponse<TokenResponse>>().response
 
             token = "${response.tokenResult.scheme} ${response.tokenResult.parameter}"
@@ -134,7 +135,7 @@ abstract class Manhuaren :
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
-    private fun getAnonyUser(): Request {
+    private suspend fun getAnonyUser(): Response {
         val url = baseHttpUrl.newBuilder()
             .addPathSegments("v1/user/createAnonyUser2")
             .build()
@@ -233,17 +234,18 @@ abstract class Manhuaren :
         )
     }
 
-    private fun myPost(url: HttpUrl, body: RequestBody?): Request = myRequest(url, "POST", body).newBuilder()
-        .cacheControl(CacheControl.Builder().noCache().noStore().build())
-        .build()
+    private suspend fun myPost(url: HttpUrl, body: RequestBody): Response {
+        val request = myRequest(url, "POST", body)
+        return client.post(request.url, request.headers, body)
+    }
 
     private suspend fun myGet(url: HttpUrl): Response {
         val authorization = fetchToken()
-        val request = myRequest(url, "GET", null).newBuilder()
-            .addHeader("Authorization", authorization)
-            .cacheControl(CacheControl.Builder().maxAge(10.minutes).build())
+        val request = myRequest(url, "GET", null)
+        val headers = request.headers.newBuilder()
+            .add("Authorization", authorization)
             .build()
-        return client.newCall(request).await()
+        return client.get(request.url, headers, CacheControl.Builder().maxAge(10.minutes).build())
     }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
@@ -359,11 +361,8 @@ abstract class Manhuaren :
     ): SMangaUpdate {
         val dto = myGet((baseUrl + manga.url).toHttpUrl())
             .parseAs<ManhuarenResponse<MangaDetailDto>>().response
-        if (fetchDetails) {
-            dto.toSManga(manga)
-        }
-        val chapterList = if (fetchChapters) dto.toChapterList() else chapters
-        return SMangaUpdate(manga, chapterList)
+        dto.toSManga(manga)
+        return SMangaUpdate(manga, dto.toChapterList())
     }
 
     override fun getHomeUrl(): String = "$WEBSITE_URL/"
@@ -375,7 +374,7 @@ abstract class Manhuaren :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host !in webHosts) return null
         val id = url.queryParameter("id")
-            ?: client.newCall(GET(url.toString(), headers)).await().body.string()
+            ?: client.get(url).body.string()
                 .let { mangaIdRegex.find(it)?.groupValues?.get(1) }
             ?: return null
         val manga = SManga.create().apply { this.url = "/v1/manga/getDetail?mangaId=$id" }
