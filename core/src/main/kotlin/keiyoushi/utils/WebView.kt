@@ -1,6 +1,8 @@
 package keiyoushi.utils
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.os.Handler
@@ -65,7 +67,7 @@ class WebViewTimeoutException internal constructor(
  */
 @SuppressLint("SetJavaScriptEnabled")
 class WebViewScope<T> internal constructor(
-    private val webView: WebView,
+    internal val webView: WebView,
     private val deferred: CompletableDeferred<T>,
 ) {
     internal val pageStartedHooks = CopyOnWriteArrayList<(String) -> Unit>()
@@ -340,7 +342,8 @@ private fun setupWebView(webView: WebView) {
     }
 
     runCatching {
-        val metrics = Resources.getSystem().displayMetrics
+        val metrics = (webView.context as? Activity)?.resources?.displayMetrics
+            ?: Resources.getSystem().displayMetrics
         webView.layoutParams = ViewGroup.LayoutParams(metrics.widthPixels, metrics.heightPixels)
         webView.measure(
             View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
@@ -357,9 +360,24 @@ private fun setupWebView(webView: WebView) {
 suspend fun <T> runWebView(
     timeout: Duration = 30.seconds,
     configure: WebViewScope<T>.() -> Unit,
+): T = runWebViewInternal(context = applicationContext, timeout = timeout, configure = configure)
+
+/**
+ * Runs a WebView bound to [activity] with [configure]. Internal to :core.
+ */
+internal suspend fun <T> runWebView(
+    activity: Activity,
+    timeout: Duration = 30.seconds,
+    configure: WebViewScope<T>.() -> Unit,
+): T = runWebViewInternal(context = activity, timeout = timeout, configure = configure)
+
+private suspend fun <T> runWebViewInternal(
+    context: Context,
+    timeout: Duration,
+    configure: WebViewScope<T>.() -> Unit,
 ): T = withContext(Dispatchers.Main) {
     val deferred = CompletableDeferred<T>()
-    val webView = WebView(applicationContext)
+    val webView = WebView(context)
     setupWebView(webView)
     val scope = WebViewScope(webView, deferred)
     webView.webViewClient = ScopeWebViewClient(scope)
@@ -379,6 +397,7 @@ suspend fun <T> runWebView(
         }
     } finally {
         scope.destroyed = true
+        runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
         webView.stopLoading()
         webView.destroy()
     }

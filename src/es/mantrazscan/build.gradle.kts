@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Mantraz Scan"
-    versionCode = 57
+    versionCode = 58
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "es"
-        baseUrl = "https://mantrazscan.co"
+        baseUrl = "https://mantrazscanss.lat"
     }
 }
