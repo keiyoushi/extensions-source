@@ -6,13 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Fenix Project"
-    versionCode = 3
+    versionCode = 59
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://fenixproject.site"
+        baseUrl = "https://fenixproject.website"
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }
