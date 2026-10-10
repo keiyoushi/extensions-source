@@ -17,15 +17,7 @@ abstract class KeyoappBase :
     KeiSource(),
     ConfigurableSource {
 
-    protected val preferences = getPreferences {
-        // Siren Scans' key from before it used this theme
-        if (contains("pref_show_locked_chap")) {
-            edit()
-                .putBoolean(SHOW_PAID_CHAPTERS_PREF, getBoolean("pref_show_locked_chap", false))
-                .remove("pref_show_locked_chap")
-                .apply()
-        }
-    }
+    protected val preferences = getPreferences()
 
     open val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
 
@@ -105,7 +97,7 @@ abstract class KeyoappBase :
     }
 
     companion object {
-        private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
+        protected const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private val RELATIVE_DATE_REGEX = """(a|one|\d+)\s*(\w+)\s+ago""".toRegex()
     }
 }
