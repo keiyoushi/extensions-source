@@ -1,19 +1,17 @@
 package keiyoushi.lib.zipinterceptor
 
 import android.app.ActivityManager
-import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
+import keiyoushi.utils.applicationContext
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import tachiyomi.decoder.ImageDecoder
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -135,66 +133,72 @@ open class ZipInterceptor {
     fun zipImageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        val filename = request.url.pathSegments.last()
 
-        if (requestIsZipImage(request).not()) {
-            return response
-        }
+        if (!requestIsZipImage(request)) return response
 
-        val zis = ZipInputStream(zipGetByteStream(request, response))
-
-        val images = generateSequence { zis.nextEntry }
-            .mapNotNull {
-                val entryName = it.name
-                val splitEntryName = entryName.split('.')
-                val entryIndex = splitEntryName.first().toInt()
-                val entryType = splitEntryName.last()
-
-                val imageData = if (entryType == "avif" || splitEntryName.size == 1) {
-                    zis.readBytes()
-                } else {
-                    val svgBytes = zis.readBytes()
-                    val svgContent = svgBytes.toString(Charsets.UTF_8)
-                    val b64 = dataUriRegex.find(svgContent)?.groupValues?.get(1)
-                        ?: return@mapNotNull null
-
-                    Base64.decode(b64, Base64.DEFAULT)
-                }
-
-                entryIndex to ImageDecoderWrapper.decodeImage(imageData, isLowRamDevice, filename, entryName)
+        return response.use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("Unzip response failed: ${response.code}")
             }
-            .sortedBy { it.first }
-            .toList()
 
-        zis.closeEntry()
-        zis.close()
+            val filename = request.url.pathSegments.last(String::isNotEmpty)
 
-        val totalWidth = images.maxOf { it.second.width }
-        val totalHeight = images.sumOf { it.second.height }
+            val images = ZipInputStream(zipGetByteStream(request, response)).use { zis ->
+                generateSequence { zis.nextEntry }
+                    .mapNotNull {
+                        val entryName = it.name
+                        val splitEntryName = entryName.split('.')
+                        val entryIndex = splitEntryName.first().toIntOrNull()
+                            ?: return@mapNotNull null
+                        val entryType = splitEntryName.last()
 
-        val result = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
+                        val imageData = if (entryType == "avif" || splitEntryName.size == 1) {
+                            zis.readBytes()
+                        } else {
+                            val svgBytes = zis.readBytes()
+                            val svgContent = svgBytes.toString(Charsets.UTF_8)
+                            val b64 = dataUriRegex.find(svgContent)?.groupValues?.get(1)
+                                ?: return@mapNotNull null
 
-        var dy = 0
+                            Base64.decode(b64, Base64.DEFAULT)
+                        }
 
-        images.forEach {
-            val srcRect = Rect(0, 0, it.second.width, it.second.height)
-            val dstRect = Rect(0, dy, it.second.width, dy + it.second.height)
+                        entryIndex to ImageDecoderWrapper.decodeImage(imageData, isLowRamDevice, filename, entryName)
+                    }
+                    .sortedBy { it.first }
+                    .toList()
+            }
 
-            canvas.drawBitmap(it.second, srcRect, dstRect, null)
+            if (images.isEmpty()) throw IOException("No images found in ZIP")
 
-            dy += it.second.height
+            val totalWidth = images.maxOf { it.second.width }
+            val totalHeight = images.sumOf { it.second.height }
+
+            val result = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(result)
+
+            var dy = 0
+
+            images.forEach {
+                val srcRect = Rect(0, 0, it.second.width, it.second.height)
+                val dstRect = Rect(0, dy, it.second.width, dy + it.second.height)
+
+                canvas.drawBitmap(it.second, srcRect, dstRect, null)
+
+                dy += it.second.height
+            }
+
+            val output = ByteArrayOutputStream()
+            result.compress(Bitmap.CompressFormat.JPEG, 90, output)
+
+            val image = output.toByteArray()
+            val body = image.toResponseBody("image/jpeg".toMediaType())
+
+            response.newBuilder()
+                .header("Content-Type", "image/jpeg")
+                .body(body)
+                .build()
         }
-
-        val output = ByteArrayOutputStream()
-        result.compress(Bitmap.CompressFormat.JPEG, 90, output)
-
-        val image = output.toByteArray()
-        val body = image.toResponseBody("image/jpeg".toMediaType())
-
-        return response.newBuilder()
-            .body(body)
-            .build()
     }
 
     /**
@@ -205,8 +209,7 @@ open class ZipInterceptor {
      * considering how heavy image processing can be.
      */
     private val isLowRamDevice by lazy {
-        val ctx = Injekt.get<Application>()
-        val activityManager = ctx.getSystemService("activity") as ActivityManager
+        val activityManager = applicationContext.getSystemService("activity") as ActivityManager
         val memInfo = ActivityManager.MemoryInfo()
 
         activityManager.getMemoryInfo(memInfo)
