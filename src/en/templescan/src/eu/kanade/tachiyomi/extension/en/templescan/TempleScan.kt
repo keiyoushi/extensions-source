@@ -22,6 +22,7 @@ import keiyoushi.utils.toJsonString
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -41,6 +42,9 @@ abstract class TempleScan :
         rateLimit(1)
         addInterceptor(ChallengeInterceptor())
     }
+
+    // Cloudflare blocks requests that send Origin
+    override fun Headers.Builder.configureHeaders() = removeAll("Origin")
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
 
