@@ -24,7 +24,7 @@ abstract class Dilar : KeiSource() {
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         add("X-DH-Pub", ecies.clientPubB64)
-        add("X-Crypto-Caps", "1,2,3,4,5,6,7,8,9,10,11,12,13,14")
+        add("X-Crypto-Caps", "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15")
     }
 
     // Popular

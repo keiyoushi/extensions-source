@@ -1,11 +1,13 @@
-package eu.kanade.tachiyomi.extension.ar.dilar
+package keiyoushi.lib.aessiv
 
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 
-// AES-GCM-SIV (RFC 8452) decryption, built on AES-ECB because the platform Cipher only exposes
-// AES/GCM-SIV/NoPadding from API 34.
-internal object AesGcmSiv {
+/**
+ * AES-GCM-SIV (RFC 8452) decryption.
+ * Built on AES-ECB because the platform Cipher only exposes AES/GCM-SIV/NoPadding from API 34.
+ */
+object AesGcmSiv {
     private const val BLOCK = 16
     private const val TAG_LENGTH = 16
 
@@ -16,7 +18,13 @@ internal object AesGcmSiv {
         it[15] = 0x92.toByte()
     }
 
-    fun decrypt(key: ByteArray, nonce: ByteArray, ciphertext: ByteArray, aad: ByteArray): ByteArray {
+    /**
+     * Decrypts ciphertext (ciphertext || tag) using AES-GCM-SIV (RFC 8452).
+     * [key] must be 16 bytes (AES-128) or 32 bytes (AES-256).
+     * [nonce] must be 12 bytes.
+     */
+    fun decrypt(key: ByteArray, nonce: ByteArray, ciphertext: ByteArray, aad: ByteArray = ByteArray(0)): ByteArray {
+        require(key.size == 16 || key.size == 32) { "aes-gcm-siv: key must be 16 or 32 bytes" }
         require(nonce.size == 12) { "aes-gcm-siv: nonce must be 12 bytes" }
         require(ciphertext.size >= TAG_LENGTH) { "aes-gcm-siv: ciphertext shorter than the tag" }
 
@@ -24,15 +32,23 @@ internal object AesGcmSiv {
         val tag = ciphertext.copyOfRange(ciphertext.size - TAG_LENGTH, ciphertext.size)
 
         val (authKey, encryptionKey) = deriveKeys(key, nonce)
-        val counter = tag.copyOf().also { it[15] = (it[15].toInt() or 0x80).toByte() }
-        val plaintext = counterMode(encryptionKey, counter, encrypted)
+        try {
+            val counter = tag.copyOf().also { it[15] = (it[15].toInt() or 0x80).toByte() }
+            val plaintext = counterMode(encryptionKey, counter, encrypted)
 
-        val expected = polyval(authKey, aad, plaintext)
-        for (i in 0 until 12) expected[i] = (expected[i].toInt() xor nonce[i].toInt()).toByte()
-        expected[15] = (expected[15].toInt() and 0x7f).toByte()
+            val expected = polyval(authKey, aad, plaintext)
+            for (i in 0 until 12) expected[i] = (expected[i].toInt() xor nonce[i].toInt()).toByte()
+            expected[15] = (expected[15].toInt() and 0x7f).toByte()
 
-        require(aesBlock(encryptionKey, expected).contentEquals(tag)) { "aes-gcm-siv: authentication failed" }
-        return plaintext
+            val expectedTag = aesBlock(encryptionKey, expected)
+            var diff = 0
+            for (i in 0 until TAG_LENGTH) diff = diff or (expectedTag[i].toInt() xor tag[i].toInt())
+            require(diff == 0) { "aes-gcm-siv: authentication failed" }
+            return plaintext
+        } finally {
+            authKey.fill(0)
+            encryptionKey.fill(0)
+        }
     }
 
     // Per-nonce keys: 2 blocks feed the 16-byte authentication key, then 2 (AES-128) or 4 (AES-256)

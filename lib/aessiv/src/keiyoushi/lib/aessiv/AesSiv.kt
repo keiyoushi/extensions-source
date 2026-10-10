@@ -1,14 +1,12 @@
-package eu.kanade.tachiyomi.extension.vi.moetruyen.cipher
+package keiyoushi.lib.aessiv
 
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * AES-SIV (RFC 5297) for IMGX v4 profile p08.
- * Site: noble-ciphers aessiv with 64-byte key (AES-256-SIV).
- * Body layout: tag(16) || ciphertext.
+ * AES-SIV (RFC 5297) AEAD decryption.
  */
-internal object AesSiv {
+object AesSiv {
 
     private fun aesEcbEncrypt(key: ByteArray, block: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/ECB/NoPadding")
@@ -69,9 +67,9 @@ internal object AesSiv {
 
     private fun xorBytes(a: ByteArray, b: ByteArray): ByteArray = ByteArray(a.size) { i -> (a[i].toInt() xor b[i].toInt()).toByte() }
 
-    /** S2V(K, S1..Sn) with a single associated-data component + plaintext. */
-    private fun s2v(key: ByteArray, aad: ByteArray?, plaintext: ByteArray): ByteArray {
-        val parts = listOfNotNull(aad?.takeIf { it.isNotEmpty() }, plaintext)
+    /** S2V(K, S1..Sn) with multiple associated-data components + plaintext. */
+    private fun s2v(key: ByteArray, ad: List<ByteArray>, plaintext: ByteArray): ByteArray {
+        val parts = ad.filter { it.isNotEmpty() } + listOf(plaintext)
         if (parts.isEmpty()) {
             val one = ByteArray(16)
             one[15] = 0x01
@@ -96,16 +94,18 @@ internal object AesSiv {
         return cmac(key, t)
     }
 
-    /** AES-256-CTR, full 16-byte big-endian counter (noble `ctr`). */
+    /** AES-CTR, full 16-byte big-endian counter. */
     private fun aesCtrDecrypt(key: ByteArray, iv: ByteArray, ciphertext: ByteArray): ByteArray {
+        val cipher = Cipher.getInstance("AES/ECB/NoPadding").apply {
+            init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"))
+        }
         val ctr = iv.copyOf()
         val out = ByteArray(ciphertext.size)
         var pos = 0
         while (pos < ciphertext.size) {
-            val ks = aesEcbEncrypt(key, ctr)
+            val ks = cipher.doFinal(ctr)
             val n = minOf(16, ciphertext.size - pos)
             for (i in 0 until n) out[pos + i] = (ciphertext[pos + i].toInt() xor ks[i].toInt()).toByte()
-            // increment 128-bit BE counter
             for (j in 15 downTo 0) {
                 val v = (ctr[j].toInt() and 0xFF) + 1
                 ctr[j] = (v and 0xFF).toByte()
@@ -116,11 +116,16 @@ internal object AesSiv {
         return out
     }
 
-    fun decrypt(key: ByteArray, ciphertext: ByteArray, aad: ByteArray): ByteArray {
-        require(key.size == 64) { "AES-SIV key must be 64 bytes" }
+    /**
+     * Decrypts ciphertext (tag || ciphertext) using AES-SIV (RFC 5297).
+     * [key] must be 32 bytes (AES-128-SIV) or 64 bytes (AES-256-SIV).
+     */
+    fun decrypt(key: ByteArray, ciphertext: ByteArray, vararg aad: ByteArray): ByteArray {
+        require(key.size == 32 || key.size == 64) { "AES-SIV key must be 32 or 64 bytes" }
         require(ciphertext.size >= 16) { "AES-SIV ciphertext too short" }
-        val k1 = key.copyOfRange(0, 32)
-        val k2 = key.copyOfRange(32, 64)
+        val half = key.size / 2
+        val k1 = key.copyOfRange(0, half)
+        val k2 = key.copyOfRange(half, key.size)
         try {
             val v = ciphertext.copyOfRange(0, 16)
             val c = ciphertext.copyOfRange(16, ciphertext.size)
@@ -128,7 +133,7 @@ internal object AesSiv {
             q[8] = (q[8].toInt() and 0x7F).toByte()
             q[12] = (q[12].toInt() and 0x7F).toByte()
             val plaintext = aesCtrDecrypt(k2, q, c)
-            val expected = s2v(k1, aad, plaintext)
+            val expected = s2v(k1, aad.toList(), plaintext)
             var diff = 0
             for (i in 0 until 16) diff = diff or (v[i].toInt() xor expected[i].toInt())
             require(diff == 0) { "AES-SIV authentication failed" }
