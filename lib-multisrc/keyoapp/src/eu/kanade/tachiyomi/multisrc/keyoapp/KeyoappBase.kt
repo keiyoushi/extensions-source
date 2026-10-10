@@ -17,9 +17,21 @@ abstract class KeyoappBase :
     KeiSource(),
     ConfigurableSource {
 
-    protected val preferences = getPreferences()
+    protected val preferences = getPreferences {
+        // Siren Scans' key from before it used this theme
+        if (contains("pref_show_locked_chap")) {
+            edit()
+                .putBoolean(SHOW_PAID_CHAPTERS_PREF, getBoolean("pref_show_locked_chap", false))
+                .remove("pref_show_locked_chap")
+                .apply()
+        }
+    }
 
     open val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
+
+    override val supportsFilterFetching = true
+
+    override val supportRelatedMangasBySearch = true
 
     protected val intl = Intl(
         language = lang,
@@ -40,6 +52,8 @@ abstract class KeyoappBase :
 
     protected val showPaidChapters
         get() = preferences.getBoolean(SHOW_PAID_CHAPTERS_PREF, false)
+
+    open fun Element.isNovel() = select("""[data-type="novel" i], span:matchesOwn((?i)^novel$)""").isNotEmpty()
 
     protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
         "ongoing" -> SManga.ONGOING

@@ -97,8 +97,6 @@ abstract class Keyoapp : KeyoappBase() {
 
     open fun searchMangaNextPageSelector(): String? = null
 
-    open fun Element.isNovel() = select("""[data-type="novel" i], span:matchesOwn((?i)^novel$)""").isNotEmpty()
-
     open fun Element.matchesQuery(query: String) = attr("title").contains(query, ignoreCase = true)
 
     open fun Element.matchesGenres(genres: List<String>): Boolean {
@@ -129,8 +127,6 @@ abstract class Keyoapp : KeyoappBase() {
     }
 
     // ========================= Details + Chapters ========================
-
-    override val supportRelatedMangasBySearch = true
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -241,8 +237,6 @@ abstract class Keyoapp : KeyoappBase() {
     private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
 
     // ============================== Filters ==============================
-
-    override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData() = parseGenres(requestGeneres().asJsoup()).toJsonElement()
 

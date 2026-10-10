@@ -22,10 +22,12 @@ import org.jsoup.nodes.Element
 
 abstract class KeyoappV2 : KeyoappBase() {
 
-    // ========================= Popular =========================
+    // ============================== Popular ==============================
+
     override suspend fun getPopularManga(page: Int) = fetchMangaListPage(page, sort = "popular")
 
-    // ========================= Latest =========================
+    // ============================== Latest ===============================
+
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("_ajax", "recent-chapters")
@@ -44,7 +46,8 @@ abstract class KeyoappV2 : KeyoappBase() {
         thumbnail_url = selectFirst("img.ru-cover-img")?.attrOrNull("data-src")
     }
 
-    // ========================= Search =========================
+    // ============================== Search ===============================
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = fetchMangaListPage(page, query = query, filters = filters)
 
     private suspend fun fetchMangaListPage(
@@ -59,24 +62,12 @@ abstract class KeyoappV2 : KeyoappBase() {
             sort?.let { addQueryParameter("sort", it) }
             addQueryParameter("offset", ((page - 1) * 20).toString())
 
-            filters.forEach { filter ->
-                when (filter) {
-                    is TypeSelectFilter -> if (filter.state > 0) addQueryParameter("type", filter.selected)
-                    is StatusSelectFilter -> if (filter.state > 0) addQueryParameter("status", filter.selected)
-                    is SortFilter -> if (filter.state != 0) addQueryParameter("sort", filter.selected)
-                    is GenreTagFilter ->
-                        filter.state
-                            .filterIsInstance<GenreCheckBox>()
-                            .filter { it.state }
-                            .forEach { addQueryParameter("tag[]", it.value) }
-
-                    else -> {}
-                }
-            }
+            filters.filterIsInstance<SelectFilter>().forEach { it.addToUri(this) }
+            filters.filterIsInstance<MultiSelectFilter>().forEach { it.addToUri(this) }
         }.build()
 
         val data = client.get(url).parseAs<AjaxSearchResponseDto>()
-        val mangas = data.html.asJsoup(baseUrl).select("a.group[href]").map { it.toSManga() }
+        val mangas = data.html.asJsoup(baseUrl).select("a.group[href]").filterNot { it.isNovel() }.map { it.toSManga() }
         return MangasPage(mangas, data.hasMore)
     }
 
@@ -86,10 +77,11 @@ abstract class KeyoappV2 : KeyoappBase() {
         thumbnail_url = selectFirst("img")?.attrOrNull("data-src")
     }
 
-    // ========================= Details + Chapters =========================
+    // ========================= Details + Chapters ========================
+
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        if (url.pathSegments.none(String::isNotEmpty)) return null
+        url.pathSegments.filter(String::isNotEmpty).singleOrNull() ?: return null
 
         val document = client.get(url).asJsoup()
 
@@ -169,17 +161,19 @@ abstract class KeyoappV2 : KeyoappBase() {
                 SChapter.create().apply {
                     setUrlWithoutDomain(element.absUrl("href"))
                     name = if (locked) "🔒 $label" else label
-                    date_upload = element.selectFirst(".ch-date-row span:last-child")?.text()?.parseDate() ?: 0L
+                    element.selectFirst(".ch-date-row span:last-child")?.text()?.let { date_upload = it.parseDate() }
                 }
             }
     }
 
-    // ========================= Pages =========================
+    // =============================== Pages ===============================
+
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
         .select("#strip-reader img.reader-page")
         .mapIndexed { i, element -> Page(i, imageUrl = element.absUrl("src")) }
 
-    // ========================= Filters =========================
+    // ============================== Filters ==============================
+
     override suspend fun fetchFilterData(): JsonElement {
         val url = baseUrl.toHttpUrl().newBuilder().addQueryParameter("browse", "1").build()
         val document = client.get(url).asJsoup()
@@ -193,11 +187,37 @@ abstract class KeyoappV2 : KeyoappBase() {
 
         return FilterList(
             buildList {
-                add(TypeSelectFilter())
-                add(StatusSelectFilter())
-                add(SortFilter())
-                if (genres.isNotEmpty()) add(GenreTagFilter(genres))
+                add(SelectFilter("Type", "type", TYPES))
+                add(SelectFilter("Status", "status", STATUSES))
+                add(SelectFilter("Sort by", "sort", SORTS))
+                if (genres.isNotEmpty()) add(TagFilter(genres.associateBy { it.replaceFirstChar(Char::uppercase) }))
             },
+        )
+    }
+
+    companion object {
+        private val TYPES = listOf(
+            "All" to "",
+            "Manhwa" to "manhwa",
+            "Manhua" to "manhua",
+            "Mangatoon" to "mangatoon",
+            "Manga" to "manga",
+        )
+
+        private val STATUSES = listOf(
+            "All" to "",
+            "Ongoing" to "ongoing",
+            "Completed" to "completed",
+        )
+
+        private val SORTS = listOf(
+            "Latest" to "latest",
+            "Trending" to "trending",
+            "Popular" to "popular",
+            "Most Viewed" to "views",
+            "Top Rated" to "rating",
+            "A-Z" to "az",
+            "Z-A" to "za",
         )
     }
 }
