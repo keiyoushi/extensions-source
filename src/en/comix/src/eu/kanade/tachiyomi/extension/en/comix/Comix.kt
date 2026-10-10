@@ -532,20 +532,24 @@ abstract class Comix :
                                 const mainResponse = await fetch(mainScriptUrl);
                                 if (!mainResponse.ok) throw new Error('Could not load main bundle');
                                 const mainJavaScript = await mainResponse.text();
-                                const environmentFile = mainJavaScript.match(
-                                    /from\s*["']\.\/(env-[^"']+\.js)["']/
-                                )?.[1];
-                                if (!environmentFile) throw new Error('Could not find environment bundle');
+                                const bundleFiles = Array.from(
+                                    mainJavaScript.matchAll(/from\s*["']\.\/([^"']+\.js)["']/g),
+                                    match => match[1]
+                                );
 
                                 const importBundle = new Function('url', 'return import(url)');
-                                const environment = await importBundle(
-                                    new URL(environmentFile, mainScriptUrl).href
-                                );
-                                const mangaApi = Object.values(environment).find(value =>
-                                    value &&
-                                    typeof value === 'object' &&
-                                    typeof value.chapters === 'function'
-                                );
+                                let mangaApi = null;
+                                for (const bundleFile of bundleFiles) {
+                                    const bundle = await importBundle(
+                                        new URL(bundleFile, mainScriptUrl).href
+                                    );
+                                    mangaApi = Object.values(bundle).find(value =>
+                                        value &&
+                                        typeof value === 'object' &&
+                                        typeof value.chapters === 'function'
+                                    );
+                                    if (mangaApi) break;
+                                }
                                 if (!mangaApi) throw new Error('Could not find manga API');
 
                                 const items = [];
