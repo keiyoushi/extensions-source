@@ -8,10 +8,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -85,6 +88,65 @@ abstract class HentaiCB : Madara() {
         val chapterUrl = getChapterUrl(chapter)
         val document = client.get(chapterUrl).asJsoup()
 
+        val msr3Element = document.selectFirst(".msr-reader[data-msr-api]")
+        if (msr3Element != null) {
+            val mangaId = msr3Element.attr("data-msr-manga").toIntOrNull()
+                ?: error("Manga ID not found in reader element")
+            val chapterId = msr3Element.attr("data-msr-chapter").toIntOrNull()
+                ?: error("Chapter ID not found in reader element")
+            val apiEndpoint = msr3Element.attr("data-msr-api").ifEmpty { "/wp-json/manga-reader/v3/" }
+            val siteKey = msr3Element.attr("data-msr-key")
+
+            val baseApiUrl = if (apiEndpoint.startsWith("http")) {
+                apiEndpoint.removeSuffix("/")
+            } else {
+                "$baseUrl${if (apiEndpoint.startsWith("/")) "" else "/"}${apiEndpoint.removeSuffix("/")}"
+            }
+
+            val apiHeaders = headersBuilder()
+                .set("Accept", "application/json")
+                .set("Content-Type", "application/json")
+                .set("X-MSR-Request", "1")
+                .set("Referer", chapterUrl)
+                .build()
+
+            val pagesPayload = MsrPagesRequest(manga = mangaId, chapter = chapterId).toJsonRequestBody()
+            val pagesResponse = client.post("$baseApiUrl/pages", apiHeaders, pagesPayload, ensureSuccess = false)
+
+            val imageUrls = if (pagesResponse.code == 401 && siteKey.isNotEmpty()) {
+                pagesResponse.close()
+
+                val token = getTurnstileToken(
+                    url = chapterUrl,
+                    siteKey = siteKey,
+                    action = "msr_read",
+                )
+
+                val verifyPayload = MsrVerifyRequest(token = token).toJsonRequestBody()
+                val verifyResponse = client.post("$baseApiUrl/verify", apiHeaders, verifyPayload)
+                val verifyResult = verifyResponse.parseAs<MsrVerifyResponse>()
+                if (!verifyResult.ok) {
+                    error("Verification failed")
+                }
+
+                val retryPayload = MsrPagesRequest(manga = mangaId, chapter = chapterId).toJsonRequestBody()
+                val retryResponse = client.post("$baseApiUrl/pages", apiHeaders, retryPayload)
+                val data = retryResponse.parseAs<MsrPagesResponse>()
+                data.items
+            } else if (pagesResponse.isSuccessful) {
+                val data = pagesResponse.parseAs<MsrPagesResponse>()
+                data.items
+            } else {
+                val code = pagesResponse.code
+                pagesResponse.close()
+                error("Failed to load pages: HTTP $code")
+            }
+
+            return imageUrls.mapIndexed { i, imageUrl ->
+                Page(i, chapterUrl, imageUrl)
+            }
+        }
+
         val readerElement = document.selectFirst(".masr2-reader[data-masr2-token]")
             ?: error("Reader element not found")
 
@@ -128,6 +190,29 @@ abstract class HentaiCB : Madara() {
         .addQueryParameter("cid", clientId)
         .build()
         .toString()
+
+    @Serializable
+    private class MsrPagesRequest(
+        @SerialName("manga") val manga: Int,
+        @SerialName("chapter") val chapter: Int,
+    )
+
+    @Serializable
+    private class MsrPagesResponse(
+        @SerialName("items") val items: List<String>,
+        @SerialName("count") val count: Int? = null,
+        @SerialName("protocol") val protocol: Int? = null,
+    )
+
+    @Serializable
+    private class MsrVerifyRequest(
+        @SerialName("token") val token: String,
+    )
+
+    @Serializable
+    private class MsrVerifyResponse(
+        @SerialName("ok") val ok: Boolean = false,
+    )
 
     @Serializable
     private class ReaderPageResponse(
