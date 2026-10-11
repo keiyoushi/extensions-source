@@ -134,8 +134,7 @@ abstract class EmperorScan :
 
     private suspend fun openReader(input: ReaderInput): List<PageDto> = readerMutex.withLock {
         val bridge = "r" + Random.nextLong().toULong().toString(36)
-        val readerScript = javaClass.getResource("/assets/reader.js")!!.readText()
-        val script = "($readerScript)(${input.toJsonString()})" +
+        val script = "(${asset("reader.js")})(${input.toJsonString()})" +
             ".then((pages) => $bridge.post(JSON.stringify({ pages })), (e) => $bridge.post(JSON.stringify({ error: String(e) })))"
         val result = try {
             runWebView<ReaderResult> {
@@ -156,6 +155,8 @@ abstract class EmperorScan :
         result.error?.let { throw IOException(it) }
         result.pages!!
     }
+
+    private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
     override val supportsFilterFetching = true
 
