@@ -9,6 +9,9 @@ import java.util.Locale
 @Source
 abstract class Mangalek : Madara() {
 
+    // The site has no novels or videos, but some manga lack the chapter type meta and get filtered out
+    override val filterNonMangaItems get() = false
+
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("ar"))
     private val formatTwo = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
 
