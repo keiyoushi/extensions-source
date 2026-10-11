@@ -129,13 +129,12 @@ abstract class EmperorScan :
         }
     }
 
-    private val readerScript by lazy { javaClass.getResource("/assets/reader.js")!!.readText() }
-
     // One reader WebView at a time
     private val readerMutex = Mutex()
 
     private suspend fun openReader(input: ReaderInput): List<PageDto> = readerMutex.withLock {
         val bridge = "r" + Random.nextLong().toULong().toString(36)
+        val readerScript = javaClass.getResource("/assets/reader.js")!!.readText()
         val script = "($readerScript)(${input.toJsonString()})" +
             ".then((pages) => $bridge.post(JSON.stringify({ pages })), (e) => $bridge.post(JSON.stringify({ error: String(e) })))"
         val result = try {
