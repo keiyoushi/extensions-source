@@ -1,15 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.schalenetwork
 
-import android.app.Activity
-import android.app.AlertDialog
-import android.app.Application
 import android.content.SharedPreferences
-import android.graphics.Color
-import android.os.Bundle
-import android.view.ViewGroup
-import android.view.ViewGroup.LayoutParams.MATCH_PARENT
-import android.webkit.WebView
-import android.widget.FrameLayout
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -27,18 +18,15 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebView
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.RequestBody
-import java.lang.ref.WeakReference
-import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class SchaleNetwork :
@@ -278,88 +266,10 @@ abstract class SchaleNetwork :
             }
         }
 
-        var captcha: CaptchaDialog? = null
-        var cssHeight = 65
-
-        val challenge = try {
-            runWebView(2.minutes) {
-                userAgent = headers["User-Agent"]!!
-
-                jsBridge("turnstileToken") { resolve(it) }
-                jsBridge("turnstileError") { reject(Exception(it)) }
-
-                jsBridge("turnstileReady") {
-                    evaluateJs(
-                        """
-                        turnstile.render("#challenge", {
-                            sitekey: "0x4AAAAAAA1gtfQl-5lpZVcM",
-                            appearance: "interaction-only",
-                            callback: token => window.turnstileToken.post(token),
-                            "error-callback": error => window.turnstileError.post(error || "error"),
-                            "expired-callback": () => window.turnstileError.post("expired"),
-                            "before-interactive-callback": () => window.turnstileInteractive.post("interactive"),
-                            "after-interactive-callback": () => window.turnstileInteractiveDone.post("done"),
-                            "unsupported-callback": () => window.turnstileError.post("unsupported"),
-                            "timeout-callback": () => window.turnstileError.post("timeout"),
-                        });
-                        """.trimIndent(),
-                    )
-                }
-
-                jsBridge("turnstileResize") {
-                    it.toIntOrNull()?.let { h ->
-                        cssHeight = h
-                        captcha?.resize(h)
-                    }
-                }
-
-                jsBridge("turnstileInteractive") {
-                    val activity = currentActivity?.get()
-                    if (activity == null) {
-                        reject(Exception("Captcha needs the app in the foreground"))
-                        return@jsBridge
-                    }
-                    captcha = CaptchaDialog(activity, getWebView(), cssHeight) {
-                        reject(Exception("Captcha cancelled"))
-                    }.also { it.show() }
-                }
-
-                jsBridge("turnstileInteractiveDone") { captcha?.dismiss() }
-
-                loadData(
-                    baseUrl,
-                    """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1">
-                        <style>
-                            html, body { margin: 0; background: transparent; }
-                            body { display: flex; justify-content: center; align-items: flex-start; }
-                            #challenge { align-self: flex-start; }
-                        </style>
-                    </head>
-                    <body>
-                        <div id="challenge"></div>
-                        <script
-                            src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-                            onload="window.turnstileReady.post('ready')"
-                            onerror="window.turnstileError.post(event.type)"></script>
-                        <script>
-                            const challenge = document.getElementById('challenge');
-                            new ResizeObserver(() => {
-                                const h = Math.ceil(challenge.getBoundingClientRect().height);
-                                if (h > 0) window.turnstileResize.post(String(h));
-                            }).observe(challenge);
-                        </script>
-                    </body>
-                    </html>
-                    """.trimIndent(),
-                )
-            }
-        } finally {
-            captcha?.dismiss()
-        }
+        val challenge = getTurnstileToken(
+            url = baseUrl,
+            siteKey = "0x4AAAAAAA1gtfQl-5lpZVcM",
+        )
 
         val authHeaders = headersBuilder()
             .set("Accept", "*/*")
@@ -373,75 +283,6 @@ abstract class SchaleNetwork :
 
         return client.post("$authUrl/clearance", authHeaders, RequestBody.EMPTY).body.string()
             .also { clearance = it }
-    }
-
-    private var currentActivity: WeakReference<Activity>? = null
-
-    init {
-        applicationContext.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityResumed(a: Activity) {
-                currentActivity = WeakReference(a)
-            }
-            override fun onActivityPaused(a: Activity) {
-                if (currentActivity?.get() === a) currentActivity = null
-            }
-            override fun onActivityDestroyed(a: Activity) {
-                if (currentActivity?.get() === a) currentActivity = null
-            }
-            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-            override fun onActivityStarted(activity: Activity) = Unit
-            override fun onActivityStopped(activity: Activity) = Unit
-            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-        })
-    }
-
-    private class CaptchaDialog(
-        private val activity: Activity,
-        private val webView: WebView,
-        initialCssHeight: Int,
-        private val onCancel: () -> Unit,
-    ) {
-        private var dialog: AlertDialog? = null
-        private var holder: FrameLayout? = null
-        private var closing = false
-        private val initialHeight = initialCssHeight.coerceIn(65, 400)
-
-        fun show() = activity.runOnUiThread {
-            if (dialog != null || closing) return@runOnUiThread
-
-            (webView.parent as? ViewGroup)?.removeView(webView)
-            webView.setBackgroundColor(Color.TRANSPARENT)
-
-            val frame = FrameLayout(activity).apply {
-                setPadding(dp(8), dp(8), dp(8), dp(16))
-                addView(webView, FrameLayout.LayoutParams(MATCH_PARENT, dp(initialHeight)))
-            }
-            holder = frame
-
-            dialog = AlertDialog.Builder(activity)
-                .setTitle("Captcha Required!")
-                .setView(frame)
-                .setOnDismissListener {
-                    holder?.removeView(webView)
-                    holder = null
-                    dialog = null
-                    if (!closing) onCancel()
-                }
-                .show()
-        }
-
-        fun resize(cssPx: Int) = activity.runOnUiThread {
-            webView.layoutParams = webView.layoutParams?.apply {
-                height = dp(cssPx.coerceIn(65, 400))
-            }
-        }
-
-        fun dismiss() = activity.runOnUiThread {
-            closing = true
-            dialog?.takeIf { it.isShowing }?.dismiss()
-        }
-
-        private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
     }
 
     override val supportsRelatedMangas = true

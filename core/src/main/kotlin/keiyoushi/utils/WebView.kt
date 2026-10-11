@@ -20,7 +20,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.annotation.Discouraged
 import keiyoushi.webview.internal.WebViewGlueBridge
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -269,9 +268,6 @@ class WebViewScope<T> internal constructor(
             webView.settings.set(value)
         }
     }
-
-    @Discouraged("Most of the time, you don't need to directly access WebView")
-    fun getWebView(): WebView = webView
 }
 
 private class ScopeWebViewClient(
