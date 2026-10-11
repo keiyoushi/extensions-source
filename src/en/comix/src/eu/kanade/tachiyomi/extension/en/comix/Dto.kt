@@ -260,24 +260,6 @@ class SearchResponse(
 }
 
 @Serializable
-class ChapterDetailsResponse(
-    val result: Items,
-) {
-    @Serializable
-    class Items(
-        val items: List<Chapter> = emptyList(),
-        private val meta: Meta? = null,
-        private val pagination: Pagination? = null,
-    ) {
-        fun hasNextPage(): Boolean = when {
-            meta != null -> meta.page < meta.actualLastPage
-            pagination != null -> pagination.page < pagination.actualLastPage
-            else -> false
-        }
-    }
-}
-
-@Serializable
 class Chapter(
     val id: Int,
     val url: String = "",
@@ -351,30 +333,20 @@ class Chapter(
 }
 
 @Serializable
-class ChapterResponse(
-    val result: ChapterResult,
+class ChapterPages(
+    val baseUrl: String = "",
+    val items: List<PageDto>,
+    private val alt: List<String>? = null,
+    private val node: String? = null,
 ) {
-    @Serializable
-    class ChapterResult(
-        val pages: Pages,
-    )
-
-    @Serializable
-    class Pages(
-        val baseUrl: String = "",
-        val items: List<PageDto>,
-        private val alt: List<String>? = null,
-        private val node: String? = null,
-    ) {
-        // Alt hosts in the site reader's retry order
-        fun altHosts(host: String, index: Int): List<String> {
-            if (alt.isNullOrEmpty()) return emptyList()
-            val label = host.substringBefore('.')
-            val start = index % alt.size
-            val domains = alt.drop(start) + alt.take(start)
-            val hosts = domains.map { "$label.$it" } + domains.map { "${node ?: label}.$it" }
-            return List(6) { hosts[it % hosts.size] }
-        }
+    // Alt hosts in the site reader's retry order
+    fun altHosts(host: String, index: Int): List<String> {
+        if (alt.isNullOrEmpty()) return emptyList()
+        val label = host.substringBefore('.')
+        val start = index % alt.size
+        val domains = alt.drop(start) + alt.take(start)
+        val hosts = domains.map { "$label.$it" } + domains.map { "${node ?: label}.$it" }
+        return List(6) { hosts[it % hosts.size] }
     }
 
     @Serializable
