@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MangaMee"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -14,4 +14,8 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://manga-mee.jp"
     }
+}
+
+dependencies {
+    implementation(project(":lib:xorinterceptor"))
 }
