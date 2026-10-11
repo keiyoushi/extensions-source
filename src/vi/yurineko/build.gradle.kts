@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "YuriNeko"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -19,4 +19,8 @@ keiyoushi {
     deeplink {
         path("/manga/.*")
     }
+}
+
+dependencies {
+    implementation(project(":lib:xorinterceptor"))
 }

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manga-Park"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -14,4 +14,8 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://manga-park.com"
     }
+}
+
+dependencies {
+    implementation(project(":lib:xorinterceptor"))
 }

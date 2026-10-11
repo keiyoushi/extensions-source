@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.xorinterceptor.xor
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -21,10 +22,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.Buffer
-import okio.ForwardingSource
-import okio.buffer
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -128,21 +125,7 @@ abstract class CatharsisWorld : KeiSource() {
         val decoded = ByteArray(HEADER_SIZE) { (header[it].toInt() xor XOR_KEY).toByte() }
         if (isImage(header) || !isImage(decoded)) return response
 
-        val xorSource = object : ForwardingSource(source) {
-            override fun read(sink: Buffer, byteCount: Long): Long {
-                val chunk = Buffer()
-                val read = super.read(chunk, byteCount)
-                if (read > 0) {
-                    val bytes = chunk.readByteArray()
-                    for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor XOR_KEY).toByte()
-                    sink.write(bytes)
-                }
-                return read
-            }
-        }
-        return response.newBuilder()
-            .body(xorSource.buffer().asResponseBody(body.contentType(), body.contentLength()))
-            .build()
+        return response.xor(XOR_KEY)
     }
 
     private fun isImage(bytes: ByteArray): Boolean {

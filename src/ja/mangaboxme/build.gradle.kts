@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MangaBox"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -14,4 +14,8 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://www.mangabox.me"
     }
+}
+
+dependencies {
+    implementation(project(":lib:xorinterceptor"))
 }
