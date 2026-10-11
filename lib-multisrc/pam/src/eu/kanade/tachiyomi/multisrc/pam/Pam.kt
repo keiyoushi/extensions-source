@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.pam
 
 import android.util.Base64
+import android.webkit.WebResourceResponse
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -16,15 +17,16 @@ import keiyoushi.lib.secretstream.SecretStream
 import keiyoushi.lib.secretstream.State
 import keiyoushi.lib.secretstream.X25519
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParseDateTime
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.Headers
@@ -38,6 +40,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import okio.Timeout
 import okio.buffer
+import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.net.URLDecoder
 import java.security.MessageDigest
@@ -309,17 +312,10 @@ abstract class Pam :
         readerModule ?: client.fetchReaderModule(baseUrl, headers).also { readerModule = it }
     }
 
-    /**
-     * The signer holds 16 MB of WASM memory, so it is built per chapter and dropped again
-     * instead of being kept for the source's lifetime.
-     */
-    private suspend fun <T> withSigner(block: suspend Signer.() -> T): T = try {
-        Signer(readerModule()).block()
-    } catch (e: Exception) {
-        // Most likely the site rebuilt its reader; pick the new one up on the next attempt.
-        readerModule = null
-        throw e
-    }
+    private val readerScript by lazy { javaClass.getResource("/assets/reader.js")!!.readText() }
+
+    // One handshake WebView at a time, also during library updates and downloads.
+    private val readerMutex = Mutex()
 
     private val secureRandom = SecureRandom()
 
@@ -329,6 +325,8 @@ abstract class Pam :
         val clientPubkeyB64: String,
         /** Reader v2 only: input keying material for this chapter's encrypted pages. */
         val contentKey: ByteArray? = null,
+        /** Reader v2 only: the manifest's page ticket. */
+        val pageTicket: String? = null,
     )
 
     private class ChapterState(
@@ -357,109 +355,93 @@ abstract class Pam :
                 return ChapterState(ChapterSession(token, shared, clientPubkeyB64), null)
             }
 
-            return withSigner {
-                val token = attest(body, clientPubkeyB64)
-                val manifest = requestManifest(props.data.uid, token, clientPubkeyB64)
-
-                ChapterState(
-                    ChapterSession(token, shared, clientPubkeyB64, contentKey(manifest, priv, serverPub)),
-                    manifest,
-                )
-            }
+            return openReader(body, priv, clientPubkeyB64, shared)
         } finally {
-            // The signer needs the private key for its own key exchange, so it is wiped only afterwards.
+            // The site's signer needs the private key for its own key exchange, so it is wiped only afterwards.
             priv.fill(0)
         }
     }
 
     /**
-     * Reader v2 mints the chapter token from an attestation exchange instead of shipping it
-     * in the page props. The first exchange is always answered with `refresh`, which retires
-     * the challenge embedded in the page: only the challenge handed back by the partial
-     * reload gets a token.
+     * Reader v2 runs in the site's own code: its attestation reports the WebView's fingerprint and
+     * mints the chapter token, and its signer signs the manifest request and unmasks the page key.
      */
-    private suspend fun Signer.attest(body: PageListResponse, clientPubkeyB64: String): String {
-        val attestation = body.props.attestation ?: throw IOException("Missing attestation challenge")
-        val device = deviceReport(attestation.webglSeed)
-        var challenge = attestation.challenge
+    private suspend fun openReader(
+        body: PageListResponse,
+        privateKey: ByteArray,
+        clientPubkeyB64: String,
+        sharedSecret: ByteArray,
+    ): ChapterState = readerMutex.withLock {
+        val props = body.props
+        val reader = readerModule()
+        val csrfToken = apiHeaders(includeXSRFToken = false, includeCSRFToken = true, includeVersion = false)["X-CSRF-TOKEN"]!!
+        val bridge = "pam${hexNonce(8)}"
+        val input = ReaderInput(
+            bridge = bridge,
+            csrfToken = csrfToken,
+            sharedUrl = reader.sharedUrl,
+            glueUrl = reader.glueUrl,
+            exports = reader.exports,
+            attestation = props.attestation ?: throw IOException("Missing attestation challenge"),
+            serverPubkey = props.serverPubkey,
+            privateKey = Base64.encodeToString(privateKey, Base64.NO_WRAP),
+            clientPubkey = clientPubkeyB64,
+            uid = props.data.uid,
+            manifestVersion = MANIFEST_VERSION,
+            chapterUrl = "$baseUrl/serie/${props.data.serie.slug}/chapter/${props.data.slug}",
+            reloadHeaders = mapOf(
+                "X-Requested-With" to "XMLHttpRequest",
+                "X-Inertia" to "true",
+                "X-Inertia-Version" to body.version,
+                "X-Inertia-Partial-Component" to body.component,
+                "X-Inertia-Partial-Data" to "chapter_token,attestation",
+            ),
+        ).toJsonString()
 
-        val reloadUrl = "$baseUrl/serie/${body.props.data.serie.slug}/chapter/${body.props.data.slug}"
-        val reloadHeaders = headersBuilder()
-            .set("X-Requested-With", "XMLHttpRequest")
-            .set("X-Inertia", "true")
-            .set("X-Inertia-Version", body.version)
-            .set("X-Inertia-Partial-Component", body.component)
-            .set("X-Inertia-Partial-Data", "chapter_token,attestation")
-            .build()
-
-        repeat(ATTESTATION_ATTEMPTS) {
-            val request = AttestationRequest(
-                c = challenge,
-                v = hmacSha256Hex(device, challenge.toByteArray()),
-                sp = signAttestation(challenge, "$device\u0000$clientPubkeyB64"),
-                d = device,
-                pk = clientPubkeyB64,
-            )
-            val apiHeaders = apiHeaders(includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
-            val minted = client.post("$baseUrl/api/v1/t", apiHeaders, request.toJsonRequestBody())
-                .parseAs<AttestationResponse>()
-
-            if (!minted.supported) throw IOException("Attestation refused: device not supported")
-            minted.ct?.also { return it }
-
-            val reloaded = client.get(reloadUrl, reloadHeaders).parseAs<AttestationReload>().props
-            reloaded.chapterToken?.also { return it }
-            challenge = reloaded.attestation?.challenge ?: throw IOException("Attestation refused")
+        val script = "($readerScript)($input)"
+        val result = try {
+            runWebView<ReaderResult>(timeout = 60.seconds) {
+                userAgent = headers["User-Agent"]!!
+                blockImages = true
+                // Keep the WebView on the site's own host.
+                interceptRequest { request ->
+                    val requestHost = request.url.host
+                    if (requestHost == null || requestHost == baseHttpUrl.host) null else blockedResponse()
+                }
+                jsBridge(bridge) { resolve(it.parseAs()) }
+                var started = false
+                onPageFinished {
+                    if (!started) {
+                        started = true
+                        evaluateJs(script)
+                    }
+                }
+                loadData(baseUrl, "")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            throw e
+        } catch (e: Throwable) {
+            throw IOException(e.message, e)
         }
 
-        throw IOException("Attestation refused")
+        result.error?.let { error ->
+            // Most likely the site rebuilt its reader; pick the new one up on the next attempt.
+            readerModule = null
+            throw IOException(error)
+        }
+
+        // Anything the page hands back is used in page URLs and headers.
+        val token = result.token?.takeIf(String::isNotBlank)
+        val manifest = result.manifest?.takeIf { MANIFEST_BASE_REGEX.matches(it.base) && it.pt?.let(PAGE_TICKET_REGEX::matches) != false }
+        val contentKey = result.contentKey?.let { runCatching { Base64.decode(it, Base64.DEFAULT) }.getOrNull() }?.takeIf { it.size == 32 }
+        if (token == null || manifest == null || contentKey == null) throw IOException("Unexpected reader result")
+
+        ChapterState(ChapterSession(token, sharedSecret, clientPubkeyB64, contentKey, manifest.pt), manifest)
     }
 
-    /**
-     * Stands in for the browser fingerprint the site collects through canvas and WebGL. The
-     * reader renders `webgl_proof` from the seed while `canvas_hash` draws a fixed string, and
-     * the server's `refresh` round checks that they react to a new seed accordingly.
-     */
-    private fun deviceReport(webglSeed: String): String = """{"webdriver":false,"webgl_vendor":"Qualcomm","webgl_renderer":"Adreno (TM) 730",""" +
-        """"webgl_proof":"${sha256Hex("proof:$webglSeed")}","gl_sig":"8192|1|1|23",""" +
-        """"device_memory":null,"hardware_concurrency":8,"effective_type":null,"save_data":false,""" +
-        """"screen_width":1080,"screen_height":2340,"viewport_width":1080,"viewport_height":2130,""" +
-        """"device_pixel_ratio":2.75,"max_touch_points":5,"has_touch":true,""" +
-        """"locale":"en-US","timezone":"America/New_York","platform":"Linux armv8l",""" +
-        """"canvas_hash":"${sha256Hex("attest:canvas")}","visibility_state":"visible"}"""
-
-    private suspend fun Signer.requestManifest(uid: String, chapterToken: String, clientPubkeyB64: String): ManifestResponse {
-        val ts = System.currentTimeMillis() / 1000
-        val nonce = hexNonce()
-        val request = ManifestRequest(
-            v = MANIFEST_VERSION,
-            c = uid,
-            t = chapterToken,
-            ts = ts,
-            n = nonce,
-            s = signManifest(chapterToken, MANIFEST_VERSION, uid, ts, nonce),
-        )
-
-        val headers = apiHeaders(
-            includeXSRFToken = true,
-            includeCSRFToken = false,
-            includeVersion = false,
-        ).newBuilder().set("X-Client-Pubkey", clientPubkeyB64).build()
-
-        return client.post("$baseUrl/api/v1/m", headers, request.toJsonRequestBody()).parseAs<ManifestResponse>()
-    }
-
-    /**
-     * The manifest hint is the page key masked with a digest chain over the ECDH secret, so
-     * it is worthless to any other session.
-     */
-    private fun Signer.contentKey(manifest: ManifestResponse, privateKey: ByteArray, serverPubkey: ByteArray): ByteArray {
-        val segments = manifest.base.split('/').filter(String::isNotEmpty)
-        require(segments.size >= 4 && segments[0] == "p") { "unexpected manifest base: ${manifest.base}" }
-
-        val hint = Base64.decode(manifest.hint, Base64.DEFAULT)
-        return deriveContentKey(privateKey, serverPubkey, segments[1], segments[2].toInt(), hint)
-    }
+    private fun blockedResponse() = WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0)))
 
     private suspend fun ensureSession(serieSlug: String, chapterSlug: String): ChapterSession {
         val id = sessionKey(serieSlug, chapterSlug)
@@ -527,9 +509,6 @@ abstract class Pam :
         return mac.doFinal(msg).joinToString("") { "%02x".format(it) }
     }
 
-    private fun sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
-        .joinToString("") { "%02x".format(it) }
-
     override suspend fun getImageUrl(page: Page): String {
         val seg = "$baseUrl${page.url}".toHttpUrl().pathSegments
         require(seg.size >= 6 && seg[0] == "serie" && seg[2] == "chapter" && seg[4] == "page") {
@@ -564,7 +543,9 @@ abstract class Pam :
         val session = request.url.fragment?.let(sessions::get) ?: return chain.proceed(request)
 
         if (session.contentKey != null) {
-            val response = chain.proceed(request)
+            val response = chain.proceed(
+                request.newBuilder().apply { session.pageTicket?.let { header("X-Pt", it) } }.build(),
+            )
             if (!response.isSuccessful) return response
 
             return response.newBuilder()
@@ -646,8 +627,9 @@ abstract class Pam :
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
-private const val ATTESTATION_ATTEMPTS = 3
 private const val MANIFEST_VERSION = 2
+private val MANIFEST_BASE_REGEX = Regex("""/p/[\w-]+/\d+/[\w-]+/""")
+private val PAGE_TICKET_REGEX = Regex("""[!-~]+""")
 private const val MAX_VARIANT_WIDTH = 2160
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
 private const val CHUNK_SIZE = 65536 + 17 // libsodium secretstream chunk + ABYTES
