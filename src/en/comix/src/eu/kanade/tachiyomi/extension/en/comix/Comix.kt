@@ -57,10 +57,6 @@ abstract class Comix :
     private val apiUrl get() = "$baseUrl/api/v1"
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    private val captureItemsScript by lazy { javaClass.getResource("/assets/capture_items.js")!!.readText() }
-    private val chapterListScript by lazy { javaClass.getResource("/assets/chapter_list.js")!!.readText() }
-    private val chapterPagesScript by lazy { javaClass.getResource("/assets/chapter_pages.js")!!.readText() }
-
     private val tagIdCache = object : LinkedHashMap<String, List<String>>(
         TAG_ID_CACHE_SIZE,
         0.75f,
@@ -518,7 +514,7 @@ abstract class Comix :
         val mangaSlug = manga.url.removePrefix("/")
         val chapterPath = JSONObject.quote("/title/${mangaSlug.substringBefore('-')}-")
         val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, rejectName ->
-            "($captureItemsScript)(($chapterListScript)(" +
+            "(${asset("capture_items.js")})((${asset("chapter_list.js")})(" +
                 "${latestChapterId ?: "null"}, $chapterPath, $MAX_CHAPTER_PAGES, $PAGES_IN_FLIGHT, " +
                 "window.$passPayloadName, window.$rejectName));"
         }
@@ -602,7 +598,7 @@ abstract class Comix :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
         val payload = runInWebView(document, { it.isChapterPagesRequest() }) { passPayloadName, _ ->
-            "($captureItemsScript)(($chapterPagesScript)(window.$passPayloadName));"
+            "(${asset("capture_items.js")})((${asset("chapter_pages.js")})(window.$passPayloadName));"
         }
 
         return buildPages(payload.parseAs())
@@ -696,6 +692,8 @@ abstract class Comix :
             loadData(document.location(), html)
         }
     }
+
+    private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
     private fun HttpUrl.isChapterPagesRequest(): Boolean = pathSegments.size == 4 &&
         pathSegments[0] == "api" &&
