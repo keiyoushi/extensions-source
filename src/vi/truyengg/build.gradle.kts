@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "FoxTruyen"
-    versionCode = 13
+    versionCode = 14
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
-            custom("https://foxtruyen2.com")
+            custom("https://pagerrentablespotlight.com")
         }
         id = 1458993267006200127
     }
