@@ -1,49 +1,13 @@
-// Chapter list through the site's own `?page=` state
-(latestChapterId, chapterPath, maxPages, pagesInFlight, pass, reject) => {
+// Chapter list through the site's own `?page=` state, one page at a time
+(latestChapterId, chapterPath, maxPages, pageDelayMs, pass, reject) => {
     const chapters = [];
-    const received = new Map();
     const isChapter = (item) => item &&
         typeof item.id === "number" &&
         typeof item.number === "number" &&
         typeof item.url === "string" &&
         item.url.includes(chapterPath);
-    let lastPage = null;
-    let nextToRead = 1;
-    let nextToRequest = 2;
+    let page = 1;
     let done = false;
-
-    const advance = () => {
-        while (received.has(nextToRead)) {
-            const { items, meta } = received.get(nextToRead);
-            received.delete(nextToRead);
-            chapters.push(...items);
-            if (items.some((item) => item.id === latestChapterId)) {
-                done = true;
-                pass(JSON.stringify(chapters));
-                return;
-            }
-            if (!meta.hasNext || nextToRead >= lastPage) {
-                done = true;
-                const count = new Set(chapters.map((item) => item.id)).size;
-                if (count === meta.total) {
-                    pass(JSON.stringify(chapters));
-                } else {
-                    reject(`Got ${count} of ${meta.total} chapters`);
-                }
-                return;
-            }
-            nextToRead++;
-        }
-        while (nextToRequest <= lastPage && nextToRequest < nextToRead + pagesInFlight) {
-            const page = nextToRequest++;
-            setTimeout(() => {
-                const url = new URL(location.href);
-                url.searchParams.set("page", String(page));
-                history.pushState(history.state, "", url);
-                dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
-            });
-        }
-    };
 
     return (holder) => {
         const items = holder.items;
@@ -55,9 +19,29 @@
             reject("Chapter list has no page numbers");
             return;
         }
-        if (meta.page < nextToRead || received.has(meta.page)) return;
-        if (lastPage === null) lastPage = Math.min(meta.lastPage, maxPages);
-        received.set(meta.page, { items, meta });
-        advance();
+        if (meta.page !== page) return;
+        chapters.push(...items);
+        if (items.some((item) => item.id === latestChapterId)) {
+            done = true;
+            pass(JSON.stringify(chapters));
+            return;
+        }
+        if (!meta.hasNext || page >= Math.min(meta.lastPage, maxPages)) {
+            done = true;
+            const count = new Set(chapters.map((item) => item.id)).size;
+            if (count === meta.total) {
+                pass(JSON.stringify(chapters));
+            } else {
+                reject(`Got ${count} of ${meta.total} chapters`);
+            }
+            return;
+        }
+        page++;
+        setTimeout(() => {
+            const url = new URL(location.href);
+            url.searchParams.set("page", String(page));
+            history.pushState(history.state, "", url);
+            dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
+        }, pageDelayMs);
     };
 }
