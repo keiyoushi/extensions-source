@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.komga.dto
+package eu.kanade.tachiyomi.extension.all.komga
 
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
@@ -7,6 +7,19 @@ import org.apache.commons.text.StringSubstitutor
 interface ConvertibleToSManga {
     fun toSManga(baseUrl: String): SManga
 }
+
+@Serializable
+class PageWrapperDto<T>(
+    val content: List<T>,
+    val empty: Boolean,
+    val first: Boolean,
+    val last: Boolean,
+    val number: Long,
+    val numberOfElements: Long,
+    val size: Long,
+    val totalElements: Long,
+    val totalPages: Long,
+)
 
 @Serializable
 class LibraryDto(
@@ -98,7 +111,7 @@ class BookDto(
     val media: MediaDto,
     val metadata: BookMetadataDto,
 ) : ConvertibleToSManga {
-    fun getChapterName(template: String, isFromReadList: Boolean): String {
+    fun getChapterName(template: String, isFromReadList: Boolean, mangaTitle: String): String {
         val values = hashMapOf(
             "title" to metadata.title,
             "seriesTitle" to seriesTitle,
@@ -117,7 +130,9 @@ class BookDto(
             }
 
             append(sub.replace(template))
-        }
+        }.takeIf {
+            it != mangaTitle
+        } ?: "\u200B$mangaTitle" // Avoid app trimming to empty
     }
 
     override fun toSManga(baseUrl: String) = SManga.create().apply {
