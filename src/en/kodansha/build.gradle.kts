@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Kodansha"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -15,4 +15,8 @@ keiyoushi {
         baseUrl = "https://kodansha.us"
         versionId = 2
     }
+}
+
+dependencies {
+    implementation(project(":lib:xorinterceptor"))
 }
