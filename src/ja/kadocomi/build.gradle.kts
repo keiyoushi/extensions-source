@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "KadoComi"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -15,4 +15,8 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://comic-walker.com"
     }
+}
+
+dependencies {
+    implementation(project(":lib:xorinterceptor"))
 }
