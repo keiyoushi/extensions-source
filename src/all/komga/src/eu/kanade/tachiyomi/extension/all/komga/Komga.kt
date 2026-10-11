@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -20,11 +21,14 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -111,86 +115,86 @@ class Komga(
         dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = searchMangaUrl(
-            page,
-            "",
-            FilterList(
-                SeriesSort(Filter.Sort.Selection(1, true)),
-            ),
-        )
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SeriesSort(Filter.Sort.Selection(1, true))))
 
-        return processSeriesPage(client.get(url, Fetch.XHR), baseUrl)
-    }
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = searchMangaUrl(
-            page,
-            "",
-            FilterList(
-                SeriesSort(Filter.Sort.Selection(3, false)),
-            ),
-        )
-
-        return processSeriesPage(client.get(url, Fetch.XHR), baseUrl)
-    }
-
-    private fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
-        if (baseUrl.isBlank()) throw Exception("Set Address in Settings")
-
-        val collectionId = (filters.find { it is CollectionSelect } as? CollectionSelect)?.let {
-            it.collections[it.state].id
-        }
-
-        val type = when {
-            collectionId != null -> "collections/$collectionId/series"
-            filters.find { it is TypeSelect }?.state == 1 -> "readlists"
-            filters.find { it is TypeSelect }?.state == 2 -> "books"
-            else -> "series"
-        }
-
-        val url = "$baseUrl/api/v1".toHttpUrl().newBuilder()
-            .addPathSegments(type)
-            .addQueryParameter("search", query)
-            .addQueryParameter("page", (page - 1).toString())
-            .addQueryParameter("deleted", "false")
-
-        val filterList = filters.ifEmpty { getFilterList() }
-        val defaultLibraries = defaultLibraries
-
-        if (filterList.filterIsInstance<LibraryFilter>().isEmpty() && defaultLibraries.isNotEmpty()) {
-            url.addQueryParameter("library_id", defaultLibraries.joinToString(","))
-        }
-
-        filterList.forEach { filter ->
-            when (filter) {
-                is UriFilter -> filter.addToUri(url)
-
-                is Filter.Sort -> {
-                    val state = filter.state ?: return@forEach
-
-                    val sortCriteria = when (state.index) {
-                        0 -> "relevance"
-                        1 -> if (type == "series") "metadata.titleSort" else "name"
-                        2 -> "createdDate"
-                        3 -> "lastModifiedDate"
-                        4 -> "random"
-                        else -> return@forEach
-                    } + "," + if (state.ascending) "asc" else "desc"
-
-                    url.addQueryParameter("sort", sortCriteria)
-                }
-
-                else -> {}
-            }
-        }
-
-        return url.build().toString()
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SeriesSort(Filter.Sort.Selection(3, false))))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = searchMangaUrl(page, query, filters)
-        return processSeriesPage(client.get(url, Fetch.XHR), baseUrl)
+        if (baseUrl.isBlank()) throw Exception("Set Address in Settings")
+
+        val collection = filters.firstInstanceOrNull<CollectionSelect>()?.let { it.collections[it.state] }?.takeIf { it.id != null }
+        val type = when (filters.firstInstanceOrNull<TypeSelect>()?.state?.takeIf { collection == null }) {
+            1 -> TYPE_READLISTS
+            2 -> TYPE_BOOKS
+            else -> TYPE_SERIES
+        }
+        val libraryFilter = filters.firstInstanceOrNull<LibraryFilter>()
+
+        val url = "$baseUrl/api/v1".toHttpUrl().newBuilder()
+            .addPathSegments(
+                when (type) {
+                    TYPE_READLISTS -> "readlists"
+                    TYPE_BOOKS -> "books/list"
+                    else -> "series/list"
+                },
+            )
+            .addQueryParameter("page", (page - 1).toString())
+
+        val searchTerm = query.trim().replace(LUCENE_RESERVED, """\\$0""").replace(LUCENE_OPERATOR) { it.value.lowercase() }
+        val sort = filters.firstInstanceOrNull<SeriesSort>()?.state
+        val sortCriteria = when {
+            // Komga shows a collection in its own order whatever the sort
+            collection != null -> if (collection.ordered) "collection.number,asc" else "metadata.titleSort,asc"
+            sort == null -> null
+            else -> {
+                val field = when {
+                    // Komga only ranks by relevance when there is a search term
+                    sort.index == 0 && searchTerm.isNotEmpty() -> "relevance"
+                    sort.index <= 1 -> when (type) {
+                        TYPE_SERIES -> "metadata.titleSort"
+                        TYPE_BOOKS -> "metadata.title"
+                        else -> "name"
+                    }
+                    sort.index == 2 -> "createdDate"
+                    sort.index == 3 -> "lastModifiedDate"
+                    // Komga only sorts series randomly
+                    type == TYPE_SERIES -> "random"
+                    else -> null
+                }
+                field?.let { "$it,${if (sort.ascending) "asc" else "desc"}" }
+            }
+        }
+        sortCriteria?.let { url.addQueryParameter("sort", it) }
+
+        if (type == TYPE_READLISTS) {
+            val libraryIds = libraryFilter?.selectedIds ?: defaultLibraries
+            url.addQueryParameter("search", searchTerm)
+            if (libraryIds.isNotEmpty()) url.addQueryParameter("library_id", libraryIds.joinToString(","))
+            return processSeriesPage(client.get(url.build(), Fetch.XHR), baseUrl)
+        }
+
+        val conditions = buildList {
+            add(ConditionDto(deleted = OperatorDto("isFalse")))
+            collection?.id?.let { add(ConditionDto(collectionId = OperatorDto("is", it))) }
+            if (libraryFilter == null && defaultLibraries.isNotEmpty()) {
+                add(ConditionDto(anyOf = defaultLibraries.map { ConditionDto(libraryId = OperatorDto("is", it)) }))
+            }
+            filters.filterIsInstance<ConditionFilter>()
+                .filter { type == TYPE_SERIES || it.appliesToBooks }
+                .groupBy { it.key }
+                .map { (_, group) -> group.flatMap { it.alternatives() } }
+                .filter { it.isNotEmpty() }
+                .forEach { add(ConditionDto(anyOf = it)) }
+        }
+
+        val body = SearchDto(ConditionDto(allOf = conditions), searchTerm.ifEmpty { null }).toJsonRequestBody()
+        val response = try {
+            client.post(url.build(), Fetch.XHR, body)
+        } catch (e: HttpException) {
+            // Servers before the list API answer 405
+            if (e.code == 405) throw Exception("Update Komga to 1.19 or newer") else throw e
+        }
+        return processSeriesPage(response, baseUrl)
     }
 
     private fun processSeriesPage(response: Response, baseUrl: String): MangasPage {
@@ -325,26 +329,18 @@ class Komga(
             TypeSelect(),
         ).apply {
             filterData?.collections?.takeIf { it.isNotEmpty() }
-                ?.map { CollectionFilterEntry(it.name, it.id) }
+                ?.map { CollectionFilterEntry(it.name, it.id, it.ordered) }
                 ?.let { add(CollectionSelect(listOf(CollectionFilterEntry("None")) + it)) }
             filterData?.libraries?.takeIf { it.isNotEmpty() }
                 ?.let { add(LibraryFilter(it, defaultLibraries)) }
-            add(
-                UriMultiSelectFilter(
-                    "Status",
-                    "status",
-                    listOf("Ongoing", "Ended", "Abandoned", "Hiatus").map {
-                        UriMultiSelectOption(it, it.uppercase(Locale.ROOT))
-                    },
-                ),
-            )
-            listOf(
-                Triple("Genres", "genre", filterData?.genres),
-                Triple("Tags", "tag", filterData?.tags),
-                Triple("Publishers", "publisher", filterData?.publishers),
-            ).forEach { (name, key, values) ->
-                if (!values.isNullOrEmpty()) add(UriMultiSelectFilter(name, key, values.map { UriMultiSelectOption(it) }))
+            fun addOptions(name: String, options: List<MultiSelectOption>?, appliesToBooks: Boolean = true, toCondition: (String) -> ConditionDto) {
+                if (!options.isNullOrEmpty()) add(MultiSelectFilter(name, options, appliesToBooks, toCondition))
             }
+            val status = listOf("Ongoing", "Ended", "Abandoned", "Hiatus").map { MultiSelectOption(it, it.uppercase(Locale.ROOT)) }
+            addOptions("Status", status, appliesToBooks = false) { ConditionDto(seriesStatus = OperatorDto("is", it)) }
+            addOptions("Genres", filterData?.genres?.map(::MultiSelectOption), appliesToBooks = false) { ConditionDto(genre = OperatorDto("is", it)) }
+            addOptions("Tags", filterData?.tags?.map(::MultiSelectOption)) { ConditionDto(tag = OperatorDto("is", it)) }
+            addOptions("Publishers", filterData?.publishers?.map(::MultiSelectOption), appliesToBooks = false) { ConditionDto(publisher = OperatorDto("is", it)) }
             addAll(filterData?.authors.orEmpty().map { (role, authors) -> AuthorGroup(role, authors.map { AuthorFilter(it) }) })
             add(SeriesSort())
         }
@@ -597,6 +593,10 @@ class Komga(
         internal const val TYPE_SERIES = "Series"
         internal const val TYPE_READLISTS = "Read lists"
         internal const val TYPE_BOOKS = "Books"
+
+        // Lucene syntax, escaped so search terms match literally
+        private val LUCENE_RESERVED = Regex("""[-+&|!(){}\[\]^"~*?:\\/]""")
+        private val LUCENE_OPERATOR = Regex("""(?<![^\s\u3000])(AND|OR|NOT)(?![^\s\u3000])""")
     }
 }
 

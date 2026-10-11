@@ -216,3 +216,30 @@ class ReadListDto(
         status = SManga.UNKNOWN
     }
 }
+
+@Serializable
+class SearchDto(
+    private val condition: ConditionDto,
+    private val fullTextSearch: String? = null,
+)
+
+@Serializable
+class ConditionDto(
+    private val allOf: List<ConditionDto>? = null,
+    private val anyOf: List<ConditionDto>? = null,
+    private val deleted: OperatorDto<String>? = null,
+    private val libraryId: OperatorDto<String>? = null,
+    private val collectionId: OperatorDto<String>? = null,
+    private val readStatus: OperatorDto<String>? = null,
+    private val seriesStatus: OperatorDto<String>? = null,
+    private val genre: OperatorDto<String>? = null,
+    private val tag: OperatorDto<String>? = null,
+    private val publisher: OperatorDto<String>? = null,
+    private val author: OperatorDto<AuthorMatchDto>? = null,
+)
+
+@Serializable
+class OperatorDto<T>(private val operator: String, private val value: T? = null)
+
+@Serializable
+class AuthorMatchDto(private val name: String, private val role: String)
