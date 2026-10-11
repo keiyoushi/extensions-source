@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Omoi"
     pkgName = "en.azuki"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -16,4 +16,8 @@ keiyoushi {
         baseUrl = "https://www.omoi.com"
         versionId = 2
     }
+}
+
+dependencies {
+    implementation(project(":lib:xorinterceptor"))
 }
