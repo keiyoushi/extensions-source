@@ -126,7 +126,8 @@ class PageListResponse(
         val serverPubkey: String,
         @SerialName("reader_v2")
         val readerV2: Boolean = false,
-        val attestation: Attestation? = null,
+        /** Handed to the site's attestation as is. */
+        val attestation: JsonObject? = null,
         val data: Data,
     ) {
         @Serializable
@@ -141,30 +142,31 @@ class PageListResponse(
     }
 }
 
+/** What reader.js is called with. */
 @Serializable
-class Attestation(
-    val challenge: String,
-    @SerialName("webgl_seed")
-    val webglSeed: String,
+class ReaderInput(
+    private val bridge: String,
+    private val csrfToken: String,
+    private val sharedUrl: String,
+    private val glueUrl: String,
+    private val exports: Map<String, String>,
+    private val attestation: JsonObject,
+    private val serverPubkey: String,
+    private val privateKey: String,
+    private val clientPubkey: String,
+    private val uid: String,
+    private val manifestVersion: Int,
+    private val chapterUrl: String,
+    private val reloadHeaders: Map<String, String>,
 )
 
-/** Partial Inertia reload, asking only for the freshly minted token and challenge. */
+/** What reader.js hands back. */
 @Serializable
-class AttestationReload(
-    val props: Props,
-) {
-    @Serializable
-    class Props(
-        @SerialName("chapter_token")
-        val chapterToken: String? = null,
-        val attestation: Attestation? = null,
-    )
-}
-
-@Serializable
-class AttestationResponse(
-    val ct: String? = null,
-    val supported: Boolean = true,
+class ReaderResult(
+    val token: String? = null,
+    val manifest: ManifestResponse? = null,
+    val contentKey: String? = null,
+    val error: String? = null,
 )
 
 @Serializable
@@ -173,25 +175,8 @@ class ManifestResponse(
     val hint: String,
     val count: Int,
     val variants: List<Int> = emptyList(),
-)
-
-@Serializable
-class AttestationRequest(
-    val c: String,
-    val v: String,
-    val sp: String,
-    val d: String,
-    val pk: String,
-)
-
-@Serializable
-class ManifestRequest(
-    val v: Int,
-    val c: String,
-    val t: String,
-    val ts: Long,
-    val n: String,
-    val s: String,
+    /** Page ticket, sent as `X-Pt` with every page. */
+    val pt: String? = null,
 )
 
 @Serializable

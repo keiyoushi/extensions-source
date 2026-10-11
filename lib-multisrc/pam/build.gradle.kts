@@ -6,10 +6,9 @@ dependencies {
     api(project(":lib:secretstream"))
     api(project(":lib:i18n"))
     implementation(project(":lib:ece"))
-    implementation("com.dylibso.chicory:runtime:1.7.5")
 }
 
 keiyoushi {
-    baseVersionCode = 1
+    baseVersionCode = 2
     libVersion = "1.6"
 }
