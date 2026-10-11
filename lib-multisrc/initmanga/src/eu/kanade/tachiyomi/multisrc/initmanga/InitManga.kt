@@ -13,12 +13,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -30,6 +32,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -267,17 +270,22 @@ abstract class InitManga :
     }
 
     protected open suspend fun parseChapterList(initialDocument: Document, mangaUrl: HttpUrl): List<SChapter> {
+        val items = initialDocument.select(chapterListSelector())
+        if (items.isEmpty()) {
+            return fetchChapterListFromApi(initialDocument, mangaUrl)
+        }
+
         val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED_KEY, PREF_HIDE_LOCKED_DEFAULT)
         val chapters = mutableListOf<SChapter>()
         var document = initialDocument
         var page = 2
 
         do {
-            val items = document.select(chapterListSelector())
-            if (items.isEmpty()) break
+            val pageItems = document.select(chapterListSelector())
+            if (pageItems.isEmpty()) break
 
             chapters.addAll(
-                items.mapNotNull { element ->
+                pageItems.mapNotNull { element ->
                     if (hideLocked && isLocked(element)) return@mapNotNull null
                     chapterFromElement(element).takeUnless { hideLocked && it.name.startsWith("🔒") }
                 },
@@ -297,6 +305,64 @@ abstract class InitManga :
 
             val hasNextPage = document.selectFirst("ul.uk-pagination a:not(:matchesOwn(\\S))[href^=http]") != null
         } while (hasNextPage)
+
+        return chapters
+    }
+
+    protected open suspend fun fetchChapterListFromApi(document: Document, mangaUrl: HttpUrl): List<SChapter> {
+        val mangaId = REGEX_POST_ID.find(document.html())?.groupValues?.get(1)?.toIntOrNull()
+            ?: run {
+                val slug = mangaUrl.pathSegments.filter { it.isNotEmpty() }.lastOrNull() ?: return emptyList()
+                val apiUrl = "$baseUrl/wp-json/wp/v2/manga".toHttpUrl().newBuilder()
+                    .addQueryParameter("slug", slug)
+                    .addQueryParameter("_fields", "id")
+                    .build()
+                client.get(apiUrl).parseAs<List<MangaIdDto>>().firstOrNull()?.id ?: return emptyList()
+            }
+
+        val mangaBasePath = mangaUrl.encodedPath.trimEnd('/') + "/"
+        val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED_KEY, PREF_HIDE_LOCKED_DEFAULT)
+        val chapters = mutableListOf<SChapter>()
+        var page = 1
+
+        do {
+            val url = "$baseUrl/wp-json/initmanga/v1/chapters".toHttpUrl().newBuilder()
+                .addQueryParameter("manga_id", mangaId.toString())
+                .addQueryParameter("per_page", "50")
+                .addQueryParameter("paged", page.toString())
+                .build()
+            val result = client.get(url).parseAs<ChapterListDto>()
+
+            for (chapter in result.items) {
+                val isLocked = chapter.lockType != "none" && !chapter.isPurchased
+                if (hideLocked && isLocked) continue
+
+                chapters.add(
+                    SChapter.create().apply {
+                        setUrlWithoutDomain("$mangaBasePath${chapter.slug.trim('/')}/")
+                        chapter_number = chapter.number
+                        val cleanNumber = chapter.number.toString().removeSuffix(".0")
+                        val title = chapter.title.trim()
+                        val chapterName = buildString {
+                            if (isLocked) append("🔒 ")
+                            if (title.startsWith("bölüm", ignoreCase = true) || title.startsWith("chapter", ignoreCase = true)) {
+                                append(title)
+                            } else {
+                                append("Bölüm ")
+                                append(cleanNumber)
+                                if (title.isNotBlank()) {
+                                    append(" - ")
+                                    append(title)
+                                }
+                            }
+                        }
+                        name = chapterName
+                        date_upload = restDateFormat.tryParseDateTime(chapter.createdAt, istanbulZone)
+                    },
+                )
+            }
+            page++
+        } while (page <= result.totalPages)
 
         return chapters
     }
@@ -326,12 +392,13 @@ abstract class InitManga :
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
-        return pageListParse(document)
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl).asJsoup()
+        return pageListParse(document, chapterUrl)
     }
 
-    open fun pageListParse(document: Document): List<Page> {
-        if (document.selectFirst("div#chapter-content div.lock-card") != null) {
+    open suspend fun pageListParse(document: Document, chapterUrl: String = baseUrl): List<Page> {
+        if (document.selectFirst("div.lock-card, div#chapter-content div.lock-card, div.imc-locked") != null) {
             throw Exception("Kilitli bölüm, okumak için siteye giriş yapmanız gerekiyor")
         }
 
@@ -349,10 +416,59 @@ abstract class InitManga :
         val payload = runCatching { encryptedJson.parseAs<EncryptedPayloadDto>() }.getOrNull()
             ?: return fallbackPages(document)
 
-        val decryptedContent = AesDecrypt.decryptLayered(document, payload.ciphertext, payload.iv, payload.salt)
-            ?: return fallbackPages(document)
+        val decrypted = if (!payload.salt.isNullOrBlank()) {
+            AesDecrypt.decryptLayered(document, payload.ciphertext, payload.iv, payload.salt)
+        } else if (payload.cid != null && payload.e != null && !payload.g.isNullOrBlank()) {
+            fetchDecryptedContentV2(document, payload, chapterUrl)
+        } else {
+            null
+        }
+        val decryptedContent = decrypted ?: return fallbackPages(document)
 
         return parseDecryptedPages(decryptedContent)
+    }
+
+    private suspend fun fetchDecryptedContentV2(
+        document: Document,
+        payload: EncryptedPayloadDto,
+        chapterUrl: String,
+    ): String? {
+        val initMangaData = REGEX_INIT_MANGA_DATA.find(document.html())?.groupValues?.get(1)
+            ?.let { runCatching { it.parseAs<InitMangaDataDto>() }.getOrNull() }
+
+        val restUrl = initMangaData?.restUrl?.takeIf { it.isNotBlank() }
+            ?: "$baseUrl/wp-json/initmanga/v1"
+        val nonce = initMangaData?.nonce?.takeIf { it.isNotBlank() }
+
+        val keyUrl = "$restUrl/chapter-key".toHttpUrl()
+        val requestDto = ChapterKeyRequestDto(
+            chapterId = payload.cid!!,
+            epoch = payload.e!!,
+            grant = payload.g!!,
+        )
+
+        suspend fun requestKey(includeNonce: Boolean): String? = runCatching {
+            val requestHeaders = headers.newBuilder()
+                .apply {
+                    if (includeNonce && !nonce.isNullOrBlank()) {
+                        add("X-WP-Nonce", nonce)
+                    }
+                    add("Referer", chapterUrl)
+                }
+                .build()
+            val response = client.post(keyUrl, requestHeaders, requestDto.toJsonRequestBody(), ensureSuccess = false)
+            if (response.isSuccessful) {
+                response.parseAs<ChapterKeyResponseDto>().key
+            } else {
+                null
+            }
+        }.getOrNull()
+
+        val keyHex = (if (!nonce.isNullOrBlank()) requestKey(true) else null)
+            ?: requestKey(false)
+            ?: return null
+
+        return AesDecrypt.decryptWithKey(payload.ciphertext, keyHex, payload.iv)
     }
 
     private fun parseDecryptedPages(content: String): List<Page> {
@@ -438,8 +554,12 @@ abstract class InitManga :
     }
 
     companion object {
-        private const val PREF_HIDE_LOCKED_KEY = "pref_hide_locked_chapters"
-        private const val PREF_HIDE_LOCKED_DEFAULT = false
+        const val PREF_HIDE_LOCKED_KEY = "pref_hide_locked_chapters"
+        const val PREF_HIDE_LOCKED_DEFAULT = false
         private val ENCRYPTED_CHAPTER_REGEX = Regex("""InitMangaEncryptedChapter\s*=\s*(\{.*?\})""", RegexOption.DOT_MATCHES_ALL)
+        private val REGEX_INIT_MANGA_DATA = Regex("""var\s+InitMangaData\s*=\s*(\{.*?\});""", RegexOption.DOT_MATCHES_ALL)
+        private val REGEX_POST_ID = Regex("""(?:postid-|window\.post_id\s*=\s*|post_id["']?\s*:\s*["']?)(\d+)""")
+        private val restDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        private val istanbulZone = ZoneId.of("Europe/Istanbul")
     }
 }

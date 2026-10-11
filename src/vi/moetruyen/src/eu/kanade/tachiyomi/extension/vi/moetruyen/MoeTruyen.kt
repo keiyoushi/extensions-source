@@ -1,11 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyen
 
-import android.app.Activity
-import android.app.AlertDialog
-import android.app.Application
-import android.os.Bundle
-import android.widget.EditText
-import android.widget.FrameLayout
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -17,16 +11,13 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.ui.askInput
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -39,8 +30,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.lang.ref.WeakReference
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Collections
@@ -55,30 +44,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MoeTruyen : KeiSource() {
-    private var currentActivity: WeakReference<Activity>? = null
-
-    init {
-        try {
-            applicationContext.registerActivityLifecycleCallbacks(
-                object : Application.ActivityLifecycleCallbacks {
-                    override fun onActivityResumed(a: Activity) {
-                        currentActivity = WeakReference(a)
-                    }
-                    override fun onActivityPaused(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-                    override fun onActivityDestroyed(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-                    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-                    override fun onActivityStarted(activity: Activity) = Unit
-                    override fun onActivityStopped(activity: Activity) = Unit
-                    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-                },
-            )
-        } catch (_: Throwable) {
-        }
-    }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         set("Sec-Fetch-Dest", "document")
@@ -310,15 +275,7 @@ abstract class MoeTruyen : KeiSource() {
         return (Clock.System.now() - duration).toEpochMilliseconds()
     }
 
-    private fun parseAbsoluteDate(date: String?): Long {
-        if (date == null) return 0L
-        return runCatching {
-            LocalDate.parse(date, dateFormat)
-                .atStartOfDay(dateZone)
-                .toInstant()
-                .toEpochMilli()
-        }.getOrDefault(0L)
-    }
+    private fun parseAbsoluteDate(date: String?): Long = dateFormat.tryParseDate(date, dateZone)
 
     // ============================== Pages =================================
 
@@ -393,61 +350,12 @@ abstract class MoeTruyen : KeiSource() {
             ?.takeIf { it.isNotBlank() }
             ?: throw Exception(loginRequiredMessage)
 
-        val comment = promptForComment(chapter.name)
+        val comment = askInput(
+            title = chapter.name,
+            message = "Chương này yêu cầu bình luận ở chương trước\n\nBình luận vô nghĩa tài khoản sẽ bị khoá",
+            hint = "Bình luận",
+        ) ?: throw Exception("Đã hủy bình luận")
         postChapterComment(previousUrl, chapterUrl, comment)
-    }
-
-    // Some chapters require comment in previous chapter to unlock
-    private suspend fun promptForComment(chapterTitle: String): String {
-        val activity = currentActivity?.get()
-            ?: throw Exception(loginRequiredMessage)
-
-        val deferred = CompletableDeferred<String>()
-        var dialog: AlertDialog? = null
-
-        try {
-            withContext(Dispatchers.Main.immediate) {
-                val input = EditText(activity).apply {
-                    hint = "Bình luận"
-                }
-                val container = FrameLayout(activity).apply {
-                    val pad = (16 * resources.displayMetrics.density).toInt()
-                    setPadding(pad, pad / 2, pad, 0)
-                    addView(input)
-                }
-
-                dialog = AlertDialog.Builder(activity)
-                    .setTitle(chapterTitle)
-                    .setMessage("Chương này yêu cầu bình luận ở chương trước\n\nBình luận vô nghĩa tài khoản sẽ bị khoá")
-                    .setView(container)
-                    .setPositiveButton("Mở khóa") { _, _ ->
-                        val text = input.text.toString().trim()
-                        if (text.isNotBlank()) {
-                            deferred.complete(text)
-                        } else {
-                            deferred.completeExceptionally(Exception("Bình luận không được để trống"))
-                        }
-                    }
-                    .setNegativeButton("Hủy") { _, _ ->
-                        deferred.completeExceptionally(Exception("Đã hủy bình luận"))
-                    }
-                    .setOnCancelListener {
-                        deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                    }
-                    .setOnDismissListener {
-                        if (!deferred.isCompleted) {
-                            deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                        }
-                    }
-                    .show()
-            }
-
-            return deferred.await()
-        } finally {
-            withContext(NonCancellable + Dispatchers.Main.immediate) {
-                dialog?.takeIf { it.isShowing }?.dismiss()
-            }
-        }
     }
 
     private suspend fun postChapterComment(previousChapterUrl: String, referer: String, content: String) {

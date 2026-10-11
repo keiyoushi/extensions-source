@@ -92,15 +92,14 @@ class Bubble(
     val w: Float = 0f,
     val h: Float = 0f,
     val angle: Float = 0f,
-    val rotate: Float? = null,
-    val color: String = "#000000",
-    @SerialName("stroke_color") val strokeColor: String = "#ffffff",
-    @SerialName("font_size_px") val fontSizePx: Float = 37.3f,
-    @SerialName("line_height") val lineHeight: Float = 1.1f,
-    @SerialName("stroke_width_px") val strokeWidthPx: Float = 3f,
-) {
-    val actualAngle: Float get() = rotate ?: angle
-}
+    val color: String? = null,
+    @SerialName("stroke_color") val strokeColor: String? = null,
+    @SerialName("font_size_px") val fontSizePx: Float = 16f,
+    @SerialName("line_height") val lineHeight: Float = 1.2f,
+    @SerialName("stroke_width_px") val strokeWidthPx: Float = 0f,
+    @SerialName("font_family") val fontFamily: String = "",
+    @SerialName("text_align") val textAlign: String? = null,
+)
 
 @Serializable
 class ChapterProps(

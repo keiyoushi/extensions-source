@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "SpyFakku"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -19,5 +19,9 @@ keiyoushi {
                 "https://fakkuonion.airdns.org:4096",
             )
         }
+    }
+
+    deeplink {
+        path("/g/..*")
     }
 }

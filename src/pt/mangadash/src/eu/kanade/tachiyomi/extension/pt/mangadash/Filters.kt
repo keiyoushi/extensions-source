@@ -4,11 +4,11 @@ package eu.kanade.tachiyomi.extension.pt.mangadash
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
     fun toUriPart() = vals[state].second
 }
 
-class SortFilter :
+class SortFilter(state: Int = 0) :
     UriPartFilter(
         "Ordenação",
         arrayOf(
@@ -17,6 +17,7 @@ class SortFilter :
             Pair("A-Z", "alfabetica"),
             Pair("Melhor Avaliados", "nota"),
         ),
+        state,
     )
 
 class CategoryFilter :

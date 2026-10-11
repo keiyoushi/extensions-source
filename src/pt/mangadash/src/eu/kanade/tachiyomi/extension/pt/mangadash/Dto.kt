@@ -6,10 +6,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class MangaListDto(
-    private val items: List<MangaItemDto> = emptyList(),
+    val items: List<MangaItemDto> = emptyList(),
     private val pagination: PaginationDto? = null,
 ) {
-    val mangas get() = items.map { it.toSManga() }
     val hasNext get() = pagination?.hasNext ?: false
 }
 
@@ -20,10 +19,10 @@ class MangaItemDto(
     private val nome: String,
     private val capa: String,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
         title = nome
         url = "/manga/$id-$slug"
-        thumbnail_url = capa
+        thumbnail_url = capa.replace("../", "$baseUrl/static/")
     }
 }
 

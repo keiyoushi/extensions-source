@@ -199,6 +199,7 @@ abstract class MangaThemesia : KeiSource() {
             "İllüstratör",
             "Çizer",
             "Sanatçı",
+            "นักวาด",
         ),
     )
 
@@ -214,6 +215,7 @@ abstract class MangaThemesia : KeiSource() {
             "Pengarang",
             "Yazar",
             "ผู้แต่ง",
+            "นักเขียน",
         ),
     )
 

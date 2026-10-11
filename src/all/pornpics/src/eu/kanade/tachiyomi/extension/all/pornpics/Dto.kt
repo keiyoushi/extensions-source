@@ -10,13 +10,19 @@ internal class MangaDto(
     val url: String,
     @SerialName("t_url")
     val thumbnailUrl: String,
-)
+) {
+    val title: String
+        get() = desc.ifEmpty {
+            url.slugToTitle()
+        }
+}
 
 @Serializable
-internal class RecommendCategoryDto(
-    val name: String,
-    val categoryTypeName: String,
-    val link: String,
+internal class FilterData(
+    val categories: List<CategoryDto>,
+    val tags: List<CategoryDto>,
+    val pornStars: List<CategoryDto>,
+    val channels: List<CategoryDto>,
 )
 
 @Serializable
@@ -24,3 +30,10 @@ internal class CategoryDto(
     val name: String,
     val link: String,
 )
+
+private fun String.slugToTitle(): String = trimEnd('/')
+    .substringAfterLast('/')
+    .replaceFirstChar(Char::uppercaseChar)
+    .split('-')
+    .filterNot { it.all(Char::isDigit) }
+    .joinToString(" ")

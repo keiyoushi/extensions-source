@@ -127,8 +127,9 @@ abstract class OrckuMangas : KeiSource() {
         val url = "$baseUrl${manga.url}".toHttpUrl().newBuilder()
             .setQueryParameter("order", "desc")
             .setQueryParameter("page", "1")
+            .build()
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url).asJsoup()
         val pages = document.select("div > a[href*=page=]").lastOrNull()
             ?.attr("abs:href")?.toHttpUrl()
             ?.queryParameter("page")?.toInt() ?: 1
@@ -137,7 +138,9 @@ abstract class OrckuMangas : KeiSource() {
             async {
                 parseChapters(
                     client.get(
-                        url.setQueryParameter("page", page.toString()).build(),
+                        url.newBuilder()
+                            .setQueryParameter("page", page.toString())
+                            .build(),
                     ).asJsoup(),
                 )
             }

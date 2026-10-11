@@ -176,6 +176,7 @@ class MangaDto(
     class ScanlatorDto(
         val id: String,
         val name: String,
+        val score: Int,
     )
 
     companion object {
@@ -191,22 +192,22 @@ class AllChaptersDto(
 @Serializable
 class ChapterDto(
     val id: String,
-    private val number: Float,
+    val number: Float,
     private val title: String,
     val scanlationMangaId: String? = null,
     @SerialName("createdAt") private val date: JsonElement? = null,
 ) {
+    fun dateUploadMillis(): Long = when (date) {
+        is JsonPrimitive -> date.longOrNull ?: Instant.tryParse(date.content)
+        else -> 0L
+    }
+
     fun toSChapter(slug: String, scanlatorName: String? = null): SChapter = SChapter.create().apply {
         url = "$slug/$id"
         chapter_number = number
         name = title
         scanlator = scanlatorName
-        date?.let {
-            date_upload = when {
-                it is JsonPrimitive -> it.longOrNull ?: Instant.tryParse(it.content)
-                else -> 0L
-            }
-        }
+        date?.let { date_upload = dateUploadMillis() }
     }
 }
 

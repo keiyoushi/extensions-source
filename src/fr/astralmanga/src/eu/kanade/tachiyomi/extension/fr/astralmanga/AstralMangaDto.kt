@@ -29,14 +29,11 @@ class MangaDto(
     val artists: List<NameDto>? = null,
     val teams: List<NameDto>? = null,
 ) {
-    fun toSManga(presignS3Key: (String) -> String?): SManga = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         url = "/manga/$urlId"
         title = this@MangaDto.title
 
-        thumbnail_url = cover?.image?.link?.let { link ->
-            if (link.startsWith("s3:")) presignS3Key(link.substringAfter("s3:")) else link
-        }
-
+        thumbnail_url = cover?.image?.link
         description = this@MangaDto.description
 
         status = when (this@MangaDto.status?.uppercase()) {
@@ -94,3 +91,14 @@ class RscImageDto(
     val link: String,
     val orderId: Int,
 )
+
+@Serializable
+class Genres(
+    val mangas: List<MangaDto>,
+    val genres: List<Genre>,
+) {
+    @Serializable
+    class Genre(
+        val name: String,
+    )
+}

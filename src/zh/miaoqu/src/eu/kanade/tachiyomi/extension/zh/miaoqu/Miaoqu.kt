@@ -43,7 +43,7 @@ abstract class Miaoqu : MCCMSWeb() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = try {
         super.getSearchMangaList(page, query, filters)
     } catch (e: HttpException) {
-        if (e.code == 404) throw Exception("服务器错误，无法搜索")
+        if (e.message?.contains("404") == true) throw Exception("服务器错误，无法搜索")
         throw e
     }
 

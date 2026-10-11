@@ -1,49 +1,52 @@
 package eu.kanade.tachiyomi.extension.en.templescan
 
+import android.webkit.WebResourceResponse
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.io.ByteArrayInputStream
 
 /**
  * Resolves the short field names the site's Next.js RSC payload uses.
  *
- * The site renames a fixed set of fields to keys it ships in its own client bundle (module
- * `14834`) as a positional pair of lists: the logical names, then a comma-separated string of
- * keys. Reading that table from the bundle means a rebuild that renames the keys does not need
- * an extension update, unlike the key literals it replaces.
+ * The site renames a fixed set of fields to short keys and renames them back with a function in
+ * its client bundle. That function is found by what it does (see `assets/decode_rsc_keys.js`), so
+ * the table survives changes to how the keys are derived and to where the decoder lives.
  */
 internal object RscKeys {
 
+    private val decodeScript by lazy { javaClass.getResource("/assets/decode_rsc_keys.js")!!.readText() }
+
     /**
-     * The bundle's table: an array literal of logical names, then the variable holding the
-     * comma-separated keys. Names are paired with keys by position, exactly as the site does it.
+     * Decodes [payloadKeys] with the decoder from [chunks] in a WebView confined to [baseUrl]'s
+     * host, returning logical name to short key, or `null` if no module renames any of [fields].
      */
-    private val TABLE_REGEX = Regex(
-        """\[((?:"[A-Za-z0-9_]+",?)+)],\s*[^=;]{1,32}=\s*"([^"]*)"\.split\(","\)""",
-    )
+    suspend fun decodeTable(
+        baseUrl: String,
+        chunks: List<String>,
+        payloadKeys: Collection<String>,
+        fields: Collection<String>,
+    ): Map<String, String>? {
+        val host = baseUrl.toHttpUrl().host
+        val args = listOf(chunks, payloadKeys.toList(), fields.toList()).joinToString { it.toJsonString() }
+        val script = "($decodeScript)($args)" +
+            ".then((table) => rscKeys.post(JSON.stringify(table)), () => rscKeys.post('null'))"
 
-    private val NAME_REGEX = Regex("\"([A-Za-z0-9_]+)\"")
-
-    /** Reads the rename table from a client chunk, or returns `null` if this chunk is not the one. */
-    fun findTable(chunkSource: String): Map<String, String>? {
-        val match = TABLE_REGEX.find(chunkSource) ?: return null
-
-        val names = NAME_REGEX.findAll(match.groupValues[1]).map { it.groupValues[1] }.toList()
-        val keys = match.groupValues[2].split(",")
-        // The bundle itself throws when it cannot name every field; treat that as "not this chunk".
-        if (keys.size < names.size) return null
-
-        return names.zip(keys).toMap()
+        return runWebView<Map<String, String>?> {
+            blockImages = true
+            interceptRequest { request ->
+                val requestHost = request.url.host
+                if (requestHost == null || requestHost == host) null else WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0)))
+            }
+            jsBridge("rscKeys") { resolve(it.parseAs<Map<String, String>?>()) }
+            onPageFinished { evaluateJs(script) }
+            loadData(baseUrl, "")
+        }?.filterValues { it in payloadKeys }
     }
-
-    /** Flattens [keys] into the single preference value that caches the table. */
-    fun encode(keys: Map<String, String>): String = keys.entries.joinToString(",") { "${it.key}=${it.value}" }
-
-    /** Reads back what [encode] wrote. */
-    fun decode(stored: String): Map<String, String> = stored.split(",").mapNotNull { entry ->
-        val separator = entry.indexOf('=')
-        if (separator <= 0) null else entry.take(separator) to entry.substring(separator + 1)
-    }.toMap()
 
     /**
      * Rewrites every short key in [element] to its logical name, so the payload can be decoded

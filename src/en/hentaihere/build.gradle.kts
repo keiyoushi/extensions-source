@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "HentaiHere"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -17,6 +17,9 @@ keiyoushi {
 
     deeplink {
         host("hentaihere.com")
-        path("/m/S..*")
+        path("/doujinshi/..*")
+        path("/original/..*")
+        path("/imageset/..*")
+        path("/m/..*")
     }
 }

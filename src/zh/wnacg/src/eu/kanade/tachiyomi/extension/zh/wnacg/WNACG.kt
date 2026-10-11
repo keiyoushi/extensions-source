@@ -147,7 +147,7 @@ abstract class WNACG :
         val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(document).apply { url = manga.url },
-            chaptersParse(document, manga),
+            if (fetchChapters) chaptersParse(document, manga) else chapters,
         )
     }
 
@@ -229,8 +229,23 @@ abstract class WNACG :
         status = if ("連載中" in statusText) SManga.ONGOING else SManga.COMPLETED
     }
 
-    private fun chaptersParse(document: Document, manga: SManga): List<SChapter> {
-        val chapterElements = document.select("div.sr_compact a.tagshow[data-chid]")
+    private suspend fun chaptersParse(document: Document, manga: SManga): List<SChapter> {
+        val chapterElements = buildList {
+            addAll(document.select("div.sr_compact a.tagshow[data-chid]"))
+
+            val lastPage = document.select("div.f_left.paginator a[href]")
+                .mapNotNull { chapterListPageRegex.find(it.attr("href"))?.groupValues?.get(1)?.toIntOrNull() }
+                .maxOrNull()
+                ?: 1
+            val aid = mangaAidRegex.find(manga.url)?.groupValues?.get(1)
+            if (aid != null) {
+                (2..lastPage).forEach { page ->
+                    val pageUrl = "$baseUrl/photos-index-aid-$aid-page-$page.html"
+                    addAll(client.get(pageUrl).asJsoup().select("div.sr_compact a.tagshow[data-chid]"))
+                }
+            }
+        }.distinctBy { it.attr("data-chid") }
+
         if (chapterElements.isEmpty()) {
             return listOf(
                 SChapter.create().apply {
@@ -248,7 +263,7 @@ abstract class WNACG :
                     chapterZone,
                 )
             }
-        }
+        }.reversed()
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -264,6 +279,8 @@ abstract class WNACG :
             RegexOption.IGNORE_CASE,
         )
         private val mangaUrlRegex = Regex("""/photos-index-aid-\d+\.html""")
+        private val mangaAidRegex = Regex("""photos-index-aid-(\d+)""")
+        private val chapterListPageRegex = Regex("""photos-index-aid-\d+-page-(\d+)\.html""")
         private val chapterDateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
         private val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         private val chapterZone = ZoneId.of("Asia/Taipei")

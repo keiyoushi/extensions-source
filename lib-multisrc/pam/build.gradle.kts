@@ -5,9 +5,10 @@ plugins {
 dependencies {
     api(project(":lib:secretstream"))
     api(project(":lib:i18n"))
+    implementation(project(":lib:ece"))
 }
 
 keiyoushi {
-    baseVersionCode = 4
-    libVersion = "1.4"
+    baseVersionCode = 2
+    libVersion = "1.6"
 }

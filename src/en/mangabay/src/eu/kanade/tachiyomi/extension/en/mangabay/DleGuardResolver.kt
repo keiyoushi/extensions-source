@@ -1,19 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.mangabay
 
-import android.annotation.SuppressLint
-import android.os.Handler
-import android.os.Looper
 import android.webkit.CookieManager
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import keiyoushi.utils.applicationContext
+import keiyoushi.utils.runWebViewBlocking
+import okhttp3.Call
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 object DleGuardResolver {
 
@@ -22,8 +16,10 @@ object DleGuardResolver {
     private const val PARALLEL_TRUST_WINDOW_MS = 5_000L
     private const val TRUST_COOKIE = "__guard_trust"
 
-    private val lock = ReentrantLock()
+    @Volatile
     private var failedOnce = false
+
+    @Volatile
     private var lastSolveAt = 0L
 
     fun interceptor(baseUrl: String): Interceptor = Interceptor { chain ->
@@ -47,67 +43,45 @@ object DleGuardResolver {
         } else {
             "$baseUrl/"
         }
-        if (!lock.withLock { resolve(url, originalRequest.header("User-Agent")) }) {
+        if (!solve(url, originalRequest.header("User-Agent"), chain.call())) {
             throw IOException("Open in WebView to bypass site protection")
         }
         chain.proceed(originalRequest)
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun resolve(siteUrl: String, userAgent: String?): Boolean {
+    @Synchronized
+    private fun solve(siteUrl: String, userAgent: String?, call: Call): Boolean {
         if (failedOnce) return false
         if (System.currentTimeMillis() - lastSolveAt < PARALLEL_TRUST_WINDOW_MS) return true
 
         val cookieManager = CookieManager.getInstance()
         cookieManager.setCookie(siteUrl, "$TRUST_COOKIE=; Max-Age=0; Path=/")
 
-        val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        var webView: WebView? = null
-        lateinit var poll: Runnable
+        return try {
+            runWebViewBlocking<Unit>(call, timeout = TIMEOUT_SECONDS.seconds) {
+                this.userAgent = userAgent!!
+                blockImages = true
 
-        handler.post {
-            val wv = WebView(applicationContext)
-            webView = wv
-
-            with(wv.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
-                if (!userAgent.isNullOrBlank()) userAgentString = userAgent
-            }
-
-            wv.webViewClient = WebViewClient()
-
-            poll = Runnable {
-                if (latch.count == 0L) return@Runnable
-                if (hasTrust(cookieManager, siteUrl)) {
-                    latch.countDown()
-                } else {
-                    handler.postDelayed(poll, POLL_INTERVAL_MS)
+                onPageFinished { url ->
+                    poll(POLL_INTERVAL_MS.milliseconds) {
+                        if (hasTrust(cookieManager, url)) {
+                            resolve(Unit)
+                        }
+                    }
                 }
+                loadUrl(siteUrl)
             }
-
-            wv.loadUrl(siteUrl)
-            handler.postDelayed(poll, POLL_INTERVAL_MS)
-        }
-
-        latch.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-
-        handler.post {
-            handler.removeCallbacks(poll)
-            webView?.stopLoading()
-            webView?.destroy()
-        }
-
-        val solved = hasTrust(cookieManager, siteUrl)
-        if (solved) {
-            lastSolveAt = System.currentTimeMillis()
-        } else {
+            val solved = hasTrust(cookieManager, siteUrl)
+            if (solved) {
+                lastSolveAt = System.currentTimeMillis()
+            } else {
+                failedOnce = true
+            }
+            solved
+        } catch (e: Exception) {
             failedOnce = true
+            false
         }
-        return solved
     }
 
     private fun Response.isStalled() = header("X-Guard-Stall") == "1"
