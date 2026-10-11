@@ -21,6 +21,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CancellationException
@@ -105,6 +106,12 @@ abstract class EmperorScan :
             all.filterNot { hideLocked && it.locked }
                 .map { (dated[it.slug] ?: it).toSChapter(props.series.url) },
         )
+    }
+
+    // Madara-era search results: a post id, with the path in memo
+    override fun getMangaUrl(manga: SManga): String {
+        val path = manga.memo["path"]?.stringOrNull?.takeIf { manga.url.all(Char::isDigit) } ?: manga.url
+        return baseUrl + path
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
