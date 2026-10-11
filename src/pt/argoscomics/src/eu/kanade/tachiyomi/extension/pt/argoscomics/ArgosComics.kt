@@ -244,7 +244,7 @@ abstract class ArgosComics : KeiSource() {
             }
 
         fun reset() = setOf(SEARCH_TOKEN_PREF, DETAILS_TOKEN_PREF, CHAPTER_TOKEN_PREF, PAGES_TOKEN_PREF)
-            .forEach (::remove)
+            .forEach(::remove)
 
         companion object {
             private const val SEARCH_TOKEN_PREF = "searchTokenPref"
