@@ -21,6 +21,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -172,11 +173,11 @@ abstract class DuaLeoTruyen : KeiSource() {
 
         return document.select(".content_view_chap img")
             .mapNotNull { img ->
-                val dataImg = img.attr("data-img")
+                val dataImg = img.absUrl("data-img").ifEmpty { img.attr("data-img") }
                 val src = img.absUrl("src")
 
                 when {
-                    dataImg.isNotBlank() -> decryptImageUrl(dataImg)
+                    dataImg.isNotBlank() -> decryptImageUrl(dataImg, document)
                     src.isNotBlank() && !src.startsWith("data:") -> src
                     else -> null
                 }
@@ -187,7 +188,7 @@ abstract class DuaLeoTruyen : KeiSource() {
             }
     }
 
-    private fun decryptImageUrl(url: String): String? {
+    private fun decryptImageUrl(url: String, document: Document): String? {
         val lastSlashIndex = url.lastIndexOf('/')
         val dotIndex = url.lastIndexOf('.')
         if (lastSlashIndex == -1 || dotIndex == -1 || dotIndex <= lastSlashIndex) return null
@@ -195,6 +196,19 @@ abstract class DuaLeoTruyen : KeiSource() {
         val basePath = url.substring(0, lastSlashIndex + 1)
         val encodedName = url.substring(lastSlashIndex + 1, dotIndex)
         val extension = url.substring(dotIndex)
+
+        if (encodedName.startsWith("q4_")) {
+            val encoded = encodedName.substring(3)
+            val decoded = decodeV4(basePath, encoded, extension, cachedSecret)
+            if (decoded != null) return decoded
+
+            val dynamicSecret = extractSecret(document)
+            if (dynamicSecret != null && dynamicSecret != cachedSecret) {
+                cachedSecret = dynamicSecret
+                return decodeV4(basePath, encoded, extension, dynamicSecret) ?: url
+            }
+            return url
+        }
 
         val base64 = encodedName.replace('-', '+').replace('_', '/')
         val decoded = try {
@@ -211,6 +225,84 @@ abstract class DuaLeoTruyen : KeiSource() {
         return "$basePath$decryptedName$extension"
     }
 
+    private fun extractSecret(document: Document): String? = document.select("script").firstNotNullOfOrNull { script ->
+        secretRegex.find(script.data())?.groupValues?.get(1)
+    }
+
+    private fun decodeV4(
+        basePath: String,
+        encoded: String,
+        extension: String,
+        secret: String,
+    ): String? {
+        return runCatching {
+            val paddedBase64 = buildString(encoded.length + 3) {
+                append(encoded.replace('-', '+').replace('_', '/'))
+                while (length % 4 != 0) {
+                    append('=')
+                }
+            }
+            val payloadBytes = Base64.decode(paddedBase64, Base64.DEFAULT)
+            val payload = String(payloadBytes, Charsets.ISO_8859_1)
+            val parts = payload.split('|')
+            if (parts.size != 5 || parts[0] != "V4") return null
+
+            val checksum = parts[1]
+            val nonce = parts[2]
+            val salt = parts[3]
+            val rawB64 = parts[4]
+
+            if (checksum.isEmpty() || nonce.isEmpty() || salt.isEmpty() || rawB64.isEmpty()) {
+                return null
+            }
+
+            val k1 = sha256("$secret|A|$nonce|$salt")
+            val k1Hex = k1.toHex()
+            val k2 = sha256("$secret|B|$salt|$nonce|$k1Hex")
+            val key = k1 + k2
+
+            val paddedRawB64 = buildString(rawB64.length + 3) {
+                append(rawB64.replace('-', '+').replace('_', '/'))
+                while (length % 4 != 0) {
+                    append('=')
+                }
+            }
+            val rawBytes = Base64.decode(paddedRawB64, Base64.DEFAULT)
+            rawBytes.reverse()
+
+            val nameBytes = ByteArray(rawBytes.size) { i ->
+                (rawBytes[i].toInt() xor (key[i % key.size].toInt() and 0xFF)).toByte()
+            }
+            val name = String(nameBytes, Charsets.UTF_8)
+
+            val verify = sha256("V4|$secret|$nonce|$salt|$name")
+            val verifyHex = verify.toHex()
+            if (!verifyHex.startsWith(checksum)) {
+                return null
+            }
+
+            "$basePath$name$extension"
+        }.getOrNull()
+    }
+
+    private fun sha256(text: String): ByteArray {
+        val md = MessageDigest.getInstance("SHA-256")
+        return md.digest(text.toByteArray(Charsets.UTF_8))
+    }
+
+    private fun ByteArray.toHex(): String {
+        val hexChars = "0123456789abcdef"
+        val result = StringBuilder(size * 2)
+        for (b in this) {
+            val octet = b.toInt() and 0xFF
+            result.append(hexChars[octet ushr 4])
+            result.append(hexChars[octet and 0x0F])
+        }
+        return result.toString()
+    }
+
+    private val secretRegex = """OBF_SECRET\s*=\s*['"]([^'"]+)['"]""".toRegex()
+    private var cachedSecret = "dualeo_url_v4_9Qx7_2026_R8mK"
     private val decryptSalt = "dualeo_salt_2025"
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
