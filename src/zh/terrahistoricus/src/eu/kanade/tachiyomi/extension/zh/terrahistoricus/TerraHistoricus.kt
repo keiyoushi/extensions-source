@@ -15,11 +15,16 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 
 @Source
 abstract class TerraHistoricus : KeiSource() {
     private val topicKeys = listOf("terra-historicus", "talos-ii-historicus")
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::refreshExpiredImage)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val topicKey = topicKeys[page - 1]
@@ -69,17 +74,24 @@ abstract class TerraHistoricus : KeiSource() {
         }
     }
 
-    override suspend fun getImageUrl(page: Page): String = fetch<THPage>(freshPageUrl(page)).url
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url).pageImageUrl()
+        .toHttpUrl().newBuilder().fragment(page.url).build().toString()
 
-    // Mihon may reuse an image URL after its CDN signature has expired.
-    override fun imageRequest(page: Page): Request {
-        val imageUrl = client.newCall(Request.Builder().url(freshPageUrl(page)).headers(headers).build())
-            .execute()
-            .use { it.parseAs<THResult<THPage>>().data.url }
-        return Request.Builder().url(imageUrl).headers(headers).build()
+    private fun refreshExpiredImage(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        val pageApiUrl = request.url.fragment
+        if (response.code != 403 || pageApiUrl == null) return response
+
+        response.close()
+        val freshImageUrl = chain.proceed(Request.Builder().url(freshPageUrl(pageApiUrl)).headers(headers).build())
+            .pageImageUrl()
+        return chain.proceed(request.newBuilder().url(freshImageUrl).build())
     }
 
-    private fun freshPageUrl(page: Page): String = page.url.toHttpUrl().newBuilder()
+    private fun Response.pageImageUrl(): String = use { it.parseAs<THResult<THPage>>().data.url }
+
+    private fun freshPageUrl(pageApiUrl: String): String = pageApiUrl.toHttpUrl().newBuilder()
         .addQueryParameter("_", System.currentTimeMillis().toString())
         .build()
         .toString()
