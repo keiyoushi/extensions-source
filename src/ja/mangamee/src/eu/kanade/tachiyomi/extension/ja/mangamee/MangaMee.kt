@@ -10,8 +10,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.FragmentXorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAsProto
@@ -32,7 +34,11 @@ abstract class MangaMee :
         .set("rsc", "1")
         .build()
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(
+        FragmentXorInterceptor({
+            if (it.contains("key=")) it.substringAfter("key=").decodeHex() else null
+        }),
+    )
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val result = client.get("$baseUrl/title-list/ranking", rscHeaders).extractNextJs<RankingResponse>()
