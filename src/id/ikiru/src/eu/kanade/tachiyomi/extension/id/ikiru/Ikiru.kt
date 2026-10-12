@@ -14,18 +14,11 @@ import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 
 @Source
 abstract class Ikiru : KeiSource() {
-
-    private val apiHeaders: Headers
-        get() = headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-            .build()
 
     // =========================== Popular ===========================
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -34,7 +27,7 @@ abstract class Ikiru : KeiSource() {
             .addQueryParameter("sort", "desc")
             .addQueryParameter("page", page.toString())
             .build()
-        val response = client.get(url, apiHeaders)
+        val response = client.get(url)
         return parseSearchResponse(response)
     }
 
@@ -45,7 +38,7 @@ abstract class Ikiru : KeiSource() {
             .addQueryParameter("sort", "desc")
             .addQueryParameter("page", page.toString())
             .build()
-        val response = client.get(url, apiHeaders)
+        val response = client.get(url)
         return parseSearchResponse(response)
     }
 
@@ -62,7 +55,7 @@ abstract class Ikiru : KeiSource() {
             it.addToUri(url)
         }
 
-        val response = client.get(url.build(), apiHeaders)
+        val response = client.get(url.build())
         return parseSearchResponse(response)
     }
 
@@ -114,7 +107,7 @@ abstract class Ikiru : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(slug: String): SManga {
-        val response = client.get("$baseUrl/api/public/manga/$slug", apiHeaders)
+        val response = client.get("$baseUrl/api/public/manga/$slug")
         val res = response.parseAs<IkiruResponseDto<IkiruMangaDetailDto>>()
         return res.data?.toSManga() ?: SManga.create().apply { url = slug }
     }
@@ -129,7 +122,7 @@ abstract class Ikiru : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .build()
 
-            val response = client.get(url, apiHeaders)
+            val response = client.get(url)
             val res = response.parseAs<IkiruResponseDto<IkiruChapterListDto>>()
             val data = res.data ?: break
             val chapters = data.chapters.map { it.toSChapter(slug) }
@@ -150,7 +143,7 @@ abstract class Ikiru : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) chapter.url else "$baseUrl${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter), apiHeaders)
+        val response = client.get(getChapterUrl(chapter))
         val document = response.asJsoup()
         val images = document.select("img[src*='cdn.ikiru.id'], img.is-loading")
 
