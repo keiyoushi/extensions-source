@@ -69,7 +69,9 @@ abstract class Comix :
         .addInterceptor(::altHostFallback)
         .addInterceptor { chain ->
             val request = chain.request()
-            if (request.url.fragment?.startsWith(ALT_HOSTS_FRAGMENT) == true) return@addInterceptor chain.proceed(request)
+            if (request.url.fragment?.startsWith(ALT_HOSTS_FRAGMENT) == true || request.url.host == baseUrlHost) {
+                return@addInterceptor chain.proceed(request)
+            }
 
             var response = proceedWithRetry(chain, request)
             if (response.isSuccessful) return@addInterceptor response
@@ -88,7 +90,10 @@ abstract class Comix :
             }
             response
         }
+        .rateLimit(2) { it.host == baseUrlHost }
         .rateLimit(5)
+
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     // Retry failed images on alt hosts, like the site's reader
     private fun altHostFallback(chain: Interceptor.Chain): Response {
@@ -432,12 +437,12 @@ abstract class Comix :
         val deduplicateChapters = preferences.deduplicateChapters()
         val scanlatorBlacklist = preferences.scanlatorBlacklist()
         val blacklistSignature = scanlatorBlacklist.sorted().joinToString(",")
-        val storedDeduplicateChapters = manga.memo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull
-        val storedBlacklistSignature = manga.memo[CHAPTER_LIST_BLACKLIST_MEMO]?.string
+        // List settings live on the newest chapter; browse and search results replace a non-library entry's memo
+        val listMemo = chapters.firstOrNull()?.memo?.takeIf { CHAPTER_LIST_DEDUPLICATED_MEMO in it } ?: manga.memo
         val fetchUntilKnown = fetchChapters &&
             preferences.fetchChaptersUntilKnown() &&
-            storedDeduplicateChapters == deduplicateChapters &&
-            storedBlacklistSignature == blacklistSignature
+            listMemo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull == deduplicateChapters &&
+            listMemo[CHAPTER_LIST_BLACKLIST_MEMO]?.string == blacklistSignature
         val latestChapterId = chapters.firstOrNull()
             ?.takeIf { fetchUntilKnown }
             ?.chapterId()
@@ -446,22 +451,17 @@ abstract class Comix :
         val updatedChapters = if (fetchChapters) {
             val fetched = getWebViewChapterList(manga, getDocument(), latestChapterId)
             val candidates = if (fetchUntilKnown) fetched + chapters else fetched
-            selectChapters(candidates, deduplicateChapters, scanlatorBlacklist)
+            selectChapters(candidates, deduplicateChapters, scanlatorBlacklist).also { selected ->
+                selected.firstOrNull()?.apply {
+                    memo = buildJsonObject {
+                        memo.forEach { (key, value) -> put(key, value) }
+                        put(CHAPTER_LIST_DEDUPLICATED_MEMO, deduplicateChapters)
+                        put(CHAPTER_LIST_BLACKLIST_MEMO, blacklistSignature)
+                    }
+                }
+            }
         } else {
             chapters
-        }
-        val chapterListMode = if (fetchChapters) deduplicateChapters else storedDeduplicateChapters
-        val chapterListBlacklist = if (fetchChapters) {
-            blacklistSignature
-        } else {
-            storedBlacklistSignature
-        }
-        if (chapterListMode != null && chapterListBlacklist != null) {
-            updatedManga.memo = buildJsonObject {
-                updatedManga.memo.forEach { (key, value) -> put(key, value) }
-                put(CHAPTER_LIST_DEDUPLICATED_MEMO, chapterListMode)
-                put(CHAPTER_LIST_BLACKLIST_MEMO, chapterListBlacklist)
-            }
         }
         return SMangaUpdate(updatedManga, updatedChapters)
     }
@@ -515,7 +515,7 @@ abstract class Comix :
         val chapterPath = JSONObject.quote("/title/${mangaSlug.substringBefore('-')}-")
         val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, rejectName ->
             "(${asset("capture_items.js")})((${asset("chapter_list.js")})(" +
-                "${latestChapterId ?: "null"}, $chapterPath, $MAX_CHAPTER_PAGES, $PAGES_IN_FLIGHT, " +
+                "${latestChapterId ?: "null"}, $chapterPath, $MAX_CHAPTER_PAGES, $CHAPTER_PAGE_DELAY_MS, " +
                 "window.$passPayloadName, window.$rejectName));"
         }
 
@@ -645,13 +645,13 @@ abstract class Comix :
             interceptRequest { request ->
                 val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                     ?: return@interceptRequest emptyResponse
-                val sourceHost = baseUrl.toHttpUrl().host
+                if (UNUSED_SITE_PATHS.any(requestUrl.encodedPath::startsWith)) return@interceptRequest emptyResponse
                 if (isDataRequest?.invoke(requestUrl) == true) {
                     dataRequests.incrementAndGet()
                     timeoutDeadline.set(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
                 }
-                val allowed = requestUrl.host == sourceHost ||
-                    requestUrl.host.endsWith(".$sourceHost") ||
+                val allowed = requestUrl.host == baseUrlHost ||
+                    requestUrl.host.endsWith(".$baseUrlHost") ||
                     requestUrl.host == "comix.to" ||
                     requestUrl.host.endsWith(".comix.to") ||
                     requestUrl.host == "comix.ws" ||
@@ -881,11 +881,14 @@ abstract class Comix :
         private const val DATA_REQUEST_WAIT_SECONDS = 30L
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val MAX_CHAPTER_PAGES = 1000
-        private const val PAGES_IN_FLIGHT = 4
+        private const val CHAPTER_PAGE_DELAY_MS = 500
         private const val OFFICIAL_GROUP_ID = 10702
         private const val TAG_ID_CACHE_SIZE = 50
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
         private const val ALT_HOSTS_FRAGMENT = "alt="
+
+        // Site requests in the WebView that the extension has no use for: error reports, comments, upload images
+        private val UNUSED_SITE_PATHS = listOf("/api/v1/client-errors", "/api/v1/threads/", "/assets/uploads/")
     }
 }
