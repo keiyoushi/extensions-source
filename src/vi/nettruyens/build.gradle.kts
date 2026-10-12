@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "NetTruyenS (unoriginal)"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://nettruyen13s.com"
+        baseUrl = "https://nettruyen14s.com"
     }
 }

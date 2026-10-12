@@ -1,65 +1,61 @@
 package eu.kanade.tachiyomi.extension.tr.golgebahcesi
-
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Source
-abstract class GolgeBahcesi : HttpSource() {
+abstract class GolgeBahcesi : KeiSource() {
 
-    private val apiBaseUrl = "https://api.golgebahcesi.com/api"
-    override val supportsLatest = true
+    private val apiBaseUrl get() = "https://api.golgebahcesi.com/api"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortFilter.POPULAR)
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/series?page=$page&limit=24&sort=popular", headers)
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", SortFilter.LATEST)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SeriesListResponse>()
-        val mangas = result.data.map { it.toSManga() }
-        val hasNextPage = result.pagination?.let { it.currentPage < it.totalPages } ?: false
-        return MangasPage(mangas, hasNextPage)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = slug },
+            emptyList(),
+            true,
+            false,
+        ).manga
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl/series?page=$page&limit=24&sort=updatedAt", headers)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$apiBaseUrl/series".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            addQueryParameter("limit", "24")
+            if (query.isNotBlank()) addQueryParameter("search", query)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+            filters.forEach { filter ->
+                when (filter) {
+                    is SortFilter -> addQueryParameter("sort", filter.toUriPart())
+                    is StatusFilter -> filter.toUriPart().takeIf { it.isNotBlank() }?.let { addQueryParameter("status", it) }
+                    is TypeFilter -> filter.toUriPart().takeIf { it.isNotBlank() }?.let { addQueryParameter("type", it) }
+                    is GenreFilter -> filter.toUriPart().takeIf { it.isNotBlank() }?.let { addQueryParameter("genre", it) }
+                    is MinChaptersFilter -> filter.state.takeIf { it.isNotBlank() }?.let { addQueryParameter("minChapters", it) }
+                    else -> {}
+                }
+            }
+        }.build()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val sort = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: "default"
-        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart() ?: ""
-        val type = filters.firstInstanceOrNull<TypeFilter>()?.toUriPart() ?: ""
-        val genre = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart() ?: ""
-        val minChapters = filters.firstInstanceOrNull<MinChaptersFilter>()?.state?.toString()?.takeIf { it.isNotBlank() } ?: ""
-
-        val url = "$apiBaseUrl/series?page=$page&limit=24&sort=$sort".toHttpUrl().newBuilder()
-        if (query.isNotBlank()) url.addQueryParameter("search", query)
-        if (status.isNotBlank()) url.addQueryParameter("status", status)
-        if (type.isNotBlank()) url.addQueryParameter("type", type)
-        if (genre.isNotBlank()) url.addQueryParameter("genre", genre)
-        if (minChapters.isNotBlank()) url.addQueryParameter("minChapters", minChapters)
-
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SeriesListResponse>()
+        val result = client.get(url).parseAs<SeriesListResponse>()
         val mangas = result.data.map { it.toSManga() }
         val hasNextPage = result.pagination?.let { it.currentPage < it.totalPages } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -67,19 +63,41 @@ abstract class GolgeBahcesi : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBaseUrl/series/${manga.url}", headers)
+    override val supportsRelatedMangas = true
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDto>().toSManga()
+    override suspend fun fetchRelatedMangaList(manga: SManga) = client.get(
+        "$apiBaseUrl/recommendations/series/${manga.url}/similar",
+    ).parseAs<Recommended>().recommendations.map { it.toSManga() }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiBaseUrl/series/${manga.url}/chapters", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<List<ChapterDto>>().map { chapter ->
-        SChapter.create().apply {
-            url = "/${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
-            name = chapter.title
-            chapter_number = chapter.number
-            date_upload = dateFormat.tryParse(chapter.releaseDate ?: chapter.createdAt)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val updatedManga = async {
+            if (fetchDetails) {
+                client.get("$apiBaseUrl/series/${manga.url}").parseAs<SeriesDto>().toSManga()
+            } else {
+                manga
+            }
         }
+        val updatedChapters = async {
+            if (fetchChapters) {
+                client.get("$apiBaseUrl/series/${manga.url}/chapters").parseAs<List<ChapterDto>>().map { chapter ->
+                    SChapter.create().apply {
+                        url = "/${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
+                        name = chapter.title
+                        chapter_number = chapter.number
+                        date_upload = Instant.tryParse(chapter.releaseDate ?: chapter.createdAt)
+                    }
+                }
+            } else {
+                chapters
+            }
+        }
+
+        SMangaUpdate(updatedManga.await(), updatedChapters.await())
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -87,30 +105,31 @@ abstract class GolgeBahcesi : HttpSource() {
         return "$baseUrl/manga/${segments[1]}/bolum/${segments[2]}"
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
-        return GET("$apiBaseUrl/chapters/$chapterId", headers)
+        return client.get(
+            "$apiBaseUrl/chapters/$chapterId",
+        ).parseAs<ChapterDto>().pages?.map { page ->
+            Page(page.index, imageUrl = page.url)
+        } ?: emptyList()
     }
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<ChapterDto>().pages?.map { page ->
-        Page(page.index, imageUrl = page.url)
-    } ?: emptyList()
+    override val supportsFilterFetching = true
 
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        TypeFilter(),
-        GenreFilter(),
-        MinChaptersFilter(),
+    override suspend fun fetchFilterData() = client.get("$apiBaseUrl/genres")
+        .parseAs<List<Genre>>()
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        listOf(
+            SortFilter(),
+            StatusFilter(),
+            TypeFilter(),
+            MinChaptersFilter(),
+        ) + listOfNotNull(
+            data?.parseAs<List<Genre>>()?.map { it.name to it.slug }
+                ?.takeIf { it.isNotEmpty() }
+                ?.let(::GenreFilter),
+        ),
     )
-
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
 }

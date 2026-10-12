@@ -26,6 +26,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import okio.IOException
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -34,6 +35,14 @@ import kotlin.time.Duration.Companion.seconds
 abstract class ArgosComics : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = readTimeout(2.minutes)
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (response.code == 404) {
+                tokenManager.reset()
+                throw IOException("Tokens redefinidos. Tente Novamente")
+            }
+            response
+        }
         .callTimeout(3.minutes)
         .rateLimit(3, 2.seconds)
 
@@ -208,6 +217,8 @@ abstract class ArgosComics : KeiSource() {
                 .apply()
         }
 
+        private fun remove(key: String) = preferences.edit().remove(key).apply()
+
         var search: Token?
             get() = get(SEARCH_TOKEN_PREF)
             set(value) {
@@ -231,6 +242,9 @@ abstract class ArgosComics : KeiSource() {
             set(value) {
                 set(PAGES_TOKEN_PREF, value!!)
             }
+
+        fun reset() = setOf(SEARCH_TOKEN_PREF, DETAILS_TOKEN_PREF, CHAPTER_TOKEN_PREF, PAGES_TOKEN_PREF)
+            .forEach(::remove)
 
         companion object {
             private const val SEARCH_TOKEN_PREF = "searchTokenPref"

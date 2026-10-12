@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.lxhentai
 
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,19 +10,16 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getArrayOrNull
-import keiyoushi.utils.getStringOrNull
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebView
-import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -30,7 +28,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Source
@@ -206,78 +203,145 @@ abstract class LxHentai : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
+        val chapterHtml = client.get(chapterUrl).asJsoup().html()
 
-        val fetchHookScript = javaClass.getResource("/assets/fetch_hook.js")?.readText()
-            ?: throw IllegalStateException("fetch_hook.js not found in assets")
-        val decodeUrlsScript = javaClass.getResource("/assets/decode_urls.js")?.readText()
-            ?: throw IllegalStateException("decode_urls.js not found in assets")
+        val imageUrls = extractImageUrls(chapterHtml)
+        if (imageUrls.isEmpty()) return emptyList()
 
-        val (token, imageUrls) = try {
-            runWebView<Pair<String, List<String>>>(timeout = 60.seconds) {
-                loadWithOverviewMode = true
-                useWideViewPort = true
-                userAgent = headers["User-Agent"]!!
-
-                onPageStarted {
-                    evaluateJs(fetchHookScript)
-                }
-
-                poll(1.seconds) {
-                    evaluateJs(decodeUrlsScript) { value ->
-                        val parsed = parseTokenResult(value.orEmpty())
-                        if (parsed == null) {
-                            return@evaluateJs
-                        }
-                        resolve(parsed)
-                    }
-                }
-
-                loadUrl(chapterUrl)
-            }
-        } catch (_: WebViewTimeoutException) {
-            "" to emptyList()
-        }
-
-        val urls = imageUrls.filter { it.isNotBlank() }
-        if (urls.isEmpty()) return emptyList()
-
+        val token = getActionToken(chapterUrl, chapterHtml)
         val pageMetadata = encodePageMetadata(chapterUrl, token)
-        return urls.mapIndexed { index: Int, imageUrl: String ->
+
+        return imageUrls.mapIndexed { index: Int, imageUrl: String ->
             Page(index, url = pageMetadata, imageUrl = imageUrl)
         }
     }
 
-    private fun parseTokenResult(value: String): Pair<String, List<String>>? {
-        if (value.isBlank()) return null
+    private suspend fun getActionToken(chapterUrl: String, chapterHtml: String): String {
+        cachedActionToken?.let { return it }
 
-        //   JS returns: {"token":"abc","urls":["url1"]}
-        //   callback gets: "{\"token\":\"abc\",\"urls\":[\"url1\"]}"  (escaped)
-        return try {
-            val jsonStr = try {
-                value.parseAs<String>()
+        val csrfToken = csrfTokenRegex.find(chapterHtml)?.groupValues?.get(1).orEmpty()
+        val siteKey = recaptchaRegex.find(chapterHtml)?.groupValues?.get(1).orEmpty()
+
+        val tokenHeaders = headersBuilder()
+            .set("Accept", "application/json")
+            .set("Content-Type", "application/json")
+            .set("X-CSRF-TOKEN", csrfToken)
+            .set("Referer", chapterUrl)
+            .set("Origin", baseUrl)
+            .build()
+
+        val getResponse = client.get("$baseUrl/get_token", tokenHeaders, ensureSuccess = false)
+        if (getResponse.isSuccessful) {
+            val data = getResponse.parseAs<TokenResponse>()
+            if (!data.is_bot && !data.action_token.isNullOrEmpty()) {
+                return data.action_token.also { cachedActionToken = it }
+            }
+        } else {
+            getResponse.close()
+        }
+
+        if (siteKey.isNotEmpty()) {
+            val turnstileToken = getTurnstileToken(
+                url = chapterUrl,
+                siteKey = siteKey,
+            )
+
+            val payload = TurnstilePayload(turnstileResponse = turnstileToken).toJsonRequestBody()
+            val postResponse = client.post("$baseUrl/get_token", tokenHeaders, payload, ensureSuccess = false)
+            if (postResponse.isSuccessful) {
+                val data = postResponse.parseAs<TokenResponse>()
+                if (!data.is_bot && !data.action_token.isNullOrEmpty()) {
+                    return data.action_token.also { cachedActionToken = it }
+                }
+            } else {
+                postResponse.close()
+            }
+        }
+
+        return ""
+    }
+
+    private fun extractImageUrls(html: String): List<String> {
+        for (match in scriptTagRegex.findAll(html)) {
+            val scriptContent = match.groupValues[1]
+            if (!scriptContent.contains("KGZ") || scriptContent.length < 1000) continue
+
+            val bArrayContent = bArrayRegex.find(scriptContent)?.groupValues?.get(2) ?: continue
+            val parts = quotedStringRegex.findAll(bArrayContent).map { it.groupValues[1] }.toList()
+            if (parts.isEmpty()) continue
+
+            val layer2 = try {
+                String(Base64.decode(parts.joinToString(""), Base64.DEFAULT), Charsets.UTF_8)
             } catch (_: Exception) {
-                value.trim().let { s ->
-                    val inner = if (s.startsWith("\"") && s.endsWith("\"")) {
-                        s.substring(1, s.length - 1)
-                    } else {
-                        s.removeSurrounding("'")
-                    }
-                    inner.replace("\\\"", "\"").replace("\\\\", "\\")
+                continue
+            }
+
+            val arrayMap = mutableMapOf<String, IntArray>()
+            for (arrMatch in arrayAssignRegex.findAll(layer2)) {
+                val name = arrMatch.groupValues[1]
+                val nums = arrMatch.groupValues[2].split(',').mapNotNull { it.trim().toIntOrNull() }.toIntArray()
+                arrayMap[name] = nums
+            }
+
+            val hexKey = keyRegex.find(layer2)?.groupValues?.get(1) ?: continue
+            val concatExpr = concatRegex.find(layer2)?.groupValues?.get(1) ?: continue
+            val varNames = varNameRegex.findAll(concatExpr).map { it.value }.toList()
+            if (varNames.isEmpty()) continue
+
+            var totalLength = 0
+            for (v in varNames) {
+                totalLength += arrayMap[v]?.size ?: 0
+            }
+            if (totalLength == 0) continue
+
+            val payload = ByteArray(totalLength)
+            var offset = 0
+            for (v in varNames) {
+                val arr = arrayMap[v] ?: continue
+                for (num in arr) {
+                    payload[offset++] = num.toByte()
                 }
             }
 
-            if (jsonStr.isBlank() || jsonStr == "null" || jsonStr == "[]") return null
+            val keyLen = hexKey.length
+            for (i in payload.indices) {
+                payload[i] = (payload[i].toInt() xor hexKey[i % keyLen].code).toByte()
+            }
 
-            val json = jsonStr.parseAs<JsonObject>()
-            val token = json.getStringOrNull("token").orEmpty()
-            val urls = json.getArrayOrNull("urls")
-                ?.mapNotNull { it.stringOrNull }
-                .orEmpty()
+            val layer3 = String(payload, Charsets.UTF_8)
+            val key3 = key3Regex.find(layer3)?.groupValues?.get(1) ?: continue
+            val rawJsonB64 = b64JsonRegex.find(layer3)?.groupValues?.get(1) ?: continue
 
-            if (token.isNotEmpty() && urls.isNotEmpty()) token to urls else null
-        } catch (_: Exception) {
-            null
+            val jsonStr = try {
+                String(Base64.decode(rawJsonB64, Base64.DEFAULT), Charsets.UTF_8)
+            } catch (_: Exception) {
+                continue
+            }
+
+            val rawList = try {
+                jsonStr.parseAs<List<String>>()
+            } catch (_: Exception) {
+                continue
+            }
+
+            val urls = mutableListOf<String>()
+            val key3Len = key3.length
+            for (item in rawList) {
+                val b = try {
+                    Base64.decode(item, Base64.DEFAULT)
+                } catch (_: Exception) {
+                    continue
+                }
+                for (j in b.indices) {
+                    b[j] = (b[j].toInt() xor key3[j % key3Len].code).toByte()
+                }
+                urls.add(String(b, Charsets.UTF_8))
+            }
+
+            if (urls.isNotEmpty()) return urls
         }
+
+        return emptyList()
     }
 
     override fun imageRequest(page: Page): Request {
@@ -289,7 +353,11 @@ abstract class LxHentai : KeiSource() {
     private fun imageHeaders(chapterUrl: String, actionToken: String) = super.headersBuilder()
         .add("Referer", chapterUrl)
         .add("Origin", baseUrl)
-        .add("Token", actionToken)
+        .apply {
+            if (actionToken.isNotEmpty()) {
+                add("Token", actionToken)
+            }
+        }
         .build()
 
     // ============================== Filters ===============================
@@ -325,8 +393,8 @@ abstract class LxHentai : KeiSource() {
 
     private fun decodePageMetadata(rawMetadata: String): Pair<String, String> {
         val separatorIndex = rawMetadata.lastIndexOf('\n')
-        if (separatorIndex <= 0) {
-            throw Exception("Không đọc được thông tin token ảnh")
+        if (separatorIndex < 0) {
+            return rawMetadata to ""
         }
 
         val chapterUrl = rawMetadata.substring(0, separatorIndex)
@@ -334,6 +402,19 @@ abstract class LxHentai : KeiSource() {
         return chapterUrl to actionToken
     }
 
+    private var cachedActionToken: String? = null
+
+    private val csrfTokenRegex = Regex("""var\s+csrf_token\s*=\s*'([^']+)'""")
+    private val recaptchaRegex = Regex("""var\s+recaptcha\s*=\s*'([^']+)'""")
+    private val scriptTagRegex = Regex("""<script\b[^>]*>([\s\S]*?)</script>""", RegexOption.IGNORE_CASE)
+    private val bArrayRegex = Regex("""var\s+(_\w+)\s*=\s*\[([\s\S]*?)\];\s*var\s+_\w+\s*=\s*\1\.join""")
+    private val quotedStringRegex = Regex(""""([^"]+)"""")
+    private val arrayAssignRegex = Regex("""var\s+(_\w+)\s*=\s*\[((?:\d+(?:\s*,\s*\d+)*)?)\]""")
+    private val keyRegex = Regex("""var\s+_\w+\s*=\s*['"]([0-9a-f]{16,64})['"]""")
+    private val concatRegex = Regex("""var\s+_\w+\s*=\s*(_\w+(?:\.concat\(_\w+\))+)""")
+    private val varNameRegex = Regex("""_\w+""")
+    private val key3Regex = Regex("""var\s+_\w+\s*=\s*"([0-9a-f]{16,64})";""")
+    private val b64JsonRegex = Regex("""var\s+_\w+\s*=\s*"([A-Za-z0-9+/=]{100,})";""")
     private val backgroundUrlRegex = Regex("""background-image:\s*url\(['"]?([^'")]+)""", RegexOption.IGNORE_CASE)
     private val genreSlugRegex = Regex("""toggleGenre\('([^']+)'\)""")
 }

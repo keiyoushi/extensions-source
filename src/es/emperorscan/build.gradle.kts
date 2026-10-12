@@ -6,13 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Emperor Scan"
-    versionCode = 14
-    contentWarning = ContentWarning.SAFE
+    versionCode = 70
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "es"
-        baseUrl = "https://imperiomanhua.com"
+        baseUrl = "https://imperiomanhwa.com"
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }
