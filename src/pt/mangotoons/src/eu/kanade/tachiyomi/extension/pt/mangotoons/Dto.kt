@@ -66,8 +66,11 @@ class ManifestDto(
 ) {
     fun toPageList() = pages
         .sortedBy { it.index }
-        .map { Page(it.index, imageUrl = it.url) }
+        // some works send absolute CDN URLs, others only the path on the CDN
+        .map { Page(it.index, imageUrl = if (it.url.startsWith("/")) "$CDN_URL${it.url}" else it.url) }
 }
+
+private const val CDN_URL = "https://cdn.mangotoons.com"
 
 @Serializable
 class PageDto(
