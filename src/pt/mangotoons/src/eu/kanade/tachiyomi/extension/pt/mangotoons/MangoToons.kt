@@ -25,15 +25,9 @@ abstract class MangoToons : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 10.seconds) { it.encodedPath.endsWith("/manifest") }
         .rateLimit(2)
 
-    // =====================Popular=====================
-
     override suspend fun getPopularManga(page: Int): MangasPage = mangaList(page) { addQueryParameter("ordenar", "populares") }
 
-    // =====================Latest=====================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = mangaList(page) { addQueryParameter("ordenar", "recentes") }
-
-    // =====================Search=====================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = mangaList(page) {
         query.takeIf { it.isNotBlank() }?.let { addQueryParameter("busca", it) }
@@ -49,8 +43,6 @@ abstract class MangoToons : KeiSource() {
         return client.get(url).parseAs<MangaListDto>().toMangasPage(baseUrl)
     }
 
-    // =====================Details=====================
-
     // details and chapters come from the same endpoint
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -63,20 +55,14 @@ abstract class MangoToons : KeiSource() {
         return SMangaUpdate(dto.toSManga(baseUrl), dto.chapterList())
     }
 
-    // =====================Pages========================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val mangaId = chapter.url.mangaId()
         val number = chapter.url.chapterNumber()
 
         return client.get("$apiUrl/leitor/obras/$mangaId/capitulos/$number/manifest")
             .parseAs<ManifestDto>()
-            .pages
-            .sortedBy { it.index }
-            .map { Page(it.index, imageUrl = it.url) }
+            .toPageList()
     }
-
-    // =====================Utils=====================
 
     // the library stores /obra/{id} and /obra/{id}/capitulo/{numero}; older entries may carry ?slug=
     private fun String.mangaId(): String = substringAfter("/obra/").substringBefore("/").substringBefore("?")
