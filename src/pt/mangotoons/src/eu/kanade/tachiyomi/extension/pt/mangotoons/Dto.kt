@@ -4,8 +4,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 @Serializable
 class MangaListDto(
@@ -44,6 +46,7 @@ class MangaDto(
 @Serializable
 class ChapterDto(
     private val numero: String,
+    @SerialName("published_at") private val publishedAt: String? = null,
 ) {
     fun toSChapter(mangaId: Int) = SChapter.create().apply {
         // same number format as the old API, so chapters already in the library keep their URL
@@ -52,7 +55,8 @@ class ChapterDto(
         name = "Capitulo $number"
         chapter_number = parsed ?: -1f
         url = "/obra/$mangaId/capitulo/$number"
-        // the API sends no date (published_at is always null)
+        // published_at is null for many chapters
+        date_upload = Instant.tryParse(publishedAt)
     }
 }
 

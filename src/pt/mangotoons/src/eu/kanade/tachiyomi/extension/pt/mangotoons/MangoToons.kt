@@ -21,8 +21,8 @@ abstract class MangoToons : KeiSource() {
 
     private val apiUrl = "https://api.mangotoons.com/api/v1"
 
-    // the page manifest answers 429 (Retry-After: 10) past 3 requests in 10 seconds
-    override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 10.seconds) { it.encodedPath.endsWith("/manifest") }
+    // the page manifest answers 429 (Retry-After: 10) from about 12 requests a minute
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 5.seconds) { it.encodedPath.endsWith("/manifest") }
         .rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage = mangaList(page) { addQueryParameter("ordenar", "populares") }
