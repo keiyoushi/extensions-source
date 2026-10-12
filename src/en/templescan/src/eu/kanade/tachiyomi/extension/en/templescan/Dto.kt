@@ -77,3 +77,10 @@ class SeriesData(
 class PagesList(
     val images: List<String>,
 )
+
+@Serializable
+class RenderedPage(
+    val status: Int,
+    val cloudflareChallenge: Boolean,
+    val html: String,
+)
