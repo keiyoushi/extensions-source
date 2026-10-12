@@ -367,12 +367,20 @@ abstract class LectorXd : KeiSource() {
             val document = response.asJsoup()
 
             SMangaUpdate(
-                manga = parseMangaDetails(
-                    document = document,
-                    original = manga,
-                    communityRating = fetchCommunityRating(document),
-                ),
-                chapters = chapterListParse(document),
+                manga = if (fetchDetails) {
+                    parseMangaDetails(
+                        document = document,
+                        original = manga,
+                        communityRating = fetchCommunityRating(document),
+                    )
+                } else {
+                    manga
+                },
+                chapters = if (fetchChapters) {
+                    chapterListParse(document)
+                } else {
+                    chapters
+                },
             )
         }
     }
