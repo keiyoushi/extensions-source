@@ -2,11 +2,14 @@ package eu.kanade.tachiyomi.extension.zh.vomic
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
+
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss")
 
 val SManga.id get() = url.substring(1, 1 + 32)
 
@@ -65,10 +68,10 @@ class ChapterDto(
     private val cid: String,
     private val update_time: String,
 ) {
-    fun toSChapter(mangaId: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(mangaId: String) = SChapter.create().apply {
         url = "/m_$cid/chapterimage.ashx?mid=$mangaId"
         name = title
-        date_upload = dateFormat.parse(update_time)!!.time
+        date_upload = dateFormat.tryParseDate(update_time)
     }
 }
 

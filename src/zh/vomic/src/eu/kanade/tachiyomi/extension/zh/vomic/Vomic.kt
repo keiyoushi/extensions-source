@@ -1,75 +1,65 @@
 package eu.kanade.tachiyomi.extension.zh.vomic
 
 import android.util.Base64
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import okhttp3.Headers
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
+import okhttp3.OkHttpClient
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 @Source
-abstract class Vomic : HttpSource() {
+abstract class Vomic : KeiSource() {
 
     override val supportsLatest = false
 
     private val apiUrl: String
-        get() = apiUrl()
-
-    private fun apiUrl(): String {
-        val host = baseUrl.toHttpUrl().host
-        return if (host.startsWith("www.") || host.startsWith("api.")) {
-            "https://api.${host.substring(4)}"
-        } else {
-            baseUrl
+        get() {
+            val host = baseUrl.toHttpUrl().host
+            return if (host.startsWith("www.") || host.startsWith("api.")) {
+                "https://api.${host.substring(4)}"
+            } else {
+                baseUrl
+            }
         }
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
+        try {
+            chain.proceed(chain.request()).use { response ->
+                if (response.isSuccessful) {
+                    return@addInterceptor response
+                }
+            }
+        } catch (_: Exception) { }
+
+        throw IOException("请在插件设置中修改网址")
     }
 
-    override val client = network.client.newBuilder().addInterceptor { chain ->
-        try {
-            val response = chain.proceed(chain.request())
-            if (response.isSuccessful) {
-                return@addInterceptor response
-            }
-            response.close()
-        } catch (_: Throwable) {
-        }
-        throw IOException("请在插件设置中修改网址")
-    }.build()
-
-    override fun headersBuilder() = Headers.Builder().add("User-Agent", System.getProperty("http.agent")!!)
-
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/api/v1/rank/rank-data?rank_id=1&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangaList: RankingDto = response.parseAs()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mangaList = client.get(
+            "$apiUrl/api/v1/rank/rank-data?rank_id=1&page=$page",
+        ).parseAs<RankingDto>()
         val entries = mangaList.result.mapNotNull { it.toSMangaOrNull() }
-        val hasNextPage = response.request.url.queryParameter("page") != "4"
+        val hasNextPage = page < 5
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun getFilterList() = getFilterListInternal()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchQuery = parseSearchQuery(query.trim(), filters)
         if (searchQuery.title.isEmpty() && searchQuery.category.isEmpty()) throw Exception("请输入搜索词或分类")
 
@@ -78,28 +68,42 @@ abstract class Vomic : HttpSource() {
             .addQueryParameter("category", searchQuery.category)
             .addEncodedQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
-    }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val mangaList: MangaListDto = response.parseAs()
+        val mangaList = client.get(url).parseAs<MangaListDto>()
         val entries = mangaList.entries.mapNotNull { it.toSMangaOrNull() }
         return MangasPage(entries, mangaList.hasNextPage)
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/#/detail?id=${manga.id}"
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/api/v1/detail/get-comic-detail-data?mid=${manga.id}", headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (fetchDetails) {
+                client.get(
+                    "$apiUrl/api/v1/detail/get-comic-detail-data?mid=${manga.id}",
+                ).parseAs<MangaDto>().toSMangaDetails()
+            } else {
+                manga
+            }
+        }
 
-    override fun mangaDetailsParse(response: Response) = response.parseAs<MangaDto>().toSMangaDetails()
+        val chapterList = async {
+            if (fetchChapters) {
+                val chapters = client.get(
+                    "$apiUrl/api/v1/detail/get-comic-detail-chapter-data?mid=${manga.id}",
+                ).parseAs<List<ChapterDto>>()
+                chapters.map { it.toSChapter(manga.id) }
+            } else {
+                chapters
+            }
+        }
 
-    override fun chapterListRequest(manga: SManga) = GET("$apiUrl/api/v1/detail/get-comic-detail-chapter-data?mid=${manga.id}", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters: List<ChapterDto> = response.parseAs()
-        val mangaId = response.request.url.queryParameter("mid")!!
-        val dateFormat = dateFormat
-        return chapters.map { it.toSChapter(mangaId, dateFormat) }
+        SMangaUpdate(details.await(), chapterList.await())
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -107,7 +111,7 @@ abstract class Vomic : HttpSource() {
         return "$baseUrl/#/page/$mangaId/$chapterId"
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (mangaId, chapterId) = chapter.id
         val key = run {
             val alphanumeric = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -131,31 +135,14 @@ abstract class Vomic : HttpSource() {
             .addEncodedQueryParameter("t", time)
             .addQueryParameter("e", encrypted)
             .build()
-        return GET(url, headers)
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val pageList: List<String> = response.parseAs()
+        val response = client.get(url)
+        val pageList = response.parseAs<List<String>>()
         if (pageList.size == 1 && pageList[0] == "https://cdn.vomicer.com/qiniu/vomic/otherImg/info2.webp") {
             throw Exception("无法阅读此章节")
         }
         return pageList.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageRequest(page: Page): Request {
-        val url = page.imageUrl!!
-        val host = url.toHttpUrl().host
-        val headers = headersBuilder().set("Referer", "https://$host/").build()
-        return GET(url, headers)
-    }
-
-    private val json: Json by injectLazy()
-
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<ResponseDto<T>>(body.string()).data
-
-    companion object {
-        private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.ENGLISH) }
-    }
+    override fun getFilterList(data: JsonElement?) = getFilterListInternal()
 }
