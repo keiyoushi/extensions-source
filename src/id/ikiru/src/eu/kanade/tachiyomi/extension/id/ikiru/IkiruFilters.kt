@@ -68,7 +68,7 @@ class StatusFilter :
 
 class Genre(name: String, val slug: String) : Filter.CheckBox(name)
 
-class GenreFilter(genres: List<Genre>) :
+class GenreFilter(genres: List<Genre> = defaultGenres) :
     Filter.Group<Genre>("Genre", genres),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
@@ -78,7 +78,7 @@ class GenreFilter(genres: List<Genre>) :
     }
 }
 
-val defaultGenres = listOf(
+private val defaultGenres = listOf(
     Genre("Action", "action"),
     Genre("Adventure", "adventure"),
     Genre("Comedy", "comedy"),

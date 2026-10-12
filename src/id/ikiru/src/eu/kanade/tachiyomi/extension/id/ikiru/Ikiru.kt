@@ -20,7 +20,6 @@ import okhttp3.Response
 @Source
 abstract class Ikiru : KeiSource() {
 
-    // =========================== Popular ===========================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
             .addQueryParameter("sortBy", "popular")
@@ -31,7 +30,6 @@ abstract class Ikiru : KeiSource() {
         return parseSearchResponse(response)
     }
 
-    // =========================== Latest ===========================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
             .addQueryParameter("sortBy", "updated")
@@ -42,7 +40,6 @@ abstract class Ikiru : KeiSource() {
         return parseSearchResponse(response)
     }
 
-    // =========================== Search ===========================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -66,15 +63,13 @@ abstract class Ikiru : KeiSource() {
         return MangasPage(mangaList, hasNextPage)
     }
 
-    // =========================== Filters ===========================
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         SortFilter(),
         TypeFilter(),
         StatusFilter(),
-        GenreFilter(defaultGenres),
+        GenreFilter(),
     )
 
-    // =========================== Manga Details & Chapters ===========================
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.url.removePrefix("/manga/").trim('/')
         return "$baseUrl/manga/$slug"
@@ -132,14 +127,11 @@ abstract class Ikiru : KeiSource() {
 
             hasMore = data.hasMore
             page++
-
-            if (page > 30) break
         }
 
         return allChapters
     }
 
-    // =========================== Pages (SSR) ===========================
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) chapter.url else "$baseUrl${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

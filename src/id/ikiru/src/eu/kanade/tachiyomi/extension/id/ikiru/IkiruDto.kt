@@ -2,18 +2,14 @@ package eu.kanade.tachiyomi.extension.id.ikiru
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class IkiruResponseDto<T>(
-    val success: Boolean = false,
     val data: T? = null,
-    val message: String? = null,
-    val code: Int? = null,
 )
 
 @Serializable
@@ -23,42 +19,39 @@ class IkiruSearchDataDto(
 
 @Serializable
 class IkiruMangaItemDto(
-    val id: String,
-    val title: String,
-    val slug: String,
-    val featuredImage: String? = null,
-    val type: String? = null,
+    private val title: String,
+    private val slug: String,
+    private val featuredImage: String? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         this.title = this@IkiruMangaItemDto.title
-        this.url = this@IkiruMangaItemDto.slug
-        this.thumbnail_url = featuredImage
+        this.url = slug
+        thumbnail_url = featuredImage
     }
 }
 
 @Serializable
 class IkiruMangaDetailDto(
-    val id: String,
-    val title: String,
-    val slug: String,
-    val description: String? = null,
-    val status: String? = null,
-    val featuredImage: String? = null,
-    val metadata: IkiruMetadataDto? = null,
+    private val title: String,
+    private val slug: String,
+    private val description: String? = null,
+    private val status: String? = null,
+    private val featuredImage: String? = null,
+    private val metadata: IkiruMetadataDto? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         this.title = this@IkiruMangaDetailDto.title
-        this.url = this@IkiruMangaDetailDto.slug
-        this.thumbnail_url = featuredImage
+        this.url = slug
+        thumbnail_url = featuredImage
         this.description = description?.let { Jsoup.parseBodyFragment(it).text() }
         this.status = when (this@IkiruMangaDetailDto.status?.uppercase()) {
             "ONGOING" -> SManga.ONGOING
             "COMPLETED" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        this.author = metadata?.author?.mapNotNull { it.name }?.joinToString(", ")
-        this.artist = metadata?.artist?.mapNotNull { it.name }?.joinToString(", ")
-        this.genre = metadata?.genre?.mapNotNull { it.name }?.joinToString(", ")
+        author = metadata?.author?.mapNotNull { it.name }?.joinToString(", ")
+        artist = metadata?.artist?.mapNotNull { it.name }?.joinToString(", ")
+        genre = metadata?.genre?.mapNotNull { it.name }?.joinToString(", ")
     }
 }
 
@@ -72,24 +65,20 @@ class IkiruMetadataDto(
 @Serializable
 class IkiruNamedDto(
     val name: String? = null,
-    val slug: String? = null,
 )
 
 @Serializable
 class IkiruChapterListDto(
     val chapters: List<IkiruChapterItemDto> = emptyList(),
     val hasMore: Boolean = false,
-    val lastIndex: String? = null,
-    val count: Int? = null,
 )
 
 @Serializable
 class IkiruChapterItemDto(
-    val id: String,
-    val slug: String,
-    val title: String? = null,
-    val number: Float? = null,
-    val createdAt: String? = null,
+    private val slug: String,
+    private val title: String? = null,
+    private val number: Float? = null,
+    private val createdAt: String? = null,
 ) {
     fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
         val chapterSegment = chapterRegex.find(slug)?.value
@@ -105,7 +94,7 @@ class IkiruChapterItemDto(
         this.url = "/manga/$mangaSlug/$chapterSegment"
         this.name = cleanChapterName(title, number)
         this.chapter_number = number ?: -1f
-        this.date_upload = parseIsoDate(createdAt)
+        this.date_upload = Instant.tryParse(createdAt)
     }
 
     private fun cleanChapterName(rawTitle: String?, num: Float?): String {
@@ -123,16 +112,6 @@ class IkiruChapterItemDto(
             return "Chapter $numStr"
         }
         return rawTitle?.takeIf { it.isNotBlank() } ?: "Chapter"
-    }
-
-    private fun parseIsoDate(dateStr: String?): Long {
-        if (dateStr.isNullOrBlank()) return 0L
-        return runCatching {
-            val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
-            format.parse(dateStr)?.time ?: 0L
-        }.getOrDefault(0L)
     }
 
     companion object {
