@@ -35,16 +35,17 @@ class THComic(
         else -> emptyList() // 1 = Normal
     }
 
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(topicKey: String) = SManga.create().apply {
         url = "/api/comic/$cid"
         title = this@THComic.title
         author = authors.joinToString("、")
         thumbnail_url = cover
         description = getDescription()
         genre = (getType() + keywords.orEmpty()).joinToString(", ").replace("，", ", ")
+        memo = TerraHistoricus.buildMemo(topicKey)
     }
 
-    fun toSChapterList() = episodes!!.map { episode ->
+    fun toSChapterList(topicKey: String) = episodes!!.map { episode ->
         SChapter.create().apply {
             url = "/api/comic/$cid/episode/${episode.cid!!}"
             name = if (episode.type != 1) {
@@ -54,6 +55,7 @@ class THComic(
             } else {
                 "${episode.shortTitle} ${episode.title}"
             }
+            memo = TerraHistoricus.buildMemo(topicKey)
         }
     }.apply {
         this[0].date_upload = (updateTime ?: 0L) * 1000
@@ -75,10 +77,11 @@ class THRecentUpdate(
 //  val episodeShortTitle: String,
 //  val updateTime: Long
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(topicKey: String) = SManga.create().apply {
         url = "/api/comic/$comicCid"
         title = this@THRecentUpdate.title
         thumbnail_url = coverUrl
+        memo = TerraHistoricus.buildMemo(topicKey)
     }
 }
 

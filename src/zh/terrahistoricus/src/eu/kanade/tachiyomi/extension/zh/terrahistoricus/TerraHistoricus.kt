@@ -10,6 +10,10 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Source
 abstract class TerraHistoricus : KeiSource() {
@@ -18,13 +22,13 @@ abstract class TerraHistoricus : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val topicKey = topicKeys[page - 1]
         val comics = fetch<List<THComic>>("$baseUrl/api/comic?topicKey=$topicKey")
-        return MangasPage(comics.map { it.toSManga() }, topicKey != topicKeys.last())
+        return MangasPage(comics.map { it.toSManga(topicKey) }, topicKey != topicKeys.last())
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val topicKey = topicKeys[page - 1]
         val updates = fetch<List<THRecentUpdate>>("$baseUrl/api/recentUpdate?topicKey=$topicKey")
-        return MangasPage(updates.map { it.toSManga() }, topicKey != topicKeys.last())
+        return MangasPage(updates.map { it.toSManga(topicKey) }, topicKey != topicKeys.last())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -33,9 +37,16 @@ abstract class TerraHistoricus : KeiSource() {
         return MangasPage(mangas, mangasPage.hasNextPage)
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.removePrefix("/api")
+    override fun getMangaUrl(manga: SManga): String {
+        val topicKey = manga.memo[TOPIC_KEY]?.stringOrNull ?: return baseUrl + manga.url.removePrefix("/api")
+        return "$baseUrl/$topicKey/comic/${manga.url.substringAfterLast('/')}"
+    }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.removePrefix("/api")
+    override fun getChapterUrl(chapter: SChapter): String {
+        val topicKey = chapter.memo[TOPIC_KEY]?.stringOrNull ?: return baseUrl + chapter.url.removePrefix("/api")
+        val chapterPath = chapter.url.removePrefix("/api")
+        return "$baseUrl/$topicKey$chapterPath"
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -44,7 +55,9 @@ abstract class TerraHistoricus : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val comic = fetch<THComic>(baseUrl + manga.url)
-        return SMangaUpdate(comic.toSManga(), comic.toSChapterList())
+        val topicKey = manga.memo[TOPIC_KEY]?.stringOrNull ?: findTopicKey(comic.cid)
+        val details = comic.toSManga(topicKey).apply { url = manga.url }
+        return SMangaUpdate(details, comic.toSChapterList(topicKey))
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -56,5 +69,21 @@ abstract class TerraHistoricus : KeiSource() {
 
     override suspend fun getImageUrl(page: Page): String = fetch<THPage>(page.url).url
 
+    private suspend fun findTopicKey(comicCid: String): String {
+        for (topicKey in topicKeys) {
+            val comics = fetch<List<THComic>>("$baseUrl/api/comic?topicKey=$topicKey")
+            if (comics.any { it.cid == comicCid }) return topicKey
+        }
+        return topicKeys.first()
+    }
+
     private suspend inline fun <reified T> fetch(url: String) = client.get(url).parseAs<THResult<T>>().data
+
+    companion object {
+        const val TOPIC_KEY = "topicKey"
+
+        fun buildMemo(topicKey: String): JsonObject = buildJsonObject {
+            put(TOPIC_KEY, topicKey)
+        }
+    }
 }
