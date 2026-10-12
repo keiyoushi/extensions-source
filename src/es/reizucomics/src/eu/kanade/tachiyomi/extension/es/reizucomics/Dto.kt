@@ -61,6 +61,7 @@ class ChapterRow(
     val is_locked: Boolean? = null,
     val is_special: Boolean? = null,
     val published_at: String? = null,
+    val comics: ComicRow? = null,
 )
 
 @Serializable

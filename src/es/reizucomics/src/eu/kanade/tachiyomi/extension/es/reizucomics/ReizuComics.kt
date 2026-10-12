@@ -11,9 +11,8 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
@@ -21,8 +20,6 @@ import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import kotlin.time.Instant
 
 @Source
@@ -33,12 +30,11 @@ abstract class ReizuComics : KeiSource() {
 
     private val anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyeWR6Y3F2ZWhldXd2aXllcnRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3ODEzOTUsImV4cCI6MjA3OTM1NzM5NX0.9YWTbyCsK5itpTMFnNT8q6nOYfpIRc7Aslm8OQHe7QU"
 
-    private val apiHeaders: Headers = Headers.Builder()
+    private val apiHeaders: Headers get() = headersBuilder()
         .add("apikey", anonKey)
         .add("Authorization", "Bearer $anonKey")
         .build()
 
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val pageSize = 20
     private val comicSelect = "id,slug,title,description,cover_image_url,cover_r2_key,genres,status,work_type,has_adult_content"
     private val uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
@@ -52,7 +48,7 @@ abstract class ReizuComics : KeiSource() {
             put("p_reading_format", "all")
             put("p_language", "es")
             put("p_limit", limit)
-        }.toString().toRequestBody(jsonMediaType)
+        }.toJsonRequestBody()
         val rows = client.post("$apiUrl/rpc/get_comics_by_period_views", apiHeaders, body)
             .parseAs<List<RankingRow>>()
             .filter { it.work_type != "novel" }
@@ -82,7 +78,7 @@ abstract class ReizuComics : KeiSource() {
             put("p_month", JsonNull)
             put("p_offset", offset)
             put("p_limit", pageSize)
-        }.toString().toRequestBody(jsonMediaType)
+        }.toJsonRequestBody()
         val rows = client.post("$apiUrl/rpc/get_comics_by_recent_chapter", apiHeaders, body)
             .parseAs<List<RecentRow>>()
         val total = rows.firstOrNull()?.total_count ?: 0
@@ -105,7 +101,7 @@ abstract class ReizuComics : KeiSource() {
             .addQueryParameter("order", "title.asc")
             .addQueryParameter("limit", pageSize.toString())
             .addQueryParameter("offset", ((page - 1) * pageSize).toString())
-            .build().toString()
+            .build()
         val rows = client.get(url, apiHeaders)
             .parseAs<List<ComicRow>>()
             .filter { it.work_type != "novel" }
@@ -121,7 +117,7 @@ abstract class ReizuComics : KeiSource() {
             .addQueryParameter("select", comicSelect)
             .addQueryParameter(column, "eq.$value")
             .addQueryParameter("limit", "1")
-            .build().toString()
+            .build()
         return client.get(requestUrl, apiHeaders)
             .parseAs<List<ComicRow>>()
             .firstOrNull()
@@ -133,10 +129,11 @@ abstract class ReizuComics : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
+    ): SMangaUpdate {
+        if (fetchDetails && fetchChapters) return fetchDetailsAndChapters(manga)
+        val details = if (fetchDetails) fetchMangaDetails(manga) else manga
+        val chapterList = if (fetchChapters) fetchChapterList(manga) else chapters
+        return SMangaUpdate(details, chapterList)
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
@@ -145,12 +142,24 @@ abstract class ReizuComics : KeiSource() {
             .addQueryParameter("select", comicSelect)
             .addQueryParameter(column, "eq.$value")
             .addQueryParameter("limit", "1")
-            .build().toString()
+            .build()
         return client.get(url, apiHeaders)
             .parseAs<List<ComicRow>>()
             .firstOrNull()
             ?.toSManga()
             ?: manga
+    }
+
+    private suspend fun fetchDetailsAndChapters(manga: SManga): SMangaUpdate {
+        val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "id,chapter_number,title,is_locked,is_special,published_at,comics($comicSelect)")
+            .addQueryParameter("comic_id", "eq.${manga.url}")
+            .addQueryParameter("is_published", "eq.true")
+            .addQueryParameter("order", "chapter_number.desc")
+            .build()
+        val rows = client.get(url, apiHeaders).parseAs<List<ChapterRow>>()
+        val details = rows.firstOrNull()?.comics?.toSManga() ?: manga
+        return SMangaUpdate(details, rows.toSChapters(manga.url))
     }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
@@ -159,27 +168,25 @@ abstract class ReizuComics : KeiSource() {
             .addQueryParameter("comic_id", "eq.${manga.url}")
             .addQueryParameter("is_published", "eq.true")
             .addQueryParameter("order", "chapter_number.desc")
-            .build().toString()
-        val rows = client.get(url, apiHeaders).parseAs<List<ChapterRow>>()
-        val (regulars, specials) = rows.partition { it.is_special != true }
-        return (regulars + specials).map { it.toSChapter(manga.url) }
+            .build()
+        return client.get(url, apiHeaders)
+            .parseAs<List<ChapterRow>>()
+            .toSChapters(manga.url)
+    }
+
+    private fun List<ChapterRow>.toSChapters(comicId: String): List<SChapter> {
+        val (regulars, specials) = partition { it.is_special != true }
+        return (regulars + specials).map { it.toSChapter(comicId) }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val comicId = chapter.url.substringBefore("/")
-        val idOrNumber = chapter.url.substringAfter("/")
-        val builder = "$apiUrl/chapters".toHttpUrl().newBuilder()
+        val chapterId = chapter.url.substringAfter("/")
+        val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
             .addQueryParameter("select", "content_url,content_r2_keys,content_r2_keys_paged,content_r2_keys_scroll,is_locked")
             .addQueryParameter("is_published", "eq.true")
             .addQueryParameter("limit", "1")
-        // New chapter URLs carry the row UUID; older cached ones carry the chapter number.
-        if (uuidRegex.matches(idOrNumber)) {
-            builder.addQueryParameter("id", "eq.$idOrNumber")
-        } else {
-            builder.addQueryParameter("comic_id", "eq.$comicId")
-            builder.addQueryParameter("chapter_number", "eq.$idOrNumber")
-        }
-        val url = builder.build().toString()
+            .addQueryParameter("id", "eq.$chapterId")
+            .build()
         val row = client.get(url, apiHeaders)
             .parseAs<List<ChapterPages>>()
             .firstOrNull()
