@@ -11,15 +11,14 @@ import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-/** Loads the site's pages in a WebView, one at a time, as its own readers do. */
-internal class SitePages(baseUrl: String) {
+/** Loads the site's pages in a WebView, one at a time, as its own readers do, and reads the site's data from them. */
+internal class SitePages(baseUrl: String, private val userAgent: () -> String) {
 
     private val host = baseUrl.toHttpUrl().host
 
@@ -27,17 +26,21 @@ internal class SitePages(baseUrl: String) {
 
     private var failedAt: Long? = null
 
-    suspend fun get(url: String): Document = mutex.withLock {
+    /** Loads [url] and reads [kind] (`catalog`, `chapters` or `pages`) from the site's app state. */
+    suspend fun get(url: String, kind: String): SitePage = mutex.withLock {
         var challenged = false
+        val script = asset("read_page.js")
+        var polling = false
 
         // A challenge that just failed to solve would fail again; leave it to the user.
-        fun WebViewScope<RenderedPage>.onChallenge() {
+        fun WebViewScope<SitePage>.onChallenge() {
             challenged = true
             failedAt?.let { if (System.nanoTime() - it < BACKOFF.inWholeNanoseconds) reject(IOException(SOLVE_MANUALLY)) }
         }
 
         val page = try {
-            runWebView<RenderedPage>(timeout = 60.seconds) {
+            runWebView<SitePage>(timeout = 60.seconds) {
+                userAgent = this@SitePages.userAgent()
                 blockImages = true
                 interceptRequest { request ->
                     val requestHost = request.url.host
@@ -49,10 +52,24 @@ internal class SitePages(baseUrl: String) {
                 onPageFinished { finished ->
                     val finishedUrl = finished.toHttpUrlOrNull() ?: return@onPageFinished
                     if (finishedUrl.host != host || finishedUrl.isChallenge()) return@onPageFinished
-                    evaluateJs(RENDERED_PAGE_JS) { result ->
-                        val rendered = result.parseAs<RenderedPage>()
-                        // Cloudflare's challenge page solves itself and reloads the real one.
-                        if (rendered.cloudflareChallenge) onChallenge() else resolve(rendered)
+                    if (polling) return@onPageFinished
+                    polling = true
+                    // The site's app fills in its state after the page has loaded.
+                    var polls = 0
+                    poll(POLL_INTERVAL) {
+                        // Only a reader page can legitimately lack its data (a locked chapter)
+                        val settled = kind == "pages" && POLL_INTERVAL * ++polls >= SETTLE_TIME
+                        // Serialized in the page: the WebView writes large numbers in exponent form
+                        evaluateJs("JSON.stringify(($script)(\"$kind\", $settled))") { result ->
+                            val page = result.parseAs<String?>()?.parseAs<SitePage?>() ?: return@evaluateJs
+                            // Cloudflare's challenge page solves itself and reloads the real one.
+                            if (page.cloudflareChallenge) {
+                                polls = 0
+                                onChallenge()
+                            } else {
+                                resolve(page)
+                            }
+                        }
                     }
                 }
                 onReceivedError { request, error ->
@@ -73,8 +90,10 @@ internal class SitePages(baseUrl: String) {
         }
         failedAt = null
         if (page.status >= 400) throw IOException("HTTP error ${page.status}")
-        Jsoup.parse(page.html, url)
+        page
     }
+
+    private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
     private fun String.isAllowed() = this == host || endsWith(".$host") || this == TURNSTILE_HOST
 
@@ -85,11 +104,9 @@ internal class SitePages(baseUrl: String) {
     companion object {
         private const val TURNSTILE_HOST = "challenges.cloudflare.com"
 
-        // responseStatus needs WebView 109+
-        private const val RENDERED_PAGE_JS = "({ " +
-            "status: performance.getEntriesByType('navigation')[0]?.responseStatus || 200, " +
-            "cloudflareChallenge: !!window._cf_chl_opt, " +
-            "html: document.documentElement.outerHTML })"
+        private val POLL_INTERVAL = 250.milliseconds
+
+        private val SETTLE_TIME = 10.seconds
 
         private const val SOLVE_MANUALLY = "Open in WebView to pass the site's verification"
 
