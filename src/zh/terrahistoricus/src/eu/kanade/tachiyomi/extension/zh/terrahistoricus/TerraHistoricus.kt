@@ -14,6 +14,8 @@ import keiyoushi.utils.stringOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 
 @Source
 abstract class TerraHistoricus : KeiSource() {
@@ -67,7 +69,20 @@ abstract class TerraHistoricus : KeiSource() {
         }
     }
 
-    override suspend fun getImageUrl(page: Page): String = fetch<THPage>(page.url).url
+    override suspend fun getImageUrl(page: Page): String = fetch<THPage>(freshPageUrl(page)).url
+
+    // Mihon may reuse an image URL after its CDN signature has expired.
+    override fun imageRequest(page: Page): Request {
+        val imageUrl = client.newCall(Request.Builder().url(freshPageUrl(page)).headers(headers).build())
+            .execute()
+            .use { it.parseAs<THResult<THPage>>().data.url }
+        return Request.Builder().url(imageUrl).headers(headers).build()
+    }
+
+    private fun freshPageUrl(page: Page): String = page.url.toHttpUrl().newBuilder()
+        .addQueryParameter("_", System.currentTimeMillis().toString())
+        .build()
+        .toString()
 
     private suspend fun findTopicKey(comicCid: String): String {
         for (topicKey in topicKeys) {
