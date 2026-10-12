@@ -646,6 +646,10 @@ abstract class Comix :
                 val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                     ?: return@interceptRequest emptyResponse
                 if (UNUSED_SITE_PATHS.any(requestUrl.encodedPath::startsWith)) return@interceptRequest emptyResponse
+                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH) {
+                    reject(Exception("Open in WebView to solve the captcha"))
+                    return@interceptRequest emptyResponse
+                }
                 if (isDataRequest?.invoke(requestUrl) == true) {
                     dataRequests.incrementAndGet()
                     timeoutDeadline.set(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
@@ -890,5 +894,8 @@ abstract class Comix :
 
         // Site requests in the WebView that the extension has no use for: error reports, comments, upload images
         private val UNUSED_SITE_PATHS = listOf("/api/v1/client-errors", "/api/v1/threads/", "/assets/uploads/")
+
+        // Site's captcha page, shown when the API answers 403 captcha_required
+        private const val WAF_CHALLENGE_PATH = "/@waf/challenge"
     }
 }
