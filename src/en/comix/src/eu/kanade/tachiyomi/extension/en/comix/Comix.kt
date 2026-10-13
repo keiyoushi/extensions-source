@@ -464,7 +464,13 @@ abstract class Comix :
 
         val updatedManga = if (fetchDetails) parseMangaDetails(getDocument()) else manga
         val updatedChapters = if (fetchChapters) {
-            val fetched = getWebViewChapterList(manga, getDocument(), latestChapterId)
+            // Site dates are relative ("2w ago"), so keep the date a chapter was first stored with
+            val knownDates = chapters.mapNotNull { chapter ->
+                chapter.chapterId()?.let { it to chapter.date_upload }?.takeIf { it.second > 0 }
+            }.toMap()
+            val fetched = getWebViewChapterList(manga, getDocument(), latestChapterId).onEach { chapter ->
+                chapter.chapterId()?.let(knownDates::get)?.let { chapter.date_upload = it }
+            }
             val candidates = if (fetchUntilKnown) fetched + chapters else fetched
             selectChapters(candidates, deduplicateChapters, scanlatorBlacklist).also { selected ->
                 selected.firstOrNull()?.apply {
