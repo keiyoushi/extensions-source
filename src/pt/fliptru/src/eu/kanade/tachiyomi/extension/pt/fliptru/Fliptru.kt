@@ -28,8 +28,7 @@ abstract class Fliptru : KeiSource() {
         return MangasPage(parseComicCards(document), false)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        getBrowsePage("$baseUrl/comics/all", page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getBrowsePage("$baseUrl/comics/all", page)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
@@ -70,20 +69,19 @@ abstract class Fliptru : KeiSource() {
 
     private val thumbnailRegex = Regex("""url\((https?://[^)]+)\)""")
 
-    private fun parseComicCards(document: Document): List<SManga> =
-        document.select("a.comic-card[href^=\"/comic/\"]")
-            .mapNotNull { card ->
-                val url = card.attr("href").substringBefore("?")
-                val title = card.attr("data-title")
-                    .ifBlank { card.selectFirst("h3")?.text().orEmpty() }
-                if (title.isBlank()) return@mapNotNull null
-                SManga.create().apply {
-                    this.url = url
-                    this.title = title
-                    thumbnail_url = thumbnailRegex.find(card.attr("style"))?.groupValues?.get(1)
-                }
+    private fun parseComicCards(document: Document): List<SManga> = document.select("a.comic-card[href^=\"/comic/\"]")
+        .mapNotNull { card ->
+            val url = card.attr("href").substringBefore("?")
+            val title = card.attr("data-title")
+                .ifBlank { card.selectFirst("h3")?.text().orEmpty() }
+            if (title.isBlank()) return@mapNotNull null
+            SManga.create().apply {
+                this.url = url
+                this.title = title
+                thumbnail_url = thumbnailRegex.find(card.attr("style"))?.groupValues?.get(1)
             }
-            .distinctBy { it.url }
+        }
+        .distinctBy { it.url }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(GenreFilter())
 
