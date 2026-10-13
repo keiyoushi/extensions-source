@@ -1,12 +1,11 @@
 package eu.kanade.tachiyomi.extension.ja.ebookjapan
 
 import android.util.Base64
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.inflate
 import java.nio.ByteBuffer
 import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 class Book(
     private val fileId: String,
@@ -59,16 +58,7 @@ fun decryptBook(
     return parseBook(blob.inflate(), fileId)
 }
 
-private fun decryptGcm(keyAndIv: ByteArray, data: ByteArray): ByteArray {
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-        init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(keyAndIv, 0, 32, "AES"),
-            GCMParameterSpec(128, keyAndIv, 32, 16),
-        )
-    }
-    return cipher.doFinal(data)
-}
+private fun decryptGcm(keyAndIv: ByteArray, data: ByteArray): ByteArray = data.aesDecrypt(aesGcm(keyAndIv.copyOfRange(0, 32), keyAndIv.copyOfRange(32, 48)))
 
 // used by WASM func 164
 //  u8 flags, u16 pageCount
