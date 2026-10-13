@@ -11,6 +11,8 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -28,9 +30,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class MangaTek : KeiSource() {
@@ -248,15 +247,7 @@ abstract class MangaTek : KeiSource() {
         val ciphertext = ctHex.hexToBytes()
         val tag = tagHex.hexToBytes()
 
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(
-                Cipher.DECRYPT_MODE,
-                SecretKeySpec(keyHex.hexToBytes(), "AES"),
-                GCMParameterSpec(tag.size * 8, iv),
-            )
-        }
-
-        return String(cipher.doFinal(ciphertext + tag), Charsets.UTF_8).parseAs<OverlayData>()
+        return String((ciphertext + tag).aesDecrypt(aesGcm(keyHex.hexToBytes(), iv, tagLength = tag.size * 8)), Charsets.UTF_8).parseAs<OverlayData>()
     }
 
     companion object {
