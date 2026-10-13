@@ -6,6 +6,7 @@
         typeof item.number === "number" &&
         typeof item.url === "string" &&
         item.url.includes(chapterPath);
+    const PAGER_FALLBACK_MS = 3000;
     let page = 1;
     let done = false;
 
@@ -37,11 +38,27 @@
             return;
         }
         page++;
+        const target = page;
+        // Site's pager, for when it ignores the popstate
+        const clickPage = (tries) => {
+            if (done || page !== target) return;
+            const button = [...document.querySelectorAll(".mpage__chapters nav.npager button.npager__num")]
+                .find((b) => b.textContent.trim() === String(target));
+            if (button) {
+                button.click();
+            } else if (tries > 0) {
+                setTimeout(() => clickPage(tries - 1), 200);
+            } else {
+                done = true;
+                reject(`Chapter list pager has no page ${target}`);
+            }
+        };
         setTimeout(() => {
             const url = new URL(location.href);
-            url.searchParams.set("page", String(page));
+            url.searchParams.set("page", String(target));
             history.pushState(history.state, "", url);
             dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
+            setTimeout(() => clickPage(25), PAGER_FALLBACK_MS);
         }, pageDelayMs);
     };
 }
