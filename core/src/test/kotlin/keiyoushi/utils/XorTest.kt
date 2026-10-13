@@ -1,6 +1,6 @@
 package keiyoushi.utils
 
-import keiyoushi.network.FragmentXorInterceptor
+import keiyoushi.network.XorInterceptor
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -195,13 +195,13 @@ class XorTest {
     }
 
     @Test
-    fun testFragmentXorInterceptorSuccess() {
+    fun testXorInterceptorSuccess() {
         val plainText = "Decrypted manga page payload"
         val key = byteArrayOf(0x12, 0x34, 0xAB.toByte())
         val encrypted = plainText.toByteArray().xor(key)
 
         val client = OkHttpClient.Builder()
-            .addInterceptor(FragmentXorInterceptor(String::decodeHex))
+            .addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
             .addInterceptor(
                 Interceptor { chain ->
                     Response.Builder()
@@ -224,10 +224,10 @@ class XorTest {
     }
 
     @Test
-    fun testFragmentXorInterceptorNoFragmentPassesThrough() {
+    fun testXorInterceptorNullKeyPassesThrough() {
         val payload = "unencrypted payload"
         val client = OkHttpClient.Builder()
-            .addInterceptor(FragmentXorInterceptor())
+            .addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
             .addInterceptor(
                 Interceptor { chain ->
                     Response.Builder()
@@ -247,9 +247,9 @@ class XorTest {
     }
 
     @Test
-    fun testFragmentXorInterceptorErrorResponsePassesThrough() {
+    fun testXorInterceptorErrorResponsePassesThrough() {
         val client = OkHttpClient.Builder()
-            .addInterceptor(FragmentXorInterceptor())
+            .addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
             .addInterceptor(
                 Interceptor { chain ->
                     Response.Builder()
@@ -278,7 +278,7 @@ class XorTest {
         val obfuscatedBytes = imageBytes.xor(key)
 
         val client = OkHttpClient.Builder()
-            .addInterceptor(FragmentXorInterceptor())
+            .addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
             .addInterceptor(
                 Interceptor { chain ->
                     Response.Builder()

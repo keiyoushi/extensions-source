@@ -1153,7 +1153,7 @@ val directText = element.ownTextOrNull() // excludes text of nested child elemen
 For encrypted APIs and descramblers:
 
 ```kotlin
-import keiyoushi.network.FragmentXorInterceptor
+import keiyoushi.network.XorInterceptor
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.rc4
 import keiyoushi.utils.xor
@@ -1167,9 +1167,9 @@ val decrypted = cipherBytes.rc4(key = keyBytes)
 // Streaming XOR decryption on Response, ResponseBody, Source, or ByteArray (single-byte or cyclic multi-byte):
 val decryptedResponse = response.xor(keyBytes)
 
-// Fragment-based XOR image interceptor (URL fragment carries decryption key, default decodes hex):
+// XOR image interceptor extracting decryption key from request (e.g. from URL fragment):
 client.newBuilder()
-    .addInterceptor(FragmentXorInterceptor())
+    .addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
     .build()
 ```
 

@@ -8,6 +8,7 @@ import okio.Buffer
 import okio.ForwardingSource
 import okio.Source
 import okio.buffer
+import kotlin.experimental.xor
 
 /**
  * Decodes this hexadecimal string into a [ByteArray].
@@ -135,7 +136,7 @@ private class Rc4(key: ByteArray, skip: Int) {
  * @param key the single-byte XOR mask
  * @return a [Source] streaming the XOR-transformed data
  */
-fun Source.xor(key: Byte): Source = XorByteSource(this, key)
+fun Source.xor(key: Byte): Source = xor(byteArrayOf(key))
 
 /**
  * Decrypts or encrypts this [Source] by applying a single-byte XOR [key] mask in-place.
@@ -154,11 +155,7 @@ fun Source.xor(key: Int): Source = xor(key.toByte())
  */
 fun Source.xor(key: ByteArray): Source {
     require(key.isNotEmpty()) { "XOR key must not be empty" }
-    return if (key.size == 1) {
-        XorByteSource(this, key[0])
-    } else {
-        XorByteArraySource(this, key)
-    }
+    return XorSource(this, key)
 }
 
 /**
@@ -168,9 +165,8 @@ fun Source.xor(key: ByteArray): Source {
  * @return this [ByteArray] after modification
  */
 fun ByteArray.xorInPlace(key: Byte): ByteArray {
-    val mask = key.toInt()
     for (i in indices) {
-        this[i] = (this[i].toInt() xor mask).toByte()
+        this[i] = this[i] xor key
     }
     return this
 }
@@ -192,9 +188,10 @@ fun ByteArray.xorInPlace(key: Int): ByteArray = xorInPlace(key.toByte())
  */
 fun ByteArray.xorInPlace(key: ByteArray): ByteArray {
     require(key.isNotEmpty()) { "XOR key must not be empty" }
-    val keySize = key.size
+    var k = 0
     for (i in indices) {
-        this[i] = (this[i].toInt() xor key[i % keySize].toInt()).toByte()
+        this[i] = this[i] xor key[k]
+        if (++k == key.size) k = 0
     }
     return this
 }
@@ -278,11 +275,9 @@ fun Response.xor(key: Int, contentType: MediaType? = body.contentType()): Respon
  */
 fun Response.xor(key: ByteArray, contentType: MediaType? = body.contentType()): Response = newBuilder().body(body.xor(key, contentType)).build()
 
-private class XorByteSource(
-    delegate: Source,
-    private val mask: Byte,
-) : ForwardingSource(delegate) {
+private class XorSource(delegate: Source, private val key: ByteArray) : ForwardingSource(delegate) {
     private val cursor = Buffer.UnsafeCursor()
+    private var index = 0
 
     override fun read(sink: Buffer, byteCount: Long): Long {
         val read = super.read(sink, byteCount)
@@ -290,44 +285,16 @@ private class XorByteSource(
 
         sink.readAndWriteUnsafe(cursor).use {
             var length = it.seek(sink.size - read)
-            val maskInt = mask.toInt()
+            var k = index
             while (length != -1) {
                 val data = it.data!!
-                val start = it.start
-                for (i in start until start + length) {
-                    data[i] = (data[i].toInt() xor maskInt).toByte()
+                for (i in it.start until it.start + length) {
+                    data[i] = data[i] xor key[k]
+                    if (++k == key.size) k = 0
                 }
                 length = it.next()
             }
-        }
-        return read
-    }
-}
-
-private class XorByteArraySource(
-    delegate: Source,
-    key: ByteArray,
-) : ForwardingSource(delegate) {
-    private val cursor = Buffer.UnsafeCursor()
-    private val key = key.copyOf()
-    private var keyIndex = 0
-
-    override fun read(sink: Buffer, byteCount: Long): Long {
-        val read = super.read(sink, byteCount)
-        if (read <= 0L) return read
-
-        sink.readAndWriteUnsafe(cursor).use {
-            var length = it.seek(sink.size - read)
-            val keySize = key.size
-            while (length != -1) {
-                val data = it.data!!
-                val start = it.start
-                for (i in start until start + length) {
-                    data[i] = (data[i].toInt() xor key[keyIndex].toInt()).toByte()
-                    keyIndex = (keyIndex + 1) % keySize
-                }
-                length = it.next()
-            }
+            index = k
         }
         return read
     }
