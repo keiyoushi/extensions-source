@@ -127,6 +127,10 @@ class DetailsDto(
     val trackerId: String? = null,
     @SerialName("series_links")
     val seriesLinks: List<SeriesLink> = emptyList(),
+    @SerialName("average_rating")
+    val averageRating: Double? = null,
+    @SerialName("total_ratings")
+    val totalRatings: Int? = null,
     @SerialName("series_covers")
     val covers: List<SeriesCover> = emptyList(),
 ) {
@@ -172,6 +176,13 @@ class DetailsDto(
         title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition.clean(cleanTitle)
         thumbnail_url = covers.firstOrNull()?.imageId?.let { "$apiUrl/image/$it" }
         val desc = StringBuilder()
+
+        // Add rating
+        averageRating?.let {
+            desc.append("Rating: ${"%.1f".format(Locale.US, it / 10)}/10")
+            totalRatings?.let { desc.append(" ($it ratings)") }
+            desc.append("\n\n")
+        }
 
         // Add main description
         this@DetailsDto.description?.takeIf { it.isNotBlank() }?.let {
