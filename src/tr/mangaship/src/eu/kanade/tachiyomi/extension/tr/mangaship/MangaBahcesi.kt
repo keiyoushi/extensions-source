@@ -104,7 +104,6 @@ abstract class MangaBahcesi : KeiSource() {
         }
 
         val hasNextPage = doc.selectFirst("ul.pagination li.active + li > a") != null
-
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -161,9 +160,9 @@ abstract class MangaBahcesi : KeiSource() {
         return SMangaUpdate(parseDetails(doc), parseChapters(doc))
     }
 
-    private fun parseDetails(document: Document): SManga = SManga.create().apply {
+    private fun parseDetails(document: Document) = SManga.create().apply {
+        title = document.selectFirst("div.details-title h2")?.text()!!
         setUrlWithoutDomain(document.location())
-        title = document.selectFirst("div.details-title h2")?.text() ?: ""
         description = document.select("div.details-dectiontion p").text()
 
         val script = document.selectFirst("div#mangaKapakRes script")?.data()
@@ -193,11 +192,11 @@ abstract class MangaBahcesi : KeiSource() {
         }
     }
 
-    private fun parseChapters(document: Document): List<SChapter> = document.select("div.plylist-single").map { element ->
+    private fun parseChapters(document: Document): List<SChapter> = document.select("div.plylist-single").mapNotNull { element ->
         SChapter.create().apply {
             val a = element.selectFirst(".plylist-single-content > a")
             val href = a?.attr("onclick")?.substringAfter("location.href='")?.substringBefore("'")
-                ?: a?.attr("href") ?: ""
+                ?: a?.attr("href") ?: return@mapNotNull null
             setUrlWithoutDomain(href)
 
             val chapterName = a?.text()?.trim() ?: "Bölüm"
