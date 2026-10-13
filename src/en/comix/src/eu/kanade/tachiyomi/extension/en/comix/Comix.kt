@@ -95,6 +95,21 @@ abstract class Comix :
 
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
+    // Comix blocks clients that page chapter lists faster than this
+    private class RequestPacer(private val intervalMs: Long) {
+        private var nextNanos = 0L
+
+        fun waitForSlot() {
+            val waitNanos = synchronized(this) {
+                val now = System.nanoTime()
+                val start = maxOf(now, nextNanos)
+                nextNanos = start + intervalMs * 1_000_000
+                start - now
+            }
+            if (waitNanos > 0) Thread.sleep(waitNanos / 1_000_000)
+        }
+    }
+
     // Retry failed images on alt hosts, like the site's reader
     private fun altHostFallback(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -512,10 +527,11 @@ abstract class Comix :
         latestChapterId: Int?,
     ): List<SChapter> {
         val mangaSlug = manga.url.removePrefix("/")
-        val chapterPath = JSONObject.quote("/title/${mangaSlug.substringBefore('-')}-")
+        val mangaId = mangaSlug.substringBefore('-')
+        val chapterPath = JSONObject.quote("/title/$mangaId-")
         val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, rejectName ->
             "(${asset("capture_items.js")})((${asset("chapter_list.js")})(" +
-                "${latestChapterId ?: "null"}, $chapterPath, $MAX_CHAPTER_PAGES, $CHAPTER_PAGE_DELAY_MS, " +
+                "${latestChapterId ?: "null"}, ${JSONObject.quote(mangaId)}, $chapterPath, $MAX_CHAPTER_PAGES, " +
                 "window.$passPayloadName, window.$rejectName));"
         }
 
@@ -656,6 +672,7 @@ abstract class Comix :
                 }
                 val isData = isDataRequest?.invoke(requestUrl) == true
                 if (isData) dataRequests.incrementAndGet()
+                if (requestUrl.isChapterListRequest()) chapterListPacer.waitForSlot()
                 if (isData || requestUrl.encodedPath.startsWith(WAF_PATH)) {
                     timeoutDeadline.set(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
                 }
@@ -900,7 +917,7 @@ abstract class Comix :
         private const val DATA_REQUEST_WAIT_SECONDS = 30L
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val MAX_CHAPTER_PAGES = 1000
-        private const val CHAPTER_PAGE_DELAY_MS = 500
+        private val chapterListPacer = RequestPacer(intervalMs = 3000)
         private const val OFFICIAL_GROUP_ID = 10702
         private const val TAG_ID_CACHE_SIZE = 50
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
