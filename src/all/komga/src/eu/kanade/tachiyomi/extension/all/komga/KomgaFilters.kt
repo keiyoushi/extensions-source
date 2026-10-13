@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.komga
 
-import eu.kanade.tachiyomi.extension.all.komga.dto.AuthorDto
-import eu.kanade.tachiyomi.extension.all.komga.dto.LibraryDto
+import eu.kanade.tachiyomi.extension.all.komga.AuthorDto
+import eu.kanade.tachiyomi.extension.all.komga.LibraryDto
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 

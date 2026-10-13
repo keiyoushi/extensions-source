@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.webnex
 
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,6 +15,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
@@ -31,11 +36,15 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 @Source
-abstract class Webnex : KeiSource() {
+abstract class Webnex :
+    KeiSource(),
+    ConfigurableSource {
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("coverage")))
+    private val preferences by getPreferencesLazy()
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("updated")))
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("coverage"), RatingFilter(preferences.rating)))
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("updated"), RatingFilter(preferences.rating)))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/browse".toHttpUrl().newBuilder().apply {
@@ -175,13 +184,27 @@ abstract class Webnex : KeiSource() {
         StatusFilter(),
         DemographicFilter(),
         LanguageFilter(),
-        RatingFilter(),
+        RatingFilter(preferences.rating),
         ChaptersFilter(),
         MatchFilter(),
         GenreFilter(),
         FormatFilter(),
         ThemeFilter(),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = PREF_RATING
+            title = "Content rating"
+            summary = "Used for popular, latest and search. The Content rating filter overrides it.\nCurrent: %s"
+            entries = RATING_OPTIONS.map { it.first }.toTypedArray()
+            entryValues = RATING_OPTIONS.map { it.second }.toTypedArray()
+            setDefaultValue("")
+        }.let(screen::addPreference)
+    }
+
+    private val SharedPreferences.rating
+        get() = getString(PREF_RATING, "")!!
 
     // Next.js streams late parts of the page as hidden chunks that client JS moves into <template> placeholders.
     private fun Response.asDocument(): Document = asJsoup().apply {
@@ -209,6 +232,8 @@ abstract class Webnex : KeiSource() {
     }
 
     companion object {
+        private const val PREF_RATING = "pref_rating"
+
         private val TIME_AGO_REGEX = Regex("""(\d+)(mo|y|w|d|h|m) ago""")
 
         // Largest first, as the site's timeAgo() checks them.

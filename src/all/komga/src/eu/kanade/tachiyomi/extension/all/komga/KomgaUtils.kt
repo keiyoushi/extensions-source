@@ -6,16 +6,16 @@ import android.widget.Button
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import keiyoushi.utils.tryParse
 import keiyoushi.utils.tryParseDate
-import keiyoushi.utils.tryParseDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.time.Instant
 
 private val formatterDate = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-private val formatterDateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 
-fun parseDate(date: String): Long = formatterDate.tryParseDate(date)
-
-fun parseDateTime(date: String) = formatterDateTime.tryParseDateTime(date)
+fun parseDate(date: String) = formatterDate.tryParseDate(date).takeIf {
+    it != 0L
+} ?: Instant.tryParse(date)
 
 fun PreferenceScreen.addEditTextPreference(
     title: String,

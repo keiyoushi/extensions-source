@@ -4,10 +4,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import kotlin.time.Instant
 
-// Fields the site renames to short keys are declared under their logical names; the payload is
-// remapped before decoding, so these stay valid across key rotations. See [RscKeys].
+/** A series in the catalog the site's app holds on its comics page. */
 @Serializable
 class BrowseSeries(
     val title: String,
@@ -49,31 +51,21 @@ class ComicSeriesLd(
 }
 
 @Serializable
-class SeriesData(
-    @SerialName("Season") private val seasons: List<Season>? = null,
-) {
-    val chapters: List<Chapter> get() = seasons.orEmpty().flatMap { it.chapters }
-
-    @Serializable
-    class Season(
-        @SerialName("Chapter") private val items: List<Chapter>? = null,
-    ) {
-        val chapters: List<Chapter> get() = items.orEmpty()
-    }
-
-    @Serializable
-    class Chapter(
-        @SerialName("chapter_name") val name: String,
-        @SerialName("chapter_title") val title: String? = null,
-        @SerialName("chapter_slug") val slug: String,
-        val price: Int = 0,
-        @SerialName("created_at") private val createdAt: String? = null,
-    ) {
-        val created: Long by lazy { Instant.tryParse(createdAt) }
-    }
-}
-
-@Serializable
-class PagesList(
-    val images: List<String>,
+class SiteChapter(
+    val name: String,
+    val title: String? = null,
+    val slug: String,
+    val premium: Boolean = false,
+    val createdAt: Long = 0,
 )
+
+/** A page as the WebView loaded it, with the data the site's app holds for it. */
+@Serializable
+class SitePage(
+    val status: Int,
+    val cloudflareChallenge: Boolean,
+    val html: String,
+    val data: JsonElement? = null,
+) {
+    fun document(url: String): Document = Jsoup.parse(html, url)
+}
