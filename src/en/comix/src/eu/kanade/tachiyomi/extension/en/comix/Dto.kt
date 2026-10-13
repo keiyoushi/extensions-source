@@ -17,6 +17,7 @@ const val CHAPTER_OFFICIAL_MEMO = "official"
 const val CHAPTER_GROUP_ID_MEMO = "groupId"
 const val CHAPTER_LIST_DEDUPLICATED_MEMO = "chapterListDeduplicated"
 const val CHAPTER_LIST_BLACKLIST_MEMO = "chapterListBlacklist"
+const val CHAPTER_LIST_COMPLETE_MEMO = "chapterListComplete"
 
 @Serializable
 class Term(
@@ -258,6 +259,13 @@ class SearchResponse(
         }
     }
 }
+
+@Serializable
+class ChapterList(
+    val chapters: List<Chapter>,
+    val complete: Boolean,
+    val error: String? = null,
+)
 
 @Serializable
 class Chapter(

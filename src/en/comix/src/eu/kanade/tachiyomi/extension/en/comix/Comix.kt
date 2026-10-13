@@ -457,7 +457,8 @@ abstract class Comix :
         val fetchUntilKnown = fetchChapters &&
             preferences.fetchChaptersUntilKnown() &&
             listMemo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull == deduplicateChapters &&
-            listMemo[CHAPTER_LIST_BLACKLIST_MEMO]?.string == blacklistSignature
+            listMemo[CHAPTER_LIST_BLACKLIST_MEMO]?.string == blacklistSignature &&
+            listMemo[CHAPTER_LIST_COMPLETE_MEMO]?.booleanOrNull != false
         val latestChapterId = chapters.firstOrNull()
             ?.takeIf { fetchUntilKnown }
             ?.chapterId()
@@ -468,16 +469,23 @@ abstract class Comix :
             val knownDates = chapters.mapNotNull { chapter ->
                 chapter.chapterId()?.let { it to chapter.date_upload }?.takeIf { it.second > 0 }
             }.toMap()
-            val fetched = getWebViewChapterList(manga, getDocument(), latestChapterId).onEach { chapter ->
+            val mangaSlug = manga.url.removePrefix("/")
+            val chapterList = getWebViewChapterList(manga, getDocument(), latestChapterId)
+            if (!chapterList.complete && chapters.isEmpty()) {
+                throw Exception(chapterList.error ?: "Chapter list is incomplete")
+            }
+            val fetched = chapterList.chapters.map { it.toSChapter(mangaSlug) }.onEach { chapter ->
                 chapter.chapterId()?.let(knownDates::get)?.let { chapter.date_upload = it }
             }
-            val candidates = if (fetchUntilKnown) fetched + chapters else fetched
+            // An incomplete list keeps the stored chapters, and the next refresh walks the whole list again
+            val candidates = if (fetchUntilKnown || !chapterList.complete) fetched + chapters else fetched
             selectChapters(candidates, deduplicateChapters, scanlatorBlacklist).also { selected ->
                 selected.firstOrNull()?.apply {
                     memo = buildJsonObject {
                         memo.forEach { (key, value) -> put(key, value) }
                         put(CHAPTER_LIST_DEDUPLICATED_MEMO, deduplicateChapters)
                         put(CHAPTER_LIST_BLACKLIST_MEMO, blacklistSignature)
+                        put(CHAPTER_LIST_COMPLETE_MEMO, chapterList.complete)
                     }
                 }
             }
@@ -531,9 +539,8 @@ abstract class Comix :
         manga: SManga,
         document: Document,
         latestChapterId: Int?,
-    ): List<SChapter> {
-        val mangaSlug = manga.url.removePrefix("/")
-        val mangaId = mangaSlug.substringBefore('-')
+    ): ChapterList {
+        val mangaId = manga.url.removePrefix("/").substringBefore('-')
         val chapterPath = JSONObject.quote("/title/$mangaId-")
         val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, rejectName ->
             "(${asset("capture_items.js")})((${asset("chapter_list.js")})(" +
@@ -541,7 +548,7 @@ abstract class Comix :
                 "window.$passPayloadName, window.$rejectName));"
         }
 
-        return payload.parseAs<List<Chapter>>().map { it.toSChapter(mangaSlug) }
+        return payload.parseAs<ChapterList>()
     }
 
     private fun selectChapters(

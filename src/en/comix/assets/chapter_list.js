@@ -1,4 +1,4 @@
-// Chapter list through the site's own chapters API method, one page at a time
+// Chapter list through the site's own chapters API method, one page at a time; pages past a failure are left out
 (latestChapterId, mangaId, chapterPath, maxPages, pass, reject) => {
     const chapters = [];
     const isChapter = (item) => item &&
@@ -8,13 +8,14 @@
         item.url.includes(chapterPath);
     const isRoute = (route) => typeof route === "function" &&
         /^\(?[\w$]+\)?=>`\/manga\/\$\{[\w$]+\}\/chapters`$/.test(String(route));
+    const PAGE_TIMEOUT_MS = 25000;
     let page = 1;
     let done = false;
     let chaptersApi = null;
 
-    const fail = (message) => {
+    const finish = (complete, error) => {
         done = true;
-        reject(message);
+        pass(JSON.stringify({ chapters, complete, error }));
     };
 
     const matchChaptersApi = (exports) => {
@@ -50,21 +51,27 @@
     };
 
     const requestPage = async (target) => {
+        let error = `Chapter page ${target} never arrived`;
         try {
             chaptersApi = chaptersApi || await findChaptersApi();
+            if (!chaptersApi) {
+                error = "Could not find the site's chapters API";
+            } else {
+                await Promise.race([
+                    chaptersApi({ page: target, limit: 20, order: { number: "desc" } }),
+                    new Promise((resolve, timeout) => setTimeout(() => timeout(new Error("timed out")), PAGE_TIMEOUT_MS)),
+                ]);
+            }
         } catch (e) {
-            return fail(`Could not find the site's chapters API: ${e && e.message || e}`);
-        }
-        if (!chaptersApi) return fail("Could not find the site's chapters API");
-        try {
-            await chaptersApi({ page: target, limit: 20, order: { number: "desc" } });
-        } catch (e) {
-            if (done || page !== target) return;
             const status = e && e.response && e.response.status;
-            fail(status === 502
+            error = status === 502
                 ? `Comix blocked chapter page ${target} (HTTP 502). Try again later, or change the user agent in Advanced settings`
-                : `Chapter page ${target} failed: ${status ? `HTTP ${status}` : e && e.message || e}`);
+                : `Chapter page ${target} failed: ${status ? `HTTP ${status}` : e && e.message || e}`;
         }
+        // Captured pages are handed over on a 0 ms timer, before this one
+        setTimeout(() => {
+            if (!done && page === target) finish(false, error);
+        }, 1000);
     };
 
     return (holder) => {
@@ -73,24 +80,23 @@
         if (done || !meta || !Array.isArray(items) || !items.every(isChapter)) return;
         if (items.length === 0 && meta.total !== 0) return;
         if (typeof meta.page !== "number" || typeof meta.lastPage !== "number") {
-            fail("Chapter list has no page numbers");
+            if (chapters.length > 0) {
+                finish(false, "Chapter list has no page numbers");
+            } else {
+                done = true;
+                reject("Chapter list has no page numbers");
+            }
             return;
         }
         if (meta.page !== page) return;
         chapters.push(...items);
         if (items.some((item) => item.id === latestChapterId)) {
-            done = true;
-            pass(JSON.stringify(chapters));
+            finish(true);
             return;
         }
         if (!meta.hasNext || page >= Math.min(meta.lastPage, maxPages)) {
-            done = true;
             const count = new Set(chapters.map((item) => item.id)).size;
-            if (count === meta.total) {
-                pass(JSON.stringify(chapters));
-            } else {
-                reject(`Got ${count} of ${meta.total} chapters`);
-            }
+            finish(count === meta.total, `Got ${count} of ${meta.total} chapters`);
             return;
         }
         page++;
