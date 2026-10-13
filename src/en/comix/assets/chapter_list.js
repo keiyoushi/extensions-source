@@ -1,5 +1,7 @@
-// Chapter list through the site's own chapters API method, one page at a time; pages past a failure are left out
-(latestChapterId, mangaId, chapterPath, maxPages, pass, reject) => {
+// Chapter list through the site's own chapters API method, newest uploads first, up to a page with a known chapter;
+// pages past a failure are left out
+(knownIds, mangaId, chapterPath, maxPages, pass, reject) => {
+    const known = new Set(knownIds);
     const chapters = [];
     const isChapter = (item) => item &&
         typeof item.id === "number" &&
@@ -10,6 +12,11 @@
         /^\(?[\w$]+\)?=>`\/manga\/\$\{[\w$]+\}\/chapters`$/.test(String(route));
     const PAGE_TIMEOUT_MS = 25000;
     let page = 1;
+    // The site's own first load is by chapter number, so it is skipped and the list read again by upload date
+    let siteLoaded = false;
+    let expecting = false;
+    // Numbers in the page our own call returned (the site's mapped copy), so a page the site loads itself isn't taken for it
+    let returnedNumbers = null;
     let done = false;
     let chaptersApi = null;
 
@@ -55,13 +62,20 @@
         try {
             chaptersApi = chaptersApi || await findChaptersApi();
             if (!chaptersApi) {
-                error = "Could not find the site's chapters API";
-            } else {
-                await Promise.race([
-                    chaptersApi({ page: target, limit: 20, order: { number: "desc" } }),
-                    new Promise((resolve, timeout) => setTimeout(() => timeout(new Error("timed out")), PAGE_TIMEOUT_MS)),
-                ]);
+                finish(false, "Could not find the site's chapters API");
+                return;
             }
+            expecting = true;
+            const result = await Promise.race([
+                chaptersApi({ page: target, limit: 20, order: { created_at: "desc" } }),
+                new Promise((resolve, timeout) => setTimeout(() => timeout(new Error("timed out")), PAGE_TIMEOUT_MS)),
+            ]);
+            const arrays = Array.isArray(result) ? [result] : Object.values(result || {}).filter(Array.isArray);
+            returnedNumbers = arrays.map((returned) => ({
+                count: returned.length,
+                values: new Set(returned.flatMap((item) => Object.values(item || {}).filter((value) => typeof value === "number"))),
+            }));
+            error = `Chapter page ${target} came back in a shape the extension doesn't recognise`;
         } catch (e) {
             const status = e && e.response && e.response.status;
             error = status === 502
@@ -88,9 +102,18 @@
             }
             return;
         }
-        if (meta.page !== page) return;
+        if (!siteLoaded) {
+            siteLoaded = true;
+            requestPage(page);
+            return;
+        }
+        if (!expecting || meta.page !== page) return;
+        if (!(returnedNumbers && returnedNumbers.some((returned) => returned.count === items.length &&
+            items.every((item) => returned.values.has(item.id))))) return;
+        expecting = false;
+        returnedNumbers = null;
         chapters.push(...items);
-        if (items.some((item) => item.id === latestChapterId)) {
+        if (items.some((item) => known.has(item.id))) {
             finish(true);
             return;
         }

@@ -24,6 +24,7 @@ import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.int
+import keiyoushi.utils.long
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.string
@@ -459,18 +460,24 @@ abstract class Comix :
             listMemo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull == deduplicateChapters &&
             listMemo[CHAPTER_LIST_BLACKLIST_MEMO]?.string == blacklistSignature &&
             listMemo[CHAPTER_LIST_COMPLETE_MEMO]?.booleanOrNull != false
-        val latestChapterId = chapters.firstOrNull()
-            ?.takeIf { fetchUntilKnown }
-            ?.chapterId()
+        val knownIds = if (fetchUntilKnown) chapters.mapNotNull { it.chapterId() } else emptyList()
 
-        val updatedManga = if (fetchDetails) parseMangaDetails(getDocument()) else manga
-        val updatedChapters = if (fetchChapters) {
+        val detail = if (fetchDetails || fetchUntilKnown) getDocument().mangaDetail() else null
+        val updatedManga = detail?.takeIf { fetchDetails }?.let(::parseMangaDetails) ?: manga
+        // Skip the chapter list when the site's last chapter upload is older than the last full read of it
+        val unchanged = fetchUntilKnown && run {
+            val fetchedAt = listMemo[CHAPTER_LIST_FETCHED_AT_MEMO]?.long ?: return@run false
+            val uploadedBy = detail?.chapterUpdatedAtFormatted?.let { parseRelativeDate(it, latest = true) } ?: 0L
+            uploadedBy in 1..fetchedAt
+        }
+        val updatedChapters = if (fetchChapters && !unchanged) {
             // Site dates are relative ("2w ago"), so keep the date a chapter was first stored with
             val knownDates = chapters.mapNotNull { chapter ->
                 chapter.chapterId()?.let { it to chapter.date_upload }?.takeIf { it.second > 0 }
             }.toMap()
             val mangaSlug = manga.url.removePrefix("/")
-            val chapterList = getWebViewChapterList(manga, getDocument(), latestChapterId)
+            val fetchStartedAt = System.currentTimeMillis()
+            val chapterList = getWebViewChapterList(manga, getDocument(), knownIds)
             if (!chapterList.complete && chapters.isEmpty()) {
                 throw Exception(chapterList.error ?: "Chapter list is incomplete")
             }
@@ -482,10 +489,11 @@ abstract class Comix :
             selectChapters(candidates, deduplicateChapters, scanlatorBlacklist).also { selected ->
                 selected.firstOrNull()?.apply {
                     memo = buildJsonObject {
-                        memo.forEach { (key, value) -> put(key, value) }
+                        memo.forEach { (key, value) -> if (key != CHAPTER_LIST_FETCHED_AT_MEMO) put(key, value) }
                         put(CHAPTER_LIST_DEDUPLICATED_MEMO, deduplicateChapters)
                         put(CHAPTER_LIST_BLACKLIST_MEMO, blacklistSignature)
                         put(CHAPTER_LIST_COMPLETE_MEMO, chapterList.complete)
+                        if (chapterList.complete) put(CHAPTER_LIST_FETCHED_AT_MEMO, fetchStartedAt)
                     }
                 }
             }
@@ -495,20 +503,19 @@ abstract class Comix :
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private fun parseMangaDetails(document: Document): SManga {
-        val detail = document.extractInitialQueries()
-            .entries.firstOrNull { (key, _) -> key.contains("\"detail\"") }
-            ?.value
-            ?: throw Exception("Could not find manga detail in queries")
+    private fun Document.mangaDetail(): Manga = extractInitialQueries()
+        .entries.firstOrNull { (key, _) -> key.contains("\"detail\"") }
+        ?.value
+        ?.parseAs<Manga>()
+        ?: throw Exception("Could not find manga detail in queries")
 
-        return detail.parseAs<Manga>().toSManga(
-            preferences.posterQuality(),
-            preferences.alternativeNamesInDescription(),
-            preferences.scorePosition(),
-            preferences.showExtraInfo(),
-            preferences.showTagsInGenres(),
-        )
-    }
+    private fun parseMangaDetails(detail: Manga): SManga = detail.toSManga(
+        preferences.posterQuality(),
+        preferences.alternativeNamesInDescription(),
+        preferences.scorePosition(),
+        preferences.showExtraInfo(),
+        preferences.showTagsInGenres(),
+    )
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/title${manga.url}"
 
@@ -538,16 +545,14 @@ abstract class Comix :
     private suspend fun getWebViewChapterList(
         manga: SManga,
         document: Document,
-        latestChapterId: Int?,
+        knownIds: List<Int>,
     ): ChapterList {
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
-        val chapterPath = JSONObject.quote("/title/$mangaId-")
         val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, rejectName ->
             "(${asset("capture_items.js")})((${asset("chapter_list.js")})(" +
-                "${latestChapterId ?: "null"}, ${JSONObject.quote(mangaId)}, $chapterPath, $MAX_CHAPTER_PAGES, " +
-                "window.$passPayloadName, window.$rejectName));"
+                "${knownIds.joinToString(",", "[", "]")}, ${JSONObject.quote(mangaId)}, ${JSONObject.quote("/title/$mangaId-")}, " +
+                "$MAX_CHAPTER_PAGES, window.$passPayloadName, window.$rejectName));"
         }
-
         return payload.parseAs<ChapterList>()
     }
 
