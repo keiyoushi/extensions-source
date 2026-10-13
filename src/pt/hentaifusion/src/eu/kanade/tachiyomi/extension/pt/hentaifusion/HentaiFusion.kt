@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.hentaifusion
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -35,7 +35,7 @@ abstract class HentaiFusion : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val genre = filters.filterIsInstance<GenreFilter>().firstOrNull()?.selectedSlug()
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.selectedSlug()
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (genre != null) {
                 addPathSegments("category/$genre")
@@ -132,20 +132,5 @@ abstract class HentaiFusion : KeiSource() {
             }
             .distinct()
             .mapIndexed { index, url -> Page(index, imageUrl = url) }
-    }
-
-    private class GenreFilter : Filter.Select<String>("Gênero", GENRES.map { it.second }.toTypedArray()) {
-        fun selectedSlug(): String? = GENRES[state].first.ifEmpty { null }
-    }
-
-    companion object {
-        private val GENRES = listOf(
-            "" to "Todos",
-            "doujin" to "Doujin",
-            "hentai" to "Hentai",
-            "hq-hentai" to "HQ Hentai",
-            "mangas-hentai" to "Mangás Hentai",
-            "quadrinhos-eroticos" to "Quadrinhos Eróticos",
-        )
     }
 }
