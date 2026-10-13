@@ -21,8 +21,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class BenDezOmniHero : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder =
-        rateLimit(permits = 2, period = 1.seconds)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
 
     override val supportsLatest = false
 
@@ -31,8 +30,7 @@ abstract class BenDezOmniHero : KeiSource() {
         return MangasPage(fetchEntries().map { it.toPostManga() }, false)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
@@ -106,13 +104,11 @@ abstract class BenDezOmniHero : KeiSource() {
             .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    private fun isPageImage(url: String): Boolean =
-        "blogger.googleusercontent.com" in url || "bp.blogspot.com" in url
+    private fun isPageImage(url: String): Boolean = "blogger.googleusercontent.com" in url || "bp.blogspot.com" in url
 
     // Blogger serves downscaled images via a size segment (s320, w1200-h630-p-k-no-nu, ...);
     // replacing it with s0 requests the original full-resolution image.
-    private fun fullQualityImage(url: String): String =
-        bloggerSizeRegex.replaceFirst(url, "/s0/$1")
+    private fun fullQualityImage(url: String): String = bloggerSizeRegex.replaceFirst(url, "/s0/$1")
 
     private val bloggerSizeRegex = Regex("/[sw]\\d[\\w-]*/([^/]+)$")
 
