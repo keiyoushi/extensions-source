@@ -17,9 +17,9 @@ import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
@@ -158,9 +158,16 @@ abstract class LibGroup :
         return null
     }
 
-    private suspend fun refreshToken(): AuthToken? = getLocalStorage(baseUrl, "auth")
-        ?.parseAs<AuthToken>()
-        ?.takeIf { it.isValid() }
+    private suspend fun refreshToken(): AuthToken? = runWebView<String>(timeout = 10.seconds) {
+        onPageFinished {
+            // Some apps (e.g. Tachimanga) return evaluateJavascript results raw instead of
+            // JSON-encoded, and pass null rather than "null" for a missing value.
+            evaluateJs("localStorage.getItem('auth') || '{}'") { value ->
+                resolve(if (value.startsWith('"')) value.parseAs<String>() else value)
+            }
+        }
+        loadData(baseUrl, "")
+    }.parseAs<AuthToken>().takeIf { it.isValid() }
 
     private suspend fun isUserTokenValid(token: String): Boolean {
         val headers = Headers.Builder().apply {
