@@ -113,7 +113,8 @@ abstract class VyvyManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val mangaUrl = manga.url
+        val document = client.get(baseUrl + mangaUrl).asJsoup()
 
         val manga = SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
@@ -141,6 +142,7 @@ abstract class VyvyManga : KeiSource() {
                 name = title
                 date_upload = chapterDate
                 memo = buildJsonObject {
+                    put("mangaUrl", mangaUrl)
                     put("chapterUrl", element.absUrl("href"))
                 }
             }
@@ -159,10 +161,14 @@ abstract class VyvyManga : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = chapter.memo["chapterUrl"]?.string ?: run {
-            if (!chapter.url.startsWith("http")) error("Refresh to reload chapters")
-            chapter.url
-        }
+        val mangaUrl = chapter.memo["mangaUrl"]?.string ?: error("Refresh to reload chapters")
+
+        // Chapter links expire after a few hours
+        val url = client.get(baseUrl + mangaUrl).asJsoup()
+            .select(".list-group > a")
+            .firstOrNull { it.selectFirst("span")!!.text() == chapter.name }
+            ?.absUrl("href")
+            ?: error("Refresh to reload chapters")
 
         val document = client.get(url).asJsoup()
         return document.select("img.d-block").mapIndexed { index, element ->
