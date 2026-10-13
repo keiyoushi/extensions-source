@@ -152,7 +152,7 @@ abstract class PoseidonScans :
             val isLocked = ch.isPremium == true && mangaPageDto.isPremiumUser != true
 
             if (isLocked && !showPremium) {
-                val premiumUntilDate = ch.premiumUntil?.time ?: 0L
+                val premiumUntilDate = ch.premiumUntil?.toEpochMilliseconds() ?: 0L
                 if (System.currentTimeMillis() <= premiumUntilDate) return@mapNotNull null
             }
             SChapter.create().apply {
@@ -179,7 +179,7 @@ abstract class PoseidonScans :
 
                     if (isLocked) {
                         val dateParts = formatTimestamp(
-                            ch.premiumUntil?.time ?: 0L,
+                            ch.premiumUntil?.toEpochMilliseconds() ?: 0L,
                         ).split(" ")
                         // formatTimestamp gives: [dd, MMMM, HH:mm]
                         append(
@@ -190,7 +190,7 @@ abstract class PoseidonScans :
                 setUrlWithoutDomain(
                     "/serie/${mangaPageDto.manga.slug}/chapter/$chapterNumberString",
                 )
-                date_upload = ch.createdAt.time
+                date_upload = ch.createdAt.toEpochMilliseconds()
                 chapter_number = ch.number
             }
         }.sortedByDescending { it.chapter_number }
