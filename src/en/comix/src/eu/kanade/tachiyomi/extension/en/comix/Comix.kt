@@ -654,8 +654,9 @@ abstract class Comix :
                     val page = "<script>(${asset("solve_captcha.js")})(parent.$rejectName)</script>"
                     return@interceptRequest WebResourceResponse("text/html", "utf-8", page.byteInputStream())
                 }
-                if (isDataRequest?.invoke(requestUrl) == true) {
-                    dataRequests.incrementAndGet()
+                val isData = isDataRequest?.invoke(requestUrl) == true
+                if (isData) dataRequests.incrementAndGet()
+                if (isData || requestUrl.encodedPath.startsWith(WAF_PATH)) {
                     timeoutDeadline.set(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
                 }
                 val allowed = requestUrl.host == baseUrlHost ||
@@ -911,5 +912,8 @@ abstract class Comix :
 
         // Site's captcha page, shown when the API answers 403 captcha_required
         private const val WAF_CHALLENGE_PATH = "/@waf/challenge"
+
+        // Site's captcha endpoints, which also keep a WebView run alive while the solver works
+        private const val WAF_PATH = "/@waf/"
     }
 }
