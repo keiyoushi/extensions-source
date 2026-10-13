@@ -193,7 +193,7 @@ abstract class MangaBall :
 
         return if (fetchChapters && titleId != null) {
             coroutineScope {
-                val mangaDeferred = async { if (fetchDetails) getMangaDetails(manga.url) else manga }
+                val mangaDeferred = async { if (fetchDetails) getMangaDetails(titleId) else manga }
                 val chaptersDeferred = async { getChapterList(titleId) }
 
                 SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
@@ -201,7 +201,7 @@ abstract class MangaBall :
         } else {
             // Entries saved by older versions have no id in memo, so one details fetch is needed to
             // resolve it. Returning that manga persists the id, saving the fetch on later refreshes.
-            val updatedManga = if (titleId == null || fetchDetails) getMangaDetails(manga.url) else manga
+            val updatedManga = if (titleId == null || fetchDetails) getMangaDetails(titleId ?: manga.url) else manga
 
             val updatedChapters = if (fetchChapters) {
                 getChapterList(updatedManga.memo.getString("id"))
