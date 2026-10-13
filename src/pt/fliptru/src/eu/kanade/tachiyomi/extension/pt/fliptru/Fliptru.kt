@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -27,14 +28,15 @@ abstract class Fliptru : KeiSource() {
         return MangasPage(parseComicCards(document), false)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getBrowsePage("$baseUrl/comics/all", page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage =
+        getBrowsePage("$baseUrl/comics/all", page)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             if (page > 1) return MangasPage(emptyList(), false)
             return searchComics(query)
         }
-        val genre = filters.filterIsInstance<GenreFilter>().firstOrNull()?.toUriPart().orEmpty()
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart().orEmpty()
         val url = if (genre.isNotEmpty()) "$baseUrl/category/$genre" else "$baseUrl/comics/all"
         return getBrowsePage(url, page)
     }
@@ -68,19 +70,20 @@ abstract class Fliptru : KeiSource() {
 
     private val thumbnailRegex = Regex("""url\((https?://[^)]+)\)""")
 
-    private fun parseComicCards(document: Document): List<SManga> = document.select("a.comic-card[href^=\"/comic/\"]")
-        .mapNotNull { card ->
-            val url = card.attr("href").substringBefore("?")
-            val title = card.attr("data-title")
-                .ifBlank { card.selectFirst("h3")?.text().orEmpty() }
-            if (title.isBlank()) return@mapNotNull null
-            SManga.create().apply {
-                this.url = url
-                this.title = title
-                thumbnail_url = thumbnailRegex.find(card.attr("style"))?.groupValues?.get(1)
+    private fun parseComicCards(document: Document): List<SManga> =
+        document.select("a.comic-card[href^=\"/comic/\"]")
+            .mapNotNull { card ->
+                val url = card.attr("href").substringBefore("?")
+                val title = card.attr("data-title")
+                    .ifBlank { card.selectFirst("h3")?.text().orEmpty() }
+                if (title.isBlank()) return@mapNotNull null
+                SManga.create().apply {
+                    this.url = url
+                    this.title = title
+                    thumbnail_url = thumbnailRegex.find(card.attr("style"))?.groupValues?.get(1)
+                }
             }
-        }
-        .distinctBy { it.url }
+            .distinctBy { it.url }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(GenreFilter())
 
