@@ -111,6 +111,7 @@ abstract class ReizuComics : KeiSource() {
     override fun getFilterList(data: JsonElement?): FilterList = FilterList()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val segment = url.pathSegments.lastOrNull { it.isNotBlank() } ?: return null
         val (column, value) = if (uuidRegex.matches(segment)) "id" to segment else "slug" to segment
         val requestUrl = "$apiUrl/comics".toHttpUrl().newBuilder()
@@ -130,27 +131,6 @@ abstract class ReizuComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (fetchDetails && fetchChapters) return fetchDetailsAndChapters(manga)
-        val details = if (fetchDetails) fetchMangaDetails(manga) else manga
-        val chapterList = if (fetchChapters) fetchChapterList(manga) else chapters
-        return SMangaUpdate(details, chapterList)
-    }
-
-    private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val (column, value) = if (uuidRegex.matches(manga.url)) "id" to manga.url else "slug" to manga.url
-        val url = "$apiUrl/comics".toHttpUrl().newBuilder()
-            .addQueryParameter("select", comicSelect)
-            .addQueryParameter(column, "eq.$value")
-            .addQueryParameter("limit", "1")
-            .build()
-        return client.get(url, apiHeaders)
-            .parseAs<List<ComicRow>>()
-            .firstOrNull()
-            ?.toSManga()
-            ?: manga
-    }
-
-    private suspend fun fetchDetailsAndChapters(manga: SManga): SMangaUpdate {
         val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
             .addQueryParameter("select", "id,chapter_number,title,is_locked,is_special,published_at,comics($comicSelect)")
             .addQueryParameter("comic_id", "eq.${manga.url}")
@@ -160,18 +140,6 @@ abstract class ReizuComics : KeiSource() {
         val rows = client.get(url, apiHeaders).parseAs<List<ChapterRow>>()
         val details = rows.firstOrNull()?.comics?.toSManga() ?: manga
         return SMangaUpdate(details, rows.toSChapters(manga.url))
-    }
-
-    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "id,chapter_number,title,is_locked,is_special,published_at")
-            .addQueryParameter("comic_id", "eq.${manga.url}")
-            .addQueryParameter("is_published", "eq.true")
-            .addQueryParameter("order", "chapter_number.desc")
-            .build()
-        return client.get(url, apiHeaders)
-            .parseAs<List<ChapterRow>>()
-            .toSChapters(manga.url)
     }
 
     private fun List<ChapterRow>.toSChapters(comicId: String): List<SChapter> {
