@@ -14,10 +14,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
-import keiyoushi.network.FragmentXorInterceptor
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
@@ -73,7 +74,7 @@ abstract class MangaPlus :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::sessionTokenIntercept)
-        addInterceptor(FragmentXorInterceptor())
+        addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
         rateLimit(1) { it.host == apiUrlHost }
         rateLimit(2) { it.host == baseUrlHost }
     }

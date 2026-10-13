@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.FragmentXorInterceptor
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -33,7 +33,7 @@ abstract class MangaParkPublisher : KeiSource() {
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.ROOT).withZone(ZoneId.of("Asia/Tokyo"))
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(FragmentXorInterceptor({ Base64.decode(it, Base64.DEFAULT) }))
+        addInterceptor(XorInterceptor { it.url.fragment?.let { f -> Base64.decode(f, Base64.DEFAULT) } })
         addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)

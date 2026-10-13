@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.FragmentXorInterceptor
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.decodeHex
@@ -35,9 +35,9 @@ abstract class MangaMee :
         .build()
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(
-        FragmentXorInterceptor({
-            if (it.contains("key=")) it.substringAfter("key=").decodeHex() else null
-        }),
+        XorInterceptor { request ->
+            request.url.fragment?.let { if (it.contains("key=")) it.substringAfter("key=").decodeHex() else null }
+        },
     )
 
     override suspend fun getPopularManga(page: Int): MangasPage {

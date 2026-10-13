@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.FragmentXorInterceptor
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -55,9 +55,9 @@ abstract class Zebrack :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(
-            FragmentXorInterceptor({
-                if (it.contains("key=")) it.substringAfter("key=").decodeHex() else null
-            }),
+            XorInterceptor { request ->
+                request.url.fragment?.let { if (it.contains("key=")) it.substringAfter("key=").decodeHex() else null }
+            },
         )
         addInterceptor(::secretIntercept)
     }
