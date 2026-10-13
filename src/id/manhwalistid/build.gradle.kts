@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Manhwa List"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "mangathemesia"
 
     source {
         lang = "id"
-        baseUrl = "https://manhwalist.asia"
+        baseUrl = "https://m1.manhwalist.my.id"
     }
 }
