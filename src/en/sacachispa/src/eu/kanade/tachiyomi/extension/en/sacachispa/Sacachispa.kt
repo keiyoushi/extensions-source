@@ -176,8 +176,15 @@ abstract class Sacachispa :
     }
 
     private fun ReleaseDto.toSChapter(patreon: Boolean): SChapter? {
-        if (patreon && chapter.patreonOnly == true) return null
-        val prefix = if (chapter.patreonOnly == true) "\uD83D\uDD12 " else ""
+        val freeTime = Instant.tryParse(chapter.freeAt)
+
+        val isLocked = when {
+            freeTime > 0L -> freeTime > System.currentTimeMillis()
+            else -> chapter.patreonOnly == true
+        }
+
+        if (patreon && isLocked) return null
+        val prefix = if (isLocked) "\uD83D\uDD12 " else ""
         return SChapter.create().apply {
             url = id
             name = "${prefix}Chapter ${chapter.chapter}" + chapter.title?.takeIf { it.isNotBlank() }?.let { " - $it" }.orEmpty()

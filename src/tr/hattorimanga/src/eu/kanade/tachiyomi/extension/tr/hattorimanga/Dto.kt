@@ -17,10 +17,7 @@ class HMChapterDto(
 
 @Serializable
 class ChapterDto(
-    @SerialName("title")
     val title: String,
-    @SerialName("manga_slug")
-    val slug: String,
     @SerialName("chapter_slug")
     val chapterSlug: String,
     @SerialName("formattedUploadTime")
@@ -30,6 +27,7 @@ class ChapterDto(
 @Serializable
 class HMLatestUpdateDto(
     val chapters: List<ChapterMangaDto>,
+    val hasMorePages: Boolean = true,
 )
 
 @Serializable

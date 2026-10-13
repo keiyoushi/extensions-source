@@ -646,6 +646,14 @@ abstract class Comix :
                 val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                     ?: return@interceptRequest emptyResponse
                 if (UNUSED_SITE_PATHS.any(requestUrl.encodedPath::startsWith)) return@interceptRequest emptyResponse
+                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH) {
+                    if (!preferences.solveCaptchas()) {
+                        reject(Exception("Open in WebView to solve the captcha, or turn on \"Solve captchas\" in extension settings"))
+                        return@interceptRequest emptyResponse
+                    }
+                    val page = "<script>(${asset("solve_captcha.js")})(parent.$rejectName)</script>"
+                    return@interceptRequest WebResourceResponse("text/html", "utf-8", page.byteInputStream())
+                }
                 if (isDataRequest?.invoke(requestUrl) == true) {
                     dataRequests.incrementAndGet()
                     timeoutDeadline.set(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
@@ -707,6 +715,13 @@ abstract class Comix :
         pathSegments[4] == "chapters"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SOLVE_CAPTCHA
+            title = "Solve captchas"
+            summary = "Solve the site's \"Verify you're human\" captcha automatically"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_FETCH_CHAPTERS_UNTIL_KNOWN
             title = "Faster chapter list fetching"
@@ -829,6 +844,8 @@ abstract class Comix :
         ?.filter { it.isNotEmpty() }
         ?.toSet() ?: emptySet()
 
+    private fun SharedPreferences.solveCaptchas() = getBoolean(PREF_SOLVE_CAPTCHA, false)
+
     private fun SharedPreferences.alternativeNamesInDescription() = getBoolean(ALTERNATIVE_NAMES_IN_DESCRIPTION, false)
 
     private fun SharedPreferences.scorePosition() = getString(PREF_SCORE_POSITION, "top") ?: "top"
@@ -875,6 +892,7 @@ abstract class Comix :
         private const val PREF_SHOW_EXTRA_INFO = "pref_show_extra_info"
         private const val PREF_SHOW_TAGS_IN_GENRES = "pref_show_tags_in_genres"
         private const val PREF_SCORE_POSITION = "pref_score_position"
+        private const val PREF_SOLVE_CAPTCHA = "pref_solve_captcha"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
         private const val WEBVIEW_TIMEOUT_SECONDS = 120L
@@ -890,5 +908,8 @@ abstract class Comix :
 
         // Site requests in the WebView that the extension has no use for: error reports, comments, upload images
         private val UNUSED_SITE_PATHS = listOf("/api/v1/client-errors", "/api/v1/threads/", "/assets/uploads/")
+
+        // Site's captcha page, shown when the API answers 403 captcha_required
+        private const val WAF_CHALLENGE_PATH = "/@waf/challenge"
     }
 }

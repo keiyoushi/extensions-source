@@ -67,6 +67,7 @@ class ChapterRefDto(
     val chapter: String,
     val title: String? = null,
     val patreonOnly: Boolean? = false,
+    val freeAt: String? = null,
 )
 
 @Serializable

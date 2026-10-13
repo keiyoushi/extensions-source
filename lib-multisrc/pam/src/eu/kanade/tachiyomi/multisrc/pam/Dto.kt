@@ -12,8 +12,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonTransformingSerializer
 
 @Serializable
-class Version(
-    val version: String,
+class LibraryPage(
+    val props: LibraryResponse,
 )
 
 @Serializable
@@ -76,7 +76,6 @@ class MangaResponse(
         @Serializable
         class Manga(
             val slug: String,
-            val uid: String,
             @JsonNames("name")
             val title: String,
             @JsonNames("cover_image")
@@ -112,8 +111,6 @@ class MangaResponse(
 
 @Serializable
 class PageListResponse(
-    val component: String,
-    val version: String,
     val props: Props,
 ) {
     @Serializable
@@ -126,13 +123,10 @@ class PageListResponse(
         val serverPubkey: String,
         @SerialName("reader_v2")
         val readerV2: Boolean = false,
-        /** Handed to the site's attestation as is. */
-        val attestation: JsonObject? = null,
         val data: Data,
     ) {
         @Serializable
         class Data(
-            val uid: String,
             val slug: String,
             val serie: Serie,
         )
@@ -142,49 +136,37 @@ class PageListResponse(
     }
 }
 
-/** What reader.js is called with. */
+/** What site.js is asked to do on the page it reads. */
 @Serializable
-class ReaderInput(
-    private val bridge: String,
-    private val csrfToken: String,
-    private val sharedUrl: String,
-    private val glueUrl: String,
-    private val exports: Map<String, String>,
-    private val attestation: JsonObject,
-    private val serverPubkey: String,
-    private val privateKey: String,
-    private val clientPubkey: String,
-    private val uid: String,
-    private val manifestVersion: Int,
-    private val chapterUrl: String,
-    private val reloadHeaders: Map<String, String>,
+class SiteRequest(
+    private val fetch: String? = null,
+    private val chapters: Boolean = false,
+)
+
+/** What site.js and reader.js hand back. */
+@Serializable
+class SiteMessage(
+    val page: JsonObject? = null,
+    val fetched: JsonElement? = null,
+    val chapters: List<ChapterListItem>? = null,
+    val reader: ReaderResult? = null,
+    val error: String? = null,
+    val status: Int = 0,
 )
 
 /** What reader.js hands back. */
 @Serializable
 class ReaderResult(
-    val token: String? = null,
-    val manifest: ManifestResponse? = null,
-    val contentKey: String? = null,
-    val error: String? = null,
-)
-
-@Serializable
-class ManifestResponse(
-    val base: String,
-    val hint: String,
-    val count: Int,
-    val variants: List<Int> = emptyList(),
-    /** Page ticket, sent as `X-Pt` with every page. */
-    val pt: String? = null,
-)
-
-@Serializable
-class ChapterListResponse(
-    val items: List<ChapterListItem>,
-    @SerialName("last_page")
-    val lastPage: Int,
-)
+    val manifest: Manifest,
+    val contentKey: String,
+) {
+    @Serializable
+    class Manifest(
+        val base: String,
+        val count: Int,
+        val variants: List<Int> = emptyList(),
+    )
+}
 
 @Serializable
 class ChapterListItem(
