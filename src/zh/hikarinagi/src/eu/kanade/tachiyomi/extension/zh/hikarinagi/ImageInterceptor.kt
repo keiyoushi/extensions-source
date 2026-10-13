@@ -52,7 +52,7 @@ class ImageInterceptor : Interceptor {
         // The key is the token's two halves XORed together.
         val key = ByteArray(TOKEN_SIZE / 2) { (token[it].toInt() xor token[it + TOKEN_SIZE / 2].toInt()).toByte() }
         return aesGcm(key, iv, TAG_BITS).apply {
-            updateAAD(associatedData.toByteArray(Charsets.UTF_8))
+            updateAAD(associatedData.encodeToByteArray())
         }
     }
 

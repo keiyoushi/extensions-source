@@ -14,6 +14,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.aesGcm
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
@@ -230,24 +231,19 @@ abstract class MangaTek : KeiSource() {
 
     // decrypt
 
-    private fun String.hexToBytes(): ByteArray {
-        require(length % 2 == 0) { "Invalid hex string length" }
-
-        return ByteArray(length / 2) { index ->
-            substring(index * 2, index * 2 + 2).toInt(16).toByte()
-        }
-    }
-
     private fun decrypt(blob: String, keyHex: String = KEY): OverlayData {
         val (ivHex, ctHex, tagHex) = blob.split(":").also {
             require(it.size == 3) { "unexpected overlayBlob format" }
         }
 
-        val iv = ivHex.hexToBytes()
-        val ciphertext = ctHex.hexToBytes()
-        val tag = tagHex.hexToBytes()
+        val iv = ivHex.decodeHex()
+        val ciphertext = ctHex.decodeHex()
+        val tag = tagHex.decodeHex()
 
-        return String((ciphertext + tag).aesDecrypt(aesGcm(keyHex.hexToBytes(), iv, tagLength = tag.size * 8)), Charsets.UTF_8).parseAs<OverlayData>()
+        return (ciphertext + tag)
+            .aesDecrypt(aesGcm(keyHex.decodeHex(), iv, tagLength = tag.size * 8))
+            .decodeToString()
+            .parseAs<OverlayData>()
     }
 
     companion object {

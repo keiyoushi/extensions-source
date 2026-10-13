@@ -44,7 +44,7 @@ abstract class KomikNesia : KeiSource() {
             if (raw.size < 16) throw IOException("Encrypted data too short")
             val iv = raw.copyOfRange(0, 16)
             val ciphertext = raw.copyOfRange(16, raw.size)
-            return String(ciphertext.aesDecrypt(aesCbc(keyStr.toByteArray(Charsets.UTF_8), iv)), Charsets.UTF_8)
+            return ciphertext.aesDecrypt(aesCbc(keyStr.encodeToByteArray(), iv)).decodeToString()
         } catch (e: Exception) {
             throw IOException("Failed to decrypt API response", e)
         }

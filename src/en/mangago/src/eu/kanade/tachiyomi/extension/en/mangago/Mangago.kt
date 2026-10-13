@@ -370,7 +370,7 @@ abstract class Mangago :
         }
         val key = findHexEncodedVariable(chapterJs, "key").decodeHex()
         val iv = findHexEncodedVariable(chapterJs, "iv").decodeHex()
-        var imageList = encryptedImages.aesDecrypt(newAesCipher("AES/CBC/ZEROBYTEPADDING", key, IvParameterSpec(iv))).toString(Charsets.UTF_8)
+        var imageList = encryptedImages.aesDecrypt(newAesCipher("AES/CBC/ZEROBYTEPADDING", key, IvParameterSpec(iv))).decodeToString()
         imageList = unscrambleImageList(imageList, chapterJs)
         val cols = COLS_REGEX.find(chapterJs)?.groupValues?.get(1).orEmpty()
         val imageKeyScript = chapterJs

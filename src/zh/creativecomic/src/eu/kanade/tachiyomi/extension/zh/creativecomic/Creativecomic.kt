@@ -88,7 +88,7 @@ abstract class Creativecomic : KeiSource() {
         val keyBytes = key.decodeHex()
         val ivBytes = iv.decodeHex()
         val cipherBytes = response.body.bytes()
-        val data = cipherBytes.aesDecrypt(aesCbc(keyBytes, ivBytes)).toString(Charsets.UTF_8)
+        val data = cipherBytes.aesDecrypt(aesCbc(keyBytes, ivBytes)).decodeToString()
 
         val image = Base64.decode(data.substringAfter("base64,"), Base64.DEFAULT)
         val mediaType = data.substringAfter("data:").substringBefore(";").toMediaType()
