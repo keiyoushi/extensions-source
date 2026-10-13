@@ -1171,6 +1171,11 @@ val decryptedResponse = response.xor(keyBytes)
 client.newBuilder()
     .addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
     .build()
+
+// Or with a fixed static key (ByteArray or Byte, optionally pass a request predicate):
+client.newBuilder()
+    .addInterceptor(XorInterceptor(keyBytes))
+    .build()
 ```
 
 ##### Binary endian helpers

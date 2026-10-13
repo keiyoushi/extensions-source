@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -19,16 +20,13 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import keiyoushi.utils.xor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import java.io.IOException
 import kotlin.time.Instant
 
@@ -42,7 +40,7 @@ abstract class Azuki :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(::imageIntercept)
+        addInterceptor(XorInterceptor(XOR_KEY) { "drm" in it.url.queryParameterNames })
         addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
@@ -213,15 +211,6 @@ abstract class Azuki :
         PublisherFilter(),
         GenreFilter(),
     )
-
-    private fun imageIntercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-        if (!response.isSuccessful || !request.url.queryParameterNames.contains("drm")) {
-            return response
-        }
-        return response.xor(XOR_KEY)
-    }
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"

@@ -19,13 +19,24 @@ open class XorInterceptor(
 ) : Interceptor {
     constructor(keyProvider: (Request) -> ByteArray?) : this(null, keyProvider)
 
+    constructor(
+        key: ByteArray,
+        contentType: MediaType? = null,
+        predicate: (Request) -> Boolean = { true },
+    ) : this(contentType, { if (predicate(it)) key else null })
+
+    constructor(
+        key: Byte,
+        contentType: MediaType? = null,
+        predicate: (Request) -> Boolean = { true },
+    ) : this(byteArrayOf(key), contentType, predicate)
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
         if (!response.isSuccessful) return response
 
-        val key = keyProvider(request) ?: return response
-        if (key.isEmpty()) return response
+        val key = keyProvider(request)?.takeIf { it.isNotEmpty() } ?: return response
 
         return response.xor(key, contentType ?: response.body.contentType())
     }

@@ -299,4 +299,38 @@ class XorTest {
         val response = client.newCall(request).execute()
         assertArrayEquals(imageBytes, response.body.bytes())
     }
+
+    @Test
+    fun testXorInterceptorStaticKeyWithPredicate() {
+        val plainText = "Azuki payload encrypted with single byte"
+        val key = 174.toByte()
+        val encrypted = plainText.toByteArray().xor(key)
+
+        val client = OkHttpClient.Builder()
+            .addInterceptor(XorInterceptor(key) { "drm" in it.url.queryParameterNames })
+            .addInterceptor(
+                Interceptor { chain ->
+                    Response.Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(encrypted.toResponseBody("image/jpeg".toMediaType()))
+                        .build()
+                },
+            )
+            .build()
+
+        val matchingRequest = Request.Builder()
+            .url("https://example.com/page.jpg?drm=1")
+            .build()
+        val matchingResponse = client.newCall(matchingRequest).execute()
+        assertEquals(plainText, matchingResponse.body.string())
+
+        val nonMatchingRequest = Request.Builder()
+            .url("https://example.com/page.jpg")
+            .build()
+        val nonMatchingResponse = client.newCall(nonMatchingRequest).execute()
+        assertArrayEquals(encrypted, nonMatchingResponse.body.bytes())
+    }
 }
