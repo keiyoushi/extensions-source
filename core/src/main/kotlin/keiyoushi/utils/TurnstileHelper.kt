@@ -51,27 +51,24 @@ suspend fun getTurnstileToken(
             )
             dialog = d
 
-            jsBridge("turnstileToken") { token ->
-                d.dismiss()
-                resolve(token)
-            }
-
-            jsBridge("turnstileError") { code ->
-                d.dismiss()
-                reject(Exception("Captcha Failed! ${turnstileErrorMessage(code)} (code: $code)"))
-            }
-
-            jsBridge("turnstileCancel") {
-                d.dismiss()
-                reject(Exception("Captcha cancelled"))
-            }
-
-            jsBridge("turnstileShow") {
-                d.show()
-            }
-
-            jsBridge("turnstileHide") {
-                d.dismiss()
+            webMessageBridge("turnstileBridge") { message ->
+                when {
+                    message.startsWith("token:") -> {
+                        d.dismiss()
+                        resolve(message.removePrefix("token:"))
+                    }
+                    message.startsWith("error:") -> {
+                        val code = message.removePrefix("error:")
+                        d.dismiss()
+                        reject(Exception("Captcha Failed! ${turnstileErrorMessage(code)} (code: $code)"))
+                    }
+                    message == "cancel" -> {
+                        d.dismiss()
+                        reject(Exception("Captcha cancelled"))
+                    }
+                    message == "show" -> d.show()
+                    message == "hide" -> d.dismiss()
+                }
             }
 
             val html = """
@@ -106,22 +103,22 @@ suspend fun getTurnstileToken(
                             theme: '$theme',
                             appearance: 'interaction-only',
                             callback: function (token) {
-                                window.turnstileToken.post(token);
+                                window.turnstileBridge.postMessage('token:' + token);
                             },
                             'before-interactive-callback': function () {
-                                window.turnstileShow.post('show');
+                                window.turnstileBridge.postMessage('show');
                             },
                             'after-interactive-callback': function () {
-                                window.turnstileHide.post('hide');
+                                window.turnstileBridge.postMessage('hide');
                             },
                             'error-callback': function (e) {
-                                window.turnstileError.post(String(e || 'unknown'));
+                                window.turnstileBridge.postMessage('error:' + String(e || 'unknown'));
                             },
                             'expired-callback': function () {
-                                window.turnstileError.post('expired');
+                                window.turnstileBridge.postMessage('error:expired');
                             },
                             'timeout-callback': function () {
-                                window.turnstileError.post('timeout');
+                                window.turnstileBridge.postMessage('error:timeout');
                             },
                         };
 
@@ -136,12 +133,12 @@ suspend fun getTurnstileToken(
 
                     document.body.addEventListener('click', function (e) {
                         if (e.target === document.body || e.target === document.documentElement) {
-                            window.turnstileCancel.post('cancelled');
+                            window.turnstileBridge.postMessage('cancel');
                         }
                     });
                 </script>
                 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&amp;onload=onTurnstileLoad"
-                        onerror="window.turnstileError.post('script_load_failed')"></script>
+                        onerror="window.turnstileBridge.postMessage('error:script_load_failed')"></script>
             </body>
             </html>
             """.trimIndent()
