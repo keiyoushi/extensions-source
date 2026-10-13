@@ -13,4 +13,6 @@ abstract class Kiryuu : NatsuId() {
     override fun chapterListUrl(mangaId: String) = super.chapterListUrl(mangaId).newBuilder()
         .setQueryParameter("page", "1")
         .build()
+
+    override val pageListSelector = "section[data-image-data] img"
 }

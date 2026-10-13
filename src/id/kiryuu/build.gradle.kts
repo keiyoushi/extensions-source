@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Kiryuu"
-    versionCode = 52
+    versionCode = 53
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "natsuid"
