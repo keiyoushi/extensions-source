@@ -680,7 +680,9 @@ abstract class Comix :
                 val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                     ?: return@interceptRequest emptyResponse
                 if (UNUSED_SITE_PATHS.any(requestUrl.encodedPath::startsWith)) return@interceptRequest emptyResponse
-                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH) {
+                // The solver's own request for this path reads the site's page
+                val isFrameLoad = request.requestHeaders["Accept"].orEmpty().contains("text/html")
+                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH && isFrameLoad) {
                     if (!preferences.solveCaptchas()) {
                         reject(Exception("Open in WebView to solve the captcha, or turn on \"Solve captchas\" in extension settings"))
                         return@interceptRequest emptyResponse
