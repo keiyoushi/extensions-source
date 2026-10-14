@@ -10,7 +10,10 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,7 +28,27 @@ abstract class Submanhwa : KeiSource() {
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept-Language", "es-PE,es;q=0.9,en-US;q=0.8,en;q=0.7")
 
-    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
+    // /biblioteca?sort=popular has the same order but is behind a Cloudflare challenge
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("filterList")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("sortBy", "views")
+            addQueryParameter("asc", "false")
+        }.build()
+        val document = client.get(url).asJsoup()
+
+        val mangas = document.select(".series-card").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst(".series-title")!!.text()
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+            }
+        }
+        val hasNextPage = document.selectFirst("li a[rel=next]") != null
+
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val document = client.get(baseUrl).asJsoup()
@@ -54,26 +77,25 @@ abstract class Submanhwa : KeiSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): MangasPage = parseMangaList(
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("filterList")
+    ): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("biblioteca")
+            if (query.isNotEmpty()) addQueryParameter("search", query)
+            filters.filterIsInstance<UriPartFilter>().forEach { filter ->
+                if (filter.selected.isNotEmpty()) addQueryParameter(filter.param, filter.selected)
+            }
             addQueryParameter("page", page.toString())
-            addQueryParameter("sortBy", "views")
-            addQueryParameter("asc", "false")
-            addQueryParameter("alpha", query)
-        }.build(),
-    )
-
-    private suspend fun parseMangaList(url: HttpUrl): MangasPage {
+        }.build()
         val document = client.get(url).asJsoup()
-        val mangas = document.select(".series-card").map { element ->
+
+        val mangas = document.select("a.lib-card").map { element ->
             SManga.create().apply {
-                title = element.selectFirst(".series-title")!!.text()
-                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-                thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+                title = element.selectFirst(".lib-title")!!.text()
+                setUrlWithoutDomain(element.absUrl("href"))
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
         }
-        val hasNextPage = document.selectFirst("li a[rel=next]") != null
+        val hasNextPage = document.selectFirst(".lib-pages a[aria-label=Siguiente]") != null
 
         return MangasPage(mangas, hasNextPage)
     }
@@ -135,6 +157,29 @@ abstract class Submanhwa : KeiSource() {
         return document.select("#all img").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.imgAttr())
         }
+    }
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/biblioteca").asJsoup()
+        .select("a.tag-chip")
+        .mapNotNull { chip ->
+            chip.absUrl("href").toHttpUrl().queryParameter("genre")?.let { chip.ownText() to it }
+        }
+        .distinctBy { it.second }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<Pair<String, String>>>().orEmpty()
+
+        return FilterList(
+            buildList {
+                add(SortFilter())
+                add(TypeFilter())
+                add(StatusFilter())
+                if (genres.isNotEmpty()) add(GenreFilter(genres))
+            },
+        )
     }
 
     private fun Element.imgAttr(): String = when {
