@@ -730,6 +730,12 @@ abstract class Comix :
             val bootstrapScript = """
                 window.$passPayloadName = payload => window.$bridgeName.post(payload);
                 window.$rejectName = message => window.$errorBridgeName.post(message);
+                // The site's X-Rt flag, raised after a few API calls without user input and blocked on by the server; held at zero
+                const originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+                XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+                    if (name.toLowerCase() === "x-rt" && value === "1") value = "0";
+                    return originalSetRequestHeader.call(this, name, value);
+                };
                 ${pageScript(passPayloadName, rejectName)}
             """.trimIndent()
             val html = document.clone().apply {
