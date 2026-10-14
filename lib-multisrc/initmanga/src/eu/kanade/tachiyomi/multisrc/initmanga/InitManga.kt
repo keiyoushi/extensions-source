@@ -269,10 +269,11 @@ abstract class InitManga :
         title = if (!siteTitle.isNullOrBlank()) siteTitle else mangaTitle!!
     }
 
+    protected open val useChapterApi get() = true
+
     protected open suspend fun parseChapterList(initialDocument: Document, mangaUrl: HttpUrl): List<SChapter> {
-        val apiChapters = runCatching { fetchChapterListFromApi(initialDocument, mangaUrl) }.getOrNull()
-        if (!apiChapters.isNullOrEmpty()) {
-            return apiChapters
+        if (useChapterApi) {
+            return fetchChapterListFromApi(initialDocument, mangaUrl)
         }
 
         val items = initialDocument.select(chapterListSelector())
@@ -308,11 +309,7 @@ abstract class InitManga :
             if (!response.isSuccessful) break
             document = response.asJsoup()
 
-            val hasNextPage = document.selectFirst(
-                "ul.uk-pagination li:not(.uk-disabled) a:has([uk-pagination-next]), " +
-                    "ul.uk-pagination li:not(.uk-disabled) a[aria-label=\"Sonraki sayfa\"], " +
-                    "ul.uk-pagination li:not(.uk-disabled) a[aria-label=\"Next page\"]",
-            ) != null
+            val hasNextPage = document.selectFirst("ul.uk-pagination > li:last-child:not(.uk-disabled)") != null
         } while (hasNextPage)
 
         return chapters
