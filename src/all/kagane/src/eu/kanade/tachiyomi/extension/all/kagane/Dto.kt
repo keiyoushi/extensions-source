@@ -2,12 +2,14 @@ package eu.kanade.tachiyomi.extension.all.kagane
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class GenreDto(
@@ -119,8 +121,6 @@ class DetailsDto(
     val tags: List<Tag> = emptyList(),
     @SerialName("series_alternate_titles")
     val seriesAlternateTitles: List<AlternateTitle> = emptyList(),
-    @SerialName("series_books")
-    val seriesBooks: List<ChapterDto.Book> = emptyList(),
     @SerialName("edition_info")
     val editionInfo: String? = null,
     @SerialName("tracker_id")
@@ -245,6 +245,33 @@ class DetailsDto(
 }
 
 @Serializable
+class BookIndexDto(
+    private val count: Int,
+    private val fields: List<String>,
+    private val groups: List<ChapterDto.Group>,
+    private val books: List<List<JsonElement>>,
+) {
+    fun toBooks(): List<ChapterDto.Book> {
+        check(books.size == count) { "Incomplete Kagane chapter index" }
+        // The compact index declares its column order in fields.
+        return books.map { row ->
+            val values = fields.zip(row).toMap()
+            ChapterDto.Book(
+                id = values.getValue("book_id").parseAs<String>(),
+                title = values.getValue("title").parseAs<String>(),
+                createdAt = values.getValue("released_at").parseAs<Long?>()
+                    ?.let { Instant.fromEpochSeconds(it).toString() },
+                pagesCount = values.getValue("page_count").parseAs<Int>(),
+                number = values.getValue("sort_no").parseAs<Float>(),
+                chapterNo = values.getValue("chapter_no").parseAs<String?>(),
+                volumeNo = values.getValue("volume_no").parseAs<String?>(),
+                groups = values.getValue("group_ix").parseAs<List<Int>>().map { groups[it] },
+            )
+        }
+    }
+}
+
+@Serializable
 class ChapterDto(
     @SerialName("series_books")
     val seriesBooks: List<Book>,
@@ -271,7 +298,7 @@ class ChapterDto(
         fun toSChapter(actualSeriesId: String, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "optional"): SChapter = SChapter.create().apply {
             url = "/series/$actualSeriesId/reader/$id"
             name = buildChapterName(chapterTitleMode)
-            date_upload = dateFormat.tryParse(createdAt)
+            date_upload = Instant.tryParse(createdAt)
             if (useSourceChapterNumber) {
                 chapter_number = number
             }
@@ -325,9 +352,6 @@ class ChapterDto(
     class Group(
         val title: String,
     )
-    companion object {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
-    }
 }
 
 @Serializable

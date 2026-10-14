@@ -273,22 +273,28 @@ abstract class Kagane :
                 }
             }
         }
-        val updatedChapters = parseChapterList(dto, seriesId)
+        val updatedChapters = if (fetchChapters) {
+            val index = client.get("$apiUrl/series/$seriesId/books/index?fields=List")
+                .parseAs<BookIndexDto>()
+            parseChapterList(index.toBooks(), dto.format, seriesId)
+        } else {
+            emptyList()
+        }
 
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private fun parseChapterList(details: DetailsDto, seriesId: String): List<SChapter> {
-        val useSourceChapterNumber = details.format in setOf(
+    private fun parseChapterList(books: List<ChapterDto.Book>, format: String?, seriesId: String): List<SChapter> {
+        val useSourceChapterNumber = format in setOf(
             "Dark Horse Comics",
             "Flame Comics",
             "MangaDex",
             "Square Enix Manga",
         )
 
-        return details.seriesBooks.map { book ->
+        return books.sortedByDescending { it.number }.map { book ->
             book.toSChapter(seriesId, useSourceChapterNumber, chapterTitleMode)
-        }.reversed()
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
