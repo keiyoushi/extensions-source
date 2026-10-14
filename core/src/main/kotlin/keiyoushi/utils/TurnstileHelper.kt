@@ -13,6 +13,8 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.ui.onDestroyed
 import keiyoushi.utils.ui.topActivity
 import keiyoushi.utils.ui.usable
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
@@ -38,6 +40,11 @@ suspend fun getTurnstileToken(
         Configuration.UI_MODE_NIGHT_YES
     val theme = if (night) "dark" else "light"
 
+    // Turnstile's callbacks run in our page; keep iframes (including Cloudflare's) off the bridge.
+    val pageOrigin = url.toHttpUrl().let {
+        if (it.port == HttpUrl.defaultPort(it.scheme)) "${it.scheme}://${it.host}" else "${it.scheme}://${it.host}:${it.port}"
+    }
+
     var dialog: CaptchaOverlayDialog? = null
 
     return try {
@@ -51,7 +58,7 @@ suspend fun getTurnstileToken(
             )
             dialog = d
 
-            webMessageBridge("turnstileBridge") { message ->
+            webMessageBridge("turnstileBridge", setOf(pageOrigin)) { message ->
                 when {
                     message.startsWith("token:") -> {
                         d.dismiss()

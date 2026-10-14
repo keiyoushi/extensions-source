@@ -180,14 +180,20 @@ internal object WebViewGlueBridge {
                 "getSupportedFeatures" -> arrayOf("WEB_MESSAGE_LISTENER", "WEB_MESSAGE_ARRAY_BUFFER")
                 "onPostMessage" -> {
                     // args: view, message, sourceOrigin, isMainFrame, replyProxy
-                    val (_, messageHandler, _, _, replyHandler) = args!!
+                    val (_, messageHandler, sourceOrigin, isMainFrame, replyHandler) = args!!
                     val message = try {
                         extractMessageString(messageHandler as InvocationHandler)
                     } catch (t: Throwable) {
                         onError(t)
                         return@InvocationHandler null
                     }
-                    listener(message, createReplyProxy(replyHandler as InvocationHandler, onError))
+                    val replyProxy = createReplyProxy(
+                        replyHandler as InvocationHandler,
+                        sourceOrigin = sourceOrigin.toString(),
+                        isMainFrame = isMainFrame as Boolean,
+                        onError = onError,
+                    )
+                    listener(message, replyProxy)
                     null
                 }
                 "equals" -> proxy === args?.getOrNull(0)
@@ -224,6 +230,8 @@ internal object WebViewGlueBridge {
 
     private fun createReplyProxy(
         replyHandler: InvocationHandler,
+        sourceOrigin: String,
+        isMainFrame: Boolean,
         onError: (Throwable) -> Unit,
     ): WebMessageReplyProxy {
         val proxy = Proxy.newProxyInstance(
@@ -233,6 +241,9 @@ internal object WebViewGlueBridge {
         ) as JsReplyProxyBoundaryInterface
 
         return object : WebMessageReplyProxy {
+            override val sourceOrigin: String? = sourceOrigin
+            override val isMainFrame: Boolean? = isMainFrame
+
             override fun postMessage(message: String) {
                 runCatching { proxy.postMessage(message) }
             }

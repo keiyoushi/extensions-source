@@ -73,8 +73,17 @@ fun interface ScriptHandle {
     fun remove()
 }
 
-/** Proxy for replying to or interacting with a frame that sent a web message. */
+/** The frame that sent a web message: where it came from, and how to reply to it. */
 interface WebMessageReplyProxy {
+    /**
+     * Origin of the sending frame (e.g. `https://example.com`), or null on the pre-Chromium 82
+     * fallback, which can't tell senders apart.
+     */
+    val sourceOrigin: String?
+
+    /** Whether the message came from the main frame, or null on the pre-Chromium 82 fallback. */
+    val isMainFrame: Boolean?
+
     /** Posts [message] back to the frame that originated the message. */
     fun postMessage(message: String)
 
@@ -242,10 +251,17 @@ class WebViewScope<T> internal constructor(
      * [allowedOriginRules] entries need a scheme (e.g. `https://example.com`); WebView rejects
      * invalid rules with [IllegalArgumentException], failing the run.
      *
+     * With the default `*` rule, every frame on the page (including third-party iframes such as
+     * ads) can post messages. Restrict [allowedOriginRules] to the expected origin, and check
+     * [WebMessageReplyProxy.sourceOrigin]/[WebMessageReplyProxy.isMainFrame] if a message can
+     * complete the run.
+     *
      * Requires **Chromium 82+** (`WEB_MESSAGE_LISTENER`) for native origin-scoped boundary messaging.
      * On older engines (< Chromium 82), transparently falls back to an `addJavascriptInterface`
      * bridge exposing `window.$name.postMessage(message)` with debug logging under tag `"KeiyoushiWebView"`.
      * Replying via [WebMessageReplyProxy] is unsupported on the fallback path and will [reject] the execution.
+     * The fallback ignores [allowedOriginRules] (every frame can post) and reports a null
+     * sender origin.
      *
      * [handler] runs on the main thread (on a background thread on the fallback path).
      * [WebMessageReplyProxy.evaluateJs] additionally requires **Chromium 146+**
@@ -275,6 +291,9 @@ class WebViewScope<T> internal constructor(
         Log.d("KeiyoushiWebView", "WEB_MESSAGE_LISTENER not supported; falling back to addJavascriptInterface for '$name'")
 
         val fallbackReplyProxy = object : WebMessageReplyProxy {
+            override val sourceOrigin: String? = null
+            override val isMainFrame: Boolean? = null
+
             override fun postMessage(message: String) {
                 reject(UnsupportedOperationException("WebMessageReplyProxy.postMessage is not supported on this WebView (requires Chromium 82+)"))
             }
