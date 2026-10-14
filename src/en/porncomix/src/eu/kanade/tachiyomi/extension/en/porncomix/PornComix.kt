@@ -22,9 +22,9 @@ abstract class PornComix : KeiSource() {
     // ======================== Popular ========================
 
     override suspend fun getPopularManga(page: Int): MangasPage = if (page == 1) {
-        parseMangaList("$baseUrl/multporn-net/".toHttpUrl())
+        parseMangaList("$baseUrl/allmultking/".toHttpUrl())
     } else {
-        parseMangaList("$baseUrl/multporn-net/page/$page/".toHttpUrl())
+        parseMangaList("$baseUrl/allmultking/page/$page/".toHttpUrl())
     }
 
     private suspend fun parseMangaList(url: HttpUrl): MangasPage {

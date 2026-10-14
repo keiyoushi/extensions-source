@@ -1,37 +1,36 @@
-@file:Suppress("SpellCheckingInspection")
-
 package eu.kanade.tachiyomi.extension.tr.mangaship
 
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.Calendar
 
 @Source
-abstract class MangaBahcesi : HttpSource() {
+abstract class MangaBahcesi : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(::decryptInterceptor)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::decryptInterceptor)
 
     // Manga Bahçesi encrypts their image URLs (both covers and pages).
     // Instead of overriding 'imageUrlRequest' individually, we intercept generic requests internally,
@@ -76,12 +75,21 @@ abstract class MangaBahcesi : HttpSource() {
         return chain.proceed(request)
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/Tr/PopulerMangalar?page=$page", headers)
+    override suspend fun getPopularManga(page: Int) = parseMangas(
+        client.get(
+            "$baseUrl/Tr/PopulerMangalar?page=$page",
+        ),
+    )
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int) = parseMangas(
+        client.get(
+            "$baseUrl/Tr/YeniMangalar?page=$page",
+        ),
+    )
 
-        val mangas = document.select("div.zaman.boyut").map { element ->
+    private fun parseMangas(response: Response): MangasPage {
+        val doc = response.asJsoup()
+        val mangas = doc.select("div.zaman.boyut").map { element ->
             SManga.create().apply {
                 val a = element.selectFirst("a")!!
                 setUrlWithoutDomain(a.attr("abs:href"))
@@ -95,18 +103,21 @@ abstract class MangaBahcesi : HttpSource() {
             }
         }
 
-        val hasNextPage = document.selectFirst("ul.pagination li.active + li > a") != null
-
+        val hasNextPage = doc.selectFirst("ul.pagination li.active + li > a") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/Tr/YeniMangalar?page=$page", headers)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.count(String::isNotBlank) < 3) return null
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = url.encodedPath },
+            emptyList(),
+            true,
+            false,
+        ).manga
+    }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun getFilterList() = FilterList(getFilters())
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("Tr")
             addPathSegment("Search")
@@ -133,72 +144,77 @@ abstract class MangaBahcesi : HttpSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return GET(url, headers)
+        return parseMangas(client.get(url))
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override val supportRelatedMangasBySearch = true
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("div.details-title h2")?.text() ?: ""
-            description = document.select("div.details-dectiontion p").text()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
 
-            val script = document.selectFirst("div#mangaKapakRes script")?.data()
-            val id = script?.substringAfter("\"id\": '")?.substringBefore("'")
-            if (!id.isNullOrEmpty()) {
-                thumbnail_url = "$baseUrl/decrypt?id=${URLEncoder.encode(id, "UTF-8")}"
-            }
+        return SMangaUpdate(parseDetails(doc), parseChapters(doc))
+    }
 
-            val metadataElements = document.select("div.dec-review-meta ul li")
-            for (element in metadataElements) {
-                val label = element.selectFirst("span.left")?.text().orEmpty()
-                val value = element.select("div.left a, a").text().trim()
+    private fun parseDetails(document: Document) = SManga.create().apply {
+        title = document.selectFirst("div.details-title h2")?.text()!!
+        setUrlWithoutDomain(document.location())
+        description = document.select("div.details-dectiontion p").text()
 
-                when {
-                    label.contains("Yazar", true) -> author = value
-                    label.contains("Durum", true) -> status = when {
-                        value.contains("Devam Ediyor", true) -> SManga.ONGOING
-                        value.contains("Tamamlandı", true) -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
+        val script = document.selectFirst("div#mangaKapakRes script")?.data()
+        val id = script?.substringAfter("\"id\": '")?.substringBefore("'")
+        if (!id.isNullOrEmpty()) {
+            thumbnail_url = "$baseUrl/decrypt?id=${URLEncoder.encode(id, "UTF-8")}"
+        }
+
+        val metadataElements = document.select("div.dec-review-meta ul li")
+        for (element in metadataElements) {
+            val label = element.selectFirst("span.left")?.text().orEmpty()
+            val value = element.select("div.left a, a").text().trim()
+
+            when {
+                label.contains("Yazar", true) -> author = value
+                label.contains("Durum", true) -> status = when {
+                    value.contains("Devam Ediyor", true) -> SManga.ONGOING
+                    value.contains("Tamamlandı", true) -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
                 }
             }
+        }
 
-            val genres = document.select("div.dec-review-meta ul li:contains(Kategori) a").map { it.text().trim() }
-            if (genres.isNotEmpty()) {
-                genre = genres.joinToString(", ")
-            }
+        val genres = document.select("div.dec-review-meta ul li:contains(Kategori) a").map { it.text().trim() }
+        if (genres.isNotEmpty()) {
+            genre = genres.joinToString(", ")
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun parseChapters(document: Document): List<SChapter> = document.select("div.plylist-single").mapNotNull { element ->
+        SChapter.create().apply {
+            val a = element.selectFirst(".plylist-single-content > a")
+            val href = a?.attr("onclick")?.substringAfter("location.href='")?.substringBefore("'")
+                ?: a?.attr("href") ?: return@mapNotNull null
+            setUrlWithoutDomain(href)
 
-        return document.select("div.plylist-single").map { element ->
-            SChapter.create().apply {
-                val a = element.selectFirst(".plylist-single-content > a")
-                val href = a?.attr("onclick")?.substringAfter("location.href='")?.substringBefore("'")
-                    ?: a?.attr("href") ?: ""
-                setUrlWithoutDomain(href)
+            val chapterName = a?.text()?.trim() ?: "Bölüm"
+            val isVip = element.select("span:contains(VIP)").isNotEmpty()
+            name = if (isVip) "[VIP] $chapterName" else chapterName
 
-                val chapterName = a?.text()?.trim() ?: "Bölüm"
-                val isVip = element.select("span:contains(VIP)").isNotEmpty()
-                name = if (isVip) "[VIP] $chapterName" else chapterName
-
-                date_upload = element.selectFirst("li.movie-time a")?.text()?.let { parseDate(it) } ?: 0L
-            }
+            date_upload = element.selectFirst("li.movie-time a")?.text()?.let { parseDate(it) } ?: 0L
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         // Enforce the site's mandatory login rule to view page images.
         val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
         if (cookies.none { it.name == ".ASPXAUTH" }) {
             throw Exception("Bölümleri okumak için WebView üzerinden giriş yapmalısınız.")
         }
 
-        val document = response.asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val pages = mutableListOf<Page>()
         var i = 0
 
@@ -220,8 +236,27 @@ abstract class MangaBahcesi : HttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override val supportsFilterFetching = true
 
+    override suspend fun fetchFilterData() = client.get("$baseUrl/Tr/Mangalar")
+        .asJsoup()
+        .select("select[name=kategori] option")
+        .associate { it.text() to it.attr("value") }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        listOf<Filter<*>>(
+            TypeFilter(),
+            StatusFilter(),
+        ) + buildList {
+            val genres = data?.parseAs<Map<String, String>>().orEmpty()
+            if (genres.isNotEmpty()) {
+                add(
+                    GenreFilter(genres.map { Genre(it.key, it.value) }),
+                )
+            }
+        },
+    )
     private fun parseDate(dateStr: String): Long {
         val now = Calendar.getInstance()
         val num = dateStr.filter { it.isDigit() }.toIntOrNull() ?: 1

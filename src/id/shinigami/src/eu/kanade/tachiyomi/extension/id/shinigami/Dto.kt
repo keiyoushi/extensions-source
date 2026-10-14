@@ -11,10 +11,15 @@ class ShinigamiBrowseDto(
 
 @Serializable
 class ShinigamiBrowseDataDto(
-    @SerialName("cover_image_url") val thumbnail: String? = "",
+    @SerialName("cover_portrait_url") private val coverPortraitUrl: String? = null,
+    @SerialName("cover_image_url") private val coverImageUrl: String? = null,
     @SerialName("manga_id") val mangaId: String? = "",
     val title: String? = "",
-)
+) {
+    val thumbnail: String?
+        get() = coverPortraitUrl?.takeIf { it.isNotBlank() }
+            ?: coverImageUrl?.takeIf { it.isNotBlank() }
+}
 
 @Serializable
 class MetaDto(
@@ -30,13 +35,17 @@ class ShinigamiMangaDetailDto(
 @Serializable
 class ShinigamiMangaDetailDataDto(
     val title: String? = null,
-    @SerialName("cover_portrait_url") val coverPortraitUrl: String? = null,
-    @SerialName("cover_image_url") val coverImageUrl: String? = null,
+    @SerialName("cover_portrait_url") private val coverPortraitUrl: String? = null,
+    @SerialName("cover_image_url") private val coverImageUrl: String? = null,
     @SerialName("alternative_title") val altTitle: String? = null,
     val description: String = "",
     val status: Int = 0,
     val taxonomy: Map<String, List<TaxonomyItemDto>> = emptyMap(),
-)
+) {
+    val thumbnail: String?
+        get() = coverPortraitUrl?.takeIf { it.isNotBlank() }
+            ?: coverImageUrl?.takeIf { it.isNotBlank() }
+}
 
 @Serializable
 class TaxonomyItemDto(

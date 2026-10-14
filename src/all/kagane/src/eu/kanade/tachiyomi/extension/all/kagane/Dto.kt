@@ -125,6 +125,12 @@ class DetailsDto(
     val editionInfo: String? = null,
     @SerialName("tracker_id")
     val trackerId: String? = null,
+    @SerialName("series_links")
+    val seriesLinks: List<SeriesLink> = emptyList(),
+    @SerialName("average_rating")
+    val averageRating: Double? = null,
+    @SerialName("total_ratings")
+    val totalRatings: Int? = null,
     @SerialName("series_covers")
     val covers: List<SeriesCover> = emptyList(),
 ) {
@@ -158,12 +164,25 @@ class DetailsDto(
         val imageId: String,
     )
 
+    @Serializable
+    class SeriesLink(
+        val url: String,
+        val label: String? = null,
+    )
+
     fun toSManga(apiUrl: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false, cleanTitle: Boolean): SManga = SManga.create().apply {
         val base = this@DetailsDto.title.trim()
         val withEdition = if (showEdition && !this@DetailsDto.editionInfo.isNullOrBlank()) "$base (${this@DetailsDto.editionInfo})" else base
         title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition.clean(cleanTitle)
         thumbnail_url = covers.firstOrNull()?.imageId?.let { "$apiUrl/image/$it" }
         val desc = StringBuilder()
+
+        // Add rating
+        averageRating?.let {
+            desc.append("Rating: ${"%.1f".format(Locale.US, it / 10)}/10")
+            totalRatings?.let { desc.append(" ($it ratings)") }
+            desc.append("\n\n")
+        }
 
         // Add main description
         this@DetailsDto.description?.takeIf { it.isNotBlank() }?.let {
@@ -175,6 +194,15 @@ class DetailsDto(
         if (sourceName != null && this@DetailsDto.sourceId != null) {
             if (desc.isNotEmpty()) desc.append("\n")
             desc.append("Source: [$sourceName]($baseUrl/sources/${this@DetailsDto.sourceId})\n")
+        }
+
+        // Add tracker/source links
+        if (seriesLinks.isNotEmpty()) {
+            if (desc.isNotEmpty()) desc.append("\n")
+            desc.append("Link(s):\n")
+            seriesLinks.forEach {
+                desc.append("- [${it.label ?: it.url}](${it.url})\n")
+            }
         }
 
         // Add alternate titles at the end
