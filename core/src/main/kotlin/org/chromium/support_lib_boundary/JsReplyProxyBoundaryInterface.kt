@@ -6,6 +6,5 @@ import java.lang.reflect.InvocationHandler
 
 internal interface JsReplyProxyBoundaryInterface {
     fun postMessage(message: String)
-    fun postMessageWithPayload(messagePayload: InvocationHandler)
     fun executeJavaScript(script: String, callback: InvocationHandler)
 }

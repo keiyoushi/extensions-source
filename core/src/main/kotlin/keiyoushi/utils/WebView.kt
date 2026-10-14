@@ -85,8 +85,9 @@ interface WebMessageReplyProxy {
 /**
  * DSL for configuring and driving a single [runWebView] run.
  *
- * Threading: page/navigation hooks and [poll] run on the main thread; [interceptRequest]
- * and [jsBridge] handlers run on WebView background threads. An exception thrown from any
+ * Threading: page/navigation hooks, [poll] and [webMessageBridge] handlers run on the main
+ * thread; [interceptRequest] and [jsBridge] handlers (and [webMessageBridge] handlers on the
+ * pre-Chromium 82 fallback) run on WebView background threads. An exception thrown from any
  * callback fails the run via [reject].
  */
 @SuppressLint("SetJavaScriptEnabled")
@@ -128,9 +129,11 @@ class WebViewScope<T> internal constructor(
     var loadWithOverviewMode: Boolean by setting({ loadWithOverviewMode }, { loadWithOverviewMode = it })
 
     /**
-     * Enables Cookie header inclusion when intercepting requests.
+     * Includes the `Cookie` header in requests passed to [interceptRequest], and makes WebView
+     * accept `Set-Cookie` headers from responses returned by it.
      *
-     * Requires **Chromium 122+** (`REQUESTED_WITH_HEADER_ALLOW_LIST`). Silently ignored if unsupported.
+     * Requires **Chromium 138+** (`COOKIE_INTERCEPT`). Silently ignored if unsupported; the
+     * getter returns the requested value either way.
      */
     var includeCookiesOnIntercept: Boolean = false
         set(value) {
@@ -139,20 +142,9 @@ class WebViewScope<T> internal constructor(
         }
 
     /**
-     * Suppresses the default Chromium error page on network/SSL errors.
-     *
-     * Requires **Chromium 88+** (`SUPPRESS_ERROR_PAGE`). Silently ignored if unsupported.
-     */
-    var suppressErrorPage: Boolean = true
-        set(value) {
-            field = value
-            WebViewGlueBridge.setWillSuppressErrorPage(webView.settings, value)
-        }
-
-    /**
      * Sets the user agent string and spoofs matching `Sec-CH-UA` client hints.
      *
-     * Spoofing client hints requires **Chromium 101+** (`USER_AGENT_METADATA`). On older engines,
+     * Spoofing client hints requires **Chromium 119+** (`USER_AGENT_METADATA`). On older engines,
      * only the standard user agent string is modified.
      */
     var userAgent: String
@@ -221,7 +213,8 @@ class WebViewScope<T> internal constructor(
      */
     @Deprecated(
         message = "Use webMessageBridge instead for asynchronous, origin-scoped messaging. " +
-            "Note that JavaScript calls window.<name>.postMessage() instead of .post().",
+            "Note that JavaScript calls window.<name>.postMessage() instead of .post(), " +
+            "and the handler runs on the main thread instead of a background thread.",
     )
     fun jsBridge(name: String, handler: (String) -> Unit) {
         check(bridgeNames.add(name)) { "Bridge '$name' has already been registered on this WebView" }
@@ -245,11 +238,16 @@ class WebViewScope<T> internal constructor(
      * Injects `window.$name` exposing modern, asynchronous, origin-scoped 2-way messaging.
      * JavaScript sends: `window.$name.postMessage(message)`.
      * JavaScript receives: `window.$name.onmessage = (event) => ...`.
+     * Must be called before [loadUrl]/[loadData]; the object is only injected on later navigations.
      *
      * Requires **Chromium 82+** (`WEB_MESSAGE_LISTENER`) for native origin-scoped boundary messaging.
      * On older engines (< Chromium 82), transparently falls back to an `addJavascriptInterface`
      * bridge exposing `window.$name.postMessage(message)` with debug logging under tag `"KeiyoushiWebView"`.
      * Replying via [WebMessageReplyProxy] is unsupported on the fallback path and will [reject] the execution.
+     *
+     * [handler] runs on the main thread (on a background thread on the fallback path).
+     * [WebMessageReplyProxy.evaluateJs] additionally requires **Chromium 146+**
+     * (`JS_INJECTION_IN_FRAME_AND_WORLD`) and [reject]s otherwise.
      */
     fun webMessageBridge(
         name: String,
@@ -311,11 +309,13 @@ class WebViewScope<T> internal constructor(
 
     /**
      * Injects [script] into matching origins before any document or inline script executes.
-     * Returns a [ScriptHandle] to cancel future injections.
+     * Returns a [ScriptHandle] to cancel future injections. Must be called before
+     * [loadUrl]/[loadData]; it only applies to later navigations.
      *
-     * Requires **Chromium 82+** (`DOCUMENT_START_SCRIPT`) for native pre-execution injection.
-     * On older engines (< Chromium 82), transparently falls back to [onPageStarted] evaluation
-     * with debug logging under tag `"KeiyoushiWebView"`.
+     * Requires **Chromium 91+** (`DOCUMENT_START_SCRIPT`) for native pre-execution injection.
+     * On older engines (< Chromium 91), falls back to [onPageStarted] evaluation with debug
+     * logging under tag `"KeiyoushiWebView"`. The fallback only reaches the main frame and
+     * runs asynchronously, so page scripts (including inline ones) may already have run.
      */
     fun injectAtDocumentStart(
         script: String,
@@ -337,9 +337,10 @@ class WebViewScope<T> internal constructor(
 
     /**
      * Injects [script] on lifecycle [event] ([InjectionEvent.DOCUMENT_START] or [InjectionEvent.DOCUMENT_END]),
-     * optionally targeting an isolated [worldName].
+     * optionally targeting an isolated [worldName]. Must be called before [loadUrl]/[loadData];
+     * it only applies to later navigations.
      *
-     * Requires **Chromium 123+** (`JS_INJECTION_IN_FRAME_AND_WORLD`).
+     * Requires **Chromium 146+** (`JS_INJECTION_IN_FRAME_AND_WORLD`).
      * This method has **no fallback** on older WebView versions and immediately fails ([reject]s)
      * if the feature is unsupported.
      */
@@ -353,7 +354,7 @@ class WebViewScope<T> internal constructor(
         if (handle != null) {
             return handle
         }
-        reject(UnsupportedOperationException("JS_INJECTION_IN_FRAME_AND_WORLD is not supported on this WebView (requires Chromium 123+)"))
+        reject(UnsupportedOperationException("JS_INJECTION_IN_FRAME_AND_WORLD is not supported on this WebView (requires Chromium 146+)"))
         return ScriptHandle { }
     }
 
@@ -513,7 +514,6 @@ private fun setupWebView(webView: WebView) {
     }
 
     WebViewGlueBridge.setAudioMuted(webView, true)
-    WebViewGlueBridge.setWillSuppressErrorPage(webView.settings, true)
 
     runCatching {
         val metrics = (webView.context as? Activity)?.resources?.displayMetrics

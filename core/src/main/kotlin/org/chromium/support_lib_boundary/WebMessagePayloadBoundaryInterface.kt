@@ -2,8 +2,8 @@
 
 package org.chromium.support_lib_boundary
 
-internal interface WebMessagePayloadBoundaryInterface : FeatureFlagHolderBoundaryInterface {
+internal interface WebMessagePayloadBoundaryInterface {
     fun getType(): Int
     fun getAsString(): String?
-    fun getAsArrayBuffer(): ByteArray?
+    fun getAsArrayBuffer(): ByteArray
 }

@@ -17,12 +17,11 @@ import org.chromium.support_lib_boundary.WebViewProviderFactoryBoundaryInterface
 import org.chromium.support_lib_boundary.WebkitToCompatConverterBoundaryInterface
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Proxy
-import java.util.WeakHashMap
 
 internal object WebViewGlueBridge {
 
     private lateinit var factory: WebViewProviderFactoryBoundaryInterface
-    private val providers = WeakHashMap<WebView, WebViewProviderBoundaryInterface>()
+    private lateinit var supportedFeatures: Set<String>
 
     private fun ensureFactory() {
         if (::factory.isInitialized) return
@@ -46,30 +45,26 @@ internal object WebViewGlueBridge {
             .getDeclaredMethod("createWebViewProviderFactory")
             .invoke(null) as InvocationHandler
 
-        factory = Proxy.newProxyInstance(
+        val proxy = Proxy.newProxyInstance(
             WebViewGlueBridge::class.java.getClassLoader(),
             arrayOf(WebViewProviderFactoryBoundaryInterface::class.java),
             webViewProviderFactory,
         ) as WebViewProviderFactoryBoundaryInterface
+        supportedFeatures = proxy.supportedFeatures.toHashSet()
+        factory = proxy
     }
 
     @Synchronized
-    private fun getProvider(webView: WebView): WebViewProviderBoundaryInterface? {
-        providers[webView]?.let { return it }
-        return try {
-            ensureFactory()
-            val webViewProvider = factory.createWebView(webView)
-            val provider = Proxy.newProxyInstance(
-                WebViewGlueBridge::class.java.classLoader,
-                arrayOf(WebViewProviderBoundaryInterface::class.java),
-                webViewProvider,
-            ) as WebViewProviderBoundaryInterface
-            providers[webView] = provider
-            provider
-        } catch (e: Throwable) {
-            Log.e("WebViewGlueBridge", "getProvider", e)
-            null
-        }
+    private fun getProvider(webView: WebView): WebViewProviderBoundaryInterface? = try {
+        ensureFactory()
+        Proxy.newProxyInstance(
+            WebViewGlueBridge::class.java.classLoader,
+            arrayOf(WebViewProviderBoundaryInterface::class.java),
+            factory.createWebView(webView),
+        ) as WebViewProviderBoundaryInterface
+    } catch (e: Throwable) {
+        Log.e("WebViewGlueBridge", "getProvider", e)
+        null
     }
 
     @Synchronized
@@ -91,13 +86,12 @@ internal object WebViewGlueBridge {
         null
     }
 
+    /** Exact match only: features suffixed with `:dev` are unreleased and must not be used. */
     @Synchronized
     fun isFeatureSupported(featureName: String): Boolean {
         try {
             ensureFactory()
-            for (feature in factory.supportedFeatures) {
-                if (feature == featureName || feature.startsWith("$featureName:")) return true
-            }
+            return featureName in supportedFeatures
         } catch (e: Throwable) {
             Log.e("WebViewGlueBridge", """isFeatureSupported("$featureName")""", e)
         }
@@ -129,24 +123,12 @@ internal object WebViewGlueBridge {
     }
 
     @Synchronized
-    fun setWillSuppressErrorPage(settings: WebSettings, suppress: Boolean): Boolean {
-        if (!isFeatureSupported("SUPPRESS_ERROR_PAGE")) return false
-        return try {
-            getBoundarySettings(settings)?.setWillSuppressErrorPage(suppress)
-            true
-        } catch (e: Throwable) {
-            Log.e("WebViewGlueBridge", "setWillSuppressErrorPage", e)
-            false
-        }
-    }
-
-    @Synchronized
     fun addDocumentStartJavaScript(
         webView: WebView,
         script: String,
         allowedOriginRules: Set<String>,
     ): ScriptHandle? {
-        if (!isFeatureSupported("DOCUMENT_START_SCRIPT")) return null
+        if (!isFeatureSupported("DOCUMENT_START_SCRIPT:1")) return null
         return try {
             val provider = getProvider(webView) ?: return null
             val handler = provider.addDocumentStartJavaScript(script, allowedOriginRules.toTypedArray())
@@ -175,6 +157,8 @@ internal object WebViewGlueBridge {
         if (!isFeatureSupported("JS_INJECTION_IN_FRAME_AND_WORLD")) return null
         return try {
             val provider = getProvider(webView) ?: return null
+            // Registers the world; addJavaScriptOnEvent throws for unregistered world names.
+            provider.getJavaScriptWorld(worldName)
             val handler = provider.addJavaScriptOnEvent(
                 script,
                 allowedOriginRules.toTypedArray(),
@@ -210,18 +194,15 @@ internal object WebViewGlueBridge {
                 when (method.name) {
                     "getSupportedFeatures" -> arrayOf("WEB_MESSAGE_LISTENER", "WEB_MESSAGE_ARRAY_BUFFER")
                     "onPostMessage" -> {
-                        // args[0]: WebView view
-                        // args[1]: InvocationHandler webMessage
-                        // args[2]: Uri sourceOrigin
-                        // args[3]: boolean isMainFrame
-                        // args[4]: InvocationHandler replyProxy
-                        val msgHandler = args?.getOrNull(1) as? InvocationHandler
-                        val replyHandler = args?.getOrNull(4) as? InvocationHandler
-
-                        val messageString = msgHandler?.let { extractMessageString(it) }.orEmpty()
-                        val replyProxy = replyHandler?.let { createReplyProxy(it, onError) } ?: NoOpReplyProxy
-
-                        listener(messageString, replyProxy)
+                        // args: view, message, sourceOrigin, isMainFrame, replyProxy
+                        val (_, messageHandler, _, _, replyHandler) = args!!
+                        val message = try {
+                            extractMessageString(messageHandler as InvocationHandler)
+                        } catch (t: Throwable) {
+                            onError(t)
+                            return@InvocationHandler null
+                        }
+                        listener(message, createReplyProxy(replyHandler as InvocationHandler, onError))
                         null
                     }
                     "equals" -> proxy === args?.getOrNull(0)
@@ -239,29 +220,24 @@ internal object WebViewGlueBridge {
     }
 
     private fun extractMessageString(messageHandler: InvocationHandler): String {
-        return try {
-            val webMessage = Proxy.newProxyInstance(
-                WebViewGlueBridge::class.java.classLoader,
-                arrayOf(WebMessageBoundaryInterface::class.java),
-                messageHandler,
-            ) as WebMessageBoundaryInterface
+        val webMessage = Proxy.newProxyInstance(
+            WebViewGlueBridge::class.java.classLoader,
+            arrayOf(WebMessageBoundaryInterface::class.java),
+            messageHandler,
+        ) as WebMessageBoundaryInterface
 
-            webMessage.getData() ?: run {
-                val payloadHandler = webMessage.getMessagePayload() ?: return ""
-                val payload = Proxy.newProxyInstance(
-                    WebViewGlueBridge::class.java.classLoader,
-                    arrayOf(WebMessagePayloadBoundaryInterface::class.java),
-                    payloadHandler,
-                ) as WebMessagePayloadBoundaryInterface
-                if (payload.getType() == 0) {
-                    payload.getAsString().orEmpty()
-                } else {
-                    payload.getAsArrayBuffer()?.let { String(it, Charsets.UTF_8) }.orEmpty()
-                }
-            }
-        } catch (e: Throwable) {
-            Log.e("WebViewGlueBridge", "extractMessageString", e)
-            ""
+        // getData() throws for non-string payloads, so read the payload whenever it's available.
+        if (!isFeatureSupported("WEB_MESSAGE_ARRAY_BUFFER")) return webMessage.getData().orEmpty()
+
+        val payload = Proxy.newProxyInstance(
+            WebViewGlueBridge::class.java.classLoader,
+            arrayOf(WebMessagePayloadBoundaryInterface::class.java),
+            webMessage.getMessagePayload(),
+        ) as WebMessagePayloadBoundaryInterface
+        return if (payload.getType() == 0) {
+            payload.getAsString().orEmpty()
+        } else {
+            String(payload.getAsArrayBuffer(), Charsets.UTF_8)
         }
     }
 
@@ -281,6 +257,10 @@ internal object WebViewGlueBridge {
             }
 
             override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
+                if (!isFeatureSupported("JS_INJECTION_IN_FRAME_AND_WORLD")) {
+                    onError(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
+                    return
+                }
                 val callbackHandler = InvocationHandler { _, method, args ->
                     when (method.name) {
                         "onSuccess" -> {
@@ -303,15 +283,12 @@ internal object WebViewGlueBridge {
                         else -> null
                     }
                 }
-                runCatching { proxy.executeJavaScript(script, callbackHandler) }
+                try {
+                    proxy.executeJavaScript(script, callbackHandler)
+                } catch (t: Throwable) {
+                    onError(t)
+                }
             }
-        }
-    }
-
-    private object NoOpReplyProxy : WebMessageReplyProxy {
-        override fun postMessage(message: String) = Unit
-        override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
-            callback?.invoke(null)
         }
     }
 
