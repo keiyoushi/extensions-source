@@ -90,7 +90,7 @@ class MangaDto(
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
             "hiatus" -> SManga.ON_HIATUS
-            "cancelled" -> SManga.CANCELLED
+            "cancelled", "dropped" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
         thumbnail_url = coverImage?.let { baseUrl.resolve(it)?.toString() }

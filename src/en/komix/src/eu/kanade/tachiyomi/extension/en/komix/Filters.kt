@@ -51,7 +51,7 @@ class StatusFilter :
             "Releasing" to "ongoing",
             "Completed" to "completed",
             "On Hiatus" to "hiatus",
-            "Cancelled" to "cancelled",
+            "Cancelled" to "dropped",
         ),
     )
 
