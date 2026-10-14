@@ -39,19 +39,45 @@ class IkiruMangaDetailDto(
     private val featuredImage: String? = null,
     private val metadata: IkiruMetadataDto? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
-        this.title = this@IkiruMangaDetailDto.title
-        this.url = slug
-        thumbnail_url = featuredImage
-        this.description = description?.let { Jsoup.parseBodyFragment(it).text() }
-        this.status = when (this@IkiruMangaDetailDto.status?.uppercase()) {
+    fun toSManga(manga: SManga = SManga.create()): SManga = manga.apply {
+        title = this@IkiruMangaDetailDto.title
+        url = slug
+        featuredImage?.let { thumbnail_url = it }
+
+        val descHtml = this@IkiruMangaDetailDto.description
+        val mainDescription = if (!descHtml.isNullOrBlank()) {
+            val document = Jsoup.parseBodyFragment(descHtml)
+            val paragraphs = document.select("p").map { it.text().trim() }.filter { it.isNotBlank() }
+            if (paragraphs.isNotEmpty()) {
+                paragraphs.joinToString("\n\n")
+            } else {
+                document.text().trim()
+            }
+        } else {
+            ""
+        }
+
+        val altTitles = metadata?.alternateTitles?.filter { it.isNotBlank() }.orEmpty()
+
+        description = buildString {
+            if (mainDescription.isNotBlank()) {
+                append(mainDescription)
+            }
+            if (altTitles.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                append("Alternative Names:\n")
+                append(altTitles.joinToString("\n") { "- $it" })
+            }
+        }.trim().ifEmpty { null }
+
+        status = when (this@IkiruMangaDetailDto.status?.uppercase()) {
             "ONGOING" -> SManga.ONGOING
             "COMPLETED" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        author = metadata?.author?.mapNotNull { it.name }?.joinToString(", ")
-        artist = metadata?.artist?.mapNotNull { it.name }?.joinToString(", ")
-        genre = metadata?.genre?.mapNotNull { it.name }?.joinToString(", ")
+        author = metadata?.author?.mapNotNull { it.name }?.filter { it.isNotBlank() }?.joinToString(", ")
+        artist = metadata?.artist?.mapNotNull { it.name }?.filter { it.isNotBlank() }?.joinToString(", ")
+        genre = metadata?.genre?.mapNotNull { it.name }?.filter { it.isNotBlank() }?.joinToString(", ")
     }
 }
 
@@ -60,6 +86,7 @@ class IkiruMetadataDto(
     val genre: List<IkiruNamedDto> = emptyList(),
     val author: List<IkiruNamedDto> = emptyList(),
     val artist: List<IkiruNamedDto> = emptyList(),
+    val alternateTitles: List<String> = emptyList(),
 )
 
 @Serializable

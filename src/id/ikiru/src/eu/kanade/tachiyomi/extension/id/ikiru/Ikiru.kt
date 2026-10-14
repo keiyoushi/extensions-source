@@ -71,7 +71,7 @@ abstract class Ikiru : KeiSource() {
     )
 
     override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.removePrefix("/manga/").trim('/')
+        val slug = extractSlug(manga.url)
         return "$baseUrl/manga/$slug"
     }
 
@@ -81,10 +81,10 @@ abstract class Ikiru : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val slug = manga.url.removePrefix("/manga/").trim('/')
+        val slug = extractSlug(manga.url)
 
         val detailsDeferred = if (fetchDetails) {
-            async { fetchMangaDetails(slug) }
+            async { fetchMangaDetails(manga, slug) }
         } else {
             null
         }
@@ -101,10 +101,20 @@ abstract class Ikiru : KeiSource() {
         SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private suspend fun fetchMangaDetails(slug: String): SManga {
+    private suspend fun fetchMangaDetails(manga: SManga, slug: String): SManga {
         val response = client.get("$baseUrl/api/public/manga/$slug")
         val res = response.parseAs<IkiruResponseDto<IkiruMangaDetailDto>>()
-        return res.data?.toSManga() ?: SManga.create().apply { url = slug }
+        return res.data?.toSManga(manga) ?: manga
+    }
+
+    private fun extractSlug(url: String): String {
+        if (url.startsWith("{")) {
+            val slugMatch = slugJsonRegex.find(url)
+            if (slugMatch != null) {
+                return slugMatch.groupValues[1]
+            }
+        }
+        return url.substringAfterLast("/manga/").substringAfterLast("/").trim('/')
     }
 
     private suspend fun fetchChapterList(slug: String): List<SChapter> {
@@ -143,5 +153,9 @@ abstract class Ikiru : KeiSource() {
             val src = img.attr("src").takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
             Page(idx, imageUrl = src)
         }
+    }
+
+    companion object {
+        private val slugJsonRegex = Regex("\"slug\"\\s*:\\s*\"([^\"]+)\"")
     }
 }
