@@ -89,7 +89,6 @@ suspend fun getTurnstileToken(
             <html>
             <head>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
-                <!-- Otherwise WebView fetches /favicon.ico from the real site. -->
                 <link rel="icon" href="data:,">
                 <style>
                     html, body {

@@ -629,6 +629,5 @@ suspend fun getLocalStorage(url: String, key: String): String? = runWebView(time
             resolve(value.parseAs<String?>())
         }
     }
-    // The empty icon stops WebView from fetching /favicon.ico from [url]'s site.
     loadData(url, """<link rel="icon" href="data:,">""")
 }
