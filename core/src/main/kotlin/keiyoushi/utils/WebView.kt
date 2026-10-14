@@ -239,6 +239,8 @@ class WebViewScope<T> internal constructor(
      * JavaScript sends: `window.$name.postMessage(message)`.
      * JavaScript receives: `window.$name.onmessage = (event) => ...`.
      * Must be called before [loadUrl]/[loadData]; the object is only injected on later navigations.
+     * [allowedOriginRules] entries need a scheme (e.g. `https://example.com`); WebView rejects
+     * invalid rules with [IllegalArgumentException], failing the run.
      *
      * Requires **Chromium 82+** (`WEB_MESSAGE_LISTENER`) for native origin-scoped boundary messaging.
      * On older engines (< Chromium 82), transparently falls back to an `addJavascriptInterface`
@@ -310,7 +312,8 @@ class WebViewScope<T> internal constructor(
     /**
      * Injects [script] into matching origins before any document or inline script executes.
      * Returns a [ScriptHandle] to cancel future injections. Must be called before
-     * [loadUrl]/[loadData]; it only applies to later navigations.
+     * [loadUrl]/[loadData]; it only applies to later navigations. Invalid [allowedOriginRules]
+     * entries (e.g. missing scheme) are rejected with [IllegalArgumentException], failing the run.
      *
      * Requires **Chromium 91+** (`DOCUMENT_START_SCRIPT`) for native pre-execution injection.
      * On older engines (< Chromium 91), falls back to [onPageStarted] evaluation with debug
@@ -338,7 +341,8 @@ class WebViewScope<T> internal constructor(
     /**
      * Injects [script] on lifecycle [event] ([InjectionEvent.DOCUMENT_START] or [InjectionEvent.DOCUMENT_END]),
      * optionally targeting an isolated [worldName]. Must be called before [loadUrl]/[loadData];
-     * it only applies to later navigations.
+     * it only applies to later navigations. Invalid [allowedOriginRules] entries (e.g. missing
+     * scheme) are rejected with [IllegalArgumentException], failing the run.
      *
      * Requires **Chromium 146+** (`JS_INJECTION_IN_FRAME_AND_WORLD`).
      * This method has **no fallback** on older WebView versions and immediately fails ([reject]s)

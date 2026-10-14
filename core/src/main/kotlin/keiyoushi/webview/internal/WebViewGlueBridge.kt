@@ -122,6 +122,10 @@ internal object WebViewGlueBridge {
         }
     }
 
+    // The add* functions below return null/false only when the feature is unavailable, so callers
+    // can fall back. Errors from WebView itself (e.g. IllegalArgumentException for an invalid
+    // allowedOriginRules entry) propagate instead of silently triggering the fallback.
+
     @Synchronized
     fun addDocumentStartJavaScript(
         webView: WebView,
@@ -129,21 +133,8 @@ internal object WebViewGlueBridge {
         allowedOriginRules: Set<String>,
     ): ScriptHandle? {
         if (!isFeatureSupported("DOCUMENT_START_SCRIPT:1")) return null
-        return try {
-            val provider = getProvider(webView) ?: return null
-            val handler = provider.addDocumentStartJavaScript(script, allowedOriginRules.toTypedArray())
-            val scriptHandler = Proxy.newProxyInstance(
-                WebViewGlueBridge::class.java.classLoader,
-                arrayOf(ScriptHandlerBoundaryInterface::class.java),
-                handler,
-            ) as ScriptHandlerBoundaryInterface
-            ScriptHandle {
-                runCatching { scriptHandler.remove() }
-            }
-        } catch (e: Throwable) {
-            Log.e("WebViewGlueBridge", "addDocumentStartJavaScript", e)
-            null
-        }
+        val provider = getProvider(webView) ?: return null
+        return toScriptHandle(provider.addDocumentStartJavaScript(script, allowedOriginRules.toTypedArray()))
     }
 
     @Synchronized
@@ -155,27 +146,22 @@ internal object WebViewGlueBridge {
         allowedOriginRules: Set<String>,
     ): ScriptHandle? {
         if (!isFeatureSupported("JS_INJECTION_IN_FRAME_AND_WORLD")) return null
-        return try {
-            val provider = getProvider(webView) ?: return null
-            // Registers the world; addJavaScriptOnEvent throws for unregistered world names.
-            provider.getJavaScriptWorld(worldName)
-            val handler = provider.addJavaScriptOnEvent(
-                script,
-                allowedOriginRules.toTypedArray(),
-                event,
-                worldName,
-            )
-            val scriptHandler = Proxy.newProxyInstance(
-                WebViewGlueBridge::class.java.classLoader,
-                arrayOf(ScriptHandlerBoundaryInterface::class.java),
-                handler,
-            ) as ScriptHandlerBoundaryInterface
-            ScriptHandle {
-                runCatching { scriptHandler.remove() }
-            }
-        } catch (e: Throwable) {
-            Log.e("WebViewGlueBridge", "addJavaScriptOnEvent", e)
-            null
+        val provider = getProvider(webView) ?: return null
+        // Registers the world; addJavaScriptOnEvent throws for unregistered world names.
+        provider.getJavaScriptWorld(worldName)
+        return toScriptHandle(
+            provider.addJavaScriptOnEvent(script, allowedOriginRules.toTypedArray(), event, worldName),
+        )
+    }
+
+    private fun toScriptHandle(handler: InvocationHandler): ScriptHandle {
+        val scriptHandler = Proxy.newProxyInstance(
+            WebViewGlueBridge::class.java.classLoader,
+            arrayOf(ScriptHandlerBoundaryInterface::class.java),
+            handler,
+        ) as ScriptHandlerBoundaryInterface
+        return ScriptHandle {
+            runCatching { scriptHandler.remove() }
         }
     }
 
@@ -188,35 +174,30 @@ internal object WebViewGlueBridge {
         listener: (message: String, replyProxy: WebMessageReplyProxy) -> Unit,
     ): Boolean {
         if (!isFeatureSupported("WEB_MESSAGE_LISTENER")) return false
-        return try {
-            val provider = getProvider(webView) ?: return false
-            val handler = InvocationHandler { proxy, method, args ->
-                when (method.name) {
-                    "getSupportedFeatures" -> arrayOf("WEB_MESSAGE_LISTENER", "WEB_MESSAGE_ARRAY_BUFFER")
-                    "onPostMessage" -> {
-                        // args: view, message, sourceOrigin, isMainFrame, replyProxy
-                        val (_, messageHandler, _, _, replyHandler) = args!!
-                        val message = try {
-                            extractMessageString(messageHandler as InvocationHandler)
-                        } catch (t: Throwable) {
-                            onError(t)
-                            return@InvocationHandler null
-                        }
-                        listener(message, createReplyProxy(replyHandler as InvocationHandler, onError))
-                        null
+        val provider = getProvider(webView) ?: return false
+        val handler = InvocationHandler { proxy, method, args ->
+            when (method.name) {
+                "getSupportedFeatures" -> arrayOf("WEB_MESSAGE_LISTENER", "WEB_MESSAGE_ARRAY_BUFFER")
+                "onPostMessage" -> {
+                    // args: view, message, sourceOrigin, isMainFrame, replyProxy
+                    val (_, messageHandler, _, _, replyHandler) = args!!
+                    val message = try {
+                        extractMessageString(messageHandler as InvocationHandler)
+                    } catch (t: Throwable) {
+                        onError(t)
+                        return@InvocationHandler null
                     }
-                    "equals" -> proxy === args?.getOrNull(0)
-                    "hashCode" -> System.identityHashCode(proxy)
-                    "toString" -> "WebMessageListener($jsObjectName)"
-                    else -> null
+                    listener(message, createReplyProxy(replyHandler as InvocationHandler, onError))
+                    null
                 }
+                "equals" -> proxy === args?.getOrNull(0)
+                "hashCode" -> System.identityHashCode(proxy)
+                "toString" -> "WebMessageListener($jsObjectName)"
+                else -> null
             }
-            provider.addWebMessageListener(jsObjectName, allowedOriginRules.toTypedArray(), handler)
-            true
-        } catch (e: Throwable) {
-            Log.e("WebViewGlueBridge", "addWebMessageListener", e)
-            false
         }
+        provider.addWebMessageListener(jsObjectName, allowedOriginRules.toTypedArray(), handler)
+        return true
     }
 
     private fun extractMessageString(messageHandler: InvocationHandler): String {
