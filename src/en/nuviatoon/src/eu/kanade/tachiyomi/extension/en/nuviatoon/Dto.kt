@@ -65,7 +65,7 @@ internal class ComicDto(
             if (!altTitles.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\n")
                 append("Associated Name(s):\n")
-                altTitles.forEach { append("• $it\n") }
+                altTitles.forEach { append("- $it\n") }
             }
         }.trim().ifEmpty { null }
         genre = genres?.joinToString { it.name }

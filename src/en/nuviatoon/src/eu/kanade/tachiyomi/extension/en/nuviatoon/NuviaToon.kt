@@ -58,7 +58,7 @@ abstract class NuviaToon :
         val slug = url.pathSegments.getOrNull(1) ?: return null
 
         val manga = SManga.create().apply { this.url = slug }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = true).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comics/${manga.url}"
