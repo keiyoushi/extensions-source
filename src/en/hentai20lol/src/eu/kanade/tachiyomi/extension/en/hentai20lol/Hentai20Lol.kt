@@ -1,10 +1,10 @@
-package eu.kanade.tachiyomi.extension.en.hentai20
+package eu.kanade.tachiyomi.extension.en.hentai20lol
 
 import eu.kanade.tachiyomi.multisrc.yiimanga.Yiimanga
 import keiyoushi.annotation.Source
 
 @Source
-abstract class Hentai20 : Yiimanga() {
+abstract class Hentai20Lol : Yiimanga() {
     override val mangaPath = "manga"
 
     override val popularPath = "manga-lists"

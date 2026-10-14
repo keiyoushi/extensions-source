@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.ownTextOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
@@ -74,12 +75,12 @@ abstract class Yiimanga : KeiSource() {
     }
 
     private fun mangaListParse(document: Document) = MangasPage(
-        document.select(".latest-list .latest-item").map { element ->
+        document.select(".latest-list .latest-item, .list .list-item").map { element ->
             SManga.create().apply {
-                val link = element.selectFirst(".latest-right a:has(h3, h4)")!!
+                val link = element.selectFirst(".latest-right a:has(h3, h4), .item-title a")!!
                 setUrlWithoutDomain(link.absUrl("href"))
                 title = link.text()
-                thumbnail_url = element.selectFirst(".latest-left img")?.absUrl("src")
+                thumbnail_url = element.selectFirst(".latest-left img, .item-img img")?.absUrl("src")
             }
         },
         hasNextPage = document.selectFirst("#pagination li.next a") != null,
@@ -105,24 +106,25 @@ abstract class Yiimanga : KeiSource() {
     }
 
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.main-info-title, .post-title h1")!!.text()
-        thumbnail_url = document.selectFirst("img.img-cover, .summary_image img")?.absUrl("src")
-        author = document.info("Author(s)", "Autores")?.names()
-        artist = document.info("Artist(s)", "Artistas")?.names()
+        title = document.selectFirst("h1.main-info-title, .post-title h1, .manga-detail .info h1")!!.text()
+        thumbnail_url = document.selectFirst("img.img-cover, .summary_image img, .manga-detail .poster img")?.absUrl("src")
+        author = document.info("Author(s)", "Author", "Autores")?.names()
+        artist = document.info("Artist(s)", "Artist", "Artistas")?.names()
         genre = document.info("Genres", "Genre(s)", "Géneros")?.names()
-        status = when (document.info("Status", "Estado")?.text()?.lowercase()) {
+        val statusText = document.info("Status", "Estado") ?: document.selectFirst(".manga-detail .info p.type")
+        status = when (statusText?.text()?.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        val synopsis = document.selectFirst(".short-desc-content, .dsct")?.let { block ->
+        val synopsis = document.selectFirst(".short-desc-content, .dsct, .description-summary")?.let { block ->
             block.select("p, li").ifEmpty { listOf(block) }
                 .mapNotNull { it.textOrNull() }
                 .joinToString("\n\n")
                 .takeIf { it.isNotEmpty() }
         }
         val altNames = document.info("Alternative")?.textOrNull()
-            ?: document.selectFirst(".main-info-list li > h4")?.textOrNull()
+            ?: document.selectFirst(".main-info-list li > h4, .manga-detail .info h6")?.textOrNull()
         description = listOfNotNull(
             synopsis,
             altNames?.let { "Alternative names: $it" },
@@ -130,24 +132,26 @@ abstract class Yiimanga : KeiSource() {
     }
 
     private fun Document.info(vararg labels: String): Element? {
-        val heading = select(".main-info-list li > h5, .post-content_item .summary-heading > h5")
-            .firstOrNull { it.text().removeSuffix(":") in labels }
+        val heading = select(".main-info-list li > h5, .post-content_item .summary-heading > h5, .info-item > span.sh")
+            .firstOrNull { it.text().removeSuffix(":").removeSuffix(" -") in labels }
             ?: return null
-        return heading.closest("li, .post-content_item")!!.selectFirst("> :not(h5, .summary-heading)")
+        return heading.closest("li, .post-content_item, .info-item")!!.selectFirst("> :not(h5, .summary-heading, .sh)")
     }
 
-    private fun Element.names(): String? = select("a").ifEmpty { listOf(this) }
-        .mapNotNull { it.textOrNull() }
-        .joinToString()
-        .takeIf { it.isNotEmpty() }
+    // Links on .info-item rows carry their own comma in a nested span
+    private fun Element.names(): String? {
+        val links = select("a")
+        val names = if (links.isEmpty()) listOf(textOrNull()) else links.map { it.ownTextOrNull() }
+        return names.filterNotNull().joinToString().takeIf { it.isNotEmpty() }
+    }
 
     // ============================== Chapters ==============================
 
-    private fun chapterListParse(document: Document): List<SChapter> = document.select("ul.chapter-list li, ul.row-content-chapter li").map { element ->
+    private fun chapterListParse(document: Document): List<SChapter> = document.select("ul.chapter-list li, ul.row-content-chapter li, .list-items li.item").map { element ->
         SChapter.create().apply {
             setUrlWithoutDomain(element.selectFirst("a[href]")!!.absUrl("href"))
-            name = element.selectFirst(".chapter-name")!!.text()
-            date_upload = dateFormat.tryParseDate(element.selectFirst(".ct-update, .chapter-time")?.text())
+            name = element.selectFirst(".chapter-name, .item a > span:first-child")!!.text()
+            date_upload = dateFormat.tryParseDate(element.selectFirst(".ct-update, .chapter-time, .item a > span:nth-child(2)")?.text())
         }
     }
 
