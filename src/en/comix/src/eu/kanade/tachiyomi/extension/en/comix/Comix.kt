@@ -943,7 +943,7 @@ abstract class Comix :
         private const val DATA_REQUEST_WAIT_SECONDS = 30L
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val MAX_CHAPTER_PAGES = 1000
-        private val chapterListPacer = RequestPacer(intervalMs = 3000)
+        private val chapterListPacer = RequestPacer(intervalMs = 2500)
         private const val OFFICIAL_GROUP_ID = 10702
         private const val TAG_ID_CACHE_SIZE = 50
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
