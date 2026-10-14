@@ -84,7 +84,7 @@ class ComicDetailsDto(
     @SerialName("_name") private val alternativeName: String? = null,
     @SerialName("_imagen") private val thumbnail: String,
     @SerialName("_categoris") private val genres: List<Map<Int, String>>,
-    @SerialName("_extras") private val extras: ComicDetailsExtrasDto,
+    @SerialName("_extras") private val extras: ComicDetailsExtrasDto? = null,
     val chapters: List<ChapterDto>,
 ) {
     fun toSManga() = SManga.create().apply {
@@ -98,7 +98,7 @@ class ComicDetailsDto(
         }
         status = parseStatus(this@ComicDetailsDto.status)
         genre = genres.joinToString { it.values.first() }
-        author = extras.authors.joinToString()
+        author = extras?.authors?.joinToString()
         initialized = true
     }
 
