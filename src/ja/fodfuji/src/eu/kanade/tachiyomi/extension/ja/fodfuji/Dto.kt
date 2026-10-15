@@ -2,14 +2,15 @@ package eu.kanade.tachiyomi.extension.ja.fodfuji
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Serializable
 class RankingResponse(
@@ -24,9 +25,12 @@ class TitleResponse(
     private val thumbnail: String?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "$bookId/$episodeId"
+        url = bookId
         title = bookName
         thumbnail_url = thumbnail
+        memo = buildJsonObject {
+            put("episodeId", episodeId)
+        }
     }
 }
 
@@ -47,10 +51,10 @@ class SearchResponse(
 
 @Serializable
 class SearchInfo(
-    @SerialName("current_page") private val currentPage: Int,
+    @SerialName("end_page_num") private val endPageNum: Int,
     @SerialName("search_result_num") private val searchResultNum: Int,
 ) {
-    fun hasNextPage() = currentPage < searchResultNum
+    fun hasNextPage() = endPageNum < searchResultNum
 }
 
 @Serializable
@@ -61,7 +65,9 @@ class DetailsResponse(
 
 @Serializable
 class BookDetail(
+    @SerialName("book_id") private val bookId: String,
     @SerialName("book_name") private val bookName: String,
+    @SerialName("episode_id") private val episodeId: String,
     @SerialName("book_review_long") private val bookReviewLong: String?,
     private val thumbnail: String?,
     private val authors: List<Author>?,
@@ -70,6 +76,7 @@ class BookDetail(
     @SerialName("sub_genres") private val subGenres: List<SubGenre>?,
 ) {
     fun toSManga() = SManga.create().apply {
+        url = bookId
         title = bookName
         thumbnail_url = thumbnail
         author = authors?.joinToString { it.name }
@@ -83,31 +90,9 @@ class BookDetail(
             genres?.mapTo(this) { it.name }
             subGenres?.mapTo(this) { it.name }
         }.joinToString()
-    }
-}
-
-@Serializable
-class BookSery(
-    @SerialName("book_id") private val bookId: String,
-    @SerialName("book_name") private val bookName: String,
-    @SerialName("episode_id") private val episodeId: String,
-    @SerialName("is_purchased") private val isPurchased: Boolean?,
-    @SerialName("episode_price_start") private val episodePriceStart: String?,
-    @SerialName("is_free") private val isFree: Boolean?,
-    @SerialName("episode_count") private val episodeCount: Int?,
-    @SerialName("is_sample") private val isSample: Boolean?,
-) {
-    val isLocked: Boolean
-        get() = isFree != true && isPurchased != true
-
-    fun toSChapter() = SChapter.create().apply {
-        val lock = if (isLocked) "🔒 " else ""
-        val preview = if (isSample == true && isLocked) "(Preview) " else ""
-        val normalized = episodePriceStart?.removeRange(episodePriceStart.length - 3, episodePriceStart.length)
-        url = "$bookId/$episodeId"
-        name = lock + preview + bookName
-        date_upload = dateFormat.tryParse(normalized)
-        chapter_number = episodeCount?.toFloat() ?: -1f
+        memo = buildJsonObject {
+            put("episodeId", episodeId)
+        }
     }
 }
 
@@ -131,9 +116,34 @@ class SubGenre(
     val name: String,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
+@Serializable
+class BookSery(
+    @SerialName("book_id") private val bookId: String,
+    @SerialName("book_name") private val bookName: String,
+    @SerialName("episode_id") private val episodeId: String,
+    @SerialName("is_purchased") private val isPurchased: Boolean?,
+    @SerialName("episode_price_start") private val episodePriceStart: String?,
+    @SerialName("is_free") private val isFree: Boolean?,
+    @SerialName("episode_count") private val episodeCount: Int?,
+    @SerialName("is_sample") private val isSample: Boolean?,
+) {
+    val isLocked: Boolean
+        get() = isFree != true && isPurchased != true
+
+    fun toSChapter() = SChapter.create().apply {
+        val lock = if (isLocked) "🔒 " else ""
+        val preview = if (isSample == true && isLocked) "(Preview) " else ""
+        url = episodeId
+        name = lock + preview + bookName
+        date_upload = dateFormat.tryParseDateTime(episodePriceStart)
+        chapter_number = episodeCount?.toFloat() ?: -1f
+        memo = buildJsonObject {
+            put("bookId", bookId)
+        }
+    }
 }
+
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS").withZone(ZoneId.of("Asia/Tokyo"))
 
 @Serializable
 class ViewerResponse(
@@ -146,23 +156,22 @@ class ViewerResponse(
 @Serializable
 class BookData(
     @SerialName("s3_key") val s3Key: String,
-    @SerialName("imaged_reflow") val imagedReflow: Boolean = false,
+    @SerialName("imaged_reflow") val imagedReflow: Boolean,
 )
 
 @Serializable
 class PagesData(
-    val keys: JsonElement?,
+    val keys: JsonElement,
 )
 
-// for novels
 @Serializable
 class ReflowBook(
-    val reflowData: ReflowData?,
+    val reflowData: ReflowData,
 )
 
 @Serializable
 class ReflowData(
-    val profiles: List<ReflowProfile> = emptyList(),
+    val profiles: List<ReflowProfile>,
 )
 
 @Serializable

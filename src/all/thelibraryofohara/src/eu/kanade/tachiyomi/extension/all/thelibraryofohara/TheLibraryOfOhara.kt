@@ -1,26 +1,22 @@
 package eu.kanade.tachiyomi.extension.all.thelibraryofohara
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParse
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Source
-abstract class TheLibraryOfOhara : HttpSource() {
+abstract class TheLibraryOfOhara : KeiSource() {
 
     private val siteLang: String
         get() = when (lang) {
@@ -35,11 +31,7 @@ abstract class TheLibraryOfOhara : HttpSource() {
 
     override val supportsLatest = false
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
-
     // Popular
-
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     private fun popularMangaSelector() = when (lang) {
         "en" ->
@@ -69,8 +61,8 @@ abstract class TheLibraryOfOhara : HttpSource() {
         else -> "#categories-7 ul li.cat-item-693784776, #categories-7 ul li.cat-item-699200615" // Chapter Secrets (multilingual), Return to the Reverie
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select(popularMangaSelector()).map { element ->
             SManga.create().apply {
                 title = element.select("a").text()
@@ -82,35 +74,34 @@ abstract class TheLibraryOfOhara : HttpSource() {
 
     // Latest - not supported
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters))
-        .asObservableSuccess()
-        .map { response ->
-            searchMangaParse(response, query)
-        }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(1)
-
-    private fun searchMangaParse(response: Response, query: String): MangasPage = MangasPage(popularMangaParse(response).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(getPopularManga(1).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
 
     // Details
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val title = document.select("h1.page-title").text().replace("Category: ", "")
-        return SManga.create().apply {
+
+        val updatedManga = manga.apply {
             this.title = title
             thumbnail_url = chooseChapterThumbnail(document, title)
             description = ""
             status = SManga.ONGOING
         }
+
+        return SMangaUpdate(
+            updatedManga,
+            if (fetchChapters) getChapterList(document) else chapters,
+        )
     }
 
     // Use one of the chapter thumbnails as manga thumbnail
@@ -143,18 +134,16 @@ abstract class TheLibraryOfOhara : HttpSource() {
 
     private fun chapterNextPageSelector() = "div.nav-previous a"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private suspend fun getChapterList(firstPage: Document): List<SChapter> {
         val allChapters = mutableListOf<SChapter>()
-        var document = response.asJsoup()
+        var document = firstPage
 
         while (true) {
             val pageChapters = document.select("article").map { element ->
                 SChapter.create().apply {
                     setUrlWithoutDomain(element.select("a.entry-thumbnail").attr("abs:href"))
                     name = element.select("h2.entry-title a").text()
-                    date_upload = dateFormat.tryParse(
-                        element.select("span.posted-on time").attr("datetime").replace("+00:00", "+0000"),
-                    )
+                    date_upload = Instant.tryParse(element.select("span.posted-on time").attr("datetime"))
                 }
             }
             if (pageChapters.isEmpty()) {
@@ -169,7 +158,7 @@ abstract class TheLibraryOfOhara : HttpSource() {
             }
 
             val nextUrl = nextLink.attr("abs:href")
-            document = client.newCall(GET(nextUrl, headers)).execute().asJsoup()
+            document = client.get(nextUrl).asJsoup()
         }
 
         if (allChapters.isNotEmpty() && allChapters[0].name.contains("Reverie")) {
@@ -199,14 +188,12 @@ abstract class TheLibraryOfOhara : HttpSource() {
 
     // Pages
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("div.entry-content").select("a img, img.size-full").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("data-orig-file"))
         }
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private val reverieLangRegex = Regex("""(French|Arabic|Italian|Indonesia|Spanish)""")

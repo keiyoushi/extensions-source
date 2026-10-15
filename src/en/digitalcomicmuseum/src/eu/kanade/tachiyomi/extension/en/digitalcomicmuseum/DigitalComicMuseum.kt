@@ -1,35 +1,26 @@
 package eu.kanade.tachiyomi.extension.en.digitalcomicmuseum
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.Response
 
 @Source
-abstract class DigitalComicMuseum : HttpSource() {
-    override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client
+abstract class DigitalComicMuseum : KeiSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/stats.php?ACT=latest&start=${page - 1}00&limit=100", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/stats.php?ACT=latest&start=${page - 1}00&limit=100").asJsoup()
         val mangas = document.select("tbody > .mainrow").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
@@ -44,10 +35,8 @@ abstract class DigitalComicMuseum : HttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/stats.php?ACT=topdl&start=${page - 1}00&limit=100", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/stats.php?ACT=topdl&start=${page - 1}00&limit=100").asJsoup()
         val mangas = document.select("tbody > .mainrow").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
@@ -62,22 +51,15 @@ abstract class DigitalComicMuseum : HttpSource() {
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val requestBody: RequestBody = MultipartBody.Builder()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("terms", query)
-            .build()
-        val requestHeaders: Headers = headers.newBuilder()
-            .add("Content-Type", "multipart/form-data")
             .build()
         val url = "$baseUrl/index.php".toHttpUrl().newBuilder()
             .addQueryParameter("ACT", "dosearch")
             .build()
-        return POST(url.toString(), requestHeaders, requestBody)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.post(url, requestBody).asJsoup()
         val mangas = document.select("#search-results tbody > tr").map { element ->
             SManga.create().apply {
                 val baseElement = element.selectFirst("td > a")!!
@@ -88,49 +70,49 @@ abstract class DigitalComicMuseum : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    // Details
+    // Details & Chapters
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val manga = SManga.create()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
         val elements = document.select(".tableborder")
-        val firstElement = elements.first() ?: return manga
+        elements.first()?.let { firstElement ->
+            manga.title = firstElement.select("#catname").text()
+            manga.thumbnail_url = firstElement.selectFirst("table img")?.attr("abs:src")
 
-        manga.title = firstElement.select("#catname").text()
-        manga.setUrlWithoutDomain(firstElement.selectFirst("#catname > a")!!.attr("abs:href"))
-        manga.thumbnail_url = firstElement.selectFirst("table img")?.attr("abs:src")
-
-        elements.forEach {
-            when (it.selectFirst("#catname")?.text()) {
-                "Description" -> manga.description = it.selectFirst("table")?.text()
+            elements.forEach {
+                when (it.selectFirst("#catname")?.text()) {
+                    "Description" -> manga.description = it.selectFirst("table")?.text()
+                }
             }
         }
-        return manga
-    }
 
-    // Chapters
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(".tableborder:first-of-type").map { element ->
+        val chapterList = elements.take(1).map { element ->
             SChapter.create().apply {
                 name = element.select("#catname").text()
                 setUrlWithoutDomain(element.selectFirst(".tablefooter a:first-of-type")!!.attr("abs:href"))
             }
         }
+
+        return SMangaUpdate(manga, chapterList)
     }
 
     // Pages
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select(".latest-slide > .slick-slide > a").mapIndexed { index, element ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        return document.select(".reader-page-list a.reader-page-link").mapIndexed { index, element ->
             Page(index, url = element.attr("abs:href"))
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        val document = response.asJsoup()
-        return document.selectFirst("body > a:nth-of-type(2) > img")?.attr("abs:src") ?: ""
+    override suspend fun getImageUrl(page: Page): String {
+        val document = client.get(page.url).asJsoup()
+        return document.selectFirst("img.reader-page-image")!!.absUrl("src")
     }
 }

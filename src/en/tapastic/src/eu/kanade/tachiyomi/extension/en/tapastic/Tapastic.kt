@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -26,6 +27,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okio.IOException
+import kotlin.text.RegexOption.IGNORE_CASE
 
 @Source
 abstract class Tapastic :
@@ -37,6 +39,12 @@ abstract class Tapastic :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        addCookie(
+            listOf(
+                "birthDate" to "1990-01-01",
+                "adjustedBirthDate" to "1990-01-01",
+            ),
+        )
         addInterceptor(TextInterceptor())
     }
 
@@ -154,8 +162,11 @@ abstract class Tapastic :
             thumbnail_url = document.selectFirst(".thumb.js-thumbnail img")?.absUrl("src")
             description = buildString {
                 append(document.selectFirst(".description__body")?.text())
-                document.selectFirst(".colophon")?.text()?.let {
-                    appendLine("\n\n$it")
+                document.selectFirst(".stats > a[href^=\"/static-landing/genre?category=\"]")?.text()?.let {
+                    appendLine("\n\nType: $it")
+                }
+                document.selectFirst(".colophon")?.wholeText()?.let {
+                    appendLine("\n\n${it.replace(Regex("^$title\\s*?(?:\\(Novel\\)|\\(Comic\\))?\\n\\s*", IGNORE_CASE), "")}")
                 }
             }
 
@@ -205,6 +216,12 @@ abstract class Tapastic :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(baseUrl + chapter.url).asJsoup()
+
+        // check if the "Style" button is in the toolbar, because it is even present on locked chapters, so even those are detected correctly
+        val isNovel = document.selectFirst(".toolbar a[data-type=\"style\"]") != null
+        if (isNovel) {
+            throw IOException("This is not a comic, but a novel chapter")
+        }
 
         val pages = document.select("img.content__img").mapIndexed { i, img ->
             Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })

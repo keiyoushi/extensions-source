@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "TheManga"
-    versionCode = 49
+    versionCode = 50
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "id"
         baseUrl = "https://themanga.site"
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

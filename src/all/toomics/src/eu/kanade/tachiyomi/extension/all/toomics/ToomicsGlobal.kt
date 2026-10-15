@@ -1,32 +1,33 @@
 package eu.kanade.tachiyomi.extension.all.toomics
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URLDecoder
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
 
 @Source
-abstract class ToomicsGlobal : HttpSource() {
+abstract class ToomicsGlobal : KeiSource() {
 
     private val siteLang: String
         get() = when (lang) {
@@ -37,42 +38,33 @@ abstract class ToomicsGlobal : HttpSource() {
             else -> lang
         }
 
-    private val dateFormat: SimpleDateFormat = when (lang) {
-        "zh-Hans" -> SimpleDateFormat("yyyy.MM.dd", Locale.SIMPLIFIED_CHINESE)
-        "zh-Hant" -> SimpleDateFormat("yyyy.MM.dd", Locale.TRADITIONAL_CHINESE)
-        "es-419" -> SimpleDateFormat("d MMM, yyyy", Locale("es", "419"))
-        "es" -> SimpleDateFormat("d MMM, yyyy", Locale("es", "419"))
-        "it" -> SimpleDateFormat("d MMM, yyyy", Locale.ITALIAN)
-        "de" -> SimpleDateFormat("d. MMM yyyy", Locale.GERMAN)
-        "fr" -> SimpleDateFormat("dd MMM. yyyy", Locale.ENGLISH)
-        "pt-BR" -> SimpleDateFormat("d 'de' MMM 'de' yyyy", Locale("pt", "BR"))
-        else -> SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
+    private val dateFormat: DateTimeFormatter get() = when (lang) {
+        "zh-Hans" -> dateFormatter("yyyy.M.d", Locale.SIMPLIFIED_CHINESE)
+        "zh-Hant" -> dateFormatter("yyyy.M.d", Locale.TRADITIONAL_CHINESE)
+        "es-419" -> dateFormatter("d MMM, yyyy", Locale.forLanguageTag("es-419"))
+        "es" -> dateFormatter("d MMM, yyyy", Locale.forLanguageTag("es-419"))
+        "it" -> dateFormatter("d MMM, yyyy", Locale.ITALIAN)
+        "de" -> dateFormatter("d. MMM yyyy", Locale.GERMAN)
+        "fr" -> dateFormatter("d MMM. yyyy", Locale.ENGLISH)
+        "pt-BR" -> dateFormatter("d 'de' MMM 'de' yyyy", Locale.forLanguageTag("pt-BR"))
+        else -> dateFormatter("MMM d, yyyy", Locale.ENGLISH)
     }
 
-    override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(1.minutes)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(1.minutes)
         .readTimeout(1.minutes)
         .writeTimeout(1.minutes)
-        .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Referer", "$baseUrl/$siteLang")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Referer", "$baseUrl/$siteLang")
         // Required: Prevents Toomics from returning the mobile layout, which breaks all CSS selectors.
         .set("User-Agent", USER_AGENT)
 
     // ================================== Popular =======================================
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/$siteLang/webtoon/ranking", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/$siteLang/webtoon/ranking").asJsoup())
 
     // ================================== Latest =======================================
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$siteLang/webtoon/new_comics", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/$siteLang/webtoon/new_comics").asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("li > div.visual a:has(img)").mapNotNull { element ->
@@ -96,15 +88,11 @@ abstract class ToomicsGlobal : HttpSource() {
 
     // ================================== Search =======================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val formBody = FormBody.Builder()
             .add("toonData", query)
             .build()
-        return POST("$baseUrl/$siteLang/webtoon/ajax_search", headers, formBody)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val searchDto = response.parseAs<SearchDto>()
+        val searchDto = client.post("$baseUrl/$siteLang/webtoon/ajax_search", body = formBody).parseAs<SearchDto>()
         val document = Jsoup.parseBodyFragment(searchDto.content.clearHtml(), baseUrl)
         val mangas = document.select("#search-list-items li").mapNotNull { element ->
             val title = element.selectFirst("strong")?.text() ?: return@mapNotNull null
@@ -128,32 +116,35 @@ abstract class ToomicsGlobal : HttpSource() {
 
     // ================================== Manga Details ================================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            val header = document.selectFirst("#glo_contents section.relative:has(img[src*=thumb])")
-                ?: throw Exception("Could not find manga details header")
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
+        val header = document.selectFirst("#glo_contents section.relative:has(img[src*=thumb])")
+            ?: throw Exception("Could not find manga details header")
+
+        manga.apply {
             title = header.selectFirst("h2")?.text() ?: throw Exception("Could not find manga title")
 
-            header.selectFirst(".mb-0.text-xs.font-normal")?.let {
-                val info = it.text().split("|")
-                artist = info.first()
-                author = info.last()
+            val creators = header.select("a[href*='searchtype=author']").map { it.text() }
+            if (creators.isNotEmpty()) {
+                artist = creators.first()
+                author = creators.last()
             }
 
-            genre = header.selectFirst("dt:contains(genres) + dd")?.text()?.replace("/", ",")
+            val genres = header.selectFirst("h2 + div li:nth-child(2)")?.text()?.split("·").orEmpty()
+            val tags = header.select("a[data-tag-name]").map { it.attr("data-tag-name") }
+            genre = (genres + tags).map { it.trim() }.filter { it.isNotEmpty() }.distinct().joinToString()
             description = header.selectFirst(".break-noraml.text-xs")?.text()
             thumbnail_url = document.selectFirst("head meta[property='og:image']")?.attr("content")
         }
-    }
 
-    // ================================== Chapters =====================================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
         // coin-type1 - free chapter, coin-type6 - already read chapter
-        return document.select("li.normal_ep:has(.coin-type1, .coin-type6)").mapNotNull { element ->
+        val chapterList = document.select("li.normal_ep:has(.coin-type1, .coin-type6)").mapNotNull { element ->
             val num = element.selectFirst("div.cell-num")?.text().orEmpty()
             val numText = if (num.isNotEmpty()) "$num - " else ""
             val title = element.selectFirst("div.cell-title strong")?.ownText().orEmpty()
@@ -162,19 +153,26 @@ abstract class ToomicsGlobal : HttpSource() {
             SChapter.create().apply {
                 name = "$numText$title"
                 chapter_number = num.toFloatOrNull() ?: -1f
-                date_upload = dateFormat.tryParse(element.selectFirst("div.cell-time time")?.text())
+                date_upload = dateFormat.tryParseDate(element.selectFirst("div.cell-time time")?.text())
                 scanlator = "Toomics"
                 url = link.substringAfter("href='").substringBefore("'")
             }
         }.reversed()
+
+        return SMangaUpdate(manga, chapterList)
     }
 
     // ================================== Pages ========================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        var document = client.get(getChapterUrl(chapter)).asJsoup()
         if (document.selectFirst("div.section_age_verif") != null) {
-            throw Exception("Verify age via WebView")
+            // Same request the site's "Yes, I'm over 18" button makes; stores adult display mode in the session
+            client.get("$baseUrl/$siteLang/index/set_display/?display=A&return=%2F$siteLang").close()
+            document = client.get(getChapterUrl(chapter)).asJsoup()
+            if (document.selectFirst("div.section_age_verif") != null) {
+                throw Exception("Verify age via WebView")
+            }
         }
 
         val url = document.selectFirst("head meta[property='og:url']")?.attr("content").orEmpty()
@@ -183,17 +181,16 @@ abstract class ToomicsGlobal : HttpSource() {
             .mapIndexed { i, el -> Page(i, url, imageUrl = el.attr("data-src")) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headers.newBuilder()
-            .set("Referer", page.url)
-            .build()
-
-        return GET(page.imageUrl!!, newHeaders)
-    }
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Referer", page.url)
+        .build()
 
     // ================================== Utilities ====================================
+
+    private fun dateFormatter(pattern: String, locale: Locale): DateTimeFormatter = DateTimeFormatterBuilder()
+        .parseCaseInsensitive()
+        .appendPattern(pattern)
+        .toFormatter(locale)
 
     private fun String.clearHtml(): String = this.unicode().replace(ESCAPE_CHAR_REGEX, "")
 
@@ -204,7 +201,7 @@ abstract class ToomicsGlobal : HttpSource() {
     }
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
+        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
         private val UNICODE_REGEX = "\\\\u([0-9A-Fa-f]{4})|\\\\U([0-9A-Fa-f]{8})".toRegex()
         private val ESCAPE_CHAR_REGEX = """(\\n)|(\\r)|(\\{1})""".toRegex()
     }

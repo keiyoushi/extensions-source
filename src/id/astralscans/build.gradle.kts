@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Astral Scans"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "mangathemesia"
 
     source {
         lang = "id"
-        baseUrl = "https://astralscans.top"
+        baseUrl = "https://astralscans.site"
     }
 }

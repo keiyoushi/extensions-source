@@ -3,49 +3,49 @@ package eu.kanade.tachiyomi.extension.pt.taiyo
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.AdditionalInfoDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ChapterListDto
+import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ChapterListInputDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.MediaChapterDto
+import eu.kanade.tachiyomi.extension.pt.taiyo.dto.SearchQueryDto
+import eu.kanade.tachiyomi.extension.pt.taiyo.dto.SearchRequestDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.SearchResultDto
+import eu.kanade.tachiyomi.extension.pt.taiyo.dto.TrpcInputDto
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
-import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import rx.Observable
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
 import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
-import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Source
-abstract class Taiyo : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-    private val imgcdnHost by lazy { IMG_CDN.toHttpUrl().host }
+abstract class Taiyo : KeiSource() {
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override val supportsLatest = false
 
@@ -53,78 +53,49 @@ abstract class Taiyo : HttpSource() {
 
     private var bearerToken: String = preferences.getString(BEARER_TOKEN_PREF, "").toString()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::authorizationInterceptor)
-        .rateLimit(2) { it.host == baseUrlHost || it.host == imgcdnHost }
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::authorizationInterceptor)
+        .rateLimit(2) { it.host == baseUrlHost || it.host == IMG_CDN_HOST }
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList())
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrlHost) {
-                throw Exception("Unsupported url")
-            }
-            val item = url.pathSegments[1]
-            return fetchSearchManga(page, "$PREFIX_SEARCH$item", filters)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrlHost) {
+            return null
         }
-        return if (query.startsWith(PREFIX_SEARCH)) {
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/media/$id"))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+        val id = url.pathSegments.getOrNull(1) ?: return null
+
+        return parseMangaDetails(client.get("$baseUrl/media/$id").asJsoup())
     }
 
-    private fun searchMangaByIdParse(response: Response): MangasPage {
-        val details = mangaDetailsParse(response)
-        return MangasPage(listOf(details), false)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val limit = 21
 
-        val requestBody = buildJsonObject {
-            put(
-                "queries",
-                buildJsonArray {
-                    add(
-                        buildJsonObject {
-                            put("indexUid", "medias")
-                            put("q", query)
-                            put("filter", buildJsonArray { add("deletedAt IS NULL") })
-                            put("limit", limit)
-                            put("offset", limit * (page - 1))
-                        },
-                    )
-                },
-            )
-        }.toJsonRequestBody()
+        val requestBody = SearchRequestDto(
+            listOf(
+                SearchQueryDto(
+                    indexUid = "medias",
+                    q = query,
+                    filter = listOf("deletedAt IS NULL"),
+                    limit = limit,
+                    offset = limit * (page - 1),
+                ),
+            ),
+        ).toJsonRequestBody()
 
-        return POST("https://meilisearch.${baseUrl.substringAfterLast("/")}/multi-search", getApiHeaders(), requestBody)
-    }
+        val obj = client.post(
+            "https://meilisearch.${baseUrl.substringAfterLast("/")}/multi-search",
+            getApiHeaders(),
+            requestBody,
+        ).parseAs<SearchResultDto>()
 
-    private fun getApiHeaders() = headers.newBuilder()
-        .set("Authorization", "Bearer $bearerToken")
-        .build()
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val obj = response.parseAs<SearchResultDto>()
         val mangas = obj.mangas.map { item ->
             SManga.create().apply {
                 url = "/media/${item.id}"
@@ -139,10 +110,32 @@ abstract class Taiyo : HttpSource() {
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
+    private fun getApiHeaders() = headers.newBuilder()
+        .set("Authorization", "Bearer $bearerToken")
+        .build()
+
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = if (fetchDetails) {
+            async { parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup()) }
+        } else {
+            null
+        }
+        val chapterList = if (fetchChapters) async { fetchChapterList(manga) } else null
+
+        SMangaUpdate(
+            manga = details?.await() ?: manga,
+            chapters = chapterList?.await() ?: chapters,
+        )
+    }
+
+    private fun parseMangaDetails(document: Document) = SManga.create().apply {
         setUrlWithoutDomain(document.location())
         thumbnail_url = document.selectFirst("section:has(h2) img")?.getImageUrl()
         title = document.selectFirst("p.media-title")!!.text()
@@ -175,35 +168,23 @@ abstract class Taiyo : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val id = manga.url.substringAfter("/media/").trimEnd('/')
         var page = 1
         val apiUrl = "$baseUrl/api/trpc/chapters.getByMediaId?batch=1".toHttpUrl()
         val chapters = buildList {
             do {
-                val input = buildJsonObject {
-                    putJsonObject("0") {
-                        putJsonObject("json") {
-                            put("mediaId", id)
-                            put("page", page)
-                            put("perPage", 50)
-                        }
-                    }
-                }
+                val input = mapOf("0" to TrpcInputDto(ChapterListInputDto(id, page, 50)))
 
                 page++
 
                 val pageUrl = apiUrl.newBuilder()
-                    .addQueryParameter("input", jsonInstance.encodeToString(input))
+                    .addQueryParameter("input", input.toJsonString())
                     .build()
 
-                val chaptersJson = client.newCall(GET(pageUrl, headers)).execute().let {
-                    CHAPTER_REGEX.find(it.body.string())?.groups?.get(1)?.value
+                val parsed = client.get(pageUrl).parseAs<ChapterListDto> {
+                    CHAPTER_REGEX.find(it)!!.groupValues[1]
                 }
-
-                val parsed = chaptersJson!!.parseAs<ChapterListDto>()
 
                 addAll(
                     parsed.chapters.map {
@@ -212,20 +193,20 @@ abstract class Taiyo : HttpSource() {
                             name = it.title?.takeIf(String::isNotBlank)
                                 ?: "Capítulo ${it.number.toString().removeSuffix(".0")}"
                             url = "/chapter/${it.id}/1"
-                            date_upload = DATE_FORMATTER.tryParse(it.createdAt)
+                            date_upload = Instant.tryParse(it.createdAt)
                         }
                     },
                 )
             } while (page <= parsed.totalPages)
         }
 
-        return Observable.just(chapters.sortedByDescending { it.chapter_number })
+        return chapters.sortedByDescending { it.chapter_number }
     }
 
     // =============================== Pages ================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val chapterObj = document.parseJsonFromDocument<MediaChapterDto>("mediaChapter") {
             substringBefore(",\\\"chapters\\\"") + "}}"
         }!!
@@ -236,8 +217,6 @@ abstract class Taiyo : HttpSource() {
             Page(index, imageUrl = "$base/${item.id}.jpg")
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
 
@@ -305,17 +284,11 @@ abstract class Taiyo : HttpSource() {
     }
 
     companion object {
-        const val PREFIX_SEARCH = "id:"
         val CHAPTER_REGEX = """(\{"chapters".+"totalPages":\d+\})""".toRegex()
         val TOKEN_REGEX = """NEXT_PUBLIC_MEILISEARCH_PUBLIC_KEY:(\s+)?"([^"]+)""".toRegex()
         const val BEARER_TOKEN_PREF = "TAIYO_BEARER_TOKEN"
 
         private const val IMG_CDN = "https://cdn.taiyo.moe/medias"
-
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
-        }
+        private val IMG_CDN_HOST = IMG_CDN.toHttpUrl().host
     }
 }

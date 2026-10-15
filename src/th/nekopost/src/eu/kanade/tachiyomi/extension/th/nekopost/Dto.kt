@@ -38,9 +38,17 @@ class ProjectRequestBody(
 )
 
 @Serializable
+class ChapterInfoRequest(
+    @SerialName("p")
+    val projectId: Int,
+    @SerialName("c")
+    val chapterId: Int,
+)
+
+@Serializable
 class RawChapterInfo(
     @SerialName("chapterId")
-    val chapterId: Int,
+    val chapterId: String,
     @SerialName("pageItem")
     val pageItem: List<RawPageItem>,
     @SerialName("projectId")
@@ -72,7 +80,7 @@ class RawPageItem(
     @SerialName("fileName")
     val fileName: String? = null,
     @SerialName("pageNo")
-    val pageNo: Int,
+    val pageNo: String,
 )
 
 @Serializable

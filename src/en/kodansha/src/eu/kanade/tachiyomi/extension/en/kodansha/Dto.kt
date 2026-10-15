@@ -5,173 +5,118 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonNames
-import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import kotlin.String
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 @Serializable
-class EntryResponse(
-    val response: List<Entries>,
-    val status: Status?,
+class SeriesListDto(
+    @SerialName("total_count") val totalCount: String,
+    val mangas: List<SeriesDto>,
 )
 
 @Serializable
-class Status(
-    val fullCount: Int?,
-)
-
-@Serializable
-class Entries(
-    val type: String?,
-    val content: EntryContent,
-)
-
-@Serializable
-class EntryContent(
-    private val id: Int,
-    private val title: String,
-    private val thumbnails: List<Thumbnail>?,
-    private val readableUrl: String,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        url = "$readableUrl#$id"
-        title = this@EntryContent.title
-        thumbnail_url = thumbnails?.last()?.url
-    }
-}
-
-@Serializable
-class Thumbnail(
-    val url: String,
-)
-
-@Serializable
-class DetailsResponse(
-    val response: Details,
-)
-
-@Serializable
-class Details(
-    private val genres: List<Genre>?,
-    private val creators: List<Creator>?,
-    private val completionStatus: String?,
-    private val title: String,
-    private val description: String?,
-    private val ageRating: String?,
-    private val thumbnails: List<Thumbnail>?,
-    private val publisher: String?,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@Details.title
-        author = creators?.joinToString { "${it.title}: ${it.name}" }
-        description = buildString {
-            this@Details.description?.let {
-                append(Jsoup.parse(it).text())
-            }
-            if (!publisher.isNullOrBlank()) {
-                append("\n\nPublisher: $publisher")
-            }
-
-            if (!ageRating.isNullOrBlank()) {
-                append("\n\n$ageRating")
-            }
-        }
-
-        genre = genres?.joinToString { it.name }
-        thumbnail_url = thumbnails?.first()?.url
-        status = when (completionStatus) {
-            "Complete" -> SManga.COMPLETED
-            "Ongoing" -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
-    }
-}
-
-@Serializable
-class Genre(
-    val name: String,
-)
-
-@Serializable
-class Creator(
-    val name: String,
-    val title: String,
-)
-
-@Serializable
-class PurchasedComic(
-    val id: Int,
-)
-
-@Serializable
-class ChapterResponse(
-    private val id: Int,
+class SeriesDto(
+    private val uuid: String,
+    private val slug: String,
     private val name: String,
-    private val publishDate: String?,
-    private val readable: Readable?,
-    private val variants: List<Variant>?,
-    val chapters: List<ChapterResponse>?,
-    private val chapterNumber: Int?,
-    private val volumeNumber: Int?,
+    @SerialName("short_description") private val shortDescription: String? = null,
+    @SerialName("is_complete") private val isComplete: Boolean? = null,
+    private val image: ImageDto? = null,
+    private val tags: List<String>? = null,
+    private val creators: List<NameDto>? = null,
+    private val credits: String? = null,
+    @SerialName("alt_titles") private val altTitles: List<NameDto>? = null,
 ) {
-    fun isLocked(purchasedIds: Set<Int>): Boolean {
-        val priceType = variants?.firstOrNull()?.priceType
-        val isPaid = priceType == "Paid"
-        return isPaid && id !in purchasedIds
+    fun toSManga() = SManga.create().apply {
+        url = uuid
+        title = name
+        thumbnail_url = image?.webp?.maxByOrNull { it.width }?.url
+        memo = buildJsonObject { put("slug", slug) }
     }
 
-    fun requiresLogin(isLoggedIn: Boolean): Boolean {
-        val priceType = variants?.firstOrNull()?.priceType
-        return priceType == "FreeForRegistered" && !isLoggedIn
-    }
-
-    fun toSChapter(isLocked: Boolean, requiresLogin: Boolean): SChapter = SChapter.create().apply {
-        url = "${this@ChapterResponse.id}#${readable?.seriesReadableUrl}:$volumeNumber:$chapterNumber:${if (requiresLogin) "1" else "0"}"
-        name = if (isLocked) "🔒 ${this@ChapterResponse.name}" else this@ChapterResponse.name
-        date_upload = dateFormat.tryParse(publishDate)
+    fun toSMangaDetails() = toSManga().apply {
+        author = creators?.joinToString { it.name }
+        genre = tags?.joinToString()
+        description = buildString {
+            shortDescription?.let { append(it) }
+            if (!credits.isNullOrBlank()) append("\n\n", credits)
+            if (!altTitles.isNullOrEmpty()) {
+                append("\n\nAlternative Titles:")
+                altTitles.forEach { append("\n", it.name) }
+            }
+        }.trim()
+        status = if (isComplete == true) SManga.COMPLETED else SManga.ONGOING
     }
 }
 
 @Serializable
-class Readable(
-    val seriesReadableUrl: String,
-)
+class NameDto(val name: String)
 
 @Serializable
-class Variant(
-    val priceType: String?,
-)
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
+class ImageDto(val webp: List<ImageSizeDto>)
 
 @Serializable
-class ViewerResponse(
-    val pageNumber: Int,
-    @SerialName("comicID") val comicId: Int,
-)
-
-@Serializable
-class PageResponse(
+class ImageSizeDto(
     val url: String,
-)
-
-@Suppress("unused")
-@Serializable
-class LoginRequestBody(
-    @SerialName("UserName") val userName: String,
-    @SerialName("Password") val password: String,
-)
-
-@Suppress("unused")
-@Serializable
-class RefreshRequestBody(
-    @SerialName("refresh_token") val refreshToken: String,
+    val width: Int,
 )
 
 @Serializable
-class LoginResponse(
-    @JsonNames("access_token") val accessToken: String,
-    @JsonNames("refresh_token") val refreshToken: String,
+class VolumeListDto(val volumes: List<VolumeDto>)
+
+@Serializable
+class VolumeDto(
+    val uuid: String,
+    val label: String,
 )
+
+@Serializable
+class ChapterListDto(val chapters: List<ChapterDto>)
+
+@Serializable
+class ChapterDto(
+    private val uuid: String,
+    private val label: String,
+    private val title: String? = null,
+    @SerialName("volume_uuid") val volumeUuid: String? = null,
+    @SerialName("release_date") private val releaseDate: String? = null,
+    @SerialName("free_published_date") private val freePublishedDate: String? = null,
+    @SerialName("free_unpublished_date") private val freeUnpublishedDate: String? = null,
+    @SerialName("is_upcoming") private val isUpcoming: Boolean? = null,
+) {
+    fun isFree(): Boolean {
+        val now = Clock.System.now().toEpochMilliseconds()
+        val start = Instant.tryParse(freePublishedDate)
+        val end = Instant.tryParse(freeUnpublishedDate)
+        return start in 1..now && (end == 0L || end > now)
+    }
+
+    fun toSChapter(seriesSlug: String, volume: String?) = SChapter.create().apply {
+        url = uuid
+        name = buildString {
+            if (!isFree()) append("🔒 ")
+            if (volume != null) append("Vol. ", volume, " ")
+            append("Ch. ", label)
+            if (!title.isNullOrBlank()) append(" - ", title)
+            if (isUpcoming == true) append(" [Upcoming]")
+        }
+        chapter_number = label.toFloatOrNull() ?: -1f
+        date_upload = Instant.tryParse(releaseDate)
+        memo = buildJsonObject {
+            put("slug", seriesSlug)
+            put("label", label)
+            volume?.let { put("volume", it) }
+        }
+    }
+}
+
+@Serializable
+class PageListDto(val data: PageDataDto)
+
+@Serializable
+class PageDataDto(val pages: List<PageDto>)
+
+@Serializable
+class PageDto(val image: ImageDto)

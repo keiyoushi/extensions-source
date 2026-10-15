@@ -32,12 +32,6 @@ abstract class TriStateGroupFilter(
         get() = state.filter { it.isExcluded() }.map { it.value }
 }
 
-class LetterFilter :
-    SelectFilter(
-        name = "Letter matching mode (Slow)",
-        options = listOf("Disabled" to "disabled", "Enabled" to "enabled"),
-    )
-
 class SortFilter(
     options: List<Pair<String, String>> = sortOptions,
     defaultIndex: Int = 0,
@@ -45,15 +39,10 @@ class SortFilter(
 
 class OriginalStatusFilter(
     options: List<Pair<String, String>> = uploadStatus,
-) : SelectFilter(name = "Original Work Status", options = options)
+) : CheckboxGroupFilter(name = "Original Work Status", options = options)
 
-class UploadStatusFilter(
-    options: List<Pair<String, String>> = uploadStatus,
-) : SelectFilter(name = "Upload Status", options = options)
-
-class ChapterCountFilter(
-    options: List<Pair<String, String>> = chapterCountOptions,
-) : SelectFilter(name = "Chapter Count", options = options)
+class MinChapterFilter : Filter.Text("Minimum Chapter Count")
+class MaxChapterFilter : Filter.Text("Maximum Chapter Count")
 
 class OriginalLanguageFilter(
     options: List<Pair<String, String>> = languages,
@@ -183,54 +172,56 @@ val languages = listOf(
     "Spanish (LA)" to "es_419",
     "Slovenian" to "sl",
     "Vietnamese" to "vi",
+    "Urdu" to "ur",
+    "Yoruba" to "yo",
     "Other" to "_t",
     "Uzbek" to "uz",
     "Zulu" to "zu",
 )
 
 val formatOptions = listOf(
-    "4 Koma" to "4_koma",
+    "1-Koma" to "1_koma",
+    "2-Koma" to "2_koma",
+    "3-Koma" to "3_koma",
+    "4-Koma" to "4_koma",
     "Adaptation" to "adaptation",
     "Anthology" to "anthology",
+    "Artbook" to "artbook",
     "Award Winning" to "award_winning",
     "Doujinshi" to "doujinshi",
     "Fan Colored" to "fan_colored",
+    "Fanbook" to "fanbook",
+    "Fanwork" to "fanwork",
     "Full Color" to "full_color",
+    "Guidebook" to "guidebook",
+    "Illustbook" to "illustbook",
+    "Illustration Book" to "illustration_book",
+    "Japanese Novel" to "japanese_novel",
+    "Light Novel" to "light_novel",
     "Long Strip" to "long_strip",
+    "Longstrip" to "longstrip",
+    "Novels" to "novels",
     "Official Colored" to "official_colored",
     "Oneshot" to "oneshot",
+    "Original Doujinshi" to "original_doujinshi",
+    "Partially Colored" to "partially_colored",
+    "Partially Colored Webtoon" to "partially_colored_webtoon",
     "Web Comic" to "web_comic",
+    "Web Novel" to "web_novel",
     "Webtoon" to "webtoon",
 )
 
 val uploadStatus = listOf(
-    "All" to "",
-    "Pending" to "pending",
-    "Ongoing" to "ongoing",
+    "Releasing" to "releasing",
     "Completed" to "completed",
     "Hiatus" to "hiatus",
     "Cancelled" to "cancelled",
-)
-
-val chapterCountOptions = listOf(
-    "Any" to "", "0" to "0", "1+" to "1", "10+" to "10", "20+" to "20", "30+" to "30",
-    "40+" to "40", "50+" to "50", "60+" to "60", "70+" to "70", "80+" to "80", "90+" to "90",
-    "100+" to "100", "200+" to "200", "300+" to "300", "1~9" to "1-9", "10~19" to "10-19",
-    "20~29" to "20-29", "30~39" to "30-39", "40~49" to "40-49", "50~59" to "50-59",
-    "60~69" to "60-69", "70~79" to "70-79", "80~89" to "80-89", "90~99" to "90-99",
-    "100~199" to "100-199", "200~299" to "200-299",
+    "Upcoming" to "upcoming",
+    "Unknown" to "unknown",
 )
 
 val sortOptions = listOf(
     "Rating Score" to "field_score", "Latest Update" to "field_update", "Recently Added" to "field_create",
-    "Name A-Z" to "field_name_asc", "Name Z-A" to "field_name_desc", "Most Chapters" to "field_chapter",
-    "Most Follows" to "field_follow", "Most Reviews" to "field_review", "Most Comments" to "field_comment",
-    "Most Views (Total)" to "views_d000", "Most Views (360 days)" to "views_d360",
-    "Most Views (180 days)" to "views_d180", "Most Views (90 days)" to "views_d090",
-    "Most Views (30 days)" to "views_d030", "Most Views (7 days)" to "views_d007",
-    "Most Views (24 hours)" to "views_h024", "Most Views (12 hours)" to "views_h012",
-    "Most Views (6 hours)" to "views_h006", "Most Views (1 hour)" to "views_h001",
-    "User Status (Plan to Read)" to "status_wish", "User Status (Reading)" to "status_doing",
-    "User Status (Completed)" to "status_completed", "User Status (On Hold)" to "status_on_hold",
-    "User Status (Dropped)" to "status_dropped", "User Status (Re-reading)" to "status_repeat",
+    "Name A-Z" to "field_name_asc", "Name Z-A" to "field_name_desc", "Most Follows" to "field_follow",
+    "Most Reviews" to "field_review", "Most Comments" to "field_comment", "Most Chapters" to "field_chapter",
 )

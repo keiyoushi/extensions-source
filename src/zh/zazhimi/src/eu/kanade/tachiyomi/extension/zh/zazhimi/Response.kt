@@ -6,32 +6,25 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class IndexResponse(
-    val status: String,
-    val error: String,
+class IndexResponse(
     val new: List<NewItem>,
 )
 
 @Serializable
-data class ShowResponse(
-    val status: String,
-    val error: String,
+class ShowResponse(
     val content: List<ShowItem>,
 )
 
 @Serializable
-data class SearchResponse(
-    val status: String,
-    val error: String,
+class SearchResponse(
     val magazine: List<SearchItem>,
 )
 
 @Serializable
-data class NewItem(
-    val magId: String,
-    val magName: String,
-    val magCover: String,
-    val magDate: String,
+class NewItem(
+    private val magId: String,
+    private val magName: String,
+    private val magCover: String,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@NewItem.magName
@@ -44,32 +37,27 @@ data class NewItem(
 }
 
 @Serializable
-data class ShowItem(
+class ShowItem(
     val magId: String,
     val magName: String,
-    val typeId: String,
-    val typeName: String,
-    val cateId: String,
     val magPic: String,
-    val pageUrl: String,
-    val pageThumbUrl: String,
 ) {
     fun toPage(i: Int): Page = Page(i, imageUrl = this@ShowItem.magPic)
 }
 
 @Serializable
-data class SearchItem(
-    val magId: String,
-    val magName: String,
-    val magDate: String,
-    val magCover: String?,
-    val pubdate: String?,
+class SearchItem(
+    private val magId: String,
+    private val magName: String,
+    private val magCover: String? = null,
+    private val magDate: String? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@SearchItem.magName
         author = this@SearchItem.magName.split(" ").firstOrNull()
         url = "/show.php?a=${this@SearchItem.magId}"
-        thumbnail_url = magCover
+        // search results have no cover, magDate is the image folder of the first page
+        thumbnail_url = magCover ?: magDate?.let { "https://img2020.zazhimi.net/aazzmpic-l/${it}001.jpg" }
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 }

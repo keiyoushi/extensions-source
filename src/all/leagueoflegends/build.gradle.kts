@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "League of Legends"
-    versionCode = 2
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     val locales = mapOf(
         "en" to "en_us", "de" to "de_de", "es" to "es_es", "fr" to "fr_fr",

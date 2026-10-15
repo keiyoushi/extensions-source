@@ -8,7 +8,7 @@ keiyoushi {
     name = "aurora"
     versionCode = 4
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "Aurora"

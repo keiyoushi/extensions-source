@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Mangarama"
     pkgName = "uk.pureskill"
-    versionCode = 0
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "madara"

@@ -9,9 +9,8 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import okhttp3.OkHttpClient
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
@@ -19,29 +18,16 @@ import kotlin.time.Duration.Companion.seconds
 abstract class TaurusFansub :
     Madara(),
     ConfigurableSource {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+    override val supportsPostId = false
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
 
-    override val client = super.client.newBuilder()
-        .rateLimit(2, 1.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(2, 1.seconds)
 
-    override val useNewChapterEndpoint = true
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-
-    override val popularMangaUrlSelectorImg = ".manga__thumb_item img"
+    override val chapterMode = ChapterMode.MangaAjax
 
     override val mangaDetailsSelectorTitle = "h1.post-title"
     override val mangaDetailsSelectorStatus = "div.manga-status span:last-child"
     override val mangaDetailsSelectorDescription = "div.summary__content p"
-
-    override fun parseGenres(document: Document): List<Genre> = document.select(".genres-filter .options a")
-        .mapNotNull { element ->
-            val id = element.absUrl("href").toHttpUrlOrNull()?.queryParameter("genre")
-            val name = element.text()
-
-            id?.takeIf { it.isNotEmpty() && name.isNotBlank() }
-                ?.let { Genre(name, it) }
-        }
 
     private val preferences: SharedPreferences = getPreferences()
 
@@ -55,6 +41,7 @@ abstract class TaurusFansub :
 
         return "$baseSelector:not(.scheduled)"
     }
+    override val filterGenresSelector = ".manga-genres"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {

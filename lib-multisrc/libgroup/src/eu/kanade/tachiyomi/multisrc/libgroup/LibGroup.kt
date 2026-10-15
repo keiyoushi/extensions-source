@@ -1,18 +1,10 @@
 package eu.kanade.tachiyomi.multisrc.libgroup
 
 import android.annotation.SuppressLint
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -20,50 +12,41 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.network.head
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 abstract class LibGroup :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    private val apiDomainHost by lazy { apiDomain.toHttpUrl().host }
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    private val json: Json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = false
-        encodeDefaults = true
-    }
 
     private val preferences by getPreferencesLazy {
         if (getString(SERVER_PREF, "main") == "fourth") {
             edit().putString(SERVER_PREF, "secondary").apply()
         }
     }
-
-    override val supportsLatest = true
 
     private var bearerToken: String? = null
 
@@ -73,50 +56,42 @@ abstract class LibGroup :
 
     private val apiDomain: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString()
 
-    override val client by lazy {
-        network.client.newBuilder()
-            .connectTimeout(1.minutes)
-            .readTimeout(30.seconds)
-            .addInterceptor(::checkForToken)
-            .addInterceptor { chain ->
-                val response = chain.proceed(chain.request())
-                if (response.code == 419) {
-                    throw IOException("HTTP error ${response.code}. Проверьте сайт. Для завершения авторизации необходимо перезапустить приложение с полной остановкой.")
-                }
-                if (response.code == 404) {
-                    throw IOException("HTTP error ${response.code}. Проверьте сайт. Попробуйте авторизоваться через WebView\uD83C\uDF0E︎ и обновите список. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
-                }
-                return@addInterceptor response
+    override fun OkHttpClient.Builder.configureClient() = connectTimeout(1.minutes)
+        .readTimeout(30.seconds)
+        .addInterceptor(::checkForToken)
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (response.code == 419) {
+                response.close()
+                throw IOException("HTTP error ${response.code}. Проверьте сайт. Для завершения авторизации необходимо перезапустить приложение с полной остановкой.")
             }
-            .rateLimit(1) { it.host == apiDomainHost || it.host == baseUrlHost }
-            .rateLimit(3)
-            .build()
-    }
+            if (response.code == 404) {
+                response.close()
+                throw IOException("HTTP error ${response.code}. Проверьте сайт. Попробуйте авторизоваться через WebView🌎︎ и обновите список. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
+            }
+            return@addInterceptor response
+        }
+        .rateLimit(1) { it.host == apiDomain.toHttpUrl().host || it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3)
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("Accept", "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        add("Referer", baseUrl)
-        add("Site-Id", siteId.toString())
-    }
+    override fun Headers.Builder.configureHeaders() = set("Accept", "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .set("Site-Id", siteId.toString())
 
-    private fun imageHeader() = Headers.Builder().apply {
-        add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        add("Referer", baseUrl)
-    }.build()
+    private fun imageHeader() = headersBuilder()
+        .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .build()
 
     private var constants: Constants? = null
-    private fun getConstants(): Constants? {
-        if (constants == null) {
-            try {
-                constants = client.newCall(
-                    GET("$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", headers),
-                ).execute().parseAs<Data<Constants>>().data
-                return constants
-            } catch (ex: Exception) {
-                Log.d("LibGroup", "Error getting constants: $ex")
-            }
-        }
-        return constants
+
+    private suspend fun fetchConstants(): Constants = client.get("$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers")
+        .parseAs<Data<Constants>>().data
+        .also { constants = it }
+
+    private suspend fun getConstants(): Constants? = constants ?: try {
+        fetchConstants()
+    } catch (ex: Exception) {
+        Log.d("LibGroup", "Error getting constants: $ex")
+        null
     }
 
     private fun checkForToken(chain: Interceptor.Chain): Response {
@@ -126,7 +101,7 @@ abstract class LibGroup :
         if (url.contains(apiDomain) && !url.contains("/api/auth/me")) {
             // Force change token if use manual
             if (bearerToken.isNullOrBlank() || (!manualToken.isNullOrBlank() && bearerToken != manualToken)) {
-                val token = loadToken()
+                val token = runBlocking { loadToken() }
                 if (token != null) {
                     bearerToken = token.getToken()
                     userId = token.getUserId()
@@ -144,7 +119,7 @@ abstract class LibGroup :
     }
 
     @SuppressLint("ApplySharedPref")
-    private fun loadToken(): AuthToken? {
+    private suspend fun loadToken(): AuthToken? {
         // Try to get manually configured token from preferences
         val manualToken = preferences.getString("bearer_token", "")
         val userId = preferences.getString("user_id", "")
@@ -168,8 +143,7 @@ abstract class LibGroup :
             if (token.isExpired() || !isUserTokenValid(token.getToken())) {
                 val refreshedToken: AuthToken? = refreshToken()
                 if (refreshedToken != null) {
-                    val str = json.encodeToString(refreshedToken)
-                    preferences.edit().putString(TOKEN_STORE, str).commit()
+                    preferences.edit().putString(TOKEN_STORE, refreshedToken.toJsonString()).commit()
                     token = refreshedToken
                 }
             }
@@ -177,65 +151,25 @@ abstract class LibGroup :
         } catch (ex: SerializationException) {
             val refreshedToken: AuthToken? = refreshToken()
             if (refreshedToken != null) {
-                val str = json.encodeToString(refreshedToken)
-                preferences.edit().putString(TOKEN_STORE, str).commit()
+                preferences.edit().putString(TOKEN_STORE, refreshedToken.toJsonString()).commit()
                 return refreshedToken
             }
         }
         return null
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    @Suppress("NAME_SHADOWING")
-    private fun refreshToken(): AuthToken? {
-        val latch = CountDownLatch(1)
-        var returnValue: AuthToken? = null
-        Handler(Looper.getMainLooper()).post {
-            val webView = WebView(Injekt.get<Application>())
-            with(webView.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-            }
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    val view = view!!
-                    val script = "javascript:localStorage['auth']"
-                    view.evaluateJavascript(script) {
-                        view.stopLoading()
-                        view.destroy()
-                        if (!it.isNullOrBlank() && (it != "null")) {
-                            val str: String = if ((it.first() == '"') && (it.last() == '"')) {
-                                it.substringAfter("\"").substringBeforeLast("\"")
-                                    .replace("\\", "")
-                            } else {
-                                it.replace("\\", "")
-                            }
-                            str.parseAs<AuthToken>().let { auth ->
-                                if (auth.isValid()) {
-                                    returnValue = auth
-                                }
-                            }
-                        }
-                        latch.countDown()
-                    }
-                }
-            }
-            webView.loadUrl(baseUrl)
-        }
-        latch.await(20, TimeUnit.SECONDS)
+    private suspend fun refreshToken(): AuthToken? = getLocalStorage(baseUrl, "auth")
+        ?.parseAs<AuthToken>()
+        ?.takeIf { it.isValid() }
 
-        return returnValue
-    }
-
-    private fun isUserTokenValid(token: String): Boolean {
+    private suspend fun isUserTokenValid(token: String): Boolean {
         val headers = Headers.Builder().apply {
             add("Accept", "application/json")
             add("Authorization", token)
         }.build()
-        client.newCall(GET("$apiDomain/api/auth/me", headers)).execute().also { response ->
+        client.get("$apiDomain/api/auth/me", headers, ensureSuccess = false).use { response ->
             return when (response.code) {
-                401 -> throw Exception("Попробуйте авторизоваться через WebView\uD83C\uDF0E\uFE0E. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
+                401 -> throw Exception("Попробуйте авторизоваться через WebView🌎︎. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
                 else -> true
             }
         }
@@ -243,24 +177,16 @@ abstract class LibGroup :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/ru/manga${manga.url}"
 
-    // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiDomain/api/latest-updates".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-        return GET(url.build(), headers)
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$apiDomain/api/latest-updates?page=$page"))
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    // Popular
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiDomain/api/manga".toHttpUrl().newBuilder()
             .addQueryParameter("site_id[]", siteId.toString())
             .addQueryParameter("page", page.toString())
-        return GET(url.build(), headers)
+        return parseMangasPage(client.get(url.build()))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangasPage(response: Response): MangasPage {
         val data = response.parseAs<MangasPageDto>()
         val popularMangas = data.mapToSManga(isEng())
         if (popularMangas.isNotEmpty()) {
@@ -269,11 +195,22 @@ abstract class LibGroup :
         return MangasPage(emptyList(), false)
     }
 
-    // Details
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
         // throw exception if old url
         if (!manga.url.contains("--")) throw Exception(urlChangedError(name))
 
+        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
+
+        SMangaUpdate(details.await(), chapterList.await())
+    }
+
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
         val url = "$apiDomain/api/manga${manga.url}".toHttpUrl().newBuilder()
             .addQueryParameter("fields[]", "eng_name")
             .addQueryParameter("fields[]", "otherNames")
@@ -289,27 +226,7 @@ abstract class LibGroup :
             .addQueryParameter("fields[]", "status_id")
             .addQueryParameter("fields[]", "artists")
 
-        return GET(url.build(), headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Data<Manga>>().data.toSManga(isEng())
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(mangaDetailsRequest(manga))
-        .asObservable().doOnNext { response ->
-            if (!response.isSuccessful) {
-                if (response.code == 404) throw Exception("HTTP error ${response.code}. Для просмотра 18+ контента необходима авторизация через WebView\uD83C\uDF0E︎") else throw Exception("HTTP error ${response.code}")
-            }
-        }
-        .map { response ->
-            mangaDetailsParse(response)
-        }
-
-    // Chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        // throw exception if old url
-        if (!manga.url.contains("--")) throw Exception(urlChangedError(name))
-
-        return GET("$apiDomain/api/manga${manga.url}/chapters", headers)
+        return client.get(url.build()).parseAs<Data<Manga>>().data.toSManga(isEng())
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -323,11 +240,11 @@ abstract class LibGroup :
         return "$baseUrl/ru/$slugUrl/read/v$volume/c$number?$branchStr$userStr"
     }
 
-    private fun getDefaultBranch(id: String): List<Branch> = client.newCall(GET("$apiDomain/api/branches/$id", headers)).execute().parseAs<Data<List<Branch>>>().data
+    private suspend fun getDefaultBranch(id: String): List<Branch> = client.get("$apiDomain/api/branches/$id").parseAs<Data<List<Branch>>>().data
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val slugUrl = response.request.url.toString().substringAfter("manga/").substringBefore("/chapters")
-        val chaptersData = response.parseAs<Data<List<Chapter>>>()
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val slugUrl = manga.url.removePrefix("/")
+        val chaptersData = client.get("$apiDomain/api/manga${manga.url}/chapters").parseAs<Data<List<Chapter>>>()
             .also { if (it.data.isEmpty()) return emptyList() }
         val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
         val defaultBranchId = if ((sortingList == "ms_mixing") && (chaptersData.data.getBranchCount() > 1)) {
@@ -360,97 +277,51 @@ abstract class LibGroup :
         }.filterNotNull().reversed()
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        if (manga.status == SManga.LICENSED) {
-            Log.d("MangaLib", "Manga is licensed: ${manga.title}")
-        }
-        return client.newCall(chapterListRequest(manga))
-            .asObservable().doOnNext { response ->
-                if (!response.isSuccessful) {
-                    if (response.code == 404) throw Exception("HTTP error ${response.code}. Для просмотра 18+ контента необходима авторизация через WebView\uD83C\uDF0E︎") else throw Exception("HTTP error ${response.code}")
-                }
-            }
-            .map { response ->
-                chapterListParse(response)
-            }
-    }
-
-    // Pages
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         // throw exception if old url
         if (!chapter.url.contains("--")) throw Exception(urlChangedError(name))
         if (chapter.name.contains("$$")) throw Exception("Глава не куплена")
 
-        return GET("$apiDomain/api/manga${chapter.url}", headers)
+        return client.get("$apiDomain/api/manga${chapter.url}").parseAs<Data<Pages>>().data
+            .toPageList()
+            .sortedBy { it.index }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val chapter = response.parseAs<Data<Pages>>().data.toPageList().toMutableList()
-        chapter.sortBy { it.index }
-        return chapter
+    private suspend fun checkImage(url: String): Boolean = client.head(url, imageHeader(), ensureSuccess = false).use { response ->
+        response.isSuccessful && (response.header("content-length", "0")?.toInt()!! > 600)
     }
 
-    private fun checkImage(url: String): Boolean {
-        val getUrlHead = Request.Builder().url(url).head().headers(imageHeader()).build()
-        val response = client.newCall(getUrlHead).execute()
-        return response.isSuccessful && (response.header("content-length", "0")?.toInt()!! > 600)
-    }
-
-    override fun fetchImageUrl(page: Page): Observable<String> {
-        if (page.imageUrl != null) {
-            return Observable.just(page.imageUrl)
-        }
+    override suspend fun getImageUrl(page: Page): String {
         if (isServer() == "auto") {
             for (serverApi in IMG_SERVERS.slice(1 until IMG_SERVERS.size)) {
                 val server = getConstants()?.getServer(serverApi, siteId)?.url
                 val imageUrl = "$server${page.url}"
                 if (checkImage(imageUrl)) {
-                    return Observable.just(imageUrl)
+                    return imageUrl
                 }
             }
         }
         val server = getConstants()?.getServer(isServer(), siteId)?.url ?: throw Exception("Ошибка получения сервера изображений")
-        return Observable.just("$server${page.url}")
+        return "$server${page.url}"
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .headers(imageHeader())
+        .build()
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeader())
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            val titleId = url.pathSegments.getOrNull(2)?.takeIf { it.isNotEmpty() }
-                ?: throw Exception("Unsupported url")
-            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
-        }
-
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
-            client.newCall(GET("$apiDomain/api/manga/$realQuery", headers))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val titleId = url.pathSegments.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return null
+        return client.get("$apiDomain/api/manga/$titleId").parseAs<Data<MangaShort>>().data.toSManga(isEng())
     }
 
-    // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiDomain/api/manga".toHttpUrl().newBuilder()
         url.addQueryParameter("page", page.toString())
         url.addQueryParameter("site_id[]", siteId.toString())
         if (query.isNotEmpty()) {
             url.addQueryParameter("q", query)
         }
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        filters.forEach { filter ->
             when (filter) {
                 is CategoryList -> filter.state.forEach { category ->
                     if (category.state) {
@@ -522,10 +393,8 @@ abstract class LibGroup :
                 else -> {}
             }
         }
-        return GET(url.build(), headers)
+        return parseMangasPage(client.get(url.build()))
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Filters
     private class SearchFilter(name: String, val id: String) : Filter.TriState(name)
@@ -540,27 +409,25 @@ abstract class LibGroup :
     private class AgeList(ages: List<CheckFilter>) : Filter.Group<CheckFilter>("Возрастное ограничение", ages)
     private class MyList(favorites: List<SearchFilter>) : Filter.Group<SearchFilter>("Мои списки", favorites)
 
-    override fun getFilterList(): FilterList {
-        launchIO { getConstants() }
+    override val supportsFilterFetching get() = true
 
+    override suspend fun fetchFilterData(): JsonElement = fetchConstants().toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>()
         filters += listOf(
             OrderBy(),
         )
 
-        filters += if (constants != null) {
-            listOf(
-                CategoryList(getConstants()!!.getCategories(siteId).map { CheckFilter(it.label, it.id.toString()) }),
-                FormatList(getConstants()!!.getFormats(siteId).map { SearchFilter(it.name, it.id.toString()) }),
-                GenreList(getConstants()!!.getGenres(siteId).map { SearchFilter(it.name, it.id.toString()) }),
-                TagList(getConstants()!!.getTags(siteId).map { SearchFilter(it.name, it.id.toString()) }),
-                StatusList(getConstants()!!.getScanlateStatuses(siteId).map { CheckFilter(it.label, it.id.toString()) }),
-                StatusTitleList(getConstants()!!.getTitleStatuses(siteId).map { CheckFilter(it.label, it.id.toString()) }),
-                AgeList(getConstants()!!.getAgeRestrictions(siteId).map { CheckFilter(it.label, it.id.toString()) }),
-            )
-        } else {
-            listOf(
-                Filter.Header("Нажмите «Сбросить», чтобы попытаться отобразить дополнительные фильтры."),
+        data?.parseAs<Constants>()?.let { constants ->
+            filters += listOf(
+                CategoryList(constants.getCategories(siteId).map { CheckFilter(it.label, it.id.toString()) }),
+                FormatList(constants.getFormats(siteId).map { SearchFilter(it.name, it.id.toString()) }),
+                GenreList(constants.getGenres(siteId).map { SearchFilter(it.name, it.id.toString()) }),
+                TagList(constants.getTags(siteId).map { SearchFilter(it.name, it.id.toString()) }),
+                StatusList(constants.getScanlateStatuses(siteId).map { CheckFilter(it.label, it.id.toString()) }),
+                StatusTitleList(constants.getTitleStatuses(siteId).map { CheckFilter(it.label, it.id.toString()) }),
+                AgeList(constants.getAgeRestrictions(siteId).map { CheckFilter(it.label, it.id.toString()) }),
             )
         }
 
@@ -594,18 +461,10 @@ abstract class LibGroup :
         )
 
     // Utils
-    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
-
-    private inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
-
     private fun urlChangedError(sourceName: String): String = "URL серии изменился. Перенесите/мигрируйте с $sourceName " +
         "на $sourceName, чтобы список глав обновился."
 
-    private val scope = CoroutineScope(Dispatchers.IO)
-    private fun launchIO(block: () -> Unit) = scope.launch { block() }
-
     companion object {
-        const val PREFIX_SLUG_SEARCH = "slug:"
         private const val SERVER_PREF = "MangaLibImageServer"
         private val IMG_SERVERS = arrayOf("auto", "main", "secondary", "compress")
 
@@ -630,8 +489,6 @@ abstract class LibGroup :
         private const val PAID_CHAPTER_DISPLAY_TITLE = "Показывать все платные главы"
 
         private const val TOKEN_STORE = "TokenStore"
-
-        val simpleDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US) }
     }
 
     private fun isServer(): String = preferences.getString(SERVER_PREF, "compress")!!

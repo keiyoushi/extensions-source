@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.namicomi.dto
 
-import eu.kanade.tachiyomi.extension.all.namicomi.NamiComiConstants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -9,17 +8,14 @@ typealias MangaListDto = PaginatedResponseDto<MangaDataDto>
 typealias MangaDto = ResponseDto<MangaDataDto>
 
 @Serializable
-@SerialName(NamiComiConstants.MANGA)
+@SerialName("title")
 class MangaDataDto(override val attributes: MangaAttributesDto? = null) : EntityDto()
 
 @Serializable
 class MangaAttributesDto(
-    // Title and description are maps of language codes to localized strings
     val title: Map<String, String>,
     val description: Map<String, String>,
-    val slug: String,
     val originalLanguage: String?,
-    val year: Int?,
     val contentRating: ContentRatingDto? = null,
     val publicationStatus: StatusDto? = null,
 ) : AttributesDto
@@ -55,16 +51,19 @@ enum class StatusDto(val value: String) {
 sealed class AbstractTagDto(override val attributes: TagAttributesDto? = null) : EntityDto()
 
 @Serializable
-@SerialName(NamiComiConstants.TAG)
+@SerialName("tag")
 class TagDto : AbstractTagDto()
 
 @Serializable
-@SerialName(NamiComiConstants.PRIMARY_TAG)
+@SerialName("primary_tag")
 class PrimaryTagDto : AbstractTagDto()
 
 @Serializable
-@SerialName(NamiComiConstants.SECONDARY_TAG)
+@SerialName("secondary_tag")
 class SecondaryTagDto : AbstractTagDto()
 
 @Serializable
-class TagAttributesDto(val group: String) : AttributesDto
+class TagAttributesDto(
+    val group: String,
+    val name: Map<String, String>,
+) : AttributesDto

@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Manhastro"
-    versionCode = 58
+    versionCode = 0
     contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"

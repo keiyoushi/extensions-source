@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Paradox Scans"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "initmanga"
 
     source {

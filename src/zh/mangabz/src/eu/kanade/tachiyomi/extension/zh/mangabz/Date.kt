@@ -1,37 +1,38 @@
 package eu.kanade.tachiyomi.extension.zh.mangabz
 
-import java.text.SimpleDateFormat
-import java.util.Date
+import keiyoushi.utils.tryParseDate
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 fun parseDateInternal(source: String): Long {
     // 今天 00:00
     if (recentRegex.matches(source)) {
-        val date = fullDateFormat.format(Date())
-        val time = timeFormat.parse(date + ' ' + source.substring(3))!!.time
+        val time = LocalTime.parse(source.substring(3), timeFormat)
         val offset = when (source[0]) {
             '今' -> 0L
-            '昨' -> 86400000L
-            '前' -> 86400000L * 2
+            '昨' -> 1L
+            '前' -> 2L
             else -> 0L // impossible
         }
-        return time - offset
+        return LocalDate.now(cstZone).minusDays(offset).atTime(time)
+            .atZone(cstZone).toInstant().toEpochMilli()
     }
 
     // 01月01号, 01月01號
     if (source.length >= 6 && source[2] == '月') {
-        val year = fullDateFormat.format(Date()).substringBefore('-')
-        return shortDateFormat.parse("$year $source")!!.time
+        val year = LocalDate.now(cstZone).year
+        return shortDateFormat.tryParseDate("$year ${source.take(5)}", cstZone)
     }
 
     // 2021-01-01
-    return fullDateFormat.parse(source)!!.time
+    return fullDateFormat.tryParseDate(source, cstZone)
 }
 
 private val recentRegex = Regex("""[今昨前]天 \d{2}:\d{2}""")
-private val timeFormat = cstFormat("yyyy-MM-dd hh:mm")
-private val shortDateFormat = cstFormat("yyyy MM月dd")
-private val fullDateFormat = cstFormat("yyyy-MM-dd")
-
-private fun cstFormat(pattern: String) = SimpleDateFormat(pattern, Locale.ENGLISH).apply { timeZone = TimeZone.getTimeZone("GMT+8") }
+private val cstZone = ZoneId.of("GMT+8")
+private val timeFormat = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
+private val shortDateFormat = DateTimeFormatter.ofPattern("yyyy MM月dd", Locale.ENGLISH)
+private val fullDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)

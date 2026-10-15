@@ -7,14 +7,14 @@ plugins {
 keiyoushi {
     name = "Violet Scans"
     pkgName = "en.shojoscans"
-    versionCode = 5
+    versionCode = 6
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "mangathemesia"
 
     source {
         lang = "en"
-        baseUrl = "https://violetscans.org"
+        baseUrl = "https://violetmanga.com"
         id = 9079184529211162476L
     }
 }

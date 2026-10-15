@@ -37,6 +37,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
@@ -505,7 +506,7 @@ abstract class MangaDot :
 
         buildList {
             data.relationsData?.relations?.values?.forEach(::addAll)
-            addAll(data.suggestions)
+            data.suggestions?.let(::addAll)
             addAll(followingReadsItems)
             addAll(forYouItems)
         }.map {
@@ -736,8 +737,7 @@ abstract class MangaDot :
 
     // ============================= Bookmarks =============================
     private fun parseBookmarksResponse(response: Response): MangasPage = try {
-        val flat = response.parseAs<JsonArray>()
-        val decoded = decodeRsc(flat)
+        val decoded = response.decodeRsc()
             ?: throw Exception("Login through WebView to view bookmarks")
         val routeContent = decoded.jsonObject["pages/BookmarksPage"]
             ?: throw Exception("Login through WebView to view bookmarks")
@@ -921,8 +921,7 @@ abstract class MangaDot :
 
     // ============================ RSC Decoder ============================
     private inline fun <reified T> Response.decodeRscAs(): T {
-        val flat = parseAs<JsonArray>()
-        val decoded = decodeRsc(flat)
+        val decoded = decodeRsc()
             ?: throw IllegalStateException("Failed to decode RSC response")
         val routes = request.url.queryParameter("_routes")
         return if (routes != null) {
@@ -934,7 +933,25 @@ abstract class MangaDot :
         }
     }
 
-    private fun decodeRsc(flat: JsonArray): JsonElement? {
+    private fun Response.decodeRsc(): JsonElement? {
+        val lines = body.string().lines()
+        val flat = lines.first().parseAs<JsonArray>().toMutableList()
+
+        // Values the server sent after the first line, by placeholder slot
+        val promises = mutableMapOf<Int, Int>()
+        for (line in lines.drop(1).filter { it.isNotEmpty() }) {
+            val (head, payload) = line.split(':', limit = 2)
+            val value = payload.parseAs<JsonElement>()
+            val valueIndex = if (value is JsonArray) {
+                val start = flat.size
+                flat.addAll(value)
+                start
+            } else {
+                value.jsonPrimitive.int
+            }
+            if (head[0] == 'P') promises[head.drop(1).toInt()] = valueIndex
+        }
+
         val cache = arrayOfNulls<Any>(flat.size)
         val nil = Any()
         fun resolve(i: Int): JsonElement? {
@@ -943,11 +960,16 @@ abstract class MangaDot :
             val result = when (val el = flat[i]) {
                 is JsonNull -> null
                 is JsonPrimitive -> if (el.isString) JsonPrimitive(el.content) else el
-                is JsonArray -> JsonArray(
-                    el.map {
-                        resolve((it as JsonPrimitive).int) ?: JsonNull
-                    },
-                )
+                // Placeholder for a late value, or a pointer to a value sent earlier
+                is JsonArray -> when (el.firstOrNull()) {
+                    JsonPrimitive("P") -> promises[el[1].jsonPrimitive.int]?.let(::resolve)
+                    JsonPrimitive("Z") -> resolve(el[1].jsonPrimitive.int)
+                    else -> JsonArray(
+                        el.map {
+                            resolve((it as JsonPrimitive).int) ?: JsonNull
+                        },
+                    )
+                }
                 is JsonObject -> JsonObject(
                     el.entries.associate { (k, v) ->
                         (flat[k.removePrefix("_").toInt()] as JsonPrimitive).content to

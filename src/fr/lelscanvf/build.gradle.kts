@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Lelscan-VF"
-    versionCode = 13
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "fuzzydoodle"
 
     source {
         lang = "fr"
-        baseUrl = "https://lelscanfr.com"
+        baseUrl = "https://www.lelscanfr.com"
         // mmrcms -> FuzzyDoodle
         versionId = 2
     }

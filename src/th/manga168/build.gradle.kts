@@ -6,13 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Manga168"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "mangathemesia"
 
     source {
         lang = "th"
-        baseUrl = "https://manga1688.com"
+        baseUrl = "https://manga168x.com"
+
+        deeplink {
+            path("/manga/..*")
+        }
     }
 }

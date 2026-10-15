@@ -8,20 +8,18 @@ import org.jsoup.select.Evaluator
 
 const val PAGE_SIZE = 30
 
-val pcHeaders = Headers.headersOf("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
+val pcHeaders = Headers.headersOf("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")
 
 fun String.removePathPrefix() = removePrefix("/index.php")
 
 fun String.mobileUrl() = replace("//www.", "//m.")
 
 open class MCCMSConfig(
-    hasCategoryPage: Boolean = true,
+    val hasCategoryPage: Boolean = true,
     val textSearchOnlyPageOne: Boolean = false,
     val useMobilePageList: Boolean = false,
     private val lazyLoadImageAttr: String = "data-original",
 ) {
-    val genreData = GenreData(hasCategoryPage)
-
     fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 

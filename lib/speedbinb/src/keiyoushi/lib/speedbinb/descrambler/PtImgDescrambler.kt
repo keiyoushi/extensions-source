@@ -5,9 +5,7 @@ import keiyoushi.lib.speedbinb.PtImg
 class PtImgDescrambler(private val metadata: PtImg) : SpeedBinbDescrambler() {
     override fun isScrambled() = metadata.translations.isNotEmpty()
 
-    override fun canDescramble() = metadata.translations.isNotEmpty()
+    override fun getCanvasDimensions(width: Int, height: Int) = Pair(metadata.views[0].width, metadata.views[0].height)
 
-    override fun getCanvasDimensions() = Pair(metadata.views[0].width, metadata.views[0].height)
-
-    override fun getDescrambleCoords() = metadata.translations
+    override fun getDescrambleCoords(width: Int, height: Int) = metadata.translations
 }

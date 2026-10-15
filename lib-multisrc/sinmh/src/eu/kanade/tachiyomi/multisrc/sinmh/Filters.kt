@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.sinmh
 
 import eu.kanade.tachiyomi.source.model.Filter
+import kotlinx.serialization.Serializable
 
 open class UriPartFilter(
     displayName: String,
@@ -14,6 +15,7 @@ class SortFilter : Filter.Select<String>("排序方式", sortNames) {
     fun toUriPart(): String = sortKeys[state]
 }
 
+@Serializable
 class Category(
     val name: String,
     val values: Array<String>,

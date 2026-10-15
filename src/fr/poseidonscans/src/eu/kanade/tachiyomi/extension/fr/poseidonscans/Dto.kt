@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
-import keiyoushi.utils.reactFlight.ReactFlightDate
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 @Serializable
 class LatestApiManga(
@@ -46,9 +46,9 @@ class CategoryData(val name: String)
 class ChapterData(
     val number: Float,
     val title: String? = null,
-    val createdAt: ReactFlightDate,
+    val createdAt: Instant,
     val isPremium: Boolean? = false,
-    val premiumUntil: ReactFlightDate? = null,
+    val premiumUntil: Instant? = null,
     val isVolume: Boolean? = false,
 )
 

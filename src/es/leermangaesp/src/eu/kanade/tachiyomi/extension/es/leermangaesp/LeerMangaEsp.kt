@@ -1,47 +1,41 @@
 package eu.kanade.tachiyomi.extension.es.leermangaesp
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class LeerMangaEsp : HttpSource() {
+abstract class LeerMangaEsp : KeiSource() {
 
-    override val supportsLatest = true
+    private val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
-    private val chapterDateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
-
-    private val imageBaseUrl by lazy {
-        val url = baseUrl.replace("https://", "https://images.") + "/file/leermangaesp"
-        return@lazy url.toHttpUrl()
-    }
+    private val imageBaseUrl: HttpUrl
+        get() = (baseUrl.replace("https://", "https://images.") + "/file/leermangaesp").toHttpUrl()
 
     // ========================= Popular =========================
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val allMangas = response.parseAs<List<HomeGridMangaDto>> { body: String ->
-            val document = Jsoup.parse(body)
-            val popularScript = document.selectFirst("script#ssr-trends-data")
-            popularScript?.data().orEmpty()
-        }
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val allMangas = client.get(baseUrl).asJsoup()
+            .selectFirst("script#ssr-trends-data")
+            ?.data()
+            .orEmpty()
+            .parseAs<List<HomeGridMangaDto>>()
 
         return MangasPage(
             mangas = allMangas.mapNotNull { it.toSManga(imageBaseUrl) },
@@ -50,18 +44,14 @@ abstract class LeerMangaEsp : HttpSource() {
     }
 
     // ========================= Latest =========================
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("api")
             .addPathSegment("latest_chapters_with_dates")
             .build()
 
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val allMangas = response.parseAs<List<HomeGridMangaDto>>()
-        val sortedMangas = allMangas.sortedByDescending { it.fecha_publicacion.orEmpty() }
+        val allMangas = client.get(url).parseAs<List<HomeGridMangaDto>>()
+        val sortedMangas = allMangas.sortedByDescending { it.fechaPublicacion.orEmpty() }
 
         return MangasPage(
             mangas = sortedMangas.mapNotNull { it.toSManga(imageBaseUrl) },
@@ -70,27 +60,24 @@ abstract class LeerMangaEsp : HttpSource() {
     }
 
     // ========================= Search =========================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val trimmed = query.trim()
-        val mangaSlug = (trimmed.toHttpUrlOrNull() ?: "https://$trimmed".toHttpUrlOrNull())
-            ?.takeIf { isSupportedDeeplink(it) }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val mangaSlug = url.takeIf { isSupportedDeeplink(it) }
             ?.pathSegments
             ?.getOrNull(1)
             ?.takeIf { it.isNotBlank() }
+            ?: return null
 
-        if (mangaSlug != null) {
-            return GET(mangaUrlFromSlug(mangaSlug), headers)
-        }
+        return parseMangaDetails(client.get(mangaUrlFromSlug(mangaSlug)).asJsoup())
+    }
 
-        val selectedGenres = filters.filterIsInstance<GenreFilter>()
-            .firstOrNull()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val selectedGenres = filters.firstInstanceOrNull<GenreFilter>()
             ?.state
             ?.filter { it.state }
             ?.map { it.value }
             .orEmpty()
 
-        val selectedType = filters.filterIsInstance<TypeFilter>()
-            .firstOrNull()
+        val selectedType = filters.firstInstanceOrNull<TypeFilter>()
             ?.toUriPart()
             ?.takeIf(String::isNotBlank)
 
@@ -101,20 +88,16 @@ abstract class LeerMangaEsp : HttpSource() {
             genres = selectedGenres,
         )
 
-        return GET(url, headers)
-    }
+        val dto = client.get(url).parseAs<MangaListDto>()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val requestPath = response.request.url.encodedPath
-        return if (requestPath.startsWith(MANGA_PATH_PREFIX)) {
-            MangasPage(listOf(parseMangaDetails(response.asJsoup())), false)
-        } else {
-            parseSearchMangaPage(response)
-        }
+        return MangasPage(
+            mangas = dto.resultados.mapNotNull { it.toSManga(imageBaseUrl) },
+            hasNextPage = dto.page < dto.totalPages,
+        )
     }
 
     // ========================= Filters =========================
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         TypeFilter(),
         GenreFilter(),
     )
@@ -122,13 +105,40 @@ abstract class LeerMangaEsp : HttpSource() {
     // ========================= Details =========================
     override fun getMangaUrl(manga: SManga): String = mangaUrlFromSlug(manga.url).toString()
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(mangaUrlFromSlug(manga.url), headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        var document = client.get(mangaUrlFromSlug(manga.url)).asJsoup()
+        val details = parseMangaDetails(document)
 
-    override fun mangaDetailsParse(response: Response): SManga = parseMangaDetails(response.asJsoup())
+        if (!fetchChapters) return SMangaUpdate(details, chapters)
+
+        val seen = linkedSetOf<String>()
+        val chapterList = mutableListOf<SChapter>()
+
+        while (true) {
+            document.parseChapterPage().forEach { chapter ->
+                if (seen.add(chapter.url)) {
+                    chapterList += chapter
+                }
+            }
+
+            val nextUrl = document.selectFirst("#more-link")
+                ?.attr("href")
+                ?.takeIf(String::isNotBlank)
+                ?.let { document.location().toHttpUrl().resolve(it) }
+                ?: break
+
+            document = client.get(nextUrl).asJsoup()
+        }
+
+        return SMangaUpdate(details, chapterList)
+    }
 
     // ========================= Chapters =========================
-    override fun chapterListRequest(manga: SManga): Request = GET(mangaUrlFromSlug(manga.url), headers)
-
     override fun getChapterUrl(chapter: SChapter): String {
         val chapterPath = chapter.url.toHttpUrlOrNull()?.encodedPath
             ?: chapter.url
@@ -143,46 +153,13 @@ abstract class LeerMangaEsp : HttpSource() {
             .toString()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val seen = linkedSetOf<String>()
-        val chapters = mutableListOf<SChapter>()
-
-        var currentUrl = response.request.url
-        var currentDocument = response.asJsoup()
-
-        while (true) {
-            currentDocument.parseChapterPage().forEach { chapter ->
-                if (seen.add(chapter.url)) {
-                    chapters += chapter
-                }
-            }
-
-            val nextUrl = currentDocument.selectFirst("#more-link")
-                ?.attr("href")
-                ?.takeIf(String::isNotBlank)
-                ?.let { currentUrl.resolve(it) }
-                ?: break
-
-            client.newCall(GET(nextUrl, headers)).execute().use { nextResponse ->
-                currentUrl = nextResponse.request.url
-                currentDocument = nextResponse.asJsoup()
-            }
-        }
-
-        return chapters
-    }
-
     // ========================= Pages =========================
-    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("#cascade-view img.manga-image").mapIndexed { i, img ->
             Page(i, "", img.attr("abs:src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun searchApiUrl(page: Int, query: String?, type: String?, genres: List<String>): HttpUrl = baseUrl.toHttpUrl().newBuilder()
         .addPathSegment("api")
@@ -229,20 +206,6 @@ abstract class LeerMangaEsp : HttpSource() {
         }
     }
 
-    private fun parseChapterDate(dateText: String?): Long = chapterDateFormat.tryParse(dateText?.trim())
-
-    private fun parseSearchMangaPage(response: Response): MangasPage {
-        val dto = response.parseAs<MangaListDto>()
-
-        val mangas = dto.resultados
-            .mapNotNull { it.toSManga(imageBaseUrl) }
-
-        return MangasPage(
-            mangas = mangas,
-            hasNextPage = dto.page < dto.total_pages,
-        )
-    }
-
     private fun Document.parseChapterPage(): List<SChapter> {
         return select("#chapter-list a.chapter-link").mapNotNull { element ->
             val href = element.attr("href")
@@ -266,7 +229,7 @@ abstract class LeerMangaEsp : HttpSource() {
             SChapter.create().apply {
                 url = chapterPath
                 name = chapterName
-                date_upload = parseChapterDate(element.selectFirst(".chapter-date")?.text())
+                date_upload = chapterDateFormat.tryParseDate(element.selectFirst(".chapter-date")?.text()?.trim())
             }
         }
     }

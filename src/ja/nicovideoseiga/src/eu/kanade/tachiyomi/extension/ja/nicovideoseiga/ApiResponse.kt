@@ -78,7 +78,7 @@ class Manga(
         @SerialName("serial_status")
         val serialStatus: String,
         @SerialName("square_image_url")
-        val thumbnailUrl: String,
+        val thumbnailUrl: String? = null,
     )
 
     fun toSManga() = SManga.create().apply {

@@ -4,16 +4,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import kotlin.time.Instant
 
 @Serializable
-internal data class MangaDto(
-    val id: String,
-    val title: String,
-    val slug: String,
-    val description: String? = null,
-    val status: String? = null,
-    val coverImage: String? = null,
+internal class MangaDto(
+    private val title: String,
+    private val slug: String,
+    private val description: String? = null,
+    private val status: String? = null,
+    private val coverImage: String? = null,
     val chapters: List<ChapterDto>? = null,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
@@ -30,36 +29,40 @@ internal data class MangaDto(
 }
 
 @Serializable
-internal data class ChapterDto(
-    val id: String,
-    val title: String,
-    val chapterNumber: Float? = null,
-    val createdAt: String? = null,
+internal class ChapterDto(
+    private val id: String,
+    private val title: String,
+    private val chapterNumber: Float? = null,
+    private val createdAt: String? = null,
     val pages: List<PageDto>? = null,
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter() = SChapter.create().apply {
         url = "/chapter/$id"
         name = chapterNumber?.let { "Capítulo ${it.formatNumber()}" } ?: this@ChapterDto.title
         chapter_number = this@ChapterDto.chapterNumber ?: 0f
-        date_upload = createdAt?.let { dateFormat.tryParse(it) } ?: 0L
+        date_upload = Instant.tryParse(createdAt)
     }
 
     private fun Float.formatNumber(): String = if (this % 1 == 0f) this.toInt().toString() else this.toString()
 }
 
 @Serializable
-internal data class PageDto(
-    val id: String? = null,
+internal class PageDto(
     val imageUrl: String? = null,
-    val pageNumber: Int? = null,
 )
 
 @Serializable
-internal data class LoginResponse(
+internal class LoginRequest(
+    private val email: String,
+    private val password: String,
+)
+
+@Serializable
+internal class LoginResponse(
     val token: String,
 )
 
 @Serializable
-internal data class MangaListResponse(
+internal class MangaListResponse(
     val data: List<MangaDto>,
 )

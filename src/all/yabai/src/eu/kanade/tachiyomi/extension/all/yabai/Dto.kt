@@ -3,16 +3,14 @@ package eu.kanade.tachiyomi.extension.all.yabai
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
-private val createdAtFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+private val createdAtFormat = DateTimeFormatter.ofPattern("yyyy-M-d HH:mm", Locale.ENGLISH)
 
 @Serializable
 class QueryDto(
@@ -105,7 +103,7 @@ class Tag(
 class PostDate(
     @SerialName("default") private val default: String,
 ) {
-    fun toDate(): Long = createdAtFormat.tryParse(default)
+    fun toDate(): Long = createdAtFormat.tryParseDateTime(default, ZoneOffset.UTC)
 }
 
 @Serializable

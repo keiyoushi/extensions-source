@@ -5,18 +5,17 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 
 @Source
-abstract class GunnerkriggCourt : HttpSource() {
+abstract class GunnerkriggCourt : KeiSource() {
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val manga = SManga.create().apply {
             title = name
             artist = "Tom Siddell"
@@ -33,17 +32,24 @@ abstract class GunnerkriggCourt : HttpSource() {
             thumbnail_url = "https://i.imgur.com/g2ukAIKh.jpg"
         }
 
-        return Observable.just(MangasPage(listOf(manga), false))
+        return MangasPage(listOf(manga), false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        return document.select("div.chapters option[value~=\\d*]").map { element ->
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val chapterList = document.select("div.chapters option[value~=\\d*]").map { element ->
             SChapter.create().apply {
                 val chapterNumStr = element.attr("value")
                 chapter_number = chapterNumStr.toFloatOrNull() ?: -1f
@@ -53,29 +59,15 @@ abstract class GunnerkriggCourt : HttpSource() {
                 name = "$title (${if (chapter_number >= 0f) chapter_number.toInt() else chapterNumStr})"
             }
         }.reversed()
+
+        return SMangaUpdate(manga, chapterList)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
         return document.select(".comic_image").mapIndexed { i, element ->
             Page(i, imageUrl = element.absUrl("src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 }

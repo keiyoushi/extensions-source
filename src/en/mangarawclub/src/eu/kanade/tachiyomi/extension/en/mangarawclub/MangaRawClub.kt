@@ -2,68 +2,79 @@ package eu.kanade.tachiyomi.extension.en.mangarawclub
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-private val DATE_FORMATTER = SimpleDateFormat("MMMM dd, yyyy, h:mm a", Locale.ENGLISH)
-private val DATE_FORMATTER_2 = SimpleDateFormat("MMMM dd, yyyy, h a", Locale.ENGLISH)
+// Site uses AP style months ("Sept.", "March") and optional minutes ("3 p.m.")
+private val DATE_FORMATTER: DateTimeFormatter = DateTimeFormatterBuilder()
+    .parseCaseInsensitive()
+    .appendPattern("[MMMM][MMM] d, yyyy, h[:mm] a")
+    .toFormatter(Locale.ENGLISH)
 
 @Source
 abstract class MangaRawClub :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
-    override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(10.seconds)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(10.seconds)
         .readTimeout(30.seconds)
-        .build()
 
     private val preferences by getPreferencesLazy()
     private fun nsfw() = preferences.getBoolean(PREF_HIDE_NSFW, false)
 
     // ============================== Popular ==============================
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/browse-comics/data/?page=$page&sort=popular_all_time&safe_mode=${if (nsfw()) "1" else "0"}", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = browseMangaList("$baseUrl/browse-comics/data/?page=$page&sort=popular_all_time&safe_mode=${if (nsfw()) "1" else "0"}".toHttpUrl())
 
     // ============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/browse-comics/data/?page=$page&sort=latest&safe_mode=${if (nsfw()) "1" else "0"}", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = browseMangaList("$baseUrl/browse-comics/data/?page=$page&sort=latest&safe_mode=${if (nsfw()) "1" else "0"}".toHttpUrl())
 
     // ============================== Search ===============================
-    override fun getFilterList(): FilterList = getFilters()
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         // Fallback directly to autocomplete query if only search term is provided
-        if (query.isNotBlank() && (filters.isEmpty() || filters.all { it.isDefault() })) {
+        if (query.isNotBlank() && filters.all { it.isDefault() }) {
             val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
                 addQueryParameter("search", query.trim())
                 addQueryParameter("results", page.toString())
             }.build()
 
-            return GET(url, headers)
+            val document = client.get(url).asJsoup()
+            val mangas = document.select(".novel-item").map { element ->
+                SManga.create().apply {
+                    title = element.selectFirst(".novel-title")!!.text()
+                    thumbnail_url = element.selectFirst(".novel-cover img")?.let {
+                        it.absUrl("data-src").ifEmpty { it.absUrl("src") }
+                    }
+                    setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                }
+            }
+            val hasNextPage = document.selectFirst("nav.paging a:contains(Next)") != null
+            return MangasPage(mangas, hasNextPage)
         }
 
         val url = "$baseUrl/browse-comics/data/".toHttpUrl().newBuilder().apply {
@@ -120,26 +131,11 @@ abstract class MangaRawClub :
             addQueryParameter("q", query)
         }.build()
 
-        return GET(url, headers)
+        return browseMangaList(url)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.contains("search")) {
-            val document = response.asJsoup()
-            val mangas = document.select(".novel-item").map { element ->
-                SManga.create().apply {
-                    title = element.selectFirst(".novel-title")!!.text()
-                    thumbnail_url = element.selectFirst(".novel-cover img")?.let {
-                        it.absUrl("data-src").ifEmpty { it.absUrl("src") }
-                    }
-                    setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-                }
-            }
-            val hasNextPage = document.selectFirst("nav.paging a:contains(Next)") != null
-            return MangasPage(mangas, hasNextPage)
-        }
-
-        val data = response.parseAs<Dto>()
+    private suspend fun browseMangaList(url: HttpUrl): MangasPage {
+        val data = client.get(url).parseAs<Dto>()
         val document = Jsoup.parseBodyFragment(data.html, baseUrl)
         val mangas = document.select(".comic-card").map { searchMangaFromElement(it) }
 
@@ -155,10 +151,24 @@ abstract class MangaRawClub :
     }
 
     // ============================== Details ==============================
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = if (fetchDetails) async { fetchMangaDetails(manga) } else null
+        val chapterList = if (fetchChapters) async { fetchChapterList(manga) } else null
+
+        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+    }
+
+    private suspend fun fetchMangaDetails(manga: SManga): SManga = SManga.create().apply {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         document.selectFirst(".novel-header") ?: throw Exception("Page not found")
 
+        url = manga.url
+        title = manga.title
         author = document.selectFirst(".author a")?.attr("title")?.trim()?.takeIf { it.lowercase() != "updating" }
 
         description = buildString {
@@ -206,10 +216,8 @@ abstract class MangaRawClub :
     }
 
     // ============================= Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url + "all-chapters/", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val document = client.get(baseUrl + manga.url + "all-chapters/").asJsoup()
         return document.select("ul.chapter-list > li").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
@@ -225,20 +233,18 @@ abstract class MangaRawClub :
     private fun parseChapterDate(string: String?): Long {
         if (string.isNullOrEmpty()) return 0L
         val date = string.replace(".", "").replace("Sept", "Sep")
-        return DATE_FORMATTER.tryParse(date).takeIf { it != 0L } ?: DATE_FORMATTER_2.tryParse(date)
+        return DATE_FORMATTER.tryParseDateTime(date)
     }
 
     // =============================== Pages ===============================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("#chapter-reader img")
             .filterNot { it.absUrl("src").contains("credits-mgeko.png") }
             .mapIndexed { i, img ->
                 Page(i, imageUrl = img.absUrl("src"))
             }
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // ============================= Utilities =============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

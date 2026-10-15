@@ -2,27 +2,28 @@ package eu.kanade.tachiyomi.extension.zh.miaoqu
 
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMSWeb
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
+import eu.kanade.tachiyomi.multisrc.mccms.mobileUrl
+import eu.kanade.tachiyomi.multisrc.mccms.pcHeaders
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import rx.Observable
 import kotlin.experimental.xor
 
 // This site shares the same database with 6Manhua (SixMH), but uses manga slug as URL.
 @Source
 abstract class Miaoqu : MCCMSWeb() {
     override fun parseListing(document: Document): MangasPage {
-        // There's no genre list to parse, so we fetch genres from mobile page in getFilterList()
+        // There's no genre list to parse, so we fetch genres from mobile page in fetchGenresPage()
         val entries = document.selectFirst("#mangawrap")!!.children().map { element ->
             SManga.create().apply {
                 val img = element.child(0)
@@ -39,19 +40,17 @@ abstract class Miaoqu : MCCMSWeb() {
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters)).asObservable().map { response ->
-        if (response.code == 404) {
-            response.close()
-            throw Exception("服务器错误，无法搜索")
-        }
-        searchMangaParse(response)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = try {
+        super.getSearchMangaList(page, query, filters)
+    } catch (e: HttpException) {
+        if (e.message?.contains("404") == true) throw Exception("服务器错误，无法搜索")
+        throw e
     }
 
     // Use mobile page
-    override fun mangaDetailsRequest(manga: SManga) = GET(getMangaUrl(manga), headers)
+    override suspend fun fetchMangaPage(manga: SManga): Document = client.get(getMangaUrl(manga)).asJsoup()
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         description = document.selectFirst(".text")!!.text()
 
         val infobox = document.selectFirst(".infobox")!!
@@ -68,12 +67,10 @@ abstract class Miaoqu : MCCMSWeb() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga) = GET(getMangaUrl(manga), headers)
-
     override fun chapterListSelector() = "ul.list > li"
 
     // Might return HTTP 500 with page data
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter)).asObservable().map(::pageListParse)
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url, pcHeaders, ensureSuccess = false))
 
     override fun pageListParse(response: Response): List<Page> {
         val cid = response.request.url.pathSegments.last().removeSuffix(".html").toInt()
@@ -103,10 +100,7 @@ abstract class Miaoqu : MCCMSWeb() {
     @Serializable
     private class Image(val url: String)
 
-    override fun getFilterList(): FilterList {
-        config.genreData.fetchGenres(this)
-        return super.getFilterList()
-    }
+    override suspend fun fetchGenresPage(): Document = client.get("${baseUrl.mobileUrl()}/category/").asJsoup()
 }
 
 private fun String.substringBetween(left: String, right: Char): String {

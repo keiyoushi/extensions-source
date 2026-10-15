@@ -1,41 +1,18 @@
 package eu.kanade.tachiyomi.extension.ar.mangalek
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
 import keiyoushi.annotation.Source
-import okhttp3.Request
-import org.jsoup.nodes.Document
-import java.text.ParseException
-import java.text.SimpleDateFormat
+import keiyoushi.utils.tryParseDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class Mangalek : Madara() {
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val chapterUrlSuffix = ""
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("ar"))
+    private val formatTwo = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
 
-    private val formatTwo = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-
-    override fun parseChapterDate(date: String?): Long {
-        date ?: return 0L
-
-        return try {
-            dateFormat.parse(date)!!.time
-        } catch (_: ParseException) {
-            try {
-                formatTwo.parse(date)!!.time
-            } catch (_: ParseException) {
-                0L
-            }
-        }
-    }
-
-    override fun genresRequest(): Request = GET("$baseUrl/$mangaSubString/", headers)
-
-    override fun parseGenres(document: Document): List<Genre> = document.selectFirst("div.genres")
-        ?.select("a")
-        .orEmpty()
-        .map { a -> Genre(a.ownText()) }
+    override fun parseChapterDate(date: String?) = chapterDateFormat.tryParseDate(date).takeIf {
+        it != 0L
+    } ?: formatTwo.tryParseDate(date)
 }

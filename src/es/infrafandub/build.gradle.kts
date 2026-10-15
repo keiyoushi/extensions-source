@@ -6,10 +6,10 @@ plugins {
 
 keiyoushi {
     name = "InfraFandub"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "madara"
 
     source {
         lang = "es"

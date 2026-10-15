@@ -35,3 +35,18 @@ class TypeFilter(
 class StatusFilter(
     statuses: Map<String, String>,
 ) : MultiSelectFilter("Status", "status", statuses)
+
+class TagFilter(
+    tags: Map<String, String>,
+) : MultiSelectFilter("Genres", "tag[]", tags)
+
+class SelectFilter(
+    name: String,
+    private val param: String,
+    private val options: List<Pair<String, String>>,
+) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
+
+    fun addToUri(builder: HttpUrl.Builder) {
+        if (state != 0) builder.addQueryParameter(param, options[state].second)
+    }
+}

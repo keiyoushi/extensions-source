@@ -1,31 +1,28 @@
 package eu.kanade.tachiyomi.extension.all.simplyhentai
 
-import android.net.Uri
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
-import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.time.Instant
 
 @Source
 abstract class SimplyHentai :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val langName: String
         get() = when (lang) {
@@ -44,120 +41,112 @@ abstract class SimplyHentai :
 
     private val apiUrl = "https://api.simply-hentai.com/v3"
 
-    private val json: Json by injectLazy()
-
     private val preferences by getPreferencesLazy()
 
-    override fun popularMangaRequest(page: Int) = Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
-        appendQueryParameter("type", "language")
-        appendQueryParameter("page", page.toString())
-        GET(build().toString(), headers)
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = getLanguageList(page, null)
 
-    override fun popularMangaParse(response: Response) = response.decode<SHList<SHDataAlbum>>().run {
-        MangasPage(
-            data.albums.map(SHObject::toSManga),
-            pagination.next != null,
-        )
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getLanguageList(page, "newest")
 
-    override fun latestUpdatesRequest(page: Int) = Uri.parse("$apiUrl/tag/$langName").buildUpon().run {
-        appendQueryParameter("type", "language")
-        appendQueryParameter("page", page.toString())
-        appendQueryParameter("sort", "newest")
-        GET(build().toString(), headers)
-    }
+    private suspend fun getLanguageList(page: Int, sort: String?): MangasPage {
+        val url = "$apiUrl/tag/$langName".toHttpUrl().newBuilder().apply {
+            addQueryParameter("type", "language")
+            addQueryParameter("page", page.toString())
+            sort?.let { addQueryParameter("sort", it) }
+        }.build()
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = Uri.parse("$apiUrl/search/complex").buildUpon().run {
-        appendQueryParameter("query", query)
-        appendQueryParameter("page", page.toString())
-        appendQueryParameter("blacklist", blacklist)
-        appendQueryParameter("filter[language][0]", langName.replaceFirstChar(Char::uppercase))
-        filters.forEach { filter ->
-            when (filter) {
-                is SortFilter -> {
-                    appendQueryParameter("sort", filter.orders[filter.state])
-                }
-
-                is SeriesFilter -> filter.value?.also {
-                    appendQueryParameter("filter[series_title][0]", it)
-                }
-
-                is TagsFilter -> filter.value?.forEachIndexed { idx, tag ->
-                    appendQueryParameter("filter[tags][$idx]", tag.trim())
-                }
-
-                is ArtistsFilter -> filter.value?.forEachIndexed { idx, tag ->
-                    appendQueryParameter("filter[artists][$idx]", tag.trim())
-                }
-
-                is TranslatorsFilter -> filter.value?.forEachIndexed { idx, tag ->
-                    appendQueryParameter("filter[translators][$idx]", tag.trim())
-                }
-
-                is CharactersFilter -> filter.value?.forEachIndexed { idx, tag ->
-                    appendQueryParameter("filter[characters][$idx]", tag.trim())
-                }
-
-                else -> {}
-            }
+        return client.get(url).parseAs<SHList<SHDataAlbum>>().run {
+            MangasPage(
+                data.albums.map(SHObject::toSManga),
+                pagination.next != null,
+            )
         }
-        GET(build().toString(), headers)
     }
 
-    override fun searchMangaParse(response: Response) = response.decode<SHList<List<SHWrapper>>>().run {
-        MangasPage(
-            data.map { it.`object`.toSManga() },
-            pagination.next != null,
-        )
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$apiUrl/search/complex".toHttpUrl().newBuilder().apply {
+            addQueryParameter("query", query)
+            addQueryParameter("page", page.toString())
+            addQueryParameter("blacklist", blacklist)
+            addQueryParameter("filter[language][0]", langName.replaceFirstChar(Char::uppercase))
+            filters.forEach { filter ->
+                when (filter) {
+                    is SortFilter -> {
+                        addQueryParameter("sort", filter.orders[filter.state])
+                    }
 
-    override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
+                    is SeriesFilter -> filter.value?.also {
+                        addQueryParameter("filter[series_title][0]", it)
+                    }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val album = response.decode<SHAlbum>().data
-        url = album.path
-        title = album.title
-        description = buildString {
-            if (!album.description.isNullOrEmpty()) {
-                append(album.description, "\n\n")
+                    is TagsFilter -> filter.value?.forEachIndexed { idx, tag ->
+                        addQueryParameter("filter[tags][$idx]", tag.trim())
+                    }
+
+                    is ArtistsFilter -> filter.value?.forEachIndexed { idx, tag ->
+                        addQueryParameter("filter[artists][$idx]", tag.trim())
+                    }
+
+                    is TranslatorsFilter -> filter.value?.forEachIndexed { idx, tag ->
+                        addQueryParameter("filter[translators][$idx]", tag.trim())
+                    }
+
+                    is CharactersFilter -> filter.value?.forEachIndexed { idx, tag ->
+                        addQueryParameter("filter[characters][$idx]", tag.trim())
+                    }
+
+                    else -> {}
+                }
             }
-            append("Series: ", album.series.title, "\n")
-            album.characters.joinTo(this, prefix = "Characters: ") { it.title }
+        }.build()
+
+        return client.get(url).parseAs<SHList<List<SHWrapper>>>().run {
+            MangasPage(
+                data.map { it.`object`.toSManga() },
+                pagination.next != null,
+            )
         }
-        thumbnail_url = album.preview.sizes.thumb
-        genre = album.tags.joinToString { it.title }
-        artist = album.artists.joinToString { it.title }
-        author = artist
-        initialized = true
     }
 
-    override fun chapterListRequest(manga: SManga) = Uri.parse("$apiUrl/manga").buildUpon().run {
-        appendEncodedPath(manga.url.split('/')[2])
-        GET(build().toString(), headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val album = client.get("$apiUrl/manga/${manga.url.split('/')[2]}").parseAs<SHAlbum>().data
+
+        val updatedManga = manga.apply {
+            url = album.path
+            title = album.title
+            description = buildString {
+                if (!album.description.isNullOrEmpty()) {
+                    append(album.description, "\n\n")
+                }
+                append("Series: ", album.series.title, "\n")
+                album.characters.joinTo(this, prefix = "Characters: ") { it.title }
+            }
+            thumbnail_url = album.preview.sizes.thumb
+            genre = album.tags.joinToString { it.title }
+            artist = album.artists.joinToString { it.title }
+            author = artist
+        }
+
+        val chapter = SChapter.create().apply {
+            name = "Chapter"
+            url = "${album.path}/all-pages"
+            scanlator = album.translators.joinToString { it.title }
+            date_upload = Instant.tryParse(album.createdAt)
+        }
+
+        return SMangaUpdate(updatedManga, listOf(chapter))
     }
 
-    override fun chapterListParse(response: Response) = SChapter.create().apply {
-        val album = response.decode<SHAlbum>().data
-        name = "Chapter"
-        url = "${album.path}/all-pages"
-        scanlator = album.translators.joinToString { it.title }
-        date_upload = dateFormat.parse(album.created_at)?.time ?: 0L
-    }.let(::listOf)
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/manga/${chapter.url.split('/')[2]}/pages")
+        .parseAs<SHAlbumPages>().data.pages.map {
+            Page(it.pageNum, "", it.sizes.full)
+        }
 
-    override fun pageListRequest(chapter: SChapter) = Uri.parse("$apiUrl/manga").buildUpon().run {
-        appendEncodedPath(chapter.url.split('/')[2])
-        appendEncodedPath("pages")
-        GET(build().toString(), headers)
-    }
-
-    override fun pageListParse(response: Response) = response.decode<SHAlbumPages>().data.pages.map {
-        Page(it.page_num, "", it.sizes.full)
-    }
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         SeriesFilter(),
         Note("tags"),
@@ -184,13 +173,4 @@ abstract class SimplyHentai :
 
     private inline val blacklist: String
         get() = preferences.getString("blacklist", "")!!
-
-    private inline fun <reified T> Response.decode(): T = json.decodeFromStream(body.byteStream())
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    companion object {
-        private val dateFormat =
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ROOT)
-    }
 }

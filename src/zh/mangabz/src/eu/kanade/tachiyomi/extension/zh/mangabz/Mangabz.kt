@@ -1,28 +1,31 @@
 package eu.kanade.tachiyomi.extension.zh.mangabz
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.SubstringExtractor
 import keiyoushi.lib.unpacker.Unpacker
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Response
-import org.jsoup.nodes.Document
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import org.jsoup.select.Evaluator
-import rx.Observable
 
 @Source
 abstract class Mangabz :
@@ -38,19 +41,14 @@ abstract class Mangabz :
         }
 
     private val preferences by getPreferencesLazy()
-    override val client by lazy {
-        network.client.newBuilder()
-            .addCookie { listOf(mirror.langCookie to preferences.lang) }
-            .rateLimit(5)
-            .build()
-    }
+
+    override fun OkHttpClient.Builder.configureClient() = addCookie { listOf(mirror.langCookie to preferences.lang) }
+        .rateLimit(5)
 
     private val urlSuffix: String
         get() = mirror.urlSuffix
 
-    override fun headersBuilder() = Headers.Builder()
-        .add("Referer", baseUrl)
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
+    override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0")
 
     private fun SManga.stripMirror() = apply {
         val old = url
@@ -64,40 +62,51 @@ abstract class Mangabz :
         append(old, 0, old.length - 3).append(urlSuffix)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (MIRRORS.none { it.domain == url.host }) {
-                throw Exception("Unsupported url")
-            }
-            val titleId = url.pathSegments[0]
-            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$titleId", filters)
-        }
-        if (query.isEmpty()) {
-            val ids = parseFilterList(filters)
-            if (ids.isEmpty()) return fetchPopularManga(page)
-
-            return client.newCall(GET("$baseUrl/manga-list-$ids-p$page/", headers))
-                .asObservableSuccess().map(::searchMangaParse)
-        }
-
-        val path = when {
-            query.startsWith(PREFIX_ID_SEARCH) -> query.removePrefix(PREFIX_ID_SEARCH)
-            query.startsWith(baseUrl) -> query.removePrefix(baseUrl).trim('/')
-            else -> return super.fetchSearchManga(page, query, filters)
-        }
-        val mirrorPath = "$path/".toMirror()
-
-        return client.newCall(GET("$baseUrl/$mirrorPath", headers))
-            .asObservableSuccess().map { MangasPage(listOf(mangaDetailsParse(it)), false) }
-    }
-
-    override fun searchMangaParse(response: Response) = super.searchMangaParse(response).apply {
+    private suspend fun getMangaList(url: String): MangasPage = parseMangaList(client.get(url).asJsoup()).apply {
         for (manga in mangas) manga.stripMirror()
     }
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url.toMirror(), headers)
-    override fun mangaDetailsParse(response: Response) = super.mangaDetailsParse(response).stripMirror()
+    override suspend fun getPopularManga(page: Int) = getMangaList("$baseUrl/manga-list-p$page/")
+
+    override suspend fun getLatestUpdates(page: Int) = getMangaList("$baseUrl/manga-list-0-0-2-p$page/")
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (MIRRORS.none { it.domain == url.host }) return null
+        val titleId = url.pathSegments[0]
+        val mirrorPath = "$titleId/".toMirror()
+
+        val document = client.get("$baseUrl/$mirrorPath").asJsoup()
+        return SManga.create().apply {
+            this.url = document.location().removePrefix(baseUrl)
+            parseDetails(document)
+        }.stripMirror()
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isEmpty()) {
+            val ids = parseFilterList(filters)
+            if (ids.isEmpty()) return getPopularManga(page)
+
+            return getMangaList("$baseUrl/manga-list-$ids-p$page/")
+        }
+
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            .addQueryParameter("title", query)
+            .addQueryParameter("page", page.toString())
+            .build()
+        return getMangaList(url.toString())
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url.toMirror()).asJsoup()
+        manga.parseDetails(document)
+        return SMangaUpdate(manga, parseChapterList(document))
+    }
 
     override fun parseDescription(element: Element, title: String, details: Elements): String {
         val text = element.ownText()
@@ -107,20 +116,15 @@ abstract class Mangabz :
         return start + collapsed
     }
 
-    override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url.toMirror(), headers)
-
     override fun parseDate(listTitle: String) = parseDateInternal(listTitle.substringAfterLast(", "))
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.removePrefix("/m").removeSuffix("/")
         val pageCount = chapter.name.substringAfterLast('（').removeSuffix("P）").toInt()
         val prefix = "$baseUrl${chapter.url}chapterimage.ashx?cid=$chapterId&page="
         // 1 request returns 2 pages, or 15 if server cache is ready, so we manually cache them below
-        val list = List(pageCount) { Page(it, "$prefix${it + 1}#$pageCount") }
-        return Observable.just(list)
+        return List(pageCount) { Page(it, "$prefix${it + 1}#$pageCount") }
     }
-
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
     // key is chapterId, value[0] is URL prefix, value[1..pageCount] are paths
     private val imageUrlCache = object : LinkedHashMap<Int, Array<String?>>() {
@@ -128,7 +132,7 @@ abstract class Mangabz :
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Array<String?>>?) = size > 10
     }
 
-    override fun fetchImageUrl(page: Page): Observable<String> {
+    override suspend fun getImageUrl(page: Page): String {
         val url = page.url.toHttpUrl()
 
         var cache: Array<String?>? = null
@@ -137,38 +141,30 @@ abstract class Mangabz :
             val chapterId = url.queryParameter("cid")!!.toInt()
             val realCache = imageUrlCache.getOrPut(chapterId) { arrayOfNulls(pageCount + 1) }
             val path = realCache[page.index + 1]
-            if (path != null) return Observable.just(realCache[0]!! + path)
+            if (path != null) return realCache[0]!! + path
             cache = realCache
         }
 
-        return client.newCall(GET(page.url, headers)).asObservableSuccess().map {
-            val script = Unpacker.unpack(it.body.string())
-            val parser = SubstringExtractor(script)
-            val prefix = parser.substringBetween("pix=\"", "\"")
-            // 2 pages, or 15 if server cache is ready
-            val paths = parser.substringBetween("[\"", "\"]").split("\",\"")
-            val pageNumber = page.index + 1
-            cache?.run {
-                this[0] = prefix
-                for ((offset, path) in paths.withIndex()) this[pageNumber + offset] = path
-            }
-            prefix + paths[0]
+        val script = client.get(page.url).use { Unpacker.unpack(it.body.string()) }
+        val parser = SubstringExtractor(script)
+        val prefix = parser.substringBetween("pix=\"", "\"")
+        // 2 pages, or 15 if server cache is ready
+        val paths = parser.substringBetween("[\"", "\"]").split("\",\"")
+        val pageNumber = page.index + 1
+        cache?.run {
+            this[0] = prefix
+            for ((offset, path) in paths.withIndex()) this[pageNumber + offset] = path
         }
+        return prefix + paths[0]
     }
 
-    var categories = emptyList<CategoryData>()
+    override val supportsFilterFetching get() = true
 
-    override fun parseFilters(document: Document) {
-        if (categories.isEmpty()) categories = parseCategories(document)
-    }
+    override suspend fun fetchFilterData(): JsonElement = parseCategories(client.get("$baseUrl/manga-list-p1/").asJsoup()).toJsonElement()
 
-    override fun getFilterList() = getFilterListInternal(categories)
+    override fun getFilterList(data: JsonElement?) = getFilterListInternal(data?.parseAs<List<CategoryData>>())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         getPreferencesInternal(screen.context).forEach(screen::addPreference)
-    }
-
-    companion object {
-        const val PREFIX_ID_SEARCH = "id:"
     }
 }

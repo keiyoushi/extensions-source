@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.photos18
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,39 +9,48 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
-import okhttp3.Headers
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
-import rx.Observable
 
 @Source
 abstract class Photos18 :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
 
     private val baseUrlWithLang get() = if (useTrad) baseUrl else "$baseUrl/zh-hans"
     private fun String.stripLang() = removePrefix("/zh-hans")
 
-    override val client = network.client.newBuilder().followRedirects(false).build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = followRedirects(false)
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("Referer", baseUrl)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrlWithLang/sort/views?page=$page").asJsoup())
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrlWithLang/?page=$page").asJsoup())
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = baseUrlWithLang.toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("page", page.toString())
+
+        for (filter in filters) {
+            if (filter is QueryFilter) filter.addQueryTo(url)
+        }
+
+        return parseMangaList(client.get(url.build()).asJsoup())
     }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrlWithLang/sort/views?page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        parseCategories(document)
+    private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.selectFirst(Evaluator.Id("videos"))!!.children().map {
             val cardBody = it.selectFirst(Evaluator.Class("card-body"))!!
             val link = cardBody.selectFirst(Evaluator.Tag("a"))!!
@@ -61,57 +69,50 @@ abstract class Photos18 :
         return MangasPage(mangas, !isLastPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrlWithLang/?page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrlWithLang.toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .addQueryParameter("page", page.toString())
-
-        for (filter in filters) {
-            if (filter is QueryFilter) filter.addQueryTo(url)
-        }
-
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         val chapter = SChapter.create().apply {
             url = manga.url
             name = "Gallery"
             chapter_number = 0f
         }
-        return Observable.just(listOf(chapter))
+        return SMangaUpdate(manga, listOf(chapter))
     }
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val images = document.selectFirst(Evaluator.Id("content"))!!.select(Evaluator.Tag("img"))
         return images.mapIndexed { index, image ->
             Page(index, imageUrl = image.attr("src"))
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override val supportsFilterFetching get() = true
 
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        if (categories.isEmpty()) {
-            Filter.Header("Tap 'Reset' to load categories")
-        } else {
-            CategoryFilter(categories)
-        },
-    )
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrlWithLang/").asJsoup()
+        val items = document.selectFirst(Evaluator.Id("w2"))!!.children()
+        return buildList(items.size + 1) {
+            add(Pair("All", ""))
+            items.mapTo(this) {
+                val value = it.text().substringBefore(" (")
+                val queryValue = it.selectFirst(Evaluator.Tag("a"))!!.attr("href").substringAfterLast('/')
+                Pair(value, queryValue)
+            }
+        }.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = mutableListOf<Filter<*>>(SortFilter())
+        data?.parseAs<List<Pair<String, String>>>()?.also {
+            filters.add(CategoryFilter(it))
+        }
+        return FilterList(filters)
+    }
 
     private open class QueryFilter(
         name: String,
@@ -139,21 +140,6 @@ abstract class Photos18 :
             "category_id",
             categories.map { it.second }.toTypedArray(),
         )
-
-    private var categories: List<Pair<String, String>> = emptyList()
-
-    private fun parseCategories(document: Document) {
-        if (categories.isNotEmpty()) return
-        val items = document.selectFirst(Evaluator.Id("w3"))!!.children()
-        categories = buildList(items.size + 1) {
-            add(Pair("All", ""))
-            items.mapTo(this) {
-                val value = it.text().substringBefore(" (")
-                val queryValue = it.selectFirst(Evaluator.Tag("a"))!!.attr("href").substringAfterLast('/')
-                Pair(value, queryValue)
-            }
-        }
-    }
 
     private val preferences by getPreferencesLazy()
 

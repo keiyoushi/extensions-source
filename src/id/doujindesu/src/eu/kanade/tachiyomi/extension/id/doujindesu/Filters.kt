@@ -30,7 +30,7 @@ class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
 class StatusList(statuses: Array<Status>) : Filter.Select<Status>("Status", statuses, 0)
 
 val orderBy = arrayOf(
-    Order("Semua", ""),
+    Order("Update Terbaru", "latest_chapter"),
     Order("Baru Ditambahkan", "newest"),
     Order("Terlama", "oldest"),
     Order("Populer", "rating"),
@@ -39,8 +39,9 @@ val orderBy = arrayOf(
 
 val statusList = arrayOf(
     Status("Semua", ""),
-    Status("Berlanjut", "ongoing"),
+    Status("Berlanjut", "publishing"),
     Status("Selesai", "completed"),
+    Status("Hiatus", "hiatus"),
 )
 
 val categoryNames = arrayOf(

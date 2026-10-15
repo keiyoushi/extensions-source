@@ -2,22 +2,19 @@ package eu.kanade.tachiyomi.extension.en.readcomicsonline
 
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.multisrc.mmrcms.UriFilter
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
@@ -31,9 +28,9 @@ abstract class ReadComicsOnline : MMRCMS() {
 
     override val detailsTitleSelector = "h1.text-2xl"
 
-    override val dateFormat = SimpleDateFormat("d MMM yyyy", Locale.US)
+    override val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic-list?sort=views&page=$page")
+    override fun popularMangaUrl(page: Int) = "$baseUrl/comic-list?sort=views&page=$page"
 
     override fun popularMangaSelector(): String = "div.comic-list-layout .grid > .group"
 
@@ -47,14 +44,14 @@ abstract class ReadComicsOnline : MMRCMS() {
 
     override fun popularMangaNextPageSelector(): String? = "nav a[rel=next]"
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic-list?sort=latest&page=$page")
+    override fun latestUpdatesUrl(page: Int) = "$baseUrl/comic-list?sort=latest&page=$page"
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun searchMangaSelector(): String = "div a:has(img)"
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(searchMangaRequest(page, query, filters)).asObservableSuccess().map { response ->
-        val resDoc = response.asJsoup()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val resDoc = client.get(searchMangaUrl(page, query, filters)).asJsoup()
         val mangas = resDoc.select(searchMangaSelector()).map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
@@ -63,20 +60,15 @@ abstract class ReadComicsOnline : MMRCMS() {
             }
         }
         val hasNextPage = resDoc.selectFirst("span a[rel=next]") != null
-        MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            val filterList = filters.ifEmpty { getFilterList() }
-            addPathSegment("advanced-search")
-            addQueryParameter("name", query)
-            addQueryParameter("page", page.toString())
-            filterList.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
-        }.build()
-
-        return GET(url, headers)
-    }
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList): String = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment("advanced-search")
+        addQueryParameter("name", query)
+        addQueryParameter("page", page.toString())
+        filters.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
+    }.build().toString()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1.text-2xl")?.text() ?: ""
@@ -103,7 +95,7 @@ abstract class ReadComicsOnline : MMRCMS() {
         val chapterName = element.selectFirst(".text-brand-400")?.text() ?: element.text()
         name = cleanChapterName(mangaTitle, chapterName)
 
-        date_upload = dateFormat.tryParse(element.selectFirst(".text-slate-500")?.text())
+        date_upload = dateFormat.tryParseDate(element.selectFirst(".text-slate-500")?.text())
     }
     override fun pageListParse(document: Document): List<Page> = document.select("#reader-all img").mapIndexed { i, img ->
         Page(i, imageUrl = img.imgAttr())

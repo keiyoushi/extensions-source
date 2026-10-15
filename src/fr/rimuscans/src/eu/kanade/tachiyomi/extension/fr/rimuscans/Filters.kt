@@ -1,12 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.rimuscans
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import keiyoushi.utils.parseAs
-import okhttp3.Headers
-import okhttp3.OkHttpClient
-import kotlin.concurrent.thread
 
 open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
     fun toUriPart(): String = vals[state].second
@@ -62,16 +57,7 @@ class MinChaptersFilter :
 class GenreCheckBox(name: String) : Filter.CheckBox(name)
 class GenreFilter(genres: List<String>) : Filter.Group<Filter.CheckBox>("Genres", genres.map { GenreCheckBox(it) })
 
-// ============================ Genre fetching ============================
-
-private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
-
-private var genresList: List<String> = emptyList()
-private var filtersState = FiltersState.NOT_FETCHED
-private var fetchAttempts = 0
-
-fun getRimuFilterList(baseUrl: String, client: OkHttpClient, headers: Headers): FilterList {
-    fetchGenres(baseUrl, client, headers)
+fun getRimuFilterList(genres: List<String>?): FilterList {
     val filters = mutableListOf<Filter<*>>(
         Filter.Header("Les filtres sont ignorés par la recherche texte"),
         SortFilter(),
@@ -80,25 +66,8 @@ fun getRimuFilterList(baseUrl: String, client: OkHttpClient, headers: Headers): 
         MinChaptersFilter(),
         PremiumOnlyFilter(),
     )
-    if (filtersState == FiltersState.FETCHED) {
-        filters += GenreFilter(genresList)
-    } else {
-        filters += Filter.Header("Appuyez sur « Réinitialiser » pour charger les genres")
+    if (genres != null) {
+        filters += GenreFilter(genres)
     }
     return FilterList(filters)
-}
-
-private fun fetchGenres(baseUrl: String, client: OkHttpClient, headers: Headers) {
-    if (filtersState != FiltersState.NOT_FETCHED || fetchAttempts >= 3) return
-    filtersState = FiltersState.FETCHING
-    fetchAttempts++
-    thread {
-        try {
-            val response = client.newCall(GET("$baseUrl/api/admin/genres", headers)).execute()
-            genresList = response.parseAs<GenresDto>().genres
-            filtersState = FiltersState.FETCHED
-        } catch (_: Throwable) {
-            filtersState = FiltersState.NOT_FETCHED
-        }
-    }
 }

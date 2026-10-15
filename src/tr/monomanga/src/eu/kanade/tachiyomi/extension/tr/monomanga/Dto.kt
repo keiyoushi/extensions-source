@@ -4,13 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+import kotlin.time.Instant
 
 @Serializable
 class MangaPageDto(
@@ -45,14 +39,21 @@ class VolumeDto(
 
 @Serializable
 class ChapterDto(
+    private val chapterNumber: Float? = null,
     private val title: String,
     private val slug: String,
     private val uploadDate: String? = null,
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         url = "/manga/$mangaSlug/$slug"
-        name = title
-        date_upload = uploadDate?.let { dateFormat.tryParse(it) } ?: 0L
+        // Many chapters only carry a story title ("Son Söz") without the number
+        name = if (chapterNumber == null || title.startsWith("Bölüm", ignoreCase = true)) {
+            title
+        } else {
+            "Bölüm ${chapterNumber.toString().removeSuffix(".0")}" + title.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+        }
+        chapter_number = chapterNumber ?: -1f
+        date_upload = Instant.tryParse(uploadDate)
     }
 }
 

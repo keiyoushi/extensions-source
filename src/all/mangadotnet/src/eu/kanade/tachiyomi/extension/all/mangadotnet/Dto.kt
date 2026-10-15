@@ -78,7 +78,7 @@ class BrowseManga(
         title = this@BrowseManga.title
 
         thumbnail_url = if (isAdult && hideAdultCovers) {
-            "https://fakeimg.ryd.tools/400x600/?text=NSFW"
+            "https://fakeimg.cnbattle.com/400x600/?text=NSFW"
         } else {
             photo?.let {
                 if (it.startsWith("/")) {
@@ -123,7 +123,7 @@ class MangaData(
 
 @Serializable
 class RelatedData(
-    val suggestions: List<BrowseManga> = emptyList(),
+    val suggestions: List<BrowseManga>? = null,
     val relationsData: RelationsData? = null,
 ) {
     @Serializable

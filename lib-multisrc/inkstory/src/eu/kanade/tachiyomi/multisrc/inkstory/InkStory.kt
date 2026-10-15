@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.inkstory
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -30,13 +31,14 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 
 abstract class InkStory :
     KeiSource(),
     ConfigurableSource {
 
-    private val domain: String get() = baseUrl.toHttpUrl().topPrivateDomain() ?: baseUrl.toHttpUrl().host
-    private val apiUrl: String get() = "https://api.$domain/v2"
+    abstract val serviceName: String
 
     private val preferences by getPreferencesLazy {
         val keysToRemove = listOf(
@@ -55,6 +57,7 @@ abstract class InkStory :
         // User Agent required by source. Don't change
         set("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
         set("Accept", "application/json, text/plain, */*")
+        set("X-Service-Name", serviceName)
     }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
@@ -148,8 +151,9 @@ abstract class InkStory :
 
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = apiUrl.toHttpUrl().newBuilder()
+        val url = API_URL.toHttpUrl().newBuilder()
             .addPathSegment("chapter-update-feed")
+            .addQueryParameter("serviceName", serviceName)
             .addQueryParameter("onlyBorderChapters", "true")
             .addQueryParameter("page", (page - 1).coerceAtLeast(0).toString())
             .addQueryParameter("size", PAGE_SIZE.toString())
@@ -165,7 +169,8 @@ abstract class InkStory :
 
     // ============================== Search Utilities ===============================
     protected open suspend fun makeCatalogRequest(sortBy: String, page: Int, query: String? = null, filters: FilterList? = null): MangasPage {
-        val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
+        val url = "$API_URL/books".toHttpUrl().newBuilder().apply {
+            addQueryParameter("serviceName", serviceName)
             var sort = sortBy
             var order = "desc"
 
@@ -241,7 +246,7 @@ abstract class InkStory :
     ): SMangaUpdate = coroutineScope {
         val mangaAsync = async {
             if (fetchDetails) {
-                val url = "$apiUrl/books/${manga.url}"
+                val url = "$API_URL/books/${manga.url}"
                 client.get(url).parseAs<MangaFullDto>().toSManga()
             } else {
                 manga
@@ -249,16 +254,22 @@ abstract class InkStory :
         }
         val chaptersAsync = async {
             if (fetchChapters) {
-                val branches = client.get("$apiUrl/branches?bookId=${manga.memo["id"]!!.string}&moderationStatus=APPROVED")
+                val bookId = manga.memo["id"]!!.string
+                val branches = client.get("$API_URL/branches?bookId=$bookId&moderationStatus=APPROVED")
                     .parseAs<List<BranchDto>>()
                     .associate { it.id to it.publisherName() }
                 val branchType = prefBranch()
-                val branchQuery = prefBranchQuery()
-                val url = "$apiUrl/chapters?bookId=${manga.memo["id"]!!.string}&moderationStatus=APPROVED"
-                val data = client.get(url).parseAs<List<ChapterDto>>().map { it.toSChapter(branches, manga.url) }
+                val delay = prefDelay()
+                val url = "$API_URL/chapters?bookId=$bookId&moderationStatus=APPROVED"
+                val fourDaysAgo = Clock.System.now().minus(4.days).toEpochMilliseconds()
+
+                val data = client.get(url).parseAs<List<ChapterDto>>()
+                    .map { it.toSChapter(branches, manga.url) }
+                    .filter { !delay || it.date_upload <= 0L || it.date_upload <= fourDaysAgo }
                 when (branchType) {
                     "all" -> data
                     "preferred" -> {
+                        val branchQuery = prefBranchQuery()
                         val preferred = if (branchQuery.isNotBlank()) {
                             data.filter { it.scanlator?.contains(branchQuery, ignoreCase = true) == true }.ifEmpty { data }
                         } else {
@@ -306,7 +317,7 @@ abstract class InkStory :
 
     // ============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = "$apiUrl/chapters/${chapter.url}"
+        val url = "$API_URL/chapters/${chapter.url}"
         val chapter = client.get(url).parseAs<PagesDto>()
 
         return chapter.pages
@@ -351,7 +362,7 @@ abstract class InkStory :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val genres = client.get("$apiUrl/labels")
+        val genres = client.get("$API_URL/labels")
             .parseAs<List<GenresDto>>()
             .filter { it.kind == "GENRE" }
             .map { it.name to it.slug }
@@ -392,6 +403,7 @@ abstract class InkStory :
     // ============================== Preferences ===============================
     private fun prefBranch(): String = preferences.getString(PREF_CHAPTER_BRANCH_MODE, DEFAULT_CHAPTER_BRANCH_MODE) ?: DEFAULT_CHAPTER_BRANCH_MODE
     private fun prefBranchQuery(): String = preferences.getString(PREF_PREFERRED_BRANCH_QUERY, DEFAULT_PREFERRED_BRANCH_QUERY) ?: DEFAULT_PREFERRED_BRANCH_QUERY
+    private fun prefDelay(): Boolean = preferences.getBoolean(DELAY_CHAPTERS, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -409,6 +421,14 @@ abstract class InkStory :
             dialogTitle = "Предпочитаемая ветка"
             summary = "Используется в режиме \"Предпочитаемая ветка\" (поиск по части названия команды)"
             setDefaultValue(DEFAULT_PREFERRED_BRANCH_QUERY)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = DELAY_CHAPTERS
+            title = DELAY_CHAPTERS_TITLE
+            summaryOn = DELAY_CHAPTERS_SUM_ON
+            summaryOff = DELAY_CHAPTERS_SUM_OFF
+            setDefaultValue(false)
         }.let(screen::addPreference)
     }
 
@@ -428,6 +448,7 @@ abstract class InkStory :
     }
 
     companion object {
+        private const val API_URL = "https://api.inuko.me/v2"
         private const val PAGE_SIZE = 30
         private const val IMAGE_NAME_LENGTH = 36
         private const val IMAGE_MODE_INDEX = 14
@@ -437,6 +458,10 @@ abstract class InkStory :
         private const val DEFAULT_CHAPTER_BRANCH_MODE = "all"
         private const val DEFAULT_PREFERRED_BRANCH_QUERY = ""
         private const val SECRET_KEY = "UySkp0BzPhwlvP2V"
+        private const val DELAY_CHAPTERS = "delay_chapters"
+        private const val DELAY_CHAPTERS_TITLE = "Скрывать главы"
+        private const val DELAY_CHAPTERS_SUM_ON = "Главы новее 4 дней скрыты"
+        private const val DELAY_CHAPTERS_SUM_OFF = "Показываются все главы"
         private val SECRET_KEY_BYTES = SECRET_KEY.toByteArray()
         private val BRANCH_MODE = arrayOf(
             "Все ветки" to "all",

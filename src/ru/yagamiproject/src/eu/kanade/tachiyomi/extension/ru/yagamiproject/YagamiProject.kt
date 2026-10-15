@@ -1,38 +1,35 @@
 package eu.kanade.tachiyomi.extension.ru.yagamiproject
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.tryParse
-import okhttp3.Headers
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.FormBody
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Document
+import java.time.format.DateTimeFormatter
 
 @Source
-abstract class YagamiProject : HttpSource() {
-    override val supportsLatest = true
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", baseUrl)
-
+abstract class YagamiProject : KeiSource() {
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list-new/$page", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = searchMangaParse(client.get("$baseUrl/list-new/$page").asJsoup())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun searchMangaParse(document: Document): MangasPage {
         val mangas = document.select(".list .group").map { element ->
             SManga.create().apply {
-                element.select(".title a").first()!!.let {
+                element.selectFirst(".title a")!!.let {
                     setUrlWithoutDomain(it.absUrl("href"))
                     val baseTitle = it.attr("title")
                     title = if (baseTitle.isEmpty()) it.text() else baseTitle.split(" / ").min()
@@ -40,50 +37,77 @@ abstract class YagamiProject : HttpSource() {
                 thumbnail_url = element.select(".cover_mini > img").attr("abs:src").replace("thumb_", "")
             }
         }
-        val hasNextPage = document.select(".panel_nav .button a").isNotEmpty()
+        val hasNextPage = document.selectFirst(".panel_nav .button > a:last-child") != null
         return MangasPage(mangas, hasNextPage)
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest/$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangaParse(client.get("$baseUrl/latest/$page").asJsoup())
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
-            return GET("$baseUrl/reader/search/?s=$query&p=$page", headers)
+            return searchMangaParse(client.get("$baseUrl/reader/search/?s=$query&p=$page").asJsoup())
         }
         val activeFilters = if (filters.isEmpty()) getFilterList() else filters
         activeFilters.firstInstanceOrNull<CategoryList>()?.let { filter ->
             if (filter.state > 0) {
-                val catQ = getCategoryList()[filter.state].name
-                return GET("$baseUrl/tags/$catQ", headers)
+                val url = baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("tags")
+                    addPathSegment(getCategoryList()[filter.state].name)
+                    if (page > 1) addPathSegment(page.toString())
+                }.build()
+                return searchMangaParse(client.get(url).asJsoup())
             }
         }
         activeFilters.firstInstanceOrNull<FormatList>()?.let { filter ->
             if (filter.state > 0) {
-                val formN = getFormatList()[filter.state].query
-                return GET("$baseUrl/$formN", headers)
+                val url = baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment(getFormatList()[filter.state].query)
+                    if (page > 1) addPathSegment(page.toString())
+                }.build()
+                return searchMangaParse(client.get(url).asJsoup())
             }
         }
-        return popularMangaRequest(page)
+        return getPopularManga(page)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    // Deeplink
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "series" && url.pathSegments[1].length > 1) {
+            val tmpManga = SManga.create().apply {
+                this.url = "/${url.pathSegments[0]}/${url.pathSegments[1]}/"
+            }
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }
+        return null
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val url = getMangaUrl(manga)
+        val document = client.get(url).asJsoup()
+        val newManga = mangaDetailsParse(document, manga.url)
+        val newChapter = chapterListParse(document)
+        return SMangaUpdate(newManga, newChapter)
+    }
 
     // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    private fun mangaDetailsParse(document: Document, mangaUrl: String): SManga {
         val infoElement = document.select(".large.comic .info").first()!!
         return SManga.create().apply {
-            val titlestr = document.select("title").text()
+            url = mangaUrl
+            val titleStr = document.select("title").text()
                 .substringBefore(" :: Yagami").split(" :: ").sorted()
-            title = titlestr.first().replace(":: ", "")
-            thumbnail_url = document.select(".cover img").first()!!.attr("abs:src")
-            author = infoElement.select("li:contains(Автор(ы):)").first()?.text()
+            title = titleStr.first().replace(":: ", "")
+            thumbnail_url = document.selectFirst(".cover img")!!.attr("abs:src")
+            author = infoElement.selectFirst("li:contains(Автор(ы):)")?.text()
                 ?.substringAfter("Автор(ы): ")?.split(" / ")?.min()?.replace("N/A", "")
-            artist = infoElement.select("li:contains(Художник(и):)").first()?.text()
+            artist = infoElement.selectFirst("li:contains(Художник(и):)")?.text()
                 ?.substringAfter("Художник(и): ")?.split(" / ")?.min()?.replace("N/A", "")
             status = when (infoElement.select("li:contains(Статус перевода:) span").first()?.text()) {
                 "онгоинг" -> SManga.ONGOING
@@ -93,28 +117,26 @@ abstract class YagamiProject : HttpSource() {
             }
             genre = infoElement.select("li:contains(Жанры:)").first()?.text()
                 ?.substringAfter("Жанры: ")
-            val altSelector = infoElement.select("li:contains(Название:)")
-            val altName = if (altSelector.isNotEmpty()) {
-                "Альтернативные названия:\n" + altSelector.first().toString()
-                    .replace("<li><b>Название</b>: ", "")
-                    .replace("<br>", " / ")
-                    .substringAfter(" / ")
-                    .substringBefore("</li>") + "\n\n"
-            } else {
-                ""
+
+            val altName = infoElement.selectFirst("li:contains(Название:)")?.textNodes()?.let { text ->
+                text.filter { it.text() != ":" }.joinToString { "\n- ${it.text()}" }
             }
-            val descriptElem = infoElement.select("li:contains(Описание:)").first()?.text()
-                ?.substringAfter("Описание: ") ?: ""
-            description = titlestr.last().replace(":: ", "") + "\n" + altName + descriptElem
+            val descriptionElem = infoElement.selectFirst("li:contains(Описание:)")?.ownText()?.substringAfter(":")?.trim()
+
+            description = buildString {
+                append(titleStr.last().replace(":: ", ""))
+                descriptionElem?.let { append("\n$it") }
+                altName?.let { append("\nАльтернативные названия:$it") }
+            }
         }
     }
 
     // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(".list .element").map { element ->
+    private fun chapterListParse(document: Document): List<SChapter> = document.select(".list .element").map { element ->
         SChapter.create().apply {
             val chapter = element.select(".title a").first()!!
             val chapterScanDate = element.select(".meta_r")
-            name = if (chapter.attr("title").isBlank()) chapter.text() else chapter.attr("title")
+            name = chapter.attr("title").ifBlank { chapter.text() }
             chapter_number = name.substringBefore(":").substringAfterLast(" ")
                 .substringAfterLast("№").substringAfterLast("#").toFloatOrNull()
                 ?: chapter.attr("href").substringBeforeLast("/").substringAfterLast("/").toFloatOrNull()
@@ -129,15 +151,22 @@ abstract class YagamiProject : HttpSource() {
     private fun parseDate(date: String): Long = when (date) {
         "Сегодня" -> System.currentTimeMillis()
         "Вчера" -> System.currentTimeMillis() - 24 * 60 * 60 * 1000
-        else -> dateFormat.tryParse(date)
+        else -> dateFormat.tryParseDate(date)
     }
 
     // Pages
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val webtoonsel = document.select(".web_pictures img.web_img")
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val initialDoc = client.get(getChapterUrl(chapter)).asJsoup()
+        val doc = if (initialDoc.selectFirst(".info")?.text()?.contains("mature contents") == true) {
+            client.post(getChapterUrl(chapter), adultBody).asJsoup()
+        } else {
+            initialDoc
+        }
+
+        val webtoonsel = doc.select(".web_pictures img.web_img")
+
         return if (webtoonsel.isEmpty()) {
-            document.select(".dropdown li a").map {
+            doc.select(".dropdown li a").map {
                 Page(it.text().substringAfter("Стр. ").toInt(), it.absUrl("href"))
             }
         } else {
@@ -145,24 +174,25 @@ abstract class YagamiProject : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        val document = response.asJsoup()
-        val defaultimg = document.select("#page img").attr("abs:src")
-        return if (defaultimg.contains("string(1)")) {
+    override suspend fun getImageUrl(page: Page): String {
+        val document = client.get(page.url).asJsoup()
+        val defaultImg = document.select("#page img").attr("abs:src")
+        return if (defaultImg.contains("string(1)")) {
             document.select("#get_download").first()!!.absUrl("href")
         } else {
-            defaultimg
+            defaultImg
         }
     }
 
     // Filters
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("ПРИМЕЧАНИЕ: Фильтры исключают другдруга!"),
         CategoryList(getCategoryList().map { it.name }.toTypedArray()),
         FormatList(getFormatList().map { it.name }.toTypedArray()),
     )
 
     companion object {
-        private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.US)
+        private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+        private val adultBody = FormBody.Builder().add("adult", "true").build()
     }
 }

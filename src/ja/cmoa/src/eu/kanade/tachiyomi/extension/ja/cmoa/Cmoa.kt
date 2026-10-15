@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.cmoa
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,60 +9,45 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
-import keiyoushi.lib.speedbinb.SpeedBinbReader
+import keiyoushi.lib.speedbinb.fetchPages
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.textOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
 
 @Source
 abstract class Cmoa :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
+    private val preferences by getPreferencesLazy()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(SpeedBinbInterceptor(jsonInstance))
-        .addCookie(listOf("safesearch" to "0", "R18user" to "1"))
-        .build()
-
-    private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) } // 1.7070.1001 SBC
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        // load desktop selectors
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search/purpose/ranking/all?period=daily&daily=all", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("li.search_result_box").map {
-            SManga.create().apply {
-                title = it.selectFirst("div.search_result_box_right_sec1 a.title")!!.text()
-                val img = it.selectFirst("div.search_result_box_left img")
-                thumbnail_url = img?.absUrl("data-src")?.ifEmpty { img.absUrl("src") }
-                url = it.selectFirst("div.search_result_box_left a.title")!!.absUrl("href").toHttpUrl().pathSegments[1]
-            }
-        }
-        val hasNextPage = document.selectFirst("li.next:not(.nopage)") != null
-        return MangasPage(mangas, hasNextPage)
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(SpeedBinbInterceptor()) // 1.7070.1001 SBC
+        addCookie(listOf("safesearch" to "0", "R18user" to "1"))
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/newrelease/?page=$page", headers)
+    // load desktop selectors
+    override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36")
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/search/purpose/ranking/all?period=daily&daily=all").toMangasPage()
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/newrelease/?page=$page").asJsoup()
         val mangas = document.select("ul.title_list li.title_wrap").map {
             SManga.create().apply {
                 title = it.selectFirst("div.text_box p.title_name")!!.text()
@@ -76,7 +59,7 @@ abstract class Cmoa :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         fun Builder.addFilter(param: String, filter: Filter.Text) = filter.state.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
         fun Builder.addFilter(param: String, filter: SelectFilter) = filter.value.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
         fun Builder.addFilter(param: String, filter: Filter.CheckBox) = filter.state.takeIf { it }?.let { addQueryParameter(param, "1") }
@@ -99,95 +82,96 @@ abstract class Cmoa :
             addFilter("complete_flg", filters.firstInstance<CompleteFilter>())
             addQueryParameter("page", page.toString())
         }.build()
-        return GET(url, headers)
+        return client.get(url).toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun Response.toMangasPage(): MangasPage {
+        val document = this.asJsoup()
+        val mangas = document.select("li.search_result_box").map {
+            SManga.create().apply {
+                title = it.selectFirst("div.search_result_box_right_sec1 a.title")!!.text()
+                val img = it.selectFirst("div.search_result_box_left img")
+                thumbnail_url = img?.absUrl("data-src")?.ifEmpty { img.absUrl("src") }
+                url = it.selectFirst("div.search_result_box_left a.title")!!.absUrl("href").toHttpUrl().pathSegments[1]
+            }
+        }
+        val hasNextPage = document.selectFirst("li.next:not(.nopage)") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/title/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1.titleName")!!.text().replace(TITLE_REGEX, "")
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val document = client.get("$baseUrl/title/${manga.url}?page=1&order=down").asJsoup()
+        val mangaTitle = document.selectFirst("section.brCramb a[href^=/title/]")!!.text()
+        val details = SManga.create().apply {
+            title = mangaTitle
             author = document.select("div.title_details_author_name a").joinToString { it.text() }
-            description = document.selectFirst("div#comic_description > p")?.text()
+            description = document.selectFirst("div#comic_description > p")?.textOrNull()
             genre = buildList {
-                document.selectFirst("a.comic_mark_thum")?.text()?.let { add(it) }
+                document.selectFirst("a.comic_mark_thum")?.textOrNull()?.let { add(it) }
                 document.select("div.category_line_f_r_l.genre_detail a").mapTo(this) { it.text() }
             }.joinToString()
-            val completed = document.selectFirst("div.volume")?.text()?.contains("完結")
+            val completed = document.selectFirst("div.volume")?.textOrNull()?.contains("完結")
             status = if (completed == true) SManga.COMPLETED else SManga.ONGOING
             thumbnail_url = document.selectFirst("div.thumBox img")?.absUrl("src")
         }
-    }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        if (!fetchChapters) return@coroutineScope SMangaUpdate(details, chapters)
+
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val chapters = mutableListOf<SChapter>()
-        var page = 1
+        val lastPage = document.select("div.pagination li a").mapNotNull { it.text().toIntOrNull() }.maxOrNull() ?: 1
+        val otherPages = (2..lastPage).map { page ->
+            async { client.get("$baseUrl/title/${manga.url}?page=$page&order=down").asJsoup() }
+        }
 
-        while (true) {
-            val request = GET("$baseUrl/title/${manga.url}?page=$page&order=down", headers)
-            val response = client.newCall(request).execute()
-            val document = response.asJsoup()
-
-            val mangaTitle = document.selectFirst("h1.titleName")!!.text().replace(TITLE_REGEX, "")
-
-            chapters += document.select("ul.title_vol_vox_vols li").mapNotNull {
+        val seriesTitle = mangaTitle.replace('\u3000', ' ')
+        val chapterList = (listOf(document) + otherPages.awaitAll()).flatMap {
+            it.select("ul.title_vol_vox_vols li").mapNotNull { element ->
                 SChapter.create().apply {
-                    val chapterUrl = it.selectFirst("div.title_vol_btn_box_w a[href*=content_id]")
-                        ?.absUrl("href")
-                        ?: it.selectFirst("h3.title_details_title_name_h2 a")!!.absUrl("href")
-                    setUrlWithoutDomain(chapterUrl)
+                    url = element.selectFirst("div.thum_box img")!!.absUrl("src").substringAfterLast("/").substringBefore(".")
 
-                    val rawName = it.selectFirst("h3.title_details_title_name_h2 a")!!.text()
-                        .replace(mangaTitle, "")
-                        .replace("NEW ", "")
-                        .replace("発売予定 ", "")
+                    val volumeTitle = element.selectFirst("h3.title_details_title_name_h2 a")!!.ownText().replace('\u3000', ' ')
+                    val rawName = volumeTitle.removePrefix(seriesTitle).trim(' ', ':', '：').ifEmpty { volumeTitle }
 
-                    val hasFreeOrOwned = it.selectFirst("div.GA_free.btn, div.title_vol_btn_box_w a[href*=browserviewer]") != null
-                    val hasPreview = !hasFreeOrOwned && it.selectFirst("div.title_vol_each_free_btn.GA_free") != null
-                    val isLocked = !hasFreeOrOwned && it.selectFirst("div.title_vol_btn_box_w a.cart_into_btn, div.title_vol_btn_box_w a.auto_buy_btn_s") != null
+                    val isFree = element.selectFirst("div.GA_free.free, div.title_vol_btn_box_w a[href*=browserviewer]") != null
+                    val hasPreview = element.selectFirst("div.GA_free") != null
 
-                    if (hideLocked && (isLocked || hasPreview)) return@mapNotNull null
+                    if (hideLocked && !isFree) return@mapNotNull null
 
                     name = when {
-                        hasFreeOrOwned -> rawName
+                        isFree -> rawName
                         hasPreview -> "🔒 (Preview) $rawName"
-                        isLocked -> "🔒 $rawName"
-                        else -> rawName
+                        else -> "🔒 $rawName"
                     }
                 }
             }
-
-            val hasNextPage = document.selectFirst("div.pagination li.selected + li a") != null
-            if (!hasNextPage) break
-            page++
         }
 
-        return Observable.just(chapters)
+        SMangaUpdate(
+            details,
+            chapterList,
+        )
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/browserviewer/content_id/${chapter.url}/"
 
-    override fun pageListParse(response: Response): List<Page> {
-        if (response.request.url.pathSegments.contains("speedreader")) {
-            return reader.pageListParse(response)
-        }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
-        if (response.request.url.encodedPath.contains("/bib/reader")) {
+        if (document.location().toHttpUrl().encodedPath.contains("/bib/reader")) {
             throw Exception("Novels are not supported.")
         }
-        throw Exception("Log in via WebView and purchase this product to read.")
+
+        return client.fetchPages(document).ifEmpty { throw Exception("Log in via WebView and purchase this product to read.") }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
-        Filter.Header("Note: Search and active filters are applied together"),
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Note: Novels are not supported!"),
         TitleFilter(),
         AuthorFilter(),
@@ -219,6 +203,5 @@ abstract class Cmoa :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
-        private val TITLE_REGEX = Regex("(?:(?<=\\s|】)(第?\\d+巻|第?\\d+話|\\d+(?=\\s*$))|（[０-９0-9]+）|【第?\\d+[巻話]】|#\\d+).*$")
     }
 }

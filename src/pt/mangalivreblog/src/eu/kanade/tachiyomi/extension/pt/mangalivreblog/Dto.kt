@@ -3,13 +3,11 @@ package eu.kanade.tachiyomi.extension.pt.mangalivreblog
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PopularResponse(
-    val success: Boolean,
-    val data: PopularData,
+class ChaptersResponse(
+    val data: ChaptersData,
 )
 
 @Serializable
-data class PopularData(
-    val html: String,
-    val period: String,
+class ChaptersData(
+    val markup: String,
 )

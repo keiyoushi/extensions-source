@@ -8,11 +8,14 @@ keiyoushi {
     name = "Comic Festa"
     versionCode = 2
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "clipstudioreader"
+    libVersion = "1.6"
 
     source {
         lang = "ja"
         baseUrl = "https://comic.iowl.jp"
     }
+}
+
+dependencies {
+    implementation(project(":lib:clipstudioreader"))
 }

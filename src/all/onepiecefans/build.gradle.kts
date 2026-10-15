@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "One Piece Fans"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf("es", "en").forEach {
         source {

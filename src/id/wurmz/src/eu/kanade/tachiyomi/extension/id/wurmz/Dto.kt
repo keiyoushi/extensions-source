@@ -7,12 +7,12 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class MangaDetailsDto(
-    val name: String,
-    val alternateName: String? = null,
-    val description: String? = null,
-    val image: String? = null,
-    val author: AuthorDto? = null,
-    val genre: List<String>? = null,
+    private val name: String,
+    private val alternateName: String? = null,
+    private val description: String? = null,
+    private val image: String? = null,
+    private val author: AuthorDto? = null,
+    private val genre: List<String>? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
@@ -27,6 +27,7 @@ class MangaDetailsDto(
         thumbnail_url = image
         author = this@MangaDetailsDto.author?.name
         genre = this@MangaDetailsDto.genre?.joinToString()
+        initialized = true
     }
 }
 
@@ -36,12 +37,13 @@ class AuthorDto(val name: String)
 @Serializable
 class ChapterListDto(
     val chapters: List<ChapterDto>,
+    val sourceSlug: String? = null,
 )
 
 @Serializable
 class ChapterDto(
-    @SerialName("chapter_label") val label: String,
-    @SerialName("chapter_sort") val sort: Float,
+    @SerialName("chapter_label") private val label: String,
+    @SerialName("chapter_sort") private val sort: Float,
 ) {
     fun toSChapter(sourceSlug: String) = SChapter.create().apply {
         url = "/detail/$sourceSlug/chapter/$label"
@@ -53,14 +55,4 @@ class ChapterDto(
 @Serializable
 class PageListDto(
     val images: List<String>,
-)
-
-@Serializable
-class LdJsonDto(
-    val dangerouslySetInnerHTML: InnerHtmlDto,
-)
-
-@Serializable
-class InnerHtmlDto(
-    val __html: String,
 )

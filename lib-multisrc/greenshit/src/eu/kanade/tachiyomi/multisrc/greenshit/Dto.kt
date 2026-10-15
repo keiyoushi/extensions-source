@@ -16,9 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class GreenShitLoginRequestDto(
@@ -71,7 +69,7 @@ class GreenShitChapterSimpleDto(
         name = locked + this@GreenShitChapterSimpleDto.name
         chapter_number = number ?: 0f
         url = "/capitulo/$id"
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
@@ -207,8 +205,4 @@ fun buildImageUrl(
     }
     val query = width?.let { "?width=$it" } ?: ""
     return normalizeSlashes("$base/$path/$src$query")
-}
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
 }

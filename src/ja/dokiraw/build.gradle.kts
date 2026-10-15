@@ -6,15 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Dokiraw"
-    versionCode = 9
+    versionCode = 15
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "liliana"
+    libVersion = "1.6"
 
     source {
         lang = "ja"
         baseUrl {
-            custom("https://dokiraw.diy")
+            custom("https://dokiraw.click")
         }
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

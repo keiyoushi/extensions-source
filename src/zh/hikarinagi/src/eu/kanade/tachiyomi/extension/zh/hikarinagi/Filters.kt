@@ -3,8 +3,9 @@ package eu.kanade.tachiyomi.extension.zh.hikarinagi
 import eu.kanade.tachiyomi.source.model.Filter
 
 class SortFilter(select: Selection? = null) : Filter.Sort("排序", arrayOf("更新时间", "热度", "收录时间", "发布时间", "标题"), select) {
-    private val sort = arrayOf("latest_chapter_at", "heat", "created_at", "publication_date", "title")
-    override fun toString() = state?.let { "${sort[state!!.index]}:${if (state!!.ascending) "asc" else "dssc"}" } ?: "latest_chapter_at:desc"
+    // The site sorts by "name"; "title" is silently ignored by the API.
+    private val sort = arrayOf("latest_chapter_at", "heat", "created_at", "publication_date", "name")
+    override fun toString() = state?.let { "${sort[state!!.index]}:${if (state!!.ascending) "asc" else "desc"}" } ?: "latest_chapter_at:desc"
 }
 
 class RegionFilter : Filter.Select<String>("地区", arrayOf("全部", "日漫", "韩漫", "国漫", "其他")) {

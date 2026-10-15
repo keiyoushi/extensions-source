@@ -1,11 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.mangabay
 
 import eu.kanade.tachiyomi.source.model.SChapter
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.format.DateTimeFormatter
 
 @Serializable
 class ChapterListDto(
@@ -24,11 +23,11 @@ class ChapterDto(
     fun toSChapter(newsId: Int): SChapter = SChapter.create().apply {
         url = "/reader/$newsId/$id"
         name = title
-        date_upload = dateFormat.tryParse(date)
+        date_upload = dateFormat.tryParseDate(date)
     }
 }
 
-private val dateFormat = SimpleDateFormat("d.M.yyyy", Locale.ROOT)
+private val dateFormat = DateTimeFormatter.ofPattern("d.M.yyyy")
 
 @Serializable
 class PageListDto(

@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Miaoqu Manhua"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mccms"
 
     source {

@@ -44,7 +44,7 @@ private fun <T> extractValueNextJs(
  * ([ReactFlightServer.js](https://github.com/facebook/react/blob/main/packages/react-server/src/ReactFlightServer.js)):
  * - `$$` -> Escaped string, drops the first `$`.
  * - `$undefined` -> JS `undefined`, resolved to JSON null.
- * - `$D<iso>` -> Date, drops `$D` to expose the ISO-8601 string ([ReactFlightDate]).
+ * - `$D<iso>` -> Date, drops `$D` to expose the ISO-8601 string (e.g. `kotlin.time.Instant`).
  * - `$n<digits>` -> BigInt, drops `$n` to expose the digit string ([ReactFlightBigInt]).
  * - `$Infinity` / `$-Infinity` / `$NaN` / `$-0` -> drops `$`, exposes the token string
  *   ([ReactFlightNumber] parses it to the real `Double`; JSON itself has no Infinity/NaN).
@@ -81,7 +81,7 @@ private fun resolveNextJsRefs(
                 str == "\$Infinity" || str == "\$-Infinity" || str == "\$NaN" || str == "\$-0" ->
                     JsonPrimitive(str.substring(1))
                 str[1] == '$' -> JsonPrimitive(str.substring(1)) // Escaped '$' -> keep one
-                str[1] == 'D' -> JsonPrimitive(str.substring(2)) // Date -> strip '$D' for ReactFlightDate
+                str[1] == 'D' -> JsonPrimitive(str.substring(2)) // Date -> strip '$D' to expose ISO-8601 string
                 str[1] == 'n' -> JsonPrimitive(str.substring(2)) // BigInt -> strip '$n' for ReactFlightBigInt
                 str[1] == 'Q' -> resolveMapRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 str[1] == 'W' -> resolveSetRef(str.substring(2), chunkCache, modelCache, resolving) ?: element

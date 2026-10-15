@@ -1,20 +1,12 @@
 package eu.kanade.tachiyomi.multisrc.monochrome
 
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.text.DecimalFormat
-import java.text.SimpleDateFormat
-import java.util.Locale
-
-internal const val UUID_QUERY = "uuid:"
-
-private const val ISO_DATE = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
-
-private val dateFormat = SimpleDateFormat(ISO_DATE, Locale.ROOT)
-
-private val decimalFormat = DecimalFormat("#.##")
+import java.math.RoundingMode
+import kotlin.time.Instant
 
 @Serializable
-data class Results(
+class Results(
     private val offset: Int,
     private val limit: Int,
     private val results: List<Manga>,
@@ -25,7 +17,7 @@ data class Results(
 }
 
 @Serializable
-data class Manga(
+class Manga(
     val title: String,
     val description: String,
     val author: String,
@@ -39,7 +31,7 @@ data class Manga(
 }
 
 @Serializable
-data class Chapter(
+class Chapter(
     private val name: String,
     private val volume: Int?,
     val number: Float,
@@ -52,13 +44,19 @@ data class Chapter(
     val title: String
         get() = buildString {
             if (volume != null) append("Vol ").append(volume).append(" ")
-            append("Chapter ").append(decimalFormat.format(number))
+            append("Chapter ").append(number.formatChapterNumber())
             if (name.isNotEmpty()) append(" - ").append(name)
         }
 
     val timestamp: Long
-        get() = dateFormat.parse(uploadTime)?.time ?: 0L
+        get() = Instant.tryParse(uploadTime)
 
     val parts: String
         get() = "/$id|$version|$length"
 }
+
+// at most two decimals without trailing zeros, e.g. 12.0 -> "12", 12.5 -> "12.5"
+private fun Float.formatChapterNumber(): String = toBigDecimal()
+    .setScale(2, RoundingMode.HALF_EVEN)
+    .stripTrailingZeros()
+    .toPlainString()

@@ -4,27 +4,22 @@ import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.fuzzydoodle.FuzzyDoodle
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
+import okhttp3.OkHttpClient
 
 @Source
 abstract class HentaiSlayer :
     FuzzyDoodle(),
     ConfigurableSource {
 
-    override val client = super.client.newBuilder()
-        .rateLimit(2)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", baseUrl)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
     private val preferences by getPreferencesLazy()
 
-    override fun latestPageRequest(page: Int) = GET("$baseUrl/latest-${getLatestTypes()}?page=$page", headers)
+    override fun latestPageUrl(page: Int) = "$baseUrl/latest-${getLatestTypes()}?page=$page"
 
     companion object {
         private const val LATEST_PREF = "LatestType"

@@ -55,14 +55,18 @@ class DetailsDto(
     @SerialName("CoverURL") private val coverURL: String,
     @SerialName("Authors") private val authors: List<AuthorDto>,
     @SerialName("Introduction") private val introduction: String,
+    @SerialName("BookGroupID") private val bookGroupID: String,
+    @SerialName("IsSerial") private val isSerial: Boolean,
 ) {
     fun toSManga() = SManga.create().apply {
+        url = "$bookGroupID,$isSerial"
         title = this@DetailsDto.title
         thumbnail_url = coverURL
         author = authors.joinToString {
             if (it.title.isNullOrEmpty()) it.name else "${it.title}：${it.name}"
         }
         description = introduction
+        initialized = true
     }
 }
 
