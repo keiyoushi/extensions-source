@@ -1,8 +1,6 @@
 package keiyoushi.utils
 
 import android.annotation.SuppressLint
-import android.app.Activity
-import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.os.Handler
@@ -539,8 +537,7 @@ private fun setupWebView(webView: WebView) {
     WebViewGlueBridge.setAudioMuted(webView, true)
 
     runCatching {
-        val metrics = (webView.context as? Activity)?.resources?.displayMetrics
-            ?: Resources.getSystem().displayMetrics
+        val metrics = Resources.getSystem().displayMetrics
         webView.layoutParams = ViewGroup.LayoutParams(metrics.widthPixels, metrics.heightPixels)
         webView.measure(
             View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
@@ -557,24 +554,9 @@ private fun setupWebView(webView: WebView) {
 suspend fun <T> runWebView(
     timeout: Duration = 30.seconds,
     configure: WebViewScope<T>.() -> Unit,
-): T = runWebViewInternal(context = applicationContext, timeout = timeout, configure = configure)
-
-/**
- * Runs a WebView bound to [activity] with [configure]. Internal to :core.
- */
-internal suspend fun <T> runWebView(
-    activity: Activity,
-    timeout: Duration = 30.seconds,
-    configure: WebViewScope<T>.() -> Unit,
-): T = runWebViewInternal(context = activity, timeout = timeout, configure = configure)
-
-private suspend fun <T> runWebViewInternal(
-    context: Context,
-    timeout: Duration,
-    configure: WebViewScope<T>.() -> Unit,
 ): T = withContext(Dispatchers.Main) {
     val deferred = CompletableDeferred<T>()
-    val webView = WebView(context)
+    val webView = WebView(applicationContext)
     setupWebView(webView)
     val scope = WebViewScope(webView, deferred)
     webView.webViewClient = ScopeWebViewClient(scope)
@@ -647,5 +629,5 @@ suspend fun getLocalStorage(url: String, key: String): String? = runWebView(time
             resolve(value.parseAs<String?>())
         }
     }
-    loadData(url, "")
+    loadData(url, """<link rel="icon" href="data:,">""")
 }

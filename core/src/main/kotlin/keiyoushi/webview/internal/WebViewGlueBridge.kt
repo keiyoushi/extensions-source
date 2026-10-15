@@ -344,6 +344,16 @@ internal object WebViewGlueBridge {
             val uaMetadata = boundarySettings.userAgentMetadataMap
             val updated = HashMap(uaMetadata)
 
+            // Real Chrome reduces its UA string to "Chrome/<major>.0.0.0" and "Android 10; K", but
+            // its client hints still report the exact versions. Keep the engine's own values when
+            // the claimed major version is the engine's, instead of the placeholders from the UA.
+            val hintFullVersion = (uaMetadata["FULL_VERSION"] as? String)
+                ?.takeIf { it.substringBefore('.') == majorVersion }
+                ?: fullVersion
+            if (userAgent.contains("Android 10; K)")) {
+                (uaMetadata["PLATFORM_VERSION"] as? String)?.let { platformVersion = it }
+            }
+
             val brandList = uaMetadata["BRAND_VERSION_LIST"]
             if (brandList is Array<*> && brandList.isArrayOf<Array<String>>()) {
                 @Suppress("UNCHECKED_CAST")
@@ -360,14 +370,14 @@ internal object WebViewGlueBridge {
                         }
 
                         brand[1] = majorVersion
-                        brand[2] = fullVersion
+                        brand[2] = hintFullVersion
                     }
                 }.toTypedArray()
 
                 updated["BRAND_VERSION_LIST"] = updatedBrands
             }
 
-            updated["FULL_VERSION"] = fullVersion
+            updated["FULL_VERSION"] = hintFullVersion
             updated["PLATFORM"] = platform
             updated["PLATFORM_VERSION"] = platformVersion
             updated["ARCHITECTURE"] = architecture
