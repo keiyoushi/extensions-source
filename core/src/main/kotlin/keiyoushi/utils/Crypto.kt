@@ -8,6 +8,12 @@ import okio.Buffer
 import okio.ForwardingSource
 import okio.Source
 import okio.buffer
+import okio.cipherSource
+import java.security.spec.AlgorithmParameterSpec
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 import kotlin.experimental.xor
 
 /**
@@ -298,4 +304,172 @@ private class XorSource(delegate: Source, private val key: ByteArray) : Forwardi
         }
         return read
     }
+}
+
+/**
+ * Creates and initializes an AES [Cipher].
+ *
+ * @param transformation the cipher algorithm and padding transformation
+ * @param key the AES encryption or decryption key bytes
+ * @param params optional algorithm parameter specifications such as [IvParameterSpec] or [GCMParameterSpec]
+ * @param encrypt true for [Cipher.ENCRYPT_MODE], false for [Cipher.DECRYPT_MODE]
+ * @return the initialized [Cipher] instance
+ */
+fun newAesCipher(
+    transformation: String,
+    key: ByteArray,
+    params: AlgorithmParameterSpec? = null,
+    encrypt: Boolean = false,
+): Cipher = Cipher.getInstance(transformation).apply {
+    init(if (encrypt) Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), params)
+}
+
+/**
+ * Creates and initializes an AES [Cipher] in CBC mode.
+ *
+ * @param key the AES key bytes
+ * @param iv the initialization vector bytes
+ * @param padding whether PKCS5/PKCS7 padding is enabled, defaults to true
+ * @param encrypt true for encryption, false for decryption
+ */
+fun aesCbc(
+    key: ByteArray,
+    iv: ByteArray,
+    padding: Boolean = true,
+    encrypt: Boolean = false,
+): Cipher = newAesCipher(
+    transformation = if (padding) "AES/CBC/PKCS5Padding" else "AES/CBC/NoPadding",
+    key = key,
+    params = IvParameterSpec(iv),
+    encrypt = encrypt,
+)
+
+/**
+ * Creates and initializes an AES [Cipher] in GCM mode.
+ *
+ * @param key the AES key bytes
+ * @param iv the initialization vector bytes
+ * @param tagLength the authentication tag length in bits, defaults to 128
+ * @param encrypt true for encryption, false for decryption
+ */
+fun aesGcm(
+    key: ByteArray,
+    iv: ByteArray,
+    tagLength: Int = 128,
+    encrypt: Boolean = false,
+): Cipher = newAesCipher(
+    transformation = "AES/GCM/NoPadding",
+    key = key,
+    params = GCMParameterSpec(tagLength, iv),
+    encrypt = encrypt,
+)
+
+/**
+ * Creates and initializes an AES [Cipher] in CTR mode.
+ *
+ * @param key the AES key bytes
+ * @param iv the initialization vector bytes
+ * @param encrypt true for encryption, false for decryption
+ */
+fun aesCtr(
+    key: ByteArray,
+    iv: ByteArray,
+    encrypt: Boolean = false,
+): Cipher = newAesCipher(
+    transformation = "AES/CTR/NoPadding",
+    key = key,
+    params = IvParameterSpec(iv),
+    encrypt = encrypt,
+)
+
+/**
+ * Creates and initializes an AES [Cipher] in ECB mode.
+ *
+ * @param key the AES key bytes
+ * @param padding whether PKCS5/PKCS7 padding is enabled, defaults to true
+ * @param encrypt true for encryption, false for decryption
+ */
+fun aesEcb(
+    key: ByteArray,
+    padding: Boolean = true,
+    encrypt: Boolean = false,
+): Cipher = newAesCipher(
+    transformation = if (padding) "AES/ECB/PKCS5Padding" else "AES/ECB/NoPadding",
+    key = key,
+    params = null,
+    encrypt = encrypt,
+)
+
+/**
+ * Decrypts in-memory [ByteArray] using the specified [Cipher].
+ */
+fun ByteArray.aesDecrypt(cipher: Cipher): ByteArray = cipher.doFinal(this)
+
+/**
+ * Encrypts in-memory [ByteArray] using the specified [Cipher].
+ */
+fun ByteArray.aesEncrypt(cipher: Cipher): ByteArray = cipher.doFinal(this)
+
+/**
+ * Wraps this Okio [Source] in a streaming AES decryption [Source] using the provided [cipher].
+ */
+fun Source.aesDecrypt(cipher: Cipher): Source = cipherSource(cipher)
+
+/**
+ * Returns a new [ResponseBody] streaming decrypted data from this body using [cipher].
+ */
+fun ResponseBody.aesDecrypt(
+    cipher: Cipher,
+    contentType: MediaType? = this.contentType(),
+): ResponseBody = source().aesDecrypt(cipher).buffer().asResponseBody(contentType)
+
+/**
+ * Returns a new [Response] whose [Response.body] streams decrypted data using [cipher].
+ */
+fun Response.aesDecrypt(
+    cipher: Cipher,
+    contentType: MediaType? = body.contentType(),
+): Response = newBuilder()
+    .body(body.aesDecrypt(cipher, contentType))
+    .build()
+
+/**
+ * Decrypts a [Response] where the initialization vector (IV) is prepended to the response body stream.
+ *
+ * Reads the first [ivSize] bytes from the body stream to extract the IV, creates a [Cipher] using
+ * [cipher], and decrypts the remainder of the stream.
+ *
+ * @param ivSize the size of the prepended IV in bytes
+ * @param contentType the media type of the decrypted body
+ * @param cipher function taking the extracted IV and returning an initialized [Cipher]
+ */
+fun Response.aesDecryptWithPrependedIv(
+    ivSize: Int,
+    contentType: MediaType? = body.contentType(),
+    cipher: (iv: ByteArray) -> Cipher,
+): Response {
+    val source = body.source()
+    val iv = source.readByteArray(ivSize.toLong())
+    val decryptedBody = source.cipherSource(cipher(iv)).buffer().asResponseBody(contentType)
+    return newBuilder().body(decryptedBody).build()
+}
+
+/**
+ * Decrypts a [Response] where the initialization vector (IV) is prepended to the response body stream,
+ * using AES-CBC.
+ *
+ * Reads the first [ivSize] bytes from the body stream to extract the IV, and decrypts using AES-CBC.
+ *
+ * @param key the AES decryption key
+ * @param ivSize the size of the prepended IV in bytes
+ * @param padding whether PKCS5 padding is enabled, defaults to true
+ * @param contentType the media type of the decrypted body
+ */
+fun Response.aesDecryptWithPrependedIv(
+    key: ByteArray,
+    ivSize: Int,
+    padding: Boolean = true,
+    contentType: MediaType? = body.contentType(),
+): Response = aesDecryptWithPrependedIv(ivSize, contentType) { iv ->
+    aesCbc(key, iv, padding)
 }

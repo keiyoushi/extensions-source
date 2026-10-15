@@ -15,6 +15,7 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.GraphQLException
+import keiyoushi.utils.aesCbc
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLGet
@@ -40,7 +41,6 @@ import java.security.MessageDigest
 import java.security.spec.MGF1ParameterSpec
 import javax.crypto.Cipher
 import javax.crypto.Mac
-import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.OAEPParameterSpec
 import javax.crypto.spec.PSource
 import javax.crypto.spec.SecretKeySpec
@@ -244,8 +244,7 @@ abstract class UNext :
             .copyOf(AES_KEY_SIZE)
 
         val data = Base64.decode(license.data, Base64.DEFAULT)
-        val decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        decrypt.init(Cipher.DECRYPT_MODE, SecretKeySpec(licenseKey, "AES"), IvParameterSpec(Base64.decode(license.iv, Base64.DEFAULT)))
+        val decrypt = aesCbc(licenseKey, Base64.decode(license.iv, Base64.DEFAULT))
         val records = decrypt.doFinal(data, HEADER_SIZE, data.size - HEADER_SIZE - DIGEST_SIZE)
         val unwrap = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
         unwrap.init(Cipher.DECRYPT_MODE, keyPair.private, OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT))
