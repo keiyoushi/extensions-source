@@ -14,7 +14,7 @@ object Canva2Descrambler {
     private class Tile(val x: Int, val y: Int, val w: Int, val h: Int)
 
     fun descramble(pixels: IntArray, width: Int, height: Int, chapterId: String): IntArray {
-        val h1 = sha256(chapterId + SALT).toHex()
+        val h1 = sha256(chapterId + SALT).toHexString()
         val h2 = sha256("$h1:nxn:$GRID:${width}x$height")
         val rng = Mulberry32(h2.readIntBigEndian(0))
 
@@ -85,8 +85,6 @@ object Canva2Descrambler {
     }
 
     private fun sha256(input: String) = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
-
-    private fun ByteArray.toHex() = joinToString("") { "%02x".format(it) }
 
     private class Mulberry32(private var state: Int) {
         fun nextDouble(): Double {

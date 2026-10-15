@@ -24,7 +24,7 @@ object CanvaDescrambler {
     fun descramble(pixels: IntArray, width: Int, height: Int, chapterId: String, token: String): IntArray {
         val key = Mac.getInstance("HmacSHA256").run {
             init(SecretKeySpec(token.toByteArray(), "HmacSHA256"))
-            doFinal(chapterId.toByteArray()).joinToString("") { "%02x".format(it) }
+            doFinal(chapterId.toByteArray()).toHexString()
         }
 
         val splitRng = SeedRandom(key)
