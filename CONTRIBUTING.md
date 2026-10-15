@@ -261,8 +261,8 @@ $ python ext-bootstrap.py -n "My Source" -l en -u https://mysource.com
 
 This creates `src/<lang>/<mysourcename>/build.gradle.kts` along with the extension's package
 directory and a starter source class. New (non-multisrc) sources are scaffolded extending
-`KeiSource` with `libVersion = "1.6"`; sources based on an existing multisrc theme (`-m`) inherit
-whatever base class and `libVersion` that theme uses.
+`KeiSource` with `libVersion = "1.6"`; sources based on an existing multisrc theme (`-m`) extend
+that theme's base class and use its `libVersion`.
 
 Available options:
 
@@ -362,7 +362,7 @@ At least one `source {}` block is required for every extension.
 | `name`           | The name of the extension. Should be romanized if site name is not in English.                                                                                                                                                            |
 | `versionCode`    | The extension version code. This must be a positive integer and incremented with any change to the code. Do not bump for changes that do not affect users, such as changing a private function to a public function.                      |
 | `contentWarning` | Content safety classification. Must be set explicitly to one of `ContentWarning.SAFE`, `ContentWarning.MIXED`, or `ContentWarning.NSFW`.                                                                                                  |
-| `libVersion`     | The extension library version. All new extensions must set this to `"1.6"` and implement `KeiSource` (see [Extension main class](#extension-main-class)). `"1.4"` is legacy and only found in extensions that have not yet been migrated. |
+| `libVersion`     | The extension library version. Must be `"1.6"`; the source class must implement `KeiSource` (see [Extension main class](#extension-main-class)). |
 | `theme`          | Name of a multi-source theme from `lib-multisrc/` to inherit from (e.g. `"madara"`). When set, the extension's version code is `theme.baseVersionCode + versionCode`.                                                                     |
 | `pkgName`        | Overrides the application ID suffix (defaults to `<lang>.<source dir>` derived from the module path). Only needed when moving a module to a different directory - see [Moving a source to a different directory](#moving-a-source-to-a-different-directory). |
 | `source {}`      | Declares one source (or multiple, for multi-language or multi-mirror extensions) using KSP code generation. This block is mandatory. See [Source declaration](#source-declaration).                                                       |
@@ -390,7 +390,7 @@ abstract class MySource : KeiSource() {
 }
 ```
 
-New sources must extend `KeiSource` (with `libVersion = "1.6"`), never `HttpSource` directly - see [Extension main class](#extension-main-class) for details.
+Sources must extend `KeiSource` (with `libVersion = "1.6"`), never `HttpSource` directly; the build fails otherwise - see [Extension main class](#extension-main-class) for details.
 
 #### Declare sources in build.gradle.kts
 
@@ -1284,10 +1284,9 @@ the main app has at the expense of app size.
 
 ### Extension main class
 
-The class annotated with `@Source` and referenced by your `source {}` block(s). **All new
-extensions must implement `KeiSource`** (`libVersion = "1.6"`). Existing extensions/themes still
-extending `HttpSource` directly are legacy (`libVersion = "1.4"`); do not use `HttpSource` directly
-for new sources.
+The class annotated with `@Source` and referenced by your `source {}` block(s). **All
+extensions must implement `KeiSource`** (`libVersion = "1.6"`), either directly or through a theme.
+A `@Source` class that extends `HttpSource` directly fails the build.
 
 > [!NOTE]
 > `className` is set to `keiyoushi.source.Generated` automatically by the build system.
@@ -1295,8 +1294,8 @@ for new sources.
 | Class              | Description                                                                                                                                                                                     |
 |--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `SourceFactory`    | **Obsolete.** Used to expose multiple `Source`s manually. With `source {}` blocks, this is generated automatically.                                                                             |
-| `KeiSource`        | **The base class for all new online sources** (`libVersion = "1.6"`). A suspend-based API. Use this directly or extend a `KeiSource`-based theme base class. See [KeiSource](#keisource) below. |
-| `HttpSource`       | Legacy base class (`libVersion = "1.4"`). Only found in extensions/themes not yet migrated to `KeiSource`. Do not use for new sources.                                                          |
+| `KeiSource`        | **The base class for all online sources** (`libVersion = "1.6"`). A suspend-based API. Use this directly or extend a `KeiSource`-based theme base class. See [KeiSource](#keisource) below.     |
+| `HttpSource`       | Superclass of `KeiSource`. Do not extend it directly; `@Source` classes that do fail the build.                                                                                                 |
 | `ParsedHttpSource` | Deprecated, use `KeiSource` instead.                                                                                                                                                            |
 
 #### KeiSource
@@ -1792,12 +1791,12 @@ When no `host()` is specified in a theme `deeplink {}` block, the host is resolv
 | Field             | Description                                                                                                                                                                                                                                                              |
 |-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `baseVersionCode` | The theme's base version code. This must be a positive integer and **incremented** whenever a change is made to the theme implementation that affects the extensions.                                                                                                    |
-| `libVersion`      | The extension library version. New themes must set this to `"1.6"` and have their main class extend `KeiSource`. `"1.4"` is legacy and only found in themes not yet migrated. Every extension using the theme inherits this value and must not set its own `libVersion`. |
+| `libVersion`      | The extension library version. Must be `"1.6"`, and the theme's main class must extend `KeiSource`. Every extension using the theme inherits this value and must not set its own `libVersion`. |
 | `deeplink {}`     | Declares URL deeplink patterns inherited by all extensions using this theme. See [URL intent filter](#url-intent-filter).                                                                                                                                                |
 
 #### Theme main class
 
-The theme's main class (e.g., `<ThemeName>.kt`) contains the default implementation for the source sites. It should be declared as an `abstract class` extending `KeiSource` (or `HttpSource` for themes still on `libVersion = "1.4"`), allowing individual extensions to inherit and override its properties and methods.
+The theme's main class (e.g., `<ThemeName>.kt`) contains the default implementation for the source sites. It should be declared as an `abstract class` extending `KeiSource`, allowing individual extensions to inherit and override its properties and methods.
 
 ```kotlin
 package eu.kanade.tachiyomi.multisrc.example // Replace 'example' with your theme name
@@ -1806,7 +1805,7 @@ import keiyoushi.source.KeiSource
 
 abstract class ExampleTheme : KeiSource() {
 
-    // name, lang, and baseUrl are inherited from KeiSource/HttpSource. They are automatically
+    // name, lang, and baseUrl are inherited from KeiSource. They are automatically
     // overridden and injected by the KSP generator via each extension's `source {}`
     // block. Do not declare them in the constructor.
 
