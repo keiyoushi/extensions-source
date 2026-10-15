@@ -34,6 +34,12 @@ class TermPayloadDto(
 )
 
 @Serializable
+class FilterDataDto(
+    val genres: List<TermPayloadDto>,
+    val years: List<TermPayloadDto>,
+)
+
+@Serializable
 class ChapterContentDto(
     private val content: RenderedDto? = null,
 ) {

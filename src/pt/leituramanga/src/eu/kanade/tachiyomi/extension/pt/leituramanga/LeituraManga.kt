@@ -1,35 +1,34 @@
 package eu.kanade.tachiyomi.extension.pt.leituramanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class LeituraManga : HttpSource() {
+abstract class LeituraManga : KeiSource() {
 
     private val apiUrl = "https://api.leituramanga.net"
 
     private val cdnUrl = "https://cdn.leituramanga.net"
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             when (response.code) {
                 403 -> {
@@ -44,25 +43,19 @@ abstract class LeituraManga : HttpSource() {
             }
             response
         }
-        .rateLimit(1, 2.seconds)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
+        rateLimit(1, 2.seconds)
+    }
 
     // ================= Popular ==================
 
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/api/manga/?sort=view&limit=24&page=$page", headers)
-
-    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$apiUrl/api/manga/?sort=view&limit=24&page=$page")
 
     // ================= Latest ==================
 
-    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/api/manga/?sort=time&limit=24&page=$page", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList("$apiUrl/api/manga/?sort=time&limit=24&page=$page")
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<MangaResponseDto<MangaListDto>>()
+    private suspend fun parseMangaList(url: String): MangasPage {
+        val result = client.get(url).parseAs<MangaResponseDto<MangaListDto>>()
         val mangas = result.data.data.map { it.toSManga(cdnUrl) }
         val hasNext = result.data.pagination.let { it.page < it.totalPage }
         return MangasPage(mangas, hasNext)
@@ -70,7 +63,7 @@ abstract class LeituraManga : HttpSource() {
 
     // ================= Search ==================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/api/manga/".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "24")
             .addQueryParameter("page", page.toString())
@@ -101,12 +94,10 @@ abstract class LeituraManga : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
+        return parseMangaList(url.build().toString())
     }
 
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         GenreFilter(),
         StatusFilter(),
         SortFilter(),
@@ -114,32 +105,32 @@ abstract class LeituraManga : HttpSource() {
 
     // ================= Details ==================
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst("h1")!!.text()
-        description = document.selectFirst("h2:contains(Sinopse) +div p")?.text()
-        author = document.selectFirst("h2:contains(Informações) +div p:contains(Autor)")?.text()?.substringAfter(":")
-        genre = document.select("h2 + div > a[href*=genre]").joinToString { it.text() }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        status = when (document.selectFirst("h2:contains(Informações) +div p:contains(Status)")?.text()?.substringAfter(":")?.trim()?.lowercase()) {
-            "Em breve", "Em andamento" -> SManga.ONGOING
-            "Completo" -> SManga.COMPLETED
-            "Cancelado" -> SManga.CANCELLED
-            "Em pausa" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
+        manga.apply {
+            title = document.selectFirst("h1")!!.text()
+            description = document.selectFirst("h2:contains(Sinopse) +div p")?.text()
+            author = document.selectFirst("h2:contains(Informações) +div p:contains(Autor)")?.text()?.substringAfter(":")
+            genre = document.select("h2 + div > a[href*=genre]").joinToString { it.text() }
+
+            status = when (document.selectFirst("h2:contains(Informações) +div p:contains(Status)")?.text()?.substringAfter(":")?.trim()?.lowercase()) {
+                "Em breve", "Em andamento" -> SManga.ONGOING
+                "Completo" -> SManga.COMPLETED
+                "Cancelado" -> SManga.CANCELLED
+                "Em pausa" -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
+
+            setUrlWithoutDomain(document.location())
         }
 
-        setUrlWithoutDomain(document.location())
-    }
-
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
-
-    // ================= Chapters ==================
-
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
         val mangaId = document.extractNextJs<NextJsMangaIdDto> {
             (it as? JsonObject)?.containsKey("mangaId") == true
@@ -148,21 +139,19 @@ abstract class LeituraManga : HttpSource() {
             manga?.containsKey("_id") == true
         }?.manga?.id ?: throw IOException("ID do mangá não encontrado")
 
-        val slug = response.request.url.pathSegments.last { it.isNotEmpty() }
+        val slug = document.location().toHttpUrl().pathSegments.last { it.isNotEmpty() }
 
         // Using the exact limit from the frontend so we get the 80/min limit instead of the default 3/min limit
-        val request = GET("$apiUrl/api/chapter/get-by-manga-id?mangaId=$mangaId&page=1&limit=9007199254740991", headers)
-        val result = client.newCall(request).execute().parseAs<MangaResponseDto<ChapterListDto>>()
+        val result = client.get("$apiUrl/api/chapter/get-by-manga-id?mangaId=$mangaId&page=1&limit=9007199254740991")
+            .parseAs<MangaResponseDto<ChapterListDto>>()
 
-        return result.data.data.map { it.toSChapter(slug) }
+        return SMangaUpdate(manga, result.data.data.map { it.toSChapter(slug) })
     }
-
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     // ================= Pages ==================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val dto = response.extractNextJs<ChapterPageDto> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val dto = client.get(getChapterUrl(chapter)).extractNextJs<ChapterPageDto> {
             val chapter = (it as? JsonObject)?.get("chapter") as? JsonObject
             chapter?.containsKey("images") == true
         } ?: throw IOException("Páginas não encontradas")
@@ -171,6 +160,4 @@ abstract class LeituraManga : HttpSource() {
             Page(index, imageUrl = image.absUrl(cdnUrl))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

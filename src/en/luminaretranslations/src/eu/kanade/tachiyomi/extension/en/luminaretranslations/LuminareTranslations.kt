@@ -1,42 +1,34 @@
 package eu.kanade.tachiyomi.extension.en.luminaretranslations
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class LuminareTranslations : HttpSource() {
-    override val supportsLatest = true
+abstract class LuminareTranslations : KeiSource() {
 
-    private val apiUrl = "$baseUrl/wp-json/yarnovel/v1"
+    private val apiUrl get() = "$baseUrl/wp-json/yarnovel/v1"
     private val pageSize = 24
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(listOf(Filters("Popular", "popular")))))
 
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter(listOf(Filters("popular", "")))))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(listOf(Filters("Latest", "latest")))))
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter(listOf(Filters("latest", "")))))
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
@@ -73,74 +65,78 @@ abstract class LuminareTranslations : HttpSource() {
             ?.takeIf { it.isNotEmpty() }
             ?.let { url.addQueryParameter("status", it) }
 
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<EntryResponse>()
+        val result = client.get(url.build()).parseAs<EntryResponse>()
         val mangas = result.data.filter { it.type !in EXCLUDED_TYPES }.map { it.toSManga() }
-        val page = response.request.url.queryParameter("page")!!.toInt()
         val hasNextPage = (page * pageSize) < result.meta.total
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series/${manga.url}", headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        // The series and chapters API endpoints fail with a server-side PHP memory error, so parse the series page
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsResponse>().data.toSManga()
+        val xData = document.selectFirst("section[x-data*=chapters:]")!!.attr("x-data").lines().map(String::trim)
+        fun xDataArray(key: String) = xData.first { it.startsWith("$key:") }.removePrefix("$key:").trim().removeSuffix(",")
+
+        val info = xDataArray("infoRows").parseAs<List<InfoRow>>().associate { it.label to it.value }
+
+        val updatedManga = manga.apply {
+            title = document.selectFirst("h1")!!.text()
+            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
+            description = document.selectFirst("#series-description")?.wholeText()?.trim()
+            author = info["Author"]
+            artist = info["Artist"]
+            genre = info["Genre"]
+            status = when (info["Status"]?.lowercase()) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                "hiatus" -> SManga.ON_HIATUS
+                "dropped" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+        }
+
+        val chapterList = xDataArray("chapters").parseAs<List<ChapterData>>()
+            .map { it.toSChapter(manga.url) }
+            .sortedByDescending { it.chapter_number }
+
+        return SMangaUpdate(updatedManga, chapterList)
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/series/${manga.url}/chapters?per_page=999", headers)
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.memo["seriesSlug"]!!.string}/${chapter.url}"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val entrySlug = response.request.url.pathSegments[4]
-        return response.parseAs<ChapterResponse>().data.map { it.toSChapter(entrySlug) }.sortedBy { it.chapter_number }.reversed()
-    }
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.url}"
-
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/series/${chapter.url}", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<ViewerResponse>().data
-        return result.pages.mapIndexed { i, url ->
-            Page(i, imageUrl = url)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val images = client.get(getChapterUrl(chapter)).asJsoup().select("img.reader-page[data-src]")
+        val server = images.firstOrNull()?.attr("data-server-id")
+        return images.filter { it.attr("data-server-id") == server }.mapIndexed { i, img ->
+            Page(i, imageUrl = img.absUrl("data-src"))
         }
     }
 
-    private var filterData: FilterResponse? = null
+    override val supportsFilterFetching get() = true
 
-    private fun fetchFilters() {
-        if (filterData != null) return
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching {
-                val request = GET("$apiUrl/explore/filters", headers)
-                val response = client.newCall(request).execute()
-                filterData = response.parseAs<FilterResponse>()
-            }
-        }
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/explore/filters").parseAs<FilterResponse>().toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterResponse>() ?: return FilterList()
+        return FilterList(
+            Filter.Header("Note: Search and active filters are applied together"),
+            SortFilter(filterData.sorts),
+            StatusFilter(filterData.statuses),
+            Filter.Separator(),
+            GenreFilter(filterData.genres),
+            TagFilter(filterData.tags),
+            AuthorFilter(filterData.authors),
+            ArtistFilter(filterData.artists),
+        )
     }
-
-    override fun getFilterList(): FilterList {
-        fetchFilters()
-        val data = filterData
-        return if (data == null) {
-            FilterList(Filter.Header("Press 'Reset' to load filters"))
-        } else {
-            FilterList(
-                Filter.Header("Note: Search and active filters are applied together"),
-                SortFilter(data.sorts),
-                StatusFilter(data.statuses),
-                Filter.Separator(),
-                GenreFilter(data.genres),
-                TagFilter(data.tags),
-                AuthorFilter(data.authors),
-                ArtistFilter(data.artists),
-            )
-        }
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private val EXCLUDED_TYPES = setOf("novel", "light_novel", "web_novel")

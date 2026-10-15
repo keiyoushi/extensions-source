@@ -1,51 +1,44 @@
 package eu.kanade.tachiyomi.extension.pt.muitohentai
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class MuitoHentai : HttpSource() {
+abstract class MuitoHentai : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
-
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds)
 
     // The source does not have a popular list page, so we use the list instead.
-    override fun popularMangaRequest(page: Int): Request {
-        val newHeaders = headersBuilder()
+    private suspend fun fetchMangaList(page: Int): Document {
+        val newHeaders = headers.newBuilder()
             .set("Referer", if (page == 1) baseUrl else "$baseUrl/mangas/${page - 1}")
             .build()
 
         val pageStr = if (page != 1) page.toString() else ""
-        return GET("$baseUrl/mangas/$pageStr", newHeaders)
+        return client.get("$baseUrl/mangas/$pageStr", newHeaders).asJsoup()
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = fetchMangaList(page)
         val mangas = document.select("#archive-content article.tvshows").map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst("#paginacao a:last-child:contains(»)") != null
         return MangasPage(mangas, hasNextPage)
@@ -57,10 +50,8 @@ abstract class MuitoHentai : HttpSource() {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
 
-    override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = fetchMangaList(page)
         val mangas = document.select("ul.lancamento-cap2 > li").map { latestUpdatesFromElement(it) }
         val hasNextPage = document.selectFirst("#paginacao a:last-child:contains(»)") != null
         return MangasPage(mangas, hasNextPage)
@@ -72,23 +63,27 @@ abstract class MuitoHentai : HttpSource() {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchUrl = "$baseUrl/buscar-manga/".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
-            .toString()
+            .build()
 
-        return GET(searchUrl, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(searchUrl).asJsoup()
         val mangas = document.select("#archive-content article.tvshows").map { popularMangaFromElement(it) }
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val updatedManga = SManga.create().apply {
+            url = manga.url
+            title = manga.title
             author = document.selectFirst("div:has(strong:contains(Autor))")?.ownText()
             genre = document.select("a.genero_btn").joinToString {
                 it.text().replaceFirstChar { ch -> ch.titlecase(LOCALE) }
@@ -96,13 +91,12 @@ abstract class MuitoHentai : HttpSource() {
             description = document.selectFirst("div.backgroundpost:contains(Sinopse)")?.ownText()
             thumbnail_url = document.selectFirst("#capaAnime img")?.attr("abs:src")
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div.backgroundpost:contains(Capítulos de) h3 > a")
+        val chapterList = document.select("div.backgroundpost:contains(Capítulos de) h3 > a")
             .map { chapterFromElement(it) }
             .reversed()
+
+        return SMangaUpdate(updatedManga, chapterList)
     }
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
@@ -110,16 +104,12 @@ abstract class MuitoHentai : HttpSource() {
         setUrlWithoutDomain(element.attr("abs:href"))
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val newHeader = headersBuilder()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val newHeaders = headers.newBuilder()
             .set("Referer", "$baseUrl${chapter.url}".substringBeforeLast("/"))
             .build()
 
-        return GET(baseUrl + chapter.url, newHeader)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val document = client.get(baseUrl + chapter.url, newHeaders).asJsoup()
         return document.selectFirst("script:containsData(numeroImgAtual)")
             ?.data()
             ?.substringAfter("var arr = ")
@@ -131,15 +121,9 @@ abstract class MuitoHentai : HttpSource() {
             .orEmpty()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", page.url)
-            .build()
-
-        return GET(page.imageUrl!!, newHeaders)
-    }
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Referer", page.url)
+        .build()
 
     companion object {
         private val LOCALE = Locale("pt", "BR")

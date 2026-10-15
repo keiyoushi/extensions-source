@@ -23,9 +23,11 @@ import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.newAesCipher
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
@@ -51,9 +53,7 @@ import java.security.MessageDigest
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class Mangago :
@@ -370,15 +370,7 @@ abstract class Mangago :
         }
         val key = findHexEncodedVariable(chapterJs, "key").decodeHex()
         val iv = findHexEncodedVariable(chapterJs, "iv").decodeHex()
-        val cipher = Cipher.getInstance("AES/CBC/ZEROBYTEPADDING").apply {
-            init(
-                Cipher.DECRYPT_MODE,
-                SecretKeySpec(key, "AES"),
-                IvParameterSpec(iv),
-            )
-        }
-
-        var imageList = cipher.doFinal(encryptedImages).toString(Charsets.UTF_8)
+        var imageList = encryptedImages.aesDecrypt(newAesCipher("AES/CBC/ZEROBYTEPADDING", key, IvParameterSpec(iv))).decodeToString()
         imageList = unscrambleImageList(imageList, chapterJs)
         val cols = COLS_REGEX.find(chapterJs)?.groupValues?.get(1).orEmpty()
         val imageKeyScript = chapterJs

@@ -6,32 +6,29 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 @Source
-abstract class Megatokyo : HttpSource() {
+abstract class Megatokyo : KeiSource() {
 
     override val supportsLatest = false
 
-    private val dateParser = SimpleDateFormat("MMMMM dd, yyyy", Locale.US)
+    private val dateParser = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US)
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .ignoreAllSSLErrors()
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = ignoreAllSSLErrors()
 
     @SuppressLint("CustomX509TrustManager")
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
@@ -50,57 +47,51 @@ abstract class Megatokyo : HttpSource() {
         return this
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
-            setUrlWithoutDomain("/archive.php?list_by=date")
-            title = "Megatokyo"
-            artist = "Fred Gallagher"
-            author = "Fred Gallagher"
-            status = SManga.ONGOING
-            description = "Relax, we understand j00"
-            thumbnail_url = "https://i.ibb.co/yWQM1gY/megatokyo.png"
-        }
-
-        return Observable.just(MangasPage(listOf(manga), false))
+    private fun createManga() = SManga.create().apply {
+        setUrlWithoutDomain("/archive.php?list_by=date")
+        title = "Megatokyo"
+        artist = "Fred Gallagher"
+        author = "Fred Gallagher"
+        status = SManga.ONGOING
+        description = "Relax, we understand j00"
+        thumbnail_url = "https://i.ibb.co/yWQM1gY/megatokyo.png"
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
-        .map { it.mangas.first().apply { initialized = true } }
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(createManga()), false)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div.content h2:contains(Comics by Date) + div ul li a[name]")
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedManga = if (fetchDetails) createManga() else manga
+        if (!fetchChapters) return SMangaUpdate(updatedManga, chapters)
+
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val chapterList = document.select("div.content h2:contains(Comics by Date) + div ul li a[name]")
             .map { element ->
                 SChapter.create().apply {
                     url = element.attr("href")
                     chapter_number = url.substringAfterLast("/").toFloatOrNull() ?: -1f
                     name = element.text()
-                    date_upload = dateParser.tryParse(element.attr("title").replace(ordinalRegex, "$1"))
+                    date_upload = dateParser.tryParseDate(element.attr("title").replace(ordinalRegex, "$1"))
                 }
             }.reversed()
+
+        return SMangaUpdate(updatedManga, chapterList)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("#strip img").mapIndexed { i, element ->
             Page(i, imageUrl = element.absUrl("src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     companion object {
         private val ordinalRegex = "(\\d+)(st|nd|rd|th)".toRegex()

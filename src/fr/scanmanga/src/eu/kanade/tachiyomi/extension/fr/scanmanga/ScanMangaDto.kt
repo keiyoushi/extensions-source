@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.scanmanga
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -29,13 +30,20 @@ class UrlPayload(
 }
 
 @Serializable
+class LelRequestDto(
+    private val a: String, // sme
+    private val b: String, // sml
+    private val c: String, // fingerprint
+)
+
+@Serializable
 class MangaSearchDto(
     val title: List<MangaItemDto>?,
 )
 
 @Serializable
 class MangaItemDto(
-    val nom_match: String,
+    @SerialName("nom_match") val nomMatch: String,
     val url: String,
     val image: String,
 )

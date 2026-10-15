@@ -9,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -17,9 +19,6 @@ import okhttp3.Response
 import okio.ByteString.Companion.decodeBase64
 import java.io.IOException
 import java.util.Locale
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class KomikNesia : KeiSource() {
@@ -45,9 +44,7 @@ abstract class KomikNesia : KeiSource() {
             if (raw.size < 16) throw IOException("Encrypted data too short")
             val iv = raw.copyOfRange(0, 16)
             val ciphertext = raw.copyOfRange(16, raw.size)
-            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyStr.toByteArray(Charsets.UTF_8), "AES"), IvParameterSpec(iv))
-            return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+            return ciphertext.aesDecrypt(aesCbc(keyStr.encodeToByteArray(), iv)).decodeToString()
         } catch (e: Exception) {
             throw IOException("Failed to decrypt API response", e)
         }

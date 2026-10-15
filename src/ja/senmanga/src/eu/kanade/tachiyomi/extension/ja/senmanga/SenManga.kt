@@ -1,53 +1,42 @@
 package eu.kanade.tachiyomi.extension.ja.senmanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Source
-abstract class SenManga : HttpSource() {
-    override val supportsLatest = true
+abstract class SenManga : KeiSource() {
 
-    private val apiUrl = "$baseUrl/api"
+    private val apiUrl get() = "$baseUrl/api"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$apiUrl/directory?order=Popular&page=$page").parseAs<DirectoryResponse>().toMangasPage()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/directory?order=Popular&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<DirectoryResponse>()
-        val mangas = data.series.map { it.toSManga() }
-        val hasNext = (data.currentPage ?: 1) < (data.totalPages ?: 1)
+    private fun DirectoryResponse.toMangasPage(): MangasPage {
+        val mangas = series.map { it.toSManga() }
+        val hasNext = (currentPage ?: 1) < (totalPages ?: 1)
 
         return MangasPage(mangas, hasNext)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/home?page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<HomeResponse>()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val data = client.get("$apiUrl/home").parseAs<HomeResponse>()
         val mangas = data.series.map { it.toSManga() }
-
-        // The home endpoint doesn't return total pages, but generally has 20 items per page
-        return MangasPage(mangas, mangas.isNotEmpty())
+        return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/directory".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
@@ -67,46 +56,41 @@ abstract class SenManga : HttpSource() {
             url.addQueryParameter("order", it.toUriPart())
         }
 
-        return GET(url.build(), headers)
+        return client.get(url.build()).parseAs<DirectoryResponse>().toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         TypeFilter(),
         StatusFilter(),
         OrderFilter(),
     )
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.url}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDto>().toSManga()
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<SeriesDto>()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val data = client.get("$apiUrl/manga/${manga.url}").parseAs<SeriesDto>()
         val mangaSlug = data.slug
 
-        return data.chapterList?.map { chapter ->
+        val chapterList = data.chapterList?.map { chapter ->
             SChapter.create().apply {
                 url = "$mangaSlug/${chapter.url}"
                 name = chapter.title
-                date_upload = dateFormat.tryParse(chapter.datetime)
+                date_upload = Instant.tryParse(chapter.datetime)
             }
         } ?: emptyList()
+
+        return SMangaUpdate(data.toSManga(), chapterList)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/read/${chapter.url}", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<ReadResponse>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get("$apiUrl/read/${chapter.url}").parseAs<ReadResponse>()
         return data.pages.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
@@ -114,11 +98,5 @@ abstract class SenManga : HttpSource() {
         val mangaSlug = chapter.url.substringBefore("/")
         val chapterSlug = chapter.url.substringAfter("/")
         return "$baseUrl/manga/$mangaSlug/chapter-$chapterSlug/"
-    }
-}
-
-private val dateFormat by lazy {
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
     }
 }

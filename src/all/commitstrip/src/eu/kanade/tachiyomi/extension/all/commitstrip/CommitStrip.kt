@@ -1,30 +1,28 @@
 package eu.kanade.tachiyomi.extension.all.commitstrip
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
+import keiyoushi.utils.tryParseDate
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
 @Source
-abstract class CommitStrip : HttpSource() {
+abstract class CommitStrip : KeiSource() {
 
     override val supportsLatest = false
 
     private val siteLang: String get() = lang
 
-    private val dateFormat by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.US) }
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.US)
 
     // Helper
 
@@ -52,85 +50,77 @@ abstract class CommitStrip : HttpSource() {
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         // have one manga entry for each year
         val mangas = (currentYear downTo 2012).map { createManga(it) }
-        return Observable.just(MangasPage(mangas, false))
+        return MangasPage(mangas, false)
     }
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1).map { mangaPage ->
-        val filtered = mangaPage.mangas.filter { it.title.contains(query, ignoreCase = true) }
-        MangasPage(filtered, false)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val filtered = getPopularManga(1).mangas.filter { it.title.contains(query, ignoreCase = true) }
+        return MangasPage(filtered, false)
     }
-
-    // Details
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(
-        manga.apply {
-            initialized = true
-        },
-    )
 
     // Open in WebView
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("${manga.url}/?", headers)
+    override fun getMangaUrl(manga: SManga): String = "${manga.url}/?"
 
-    // Chapters
+    override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        val pages = client.newCall(GET(manga.url, headers)).execute().use { response ->
-            val responseString = response.asJsoup().selectFirst(".wp-pagenavi .pages")?.text() ?: "1"
+    // Details & Chapters
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
+
+        // years without any strip (e.g. 2023) return 404
+        val response = client.get("${manga.url}/?", ensureSuccess = false)
+        if (response.code == 404) {
+            response.close()
+            return SMangaUpdate(manga, emptyList())
+        }
+
+        val pages = response.asJsoup().let { document ->
+            val responseString = document.selectFirst(".wp-pagenavi .pages")?.text() ?: "1"
             pageRegex.findAll(responseString).lastOrNull()?.value?.toInt() ?: 1
         }
 
-        val chapters = (1..pages).flatMap { page ->
-            client.newCall(GET("${manga.url}/page/$page", headers)).execute().use { response ->
-                if (!response.isSuccessful) throw Exception("HTTP error ${response.code}")
-                response.asJsoup().select(".excerpt a").map { element ->
-                    SChapter.create().apply {
-                        url = "$baseUrl/$siteLang" + element.attr("href").substringAfter(baseUrl)
+        val chapterList = (1..pages).flatMap { page ->
+            client.get("${manga.url}/page/$page/?").asJsoup().select(".excerpt a").map { element ->
+                SChapter.create().apply {
+                    url = "$baseUrl/$siteLang" + element.attr("href").substringAfter(baseUrl)
 
-                        // get the chapter date from the url
-                        val dateStr = dateRegex.find(url)?.value
-                        date_upload = dateFormat.tryParse(dateStr)
+                    // get the chapter date from the url
+                    val dateStr = dateRegex.find(url)?.value
+                    date_upload = dateFormat.tryParseDate(dateStr)
 
-                        name = element.select("span").text()
-                    }
+                    name = element.select("span").text()
                 }
             }
         }.distinctBy { it.url }
 
-        val total = chapters.size
-        chapters.forEachIndexed { index, chapter ->
+        val total = chapterList.size
+        chapterList.forEachIndexed { index, chapter ->
             chapter.chapter_number = (total - index).toFloat()
         }
 
-        chapters
+        return SMangaUpdate(manga, chapterList)
     }
 
     // Page
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        client.newCall(GET(chapter.url, headers)).execute().use { response ->
-            val imageUrl = response.asJsoup().selectFirst(".entry-content p img")?.attr("abs:src") ?: ""
-            listOf(Page(0, imageUrl = imageUrl))
-        }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val imageUrl = client.get(chapter.url).asJsoup().selectFirst(".entry-content p img")?.attr("abs:src") ?: ""
+        return listOf(Page(0, imageUrl = imageUrl))
     }
-
-    // Unsupported
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val LOGO_EN = "https://i.imgur.com/HODJlt9.jpg"

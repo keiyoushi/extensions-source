@@ -1,24 +1,30 @@
 package eu.kanade.tachiyomi.extension.pt.argosscan
 
-import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlin.time.Instant
 
 @Serializable
-class ProjectResponseDto(
-    private val items: List<ProjectDto> = emptyList(),
+class Projects(
+    private val items: List<Project> = emptyList(),
 ) {
-    fun toSMangaList(query: String = ""): List<SManga> = items.filter { it.type?.equals("Novel", ignoreCase = true) != true }
+    fun toMangasPage(query: String = "") = items.filter { it.type?.equals("Novel", ignoreCase = true) != true }
         .filter { query.isBlank() || it.title.contains(query, ignoreCase = true) }
-        .map { it.toSManga() }
+        .map { it.toSManga() }.let {
+            MangasPage(it, false)
+        }
 }
 
 @Serializable
-class ProjectDto(
+class Project(
     val id: String,
     val title: String,
     val slug: String,
@@ -26,15 +32,15 @@ class ProjectDto(
     private val description: String? = null,
     private val status: String? = null,
     @SerialName("cover_latest_url") private val coverLatestUrl: String? = null,
-    private val authors: List<AuthorDto> = emptyList(),
-    private val tags: List<TagDto> = emptyList(),
+    private val authors: List<Author> = emptyList(),
+    private val tags: List<Tag> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/manga/$slug"
-        title = this@ProjectDto.title
+        title = this@Project.title
         thumbnail_url = coverLatestUrl
-        description = this@ProjectDto.description
-        status = when (this@ProjectDto.status?.lowercase()) {
+        description = this@Project.description
+        status = when (this@Project.status?.lowercase()) {
             "completo" -> SManga.COMPLETED
             "em lançamento" -> SManga.ONGOING
             "em pausa" -> SManga.ON_HIATUS
@@ -48,60 +54,58 @@ class ProjectDto(
             .joinToString { it.name }
             .takeIf { it.isNotBlank() }
         genre = tags.joinToString { it.name }.takeIf { it.isNotBlank() }
+        memo = buildJsonObject { put("projectId", id) }
     }
 }
 
 @Serializable
-class AuthorDto(
+class Author(
     val name: String,
     val role: String? = null,
 )
 
 @Serializable
-class TagDto(
+class Tag(
     val name: String,
 )
 
 @Serializable
-class ChapterResponseDto(
-    private val items: List<ChapterDto> = emptyList(),
+class Chapters(
+    private val items: List<Chapter> = emptyList(),
 ) {
-    fun toSChapterList(projectId: String, dateFormat: SimpleDateFormat): List<SChapter> = items.sortedWith(compareByDescending<ChapterDto> { it.volumeNumber }.thenByDescending { it.chapterNumber })
-        .map { it.toSChapter(projectId, dateFormat) }
-
-    fun getImagesForChapter(chapterId: String): List<Page> {
-        val chapter = items.find { it.id == chapterId }
-            ?: throw Exception("Capítulo não encontrado.")
-        return chapter.images?.mapIndexed { i, img ->
-            Page(i, imageUrl = img.fileUrl)
-        } ?: emptyList()
-    }
+    fun toSChapterList(projectId: String): List<SChapter> = items.sortedWith(compareByDescending<Chapter> { it.volumeNumber }.thenByDescending { it.chapterNumber })
+        .map { it.toSChapter(projectId) }
 }
 
 @Serializable
-class ChapterDto(
+class Chapter(
     val id: String,
     private val title: String? = null,
     @SerialName("chapter_number") val chapterNumber: Float? = null,
     @SerialName("volume_number") val volumeNumber: Int? = null,
     @SerialName("created_at") private val createdAt: String? = null,
-    val images: List<ImageDto>? = null,
+    val images: List<Image>? = null,
 ) {
-    fun toSChapter(projectId: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
-        url = "$id|$projectId"
+    fun toSChapter(projectId: String) = SChapter.create().apply {
+        url = id
         name = buildString {
             if (volumeNumber != null) append("Vol. $volumeNumber ")
             append("Cap. ")
             append(chapterNumber?.toString()?.removeSuffix(".0") ?: "0")
-            if (!this@ChapterDto.title.isNullOrBlank()) append(" - ${this@ChapterDto.title}")
+            if (!this@Chapter.title.isNullOrBlank()) append(" - ${this@Chapter.title}")
         }.trim()
-        date_upload = createdAt?.substringBefore(".")?.let {
-            dateFormat.tryParse(it)
-        } ?: 0L
+        date_upload = Instant.tryParse(createdAt)
+        memo = buildJsonObject {
+            putJsonArray("images") {
+                images.orEmpty().forEach {
+                    add(it.fileUrl)
+                }
+            }
+        }
     }
 }
 
 @Serializable
-class ImageDto(
+class Image(
     @SerialName("file_url") val fileUrl: String,
 )

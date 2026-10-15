@@ -1,39 +1,30 @@
 package eu.kanade.tachiyomi.extension.pt.argosscan
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
-abstract class ArgosScan : HttpSource() {
+abstract class ArgosScan : KeiSource() {
 
     private val apiUrl = "https://api.argoscomics.online"
 
-    override val supportsLatest = true
+    override val supportsLatest = false
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-    }
-
-    private val authInterceptor = Interceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
         val request = chain.request()
 
         if (request.url.host.startsWith("api.")) {
@@ -55,88 +46,73 @@ abstract class ArgosScan : HttpSource() {
         response
     }
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(authInterceptor)
-        .build()
-
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/projects", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<ProjectResponseDto>().toSMangaList()
-        return MangasPage(mangas, false)
-    }
-
-    // =============================== Latest ===============================
-
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getPopularManga(page: Int) = (
+        client.get("$apiUrl/projects").parseAs<Projects>().toMangasPage()
+        )
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$apiUrl/projects#${query.trim()}", headers)
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val query = response.request.url.fragment ?: ""
-        val mangas = response.parseAs<ProjectResponseDto>().toSMangaList(query)
-        return MangasPage(mangas, false)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        return fetchDetails(slug).toSManga()
     }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = (
+        client.get("$apiUrl/projects").parseAs<Projects>().toMangasPage(query)
+        )
 
     // =========================== Manga Details ============================
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/projects/slug/$slug", headers)
+        val projectId = manga.memo["projectId"]?.string
+
+        if (projectId == null) {
+            val project = fetchDetails(slug)
+            return SMangaUpdate(
+                project.toSManga(),
+                if (fetchChapters) fetchChapters(project.id) else chapters,
+            )
+        }
+        return coroutineScope {
+            val updatedManga = async {
+                if (fetchDetails) fetchDetails(slug).toSManga() else manga
+            }
+            val updatedChapters = async {
+                if (fetchChapters) fetchChapters(projectId) else chapters
+            }
+            SMangaUpdate(updatedManga.await(), updatedChapters.await())
+        }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<ProjectDto>().toSManga()
+    private suspend fun fetchDetails(slug: String) = client.get("$apiUrl/projects/slug/$slug").parseAs<Project>()
 
-    // ============================== Chapters ==============================
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        val slug = manga.url.substringAfterLast("/")
-
-        // 1. Fetch details first to extract the project ID
-        val detailsReq = GET("$apiUrl/projects/slug/$slug", headers)
-        val detailsRes = client.newCall(detailsReq).execute()
-
-        if (!detailsRes.isSuccessful) {
-            throw IOException("Falha ao buscar os detalhes do projeto.")
-        }
-        val projectDto = detailsRes.parseAs<ProjectDto>()
-
-        // 2. Fetch the chapters using the required project_id
-        val chaptersReq = GET("$apiUrl/chapters?kind=published&project_id=${projectDto.id}", headers)
-        val chaptersRes = client.newCall(chaptersReq).execute()
-
-        if (!chaptersRes.isSuccessful) {
-            throw IOException("Falha ao buscar os capítulos.")
-        }
-
-        chaptersRes.parseAs<ChapterResponseDto>().toSChapterList(projectDto.id, dateFormat)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used.")
+    private suspend fun fetchChapters(projectId: String) = (
+        client.get("$apiUrl/chapters?kind=published&project_id=$projectId")
+            .parseAs<Chapters>()
+            .toSChapterList(projectId)
+        )
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val parts = chapter.url.split("|")
-        val chapterId = parts[0]
-        val projectId = parts[1]
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val images = chapter.memo["images"]?.parseAs<List<String>>()
+            ?: error("Atualizar mangá")
 
-        // Passing chapter_id as URL fragment prevents it from being sent over the network
-        return GET("$apiUrl/chapters?kind=published&project_id=$projectId#$chapterId", headers)
+        return images.ifEmpty {
+            error("Capítulo não encontrado.")
+        }.mapIndexed { i, url ->
+            Page(i, imageUrl = url)
+        }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterId = response.request.url.fragment ?: throw Exception("ID do capítulo não encontrado.")
-        return response.parseAs<ChapterResponseDto>().getImagesForChapter(chapterId)
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 }

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ru.tomilolib
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,41 +9,37 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import okhttp3.OkHttpClient
 
 @Source
 abstract class TomiloLib :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
+    private val apiUrl get() = "$baseUrl/api"
 
-    private val apiUrl by lazy { "$baseUrl/api" }
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
-    override val client = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
-
-    // Global headers only carry a browser-like Referer. This same header set is
-    // reused by Coil for cover/page images, so it must NOT include an
-    // "Accept: application/json" header (the CDN returns 403 for images).
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    // Headers for REST/JSON API calls only.
-    private val apiHeaders by lazy {
-        headersBuilder()
+    // Headers for REST/JSON API calls only. The global headers are reused by Coil
+    // for cover/page images, so they must NOT include an "Accept: application/json"
+    // header (the CDN returns 403 for images).
+    private val apiHeaders: Headers
+        get() = headersBuilder()
             .add("Accept", "application/json")
             .build()
-    }
 
     private val preferences by getPreferencesLazy()
 
@@ -56,19 +51,15 @@ abstract class TomiloLib :
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/titles?sortBy=views&order=desc&page=$page&limit=$PAGE_LIMIT", apiHeaders)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangasPage(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangasPage("$apiUrl/titles?sortBy=views&order=desc&page=$page&limit=$PAGE_LIMIT".toHttpUrl())
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/titles?sortBy=updatedAt&order=desc&page=$page&limit=$PAGE_LIMIT", apiHeaders)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangasPage(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangasPage("$apiUrl/titles?sortBy=updatedAt&order=desc&page=$page&limit=$PAGE_LIMIT".toHttpUrl())
 
     // ============================== Search ================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val urlBuilder = "$apiUrl/titles".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", PAGE_LIMIT.toString())
@@ -96,13 +87,11 @@ abstract class TomiloLib :
 
         urlBuilder.addQueryParameter("sortBy", sortBy)
         urlBuilder.addQueryParameter("order", order)
-        return GET(urlBuilder.build(), apiHeaders)
+        return getMangasPage(urlBuilder.build())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseMangasPage(response)
-
-    private fun parseMangasPage(response: Response): MangasPage {
-        val data = response.parseAs<ApiResponse<TitlesData>>().data
+    private suspend fun getMangasPage(url: HttpUrl): MangasPage {
+        val data = client.get(url, apiHeaders).parseAs<ApiResponse<TitlesData>>().data
         val mangas = data.titles
             .filter { showAdult || !it.isAdult }
             .map { it.toSManga(baseUrl) }
@@ -113,20 +102,36 @@ abstract class TomiloLib :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/titles/${manga.url.substringBefore('/')}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/titles/${manga.titleId()}", apiHeaders)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val titleId = manga.titleId()
+        val details = async {
+            if (fetchDetails) {
+                client.get("$apiUrl/titles/$titleId", apiHeaders)
+                    .parseAs<ApiResponse<TitleDto>>().data.toSManga(baseUrl)
+            } else {
+                manga
+            }
+        }
+        val chapterList = async {
+            if (fetchChapters) getChapters(titleId) else chapters
+        }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<ApiResponse<TitleDto>>().data.toSManga(baseUrl)
+        SMangaUpdate(details.await(), chapterList.await())
+    }
 
     // ============================== Chapters ==============================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable { getChapters(manga.titleId()) }
-
-    private fun getChapters(titleId: String): List<SChapter> {
+    private suspend fun getChapters(titleId: String): List<SChapter> {
         val chapters = mutableListOf<ChapterDto>()
         var page = 1
         var totalPages: Int
         do {
-            val data = client.newCall(chaptersPageRequest(titleId, page)).execute()
+            val data = client.get("$apiUrl/chapters?titleId=$titleId&page=$page&limit=$CHAPTERS_PER_PAGE", apiHeaders)
                 .parseAs<ApiResponse<ChaptersData>>().data
             chapters += data.chapters
             totalPages = data.pagination.pages
@@ -139,16 +144,11 @@ abstract class TomiloLib :
             .mapNotNull { it.toSChapter(hidePaidChapters) }
     }
 
-    private fun chaptersPageRequest(titleId: String, page: Int): Request = GET("$apiUrl/chapters?titleId=$titleId&page=$page&limit=$CHAPTERS_PER_PAGE", apiHeaders)
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/${chapter.url}", apiHeaders)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<ApiResponse<ChapterDetailDto>>().data
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get("$apiUrl/chapters/${chapter.url}", apiHeaders)
+            .parseAs<ApiResponse<ChapterDetailDto>>().data
         if (data.pages.isEmpty()) {
             if (data.isPaid) throw Exception("Глава платная и ещё не открыта бесплатно")
             return emptyList()
@@ -156,11 +156,9 @@ abstract class TomiloLib :
         return data.pages.mapIndexed { i, url -> Page(i, imageUrl = resolveImageUrl(url, baseUrl)) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         TypeFilter(),
         StatusFilter(),
         SortFilter(),

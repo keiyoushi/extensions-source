@@ -6,12 +6,17 @@ plugins {
 
 keiyoushi {
     name = "ManhwaBuddy"
-    versionCode = 3
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
+    theme = "yiimanga"
 
     source {
         lang = "en"
         baseUrl = "https://manhwabuddy.com"
+    }
+
+    deeplink {
+        path("/manhwa/..*")
     }
 }

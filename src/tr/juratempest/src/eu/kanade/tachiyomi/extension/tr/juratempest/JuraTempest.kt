@@ -7,129 +7,129 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.Headers
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import org.jsoup.Jsoup
-import org.jsoup.parser.Parser
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-import kotlin.time.Instant
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class JuraTempest : KeiSource() {
 
-    // ================================================================
-    // POPULAR
-    // ================================================================
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 3, period = 1.seconds)
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Sec-Fetch-Site", "same-origin")
 
-        val document = client.get("$baseUrl/").asJsoup()
-        val mangas = document.select("div.swiper-slide").mapNotNull { slide ->
-            val link = slide.selectFirst("a[href^=/explore/]") ?: return@mapNotNull null
-            SManga.create().apply {
-                setUrlWithoutDomain(link.absUrl("href"))
-                title = link.text()
-                thumbnail_url = slide.selectFirst("div[class*=\"aspect-2/3\"] img")?.absUrl("src")
-            }
-        }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/explore/${manga.url.removePrefix("/explore/").trim('/')}"
 
-        return MangasPage(mangas, false)
-    }
-
-    // ================================================================
-    // LATEST
-    // ================================================================
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
-
-        val document = client.get("$baseUrl/").asJsoup()
-        val section = document.selectFirst("h2:containsOwn(Son Yüklenenler)")?.closest("section")
-            ?: return MangasPage(emptyList(), false)
-
-        val mangas = section.select("a[href^=/explore/]").mapNotNull { element ->
-            val slug = element.attr("href").substringAfter("/explore/").substringBefore("/")
-            if (slug.isEmpty()) return@mapNotNull null
-
-            SManga.create().apply {
-                url = "/explore/$slug"
-                title = element.selectFirst("span.truncate.font-semibold")?.text() ?: return@mapNotNull null
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            }
-        }.distinctBy { it.url }
-
-        return MangasPage(mangas, false)
-    }
-
-    // ================================================================
-    // SEARCH
-    // ================================================================
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (query.isBlank()) return MangasPage(emptyList(), false)
-
-        val sitemapXml = client.get("$baseUrl/sitemap.xml").body.string()
-        val sitemapDocument = Jsoup.parse(sitemapXml, baseUrl, Parser.xmlParser())
-        val slugs = sitemapDocument.select("url > loc").mapNotNull { it.text().toSlugOrNull() }.distinct()
-
-        val normalizedQuery = normalizeForSearch(query)
-        val matchedSlugs = slugs.filter { normalizeForSearch(it).contains(normalizedQuery) }
-
-        val pageSlugs = matchedSlugs.drop((page - 1) * SEARCH_PAGE_SIZE).take(SEARCH_PAGE_SIZE)
-        val mangas = pageSlugs.map { slug ->
-            val document = client.get("$baseUrl/explore/$slug").asJsoup()
-            SManga.create().apply {
-                url = "/explore/$slug"
-                title = document.selectFirst("h1")?.text() ?: slug
-                thumbnail_url = document.selectFirst("div[data-slot=manga-detail-hero-cover] img")?.absUrl("src")
-            }
-        }
-
-        return MangasPage(mangas, matchedSlugs.size > page * SEARCH_PAGE_SIZE)
-    }
-
-    private fun String.toSlugOrNull(): String? {
-        val url = toHttpUrlOrNull() ?: return null
-        if (url.host != HOST_NAME || url.pathSegments.size != 2 || url.pathSegments[0] != "explore") return null
-        return url.pathSegments[1]
-    }
-
-    private fun normalizeForSearch(text: String): String = text.lowercase()
-        .replace("ç", "c")
-        .replace("ş", "s")
-        .replace("ğ", "g")
-        .replace("ü", "u")
-        .replace("ö", "o")
-        .replace("ı", "i")
-        .replace("i̇", "i")
-        .replace(Regex("[^a-z0-9]+"), "")
-
-    // ================================================================
-    // MANGA DETAILS
-    // ================================================================
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/explore/${chapter.url.removePrefix("/explore/").trim('/')}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments
-        if (url.host != HOST_NAME || segments.size != 2 || segments[0] != "explore") return null
+        if (segments.size < 2 || segments[0] != "explore") return null
 
-        val manga = SManga.create().apply {
-            this.url = "/explore/${segments[1]}"
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+        val slug = segments[1]
+        val manga = SManga.create().apply { this.url = slug }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
             .manga
             .apply {
                 initialized = true
-                this.url = manga.url
+                this.url = slug
             }
+    }
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val offset = (page - 1) * SEARCH_PAGE_SIZE
+        val response = client.post(
+            "$baseUrl/api/rpc/search/manga",
+            body = RpcRequest(SearchRequestPayload(q = WILDCARD_QUERY, limit = SEARCH_PAGE_SIZE, offset = offset)).toJsonRequestBody(),
+        ).parseAs<RpcResponse<SearchResultDto>>()
+
+        val result = response.json
+        val mangas = result.hits.map { it.toSManga() }
+        val hasNextPage = (result.offset + result.hits.size) < result.estimatedTotalHits
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page > 1) {
+            return MangasPage(emptyList(), hasNextPage = false)
+        }
+
+        val response = client.post(
+            "$baseUrl/api/rpc/release/latest",
+            body = RpcRequest(EmptyPayload()).toJsonRequestBody(),
+        ).parseAs<RpcResponse<List<LatestReleaseDto>>>()
+
+        val mangas = response.json
+            .map { it.toSManga() }
+            .distinctBy { it.url }
+
+        return MangasPage(mangas, hasNextPage = false)
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            return getPopularManga(page)
+        }
+
+        if (trimmed.length < MIN_QUERY_LENGTH) {
+            return searchShortQuery(trimmed, page)
+        }
+
+        val offset = (page - 1) * SEARCH_PAGE_SIZE
+        val response = client.post(
+            "$baseUrl/api/rpc/search/manga",
+            body = RpcRequest(SearchRequestPayload(q = trimmed, limit = SEARCH_PAGE_SIZE, offset = offset)).toJsonRequestBody(),
+        ).parseAs<RpcResponse<SearchResultDto>>()
+
+        val result = response.json
+        val mangas = result.hits.map { it.toSManga() }
+        val hasNextPage = (result.offset + result.hits.size) < result.estimatedTotalHits
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    private suspend fun searchShortQuery(query: String, page: Int): MangasPage = coroutineScope {
+        val page1 = async { fetchCatalogueBatch(0) }
+        val page2 = async { fetchCatalogueBatch(50) }
+        val page3 = async { fetchCatalogueBatch(100) }
+
+        val allHits = (page1.await() + page2.await() + page3.await())
+            .distinctBy { it.slug }
+
+        val matched = allHits
+            .filter { it.matches(query) }
+            .map { it.toSManga() }
+
+        val fromIndex = (page - 1) * SEARCH_PAGE_SIZE
+        if (fromIndex >= matched.size) {
+            return@coroutineScope MangasPage(emptyList(), false)
+        }
+
+        val paged = matched.drop(fromIndex).take(SEARCH_PAGE_SIZE)
+        val hasNext = matched.size > page * SEARCH_PAGE_SIZE
+        MangasPage(paged, hasNext)
+    }
+
+    private suspend fun fetchCatalogueBatch(offset: Int): List<MangaDto> = try {
+        val response = client.post(
+            "$baseUrl/api/rpc/search/manga",
+            body = RpcRequest(SearchRequestPayload(q = WILDCARD_QUERY, limit = 50, offset = offset)).toJsonRequestBody(),
+        ).parseAs<RpcResponse<SearchResultDto>>()
+        response.json.hits
+    } catch (_: Exception) {
+        emptyList()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -137,158 +137,60 @@ abstract class JuraTempest : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+    ): SMangaUpdate = coroutineScope {
+        val slug = manga.url.removePrefix("/explore/").trim('/')
 
-        val updatedManga = SManga.create().apply {
-            url = manga.url
-            title = document.selectFirst("h1")!!.text()
-            thumbnail_url = document.selectFirst("div[data-slot=manga-detail-hero-cover] img")?.absUrl("src")
-            description = document.selectFirst("p[data-slot=manga-detail-hero-description]")?.text()
-            genre = document.select("div[data-slot=manga-detail-tags-genres] span[data-slot=badge]")
-                .joinToString { it.text() }
-            status = document.selectFirst("div[data-slot=manga-detail-metadata] span:has(svg.lucide-clock)")
-                ?.text()
-                ?.let(::parseStatus)
-                ?: SManga.UNKNOWN
-        }
-
-        val chapterList = if (fetchChapters) {
-            val hydratedChapters = chapterEntryRegex.findAll(document.html())
-                .map { match -> match.toChapter(manga.url) }
-                .toList()
-
-            hydratedChapters.ifEmpty {
-                val visibleChapters = document.select("a[data-slot=chapter-row]").map { element ->
-                    SChapter.create().apply {
-                        setUrlWithoutDomain(element.absUrl("href"))
-                        name = element.selectFirst("span.truncate.font-medium")!!.text()
-                        chapter_number = element.selectFirst("div.size-10")?.text()?.trim()?.toFloatOrNull() ?: -1f
-                        date_upload = element.selectFirst("span.text-muted-foreground.text-xs")?.text()
-                            ?.let { dateFormat.tryParseDate(it, istanbulZone) } ?: 0L
-                    }
-                }
-                visibleChapters + fillMissingChapters(manga.url, visibleChapters)
+        val detailsDeferred = if (fetchDetails) {
+            async {
+                client.post(
+                    "$baseUrl/api/rpc/manga/bySlug",
+                    body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
+                ).parseAs<RpcResponse<MangaDto>>().json.toSMangaDetails()
             }
         } else {
-            chapters
+            null
         }
 
-        return SMangaUpdate(updatedManga, chapterList)
+        val chaptersDeferred = if (fetchChapters) {
+            async {
+                client.post(
+                    "$baseUrl/api/rpc/chapter/byMangaSlug",
+                    body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
+                ).parseAs<RpcResponse<List<ChapterDto>>>().json.map { it.toSChapter(slug) }
+            }
+        } else {
+            null
+        }
+
+        SMangaUpdate(
+            manga = detailsDeferred?.await() ?: manga,
+            chapters = chaptersDeferred?.await() ?: chapters,
+        )
     }
-
-    private fun parseStatus(status: String): Int {
-        val text = status.lowercase()
-        return when {
-            text.contains("devam") -> SManga.ONGOING
-            text.contains("tamamlandı") -> SManga.COMPLETED
-            text.contains("ara verildi") -> SManga.ON_HIATUS
-            text.contains("iptal") || text.contains("bırakıldı") -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
-    }
-
-    // ================================================================
-    // CHAPTERS
-    // ================================================================
-
-    private fun MatchResult.toChapter(mangaUrl: String): SChapter {
-        val (slug, number, title, isSpecial, createdAt) = destructured
-        return SChapter.create().apply {
-            url = "$mangaUrl/$slug"
-            name = title.replace("\\\"", "\"").replace("\\\\", "\\")
-            chapter_number = number.toFloatOrNull() ?: -1f
-            date_upload = Instant.tryParse(createdAt)
-            scanlator = if (isSpecial == "!0") "Özel" else null
-        }
-    }
-
-    private suspend fun fillMissingChapters(mangaUrl: String, visibleChapters: List<SChapter>): List<SChapter> {
-        val lowestWhole = visibleChapters
-            .map { it.chapter_number }
-            .filter { it > 0 && it == it.toInt().toFloat() }
-            .minOrNull()
-            ?.toInt()
-            ?: return emptyList()
-
-        if (lowestWhole <= 1) return emptyList()
-
-        val discovered = mutableMapOf<Int, SChapter>()
-
-        suspend fun probe(n: Int): Boolean {
-            val response = try {
-                client.get("$baseUrl$mangaUrl/$n")
-            } catch (e: Exception) {
-                return false
-            }
-            val body = response.body.string()
-            chapterEntryRegex.findAll(body).forEach { match ->
-                val chapter = match.toChapter(mangaUrl)
-                val number = chapter.chapter_number
-                if (number > 0 && number == number.toInt().toFloat()) {
-                    discovered[number.toInt()] = chapter
-                }
-            }
-            response.close()
-            return true
-        }
-
-        var lastGood = lowestWhole
-        var probeNumber = lowestWhole - 1
-        var failedAt: Int? = null
-        while (probeNumber >= 1) {
-            if (probe(probeNumber)) {
-                lastGood = probeNumber
-                if (probeNumber == 1) break
-                probeNumber = maxOf(1, probeNumber - 10)
-            } else {
-                failedAt = probeNumber
-                break
-            }
-        }
-
-        val lowerBound = failedAt?.let { badChapter ->
-            var lo = badChapter + 1
-            var hi = lastGood
-            while (lo < hi) {
-                val mid = (lo + hi) / 2
-                if (probe(mid)) hi = mid else lo = mid + 1
-            }
-            lo
-        } ?: 1
-
-        if (lowerBound >= lowestWhole) return emptyList()
-
-        return ((lowestWhole - 1) downTo lowerBound).map { n ->
-            discovered[n] ?: SChapter.create().apply {
-                url = "$mangaUrl/$n"
-                name = "Bölüm $n"
-                chapter_number = n.toFloat()
-            }
-        }
-    }
-
-    // ================================================================
-    // PAGES
-    // ================================================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val parts = chapter.url.removePrefix("/explore/").trim('/').split("/")
+        if (parts.size < 2) return emptyList()
+        val mangaSlug = parts[0]
+        val chapterSlug = parts[1]
 
-        return document.select("div[data-slot=reader-images] img").mapIndexed { index, img ->
-            Page(index, imageUrl = img.absUrl("src"))
-        }
+        val response = client.post(
+            "$baseUrl/api/rpc/release/byChapterSlug",
+            body = RpcRequest(ChapterReleasePayload(mangaSlug, chapterSlug)).toJsonRequestBody(),
+        ).parseAs<RpcResponse<List<ReleaseDto>>>()
+
+        val release = response.json.maxByOrNull { it.pages.size } ?: return emptyList()
+
+        return release.pages
+            .sortedBy { it.number }
+            .mapIndexedNotNull { index, page ->
+                page.url?.let { Page(index, imageUrl = it) }
+            }
     }
 
     companion object {
         private const val SEARCH_PAGE_SIZE = 20
-        private const val HOST_NAME = "juratempe.st"
-
-        private val istanbulZone = ZoneId.of("Europe/Istanbul")
-        private val dateFormat = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("tr"))
-
-        private val chapterEntryRegex = Regex(
-            """slug:"([^"]+)",number:([0-9.]+),title:"((?:[^"\\]|\\.)*)",isSpecial:(!0|!1),createdAt:(?:${'$'}\w+\[\d+]=)?new Date\("([^"]+)"\)""",
-        )
+        private const val MIN_QUERY_LENGTH = 3
+        private const val WILDCARD_QUERY = "***"
     }
 }

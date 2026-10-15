@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Jinmangas"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "en"
-        baseUrl = "https://jinmangas.com"
+        baseUrl = "https://mangafree.info"
     }
 }

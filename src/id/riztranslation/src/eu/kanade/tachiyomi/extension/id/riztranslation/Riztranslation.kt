@@ -1,96 +1,67 @@
 package eu.kanade.tachiyomi.extension.id.riztranslation
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
-abstract class Riztranslation : HttpSource() {
+abstract class Riztranslation : KeiSource() {
 
     private val apiUrl = "https://uefnaojxivvxeamljskn.supabase.co/rest/v1"
 
-    override val supportsLatest = true
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ROOT)
-    private val dateFormatNoMs = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
-
-    override fun headersBuilder() = super.headersBuilder()
-
-    private val apiHeaders: Headers by lazy {
-        headersBuilder()
+    private val apiHeaders: Headers
+        get() = headers.newBuilder()
             .add("apikey", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZm5hb2p4aXZ2eGVhbWxqc2tuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3MTU5MjksImV4cCI6MjA2MzI5MTkyOX0._lEBN5puTvATwtYodg4zbcoTwg0ss3j2BebD8WoHt9A")
             .build()
-    }
 
     // ========================= Popular =========================
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val offset = (page - 1) * 20
-        return GET("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&order=id.desc&offset=$offset&limit=20", apiHeaders)
+        return client.get("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&order=id.desc&offset=$offset&limit=20", apiHeaders)
+            .parseAs<List<BookDto>>()
+            .toMangasPage()
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val books = response.parseAs<List<BookDto>>()
-        val hasNextPage = books.size == 20
-
-        val mangaList = books.map { book ->
-            SManga.create().apply {
-                url = book.id.toString()
-                title = book.judul
-                thumbnail_url = book.cover
-            }
-        }
-        return MangasPage(mangaList, hasNextPage)
-    }
+    private fun List<BookDto>.toMangasPage() = MangasPage(map { it.toSManga() }, size == 20)
 
     // ========================= Latest =========================
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val offset = (page - 1) * 30
-        return GET("$apiUrl/Chapter?select=bookId,Book!inner(id,judul,cover)&Book.type=not.ilike.*novel*&order=created_at.desc&offset=$offset&limit=30", apiHeaders)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val chapters = response.parseAs<List<LatestChapterDto>>()
+        val chapters = client.get("$apiUrl/Chapter?select=bookId,Book!inner(id,judul,cover)&Book.type=not.ilike.*novel*&order=created_at.desc&offset=$offset&limit=30", apiHeaders)
+            .parseAs<List<LatestChapterDto>>()
         val hasNextPage = chapters.size == 30
 
-        val mangaList = chapters.mapNotNull { it.book }.distinctBy { it.id }.map { book ->
-            SManga.create().apply {
-                url = book.id.toString()
-                title = book.judul
-                thumbnail_url = book.cover
-            }
-        }
+        val mangaList = chapters.mapNotNull { it.book }.distinctBy { it.id }.map { it.toSManga() }
         return MangasPage(mangaList, hasNextPage)
     }
 
     // ========================= Search =========================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith(PREFIX_ID_SEARCH)) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            return GET("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders)
-        } else if (query.startsWith("https://")) {
-            val url = query.toHttpUrlOrNull()
-            if (url != null && url.host == baseUrl.toHttpUrl().host) {
-                val typeIndex = url.pathSegments.indexOfFirst { it == "detail" || it == "view" }
-                if (typeIndex != -1 && typeIndex + 1 < url.pathSize) {
-                    val id = url.pathSegments[typeIndex + 1]
-                    return GET("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders)
-                }
-            }
-        }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val typeIndex = url.pathSegments.indexOfFirst { it == "detail" || it == "view" }
+        if (typeIndex == -1 || typeIndex + 1 >= url.pathSize) return null
+        val id = url.pathSegments[typeIndex + 1]
+
+        return client.get("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders)
+            .parseAs<List<BookDto>>()
+            .firstOrNull()
+            ?.toSManga()
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val offset = (page - 1) * 20
         val url = "$apiUrl/Book".toHttpUrl().newBuilder()
 
@@ -155,13 +126,11 @@ abstract class Riztranslation : HttpSource() {
         url.addQueryParameter("offset", offset.toString())
         url.addQueryParameter("limit", "20")
 
-        return GET(url.build(), apiHeaders)
+        return client.get(url.build(), apiHeaders).parseAs<List<BookDto>>().toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
     // ========================= Filters =========================
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         HasChapterFilter(),
         TypeFilter(),
         StatusFilter(),
@@ -172,67 +141,44 @@ abstract class Riztranslation : HttpSource() {
     // ========================= Details =========================
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/detail/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/Book?select=*%2Cgenres%3A_BookGenre%28genre%3AGenre%28*%29%29&type=not.ilike.*novel*&id=eq.${manga.url}", apiHeaders)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val books = response.parseAs<List<BookDto>>()
-        if (books.isEmpty()) throw Exception("Manga not found")
-        val book = books.first()
-
-        return SManga.create().apply {
-            title = book.judul
-            thumbnail_url = book.cover
-            author = book.author
-            artist = book.artist
-            description = book.synopsis
-            status = parseStatus(book.status)
-            genre = book.genres?.mapNotNull { it.genre?.nama }?.joinToString()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = if (fetchDetails) {
+            async {
+                val books = client.get("$apiUrl/Book?select=*%2Cgenres%3A_BookGenre%28genre%3AGenre%28*%29%29&type=not.ilike.*novel*&id=eq.${manga.url}", apiHeaders)
+                    .parseAs<List<BookDto>>()
+                if (books.isEmpty()) throw Exception("Manga not found")
+                books.first().toSMangaDetails().apply { url = manga.url }
+            }
+        } else {
+            null
         }
-    }
 
-    private fun parseStatus(status: String?) = when (status?.lowercase()) {
-        "completed", "complete", "oneshot" -> SManga.COMPLETED
-        "ongoing" -> SManga.ONGOING
-        else -> SManga.UNKNOWN
+        val chapterList = if (fetchChapters) {
+            async {
+                client.get("$apiUrl/Chapter?select=id,bookId,chapter,nama,created_at&bookId=eq.${manga.url}&order=chapter.desc", apiHeaders)
+                    .parseAs<List<ChapterDto>>()
+                    .map { it.toSChapter() }
+            }
+        } else {
+            null
+        }
+
+        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
     }
 
     // ========================= Chapters =========================
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/view/${chapter.url}"
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/Chapter?select=id,bookId,chapter,nama,created_at&bookId=eq.${manga.url}&order=chapter.desc", apiHeaders)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = response.parseAs<List<ChapterDto>>()
-        return chapters.map { ch ->
-            SChapter.create().apply {
-                url = "${ch.bookId}/${ch.id}"
-                name = buildString {
-                    val chapNum = ch.chapter?.toString()?.removeSuffix(".0")
-                    if (chapNum != null) {
-                        append("Chapter $chapNum")
-                    }
-                    if (!ch.nama.isNullOrBlank()) {
-                        if (isNotEmpty()) append(" - ")
-                        append(ch.nama)
-                    }
-                }
-                chapter_number = ch.chapter ?: -1f
-                date_upload = parseDate(ch.createdAt)
-            }
-        }
-    }
-
-    private fun parseDate(dateStr: String?): Long = dateFormat.tryParse(dateStr).takeIf { it != 0L }
-        ?: dateFormatNoMs.tryParse(dateStr)
-
     // ========================= Pages =========================
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.url.substringAfterLast("/")
-        return GET("$apiUrl/Chapter?select=id,bookId,isigambar&id=eq.$id", apiHeaders)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val chapters = response.parseAs<List<ChapterDto>>()
+        val chapters = client.get("$apiUrl/Chapter?select=id,bookId,isigambar&id=eq.$id", apiHeaders)
+            .parseAs<List<ChapterDto>>()
         if (chapters.isEmpty()) throw Exception("Chapter not found")
         val isigambar = chapters.first().isigambar
 
@@ -247,11 +193,5 @@ abstract class Riztranslation : HttpSource() {
         return images.mapIndexed { i, url ->
             Page(i, "", url)
         }
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    companion object {
-        const val PREFIX_ID_SEARCH = "id:"
     }
 }

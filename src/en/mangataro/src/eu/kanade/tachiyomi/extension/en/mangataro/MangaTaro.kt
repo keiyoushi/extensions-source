@@ -11,10 +11,11 @@ import eu.kanade.tachiyomi.multisrc.mangataro.YearFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
+import kotlinx.serialization.json.JsonElement
 
 @Source
 abstract class MangaTaro : MangaTaro() {
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SearchWithFilters(),
         Filter.Header("If unchecked, all filters will be ignored with search query"),
         Filter.Header("But will give more relevant results"),

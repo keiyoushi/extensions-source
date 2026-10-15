@@ -10,76 +10,78 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.extractNextJs
-import keiyoushi.utils.get
+import keiyoushi.utils.GraphQLErrorInterceptor
+import keiyoushi.utils.GraphQLException
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.string
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
+import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.jsoup.nodes.Element
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.Locale
-import kotlin.getValue
+import java.net.URLDecoder
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class JumpToon :
     KeiSource(),
     ConfigurableSource {
+    private val apiUrl get() = "https://api.g.${baseUrl.toHttpUrl().host}/query"
     private val preferences by getPreferencesLazy()
-    private val rscHeaders get() = headersBuilder()
-        .set("rsc", "1")
-        .build()
+    private val tokenMutex = Mutex()
 
-    private val currentDayOfWeek: String
-        get() = LocalDate.now(ZoneId.of("Asia/Tokyo")).dayOfWeek.name.lowercase(Locale.US)
+    private var token: String? = null
+    private var tokenSource: String? = null
+    private var tokenExpires = 0L
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(GraphQLErrorInterceptor())
+        addInterceptor(ImageInterceptor())
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val cards = client.get("$baseUrl/series/ranking/overall/", rscHeaders).extractNextJs<List<JsonElement>> { element ->
-            element is JsonArray && element.isNotEmpty() && element.all { it.elementProps()?.containsKey("seriesRanking") == true }
-        }
-        val mangas = cards.orEmpty().map { it.elementProps()!!.parseAs<RankingResponse>().seriesRanking.series.toSManga() }
+        val result = client.post(
+            url = apiUrl,
+            body = graphQLBody(
+                query = RANKING_QUERY,
+                operationName = "SeriesOverallRankingPage",
+            ),
+        ).parseGraphQLAs<RankingResponse>()
+        val mangas = result.rankingFeedV2.seriesList.map { it.series.toSManga() }
         return MangasPage(mangas, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/series/original/$currentDayOfWeek/").asJsoup()
-        val mangas = document.select("main li:has(a[href^=/series/])").map { it.toSManga() }
+        val result = client.post(
+            url = apiUrl,
+            body = graphQLBody(
+                query = LATEST_QUERY,
+                operationName = "TopPageData",
+            ),
+        ).parseGraphQLAs<LatestResponse>().dailyUpdatedSeriesFeedList
+        val mangas = result.flatMap { it.rankedSeriesList }.map { it.series.toSManga() }.distinctBy { it.url }
         return MangasPage(mangas, false)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addPathSegment(query)
-            .addPathSegment("")
-            .addQueryParameter("page", page.toString())
-            .build()
-
-        val document = client.get(url).asJsoup()
-        val mangas = document.select("#load-searchResultList > li").map { it.toSManga() }
-        val hasNextPage = document.selectFirst("a[rel=next]:not([aria-disabled])") != null
+        val result = client.post(
+            url = apiUrl,
+            body = graphQLBody(
+                query = SEARCH_QUERY,
+                operationName = "SearchSeries",
+                variables = SearchVariables(query, (page - 1) * 24, 24),
+            ),
+        ).parseGraphQLAs<SearchResponse>().searchSeries
+        val mangas = result.seriesList.flatMap { listOfNotNull(it, it.pairedSeries) }.map { it.toSManga() }
+        val hasNextPage = page * 24 < result.totalCount
         return MangasPage(mangas, hasNextPage)
-    }
-
-    private fun JsonElement.elementProps(): JsonObject? = (this as? JsonArray)?.getOrNull(3) as? JsonObject
-
-    private fun Element.toSManga(): SManga = SManga.create().apply {
-        val link = selectFirst("a[href^=/series/]")!!
-        url = link.absUrl("href").toHttpUrl().pathSegments[1]
-        title = link.text()
-        thumbnail_url = selectFirst("img")?.absUrl("src")?.toHttpUrl()?.newBuilder()?.query(null)?.build().toString()
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}/"
@@ -89,54 +91,93 @@ abstract class JumpToon :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
+        val apiHeaders = apiHeaders()
+        val result = client.post(
+            url = apiUrl,
+            headers = apiHeaders,
+            body = graphQLBody(
+                query = DETAILS_QUERY,
+                operationName = "SeriesPageData",
+                variables = SeriesVariables(manga.url, apiHeaders["Authorization"] != null),
+            ),
+        ).parseGraphQLAs<DetailsResponse>()
+
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val details = async {
-            if (!fetchDetails) return@async manga
-            val document = client.get(getMangaUrl(manga)).asJsoup()
-            val series = document.extractNextJs<SeriesDetails> { it is JsonObject && "seriesStatusType" in it } ?: return@async manga
-            val genres = document.select("h1 ~ div > span").map { it.text() }
-            series.toSManga(genres)
-        }
+        val episodes = result.seriesEpisodeList.edges
+            .filter { !hideLocked || !it.node.isLocked }
+            .map { it.node.toSChapter() }
 
-        val chapterList = async {
-            if (!fetchChapters) return@async chapters
-            val firstPage = getEpisodePage(manga, 1) ?: return@async emptyList()
-            val otherPages = (2..firstPage.totalPageCount)
-                .map { page -> async { getEpisodePage(manga, page) } }
-                .awaitAll()
+        val volumes = result.seriesComicsList.edges
+            .filter { !hideLocked || !it.node.isLocked }
+            .map { it.node.toSChapter() }
 
-            (listOf(firstPage) + otherPages.filterNotNull())
-                .flatMap { it.episodes.edges }
-                .filter { !hideLocked || !it.node.isLocked }
-                .map { it.node.toSChapter() }
-        }
-
-        SMangaUpdate(
-            details.await(),
-            chapterList.await(),
+        val chapterList = episodes + volumes
+        return SMangaUpdate(
+            result.series.toSManga(),
+            chapterList,
         )
     }
 
-    private suspend fun getEpisodePage(manga: SManga, page: Int): EpisodeListResponse? {
-        val url = "${getMangaUrl(manga)}episodes/".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "DESC")
-            .addQueryParameter("page", page.toString())
-            .build()
-
-        return client.get(url, rscHeaders).extractNextJs<EpisodeListResponse>()
+    override fun getChapterUrl(chapter: SChapter): String {
+        val path = if (chapter.memo["type"] != null) "comics" else "episodes"
+        return "$baseUrl/series/${chapter.memo["seriesId"]!!.string}/$path/${chapter.url}/"
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.memo["seriesId"]!!.string}/episodes/${chapter.url}/"
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val content = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<EpisodeContent>()
-            ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
+        val (query, operationName) = when (chapter.memo["type"]?.stringOrNull) {
+            "comics" -> COMICS_QUERY to "SeriesComicsViewerContent"
+            "preview" -> PREVIEW_QUERY to "SeriesComicsTrialPreviewContent"
+            else -> CONTENT_QUERY to "SeriesEpisodePageData"
+        }
+
+        val content = try {
+            client.post(
+                url = apiUrl,
+                headers = apiHeaders(),
+                body = graphQLBody(
+                    query = query,
+                    operationName = operationName,
+                    variables = ContentVariables(chapter.memo["seriesId"]!!.string, chapter.url),
+                ),
+            ).parseGraphQLAs<ContentResponse>().content
+        } catch (e: GraphQLException) {
+            if (e.message != "RequiredPurchase") throw e
+            throw Exception("Log in via WebView and rent or purchase this chapter to read.")
+        }
 
         val seed = "${content.seriesId}:${content.number}".sumOf { it.code }
         return content.pageList.mapIndexed { i, page ->
             Page(i, imageUrl = "${page.imageUrl}#${content.scrambleAlgorithmType}:$seed:${page.width}")
         }
+    }
+
+    private suspend fun apiHeaders(): Headers {
+        val token = getToken() ?: return headers
+        val deviceId = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).firstOrNull { it.name == "deviceId" }?.value
+        return headersBuilder()
+            .set("Authorization", "Bearer $token")
+            .apply {
+                if (deviceId != null) {
+                    set("X-Client-Device-Id", deviceId)
+                }
+            }
+            .build()
+    }
+
+    private suspend fun getToken(): String? = tokenMutex.withLock {
+        val cookie = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).firstOrNull { it.name == "session" } ?: return null
+        val refreshToken = URLDecoder.decode(cookie.value, "UTF-8").parseAs<SessionCookie>().refreshToken
+        if (refreshToken == tokenSource && System.currentTimeMillis() < tokenExpires) return token
+
+        val url = "https://securetoken.googleapis.com/v1/token".toHttpUrl().newBuilder()
+            .addQueryParameter("key", LOGIN_KEY)
+            .build()
+
+        token = client.post(url, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<TokenResponse>().idToken
+        tokenSource = refreshToken
+        tokenExpires = System.currentTimeMillis() + 50.minutes.inWholeMilliseconds
+        token
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -149,5 +190,6 @@ abstract class JumpToon :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val LOGIN_KEY = "AIzaSyBF0YFCH2gJ67rYZ-j4pBjLJ4GiN-nrsI0"
     }
 }

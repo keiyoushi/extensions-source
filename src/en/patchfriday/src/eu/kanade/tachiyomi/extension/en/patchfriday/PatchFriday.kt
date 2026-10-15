@@ -1,21 +1,18 @@
 package eu.kanade.tachiyomi.extension.en.patchfriday
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 
 @Source
-abstract class PatchFriday : HttpSource() {
+abstract class PatchFriday : KeiSource() {
 
     override val supportsLatest = false
 
@@ -32,41 +29,33 @@ abstract class PatchFriday : HttpSource() {
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(createManga()), false)
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    // Details + Chapters
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = if (fetchDetails) createManga() else manga
+        val chapterList = if (fetchChapters) fetchChapterList() else chapters
 
-    // Details
+        return SMangaUpdate(details, chapterList)
+    }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga())
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    // Chapters
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(GET("$baseUrl/search/?search=;", headers))
-        .asObservableSuccess()
-        .map { parseChapters(it) }
-
-    private fun parseChapters(response: Response): List<SChapter> {
+    private suspend fun fetchChapterList(): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
-        var document = response.asJsoup()
+        var document = client.get("$baseUrl/search/?search=").asJsoup()
         var page = document.select("div > div:first-of-type > div:first-of-type > a").attr("abs:href").replace(baseUrl, "").replace("/", "").trim().toInt()
         while (page > 0) {
             val element = document.select("div > div > div:first-of-type > a")
@@ -79,7 +68,7 @@ abstract class PatchFriday : HttpSource() {
                 chapters.add(chapter)
             }
             page -= 10
-            document = client.newCall(GET("$baseUrl/search/?search=;id=$page", headers)).execute().asJsoup()
+            document = client.get("$baseUrl/search/?search=&id=$page").asJsoup()
         }
         // Add First Chapter becouse for some reason it does not show up in chapter search
         chapters.add(
@@ -93,15 +82,9 @@ abstract class PatchFriday : HttpSource() {
         return chapters
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
     // Pages
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(listOf(Page(0, baseUrl + chapter.url)))
+    override suspend fun getPageList(chapter: SChapter): List<Page> = listOf(Page(0, baseUrl + chapter.url))
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String = response.asJsoup().select("div#strip_image img").attr("abs:src")
-
-    override fun getFilterList() = FilterList()
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url).asJsoup().select("div#strip_image img").attr("abs:src")
 }

@@ -7,6 +7,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -18,15 +19,20 @@ abstract class DragonTranslationOrg : Madara() {
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     override val filterGenresSelector = ".filters"
-    override fun archiveSelector() = "a.acard"
+    override fun archiveSelector() = "a:has(img.ac-cover)"
     override val archiveUrlSelector = "a"
-    override val archiveTitleSelector = ".ac-t"
 
-    override val mangaDetailsSelectorTitle = "div.hcol > .htitle"
-    override val mangaDetailsSelectorStatus = "div.hcol > .htags > .htag--status"
-    override val mangaDetailsSelectorDescription = "div#syn > p"
-    override val mangaDetailsSelectorThumbnail = "div.hposter__card > img"
-    override val mangaDetailsSelectorGenre = "div.hcol > .hchips--genres > a.chip"
+    override val mangaDetailsSelectorTitle = "div.hero h1"
+    override val mangaDetailsSelectorStatus = "div.htags > span.htag"
+    override val mangaDetailsSelectorDescription = "div.syn > p"
+    override val mangaDetailsSelectorThumbnail = "div.hposter img"
+    override val mangaDetailsSelectorGenre = "div.hchips a.chip"
+
+    override val pageListParseSelector = "div.reading-content img.wp-manga-chapter-img"
+
+    override fun archiveManga(element: Element, id: String) = super.archiveManga(element, id)?.apply {
+        element.attr("title").takeIf(String::isNotBlank)?.let { title = it }
+    }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
@@ -34,7 +40,7 @@ abstract class DragonTranslationOrg : Madara() {
         mangaPath: String,
         id: String,
         mangaPage: Document?,
-    ) = mangaPage!!.selectFirst("script#mk-chapters-data")!!.data()
+    ) = mangaPage!!.selectFirst("#mkChapters script[type=application/json]")!!.data()
         .parseAs<ChapterListDto>().items.map { chapterDto ->
             SChapter.create().apply {
                 setUrlWithoutDomain(chapterDto.url)

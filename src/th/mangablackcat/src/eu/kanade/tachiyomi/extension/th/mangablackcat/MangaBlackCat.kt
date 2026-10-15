@@ -1,76 +1,60 @@
 package eu.kanade.tachiyomi.extension.th.mangablackcat
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
-abstract class MangaBlackCat : HttpSource() {
+abstract class MangaBlackCat : KeiSource() {
 
-    override val supportsLatest = true
-
-    private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Bangkok")
-    }
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("manga")
             .addQueryParameter("sort", "popular")
             .addQueryParameter("page", page.toString())
             .build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url).asJsoup())
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("latest")
             .addQueryParameter("page", page.toString())
             .build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url).asJsoup())
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("search")
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
             .build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url).asJsoup())
     }
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
-
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response.asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val manga = document.select("article.manga-card").mapNotNull { it.toSManga() }
@@ -93,69 +77,60 @@ abstract class MangaBlackCat : HttpSource() {
         }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val mangaUrl = getMangaUrl(manga)
+        val document = client.get(mangaUrl).asJsoup()
 
-        return SManga.create().apply {
-            title = document.selectFirst("article h1, main h1")?.text().orEmpty()
-            thumbnail_url = document.selectFirst("article figure img, main figure img")?.imgAttr()
-            author = document.selectFirst("article span span.text-base-content, main span span.text-base-content")
-                ?.text()
-                ?.takeUnless { it.isBlank() }
-            status = parseStatus(
-                document.select("article span, main span")
-                    .firstOrNull { element ->
-                        val text = element.text()
-                        text.contains("กำลังอัพเดท") || text.contains("จบแล้ว")
-                    }
-                    ?.text(),
-            )
-            description = document.select("article [class*=leading-relaxed], main [class*=leading-relaxed]")
-                .map { it.text() }
-                .firstOrNull { it.length > 80 }
-                .orEmpty()
-        }
+        return SMangaUpdate(
+            mangaDetailsParse(document, manga),
+            if (fetchChapters) chapterListParse(document, mangaUrl) else chapters,
+        )
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun chapterListRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
-        .asObservableSuccess()
-        .flatMap { response ->
-            chapterListParse(response, mutableSetOf(getMangaUrl(manga)))
-        }
-        .map { chapters ->
-            chapters
-                .distinctBy { it.url }
-                .sortedByDescending { it.chapter_number }
-        }
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    private fun chapterListParse(response: Response, requestedPages: MutableSet<String>): Observable<List<SChapter>> {
-        val document = response.asJsoup()
-        val chapters = parseChapters(document)
-        val nextPageUrl = document.nextChapterPageUrl()
-
-        if (nextPageUrl == null || !requestedPages.add(nextPageUrl)) {
-            return Observable.just(chapters)
-        }
-
-        val nextPageRequest = GET(
-            nextPageUrl,
-            headersBuilder()
-                .set("Referer", response.request.url.toString())
-                .build(),
+    private fun mangaDetailsParse(document: Document, manga: SManga): SManga = manga.apply {
+        title = document.selectFirst("article h1, main h1")?.text().orEmpty()
+        thumbnail_url = document.selectFirst("article figure img, main figure img")?.imgAttr()
+        author = document.selectFirst("article span span.text-base-content, main span span.text-base-content")
+            ?.text()
+            ?.takeUnless { it.isBlank() }
+        status = parseStatus(
+            document.select("article span, main span")
+                .firstOrNull { element ->
+                    val text = element.text()
+                    text.contains("กำลังอัพเดท") || text.contains("จบแล้ว")
+                }
+                ?.text(),
         )
+        description = document.select("article [class*=leading-relaxed], main [class*=leading-relaxed]")
+            .map { it.text() }
+            .firstOrNull { it.length > 80 }
+            .orEmpty()
+    }
 
-        return client.newCall(nextPageRequest)
-            .asObservableSuccess()
-            .flatMap { nextPageResponse ->
-                chapterListParse(nextPageResponse, requestedPages)
-                    .map { nextPageChapters -> chapters + nextPageChapters }
-            }
+    private suspend fun chapterListParse(firstPage: Document, mangaUrl: String): List<SChapter> {
+        val requestedPages = mutableSetOf(mangaUrl)
+        val chapters = mutableListOf<SChapter>()
+        var document = firstPage
+
+        while (true) {
+            chapters += parseChapters(document)
+            val nextPageUrl = document.nextChapterPageUrl()
+            if (nextPageUrl == null || !requestedPages.add(nextPageUrl)) break
+
+            val nextPageHeaders = headersBuilder()
+                .set("Referer", document.location())
+                .build()
+            document = client.get(nextPageUrl, nextPageHeaders).asJsoup()
+        }
+
+        return chapters
+            .distinctBy { it.url }
+            .sortedByDescending { it.chapter_number }
     }
 
     private fun parseChapters(document: Document): List<SChapter> {
@@ -164,8 +139,10 @@ abstract class MangaBlackCat : HttpSource() {
             .substringAfter("$baseUrl/manga/", "")
             .removeSuffix("/")
 
+        // The fallback also matches the "first/latest chapter" buttons, so only use it when there are no chapter cards
         return document.select("a.chapter-card-link[data-chapter-number]")
-            .map { it.toChapter() } + parseFallbackChapters(document, slugPath)
+            .map { it.toChapter() }
+            .ifEmpty { parseFallbackChapters(document, slugPath) }
     }
 
     private fun Element.toChapter(): SChapter = SChapter.create().apply {
@@ -205,16 +182,12 @@ abstract class MangaBlackCat : HttpSource() {
             }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
     private fun Document.nextChapterPageUrl(): String? = selectFirst("nav[aria-label='Pagination Navigation'] a[rel=next]")
         ?.attr("abs:href")
         ?.takeUnless { it.isBlank() }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val chapterUrl = document.location()
 
         val bootPages = BOOT_JSON_REGEX.findAll(document.html())
@@ -232,16 +205,10 @@ abstract class MangaBlackCat : HttpSource() {
             .mapIndexed { index, imageUrl -> Page(index, chapterUrl, imageUrl) }
     }
 
-    override fun imageRequest(page: Page): Request {
-        val imageHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
-            .set("Referer", page.url)
-            .build()
-
-        return GET(page.imageUrl!!, imageHeaders)
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
+        .header("Referer", page.url)
+        .build()
 
     private fun parseStatus(status: String?): Int = when (val normalizedStatus = status?.lowercase(Locale.ROOT)) {
         null -> SManga.UNKNOWN
@@ -256,9 +223,26 @@ abstract class MangaBlackCat : HttpSource() {
         val date = this?.trim()
         return when {
             date.isNullOrBlank() -> 0L
-            date.contains("ago", ignoreCase = true) -> 0L
-            else -> dateFormat.tryParse(date)
+            date.contains("ago", ignoreCase = true) -> parseRelativeDate(date)
+            else -> dateFormat.tryParseDate(date, ZoneId.of("Asia/Bangkok"))
         }
+    }
+
+    // e.g. "45m ago", "13h ago", "2d ago", "3w ago", "6mos ago", "1y ago"
+    private fun parseRelativeDate(date: String): Long {
+        val match = RELATIVE_DATE_REGEX.find(date.lowercase(Locale.ROOT)) ?: return 0L
+        val amount = match.groupValues[1].toLong()
+        val unit = when (match.groupValues[2]) {
+            "s", "sec", "secs", "second", "seconds" -> ChronoUnit.SECONDS
+            "m", "min", "mins", "minute", "minutes" -> ChronoUnit.MINUTES
+            "h", "hr", "hrs", "hour", "hours" -> ChronoUnit.HOURS
+            "d", "day", "days" -> ChronoUnit.DAYS
+            "w", "wk", "wks", "week", "weeks" -> ChronoUnit.WEEKS
+            "mo", "mos", "month", "months" -> ChronoUnit.MONTHS
+            "y", "yr", "yrs", "year", "years" -> ChronoUnit.YEARS
+            else -> return 0L
+        }
+        return ZonedDateTime.now().minus(amount, unit).toInstant().toEpochMilli()
     }
 
     private fun parseChapterNumber(url: String): Float = url.removeSuffix("/")
@@ -302,5 +286,7 @@ abstract class MangaBlackCat : HttpSource() {
     private companion object {
         val BOOT_JSON_REGEX = """boot:\s*JSON\.parse\('((?:\\'|[^'])*)'\)""".toRegex()
         val UNICODE_ESCAPE_REGEX = """\\u([0-9a-fA-F]{4})""".toRegex()
+        val RELATIVE_DATE_REGEX = """(\d+)\s*([a-z]+)\s+ago""".toRegex()
+        val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.forLanguageTag("th"))
     }
 }

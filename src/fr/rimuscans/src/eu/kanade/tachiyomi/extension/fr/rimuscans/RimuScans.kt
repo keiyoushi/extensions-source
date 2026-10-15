@@ -3,53 +3,45 @@ package eu.kanade.tachiyomi.extension.fr.rimuscans
 import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 
 @Source
 abstract class RimuScans :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
     // =============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/series?sort=rating&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = seriesParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = seriesParse("$baseUrl/api/series?sort=rating&page=$page".toHttpUrl())
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/series?page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = seriesParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = seriesParse("$baseUrl/api/series?page=$page".toHttpUrl())
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/api/series".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
@@ -82,15 +74,17 @@ abstract class RimuScans :
             }
             addQueryParameter("page", page.toString())
         }.build()
-        return GET(url, headers)
+        return seriesParse(url)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = seriesParse(response)
+    override val supportsFilterFetching get() = true
 
-    override fun getFilterList(): FilterList = getRimuFilterList(baseUrl, client, headers)
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/admin/genres").parseAs<GenresDto>().toJsonElement()
 
-    private fun seriesParse(response: Response): MangasPage {
-        val dto = response.parseAs<SeriesListDto>()
+    override fun getFilterList(data: JsonElement?): FilterList = getRimuFilterList(data?.parseAs<GenresDto>()?.genres)
+
+    private suspend fun seriesParse(url: HttpUrl): MangasPage {
+        val dto = client.get(url).parseAs<SeriesListDto>()
         val mangas = dto.series.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, dto.hasMore)
     }
@@ -99,10 +93,20 @@ abstract class RimuScans :
     // The site dropped its JSON detail API; details, chapters and pages are now
     // read from the Next.js (App Router) server payload embedded in the pages.
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get(getMangaUrl(manga))
+        val slug = response.request.url.pathSegments.last()
         val document = response.asJsoup()
+
+        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document, slug))
+    }
+
+    private fun mangaDetailsParse(document: Document): SManga {
         val ld = document.select("script[type=application/ld+json]")
             .map { it.data() }
             .firstOrNull { "\"ComicSeries\"" in it }
@@ -121,11 +125,7 @@ abstract class RimuScans :
 
     // ============================== Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val slug = response.request.url.pathSegments.last()
+    private fun chapterListParse(document: Document, slug: String): List<SChapter> {
         val showPremium = preferences.getBoolean(SHOW_PREMIUM_KEY, SHOW_PREMIUM_DEFAULT)
 
         return collectChapters(document)
@@ -137,9 +137,8 @@ abstract class RimuScans :
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter))
         val chapterNumber = response.request.url.pathSegments.last().toDoubleOrNull()
             ?: throw Exception("Numéro de chapitre absent de la requête")
 
@@ -159,8 +158,6 @@ abstract class RimuScans :
             Page(i, imageUrl = img.url.toAbsoluteUrl(baseUrl))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = ""
 
     /**
      * Collects every chapter object found in the page's Next.js flight data. Walks the whole

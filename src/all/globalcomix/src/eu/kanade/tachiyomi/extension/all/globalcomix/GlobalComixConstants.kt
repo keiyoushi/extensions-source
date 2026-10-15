@@ -22,9 +22,6 @@ const val API_SEARCH_URL = "$API_URL/comics"
 
 const val CLIENT_ID = "gck_d0f170d5729446dcb3b55e6b3ebc7bf6"
 
-// Search prefix for title ids
-const val PREFIX_ID_SEARCH = "id:"
-
 // Preferences
 fun getDataSaverPreferenceKey(extLang: String): String = "dataSaver_$extLang"
 fun getShowLockedChaptersPreferenceKey(extLang: String): String = "showLockedChapters_$extLang"

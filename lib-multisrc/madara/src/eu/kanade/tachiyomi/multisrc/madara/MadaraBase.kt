@@ -187,13 +187,18 @@ abstract class MadaraBase : KeiSource() {
         if (path != null) {
             val requestedUrl = baseUrl.toHttpUrl().resolve(path) ?: error("Invalid manga path")
             val response = client.get(requestedUrl, ensureSuccess = false)
-            if (response.isSuccessful && response.request.url == requestedUrl) return response
+            if (
+                response.isSuccessful &&
+                (response.request.url == requestedUrl || !supportsPostId)
+            ) {
+                return response
+            }
             val redirectedId = response.use { fallback ->
                 if (id == null) fallback.asJsoup().mangaId() else null
             }
             id = id ?: redirectedId
         }
-        return client.get("$baseUrl/?p=${id ?: error("Missing Madara post ID")}")
+        return client.get("$baseUrl/?p=${id ?: error("Missing Madara post ID from redirection")}")
     }
 
     protected open fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = SManga.create().apply {
@@ -504,10 +509,11 @@ abstract class MadaraBase : KeiSource() {
         "in corso", "in arrivo", "مستمرة", "مستمر", "en curso", "emision", "curso",
         "en marcha", "publicandose", "publicándose", "en emision", "连载中", "đang làm",
         "em postagem", "devam eden", "em progresso", "atualizações semanais", "виходить",
+        "đang ra",
     )
     protected open val hiatusStatus = arrayOf(
         "on hold", "hiatus", "pausado", "en espera", "durduruldu", "beklemede",
-        "đang chờ", "متوقف", "en pause", "заморожено", "en attente",
+        "đang chờ", "متوقف", "en pause", "заморожено", "en attente", "tạm dừng",
     )
     protected open val cancelledStatus = arrayOf(
         "canceled", "cancelled", "cancelado", "iptal edildi", "đã hủy", "ملغي",

@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.mangabay
 
-import android.annotation.SuppressLint
-import android.os.Handler
-import android.os.Looper
 import android.webkit.CookieManager
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import keiyoushi.utils.applicationContext
+import keiyoushi.utils.runWebViewBlocking
+import okhttp3.Call
 import okhttp3.Interceptor
+import okhttp3.Response
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 object DleGuardResolver {
 
@@ -27,7 +24,16 @@ object DleGuardResolver {
 
     fun interceptor(baseUrl: String): Interceptor = Interceptor { chain ->
         val originalRequest = chain.request()
-        val response = chain.proceed(originalRequest)
+        var response = chain.proceed(originalRequest)
+        // decoy spinner page with nothing to solve, served intermittently; a plain retry usually gets through
+        if (response.isStalled()) {
+            response.close()
+            response = chain.proceed(originalRequest)
+            if (response.isStalled()) {
+                response.close()
+                throw IOException("Blocked by site protection, try again later")
+            }
+        }
         if (response.request.url.pathSegments.firstOrNull() != "_c") {
             return@Interceptor response
         }
@@ -37,69 +43,48 @@ object DleGuardResolver {
         } else {
             "$baseUrl/"
         }
-        if (!resolve(url, originalRequest.header("User-Agent"))) {
+        if (!solve(url, originalRequest.header("User-Agent"), chain.call())) {
             throw IOException("Open in WebView to bypass site protection")
         }
         chain.proceed(originalRequest)
     }
 
     @Synchronized
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun resolve(siteUrl: String, userAgent: String?): Boolean {
+    private fun solve(siteUrl: String, userAgent: String?, call: Call): Boolean {
         if (failedOnce) return false
         if (System.currentTimeMillis() - lastSolveAt < PARALLEL_TRUST_WINDOW_MS) return true
 
         val cookieManager = CookieManager.getInstance()
         cookieManager.setCookie(siteUrl, "$TRUST_COOKIE=; Max-Age=0; Path=/")
 
-        val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        var webView: WebView? = null
-        lateinit var poll: Runnable
+        return try {
+            runWebViewBlocking<Unit>(call, timeout = TIMEOUT_SECONDS.seconds) {
+                this.userAgent = userAgent!!
+                blockImages = true
 
-        handler.post {
-            val wv = WebView(applicationContext)
-            webView = wv
-
-            with(wv.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
-                if (!userAgent.isNullOrBlank()) userAgentString = userAgent
-            }
-
-            wv.webViewClient = WebViewClient()
-
-            poll = Runnable {
-                if (latch.count == 0L) return@Runnable
-                if (hasTrust(cookieManager, siteUrl)) {
-                    latch.countDown()
-                } else {
-                    handler.postDelayed(poll, POLL_INTERVAL_MS)
+                onPageFinished { url ->
+                    poll(POLL_INTERVAL_MS.milliseconds) {
+                        if (hasTrust(cookieManager, url)) {
+                            resolve(Unit)
+                        }
+                    }
                 }
+                loadUrl(siteUrl)
             }
-
-            wv.loadUrl(siteUrl)
-            handler.postDelayed(poll, POLL_INTERVAL_MS)
-        }
-
-        latch.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-
-        handler.post {
-            handler.removeCallbacks(poll)
-            webView?.stopLoading()
-            webView?.destroy()
-        }
-
-        val solved = hasTrust(cookieManager, siteUrl)
-        if (solved) {
-            lastSolveAt = System.currentTimeMillis()
-        } else {
+            val solved = hasTrust(cookieManager, siteUrl)
+            if (solved) {
+                lastSolveAt = System.currentTimeMillis()
+            } else {
+                failedOnce = true
+            }
+            solved
+        } catch (e: Exception) {
             failedOnce = true
+            false
         }
-        return solved
     }
+
+    private fun Response.isStalled() = header("X-Guard-Stall") == "1"
 
     private fun hasTrust(cookieManager: CookieManager, url: String): Boolean {
         val cookies = cookieManager.getCookie(url) ?: return false

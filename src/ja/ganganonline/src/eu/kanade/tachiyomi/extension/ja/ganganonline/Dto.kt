@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.ja.ganganonline
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 
 @Serializable
 class NextData<T>(
@@ -89,12 +89,14 @@ class ChapterDto(
     private val subText: String?,
     private val publishingPeriod: String?,
 ) {
-    fun toSChapter(mangaUrl: String, dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaUrl: String): SChapter = SChapter.create().apply {
         url = "$mangaUrl/chapter/$id"
         name = mainText + if (!subText.isNullOrEmpty()) " - $subText" else ""
-        date_upload = publishingPeriod?.substringBefore("〜").let { dateFormat.tryParse(it) }
+        date_upload = publishingPeriod?.substringBefore("〜").let { dateFormat.tryParseDate(it) }
     }
 }
+
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy.M.d")
 
 @Serializable
 class PageListDto(

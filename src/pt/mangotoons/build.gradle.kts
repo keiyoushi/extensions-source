@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Mango Toons"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "mangotheme"
 
     source {
         lang = "pt-BR"

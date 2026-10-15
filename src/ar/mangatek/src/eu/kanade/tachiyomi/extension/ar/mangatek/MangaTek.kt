@@ -11,7 +11,10 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
@@ -28,15 +31,12 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class MangaTek : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        addInterceptor(SpeechBubblePainterInterceptor())
+        addInterceptor(SpeechBubblePainterInterceptor({ baseUrl }, id))
         rateLimit(3)
     }
 
@@ -231,38 +231,25 @@ abstract class MangaTek : KeiSource() {
 
     // decrypt
 
-    private fun String.hexToBytes(): ByteArray {
-        require(length % 2 == 0) { "Invalid hex string length" }
-
-        return ByteArray(length / 2) { index ->
-            substring(index * 2, index * 2 + 2).toInt(16).toByte()
-        }
-    }
-
     private fun decrypt(blob: String, keyHex: String = KEY): OverlayData {
         val (ivHex, ctHex, tagHex) = blob.split(":").also {
             require(it.size == 3) { "unexpected overlayBlob format" }
         }
 
-        val iv = ivHex.hexToBytes()
-        val ciphertext = ctHex.hexToBytes()
-        val tag = tagHex.hexToBytes()
+        val iv = ivHex.decodeHex()
+        val ciphertext = ctHex.decodeHex()
+        val tag = tagHex.decodeHex()
 
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(
-                Cipher.DECRYPT_MODE,
-                SecretKeySpec(keyHex.hexToBytes(), "AES"),
-                GCMParameterSpec(tag.size * 8, iv),
-            )
-        }
-
-        return String(cipher.doFinal(ciphertext + tag), Charsets.UTF_8).parseAs<OverlayData>()
+        return (ciphertext + tag)
+            .aesDecrypt(aesGcm(keyHex.decodeHex(), iv, tagLength = tag.size * 8))
+            .decodeToString()
+            .parseAs<OverlayData>()
     }
 
     companion object {
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?[^#]*)?#\[.*?]""", RegexOption.IGNORE_CASE)
         private const val KEY = "ff453871399fe268588a0936b45376022d85ed0fd1292001d5102f6a30291dc1"
-        private const val UNLOCK_PROOF_SALT = "322c4e08571941fa05abf1a6a2b45c9a9bf7bcc94af61b66"
+        private const val UNLOCK_PROOF_SALT = "80c55d2d1f1432551b82f5304b60e1aced87f823a6ed309d"
         private const val API_BASE = "https://api.mangatek.com"
         private const val UNLOCK_API_URL = "$API_BASE/api/reader/unlock"
     }

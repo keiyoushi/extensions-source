@@ -1,25 +1,24 @@
 package eu.kanade.tachiyomi.extension.ja.comicborder
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import org.jsoup.nodes.Element
+import keiyoushi.network.get
+import keiyoushi.utils.asJsoup
 
 @Source
 abstract class ComicBorder : GigaViewer() {
     override val supportsLatest = false
 
-    override fun popularMangaUrl(page: Int) = baseUrl
-
-    override val popularMangaSelector = "section.top-series"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst(".top-series-nav a")!!.absUrl("href"))
-        title = element.selectFirst("h3")!!.text()
-        thumbnail_url = element.selectFirst(".top-key-image")?.absUrl("data-src")
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mangas = client.get(baseUrl).asJsoup().select("section.top-series").map {
+            SManga.create().apply {
+                title = it.selectFirst("h3")!!.text()
+                thumbnail_url = it.selectFirst(".top-key-image")?.absUrl("data-src")
+                setSeriesUrl(it.selectFirst("li.first-episode a, li.this-episode a")!!.absUrl("href"), thumbnail_url)
+            }
+        }
+        return MangasPage(mangas, false)
     }
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw UnsupportedOperationException()
 }

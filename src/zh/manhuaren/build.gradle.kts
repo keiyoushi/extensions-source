@@ -6,13 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Manhuaren"
-    versionCode = 19
-    contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    versionCode = 0
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         name = "漫画人"
         lang = "zh"
-        baseUrl = "http://mangaapi.manhuaren.com"
+        baseUrl = "https://mangaapi.manhuaren.com"
+    }
+
+    deeplink {
+        host("www.manhuaren.com")
+        path("/manhua-..*")
     }
 }
