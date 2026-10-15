@@ -176,10 +176,11 @@ abstract class KeyoappV2 : KeyoappBase() {
 
     override suspend fun fetchFilterData(): JsonElement {
         val url = baseUrl.toHttpUrl().newBuilder().addQueryParameter("browse", "1").build()
-        val document = client.get(url).asJsoup()
-        val tags = document.selectFirst("#search-genres-list[data-genre-tags]")?.attr("data-genre-tags")
-            ?: throw Exception("Genre tags not found")
-        return tags.parseAs<List<String>>().toJsonElement()
+        val tags = client.get(url).asJsoup()
+            .select("#fsel-genres a[role=option][href]")
+            .mapNotNull { it.absUrl("href").toHttpUrl().queryParameter("tag[]") }
+        if (tags.isEmpty()) throw Exception("Genre tags not found")
+        return tags.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
