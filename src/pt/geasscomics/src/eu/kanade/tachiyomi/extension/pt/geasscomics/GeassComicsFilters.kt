@@ -6,72 +6,66 @@ import eu.kanade.tachiyomi.source.model.FilterList
 fun getFilters(
     genres: List<Pair<String, String>> = emptyList(),
     tags: List<Pair<String, String>> = emptyList(),
-    showNsfw: Boolean = false,
 ): FilterList = FilterList(
     listOf(
         SortFilter(),
+        TypeFilter(),
         StatusFilter(),
     ) + when {
-        !showNsfw -> listOf(Filter.Header("Não Mostrar conteúdo +18"))
-        else -> listOf(NsfwFilter())
-    } + listOf(
-        Filter.Separator(),
-    ) + when {
-        genres.isEmpty() && tags.isEmpty() -> listOf(Filter.Header("Clique em 'Redefinir' para carregar os filtros"))
-        genres.isEmpty() -> listOf(Filter.Header("Clique em 'Redefinir' para carregar os gêneros"))
+        genres.isEmpty() && tags.isEmpty() -> emptyList()
+        else -> listOf(Filter.Separator())
+    } + when {
+        genres.isEmpty() -> emptyList()
         else -> listOf(GenreFilter(genres))
     } + when {
-        genres.isEmpty() && tags.isEmpty() -> emptyList()
-        tags.isEmpty() -> listOf(Filter.Header("Clique em 'Redefinir' para carregar as tags"))
+        tags.isEmpty() -> emptyList()
         else -> listOf(TagFilter(tags))
     },
 )
 
 class SortFilter :
-    Filter.Select<String>(
+    Filter.Sort(
         "Ordenar por",
         SORT_OPTIONS.map { it.first }.toTypedArray(),
+        Selection(0, false),
     ) {
-    val selected: String get() = SORT_OPTIONS[state].second
-
-    val order: String
-        get() = when (state) {
-            3 -> "asc"
-
-            // Title A-Z
-            else -> "desc"
-        }
+    val selected: String get() = SORT_OPTIONS[state?.index ?: 0].second
+    val order: String get() = if (state?.ascending == true) "asc" else "desc"
 
     companion object {
         private val SORT_OPTIONS = listOf(
-            "Mais Recentes" to "updatedAt",
-            "Mais Vistos" to "views",
-            "Melhor Avaliados" to "rating",
-            "Título (A-Z)" to "title",
-            "Qtd. de Capítulos" to "chapterCount",
+            "Lançamentos recentes" to "recent",
+            "Melhor avaliados" to "rating",
+            "Ordem alfabética" to "title",
         )
     }
 }
+
+open class SelectFilter(name: String, private val options: List<Pair<String, String?>>) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
+    val selected: String? get() = options[state].second
+}
+
+class TypeFilter :
+    SelectFilter(
+        "Tipo",
+        listOf(
+            "Todos" to null,
+            "Manhwa" to "manhwa",
+            "Mangá" to "manga",
+            "Manhua" to "manhua",
+        ),
+    )
 
 class StatusFilter :
-    Filter.Select<String>(
+    SelectFilter(
         "Status",
-        STATUS_OPTIONS.map { it.first }.toTypedArray(),
-    ) {
-    val selected: String? get() = STATUS_OPTIONS[state].second
-
-    companion object {
-        private val STATUS_OPTIONS = listOf(
+        listOf(
             "Todos" to null,
-            "Em Andamento" to "ongoing",
-            "Completo" to "completed",
-            "Hiato" to "hiatus",
-            "Cancelado" to "cancelled",
-        )
-    }
-}
-
-class NsfwFilter : Filter.TriState("Mostrar conteúdo +18", TriState.STATE_IGNORE)
+            "Em lançamento" to "ongoing",
+            "Concluído" to "completed",
+            "Em hiato" to "hiatus",
+        ),
+    )
 
 class GenreFilter(genres: List<Pair<String, String>>) :
     Filter.Group<GenreCheckBox>(

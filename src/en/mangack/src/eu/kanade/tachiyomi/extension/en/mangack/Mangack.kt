@@ -1,68 +1,54 @@
 package eu.kanade.tachiyomi.extension.en.mangack
 
-import android.util.Log
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
-abstract class Mangack : HttpSource() {
+abstract class Mangack : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = mangaListUrlBuilder(page)
             .addQueryParameter("orderby", "date")
             .addQueryParameter("order", "desc")
             .build()
-        return GET(url, headers)
+        return mangaList(url, page)
     }
-
-    override fun popularMangaParse(response: Response): MangasPage = mangaListParse(response)
 
     // =============================== Latest ===============================
 
     // The REST `orderby=modified` reflects any edit to the manga post, not just
     // chapter publication, so we scrape /updates/ for true latest-by-chapter.
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val path = if (page <= 1) "/updates/" else "/updates/page/$page/"
-        return GET(baseUrl + path, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(baseUrl + path).asJsoup()
         val mangas = document.select(".latestmanga .Latest_chapter_update").mapNotNull { card ->
             val link = card.selectFirst("a[href*=/manga/]") ?: return@mapNotNull null
             SManga.create().apply {
@@ -77,26 +63,24 @@ abstract class Mangack : HttpSource() {
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        fetchTaxonomies()
-
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val builder = mangaListUrlBuilder(page)
         val trimmedQuery = query.trim()
         if (trimmedQuery.isNotEmpty()) {
             builder.addQueryParameter("search", trimmedQuery)
         }
         filters.filterIsInstance<UriFilter>().forEach { it.applyTo(builder) }
-        return GET(builder.build(), headers)
+        return mangaList(builder.build(), page)
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = mangaListParse(response)
 
     private fun mangaListUrlBuilder(page: Int): HttpUrl.Builder = "$baseUrl/wp-json/wp/v2/manga".toHttpUrl().newBuilder()
         .addQueryParameter("page", page.toString())
         .addQueryParameter("per_page", PAGE_SIZE.toString())
         .addQueryParameter("_embed", "wp:featuredmedia")
 
-    private fun mangaListParse(response: Response): MangasPage {
+    private suspend fun mangaList(url: HttpUrl, page: Int): MangasPage {
+        val response = client.get(url)
+        val totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
         val list = response.parseAs<List<MangaDto>>().map { dto ->
             SManga.create().apply {
                 title = dto.title()
@@ -104,22 +88,29 @@ abstract class Mangack : HttpSource() {
                 setUrlWithoutDomain(dto.link())
             }
         }
-        val totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
-        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        return MangasPage(list, currentPage < totalPages)
+        return MangasPage(list, page < totalPages)
     }
 
     // ============================== Details ================================
 
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(doc, manga), chapterListParse(doc))
+    }
+
     // The Ifenzi theme renders broken Author / Type rows (`foreach() over bool`),
     // but the taxonomy slugs survive on the <article> class list. Scraping the
     // public manga page also gives us Followers / Views, which the REST DTO omits.
-    override fun mangaDetailsParse(response: Response): SManga {
-        val doc = response.asJsoup()
+    private fun mangaDetailsParse(doc: Document, manga: SManga): SManga {
         val article = doc.selectFirst("article")
         val articleClasses = article?.classNames().orEmpty()
 
-        return SManga.create().apply {
+        return manga.apply {
             title = doc.selectFirst("h1.entry-title")?.text()
                 ?: doc.selectFirst("meta[property=og:title]")?.attr("content")?.removeSuffix(" mangack")
                 ?: throw Exception("Title not found")
@@ -178,31 +169,24 @@ abstract class Mangack : HttpSource() {
 
     // =============================== Chapters ===============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("ul.chapterslist li").map { li ->
-            SChapter.create().apply {
-                val link = li.selectFirst("a.title, a[href*=/chapter/]")!!
-                setUrlWithoutDomain(link.attr("abs:href"))
-                name = link.ownText().ifEmpty { link.text() }
-                date_upload = parseChapterDate(li.selectFirst(".entry-date")?.text())
-            }
+    private fun chapterListParse(document: Document): List<SChapter> = document.select("ul.chapterslist li").map { li ->
+        SChapter.create().apply {
+            val link = li.selectFirst("a.title, a[href*=/chapter/]")!!
+            setUrlWithoutDomain(link.attr("abs:href"))
+            name = link.ownText().ifEmpty { link.text() }
+            date_upload = parseChapterDate(li.selectFirst(".entry-date")?.text())
         }
     }
 
     // =============================== Pages =================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.trim('/').substringAfterLast('/')
         val url = "$baseUrl/wp-json/wp/v2/chapter".toHttpUrl().newBuilder()
             .addQueryParameter("slug", slug)
             .addQueryParameter("_fields", "id,content")
             .build()
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val dto = response.parseAs<List<ChapterContentDto>>().firstOrNull()
+        val dto = client.get(url).parseAs<List<ChapterContentDto>>().firstOrNull()
             ?: return emptyList()
         return IMG_SRC_REGEX.findAll(dto.contentHtml())
             .map { it.groupValues[1] }
@@ -211,59 +195,39 @@ abstract class Mangack : HttpSource() {
             .mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // =============================== Filters ===============================
 
-    private var genres: List<TaxonomyOption> = emptyList()
-    private var years: List<TaxonomyOption> = emptyList()
-    private var taxonomyState = TaxonomyState.NOT_FETCHED
-    private var taxonomyAttempts = 0
-    private val scope = CoroutineScope(Dispatchers.IO)
+    override val supportsFilterFetching get() = true
 
-    override fun getFilterList(): FilterList {
-        fetchTaxonomies()
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val genres = async {
+            client.get("$baseUrl/wp-json/wp/v2/Genres?per_page=100&hide_empty=true")
+                .parseAs<List<TermPayloadDto>>()
+        }
+        val years = async {
+            client.get("$baseUrl/wp-json/wp/v2/realised?per_page=100&hide_empty=true&orderby=name&order=desc")
+                .parseAs<List<TermPayloadDto>>()
+        }
+        FilterDataDto(genres.await(), years.await()).toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val taxonomies = data?.parseAs<FilterDataDto>()
+        val genres = taxonomies?.genres.orEmpty().map { TaxonomyOption(it.id, it.name) }.sortedBy { it.name }
+        val years = taxonomies?.years.orEmpty().map { TaxonomyOption(it.id, it.name) }
         return FilterList(
             buildList {
                 add(TypeFilter())
                 add(StatusFilter())
                 if (years.isNotEmpty()) add(YearFilter(years))
                 add(SortFilter())
-                add(Filter.Separator())
-                when {
-                    genres.isNotEmpty() -> add(GenreFilterGroup(genres))
-                    taxonomyAttempts >= MAX_TAXONOMY_ATTEMPTS -> add(WarningHeader(GENRE_FETCH_FAILED_MSG))
-                    else -> add(WarningHeader(GENRE_LOADING_MSG))
+                if (genres.isNotEmpty()) {
+                    add(Filter.Separator())
+                    add(GenreFilterGroup(genres))
                 }
             },
         )
     }
-
-    private fun fetchTaxonomies() {
-        if (taxonomyState != TaxonomyState.NOT_FETCHED || taxonomyAttempts >= MAX_TAXONOMY_ATTEMPTS) return
-        taxonomyState = TaxonomyState.FETCHING
-        taxonomyAttempts++
-        scope.launch {
-            try {
-                val genresList = client
-                    .newCall(GET("$baseUrl/wp-json/wp/v2/Genres?per_page=100&hide_empty=true", headers))
-                    .execute()
-                    .parseAs<List<TermPayloadDto>>()
-                val yearsList = client
-                    .newCall(GET("$baseUrl/wp-json/wp/v2/realised?per_page=100&hide_empty=true&orderby=name&order=desc", headers))
-                    .execute()
-                    .parseAs<List<TermPayloadDto>>()
-                genres = genresList.map { TaxonomyOption(it.id, it.name) }.sortedBy { it.name }
-                years = yearsList.map { TaxonomyOption(it.id, it.name) }
-                taxonomyState = TaxonomyState.FETCHED
-            } catch (e: Exception) {
-                Log.e("Mangack", "Failed to fetch taxonomies", e)
-                taxonomyState = TaxonomyState.NOT_FETCHED
-            }
-        }
-    }
-
-    private enum class TaxonomyState { NOT_FETCHED, FETCHING, FETCHED }
 
     // =============================== Helpers ===============================
 
@@ -298,7 +262,7 @@ abstract class Mangack : HttpSource() {
             }
             return System.currentTimeMillis() - number * msPerUnit
         }
-        return absoluteDateFormat.tryParse(raw)
+        return absoluteDateFormat.tryParseDate(raw, ZoneOffset.UTC)
     }
 
     private fun Element.imgAttr(): String = when {
@@ -308,17 +272,10 @@ abstract class Mangack : HttpSource() {
         else -> attr("abs:src")
     }
 
-    private val absoluteDateFormat by lazy {
-        SimpleDateFormat("MMMM d, yyyy", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-    }
+    private val absoluteDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US)
 
     companion object {
         private const val PAGE_SIZE = 24
-        private const val MAX_TAXONOMY_ATTEMPTS = 3
-        private const val GENRE_LOADING_MSG = "Genres are loading — press Reset to refresh the filter list."
-        private const val GENRE_FETCH_FAILED_MSG = "Could not load the Genres list. Check your connection and press Reset."
 
         private val IMG_SRC_REGEX = Regex("""<img[^>]+src=["']([^"']+)["']""")
         private val SKIP_ASSET_REGEX = Regex(

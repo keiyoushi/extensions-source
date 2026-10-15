@@ -7,12 +7,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
 abstract class LavaScans : MangaThemesiaAlt() {
-    override val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale("ar"))
+    override val datePattern = "yyyy/MM/dd"
 
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
 

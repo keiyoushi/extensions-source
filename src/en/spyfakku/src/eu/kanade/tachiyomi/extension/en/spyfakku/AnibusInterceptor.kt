@@ -1,23 +1,15 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
 
-import android.annotation.SuppressLint
-import android.app.Application
-import android.net.http.SslError
-import android.os.Handler
-import android.os.Looper
 import android.webkit.CookieManager
-import android.webkit.SslErrorHandler
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import keiyoushi.utils.runWebViewBlocking
+import okhttp3.Call
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 object AnibusInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -33,7 +25,7 @@ object AnibusInterceptor : Interceptor {
 
             if (document.selectFirst("script#anubis_challenge") != null) {
                 response.close()
-                if (!resolveInWebView(request)) {
+                if (!resolveInWebView(request, chain.call())) {
                     throw IOException("Failed to resolve challenge in WebView")
                 } else {
                     chain.proceed(request)
@@ -47,55 +39,35 @@ object AnibusInterceptor : Interceptor {
     }
 
     @Synchronized
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun resolveInWebView(request: Request): Boolean {
-        val context = Injekt.get<Application>()
+    private fun resolveInWebView(request: Request, call: Call): Boolean = runCatching {
         val cookieManager = CookieManager.getInstance()
-        val latch = CountDownLatch(1)
-        var webView: WebView? = null
-        val handler = Handler(Looper.getMainLooper())
+        runWebViewBlocking<Unit>(call, timeout = 20.seconds) {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            userAgent = request.header("User-Agent")!!
 
-        handler.post {
-            val webview = WebView(context)
-                .also { webView = it }
-
-            with(webview.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                userAgentString = request.header("User-Agent")
-            }
-            webview.webViewClient = object : WebViewClient() {
-                @SuppressLint("WebViewClientOnReceivedSslError")
-                override fun onReceivedSslError(
-                    view: WebView,
-                    handler: SslErrorHandler,
-                    error: SslError,
-                ) {
-                    handler.proceed()
-                }
-
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    super.onPageFinished(view, url)
+            onPageFinished { url ->
+                poll(500.milliseconds) {
                     val cookie = cookieManager.getCookie(url)
-                        ?.split("; ")?.map { it.split("=", limit = 2) } ?: emptyList()
-                    val auth = cookie.firstOrNull { it.first().contains("anubis-auth") && it.last().isNotBlank() }
+                        ?.split("; ")
+                        ?.map { it.split("=", limit = 2) }
+                        ?: emptyList()
+
+                    val auth = cookie.firstOrNull {
+                        it.first().contains("anubis-auth") && it.last().isNotBlank()
+                    }
+
                     if (auth != null) {
-                        latch.countDown()
+                        resolve(Unit)
                     }
                 }
             }
 
-            webview.loadUrl(request.url.toString())
+            loadUrl(request.url.toString())
         }
 
-        latch.await(20, TimeUnit.SECONDS)
-
-        handler.post {
-            webView?.stopLoading()
-            webView?.destroy()
-        }
-
-        return latch.count != 1L
+        true
+    }.getOrElse {
+        false
     }
 }

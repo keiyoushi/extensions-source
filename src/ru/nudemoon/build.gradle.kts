@@ -6,14 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Nude-Moon"
-    versionCode = 30
+    versionCode = 31
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         baseUrl {
             custom("https://nude-moon.org")
         }
         lang = "ru"
+    }
+
+    deeplink {
+        path("/..*--..*\\.html")
     }
 }

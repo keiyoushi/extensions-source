@@ -1,96 +1,187 @@
 package eu.kanade.tachiyomi.extension.pt.mangastop
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
-import keiyoushi.network.addCookie
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Headers
-import okhttp3.Request
-import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
-import java.util.Locale
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 
 @Source
-abstract class MangaStop :
-    MangaThemesia(),
-    ConfigurableSource {
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR"))
+abstract class MangaStop : KeiSource() {
 
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            // For covers
-            if (chain.request().url.host.contains("images")) {
-                val newRequest = request.newBuilder().apply {
-                    header("Sec-Fetch-Dest", "image")
-                    header("Sec-Fetch-Mode", "no-cors")
-                    header("Sec-Fetch-Site", "same-site")
-                }.build()
-                chain.proceed(newRequest)
-            } else {
-                chain.proceed(request)
-            }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        rateLimit(2)
+    }
+
+    private val apiUrl: HttpUrl get() = "$baseUrl/wp-json/mangastop/v1".toHttpUrl()
+
+    override suspend fun getPopularManga(page: Int) = fetchMangaList("mais-populares", page)
+
+    override suspend fun getLatestUpdates(page: Int) = fetchMangaList("recentes", page)
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        query.toSiteUrlOrNull()?.let { return getMangasByUrl(it, page) }
+
+        if (query.isNotBlank()) {
+            val url = apiUrl.newBuilder()
+                .addPathSegment("busca")
+                .addQueryParameter("q", query.trim())
+                .addQueryParameter("tipo", "obras")
+                .addQueryParameter("pagina", page.toString())
+                .addQueryParameter("por_pagina", PER_PAGE)
+                .build()
+            return client.get(url).parseAs<BuscaDto>().toMangasPage()
         }
-        .addCookie("wpmanga-ada" to "1")
-        .addInterceptor(ClientHintsInterceptor())
-        .rateLimit(2)
-        .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-        .set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
-        .set("Sec-Fetch-Dest", "document")
-        .set("Sec-Fetch-Mode", "navigate")
-        .set("Sec-Fetch-Site", "none")
-        .set("Sec-Fetch-User", "?1")
-        .set("Upgrade-Insecure-Requests", "1")
-        .setRandomUserAgent()
+        val type = filters.firstInstanceOrNull<TypeFilter>()?.selected.orEmpty()
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected.orEmpty()
+        if (genre.isNotEmpty()) {
+            return fetchMangaList("genero", page, type) { addQueryParameter("slug", genre) }
+        }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
-    override fun pageListParse(document: Document): List<Page> {
-        val pages = super.pageListParse(document)
-            .filterNot { it.imageUrl?.contains("mihon", true) == true }
-
-        if (pages.isNotEmpty()) return pages
-
-        return MangaThemesia.JSON_IMAGE_LIST_REGEX.find(document.toString())
-            ?.groupValues?.get(1)
-            ?.let { json.parseToJsonElement(it).jsonArray }
-            ?.mapIndexed { i, el ->
-                Page(i, document.location(), el.jsonPrimitive.content)
-            }
-            .orEmpty()
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.selected ?: "mais-populares"
+        return fetchMangaList(sort, page, type)
     }
 
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
-            .set("Sec-Fetch-Dest", "image")
-            .set("Sec-Fetch-Mode", "no-cors")
-            .set("Sec-Fetch-Site", "same-site")
-            .set("Referer", page.url)
+    private suspend fun fetchMangaList(
+        endpoint: String,
+        page: Int,
+        type: String = "",
+        params: HttpUrl.Builder.() -> Unit = {},
+    ): MangasPage {
+        val url = apiUrl.newBuilder()
+            .addPathSegment(endpoint)
+            .apply(params)
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("por_pagina", PER_PAGE)
+            .apply { if (type.isNotEmpty()) addQueryParameter("tipo", type) }
             .build()
-
-        return GET(page.imageUrl!!, newHeaders)
+        return client.get(url).parseAs<MangaListDto>().toMangasPage()
     }
 
-    override fun getFilterList(): FilterList {
-        val filters = super.getFilterList().filterNot { it is AuthorFilter || it is YearFilter }
-        return FilterList(filters)
+    // Also accepts site links pasted without the scheme, e.g. "mangastop.net/obra/123" or "/manga/slug/"
+    private fun String.toSiteUrlOrNull(): HttpUrl? {
+        val query = trim()
+        val host = baseUrl.toHttpUrl().host
+        return when {
+            query.startsWith("/") -> "$baseUrl$query"
+            query.startsWith("$host/") || query.startsWith("www.$host/") -> "https://$query"
+            else -> null
+        }?.toHttpUrlOrNull()
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addRandomUAPreference()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host) return null
+        val id = resolveId(url.encodedPath) ?: return null
+        val mangaId = when (url.pathSegments.first()) {
+            "obra", "manga" -> id
+            else -> fetchLeitor(id).mangaId.toString()
+        }
+        return fetchObra(mangaId).toSManga()
+    }
+
+    override fun getMangaUrl(manga: SManga): String = manga.knownId()?.let { "$baseUrl/obra/$it" } ?: (baseUrl + manga.url)
+
+    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.isId()) "$baseUrl/leitor/${chapter.url}" else baseUrl + chapter.url
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val id = manga.knownId() ?: resolveId(manga.url) ?: throw Exception("Obra não encontrada")
+        val obra = fetchObra(id)
+        return SMangaUpdate(obra.toSManga(), obra.toSChapterList())
+    }
+
+    private suspend fun fetchObra(id: String) = client.get(apiUrl.newBuilder().addPathSegment("obra").addPathSegment(id).build())
+        .parseAs<ObraDto>()
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val id = resolveId(chapter.url) ?: throw Exception("Capítulo não encontrado")
+        return fetchLeitor(id).imagens.mapIndexed { index, imagem -> Page(index, imageUrl = imagem.url) }
+    }
+
+    private suspend fun fetchLeitor(id: String) = client.get(apiUrl.newBuilder().addPathSegment("leitor").addPathSegment(id).build())
+        .parseAs<LeitorDto>()
+
+    /**
+     * Returns the WordPress post id behind a stored url or site path. A bare id (the current stored format) and
+     * current paths (/obra/{id}, /leitor/{id}) carry it directly; paths from the old MangaThemesia site
+     * (/manga/{slug}/ and /{chapter-slug}/) are looked up by slug.
+     */
+    private suspend fun resolveId(path: String): String? {
+        if (path.isId()) return path
+        val segments = path.trim('/').split('/')
+        val (type, slug) = when {
+            segments.size >= 2 && segments[0] in listOf("obra", "leitor") -> return segments[1].toLongOrNull()?.toString()
+            segments.size >= 2 && segments[0] == "manga" -> "manga" to segments[1]
+            segments.size == 1 && segments[0].isNotEmpty() -> "posts" to segments[0]
+            else -> return null
+        }
+        val url = "$baseUrl/wp-json/wp/v2".toHttpUrl().newBuilder()
+            .addPathSegment(type)
+            .addQueryParameter("slug", slug)
+            .addQueryParameter("_fields", "id")
+            .build()
+        return client.get(url).parseAs<List<PostIdDto>>().firstOrNull()?.id?.toString()
+    }
+
+    private fun String.isId() = isNotEmpty() && all { it in '0'..'9' }
+
+    private fun SManga.knownId(): String? = url.takeIf { it.isId() } ?: memo["id"]?.stringOrNull
+
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val genres = mutableListOf<GenreDto>()
+        var page = 1
+        do {
+            val url = "$baseUrl/wp-json/wp/v2/genres".toHttpUrl().newBuilder()
+                .addQueryParameter("per_page", "100")
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("hide_empty", "true")
+                .addQueryParameter("_fields", "name,slug")
+                .build()
+            val response = client.get(url)
+            val totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
+            genres += response.parseAs<List<GenreDto>>()
+        } while (page++ < totalPages)
+        return genres.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<GenreDto>>()
+        return FilterList(
+            buildList<Filter<*>> {
+                add(Filter.Header("Os filtros não se aplicam à busca por texto"))
+                add(SortFilter())
+                add(TypeFilter())
+                if (genres != null) {
+                    add(Filter.Header("Com um gênero selecionado, a ordenação é ignorada"))
+                    add(GenreFilter(genres))
+                }
+            },
+        )
+    }
+
+    companion object {
+        private const val PER_PAGE = "24"
     }
 }

@@ -1,47 +1,55 @@
 package eu.kanade.tachiyomi.extension.en.elanschool
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
 
 @Source
-abstract class ElanSchool : HttpSource() {
+abstract class ElanSchool : KeiSource() {
 
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
-            url = "/chapters/?dps_paged=$page"
-            title = "Elan School"
-            thumbnail_url = "$baseUrl/wp-content/uploads/2018/11/The-Elan-School-Comic-1cNEW-1-768x1491.jpg"
-            description = "A 16 year old boy named Joe gets indoctrinated into a sick cult that is run by imprisoned teenagers. Based on the true story of the Elan School."
-            status = SManga.ONGOING
-            author = "Joe Nobody"
-            artist = "Joe Nobody"
-        }
-
-        return Observable.just(MangasPage(listOf(manga), false))
+    private fun mangaInfo(page: Int) = SManga.create().apply {
+        url = "/chapters/?dps_paged=$page"
+        title = "Elan School"
+        thumbnail_url = "$baseUrl/wp-content/uploads/2018/11/The-Elan-School-Comic-1cNEW-1-768x1491.jpg"
+        description = "A 16 year old boy named Joe gets indoctrinated into a sick cult that is run by imprisoned teenagers. Based on the true story of the Elan School."
+        status = SManga.ONGOING
+        author = "Joe Nobody"
+        artist = "Joe Nobody"
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = fetchPopularManga(page)
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(mangaInfo(page)), false)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
-        .map { it.mangas.first().apply { initialized = true } }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getPopularManga(page)
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = if (fetchDetails) mangaInfo(1) else manga
+        val chapterList = if (fetchChapters) fetchChapterList(manga) else chapters
+
+        return SMangaUpdate(details, chapterList)
+    }
 
     private fun chapterNextPageSelector() = "a.next"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val allChaps = mutableListOf<SChapter>()
-        var document = response.asJsoup()
+        var document = client.get(getMangaUrl(manga)).asJsoup()
 
         while (true) {
             val chapters = document.select(chapterListSelector()).map {
@@ -59,7 +67,7 @@ abstract class ElanSchool : HttpSource() {
             }
 
             val nextUrl = document.select(chapterNextPageSelector()).attr("href")
-            document = client.newCall(GET(nextUrl, headers)).execute().asJsoup()
+            document = client.get(nextUrl).asJsoup()
         }
 
         return allChaps.reversed()
@@ -72,26 +80,11 @@ abstract class ElanSchool : HttpSource() {
         setUrlWithoutDomain(element.attr("href"))
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("img[data-orig-file]").mapIndexed { i, img ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        // Linked images are the language flag, subscribe banner and next-chapter buttons
+        return document.select("img[data-orig-file]").filter { it.closest("a") == null }.mapIndexed { i, img ->
             Page(i, "", img.attr("src"))
         }
     }
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

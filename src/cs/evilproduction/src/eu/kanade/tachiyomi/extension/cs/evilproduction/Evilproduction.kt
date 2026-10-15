@@ -4,4 +4,6 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import keiyoushi.annotation.Source
 
 @Source
-abstract class Evilproduction : MangaThemesia()
+abstract class Evilproduction : MangaThemesia() {
+    override val datePattern = "d. MMMM yyyy"
+}

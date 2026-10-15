@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Asmodeus Scans"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "keyoapp"
@@ -14,5 +14,6 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://asmotoon.com"
+        versionId = 2
     }
 }

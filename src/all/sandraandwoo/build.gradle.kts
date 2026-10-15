@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Sandra and Woo"
-    versionCode = 3
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf("de", "en").forEach { langCode ->
         source {

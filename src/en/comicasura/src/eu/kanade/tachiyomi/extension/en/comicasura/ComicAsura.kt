@@ -1,66 +1,49 @@
 package eu.kanade.tachiyomi.extension.en.comicasura
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class ComicAsura : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("MMMM d yyyy", Locale.US)
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override val datePattern = "MMMM d yyyy"
+
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds)
 
     override val popularFilter by lazy { FilterList(OrderByFilter("", orderByFilterOptions, "rating")) }
     override val latestFilter by lazy { FilterList(OrderByFilter("", orderByFilterOptions, "latest")) }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/advanced-search".toHttpUrl().newBuilder()
-            .addQueryParameter("name", query)
-            .addQueryParameter("page", page.toString())
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList) = "$baseUrl/advanced-search".toHttpUrl().newBuilder().apply {
+        addQueryParameter("name", query)
+        addQueryParameter("page", page.toString())
 
         filters.forEach { filter ->
             when (filter) {
-                is StatusFilter -> {
-                    url.addQueryParameter("status", filter.selectedValue())
-                }
-
-                is TypeFilter -> {
-                    url.addQueryParameter("type", filter.selectedValue().lowercase())
-                }
-
-                is OrderByFilter -> {
-                    url.addQueryParameter("sort", filter.selectedValue())
-                }
-
-                is GenreListFilter -> {
-                    val genres = filter.state
+                is StatusFilter -> addQueryParameter("status", filter.selectedValue())
+                is TypeFilter -> addQueryParameter("type", filter.selectedValue().lowercase())
+                is OrderByFilter -> addQueryParameter("sort", filter.selectedValue())
+                is GenreListFilter -> addQueryParameter(
+                    "genres",
+                    filter.state
                         .filter { it.state != Filter.TriState.STATE_IGNORE }
-                        .joinToString("_") { it.value }
-
-                    url.addQueryParameter("genres", genres)
-                }
-
-                else -> { /* Do Nothing */ }
+                        .joinToString("_") { it.value },
+                )
+                else -> {}
             }
         }
-        url.addPathSegment("")
-        return GET(url.build(), headers)
+        addPathSegment("")
     }
 
-    override fun searchMangaSelector() = ".grid > a[href*=manga]"
+    override fun searchMangaSelector() = ".grid > a[href*=manga], .flex-wrap.flex a[href*=manga]"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         thumbnail_url = element.select("img").imgAttr()
@@ -90,13 +73,6 @@ abstract class ComicAsura : MangaThemesia() {
 
     override val pageSelector = "div > img.object-cover.mx-auto"
 
-    override fun imageRequest(page: Page): Request {
-        val imageHeaders = headers.newBuilder()
-            .set("Referer", "$baseUrl/")
-            .build()
-        return GET(page.imageUrl!!, imageHeaders)
-    }
-
     override val orderByFilterOptions = arrayOf(
         Pair(intl["order_by_filter_default"], ""),
 //        Pair(intl["order_by_filter_az"], "name_asc"), // The source contains an error
@@ -105,7 +81,7 @@ abstract class ComicAsura : MangaThemesia() {
         Pair(intl["order_by_filter_popular"], "rating"),
     )
 
-    override fun parseGenres(document: Document): List<GenreData>? = document.select(".filter-dropdown-container label:has(input[name*=genres])")?.map { li ->
+    override fun parseGenres(document: Document): List<GenreData>? = document.select(".filter-dropdown-container label:has(input[name*=genres])").map { li ->
         GenreData(
             li.selectFirst("span")!!.text(),
             li.selectFirst("input[type=checkbox]")!!.attr("value"),

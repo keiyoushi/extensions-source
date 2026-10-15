@@ -6,12 +6,19 @@ plugins {
 
 keiyoushi {
     name = "MyComic"
-    versionCode = 4
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "zh"
         baseUrl = "https://mycomic.com"
+    }
+
+    deeplink {
+        path("/comics/..*")
+        path("/cn/comics/..*")
+        path("/chapters/..*")
+        path("/cn/chapters/..*")
     }
 }

@@ -78,7 +78,7 @@ class BrowseManga(
         title = this@BrowseManga.title
 
         thumbnail_url = if (isAdult && hideAdultCovers) {
-            "https://fakeimg.ryd.tools/400x600/?text=NSFW"
+            "https://fakeimg.cnbattle.com/400x600/?text=NSFW"
         } else {
             photo?.let {
                 if (it.startsWith("/")) {
@@ -116,12 +116,14 @@ class MangaData(
     @Serializable
     class Data(
         val manga: Manga,
+        @SerialName("total_volumes")
+        val volumeCount: Int? = null,
     )
 }
 
 @Serializable
 class RelatedData(
-    val suggestions: List<BrowseManga> = emptyList(),
+    val suggestions: List<BrowseManga>? = null,
     val relationsData: RelationsData? = null,
 ) {
     @Serializable
@@ -168,6 +170,12 @@ class Manga(
     private val malID: Long? = null,
     @SerialName("kitsu_id")
     private val kitsuID: Long? = null,
+    @SerialName("anime_planet_id")
+    private val animePlanetId: String? = null,
+    @SerialName("shikimori_id")
+    private val shikimoriId: Long? = null,
+    @SerialName("ann_id")
+    private val animeNewsNetworkId: Long? = null,
     @SerialName("mangadex_id")
     private val mangadexID: String? = null,
     @SerialName("year")
@@ -188,7 +196,7 @@ class Manga(
         private val listRegex = Regex("\n\n(-|•|\\d+\\.)")
     }
 
-    fun toSManga(baseUrl: String, showTags: Boolean = true) = SManga.create().apply {
+    fun toSManga(baseUrl: String, showTags: Boolean = true, extraVolumeCount: Int? = null) = SManga.create().apply {
         url = id.toString()
         title = this@Manga.title
         thumbnail_url = photo?.let {
@@ -211,6 +219,7 @@ class Manga(
                 "JP" -> add("Manga")
                 "KR" -> add("Manhwa")
                 "CN" -> add("Manhua")
+                "EN" -> add("OEL")
             }
             this@Manga.genres.forEach { add(it.trim()) }
             if (showTags) {
@@ -239,6 +248,7 @@ class Manga(
             val metaInfo = buildList {
                 year?.let { add("**Year:** $it") }
                 chapterCount?.let { add("**Chapters:** $it") }
+                extraVolumeCount?.let { add("**Volumes:** $it") }
                 trackedCount?.let { add("**Tracked:** $it") }
                 contentRating?.let {
                     add("**Content Rating:** ${it.replaceFirstChar { c -> c.uppercase() }}")
@@ -265,10 +275,13 @@ class Manga(
 
             listOfNotNull(
                 anilistID?.let { "[AniList](https://anilist.co/manga/$it)" },
-                mangaupdatesID?.let { "[MangaUpdates](https://mangaupdates.com/series/$it)" },
+                mangaupdatesID?.let { "[MangaUpdates](https://www.mangaupdates.com/series/$it)" },
                 mangabakaID?.let { "[MangaBaka](https://mangabaka.org/$it)" },
                 malID?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
                 kitsuID?.let { "[Kitsu](https://kitsu.app/manga/$it)" },
+                animePlanetId?.let { "[AnimePlanet](https://www.anime-planet.com/manga/$it)" },
+                shikimoriId?.let { "[Shikimori](https://shikimori.io/mangas/$it)" },
+                animeNewsNetworkId?.let { "[AnimeNewsNetwork](https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it)" },
                 mangadexID?.let { "[MangaDex](https://mangadex.org/title/$it)" },
                 sourceUrl?.let { "[Source]($it)" },
             ).also { links ->

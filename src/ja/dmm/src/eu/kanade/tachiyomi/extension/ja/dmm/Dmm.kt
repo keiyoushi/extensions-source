@@ -1,124 +1,92 @@
 package eu.kanade.tachiyomi.extension.ja.dmm
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
 
 @Source
 abstract class Dmm :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
-
     private val shopName get() = if (name == "FANZA") "adult" else "general"
-
     private val apiUrl get() = "$baseUrl/ajax/bff"
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
+    private val desktopHeaders get() = headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36")
+        .build()
 
-    override val client by lazy {
-        network.client.newBuilder()
-            .addInterceptor(PublusInterceptor())
-            .addCookie(listOf("book_safe_mode_level" to "off", "age_check_done" to "1"))
-            .addInterceptor { chain ->
-                val request = chain.request()
-                val response = chain.proceed(request)
-                if (request.url.fragment == "locked") {
-                    throw IOException("Log in via WebView and purchase this product to read.")
-                }
-                val path = response.request.url.encodedPath
-                if (path.contains("/service/login/password/") || path == "/shelf/") {
-                    throw IOException("Your country is not supported.")
-                }
-                response
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(PublusInterceptor())
+        addCookie(listOf("book_safe_mode_level" to "off", "age_check_done" to "1"))
+        addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            val path = response.request.url.encodedPath
+            if (path.startsWith("/service/login/password") || path == "/shelf/") {
+                throw IOException("Your country is not supported.")
             }
-            .build()
+            response
+        }
     }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    private val desktopHeaders by lazy {
-        headersBuilder()
-            .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
-            .build()
-    }
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/list/".toHttpUrl().newBuilder().apply {
             addQueryParameter("sort", "ranking")
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
         }.build()
-        return GET(url, desktopHeaders)
+        return client.get(url, desktopHeaders).toMangasPage()
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(".m-boxListBookProduct2__item").map {
-            SManga.create().apply {
-                title = it.selectFirst(".m-boxListBookProduct2Tmb__ttl")!!.text().replace(TITLE_REGEX, "")
-                val thumbUrl = it.selectFirst("img.m-bookImage__img")?.absUrl("src")
-                thumbnail_url = thumbUrl?.replace(THUMBNAIL_REGEX, "l")
-                val id = it.selectFirst("a[href*=/product/]")!!.absUrl("href").toHttpUrl().pathSegments[1]
-                setUrlWithoutDomain(id)
-            }
-        }
-
-        val hasNextPage = document.selectFirst("a.m-boxPaging:contains(>)") != null
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/list/".toHttpUrl().newBuilder().apply {
             addQueryParameter("sort", "date")
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
         }.build()
-        return GET(url, desktopHeaders)
+        return client.get(url, desktopHeaders).toMangasPage()
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search/".toHttpUrl().newBuilder()
             .addQueryParameter("searchstr", query)
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, desktopHeaders)
+        return client.get(url, desktopHeaders).toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(".m-boxSearchBookProduct__item").map {
+    private fun Response.toMangasPage(): MangasPage {
+        val document = this.asJsoup()
+        val mangas = document.select(".m-boxListBookProduct2__item, .m-boxSearchBookProduct__item").map {
             SManga.create().apply {
-                title = it.selectFirst(".m-boxSearchListTmb__ttl")!!.text().replace(TITLE_REGEX, "")
-                val thumbUrl = it.selectFirst("img.m-bookImage__img")?.absUrl("src")
-                thumbnail_url = thumbUrl?.replace(THUMBNAIL_REGEX, "l")
-                val id = it.selectFirst("a[href*=/product/]")!!.absUrl("href").toHttpUrl().pathSegments[1]
-                setUrlWithoutDomain(id)
+                url = it.selectFirst("a[href*=/product/]")!!.absUrl("href").toHttpUrl().pathSegments[1]
+                title = it.selectFirst(".m-boxListBookProduct2Tmb__ttl, .m-boxSearchListTmb__ttl")!!.text().replace(TITLE_REGEX, "")
+                thumbnail_url = it.selectFirst("img.m-bookImage__img")?.absUrl("src")?.replace(THUMBNAIL_REGEX, "l")
             }
         }
 
@@ -126,73 +94,79 @@ abstract class Dmm :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$apiUrl/contents_book/".toHttpUrl().newBuilder()
-            .addQueryParameter("shop_name", shopName)
-            .addQueryParameter("series_id", manga.url)
-            .addQueryParameter("format_webp", "1")
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("purchase_status", "all")
-            .addQueryParameter("page", "1")
-            .addQueryParameter("per_page", "1")
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val contentId = response.parseAs<ChapterResponse>().volumeBooks.first().contentId
-        val seriesId = response.request.url.queryParameter("series_id")
-        val detailsUrl = "$apiUrl/product_volume/".toHttpUrl().newBuilder()
-            .addQueryParameter("shop_name", shopName)
-            .addQueryParameter("series_id", seriesId)
-            .addQueryParameter("content_id", contentId)
-            .addQueryParameter("format_webp", "1")
-            .build()
-        val detailsResponse = client.newCall(GET(detailsUrl, headers)).execute()
-        return detailsResponse.parseAs<DetailsResponse>().toSManga()
-    }
-
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/product/${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val firstPage = async { fetchVolumeBooks(manga.url, 1) }
+
+        val details = async {
+            if (!fetchDetails) return@async manga
+            val url = "$apiUrl/product_volume/".toHttpUrl().newBuilder()
+                .addQueryParameter("shop_name", shopName)
+                .addQueryParameter("series_id", manga.url)
+                .addQueryParameter("content_id", firstPage.await().volumeBooks.first().contentId)
+                .addQueryParameter("device_type", "sp")
+                .addQueryParameter("format_webp", "1")
+                .build()
+            client.get(url).parseAs<DetailsResponse>().toSManga()
+        }
+
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            val first = firstPage.await()
+            val pageCount = (first.pager.totalCount + PER_PAGE - 1) / PER_PAGE
+            val otherPages = (2..pageCount).map { page -> async { fetchVolumeBooks(manga.url, page) } }
+            (first.volumeBooks + otherPages.awaitAll().flatMap { it.volumeBooks })
+                .distinctBy { it.contentId }
+                .filter { !hideLocked || !it.isLocked || it.isPreview }
+                .map { it.toSChapter(manga.url) }
+        }
+
+        SMangaUpdate(
+            details.await(),
+            chapterList.await(),
+        )
+    }
+
+    private suspend fun fetchVolumeBooks(seriesId: String, page: Int): ChapterResponse {
         val url = "$apiUrl/contents_book/".toHttpUrl().newBuilder()
             .addQueryParameter("shop_name", shopName)
-            .addQueryParameter("series_id", manga.url)
+            .addQueryParameter("series_id", seriesId)
             .addQueryParameter("format_webp", "1")
             .addQueryParameter("order", "desc")
             .addQueryParameter("purchase_status", "all")
-            .addQueryParameter("page", "1")
-            .addQueryParameter("per_page", "100")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("per_page", PER_PAGE.toString())
             .build()
-        return GET(url, headers)
+        return client.get(url).parseAs<ChapterResponse>()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        return response.parseAs<ChapterResponse>().volumeBooks
-            .filter { !hideLocked || (!it.isLocked || !it.isPreview) }
-            .map { it.toSChapter(baseUrl) }
-    }
+    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["viewerUrl"]?.string
+        ?: "$baseUrl/product/${chapter.memo["seriesId"]!!.string}/${chapter.url}/"
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val viewerUrl = chapter.memo["viewerUrl"]?.string?.toHttpUrl()
+            ?: throw Exception("Log in via WebView and purchase this product to read.")
 
-    override fun pageListParse(response: Response): List<Page> {
-        val cid = response.request.url.queryParameter("cid")
-        val lin = response.request.url.queryParameter("lin")
-        val cUrl = "$baseUrl/viewerapi/auth/".toHttpUrl().newBuilder()
-            .addQueryParameter("cid", cid)
+        val url = viewerUrl.takeIf { it.queryParameter("cid") != null }
+            ?: client.get(viewerUrl).use { it.request.url }
+
+        val authUrl = "$baseUrl/viewerapi/auth/".toHttpUrl().newBuilder()
+            .addQueryParameter("cid", url.queryParameter("cid"))
             .apply {
-                if (lin != null) {
-                    addQueryParameter("lin", lin)
-                }
-            }.build()
+                url.queryParameter("lin")?.let { addQueryParameter("lin", it) }
+            }
+            .build()
 
-        val content = client.newCall(GET(cUrl, headers)).execute().parseAs<PublusContent>()
-
-        return fetchPages(content.url!!, headers, client, content.authInfo?.toAuth())
+        val content = client.get(authUrl).parseAs<PublusContent>()
+        return client.fetchPages(content.url!!, content.authInfo?.toAuth())
     }
-
-    override fun imageUrlParse(response: Response): String = response.request.url.toString()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -203,6 +177,7 @@ abstract class Dmm :
     }
 
     companion object {
+        private const val PER_PAGE = 100
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
         private val THUMBNAIL_REGEX = Regex(".(?=\\.\\w+$)")
         private val TITLE_REGEX = Regex("(?:(?<=\\s|】)(第?\\d+巻|第?\\d+話|\\d+(?=\\s*$))|（[０-９0-9]+）|【第?\\d+[巻話]】|#\\d+).*$")

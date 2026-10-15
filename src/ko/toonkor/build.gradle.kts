@@ -6,14 +6,22 @@ plugins {
 
 keiyoushi {
     name = "Toonkor"
-    versionCode = 8
+    versionCode = 11
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
+
+    deeplink {
+        path("/..*")
+    }
 
     source {
         lang = "ko"
         baseUrl {
-            custom("https://tkor148.com")
+            custom("https://toonkor0.org")
         }
     }
+}
+
+dependencies {
+    implementation(project(":lib:randomua"))
 }

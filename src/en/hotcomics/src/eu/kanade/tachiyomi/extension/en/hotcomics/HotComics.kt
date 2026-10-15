@@ -1,55 +1,49 @@
 package eu.kanade.tachiyomi.extension.en.hotcomics
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.ParseException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class HotComics : HttpSource() {
+abstract class HotComics : KeiSource() {
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient() = addCookie("hc_vfs" to "Y")
 
-    override val client = network.client.newBuilder()
-        .addCookie("hc_vfs" to "Y")
-        .build()
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/en").asJsoup())
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/en/new").asJsoup())
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/en", headers)
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/en/new", headers)
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query.isNotEmpty()) {
                 addEncodedPathSegments("en/search")
                 addQueryParameter("keyword", query.trim())
             } else {
-                val filter = filters.filterIsInstance<BrowseFilter>().first()
+                val filter = filters.firstInstance<BrowseFilter>()
                 addEncodedPathSegments(filter.selected)
                 addQueryParameter("page", page.toString())
             }
         }.build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url).asJsoup())
     }
 
     abstract class SelectFilter(
@@ -84,15 +78,13 @@ abstract class HotComics : HttpSource() {
 
     class BrowseFilter(browseList: List<Pair<String, String>>) : SelectFilter("Browse", browseList)
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Doesn't work with Text search"),
         Filter.Separator(),
         BrowseFilter(browseList),
     )
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
+    private fun parseMangaList(document: Document): MangasPage {
         val entries = document.select("li[itemtype*=ComicSeries]:not(.no-comic) > a").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
@@ -105,9 +97,21 @@ abstract class HotComics : HttpSource() {
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
+        return SMangaUpdate(
+            mangaDetailsParse(manga, document),
+            chapterListParse(document),
+        )
+    }
+
+    private fun mangaDetailsParse(manga: SManga, document: Document) = manga.apply {
         title = document.selectFirst("h2.episode-title")!!.text()
         with(document.selectFirst("p.type_box")!!) {
             author = selectFirst("span.writer")?.text()
@@ -131,27 +135,15 @@ abstract class HotComics : HttpSource() {
         }.trim()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("#tab-chapter a").map { element ->
+    private fun chapterListParse(document: Document): List<SChapter> = document.select("#tab-chapter a").map { element ->
         SChapter.create().apply {
             setUrlWithoutDomain(element.attr("onclick").substringAfter("popupLogin('").substringBefore("'"))
             name = element.selectFirst(".cell-num")!!.text()
-            date_upload = parseDate(element.selectFirst(".cell-time")?.text())
+            date_upload = dateFormat.tryParseDate(element.selectFirst(".cell-time")?.text())
         }
     }.reversed()
 
-    private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
-
-    private fun parseDate(date: String?): Long {
-        date ?: return 0L
-
-        return try {
-            dateFormat.parse(date)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
-    }
-
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("#viewer-img img").mapIndexed { idx, img ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select("#viewer-img img").mapIndexed { idx, img ->
         Page(idx, imageUrl = img.imgAttr())
     }
 
@@ -159,6 +151,6 @@ abstract class HotComics : HttpSource() {
         hasAttr("data-src") -> absUrl("data-src")
         else -> absUrl("src")
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
+
+private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)

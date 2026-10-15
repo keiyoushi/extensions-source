@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.liliana
 
 import eu.kanade.tachiyomi.source.model.Filter
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl
 
 interface UrlPartFilter {
@@ -89,4 +90,18 @@ class SortFilter(
     name,
     options,
     "sort",
+)
+
+@Serializable
+class FilterData(
+    val genreName: String,
+    val genres: List<Pair<String, String>>,
+    val chapterCountName: String,
+    val chapterCounts: List<Pair<String, String>>,
+    val statusName: String,
+    val statuses: List<Pair<String, String>>,
+    val genderName: String,
+    val genders: List<Pair<String, String>>,
+    val sortName: String,
+    val sorts: List<Pair<String, String>>,
 )

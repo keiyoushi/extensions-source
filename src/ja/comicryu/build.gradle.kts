@@ -9,9 +9,11 @@ keiyoushi {
     versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "comiciviewer"
 
     source {
         lang = "ja"
         baseUrl = "https://comic-ryu.jp"
+        versionId = 2
     }
 }

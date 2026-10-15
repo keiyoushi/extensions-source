@@ -2,10 +2,9 @@ package eu.kanade.tachiyomi.extension.ja.cycomi
 
 import keiyoushi.utils.rc4
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.Buffer
+import okio.buffer
 
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -20,14 +19,10 @@ class ImageInterceptor : Interceptor {
             return response
         }
 
-        val decrypted = rc4(key.toByteArray(), response.body.bytes())
-        val buffer = Buffer().write(decrypted)
+        val source = response.body.source()
+        val body = source.rc4(key.toByteArray()).buffer().asResponseBody(response.body.contentType())
         return response.newBuilder()
-            .body(buffer.asResponseBody(MEDIA_TYPE, buffer.size))
+            .body(body)
             .build()
-    }
-
-    companion object {
-        private val MEDIA_TYPE = "image/jpeg".toMediaType()
     }
 }

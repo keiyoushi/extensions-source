@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.xomanga
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,12 +12,17 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
-abstract class XoManga : KeiSource() {
+abstract class XoManga :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences by getPreferencesLazy()
 
     // ============================== Popular ===============================
 
@@ -68,10 +76,11 @@ abstract class XoManga : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val details = client.get("$baseUrl/manga/${manga.url}/details.json").parseAs<DetailsResponse>()
+        val hideVip = hideVIP()
 
         return SMangaUpdate(
             manga = details.toSManga(),
-            chapters = details.chaptersList.map { it.toSChapter(baseUrl) },
+            chapters = details.chaptersList.mapNotNull { it.toSChapter(baseUrl, hideVip) },
         )
     }
 
@@ -103,8 +112,24 @@ abstract class XoManga : KeiSource() {
         }
     }
 
+    // ============================== Preferences ==============================
+    private fun hideVIP(): Boolean = preferences.getBoolean(HIDE_LOCKED_CHAPTERS, true)
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_CHAPTERS
+            title = HIDE_LOCKED_CHAPTERS_TITLE
+            summaryOn = HIDE_LOCKED_CHAPTERS_SUM_ON
+            summaryOff = HIDE_LOCKED_CHAPTERS_SUM_OFF
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+    }
+
     companion object {
         private val EXCLUSIVE_REGEX = Regex("""myExclusiveWorksTitles\s*=\s*\[([^]]+)]""", RegexOption.DOT_MATCHES_ALL)
         private val QUOTED_REGEX = Regex("""["']([^"'\n]+)["']""")
+        const val HIDE_LOCKED_CHAPTERS = "hide_vip_chapters"
+        const val HIDE_LOCKED_CHAPTERS_TITLE = "Hide VIP chapters"
+        const val HIDE_LOCKED_CHAPTERS_SUM_ON = "Chapters will be hidden"
+        const val HIDE_LOCKED_CHAPTERS_SUM_OFF = "Chapters will be marked with an icon: \uD83D\uDD12"
     }
 }

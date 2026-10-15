@@ -1,11 +1,22 @@
 package eu.kanade.tachiyomi.extension.pt.zettahq
 
 import eu.kanade.tachiyomi.source.model.Filter
+import kotlinx.serialization.Serializable
 
 interface Sort {
     val priority: Int
 }
 
+@Serializable
+class FilterData(
+    val categories: List<Pair<String, String>>,
+    val authors: List<Pair<String, String>>,
+    val characters: List<Pair<String, String>>,
+    val parodies: List<Pair<String, String>>,
+    val genres: List<Genre>,
+)
+
+@Serializable
 class Genre(val name: String, val id: String = name)
 
 class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)

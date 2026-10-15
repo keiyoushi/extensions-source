@@ -7,14 +7,18 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.ui.askPassword
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -26,14 +30,24 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class Panomic : KeiSource() {
+
+    private val preferences by getPreferencesLazy()
+
+    private var currentPasscodeToken: String
+        get() = preferences.getString("pref_passcode_token", "0d9678e234bc5f4234834a559f1c0157b3d933222d4b147ae2d6e1ac58a1dae0")
+            ?: "0d9678e234bc5f4234834a559f1c0157b3d933222d4b147ae2d6e1ac58a1dae0"
+        set(value) = preferences.edit().putString("pref_passcode_token", value).apply()
+
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
+        .addCookie {
+            listOf("a3_site_passcode_token" to currentPasscodeToken)
+        }
 
     private fun Element.lazyImgUrl(): String? = absUrl("data-lazy-src")
         .ifEmpty { absUrl("data-src") }
@@ -241,36 +255,71 @@ abstract class Panomic : KeiSource() {
         return trailingPart.ifEmpty { rawName.trim() }
     }
 
-    private fun parseChapterDate(date: String): Long = runCatching {
-        LocalDate.parse(date, dateFormatShort)
-            .atStartOfDay(dateZone)
-            .toInstant()
-            .toEpochMilli()
-    }.recoverCatching {
-        LocalDate.parse(date, dateFormatLong)
-            .atStartOfDay(dateZone)
-            .toInstant()
-            .toEpochMilli()
-    }.getOrDefault(0L)
+    private fun parseChapterDate(date: String): Long = dateFormatShort.tryParseDate(date, dateZone).takeIf { it != 0L }
+        ?: dateFormatLong.tryParseDate(date, dateZone)
 
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val imageUrls = client.get("$baseUrl${chapter.url}").use { response ->
-            val html = response.body.string()
-            val loginButton = Jsoup.parse(html).selectFirst(
-                "button.v-btn.v-big-btn[data-toggle=modal][data-target='#info-modal']",
-            )
-            if (loginButton?.text() == "Đăng nhập") {
-                throw Exception("Đăng nhập webview bằng tài khoản phù hợp để xem chương này")
-            }
+        val chapterUrl = "$baseUrl${chapter.url}"
+        var html = client.get(chapterUrl).body.string()
 
-            ImageDecryptor.extractImageUrls(
-                html,
-                response.request.url.toString(),
-            )
+        val loginButton = Jsoup.parse(html).selectFirst(
+            "button.v-btn.v-big-btn[data-toggle=modal][data-target='#info-modal']",
+        )
+        if (loginButton?.text() == "Đăng nhập") {
+            throw Exception("Đăng nhập webview bằng tài khoản phù hợp để xem chương này")
         }
 
+        if ("entered_secret_code" in html) {
+            val document = Jsoup.parse(html, chapterUrl)
+            val hint = document.selectFirst(".gate-box p")?.text()
+            val message = if (!hint.isNullOrBlank()) {
+                "Chương này yêu cầu mã bí mật\n\n$hint"
+            } else {
+                "Chương này yêu cầu mã bí mật"
+            }
+            val password = askPassword(
+                title = chapter.name,
+                message = message,
+                hint = "Mã bí mật",
+            ) ?: throw Exception("Đã hủy nhập mã bí mật")
+
+            val lockForm = document.selectFirst("form:has(input[name=entered_secret_code])")
+            val postAction = lockForm?.absUrl("action")?.ifEmpty { chapterUrl } ?: chapterUrl
+
+            val formBody = FormBody.Builder()
+                .add("entered_secret_code", password)
+                .add("submit_secret_code", "")
+                .build()
+
+            val postHeaders = headers.newBuilder()
+                .set("Referer", chapterUrl)
+                .build()
+
+            val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
+            val postHtml = postResponse.body.string()
+
+            val setCookieHeaders = postResponse.headers("Set-Cookie") +
+                (postResponse.priorResponse?.headers("Set-Cookie") ?: emptyList())
+            setCookieHeaders.firstNotNullOfOrNull { header ->
+                passcodeCookieRegex.find(header)?.groupValues?.get(1)
+            }?.let { newToken ->
+                currentPasscodeToken = newToken
+            }
+
+            html = if (postResponse.isSuccessful && !postHtml.contains("entered_secret_code")) {
+                postHtml
+            } else {
+                client.get(chapterUrl).body.string()
+            }
+
+            if ("entered_secret_code" in html) {
+                throw Exception("Mật khẩu không chính xác")
+            }
+        }
+
+        val imageUrls = ImageDecryptor.extractImageUrls(html, chapterUrl)
         return imageUrls.distinct().mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
@@ -346,4 +395,5 @@ abstract class Panomic : KeiSource() {
     private val chapterNameRegex = Regex("Chap\\s*\\d+(\\.\\d+)?", RegexOption.IGNORE_CASE)
     private val chapterUrlNumberRegex = Regex("-chap-(\\d+(?:\\.\\d+)?)/?", RegexOption.IGNORE_CASE)
     private val thumb150Regex = Regex("-150x150(\\.[a-zA-Z0-9]+)$")
+    private val passcodeCookieRegex = Regex("""a3_site_passcode_token=([a-fA-F0-9]+)""")
 }

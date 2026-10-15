@@ -1,48 +1,20 @@
 package eu.kanade.tachiyomi.extension.all.miauscan
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
 abstract class MiauScan : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
-
-    private val portugueseMode =
-        if (lang == "pt-BR") Filter.TriState.STATE_INCLUDE else Filter.TriState.STATE_EXCLUDE
+    override val datePattern = "dd/MM/yyyy"
 
     override val seriesGenreSelector = ".mgen a:not(:contains(Português))"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val genreFilterIndex = filters.indexOfFirst { it is GenreListFilter }
-        val genreFilter = filters.getOrNull(genreFilterIndex) as? GenreListFilter
-            ?: GenreListFilter("", emptyList())
-
-        val overloadedGenreFilter = GenreListFilter(
-            genreFilter.name,
-            genreFilter.state + listOf(
-                Genre("", PORTUGUESE_GENRE_ID, portugueseMode),
-            ),
-        )
-
-        val overloadedFilters = filters.toMutableList().apply {
-            if (genreFilterIndex != -1) {
-                removeAt(genreFilterIndex)
-            }
-
-            add(overloadedGenreFilter)
-        }
-
-        return super.searchMangaRequest(page, query, FilterList(overloadedFilters))
+    override fun searchMangaUrl(page: Int, query: String) = super.searchMangaUrl(page, query).apply {
+        if (lang == "pt-BR") addQueryParameter("genre[]", PORTUGUESE_GENRE_ID)
     }
 
     override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
@@ -75,14 +47,6 @@ abstract class MiauScan : MangaThemesia() {
         date_upload = element.selectFirst(".lm4-chapter-date")?.text().parseChapterDate()
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        countViews(document)
-
-        return document.select(pageSelector)
-            .filterNot { it.imgAttr().isEmpty() }
-            .mapIndexed { i, img -> Page(i, document.location(), img.imgAttr()) }
-    }
-
     override fun Element.imgAttr(): String = when {
         hasAttr("data-lm-orig-src") -> attr("abs:data-lm-orig-src")
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
@@ -91,7 +55,7 @@ abstract class MiauScan : MangaThemesia() {
         else -> attr("abs:src")
     }
 
-    override fun getGenreList(): List<Genre> = super.getGenreList().filter { it.value != PORTUGUESE_GENRE_ID }
+    override fun parseGenres(document: Document) = super.parseGenres(document)?.filter { it.value != PORTUGUESE_GENRE_ID }
 
     companion object {
         const val PORTUGUESE_GENRE_ID = "307"

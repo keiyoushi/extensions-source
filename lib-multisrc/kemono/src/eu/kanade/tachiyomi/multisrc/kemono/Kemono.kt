@@ -4,7 +4,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.kemono.KemonoCreatorDto.Companion.serviceName
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -23,41 +23,63 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Cache
 import okhttp3.CacheControl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.File
-import java.time.ZoneId
+import java.io.IOException
 import java.time.ZoneOffset
 import kotlin.math.min
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
 abstract class Kemono :
     KeiSource(),
     ConfigurableSource {
+    override val supportsLatest = true
 
-    override fun OkHttpClient.Builder.configureClient() = this
-        .addInterceptor { chain ->
-            val request = chain.request()
-            if (request.url.pathSegments.first() == "api") {
-                chain.proceed(request.newBuilder().header("Accept", "text/css").build())
-            } else {
-                chain.proceed(request)
-            }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
+        val request = chain.request()
+        if (request.url.pathSegments.first() == "api") {
+            chain.proceed(request.newBuilder().header("Accept", "text/css").build())
+        } else {
+            chain.proceed(request)
         }
+    }
+        .addInterceptor(::thumbnailFallbackInterceptor)
         .cache(
             Cache(
                 directory = File(applicationContext.externalCacheDir, "network_cache_${name.lowercase()}"),
                 maxSize = 50L * 1024 * 1024, // 50 MiB
             ),
         )
+        .readTimeout(5.minutes)
         .rateLimit(1)
 
-    private val creatorsClient by lazy {
-        client.newBuilder()
-            .readTimeout(5.minutes)
+    // Full-size files redirect to the nX file servers, which are often unreachable;
+    // the thumbnail server still works, so fall back to it. Once they fail to connect, skip them
+    // for the rest of the session so every page doesn't wait for the connect timeout.
+    private var fileServersUnreachable = false
+
+    private fun thumbnailFallbackInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (request.url.pathSegments.first() != dataPath) return chain.proceed(request)
+
+        if (!fileServersUnreachable) {
+            try {
+                val response = chain.proceed(request)
+                if (response.isSuccessful) return response
+                response.close()
+            } catch (e: IOException) {
+                if (chain.call().isCanceled()) throw e
+                fileServersUnreachable = true
+            }
+        }
+
+        val thumbnailUrl = request.url.newBuilder()
+            .encodedPath("/thumbnail${request.url.encodedPath}")
             .build()
+        return chain.proceed(request.newBuilder().url(thumbnailUrl).build())
     }
 
     private val preferences = getPreferences()
@@ -66,15 +88,15 @@ abstract class Kemono :
 
     private val dataPath = "data"
 
-    private val imgCdnUrl = baseUrl.replace("//", "//img.")
+    private val imgCdnUrl get() = baseUrl.replace("//", "//img.")
 
     private fun String.formatAvatarUrl(): String = removePrefix("https://").replaceBefore('/', imgCdnUrl)
 
-    override suspend fun getPopularManga(page: Int): MangasPage = searchMangas(page, sortBy = "pop" to "desc")
+    override suspend fun getPopularManga(page: Int) = searchMangas(page, sortBy = "pop" to "desc")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangas(page, sortBy = "lat" to "desc")
+    override suspend fun getLatestUpdates(page: Int) = searchMangas(page, sortBy = "lat" to "desc")
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = searchMangas(page, query, filters)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = searchMangas(page, query, filters)
 
     private suspend fun searchMangas(page: Int = 1, title: String = "", filters: FilterList? = null, sortBy: Pair<String, String> = "" to ""): MangasPage {
         var sort = sortBy
@@ -124,16 +146,11 @@ abstract class Kemono :
                 emptyList()
             }
 
-            val response = creatorsClient.get(
+            val response = client.get(
                 "$baseUrl/$apiPath/creators",
                 headers,
                 CacheControl.Builder().maxStale(30.minutes).build(),
-                ensureSuccess = false,
             )
-            if (!response.isSuccessful) {
-                response.close()
-                throw Exception("HTTP error ${response.code}")
-            }
             val allCreators = response.parseAs<List<KemonoCreatorDto>>().filterNot { it.service.lowercase() == "discord" }
             allCreators.filter {
                 val includeType = typeIncluded.isEmpty() || typeIncluded.contains(it.service.serviceName().lowercase())
@@ -202,27 +219,21 @@ abstract class Kemono :
         return MangasPage(final, toIndex != maxIndex)
     }
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url.replace("$apiPath/", "")}"
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (fetchDetails) {
-            manga.thumbnail_url = manga.thumbnail_url!!.formatAvatarUrl()
-        }
-
-        return SMangaUpdate(
-            manga = manga,
-            chapters = if (fetchChapters) fetchChapterList(manga) else chapters,
-        )
+        if (fetchDetails) manga.thumbnail_url = manga.thumbnail_url!!.formatAvatarUrl()
+        return SMangaUpdate(manga, if (fetchChapters) fetchChapterList(manga) else chapters)
     }
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url.replace("$apiPath/", "")}"
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val zone = when (manga.author) {
-            "Pixiv Fanbox", "Fantia" -> ZoneId.of("GMT+09:00")
+            "Pixiv Fanbox", "Fantia" -> ZoneOffset.ofHours(9)
             else -> ZoneOffset.UTC
         }
         val prefMaxPost = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
@@ -247,21 +258,21 @@ abstract class Kemono :
             response.close()
             code = response.code
             if (code == 429) {
-                delay(10.seconds)
+                delay(10000)
             }
         }
-        throw Exception("HTTP error $code")
+        throw HttpException(code)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val postData = client.get("$baseUrl/$apiPath${chapter.url}").parseAs<KemonoPostDtoWrapped>()
+        val postData: KemonoPostDtoWrapped = client.get("$baseUrl/$apiPath${chapter.url}").parseAs()
         return postData.post.images.mapIndexed { i, path -> Page(i, imageUrl = "$baseUrl/$dataPath$path") }
     }
 
     override fun imageRequest(page: Page): Request {
         val imageUrl = page.imageUrl!!
 
-        if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return GET(imageUrl, headers)
+        if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return Request.Builder().url(imageUrl).headers(headers).build()
 
         val index = imageUrl.indexOf('/', 8)
         val url = buildString {
@@ -269,7 +280,7 @@ abstract class Kemono :
             append("/thumbnail")
             append(imageUrl.substring(index))
         }
-        return GET(url, headers)
+        return Request.Builder().url(url).headers(headers).build()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

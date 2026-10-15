@@ -6,14 +6,17 @@ plugins {
 
 keiyoushi {
     name = "vomic"
-    versionCode = 6
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "zh"
-        baseUrl {
-            custom("https://www.vomicmh.com")
-        }
+        baseUrl = "https://vomicmh.com"
+        versionId = 2
+    }
+
+    deeplink {
+        path("/detail/..*")
     }
 }

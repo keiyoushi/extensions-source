@@ -1,15 +1,15 @@
 package eu.kanade.tachiyomi.extension.en.erofus
 
 import eu.kanade.tachiyomi.multisrc.eromuse.EroMuse
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Response
-import rx.Observable
+import org.jsoup.nodes.Document
 
 @Source
 abstract class Erofus : EroMuse() {
@@ -17,14 +17,13 @@ abstract class Erofus : EroMuse() {
     override val albumSelector = "a.a-click"
     override val topLevelPathSegment = "comics"
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchManga("$baseUrl/comics/various-authors?sort=viewed&page=1", page, "viewed")
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchManga("$baseUrl/comics/various-authors?sort=recent&page=1", page, "recent")
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchManga("$baseUrl/comics/various-authors?sort=viewed&page=1", page, "viewed")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchManga("$baseUrl/comics/various-authors?sort=recent&page=1", page, "recent")
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (page == 1) {
             pageStack.clear()
 
-            val filterList = if (filters.isEmpty()) getFilterList() else filters
-            currentSortingMode = filterList.filterIsInstance<SortFilter>().first().toQueryValue()
+            currentSortingMode = filters.firstInstance<SortFilter>().toQueryValue()
 
             if (query.isNotBlank()) {
                 // TODO possibly add genre search if a decent list of them can be built
@@ -35,7 +34,7 @@ abstract class Erofus : EroMuse() {
 
                 pageStack.addLast(StackItem(url.toString(), SEARCH_RESULTS_OR_BASE))
             } else {
-                val albumFilter = filterList.filterIsInstance<AlbumFilter>().first().selection()
+                val albumFilter = filters.firstInstance<AlbumFilter>().selection()
                 val url = (baseUrl + albumFilter.pathSegments).toHttpUrl().newBuilder()
                     .addQueryParameter("sort", currentSortingMode)
                     .addQueryParameter("page", "1")
@@ -44,14 +43,12 @@ abstract class Erofus : EroMuse() {
             }
         }
 
-        return client.newCall(stackRequest())
-            .asObservableSuccess()
-            .map { response -> parseManga(response.asJsoup()) }
+        return parseManga(client.get(stackUrl()).asJsoup())
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        with(response.asJsoup()) {
-            setUrlWithoutDomain(response.request.url.toString())
+    override fun parseDetails(document: Document): SManga = SManga.create().apply {
+        with(document) {
+            setUrlWithoutDomain(location())
             thumbnail_url = select("$albumSelector img").firstOrNull()?.imgAttr()
             author = when (getAlbumType(url)) {
                 AUTHOR -> {

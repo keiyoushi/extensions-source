@@ -3,21 +3,16 @@ package eu.kanade.tachiyomi.extension.tr.raindropfansub
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
-import okhttp3.Response
-import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
+import org.jsoup.nodes.Document
 
 @Source
 abstract class RaindropFansub : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr"))
     override val seriesTypeSelector = ".tsinfo .imptdt:contains(Tür) a"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun chapterListParse(document: Document): List<SChapter> {
         // "İlk Bölüm" points to the first chapter, but is often wrong on the site
         // We look at "Son Bölüm" to find the last chapter and sort accordingly
-        val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
-        val chapters = super.chapterListParse(response)
+        val chapters = super.chapterListParse(document)
 
         val lastChapterUrl = document
             .selectFirst("a:has(.epcurlast)")

@@ -1,32 +1,32 @@
 package eu.kanade.tachiyomi.extension.it.animegdrclub
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Headers
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
 @Source
-abstract class AnimeGDRClub : HttpSource() {
-    override val supportsLatest = true
+abstract class AnimeGDRClub : KeiSource() {
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/serie.php", headers)
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = mangasParse(client.get("$baseUrl/serie.php"), popularMangaSelector(), 1)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangasParse(client.get("$baseUrl/"), latestUpdatesSelector(), 2)
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/".toHttpUrl().newBuilder()
-        if (query.isNotEmpty()) {
+        val requestUrl = if (query.isNotEmpty()) {
             url.addEncodedPathSegment("serie.php")
-            return GET("$url#$query", headers)
+            "$url#$query"
         } else {
             url.addEncodedPathSegment("listone.php")
             var status = ""
@@ -55,15 +55,16 @@ abstract class AnimeGDRClub : HttpSource() {
                     else -> {}
                 }
             }
-            return GET(if (status.isNotEmpty()) "$baseUrl/serie.php#stati=$status" else url.toString(), headers)
+            if (status.isNotEmpty()) "$baseUrl/serie.php#stati=$status" else url.toString()
         }
+        return mangasParse(client.get(requestUrl), searchMangaSelector(), 3)
     }
 
     private fun mangasParse(response: Response, selector: String, num: Int): MangasPage {
-        val document = response.asJsoup()
         var sele = selector
         var nume = num
         val encFrags = response.request.url.encodedFragment.toString().split('-')
+        val document = response.asJsoup()
         if ((encFrags[0].isNotEmpty()) and (encFrags[0] != "null")) {
             nume = 1
             sele = if (encFrags[0].startsWith("stati=")) {
@@ -83,10 +84,6 @@ abstract class AnimeGDRClub : HttpSource() {
         }
         return MangasPage(mangas, false)
     }
-
-    override fun popularMangaParse(response: Response): MangasPage = mangasParse(response, popularMangaSelector(), 1)
-    override fun latestUpdatesParse(response: Response): MangasPage = mangasParse(response, latestUpdatesSelector(), 2)
-    override fun searchMangaParse(response: Response): MangasPage = mangasParse(response, searchMangaSelector(), 3)
 
     private fun popularMangaSelector() = "div.manga"
     private fun latestUpdatesSelector() = ".containernews > a"
@@ -110,44 +107,48 @@ abstract class AnimeGDRClub : HttpSource() {
 
     private fun searchMangaFromElement(element: Element): SManga = latestUpdatesFromElement(element)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val infoElement = document.select(".tabellaalta")
-        val manga = SManga.create()
-        manga.status = when {
-            infoElement.text().contains("In Corso") -> SManga.ONGOING
-            infoElement.text().contains("Concluso") -> SManga.COMPLETED
-            infoElement.text().contains("Interrotto") -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
-        manga.genre = infoElement.select("span.generi > a").joinToString(", ") {
-            it.text()
-        }
-        manga.description = document.select("span.trama").text().substringAfter("Trama: ")
-        manga.initialized = true
-        return manga
-    }
+    // Popular/search entries store the site's relative href without a leading slash
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url.removePrefix("/")}"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = mutableListOf<SChapter>()
-        document.select(chapterListSelector()).forEach { element ->
-            chapters.add(
-                SChapter.create().apply {
-                    setUrlWithoutDomain(element.attr("href").replace("reader", "readerr"))
-                    name = element.text()
-                    chapter_number = element.text().removePrefix("Capitolo ").trim().toFloatOrNull() ?: 0f
-                },
-            )
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val infoElement = document.select(".tabellaalta")
+        val details = SManga.create().apply {
+            url = manga.url
+            title = manga.title
+            status = when {
+                infoElement.text().contains("In Corso") -> SManga.ONGOING
+                infoElement.text().contains("Concluso") -> SManga.COMPLETED
+                infoElement.text().contains("Interrotto") -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
+            genre = infoElement.select("span.generi > a").joinToString(", ") {
+                it.text()
+            }
+            description = document.selectFirst("span.trama")?.text()?.substringAfter("Trama: ")
         }
-        chapters.reverse()
-        return chapters
+
+        val chapterList = document.select(chapterListSelector()).map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.attr("href").replace("reader", "readerr"))
+                name = element.text()
+                chapter_number = element.text().removePrefix("Capitolo ").trim().toFloatOrNull() ?: 0f
+            }
+        }.reversed()
+
+        return SMangaUpdate(details, chapterList)
     }
 
     private fun chapterListSelector() = ".capitoli_cont > a"
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
         val nomemanga = document.selectFirst("#nomemanga")?.attr("class")
         val numcap = document.selectFirst(".numcap")?.text()
@@ -164,16 +165,7 @@ abstract class AnimeGDRClub : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun imageRequest(page: Page): Request {
-        val imgHeader = Headers.Builder().apply {
-            add("Referer", "$baseUrl/")
-        }.build()
-        return GET(page.imageUrl!!, imgHeader)
-    }
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         eu.kanade.tachiyomi.source.model.Filter.Header("La ricerca non accetta i filtri e viceversa"),
         SelezType(listOf("Stato", "Genere")),
         StatusList(getStatusList()),

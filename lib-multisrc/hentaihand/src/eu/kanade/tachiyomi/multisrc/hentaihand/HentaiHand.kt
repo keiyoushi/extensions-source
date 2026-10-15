@@ -2,11 +2,10 @@ package eu.kanade.tachiyomi.multisrc.hentaihand
 
 import android.content.SharedPreferences
 import android.text.InputType
-import android.widget.Toast
+import android.util.LruCache
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,45 +13,40 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
-import rx.schedulers.Schedulers
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 abstract class HentaiHand :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     abstract val chapters: Boolean
 
     protected open val hhLangId: List<Int> = emptyList()
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::authIntercept)
 
     // Popular
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangasPage(response: Response): MangasPage {
         val resp = response.parseAs<ResponseDto<List<MangaDto>>>()
         val hasNextPage = !resp.next_page_url.isNullOrEmpty()
         return MangasPage(resp.data.map { it.toSManga() }, hasNextPage)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "popularity")
@@ -62,14 +56,12 @@ abstract class HentaiHand :
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
         // if (altLangId != null) url.addQueryParameter("languages", altLangId.toString())
-        return GET(url.build())
+        return parseMangasPage(client.get(url.build()))
     }
 
     // Latest
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "uploaded_at")
@@ -78,39 +70,76 @@ abstract class HentaiHand :
         hhLangId.forEachIndexed { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
-        return GET(url.build())
+        return parseMangasPage(client.get(url.build()))
     }
 
     // Search
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    // filter query needs to be resolved to an ID
+    // Returns the exact match when present, else the first match,
+    // or null if there are no results
+    private val filterIdCache = LruCache<String, Int>(100)
+    private val queryIdCache = LruCache<String, Pair<String, Int>>(20)
 
-    private fun lookupFilterId(query: String, uri: String): Int? {
-        // filter query needs to be resolved to an ID
-        return client.newCall(GET("$baseUrl/api/$uri?q=$query"))
-            .asObservableSuccess()
-            .subscribeOn(Schedulers.io())
-            .map { response ->
-                // Returns the first matched id, or null if there are no results
-                val idList = response.parseAs<ResponseDto<List<IdDto>>>().data.map { it.id }
-                if (idList.isEmpty()) {
-                    return@map null
-                } else {
-                    idList.first()
-                }
-            }.toBlocking().first()
+    private suspend fun lookupFilterId(query: String, uri: String, exactMatchOnly: Boolean = false): Int? {
+        val key = "$uri:$query"
+        if (!exactMatchOnly) {
+            filterIdCache.get(key)?.let { return it }
+        }
+        val lookupUrl = "$baseUrl/api/$uri".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .build()
+        val results = client.get(lookupUrl).parseAs<ResponseDto<List<IdDto>>>().data
+        if (results.isEmpty()) {
+            return null
+        }
+        val exact = results.firstOrNull { it.name.equals(query, ignoreCase = true) }?.id
+        if (exactMatchOnly) {
+            return exact
+        }
+        return (exact ?: results.first().id).also { filterIdCache.put(key, it) }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("q", query)
+
+        val hasLookupState = filters.any { it is LookupFilter && it.state.isNotBlank() }
+
+        // A plain text `q` search without any id filter returns HTTP 500 on some sites,
+        // which breaks tapping a genre tag (the app searches for the tag name as text).
+        // Resolve the query to a tag/artist/character id when possible and search by id instead.
+        val trimmedQuery = query.trim()
+        val cacheKey = trimmedQuery.lowercase()
+        val queryFilter: Pair<String, Int>? = if (trimmedQuery.isNotEmpty() && !hasLookupState) {
+            queryIdCache.get(cacheKey) ?: run {
+                var resolved: Pair<String, Int>? = null
+                for (uri in QUERY_LOOKUP_URIS) {
+                    val id = try {
+                        lookupFilterId(trimmedQuery, uri, exactMatchOnly = true)
+                    } catch (e: Exception) {
+                        null
+                    } ?: continue
+                    resolved = uri to id
+                    break
+                }
+                resolved?.also { queryIdCache.put(cacheKey, it) }
+            }
+        } else {
+            null
+        }
+
+        if (queryFilter != null) {
+            url.addQueryParameter("${queryFilter.first}[0]", queryFilter.second.toString())
+        } else if (trimmedQuery.isNotEmpty()) {
+            url.addQueryParameter("q", query)
+        }
 
         hhLangId.forEachIndexed { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
 
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        filters.forEach { filter ->
             when (filter) {
                 is SortFilter -> url.addQueryParameter("sort", getSortPairs()[filter.state].second)
 
@@ -140,58 +169,41 @@ abstract class HentaiHand :
             }
         }
 
-        return GET(url.build())
+        return parseMangasPage(client.get(url.build()))
     }
 
     // Details
 
-    private fun mangaDetailsApiRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         val slug = manga.url.removePrefix("/en/comic/")
-        return GET("$baseUrl/api/comics/$slug")
-    }
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(mangaDetailsApiRequest(manga))
-        .asObservableSuccess()
-        .map { mangaDetailsParse(it).apply { initialized = true } }
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsResponseDto>().toSMangaDetails()
-
-    // Chapters
-
-    private fun chapterListApiRequest(manga: SManga): Request {
-        val slug = manga.url.removePrefix("/en/comic/")
-        return if (chapters) {
-            GET("$baseUrl/api/comics/$slug/chapters")
-        } else {
-            GET("$baseUrl/api/comics/$slug")
+        if (!this.chapters) {
+            // details and the single chapter come from the same endpoint
+            val comic = client.get("$baseUrl/api/comics/$slug").body.string()
+            return SMangaUpdate(
+                comic.parseAs<MangaDetailsResponseDto>().toSMangaDetails(),
+                listOf(comic.parseAs<ChapterResponseDto>().toSChapter()),
+            )
         }
-    }
 
-    override fun chapterListRequest(manga: SManga): Request = chapterListApiRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> = if (this.chapters) {
-        val slug = response.request.url.toString()
-            .substringAfter("/api/comics/")
-            .removeSuffix("/chapters")
-        response.parseAs<ChapterListResponseDto>().map { it.toSChapter(slug) }
-    } else {
-        listOf(response.parseAs<ChapterResponseDto>().toSChapter())
+        return coroutineScope {
+            val details = async { if (fetchDetails) client.get("$baseUrl/api/comics/$slug").parseAs<MangaDetailsResponseDto>().toSMangaDetails() else manga }
+            val chapterList = async { if (fetchChapters) client.get("$baseUrl/api/comics/$slug/chapters").parseAs<ChapterListResponseDto>().map { it.toSChapter(slug) } else chapters }
+            SMangaUpdate(details.await(), chapterList.await())
+        }
     }
 
     // Pages
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val slug = chapter.url
-        return GET("$baseUrl/api/comics/$slug/images")
-    }
-
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageListResponseDto>().toPageList()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/comics/${chapter.url}/images").parseAs<PageListResponseDto>().toPageList()
 
     // Authorization
 
-    protected fun authIntercept(chain: Interceptor.Chain): Response {
+    private fun authIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (username.isEmpty() or password.isEmpty()
             // image request doesn't need token
@@ -210,12 +222,7 @@ abstract class HentaiHand :
     }
 
     private fun login(chain: Interceptor.Chain, username: String, password: String): String {
-        val jsonObject = buildJsonObject {
-            put("username", username)
-            put("password", password)
-            put("remember_me", true)
-        }
-        val body = jsonObject.toString().toRequestBody(MEDIA_TYPE)
+        val body = LoginRequestDto(username, password, rememberMe = true).toJsonRequestBody()
         val response = chain.proceed(POST("$baseUrl/api/login", headers, body))
         if (response.code == 401) {
             throw IOException("Failed to login, check if username and password are correct")
@@ -229,8 +236,8 @@ abstract class HentaiHand :
     }
 
     private var token: String = ""
-    private val username by lazy { getPrefUsername() }
-    private val password by lazy { getPrefPassword() }
+    private val username get() = getPrefUsername()
+    private val password get() = getPrefPassword()
 
     // Preferences
 
@@ -241,7 +248,7 @@ abstract class HentaiHand :
         screen.addPreference(screen.editTextPreference(PASSWORD_TITLE, PASSWORD_DEFAULT, password, true))
     }
 
-    private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String, isPassword: Boolean = false): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+    private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String, isPassword: Boolean = false): EditTextPreference = EditTextPreference(context).apply {
         key = title
         this.title = title
         summary = value
@@ -251,16 +258,6 @@ abstract class HentaiHand :
         if (isPassword) {
             setOnBindEditTextListener {
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }
-        setOnPreferenceChangeListener { _, newValue ->
-            try {
-                val res = preferences.edit().putString(title, newValue as String).commit()
-                Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                res
-            } catch (e: Exception) {
-                e.printStackTrace()
-                false
             }
         }
     }
@@ -287,7 +284,7 @@ abstract class HentaiHand :
     private class LanguagesFilter : LookupFilter("Other Languages", "languages", "language")
     open class LookupFilter(name: String, val uri: String, val singularName: String) : Filter.Text(name)
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(getSortPairs()),
         OrderFilter(getOrderPairs()),
         DurationFilter(getDurationPairs()),
@@ -338,8 +335,11 @@ abstract class HentaiHand :
     )
 
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        private val MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
+        private val QUERY_LOOKUP_URIS = listOf(
+            "tags",
+            "artists",
+            "characters",
+        )
         private const val USERNAME_TITLE = "Username"
         private const val USERNAME_DEFAULT = ""
         private const val PASSWORD_TITLE = "Password"

@@ -1,49 +1,42 @@
 package eu.kanade.tachiyomi.extension.pt.brasilhentai
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import rx.Observable
+import kotlin.time.Instant
 
 @Source
-abstract class BrasilHentai : HttpSource() {
+abstract class BrasilHentai : KeiSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(4)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 
-    private var categoryFilterOptions: Array<Pair<String, String>> = emptyArray()
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/page/$page").asJsoup())
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/page/$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        if (categoryFilterOptions.isEmpty()) {
-            categoryFilterOptions = parseCategories(document)
-        }
+    private fun popularMangaParse(document: Document): MangasPage {
         val mangas = document.select(".content-area article").map { element ->
             SManga.create().apply {
                 val anchor = element.selectFirst("a[title]")!!
                 title = anchor.attr("title")
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
-                initialized = true
                 setUrlWithoutDomain(anchor.absUrl("href"))
             }
         }
@@ -51,11 +44,9 @@ abstract class BrasilHentai : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val category = filters.firstInstanceOrNull<CategoryFilter>()?.selectedValue() ?: ""
 
         val url = if (category.isEmpty()) {
@@ -66,81 +57,70 @@ abstract class BrasilHentai : HttpSource() {
             "$baseUrl/category/$category/page/$page/".toHttpUrl()
         }
 
-        return GET(url, headers)
+        return popularMangaParse(client.get(url).asJsoup())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val item = url.pathSegments.last { it.isNotBlank() }
-            return fetchSearchManga(page, "$SEARCH_PREFIX$item", filters)
-        }
-        if (query.startsWith(SEARCH_PREFIX)) {
-            val url = "$baseUrl/${query.substringAfter(SEARCH_PREFIX)}/"
-            return client.newCall(GET(url, headers))
-                .asObservableSuccess()
-                .map {
-                    val manga = mangaDetailsParse(it).apply {
-                        setUrlWithoutDomain(url)
-                    }
-                    MangasPage(listOf(manga), false)
-                }
-        }
-        return super.fetchSearchManga(page, query, filters)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.count(String::isNotBlank) < 1) return null
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = url.encodedPath },
+            emptyList(),
+            true,
+            false,
+        ).manga
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1")!!.ownText()
-            thumbnail_url = document.selectFirst(".entry-content p a img")?.absUrl("src")
-        }
-    }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
-        listOf(
-            SChapter.create().apply {
-                name = "Capítulo único"
+        return SMangaUpdate(
+            SManga.create().apply {
                 url = manga.url
+                title = doc.selectFirst("h1")!!.ownText()
+                thumbnail_url = doc.selectFirst(".entry-content p a img")?.absUrl("src")
+                description = doc.selectFirst(".entry-content")?.text()
+                genre = doc.select(".cat-links a").eachText().joinToString()
+
+                author = doc.selectFirst(".author")?.text()
+                status = SManga.COMPLETED
             },
-        ),
-    )
+            listOf(
+                SChapter.create().apply {
+                    name = "Capítulo único"
+                    url = manga.url
+                    date_upload = Instant.tryParse(
+                        doc.selectFirst(".entry-date.published")?.attr("datetime"),
+                    )
+                },
+            ),
+        )
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".entry-content p > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override val supportsFilterFetching = true
 
-    override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Filter<*>>()
-
-        filters += if (categoryFilterOptions.isNotEmpty()) {
-            CategoryFilter("Categoria", categoryFilterOptions)
-        } else {
-            Filter.Header("Aperte 'Redefinir' para tentar mostrar as categorias")
-        }
-
-        return FilterList(filters)
-    }
-
-    private fun parseCategories(document: Document): Array<Pair<String, String>> = document.select("#categories-2 li a").map { element ->
+    override suspend fun fetchFilterData() = client.get(baseUrl).asJsoup().select("#categories-2 li a").associate { element ->
         val url = element.absUrl("href")
         val category = url.split("/").filter { it.isNotBlank() }.last()
-        Pair(element.ownText(), category)
-    }.toTypedArray()
+        element.ownText() to category
+    }.toJsonElement()
 
-    companion object {
-        const val SEARCH_PREFIX: String = "slug:"
-    }
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        listOfNotNull(
+            data?.parseAs<Map<String, String>>()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { CategoryFilter("Categoria", it.toList()) },
+        ),
+    )
 }

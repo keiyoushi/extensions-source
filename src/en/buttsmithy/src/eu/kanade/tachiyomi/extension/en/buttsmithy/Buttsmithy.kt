@@ -1,30 +1,31 @@
 package eu.kanade.tachiyomi.extension.en.buttsmithy
 
 import android.app.Application
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
-import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class Buttsmithy : HttpSource() {
+abstract class Buttsmithy : KeiSource() {
 
     // the full version of alfie for some reason has a separate url and isn't accessed like the other comics
     private val baseUrlAlfie = "https://buttsmithy.com"
@@ -32,20 +33,66 @@ abstract class Buttsmithy : HttpSource() {
 
     private val inCase = "InCase"
     private val alfieTitle = "Alfie"
-    private val alfieDateParser = SimpleDateFormat("HH:mm MMMM dd, yyyy", Locale.US)
+    private val alfieDateParser = DateTimeFormatter.ofPattern("H:mm MMMM d, yyyy", Locale.US)
+    private val pageNrRegex = "p*[0-9]+".toRegex()
 
-    override val supportsLatest: Boolean = false
-    override val client: OkHttpClient = network.client.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val supportsLatest = false
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapters: List<SChapter> =
-            if (manga.title.contains(alfieTitle)) {
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(TextInterceptor())
+
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchAllComics(), false)
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val chapterList = async {
+            when {
+                !fetchChapters -> chapters
                 // TODO misc-chapter is currently broken
-                fetchAlfiePagesAsChapters(manga.url).reversed()
-            } else {
-                fetchOtherPagesAsChapters(manga.title, baseUrl + manga.url).reversed()
+                manga.title.contains(alfieTitle) -> fetchAlfiePagesAsChapters(manga.url).reversed()
+                else -> fetchOtherPagesAsChapters(manga.title, baseUrl + manga.url).reversed()
             }
-        return Observable.just(chapters)
+        }
+
+        SMangaUpdate(details.await(), chapterList.await())
+    }
+
+    private suspend fun fetchMangaDetails(manga: SManga): SManga = if (manga.title.contains(alfieTitle)) {
+        val pageDoc = client.get(baseUrlAlfie).asJsoup()
+        val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
+        val chapTitle = manga.title.substringAfter("Alfie - ").trim()
+
+        SManga.create().apply {
+            url = "$chapterOverviewBaseUrl/${chapterTitleToChapterUrlName(chapTitle)}"
+            title = "$alfieTitle - $chapTitle"
+            author = inCase
+            artist = inCase
+            status = decideAlfieStatusFromTitle(chapTitle, mostRecentChapTitle)
+            genre = "fantasy, NSFW"
+            thumbnail_url = generateImageUrlWithText(alfieTitle)
+        }
+    } else {
+        manga
+    }
+
+    // Alfie manga and all chapters store absolute urls
+    override fun getMangaUrl(manga: SManga): String = if (manga.url.startsWith("http")) manga.url else baseUrl + manga.url
+
+    override fun getChapterUrl(chapter: SChapter): String = chapter.url
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val comicPageDoc = client.get(chapter.url).asJsoup()
+        val imageUrl = comicPageDoc.select("#comic img").attr("src")
+
+        return listOf(Page(0, imageUrl = imageUrl))
     }
 
     /**
@@ -58,13 +105,13 @@ abstract class Buttsmithy : HttpSource() {
      * @param allChapters list of all chapters (should be initialized with an empty list)
      * @return returns a list of all pages that were found as SChapters
      * */
-    private tailrec fun fetchOtherPagesAsChapters(
+    private tailrec suspend fun fetchOtherPagesAsChapters(
         comicTitle: String,
         currentPageUrl: String,
         pageNr: Float = 0f,
         allChapters: MutableList<SChapter> = mutableListOf(),
     ): MutableList<SChapter> {
-        val currentDoc = client.newCall(GET(currentPageUrl, headers)).execute().asJsoup()
+        val currentDoc = client.get(currentPageUrl).asJsoup()
         val currentPageComicPage = currentDoc.select("#comic img").first()!!
         val chapterTitle = currentPageComicPage.attr("alt")
 
@@ -109,14 +156,12 @@ abstract class Buttsmithy : HttpSource() {
      * @param allChapters list of all chapters (should be initialized with an empty list)
      * @return returns a list of all pages that were found in the chapter overview as SChapters
      * */
-    private tailrec fun fetchAlfiePagesAsChapters(
+    private tailrec suspend fun fetchAlfiePagesAsChapters(
         currentPageUrl: String,
         lastPageNr: Float = 0f,
         allChapters: MutableList<SChapter> = mutableListOf(),
     ): MutableList<SChapter> {
-        val pageNrRegex = "p*[0-9]+".toRegex()
-
-        val currentDoc = client.newCall(GET(currentPageUrl, headers)).execute().asJsoup()
+        val currentDoc = client.get(currentPageUrl).asJsoup()
         val pagesAsChapters = currentDoc.select("article.has-post-thumbnail .post-content")
             .mapIndexed { index, postElement ->
                 val postTitleElement = postElement.select(".post-info .post-title a")
@@ -132,7 +177,7 @@ abstract class Buttsmithy : HttpSource() {
 
                 val dateString = postElement.select(".post-info .post-date").text()
                 val timeString = postElement.select(".post-info .post-time").text()
-                val date = alfieDateParser.parse("$timeString $dateString")?.time ?: 0L
+                val date = alfieDateParser.tryParseDateTime("$timeString $dateString")
 
                 SChapter.create().apply {
                     /* Alfie has its own name space and thus can't be handled like other comics.
@@ -160,8 +205,8 @@ abstract class Buttsmithy : HttpSource() {
      *
      * @return a list of all comics currently hosted on buttsmithy with alfies chapters separated into separate mangas
      */
-    private fun fetchAllComics(): List<SManga> {
-        val mainDoc = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
+    private suspend fun fetchAllComics(): List<SManga> {
+        val mainDoc = client.get(baseUrl).asJsoup()
         // Incases choose your own adventure comics
         val cyoaSelector = "#menu-item-331"
         // Incase other comics (ignoring alfie because alfie has its own subdomain)
@@ -184,8 +229,8 @@ abstract class Buttsmithy : HttpSource() {
      *
      * @return all of Alfies chapters as separate SManga
      */
-    private fun fetchAlfieSMangas(): List<SManga> {
-        val pageDoc = client.newCall(GET(baseUrlAlfie, headers)).execute().asJsoup()
+    private suspend fun fetchAlfieSMangas(): List<SManga> {
+        val pageDoc = client.get(baseUrlAlfie).asJsoup()
         val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
 
         val chaptersAsSManga: List<SManga> =
@@ -247,61 +292,4 @@ abstract class Buttsmithy : HttpSource() {
     }
 
     private fun generateImageUrlWithText(text: String): String = TextInterceptorHelper.createUrl(text, "")
-
-    private fun generateMangasPage(): MangasPage = MangasPage(fetchAllComics(), false)
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String {
-        val pageDoc = response.asJsoup()
-        return pageDoc.select("#comic").select("img[src]").attr("href")
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(
-        if (manga.title.contains(alfieTitle)) {
-            val pageDoc = client.newCall(GET(baseUrlAlfie, headers)).execute().asJsoup()
-            val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
-            val chapTitle = manga.title.substringAfter("Alfie - ").trim()
-
-            SManga.create().apply {
-                url = "$chapterOverviewBaseUrl/${chapterTitleToChapterUrlName(chapTitle)}"
-                title = "$alfieTitle - $chapTitle"
-                author = inCase
-                artist = inCase
-                status = decideAlfieStatusFromTitle(chapTitle, mostRecentChapTitle)
-                genre = "fantasy, NSFW"
-                thumbnail_url = generateImageUrlWithText(alfieTitle)
-            }
-        } else {
-            manga
-        },
-    )
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val comicPageDoc = client.newCall(GET(chapter.url, headers)).execute().asJsoup()
-        val imageUrl = comicPageDoc.select("#comic img").attr("src")
-        val comicPage = Page(0, "", imageUrl)
-
-        return Observable.just(listOf(comicPage))
-    }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(generateMangasPage())
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
 }

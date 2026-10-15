@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Comicabc"
-    versionCode = 4
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "無限動漫"

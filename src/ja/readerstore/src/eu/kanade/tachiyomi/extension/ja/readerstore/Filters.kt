@@ -14,9 +14,9 @@ open class CheckBoxGroup(displayName: String, options: Array<Pair<String, String
     val checked get() = state.filter { it.state }.map { it.value }
 }
 
-fun Builder.addFilter(param: String, filter: SelectFilter?) = filter?.value?.takeIf(String::isNotBlank)?.let { addQueryParameter(param, it) }
+fun Builder.addFilter(param: String, filter: SelectFilter?) = filter?.value?.takeIf(String::isNotEmpty)?.let { addQueryParameter(param, it) }
 
-fun Builder.addFilter(param: String, filter: Filter.Text?) = filter?.state?.takeIf(String::isNotBlank)?.let { addQueryParameter(param, it.trim()) }
+fun Builder.addFilter(param: String, filter: Filter.Text?) = filter?.state?.takeIf(String::isNotEmpty)?.let { addQueryParameter(param, it.trim()) }
 
 fun Builder.addFilter(param: String, filter: CheckBoxGroup?) = filter?.checked?.forEach { addQueryParameter(param, it) }
 

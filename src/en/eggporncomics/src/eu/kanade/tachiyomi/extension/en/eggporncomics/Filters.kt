@@ -16,19 +16,18 @@ internal class ComicsFilter(name: String, vals: Array<Pair<String, String?>>) : 
 internal val getCategoryList: Array<Pair<String, String?>> = arrayOf(
     Pair("Any", null),
     Pair("3d comics", "7/3d-comics"),
-    Pair("8muses", "18/8muses"),
-    Pair("Anime", "1/anime"),
+    Pair("Anime Comics", "1/anime-comics"),
     Pair("Cartoon", "2/cartoon"),
     Pair("Dickgirls & Shemale", "6/dickgirls-shemale"),
+    Pair("Doujinshi", "19/doujinshi"),
     Pair("Furry", "4/furry"),
     Pair("Games comics", "3/games-comics"),
     Pair("Hentai manga", "10/hentai-manga"),
     Pair("Interracial", "14/interracial"),
     Pair("Milf", "11/milf"),
     Pair("Mindcontrol", "15/mindcontrol"),
-    Pair("Porn Comix", "16/porn-comix"),
     Pair("Western", "12/western"),
-    Pair("Yaoi/Gay", "8/yaoigay"),
+    Pair("Yaoi and Gay", "8/yaoi-and-gay"),
     Pair("Yuri and Lesbian", "9/yuri-and-lesbian"),
 )
 

@@ -156,8 +156,16 @@ class Decoder {
     }
 
     private fun ByteArray.toLeIntArray(): IntArray {
-        val padded = copyOf((size + 3) / 4 * 4)
-        return IntArray(padded.size / 4) { padded.readIntLittleEndian(it * 4) }
+        val full = size / 4
+        val words = IntArray((size + 3) / 4)
+        for (i in 0 until full) words[i] = readIntLittleEndian(i * 4)
+        val rem = size and 3
+        if (rem != 0) {
+            var tail = 0
+            for (b in 0 until rem) tail = tail or ((this[full * 4 + b].toInt() and 0xFF) shl (b * 8))
+            words[full] = tail
+        }
+        return words
     }
 
     private fun IntArray.toLeByteArray(byteSize: Int): ByteArray {
@@ -238,24 +246,17 @@ class Decoder {
                 }
             }
 
-            val pow = IntArray(256)
-            for (row in 1 until 256) {
-                val bits = IntArray(8)
-                bits[0] = row
-                for (bit in 1 until 8) {
-                    bits[bit] = bits[bit - 1] shl 1
-                    if ((bits[bit] and 256) != 0) bits[bit] = bits[bit] xor 283
-                }
-                var acc = 1
-                repeat(254) {
-                    var next = 0
-                    for (bit in 0 until 8) {
-                        if ((acc and (1 shl bit)) != 0) next = next xor bits[bit]
-                    }
-                    acc = next
-                }
-                pow[row] = acc
+            val antilog = IntArray(255)
+            val log = IntArray(256)
+            var x = 1
+            for (i in 0 until 255) {
+                antilog[i] = x
+                log[x] = i
+                val doubled = (x shl 1) xor (if ((x and 128) != 0) 283 else 0)
+                x = (doubled xor x) and 255
             }
+            val pow = IntArray(256)
+            for (row in 1 until 256) pow[row] = antilog[(255 - log[row]) % 255]
 
             val sbox = IntArray(256)
             for (row in 0 until 256) {

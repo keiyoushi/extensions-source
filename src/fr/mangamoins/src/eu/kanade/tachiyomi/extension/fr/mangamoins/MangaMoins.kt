@@ -6,72 +6,60 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import java.util.Locale
 
 @Source
-abstract class MangaMoins : HttpSource() {
+abstract class MangaMoins : KeiSource() {
 
-    override val supportsLatest = true
+    private val apiUrl get() = "$baseUrl/api/v1"
 
-    private val apiUrl = "$baseUrl/api/v1"
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
+        val request = chain.request()
+        val response = chain.proceed(request)
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val response = chain.proceed(request)
-
-            if (response.code == 403 && request.url.toString().contains("/api/v1/")) {
-                response.close()
-                val homeRequest = GET(baseUrl, headers)
-                super.client.newCall(homeRequest).execute().close()
-                return@addInterceptor chain.proceed(request)
-            }
-            response
+        if (response.code == 403 && request.url.toString().contains("/api/v1/")) {
+            response.close()
+            val homeRequest = GET(baseUrl, headers)
+            network.client.newCall(homeRequest).execute().close()
+            return@addInterceptor chain.proceed(request)
         }
-        .build()
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
+        response
+    }
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/trend", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<TrendResponse>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.get("$apiUrl/trend").parseAs<TrendResponse>()
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, false) // Trend API has no pagination
     }
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", MANGA_PAGE_LIMIT.toString())
             .build()
-        return GET(url, headers)
+        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<MangaListResponse>()
-        val mangas = result.data.map { it.toSManga() }
-        val hasNextPage = result.page * result.limit < result.total
+    private fun MangaListResponse.toMangasPage(): MangasPage {
+        val mangas = data.map { it.toSManga() }
+        val hasNextPage = page * limit < total
         return MangasPage(mangas, hasNextPage)
     }
 
     // ============================== Search ================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/explore".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", MANGA_PAGE_LIMIT.toString())
@@ -81,24 +69,24 @@ abstract class MangaMoins : HttpSource() {
                 }
             }
             .build()
-        return GET(url, headers)
+        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$apiUrl/manga".toHttpUrl().newBuilder()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val detailsUrl = "$apiUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("manga", manga.url.toMangaSlug())
             .build()
-        return GET(url, headers)
-    }
+        val result = client.get(detailsUrl).parseAs<MangaDetailsResponse>()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<MangaDetailsResponse>()
         val info = result.info
-        return SManga.create().apply {
+        val updatedManga = manga.apply {
             title = info.title.unescapeHtml()
             author = info.author.unescapeHtml()
             artist = info.author.unescapeHtml()
@@ -110,17 +98,8 @@ abstract class MangaMoins : HttpSource() {
             }
             thumbnail_url = info.cover
         }
-    }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url.toMangaSlug()}"
-
-    // ============================== Chapters ==============================
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<MangaDetailsResponse>()
-        return result.chapters.map { ch ->
+        val chapterList = result.chapters.map { ch ->
             SChapter.create().apply {
                 name = buildString {
                     val chapterName = "Chapitre ${ch.num.toString().removeSuffix(".0")}"
@@ -135,7 +114,13 @@ abstract class MangaMoins : HttpSource() {
                 date_upload = ch.time * 1000L
             }
         }
+
+        return SMangaUpdate(updatedManga, chapterList)
     }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url.toMangaSlug()}"
+
+    // ============================== Chapters ==============================
 
     override fun getChapterUrl(chapter: SChapter): String {
         val chapterSlug = chapter.url.removePrefix("/scan/")
@@ -144,18 +129,10 @@ abstract class MangaMoins : HttpSource() {
 
     // ============================== Pages =================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterSlug = chapter.url.removePrefix("/scan/")
-        val url = "$apiUrl/scan".toHttpUrl().newBuilder()
-            .addQueryParameter("slug", chapterSlug)
-            .build()
-        return GET(url, headers)
-    }
-
     private var cachedSalts: List<String> = emptyList()
     private var lastSaltFetch: Long = 0
 
-    private fun getSalts(pagesBaseUrl: String): List<String> {
+    private suspend fun getSalts(pagesBaseUrl: String): List<String> {
         val now = System.currentTimeMillis()
         if (cachedSalts.isNotEmpty() && now - lastSaltFetch < SALT_EXPIRY) {
             return cachedSalts
@@ -163,7 +140,7 @@ abstract class MangaMoins : HttpSource() {
 
         try {
             val scriptUrl = "$baseUrl/includes/components/js/reader.js"
-            client.newCall(GET(scriptUrl, headers)).execute().use { response ->
+            client.get(scriptUrl).use { response ->
                 val script = response.body.string()
 
                 val pathSegment = pagesBaseUrl.removeSuffix("/").substringAfterLast("/")
@@ -197,8 +174,12 @@ abstract class MangaMoins : HttpSource() {
         return cachedSalts.ifEmpty { FALLBACK_SALTS }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<ScanResponse>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterSlug = chapter.url.removePrefix("/scan/")
+        val url = "$apiUrl/scan".toHttpUrl().newBuilder()
+            .addQueryParameter("slug", chapterSlug)
+            .build()
+        val data = client.get(url).parseAs<ScanResponse>()
         val salts = getSalts(data.pagesBaseUrl)
 
         val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/").removeSuffix("_b")) { url, salt ->
@@ -210,8 +191,6 @@ abstract class MangaMoins : HttpSource() {
             Page(i - 1, imageUrl = "$baseUrl/$pageNum.webp")
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val MANGA_PAGE_LIMIT = 20

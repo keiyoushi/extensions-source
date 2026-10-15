@@ -2,24 +2,20 @@ package eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing
 
 import kotlinx.serialization.Serializable
 
-class BingTranslatorDto
-
 class TokenGroup(
     val token: String = "",
     val key: String = "",
     val iid: String = "",
     val ig: String = "",
 ) {
-    fun isNotValid() = listOf(token, key, iid, ig).any(String::isBlank)
-
-    fun isValid() = isNotValid().not()
+    fun isValid() = listOf(token, key, iid, ig).none(String::isBlank)
 }
 
 @Serializable
 class TranslateDto(
-    val translations: List<TextTranslated>,
+    private val translations: List<TextTranslated>,
 ) {
-    val text = translations.firstOrNull()?.text ?: ""
+    val text get() = translations.first().text
 }
 
 @Serializable

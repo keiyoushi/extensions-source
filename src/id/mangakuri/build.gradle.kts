@@ -9,14 +9,11 @@ keiyoushi {
     versionCode = 35
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
+    theme = "loneseal"
 
     source {
         lang = "id"
         baseUrl = "https://lc2.mangakuri.online"
         versionId = 2
-    }
-
-    deeplink {
-        path("/comic/..*")
     }
 }

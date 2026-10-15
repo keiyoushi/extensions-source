@@ -3,25 +3,12 @@ package eu.kanade.tachiyomi.extension.ja.cycomi
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
 class Data<T>(
     val data: T,
-)
-
-@Serializable
-class NextData(
-    val props: Props,
-)
-
-@Serializable
-class Props(
-    val pageProps: RankingList,
-)
-
-@Serializable
-class RankingList(
-    val rankingTitleList: List<TitleList>,
 )
 
 @Serializable
@@ -70,11 +57,14 @@ class ChapterListResponse(
     private val startAt: Long?,
 ) {
     fun toSChapter(isLocked: Boolean): SChapter = SChapter.create().apply {
-        url = "$id#$titleId"
+        url = id.toString()
         val lockPrefix = if (isLocked) "🔒 " else ""
         val sub = if (subName.isNullOrEmpty()) "" else " - $subName"
         name = "$lockPrefix${this@ChapterListResponse.name}$sub"
         date_upload = startAt ?: 0L
+        memo = buildJsonObject {
+            put("titleId", titleId)
+        }
     }
 }
 

@@ -9,7 +9,5 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class HentaiSeason : Gattsu() {
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 2.seconds)
 }

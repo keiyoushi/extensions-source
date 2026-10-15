@@ -5,9 +5,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
 
 @Serializable
 class SearchResponse(val data: SearchData)
@@ -24,7 +24,7 @@ class TitleDetailResponse(val data: TitleDto)
 
 @Serializable
 class TitleDto(
-    val id: Int,
+    private val id: Int,
     private val slug: String,
     private val name: String,
     @SerialName("secondary_name") private val secondaryName: String? = null,
@@ -49,6 +49,9 @@ class TitleDto(
         url = slug
         title = name
         thumbnail_url = coverUrl(mediaUrl)
+        memo = buildJsonObject {
+            put("id", id)
+        }
     }
 
     fun toSMangaDetails(mediaUrl: String): SManga = SManga.create().apply {
@@ -70,6 +73,9 @@ class TitleDto(
             tags?.mapNotNull { it.name }?.let { addAll(it) }
         }.filter { it.isNotBlank() }.distinct().joinToString()
         status = parseStatus(this@TitleDto.status)
+        memo = buildJsonObject {
+            put("id", id)
+        }
     }
 }
 
@@ -91,8 +97,8 @@ class BranchesData(val branches: List<BranchDto> = emptyList())
 @Serializable
 class BranchDto(
     val id: Int,
-    @SerialName("is_main") val isMain: Boolean? = null,
     @SerialName("count_chapters") val countChapters: Int? = null,
+    val name: String? = null,
 )
 
 @Serializable
@@ -113,15 +119,19 @@ class ChapterDto(
 ) {
     private fun numberStr(): String = number.toString().removeSuffix(".0")
 
-    fun toSChapter(slug: String): SChapter = SChapter.create().apply {
+    fun toSChapter(slug: String, translator: String?): SChapter = SChapter.create().apply {
         url = "$slug/${numberStr()}/$id"
         name = buildString {
             if (volumeNumber != null) append("Том $volumeNumber ")
             append("Глава ${numberStr()}")
-            this@ChapterDto.name?.takeIf { it.isNotBlank() }?.let { append(" — $it") }
+            this@ChapterDto.name?.takeIf { it.isNotBlank() && !chapterCheck.matches(it) }?.let { append(" — $it") }
         }
         chapter_number = number
-        date_upload = DATE_FORMAT.tryParse(publishedAt)
+        date_upload = Instant.tryParse(publishedAt)
+        translator?.takeIf(String::isNotBlank)?.let { scanlator = translator }
+    }
+    companion object {
+        private val chapterCheck = """^Глава [\d.]+$""".toRegex()
     }
 }
 
@@ -135,10 +145,6 @@ class PagesData(val pages: List<PageDto> = emptyList())
 class PageDto(
     @SerialName("image_url") val imageUrl: String,
 )
-
-private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
 
 private fun parseStatus(status: String?): Int = when (status) {
     "ongoing" -> SManga.ONGOING

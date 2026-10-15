@@ -118,7 +118,7 @@ class Input(
     val display: String?,
     val page: Int,
     @SerialName("items_per_page")
-    val itemsPerPage: Int = 50,
+    val itemsPerPage: Int? = null,
     val filters: List<Filter>,
 )
 

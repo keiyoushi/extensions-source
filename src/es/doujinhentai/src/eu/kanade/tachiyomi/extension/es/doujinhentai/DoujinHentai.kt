@@ -1,34 +1,30 @@
 package eu.kanade.tachiyomi.extension.es.doujinhentai
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class DoujinHentai : HttpSource() {
+abstract class DoujinHentai : KeiSource() {
 
-    override val supportsLatest = true
-
-    private val chapterDateFormat by lazy { SimpleDateFormat("d MMM. yyyy", Locale.ENGLISH) }
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    private val chapterDateFormat = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.ENGLISH)
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -52,15 +48,11 @@ abstract class DoujinHentai : HttpSource() {
 
     // ── Popular ───────────────────────────────────────────────────────────────
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/lista-manga-hentai?orderby=views&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = mangasPageFromDocument(response.asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = mangasPageFromDocument(client.get("$baseUrl/lista-manga-hentai?orderby=views&page=$page").asJsoup())
 
     // ── Latest ────────────────────────────────────────────────────────────────
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/lista-manga-hentai?orderby=last&page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = mangasPageFromDocument(response.asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangasPageFromDocument(client.get("$baseUrl/lista-manga-hentai?orderby=last&page=$page").asJsoup())
 
     // ── Search ────────────────────────────────────────────────────────────────
     // El endpoint /search?query= devuelve JSON (live-search), no HTML.
@@ -70,14 +62,14 @@ abstract class DoujinHentai : HttpSource() {
     // Los filtros de ruta son mutuamente excluyentes; se aplica el primero
     // con valor en este orden: género > artista > autor > scanlator > letra > tipo.
     // El filtro de ordenación solo aplica cuando no hay otro filtro de ruta.
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
 
         if (query.isNotBlank()) {
             url.addPathSegment("lista-manga-hentai")
             url.addQueryParameter("search", query)
             url.addQueryParameter("page", page.toString())
-            return GET(url.build(), headers)
+            return mangasPageFromDocument(client.get(url.build()).asJsoup())
         }
 
         var genre = ""
@@ -115,17 +107,14 @@ abstract class DoujinHentai : HttpSource() {
         }
 
         url.addQueryParameter("page", page.toString())
-        return GET(url.build(), headers)
+        return mangasPageFromDocument(client.get(url.build()).asJsoup())
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = mangasPageFromDocument(response.asJsoup())
 
     // ── Manga details ──────────────────────────────────────────────────────────
     // "Autor(es)"  → <a rel="author" href=".../author/...">
     // "Artista(s)" → <a href=".../artist/...">  (sin rel="author")
     // Algunos títulos solo tienen artista, otros solo autor, otros ambos.
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    private fun mangaDetailsParse(document: Document): SManga {
         val main: Element = document.selectFirst("main#main-content") ?: document.body()
         val manga = SManga.create()
 
@@ -161,11 +150,31 @@ abstract class DoujinHentai : HttpSource() {
 
     // ── Chapter list ───────────────────────────────────────────────────────────
     // El slug del capítulo NO siempre contiene "chapter" (ej: /roman, /bokura)
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document
-            .select("div.flex.items-center.gap-4.p-3.mb-2.border.rounded-lg")
-            .mapNotNull { chapterFromElement(it) }
+    private fun chapterListParse(document: Document): List<SChapter> = document
+        .select("div.flex.items-center.gap-4.p-3.mb-2.border.rounded-lg")
+        .mapNotNull { chapterFromElement(it) }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.firstOrNull() != "manga-hentai") {
+            return null
+        }
+
+        val mangaSlug = url.encodedPathSegments.getOrNull(1) ?: return null
+        val mangaUrl = "$baseUrl/manga-hentai/$mangaSlug".toHttpUrl()
+
+        return mangaDetailsParse(client.get(mangaUrl).asJsoup()).apply {
+            setUrlWithoutDomain(mangaUrl.toString())
+        }
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
     private fun chapterFromElement(element: Element): SChapter {
@@ -185,15 +194,15 @@ abstract class DoujinHentai : HttpSource() {
         val dateText = element.select("div.text-sm.text-right span.font-medium")
             .lastOrNull()?.text()
         if (!dateText.isNullOrEmpty()) {
-            chapter.date_upload = chapterDateFormat.tryParse(dateText)
+            chapter.date_upload = chapterDateFormat.tryParseDate(dateText)
         }
 
         return chapter
     }
 
     // ── Pages ──────────────────────────────────────────────────────────────────
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
         // Estrategia 1: JSON embebido → const pageUrls = {"1":"url",...};
         document.select("script").asSequence()
@@ -227,10 +236,8 @@ abstract class DoujinHentai : HttpSource() {
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ── Filters Layout────────────────────────────────────────────────────────────────
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("La búsqueda por texto ignora los filtros"),
         Filter.Header("Los filtros de ruta son mutuamente excluyentes"),
         Filter.Separator(),

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Panomic"
-    versionCode = 5
+    versionCode = 8
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

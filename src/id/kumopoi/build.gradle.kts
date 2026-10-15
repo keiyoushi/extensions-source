@@ -6,13 +6,22 @@ plugins {
 
 keiyoushi {
     name = "KumoPoi"
-    versionCode = 0
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
-    theme = "mangathemesia"
+    libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://kumopoi.org"
+        baseUrl {
+            custom("https://beta.kumopoi.com")
+        }
+    }
+
+    deeplink {
+        host("beta.kumopoi.com")
+        host("kumopoi.com")
+        host("kumopoi.org")
+        path("/comic/..*")
+        path("/manga/..*")
     }
 }

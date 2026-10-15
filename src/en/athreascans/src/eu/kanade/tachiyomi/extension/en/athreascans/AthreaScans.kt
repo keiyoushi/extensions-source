@@ -5,21 +5,18 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.OkHttpClient
-import okhttp3.Response
+import org.jsoup.nodes.Document
 
 @Source
 abstract class AthreaScans :
     MangaThemesia(),
     ConfigurableSource {
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(2)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     private val preferences: SharedPreferences = getPreferences()
 
@@ -30,7 +27,7 @@ abstract class AthreaScans :
         preferences,
     )
 
-    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).filterNot { chapter ->
+    override fun chapterListParse(document: Document) = super.chapterListParse(document).filterNot { chapter ->
         // Additional filter: skip chapters without valid URLs (locked chapters have no href)
         chapter.url.isBlank() || chapter.url == "#"
     }

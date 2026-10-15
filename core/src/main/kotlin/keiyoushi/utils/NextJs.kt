@@ -44,12 +44,17 @@ private fun <T> extractValueNextJs(
  * ([ReactFlightServer.js](https://github.com/facebook/react/blob/main/packages/react-server/src/ReactFlightServer.js)):
  * - `$$` -> Escaped string, drops the first `$`.
  * - `$undefined` -> JS `undefined`, resolved to JSON null.
- * - `$D<iso>` -> Date, drops `$D` to expose the ISO-8601 string ([ReactFlightDate]).
+ * - `$D<iso>` -> Date, drops `$D` to expose the ISO-8601 string (e.g. `kotlin.time.Instant`).
  * - `$n<digits>` -> BigInt, drops `$n` to expose the digit string ([ReactFlightBigInt]).
  * - `$Infinity` / `$-Infinity` / `$NaN` / `$-0` -> drops `$`, exposes the token string
  *   ([ReactFlightNumber] parses it to the real `Double`; JSON itself has no Infinity/NaN).
  * - `$Q<id>` -> Map, the outlined model at `<id>` is an array of `[key, value]` entries.
  * - `$W<id>` -> Set, the outlined model at `<id>` is an array of values.
+ * - `$L<id>` -> Lazy chunk ([ReactFlightServer]'s `serializeLazyID`), emitted for a subtree that
+ *   didn't finish rendering synchronously (an async Server Component). React wraps the row at
+ *   `<id>` in a `React.lazy`; we flatten it to the row's value.
+ * - `$@<id>` -> Promise (`serializePromiseID`); the row at `<id>` carries the settled value.
+ *   Both are always a bare hex id, never a `:<path>`.
  * - `$<id>` / `$<id>:<path>` -> Outlined model reference ([ReactFlightServer]'s `getOutlinedModel`).
  *   `<id>` is looked up in the ByteText [chunkCache] then the [modelCache]; any `:`-separated
  *   `<path>` segments walk into the model by object key or array index.
@@ -76,10 +81,12 @@ private fun resolveNextJsRefs(
                 str == "\$Infinity" || str == "\$-Infinity" || str == "\$NaN" || str == "\$-0" ->
                     JsonPrimitive(str.substring(1))
                 str[1] == '$' -> JsonPrimitive(str.substring(1)) // Escaped '$' -> keep one
-                str[1] == 'D' -> JsonPrimitive(str.substring(2)) // Date -> strip '$D' for ReactFlightDate
+                str[1] == 'D' -> JsonPrimitive(str.substring(2)) // Date -> strip '$D' to expose ISO-8601 string
                 str[1] == 'n' -> JsonPrimitive(str.substring(2)) // BigInt -> strip '$n' for ReactFlightBigInt
                 str[1] == 'Q' -> resolveMapRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 str[1] == 'W' -> resolveSetRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
+                str[1] == 'L' -> resolveModelRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
+                str[1] == '@' -> resolveModelRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 // RSC reference (`$<id>` or `$<id>:<path>`) -> resolve via chunk/model cache.
                 else -> resolveModelRef(str.substring(1), chunkCache, modelCache, resolving) ?: element
             }

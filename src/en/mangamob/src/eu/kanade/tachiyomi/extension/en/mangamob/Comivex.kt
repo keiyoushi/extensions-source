@@ -2,53 +2,45 @@ package eu.kanade.tachiyomi.extension.en.mangamob
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
 @Source
 abstract class Comivex :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
 
     private val hideStaleExploreEntries: Boolean
         get() = preferences.getBoolean(PREF_HIDE_STALE, true)
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/explore/?sort_by=Views&results=$page&ajax=1", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = exploreParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/explore/?sort_by=Views&results=$page&ajax=1").exploreParse()
 
     // =============================== Latest ===============================
     // /latest/ orders by chapter publication; /explore/?sort_by=Updated
     // orders by metadata mtime and surfaces stale series.
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest/", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangas = response.asJsoup().select("article.u-card")
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val mangas = client.get("$baseUrl/latest/").asJsoup().select("article.u-card")
             .mapNotNull(::parseLatestCard)
             .distinctBy { it.url }
         return MangasPage(mangas, false)
@@ -66,7 +58,7 @@ abstract class Comivex :
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/explore/".toHttpUrl().newBuilder().apply {
             if (query.isNotEmpty()) addQueryParameter("search", query)
 
@@ -83,23 +75,21 @@ abstract class Comivex :
             addQueryParameter("ajax", "1")
         }.build()
 
-        return GET(url, headers)
+        return client.get(url).exploreParse()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = exploreParse(response)
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         GenreFilter(),
         SortFilter(),
         StatusFilter(),
         TypeFilter(),
     )
 
-    private fun exploreParse(response: Response): MangasPage {
+    private fun Response.exploreParse(): MangasPage {
         val applyStaleFilter = hideStaleExploreEntries &&
-            response.request.url.queryParameter("sort_by") == "Updated"
+            request.url.queryParameter("sort_by") == "Updated"
 
-        val mangas = response.asJsoup().select("article.manga-card").mapNotNull { card ->
+        val mangas = asJsoup().select("article.manga-card").mapNotNull { card ->
             val link = card.selectFirst("a.card-cover") ?: return@mapNotNull null
             val url = link.attr("abs:href")
             if (applyStaleFilter && url.seriesId() in STALE_EXPLORE_IDS) return@mapNotNull null
@@ -115,9 +105,15 @@ abstract class Comivex :
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val details = SManga.create().apply {
             title = document.selectFirst(".md-title")?.text() ?: throw Exception("Title not found")
             author = document.selectFirst(".md-author span")?.text()
             description = document.selectFirst("#synopsis")?.text()
@@ -125,6 +121,16 @@ abstract class Comivex :
             thumbnail_url = document.selectFirst(".md-cover-wrap img.md-cover")?.attr("abs:src")
             status = parseStatus(document.selectFirst(".md-status")?.text())
         }
+
+        val chapterList = document.select(".ch-list .ch-item").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.selectFirst("a.ch-link")!!.attr("abs:href"))
+                name = element.selectFirst(".ch-num")?.text() ?: ""
+                date_upload = parseRelativeDate(element.selectFirst(".ch-date")?.text() ?: "")
+            }
+        }
+
+        return SMangaUpdate(details, chapterList)
     }
 
     private fun parseStatus(status: String?): Int {
@@ -138,14 +144,6 @@ abstract class Comivex :
     }
 
     // ============================== Chapters ==============================
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(".ch-list .ch-item").map { element ->
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.selectFirst("a.ch-link")!!.attr("abs:href"))
-            name = element.selectFirst(".ch-num")?.text() ?: ""
-            date_upload = parseRelativeDate(element.selectFirst(".ch-date")?.text() ?: "")
-        }
-    }
 
     private fun parseRelativeDate(dateStr: String): Long {
         val now = Calendar.getInstance()
@@ -167,11 +165,9 @@ abstract class Comivex :
 
     // =============================== Pages ================================
 
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("#chapter-images .page-wrapper img").mapIndexed { index, img ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select("#chapter-images .page-wrapper img").mapIndexed { index, img ->
         Page(index, imageUrl = img.attr("abs:src"))
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================ Preferences =============================
 

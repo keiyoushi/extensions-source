@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "8Muses"
-    versionCode = 2
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "eromuse"
 
     source {

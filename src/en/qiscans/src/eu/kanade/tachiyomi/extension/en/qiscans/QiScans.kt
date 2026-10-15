@@ -4,28 +4,28 @@ import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwa
 import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaSortFilter
 import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaStatusFilter
 import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaTypeFilter
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 
 @Source
 abstract class QiScans : EZManhwa() {
 
     override val apiUrl = "https://api.qimanga.com/api/v1"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", baseUrl)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = addEZManhwaHeaders()
         .set("Sec-Fetch-Dest", "empty")
         .set("Sec-Fetch-Mode", "cors")
         .set("Sec-Fetch-Site", "same-site")
 
     // QiScans search endpoint ignores filters — only send the query when searching.
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
         val isSearch = query.isNotBlank()
         val endpoint = if (isSearch) "$apiUrl/series/search" else "$apiUrl/series"
-        val url = endpoint.toHttpUrl().newBuilder().apply {
+        return endpoint.toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("perPage", "20")
             if (isSearch) {
@@ -47,10 +47,9 @@ abstract class QiScans : EZManhwa() {
                 if (!sortAdded) addQueryParameter("sort", "latest")
             }
         }.build()
-        return GET(url, headers)
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         EZManhwaSortFilter(),
         EZManhwaStatusFilter(),
         EZManhwaTypeFilter(),

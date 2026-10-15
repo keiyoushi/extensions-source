@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.ja.flowercomics
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Serializable
@@ -38,10 +38,13 @@ class Thumbnail(
 
 @Serializable
 class EntryChapters(
-    val earlyChapters: List<EpisodeEntry>,
-    val omittedMiddleChapters: List<EpisodeEntry>,
-    val latestChapters: List<EpisodeEntry>,
-)
+    private val earlyChapters: List<EpisodeEntry>,
+    private val omittedMiddleChapters: List<EpisodeEntry>,
+    private val latestChapters: List<EpisodeEntry>,
+) {
+    val chapters: List<EpisodeEntry>
+        get() = earlyChapters + omittedMiddleChapters + latestChapters
+}
 
 @Serializable
 class EpisodeEntry(
@@ -64,11 +67,11 @@ class EpisodeEntry(
         val lock = if (isLocked) "🔒 " else ""
         url = id.toString()
         name = lock + title + subTitle
-        date_upload = dateFormat.tryParse(updated)
+        date_upload = dateFormat.tryParseDate(updated)
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ROOT)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.ROOT)
 
 @Serializable
 class PageEntry(

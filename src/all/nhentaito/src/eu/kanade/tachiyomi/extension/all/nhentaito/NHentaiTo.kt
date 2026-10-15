@@ -14,7 +14,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
@@ -102,7 +101,7 @@ abstract class NHentaiTo : GalleryAdults() {
     // Pages
     override val serverPrefix = "i"
 
-    override fun Element.getInfoPages(document: Document?) = document?.getInfo("Pages")?.let { "**Pages**: $it" }
+    override fun Element.totalPages() = getInfo("Pages")
 
     override fun Element.getTime() = selectFirst(".tags time")?.attr("datetime").toDate(null)
 

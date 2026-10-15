@@ -9,15 +9,12 @@ class Manga(
     val id: Int,
     @SerialName("total_page") val totalPage: Int,
     private val title: String,
-    @SerialName("image_server") private val imageServer: String,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(thumbnail: String) = SManga.create().apply {
         url = "/g/$id"
         this.title = this@Manga.title
-        thumbnail_url = "$imageServer$id/cover-small.jpg"
+        thumbnail_url = thumbnail
     }
-
-    fun getImageUrl() = "$imageServer$id"
 }
 
 @Serializable

@@ -5,19 +5,19 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
-internal data class PixivApiResponse(
+internal class PixivApiResponse(
     val error: Boolean = false,
     val message: String? = null,
     val body: JsonElement? = null,
 )
 
 @Serializable
-internal data class PixivResults(
+internal class PixivResults(
     val illusts: List<PixivIllust>? = null,
 )
 
 @Serializable
-internal data class PixivIllust(
+internal class PixivIllust(
     val author_details: PixivAuthorDetails? = null,
     val comment: String? = null,
     val id: String? = null,
@@ -40,22 +40,22 @@ internal data class PixivSearchResultSeries(
 )
 
 @Serializable
-internal data class PixivIllustDetails(
+internal class PixivIllustDetails(
     val illust_details: PixivIllust? = null,
 )
 
 @Serializable
-internal data class PixivIllustsDetails(
+internal class PixivIllustsDetails(
     val illust_details: List<PixivIllust>? = null,
 )
 
 @Serializable
-internal data class PixivIllustPage(
+internal class PixivIllustPage(
     val urls: PixivIllustPageUrls? = null,
 )
 
 @Serializable
-internal data class PixivIllustPageUrls(
+internal class PixivIllustPageUrls(
     val thumb_mini: String? = null,
     val small: String? = null,
     val regular: String? = null,
@@ -63,18 +63,18 @@ internal data class PixivIllustPageUrls(
 )
 
 @Serializable
-internal data class PixivAuthorDetails(
+internal class PixivAuthorDetails(
     val user_id: String? = null,
     val user_name: String? = null,
 )
 
 @Serializable
-internal data class PixivSeriesDetails(
+internal class PixivSeriesDetails(
     val series: PixivSeries?,
 )
 
 @Serializable
-internal data class PixivSeries(
+internal class PixivSeries(
     val caption: String? = null,
     val coverImage: JsonPrimitive? = null,
     val id: String? = null,
@@ -86,45 +86,45 @@ internal data class PixivSeries(
 )
 
 @Serializable
-internal data class PixivSeriesContents(
+internal class PixivSeriesContents(
     val series_contents: List<PixivIllust>? = null,
 )
 
 @Serializable
-internal data class PixivRankings(
+internal class PixivRankings(
     val ranking: List<PixivRankingEntry>? = null,
 )
 
 @Serializable
-internal data class PixivRankingEntry(
+internal class PixivRankingEntry(
     val illustId: String? = null,
     val rank: Int? = null,
 )
 
 // Data models for parsing __NEXT_DATA__ from /search/users endpoint
 @Serializable
-internal data class PixivNextData(
+internal class PixivNextData(
     val props: PixivNextDataProps,
 )
 
 @Serializable
-internal data class PixivNextDataProps(
+internal class PixivNextDataProps(
     val pageProps: PixivPageProps,
 )
 
 @Serializable
-internal data class PixivPageProps(
+internal class PixivPageProps(
     val userIds: List<Long> = emptyList(),
     val userData: PixivUserData? = null,
 )
 
 @Serializable
-internal data class PixivUserData(
+internal class PixivUserData(
     val users: Map<String, PixivUserInfo> = emptyMap(),
 )
 
 @Serializable
-internal data class PixivUserInfo(
+internal class PixivUserInfo(
     val userId: String,
     val name: String,
     val image: String? = null,

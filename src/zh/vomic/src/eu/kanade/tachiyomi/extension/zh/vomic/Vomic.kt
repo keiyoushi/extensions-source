@@ -1,161 +1,229 @@
 package eu.kanade.tachiyomi.extension.zh.vomic
 
-import android.util.Base64
-import eu.kanade.tachiyomi.network.GET
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
-abstract class Vomic : HttpSource() {
+abstract class Vomic :
+    KeiSource(),
+    ConfigurableSource {
 
-    override val supportsLatest = false
+    private val baseHost get() = baseUrl.toHttpUrl().host
 
-    private val apiUrl: String
-        get() = apiUrl()
+    private val apiUrl get() = "https://api.$baseHost/pics_new/pics"
 
-    private fun apiUrl(): String {
-        val host = baseUrl.toHttpUrl().host
-        return if (host.startsWith("www.") || host.startsWith("api.")) {
-            "https://api.${host.substring(4)}"
-        } else {
-            baseUrl
-        }
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(SignInterceptor(apiUrl.toHttpUrl().host))
     }
 
-    override val client = network.client.newBuilder().addInterceptor { chain ->
-        try {
-            val response = chain.proceed(chain.request())
-            if (response.isSuccessful) {
-                return@addInterceptor response
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("user-agent", "Dart/3.13 (dart:io)")
+        set("platform", "android")
+        set("hide-content", "0")
+        set("name", "pics")
+        set("version", "1.2.1")
+    }
+
+    // Popular
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(1)))
+
+    // Latest
+    override suspend fun getLatestUpdates(page: Int) = client.get(
+        "$apiUrl/c/getUpdateBook".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", "$page")
+            addQueryParameter("limit", "$UPDATE_LIMIT")
+        }.build(),
+    ).parse<List<Manga>>().let {
+        MangasPage(it.map { it.toSManga() }, it.size >= UPDATE_LIMIT)
+    }
+
+    // Search
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val limit = if (query.isEmpty()) MANGA_LIMIT else SEARCH_LIMIT
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("c/getCartoonList")
+            addQueryParameter("page", "$page")
+            addQueryParameter("limit", "$limit")
+
+            if (query.isNotEmpty()) {
+                addQueryParameter("keyword", query)
+            } else {
+                filters.forEach { filter ->
+                    when (filter) {
+                        is CategoryFilter -> addQueryParameter("cat_id", filter.toUriPart())
+                        is SortFilter -> addQueryParameter("sort", filter.toUriPart())
+                        is StatusFilter -> addQueryParameter("process", filter.toUriPart())
+                        is CreativityFilter -> addQueryParameter("creativity", filter.toUriPart())
+                        is RegionFilter -> addQueryParameter("region", filter.toUriPart())
+                        is DisplayTypeFilter -> addQueryParameter("dis_type", filter.toUriPart())
+                        else -> {}
+                    }
+                }
             }
-            response.close()
-        } catch (_: Throwable) {
-        }
-        throw IOException("请在插件设置中修改网址")
-    }.build()
+        }.build()
 
-    override fun headersBuilder() = Headers.Builder().add("User-Agent", System.getProperty("http.agent")!!)
-
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/api/v1/rank/rank-data?rank_id=1&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangaList: RankingDto = response.parseAs()
-        val entries = mangaList.result.mapNotNull { it.toSMangaOrNull() }
-        val hasNextPage = response.request.url.queryParameter("page") != "4"
-        return MangasPage(entries, hasNextPage)
+        val mangas = client.get(url).parse<List<Manga>>().map { it.toSManga() }
+        return MangasPage(mangas, mangas.size >= limit)
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val mangaId = url.pathSegments.getOrNull(1) ?: return null
+        mangaId.toIntOrNull() ?: return null
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun getFilterList() = getFilterListInternal()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchQuery = parseSearchQuery(query.trim(), filters)
-        if (searchQuery.title.isEmpty() && searchQuery.category.isEmpty()) throw Exception("请输入搜索词或分类")
-
-        val url = "$apiUrl/api/v1/search/search-comic-data".toHttpUrl().newBuilder()
-            .addQueryParameter("title", searchQuery.title)
-            .addQueryParameter("category", searchQuery.category)
-            .addEncodedQueryParameter("page", page.toString())
-            .build()
-        return GET(url, headers)
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = mangaId },
+            emptyList(),
+            true,
+            false,
+        ).manga
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val mangaList: MangaListDto = response.parseAs()
-        val entries = mangaList.entries.mapNotNull { it.toSMangaOrNull() }
-        return MangasPage(entries, mangaList.hasNextPage)
+    // MangaUpdate
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/detail/${manga.url}"
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = client.get(
+            "$apiUrl/c/getCartoonInfoV1?car_id=${manga.url}",
+        ).parse<Manga>()
+
+        return SMangaUpdate(
+            details.toSManga(),
+            details.chapters.map { it.toSChapter() },
+        )
     }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/#/detail?id=${manga.id}"
-
-    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/api/v1/detail/get-comic-detail-data?mid=${manga.id}", headers)
-
-    override fun mangaDetailsParse(response: Response) = response.parseAs<MangaDto>().toSMangaDetails()
-
-    override fun chapterListRequest(manga: SManga) = GET("$apiUrl/api/v1/detail/get-comic-detail-chapter-data?mid=${manga.id}", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters: List<ChapterDto> = response.parseAs()
-        val mangaId = response.request.url.queryParameter("mid")!!
-        val dateFormat = dateFormat
-        return chapters.map { it.toSChapter(mangaId, dateFormat) }
-    }
-
+    // Pages
     override fun getChapterUrl(chapter: SChapter): String {
-        val (mangaId, chapterId) = chapter.id
-        return "$baseUrl/#/page/$mangaId/$chapterId"
+        val (mangaId, chapterId) = chapter.url.split("/")
+        return "$baseUrl/chapter/$mangaId/$chapterId"
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val (mangaId, chapterId) = chapter.id
-        val key = run {
-            val alphanumeric = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-            val chars = CharArray(24) { alphanumeric.random() }
-            String(chars)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterId = chapter.url.substringAfter("/")
+        var response = client.get(
+            "$apiUrl/c/getChapterInfo?c_id=$chapterId",
+            authHeaders,
+            ensureSuccess = false,
+        )
+
+        if (!response.isSuccessful) {
+            response.close()
+            login()
+            response = client.get(
+                "$apiUrl/c/getChapterInfo?c_id=$chapterId",
+                authHeaders,
+            )
         }
-        val time = System.currentTimeMillis().toString()
-        val encrypted = run {
-            val keySpec = SecretKeySpec(key.toByteArray(), "DESede")
-            val iv = "k8tUyS\$m"
-            val ivSpec = IvParameterSpec(iv.toByteArray())
-            val payload = key + iv + "cid=" + chapterId + "&mid=" + mangaId + time
-            val bytes = Cipher.getInstance("DESede/CBC/PKCS5Padding").run {
-                init(Cipher.ENCRYPT_MODE, keySpec, ivSpec)
-                doFinal(payload.toByteArray())
-            }
-            Base64.encodeToString(bytes, Base64.DEFAULT)
+
+        return response.parse<Pages>().images.mapIndexedNotNull { index, image ->
+            image.url?.let { Page(index, imageUrl = it) }
         }
-        val url = "$apiUrl/api/v2/page/get-comic-page-img-data".toHttpUrl().newBuilder()
-            .addEncodedQueryParameter("k", key)
-            .addEncodedQueryParameter("t", time)
-            .addQueryParameter("e", encrypted)
-            .build()
-        return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val pageList: List<String> = response.parseAs()
-        if (pageList.size == 1 && pageList[0] == "https://cdn.vomicer.com/qiniu/vomic/otherImg/info2.webp") {
-            throw Exception("无法阅读此章节")
+    // Related mangas
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga) = client.get("$apiUrl/c/getDetailRecommendList")
+        .parse<List<Manga>>().map { it.toSManga() }
+
+    // Filters
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData() = client.get(
+        "$apiUrl/c/getCatList",
+    ).parse<List<Category>>().associate { it.name to it.id }.toJsonElement()
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        buildList {
+            add(SortFilter())
+            add(StatusFilter())
+            add(CreativityFilter())
+            add(RegionFilter())
+            add(DisplayTypeFilter())
+
+            data?.parseAs<Map<String, Int>>().orEmpty()
+                .takeIf { it.isNotEmpty() }
+                ?.let { add(CategoryFilter(it)) }
+        },
+    )
+
+    // Preferences
+    private val preferences = getPreferences()
+
+    private var token: String
+        get() = preferences.getString(PREF_TOKEN, "")!!
+        set(value) = preferences.edit().putString(PREF_TOKEN, value).apply()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = PREF_EMAIL
+            title = "📧 邮箱"
+            setDefaultValue("")
+        }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = PREF_PASSWORD
+            title = "🔑 密码"
+            setDefaultValue("")
+        }.let(screen::addPreference)
+    }
+
+    // Utils
+    private val authHeaders get() = headersBuilder()
+        .set("Authorization", "Bearer $token")
+        .build()
+
+    private suspend fun login() {
+        val email = preferences.getString(PREF_EMAIL, "")!!
+        val password = preferences.getString(PREF_PASSWORD, "")!!
+
+        if (email.isEmpty() || password.isEmpty()) {
+            throw IOException("请在设置中填写邮箱和密码以访问内容")
         }
-        return pageList.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+
+        val response = client.post(
+            "$apiUrl/login",
+            LoginPayload(email, password).toJsonRequestBody(),
+        )
+
+        token = response.parseAs<Token>().token
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    inline fun <reified T> Response.parse(): T = parseAs<Result<T>>().result
 
-    override fun imageRequest(page: Page): Request {
-        val url = page.imageUrl!!
-        val host = url.toHttpUrl().host
-        val headers = headersBuilder().set("Referer", "https://$host/").build()
-        return GET(url, headers)
-    }
-
-    private val json: Json by injectLazy()
-
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<ResponseDto<T>>(body.string()).data
-
-    companion object {
-        private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.ENGLISH) }
+    private companion object {
+        const val MANGA_LIMIT = 20
+        const val SEARCH_LIMIT = 10
+        const val UPDATE_LIMIT = 15
+        const val PREF_EMAIL = "email"
+        const val PREF_PASSWORD = "password"
+        const val PREF_TOKEN = "token"
     }
 }

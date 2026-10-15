@@ -5,11 +5,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class ConfigPack(
-    val data: String,
-)
-
-@Serializable
 class PublusConfiguration(
     val contents: List<PublusContentEntry>,
 )

@@ -1,91 +1,93 @@
 package eu.kanade.tachiyomi.extension.zh.boylove
 
-import android.util.Log
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
-import rx.Observable
-import kotlin.concurrent.thread
 
 // Uses MACCMS http://www.maccms.la/
 // 支持站点，不要添加屏蔽广告选项，何况广告本来就不多
 @Source
-abstract class BoyLove : HttpSource() {
+abstract class BoyLove : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(UnscramblerInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(UnscramblerInterceptor())
         .rateLimit(2)
-        .build()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/home/api/getpage/tp/1-topestmh-${page - 1}", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage("$baseUrl/home/api/getpage/tp/1-topestmh-${page - 1}")
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val listPage = response.parseAs<ResultDto<ListPageDto<MangaDto>>>().result
+    private suspend fun parseMangaPage(url: String): MangasPage {
+        val listPage = client.get(url).parseAs<ResultDto<ListPageDto<MangaDto>>>().result
         val mangas = listPage.list.map { it.toSManga() }
         return MangasPage(mangas, !listPage.lastPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/home/Api/getDailyUpdate.html?widx=4&page=${page - 1}&limit=10", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangas = response.parseAs<ResultDto<List<MangaDto>>>().result.map { it.toSManga() }
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val mangas = client.get("$baseUrl/home/Api/getDailyUpdate.html?widx=4&page=${page - 1}&limit=10")
+            .parseAs<ResultDto<List<MangaDto>>>().result.map { it.toSManga() }
         return MangasPage(mangas, mangas.size >= 10)
     }
 
-    private fun textSearchRequest(page: Int, query: String): Request = GET("$baseUrl/home/api/searchk?keyword=$query&type=1&pageNo=$page", headers)
+    private fun textSearchUrl(page: Int, query: String) = "$baseUrl/home/api/searchk?keyword=$query&type=1&pageNo=$page"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
-        textSearchRequest(page, query)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = if (query.isNotBlank()) {
+        parseMangaPage(textSearchUrl(page, query))
     } else {
-        GET("$baseUrl/home/api/cate/tp/${parseFilters(page, filters)}", headers)
+        parseMangaPage("$baseUrl/home/api/cate/tp/${parseFilters(page, filters)}")
     }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // for WebView
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/home/book/index/id/${manga.url}", headers)
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/home/book/index/id/${manga.url}"
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(textSearchRequest(1, manga.title)).asObservableSuccess().map { response ->
-        val id = manga.url.toInt()
-        response.parseAs<ResultDto<ListPageDto<MangaDto>>>().result.list.find { it.id == id }!!.toSManga()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (!fetchDetails) return@async manga
+            val id = manga.url.toInt()
+            client.get(textSearchUrl(1, manga.title))
+                .parseAs<ResultDto<ListPageDto<MangaDto>>>().result.list.find { it.id == id }!!.toSManga()
+        }
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            client.get("$baseUrl/home/api/chapter_list/tp/${manga.url}")
+                .parseAs<ResultDto<ListPageDto<ChapterDto>>>().result.list.map { it.toSChapter() }.reversed()
+        }
+        SMangaUpdate(details.await(), chapterList.await())
     }
 
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/home/api/chapter_list/tp/${manga.url}", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ResultDto<ListPageDto<ChapterDto>>>().result.list.map { it.toSChapter() }.reversed()
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = chapter.url
         val index = chapterUrl.indexOf(':') // old URL format
         if (index == -1) return fetchPageList(chapterUrl)
         return chapterUrl.substring(index + 1).ifEmpty {
-            return Observable.just(emptyList())
+            return emptyList()
         }.split(',').mapIndexed { i, url ->
             Page(i, imageUrl = url.toImageUrl())
-        }.let { Observable.just(it) }
+        }
     }
 
-    private fun fetchPageList(chapterUrl: String): Observable<List<Page>> = client.newCall(GET(baseUrl + chapterUrl, headers)).asObservableSuccess().map { response ->
-        val doc = response.asJsoup()
+    private suspend fun fetchPageList(chapterUrl: String): List<Page> {
+        val doc = client.get(baseUrl + chapterUrl).asJsoup()
         val root = doc.selectFirst(Evaluator.Tag("section"))!!
         val images = root.select(Evaluator.Class("reader-cartoon-image"))
         val urlList = if (images.isEmpty()) {
@@ -97,7 +99,7 @@ abstract class BoyLove : HttpSource() {
                 .map { it.attr("data-original").trim().toImageUrl() }
         }
         val parts = doc.getPartsCount()
-        urlList.mapIndexed { index, imageUrl ->
+        return urlList.mapIndexed { index, imageUrl ->
             val url = if (parts == null) {
                 imageUrl
             } else {
@@ -110,45 +112,25 @@ abstract class BoyLove : HttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override val supportsFilterFetching get() = true
 
-    private var genres: Array<String> = emptyArray()
-    private var isFetchingGenres = false
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/home/book/cate.html").asJsoup()
+        .select("div[data-str=tag] > a.button")
+        .map { it.ownText() }
+        .toJsonElement()
 
-    override fun getFilterList(): FilterList {
-        val genreFilter = if (genres.isEmpty()) {
-            if (!isFetchingGenres) fetchGenres()
-            Filter.Header("点击“重置”尝试刷新标签列表")
-        } else {
-            GenreFilter(genres)
-        }
-        return FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        listOfNotNull(
             Filter.Header("分类筛选（搜索文本时无效）"),
             StatusFilter(),
             TypeFilter(),
             RegionFilter(),
-            genreFilter,
+            data?.parseAs<List<String>>()?.let { GenreFilter(it.toTypedArray()) },
             Filter.Header("若要观看VIP漫画，请先在Webview中登录网站，并确认您的账户已达到Lv3"),
             VipFilter(),
             // SortFilter(), // useless
-        )
-    }
-
-    private fun fetchGenres() {
-        isFetchingGenres = true
-        thread {
-            try {
-                val request = client.newCall(GET("$baseUrl/home/book/cate.html", headers))
-                val document = request.execute().asJsoup()
-                genres = document.select("div[data-str=tag] > a.button")
-                    .map { it.ownText() }.toTypedArray()
-            } catch (e: Throwable) {
-                isFetchingGenres = false
-                Log.e("BoyLove", "failed to fetch genres", e)
-            }
-        }
-    }
+        ),
+    )
 
     private fun Document.getPartsCount(): Int? = selectFirst("script:containsData(firstMergeImg):containsData(imageData)")?.data()?.run {
         substringBefore("var scrollTop")

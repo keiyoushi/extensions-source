@@ -273,8 +273,6 @@ fun getGenreFilters() = listOf(
     TriStateFilterOption("Workplace Sex", "50"),
 )
 
-inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
-
 private fun validYears(): List<Int> {
     val years = mutableListOf<Int>()
     val current = Calendar.getInstance()

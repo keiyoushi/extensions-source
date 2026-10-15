@@ -1,60 +1,49 @@
 package eu.kanade.tachiyomi.extension.all.hentailoop
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.FormBody
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.io.IOException
-import java.lang.UnsupportedOperationException
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Source
-abstract class HentaiLoop : HttpSource() {
-    override val supportsLatest = true
+abstract class HentaiLoop : KeiSource() {
 
-    override val client = network.client
+    private val ajaxHeaders: Headers
+        get() = headersBuilder()
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("manga", null, "views", page)
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("manga")
-            if (page > 1) {
-                addPathSegment("page")
-                addPathSegment(page.toString())
-            }
-            addPathSegment("")
-            addQueryParameter("sortmanga", "views")
-        }.build()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList("manga", null, "date", page)
 
-        return GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
 
         val mangas = document.select("div.manga-card a").map { element ->
@@ -69,23 +58,7 @@ abstract class HentaiLoop : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("manga")
-            if (page > 1) {
-                addPathSegment("page")
-                addPathSegment(page.toString())
-            }
-            addPathSegment("")
-            addQueryParameter("sortmanga", "date")
-        }.build()
-
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
         val sourceFilters = this::class.java.getResourceAsStream("/assets/filters.json")!!
             .parseAs<SourceFilters>()
 
@@ -106,16 +79,22 @@ abstract class HentaiLoop : HttpSource() {
         )
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            return deepLink(query)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "manga" || url.pathSegments.size < 2) {
+            return null
         }
 
+        val manga = SManga.create().apply { this.url = url.pathSegments[1] }
+
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val activeFilter = filters.findActiveFilter()
 
         // multiple active filters
         if (activeFilter == null) {
-            return super.fetchSearchManga(page, query, filters)
+            return advancedSearch(page, query, filters)
         }
 
         val (directory, slug) = activeFilter
@@ -127,56 +106,35 @@ abstract class HentaiLoop : HttpSource() {
                 quickSearch(query)
             } else {
                 // filters + query search
-                super.fetchSearchManga(page, query, filters)
+                advancedSearch(page, query, filters)
             }
         }
 
         // one filter (or default list) active with no query search
-        return getMangaList(directory, slug, filters, page)
+        return getMangaList(directory, slug, filters.firstInstance<SortFilter>().sort, page)
     }
 
-    private fun deepLink(url: String): Observable<MangasPage> {
-        val httpUrl = url.toHttpUrl()
-        if (httpUrl.host == baseUrl.toHttpUrl().host && httpUrl.pathSegments[0] == "manga" && httpUrl.pathSegments.size > 1) {
-            val tmpManga = SManga.create().apply {
-                this@apply.url = httpUrl.pathSegments[1]
-            }
-
-            return fetchMangaDetails(tmpManga)
-                .map { MangasPage(listOf(it), hasNextPage = false) }
-        }
-
-        throw Exception("Unsupported Url")
-    }
-
-    private fun quickSearch(query: String): Observable<MangasPage> {
+    private suspend fun quickSearch(query: String): MangasPage {
         val body = FormBody.Builder()
             .add("action", "nativeSearch")
             .add("subAction", "search")
             .add("query", query.trim())
             .build()
-        val url = "$baseUrl/wp-admin/admin-ajax.php"
-        val headers = headersBuilder()
-            .set("X-Requested-With", "XMLHttpRequest")
-            .build()
 
-        return client.newCall(POST(url, headers, body))
-            .asObservableSuccess()
-            .map {
-                val data = it.parseAs<Data<QuerySearchResponse>>()
-                val mangas = data.data.posts.map { manga ->
-                    SManga.create().apply {
-                        this@apply.url = manga.link.toHttpUrl().pathSegments[1]
-                        title = manga.title
-                        thumbnail_url = manga.thumb
-                    }
-                }
-
-                MangasPage(mangas, hasNextPage = false)
+        val data = client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, body)
+            .parseAs<Data<QuerySearchResponse>>()
+        val mangas = data.data.posts.map { manga ->
+            SManga.create().apply {
+                url = manga.link.toHttpUrl().pathSegments[1]
+                title = manga.title
+                thumbnail_url = manga.thumb
             }
+        }
+
+        return MangasPage(mangas, hasNextPage = false)
     }
 
-    private fun getMangaList(directory: String, slug: String?, filters: FilterList, page: Int): Observable<MangasPage> {
+    private suspend fun getMangaList(directory: String, slug: String?, sort: String, page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment(directory)
             if (slug != null) {
@@ -187,15 +145,13 @@ abstract class HentaiLoop : HttpSource() {
                 addPathSegment(page.toString())
             }
             addPathSegment("")
-            addQueryParameter("sortmanga", filters.firstInstance<SortFilter>().sort)
+            addQueryParameter("sortmanga", sort)
         }.build()
 
-        return client.newCall(GET(url, headers))
-            .asObservableSuccess()
-            .map(::popularMangaParse)
+        return parseMangaList(client.get(url))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    private suspend fun advancedSearch(page: Int, query: String, filters: FilterList): MangasPage {
         val data = SearchRequest(
             query = query.trim(),
             filters = listOf(
@@ -296,13 +252,13 @@ abstract class HentaiLoop : HttpSource() {
                         max = filters.firstInstance<MaxPageCount>().count,
                     ),
                 ),
-                CheckboxFilter(
+                CheckboxSpecialFilter(
                     values = CheckboxValues(
                         purpose = "uncensored-filter",
                         checked = filters.firstInstance<UncensoredFilter>().state,
                     ),
                 ),
-                CheckboxFilter(
+                CheckboxSpecialFilter(
                     values = CheckboxValues(
                         purpose = "unread-filter",
                         checked = false,
@@ -319,21 +275,14 @@ abstract class HentaiLoop : HttpSource() {
             .add("offset", ((page - 1) * 10).toString())
             .build()
 
-        val headers = headersBuilder()
-            .set("X-Requested-With", "XMLHttpRequest")
-            .build()
+        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, body)
+            .parseAs<Data<AdvancedSearchResponse>>()
 
-        return POST("$baseUrl/wp-admin/admin-ajax.php", headers, body)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<Data<AdvancedSearchResponse>>()
-
-        if (!data.success && data.data.message?.contains("captcha", ignoreCase = true) == true) {
+        if (!response.success && response.data.message?.contains("captcha", ignoreCase = true) == true) {
             throw Exception("Captcha Required! Open advanced search in WebView and solve the captcha")
         }
 
-        val mangas = data.data.posts.map {
+        val mangas = response.data.posts.map {
             val element = Jsoup.parseBodyFragment(it, baseUrl)
 
             SManga.create().apply {
@@ -344,10 +293,8 @@ abstract class HentaiLoop : HttpSource() {
             }
         }
 
-        return MangasPage(mangas, data.data.more)
+        return MangasPage(mangas, response.data.more)
     }
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 
     override fun getMangaUrl(manga: SManga): String {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -359,11 +306,15 @@ abstract class HentaiLoop : HttpSource() {
         return url
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        return SManga.create().apply {
-            url = response.request.url.pathSegments[1]
+        val updatedManga = manga.apply {
             title = document.selectFirst(".manga-title")!!.text()
             author = document.select(".manga-term-content a[href*=/artists/]").eachText().joinToString()
             artist = author
@@ -406,14 +357,24 @@ abstract class HentaiLoop : HttpSource() {
                 }.joinToString()
             }
         }
+
+        val date = document.selectFirst(".yoast-schema-graph[type=application/ld+json]")
+            ?.data()?.parseAs<SchemaGraph>()?.graph?.firstOrNull { it.datePublished != null }?.datePublished
+        val updatedChapters = listOf(
+            SChapter.create().apply {
+                url = manga.url
+                name = "Chapter"
+                date_upload = Instant.tryParse(date)
+            },
+        )
+
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override val disableRelatedMangasBySearch get() = true
+    override val supportsRelatedMangas get() = true
 
-    override fun relatedMangaListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun relatedMangaListParse(response: Response): List<SManga> {
-        val document = response.asJsoup()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
         return document.select(".related-entry a").map { element ->
             SManga.create().apply {
@@ -423,25 +384,6 @@ abstract class HentaiLoop : HttpSource() {
             }
         }
     }
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val date = document.selectFirst(".yoast-schema-graph[type=application/ld+json]")
-            ?.data()?.parseAs<SchemaGraph>()?.graph?.firstOrNull { it.datePublished != null }?.date
-        return listOf(
-            SChapter.create().apply {
-                url = response.request.url.pathSegments[1]
-                name = "Chapter"
-                date_upload = dateFormat.tryParse(date)
-            },
-        )
-    }
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
-
-    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
     override fun getChapterUrl(chapter: SChapter): String {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -454,8 +396,8 @@ abstract class HentaiLoop : HttpSource() {
         return url
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
 
         countViews(document)
 
@@ -476,11 +418,14 @@ abstract class HentaiLoop : HttpSource() {
             .add("postID", postId)
             .build()
 
-        val headers = headersBuilder()
-            .set("X-Requested-With", "XMLHttpRequest")
+        val request = Request.Builder()
+            .url("$baseUrl/wp-admin/admin-ajax.php")
+            .headers(ajaxHeaders)
+            .post(body)
             .build()
 
-        client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", headers, body))
+        // fire and forget so page loading isn't delayed
+        client.newCall(request)
             .enqueue(
                 object : Callback {
                     override fun onFailure(call: Call, e: IOException) {}
@@ -488,8 +433,6 @@ abstract class HentaiLoop : HttpSource() {
                 },
             )
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun Element.imgAttr(): String? = when {
         hasAttr("data-src") && attr("data-src").isNotBlank() -> absUrl("data-src")

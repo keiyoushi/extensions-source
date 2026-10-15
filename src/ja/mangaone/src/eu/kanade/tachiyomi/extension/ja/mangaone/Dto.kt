@@ -2,12 +2,17 @@ package eu.kanade.tachiyomi.extension.ja.mangaone
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.protobuf.ProtoNumber
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+val JST: ZoneId = ZoneId.of("Asia/Tokyo")
 
 @Serializable
 class RankingResponseList(
@@ -142,9 +147,12 @@ class ChapterList(
     fun toSChapter(titleId: String) = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
         val chapterName = if (!subName.isNullOrEmpty()) "$title - $subName" else title
-        url = "$id#$titleId"
+        url = id.toString()
         name = lock + chapterName
-        date_upload = dateFormat.tryParse(date)
+        date_upload = dateFormat.tryParseDate(date)
+        memo = buildJsonObject {
+            put("titleId", titleId)
+        }
     }
 }
 
@@ -155,7 +163,7 @@ class Points(
     @ProtoNumber(3) val coin: Int?,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ROOT)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.ROOT).withZone(JST)
 
 @Serializable
 class ViewerResponse(

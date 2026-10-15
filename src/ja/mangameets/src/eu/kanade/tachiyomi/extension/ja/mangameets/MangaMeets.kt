@@ -1,135 +1,123 @@
 package eu.kanade.tachiyomi.extension.ja.mangameets
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 
 @Source
-abstract class MangaMeets : HttpSource() {
-    override val supportsLatest = true
-
-    private val apiUrl = "$baseUrl/api"
+abstract class MangaMeets : KeiSource() {
+    private val apiUrl get() = "$baseUrl/api"
     private val pageSize = "20"
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/comics/search.json".toHttpUrl().newBuilder()
             .addQueryParameter("sort", "weekly_view_count")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("size", pageSize)
             .build()
-        return GET(url, headers)
+
+        return client.get(url).toMangasPage()
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SeriesResponse>()
-        val mangas = result.getComics().map { it.toSManga() }
-        return MangasPage(mangas, result.data.attributes.hasNextPage())
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/episodes/latest.json".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("size", pageSize)
             .build()
-        return GET(url, headers)
+
+        return client.get(url).toMangasPage()
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/comics/search.json".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) addQueryParameter("keywords", query)
-
             addQueryParameter("size", pageSize)
             addQueryParameter("page", page.toString())
-
             addFilter("sort", filters.firstInstance<SortFilter>())
             addTagGenreFilter(filters)
         }.build()
-        return GET(url, headers)
+        return client.get(url).toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun Response.toMangasPage(): MangasPage {
+        val result = this.parseAs<SeriesResponse>()
+        val mangas = result.toSMangaList()
+        return MangasPage(mangas, result.data.attributes.hasNextPage())
+    }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/comics/${manga.url}.json", headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (!fetchDetails) return@async manga
+            client.get("$apiUrl/comics/${manga.url}.json").parseAs<DetailsResponse>().toSManga()
+        }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsResponse>().toSManga()
+        val chapterList = async {
+            if (!fetchChapters) return@async chapters
+            client.get("$apiUrl/comics/${manga.url}/episodes.json").parseAs<ChapterResponse>().data
+                .map { it.attributes.toSChapter(manga.url) }
+                .reversed()
+        }
+
+        SMangaUpdate(
+            details.await(),
+            chapterList.await(),
+        )
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comics/${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/comics/${manga.url}/episodes.json", headers)
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/comics/${chapter.memo["uuid"]!!.string}/${chapter.memo["chapter"]!!.string}"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val dirName = response.request.url.pathSegments[2]
-        return response.parseAs<ChapterResponse>().data.map { it.attributes.toSChapter(dirName) }.reversed()
-    }
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/comics/${chapter.url}"
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val parts = "$baseUrl/${chapter.url}".toHttpUrl()
-        val dirName = parts.pathSegments.first()
-        val chapterNr = parts.pathSegments.last()
-        return GET("$apiUrl/comics/$dirName/episodes/$chapterNr/viewer.json", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<ViewerResponse>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val result = client.get("$apiUrl/comics/${chapter.memo["uuid"]!!.string}/episodes/${chapter.memo["chapter"]!!.string}/viewer.json").parseAs<ViewerResponse>()
         return result.episodePages.map {
             Page(it.orderIndex, imageUrl = it.image.originalUrl)
         }
     }
 
-    private var tagGenreList: List<Pair<String, String>> = emptyList()
+    override val supportsFilterFetching = true
 
-    private fun fetchTagsAndGenres() {
-        if (tagGenreList.isNotEmpty()) return
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching {
-                val tags = client.newCall(GET("$apiUrl/official_tags.json", headers)).execute()
-                    .parseAs<GenreResponse>().data
-                    .map { Pair(it.attributes.name, "tag:${it.attributes.name}") }
-
-                val genres = client.newCall(GET("$apiUrl/comic_genres.json", headers)).execute()
-                    .parseAs<GenreResponse>().data
-                    .map { Pair(it.attributes.name, "genre:${it.attributes.name}") }
-
-                tagGenreList = tags + genres
-            }
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val tags = async {
+            client.get("$apiUrl/official_tags.json").parseAs<GenreResponse>().data
+                .map { it.attributes.name to "tag:${it.attributes.name}" }
         }
+
+        val genres = async {
+            client.get("$apiUrl/comic_genres.json").parseAs<GenreResponse>().data
+                .map { it.attributes.name to "genre:${it.attributes.name}" }
+        }
+
+        (tags.await() + genres.await()).toJsonElement()
     }
 
-    override fun getFilterList(): FilterList {
-        fetchTagsAndGenres()
-
-        return if (tagGenreList.isEmpty()) {
-            FilterList(
-                Filter.Header("Note: Search and active filters are applied together"),
-                Filter.Header("Press 'Reset' to load more filters"),
-                SortFilter(),
-            )
-        } else {
-            FilterList(
-                Filter.Header("Note: Search and active filters are applied together"),
-                SortFilter(),
-                TagGenreFilter(tagGenreList),
-            )
-        }
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val tagGenreList = data?.parseAs<List<Pair<String, String>>>().orEmpty()
+        return FilterList(
+            buildList {
+                add(SortFilter())
+                if (tagGenreList.isNotEmpty()) add(TagGenreFilter(tagGenreList))
+            },
+        )
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

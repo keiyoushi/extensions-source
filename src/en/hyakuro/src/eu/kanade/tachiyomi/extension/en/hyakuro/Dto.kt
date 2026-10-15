@@ -3,10 +3,14 @@ package eu.kanade.tachiyomi.extension.en.hyakuro
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Instant
+
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
 
 @Serializable
 class PaginatedResponse(
@@ -98,8 +102,8 @@ class ChapterInListDto(
         }
         val date = translatedOn ?: parent.publishedAt
         date_upload = when {
-            date!!.contains("T") -> SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).tryParse(date)
-            else -> SimpleDateFormat("yyyy-MM-dd", Locale.US).tryParse(date)
+            date?.contains("T") == true -> Instant.tryParse(date)
+            else -> dateFormat.tryParseDate(date)
         }
         chapter_number = chapter
     }

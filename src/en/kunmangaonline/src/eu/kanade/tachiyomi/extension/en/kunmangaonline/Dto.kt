@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.kunmangaonline
 
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 @Serializable
 class ChapterListResponse(
@@ -21,9 +23,9 @@ class ChapterDto(
     @SerialName("chapter_slug") private val chapterSlug: String,
     @SerialName("updated_at") private val updatedAt: String? = null,
 ) {
-    fun toSChapter(slug: String, parseDate: (String?) -> Long) = SChapter.create().apply {
+    fun toSChapter(slug: String) = SChapter.create().apply {
         url = "/manga/$slug/$chapterSlug"
         name = chapterName
-        date_upload = parseDate(updatedAt)
+        date_upload = Instant.tryParse(updatedAt)
     }
 }

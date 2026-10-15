@@ -4,15 +4,17 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 
-private const val PAGE_SIZE = 25
-
 abstract class Madara : MadaraBase() {
+
+    protected open val pageSize = 25
+
     private enum class BrowseMode {
         Popular,
         Latest,
@@ -44,14 +46,16 @@ abstract class Madara : MadaraBase() {
         )
     }
 
+    protected open val ajaxTemplate = "madara-core/content/content-archive"
+
     private suspend fun ajaxList(page: Int, mode: BrowseMode, query: String = "", filters: FilterList = FilterList()): MangasPage {
         val body = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", (page - 1).toString())
-            add("template", "madara-core/content/content-archive")
+            add("template", ajaxTemplate)
             add("vars[paged]", "1")
             add("vars[template]", "archive")
-            add("vars[posts_per_page]", PAGE_SIZE.toString())
+            add("vars[posts_per_page]", pageSize.toString())
             add("vars[post_type]", "wp-manga")
             add("vars[post_status]", "publish")
             add("vars[manga_archives_item_layout]", "big_thumbnail")
@@ -66,7 +70,7 @@ abstract class Madara : MadaraBase() {
             }
         }.build()
         val mangas = parseArchive(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).asJsoup())
-        return MangasPage(mangas, mangas.size == PAGE_SIZE)
+        return MangasPage(mangas, mangas.size == pageSize)
     }
 
     private fun FormBody.Builder.sort(key: String) {
@@ -135,8 +139,8 @@ abstract class Madara : MadaraBase() {
         val body = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", "0")
-            add("template", "madara-core/content/content-archive")
-            add("vars[posts_per_page]", PAGE_SIZE.toString())
+            add("template", ajaxTemplate)
+            add("vars[posts_per_page]", pageSize.toString())
             add("vars[template]", "archive")
             add("vars[post_type]", "wp-manga")
             add("vars[post_status]", "publish")

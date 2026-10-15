@@ -46,3 +46,5 @@ internal class RankFilter :
             "过去30天最热门" to "/comics/leaderboard?tt=D30&ct=VC",
         ),
     )
+
+internal class FavouriteFilter : Filter.CheckBox("收藏列表")

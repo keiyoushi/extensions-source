@@ -2,49 +2,21 @@ package eu.kanade.tachiyomi.extension.en.hentaihere
 
 import eu.kanade.tachiyomi.source.model.Filter
 
+// Values map to a path segment under /browse, e.g. /browse/newest, /browse/a/most-viewed.
 val sortFilterList = listOf(
     Pair("newest", "Newest"),
-    Pair("most-popular", "Most Popular"),
-    Pair("last-updated", "Last Updated"),
-    Pair("most-viewed", "Most Viewed"),
-    Pair("alphabetical", "Alphabetical"),
-    Pair("", "----"),
-    Pair("staff-pick", "Staff Pick"),
-    Pair("last-month", "Popular (Monthly)"),
-    Pair("last-week", "Popular (Weekly)"),
-    Pair("yesterday", "Popular (Daily)"),
-    Pair("trending", "Trending"),
+    Pair("most-viewed", "Most Read"),
+    Pair("top-rated", "Highest Rated"),
+    Pair("yesterday", "Top Yesterday"),
+    Pair("last-week", "Top Last Week"),
+    Pair("last-month", "Top Last Month"),
+    Pair("alphabetical", "A to Z"),
 )
 
 val alphabetFilterList = listOf(
     Pair("", "All"),
-    Pair("a", "A"),
-    Pair("b", "B"),
-    Pair("c", "C"),
-    Pair("d", "D"),
-    Pair("e", "E"),
-    Pair("f", "F"),
-    Pair("g", "G"),
-    Pair("h", "H"),
-    Pair("i", "I"),
-    Pair("j", "J"),
-    Pair("k", "K"),
-    Pair("l", "L"),
-    Pair("m", "M"),
-    Pair("n", "N"),
-    Pair("o", "O"),
-    Pair("p", "P"),
-    Pair("q", "Q"),
-    Pair("r", "R"),
-    Pair("s", "S"),
-    Pair("t", "T"),
-    Pair("u", "U"),
-    Pair("v", "V"),
-    Pair("w", "W"),
-    Pair("x", "X"),
-    Pair("y", "Y"),
-    Pair("z", "Z"),
-)
+    Pair("0-9", "#"),
+) + ('a'..'z').map { it.toString() to it.uppercase() }
 
 val statusFilterList = listOf(
     Pair("", "All"),
@@ -52,8 +24,8 @@ val statusFilterList = listOf(
     Pair("completed", "Completed"),
 )
 
+// The `t` prefix is the site's legacy id form; the URL drops it and uses /category/{id}.
 val categoryFilterList = listOf(
-    Pair("", "All"),
     Pair("t34", "Adult"),
     Pair("t7", "Anal"),
     Pair("t372", "Beastiality"),

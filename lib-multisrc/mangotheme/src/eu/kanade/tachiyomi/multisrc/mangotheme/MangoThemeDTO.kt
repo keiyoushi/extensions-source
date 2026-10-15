@@ -15,9 +15,8 @@ import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
+import java.time.LocalDate
+import kotlin.time.Instant
 
 @Serializable
 class MangoThemeResponse<T>(
@@ -196,25 +195,16 @@ internal fun parseApiDate(dateString: String?): Long {
         ?.normalizeMidnightOverflow()
         ?: return 0L
 
-    return DATE_FORMATTERS
-        .asSequence()
-        .map { formatter -> formatter.tryParse(normalizedDate) }
-        .firstOrNull { it != 0L }
-        ?: 0L
+    return Instant.tryParse(normalizedDate)
 }
 
 private fun String.normalizeMidnightOverflow(): String {
     val match = MIDNIGHT_OVERFLOW_REGEX.matchEntire(this) ?: return this
-    val parsedDate = DATE_ONLY_FORMAT.tryParse(match.groupValues[1])
-        .takeIf { it != 0L }
+    val nextDay = runCatching { LocalDate.parse(match.groupValues[1]).plusDays(1) }.getOrNull()
         ?: return this
-    val nextDay = Calendar.getInstance().apply {
-        timeInMillis = parsedDate
-        add(Calendar.DAY_OF_MONTH, 1)
-    }
 
     return buildString {
-        append(DATE_ONLY_FORMAT.format(nextDay.time))
+        append(nextDay)
         append('T')
         append("00:")
         append(match.groupValues[2])
@@ -252,13 +242,6 @@ private fun parseStatus(statusName: String?, statusId: Int?): Int = when (status
 
 private val MIDNIGHT_OVERFLOW_REGEX =
     Regex("""^(\d{4}-\d{2}-\d{2})T24:(\d{2}:\d{2}(?:\.\d{1,3})?)(.*)$""")
-
-private val DATE_ONLY_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
-
-private val DATE_FORMATTERS = listOf(
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT),
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT),
-)
 
 private object StringOrNumberSerializer : KSerializer<String> {
     override val descriptor: SerialDescriptor =

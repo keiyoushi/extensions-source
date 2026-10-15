@@ -4,11 +4,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
+val dateReformat: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
 fun filterTags(include: String = "", exclude: List<String> = emptyList(), tags: List<String>): String? = tags.filter { it.startsWith("$include:") && exclude.none { substring -> it.startsWith("$substring:") } }
     .joinToString {
         it.substringAfter(":").replace("_", " ").split(" ").joinToString(" ") { s ->
@@ -60,7 +61,7 @@ class LongArchive(
         thumbnail_url = thumbnail
         author = groups ?: artists
         artist = artists
-        genre = listOf(male, female, others).joinToString()
+        genre = listOfNotNull(male, female, others).joinToString()
         description = buildString {
             append("Uploader: ", uploader.ifEmpty { "Anonymous" }, "\n")
             publishers?.let {
@@ -92,12 +93,12 @@ class LongArchive(
             append("Pages: ", filecount, "\n")
             append("File Size: ", getReadableSize(filesize), "\n")
 
-            try {
-                append("Public Date: ", dateReformat.format(Date(publicDate!! * 1000)), "\n")
-            } catch (_: Exception) {}
-            try {
-                append("Posted: ", dateReformat.format(Date(posted!! * 1000)), "\n")
-            } catch (_: Exception) {}
+            publicDate?.let {
+                append("Public Date: ", dateReformat.format(Instant.ofEpochSecond(it).atZone(ZoneId.systemDefault())), "\n")
+            }
+            posted?.let {
+                append("Posted: ", dateReformat.format(Instant.ofEpochSecond(it).atZone(ZoneId.systemDefault())), "\n")
+            }
         }
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE

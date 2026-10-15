@@ -1,42 +1,41 @@
 package eu.kanade.tachiyomi.extension.en.multporn
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
-import rx.schedulers.Schedulers
 
 @Source
-abstract class Multporn : HttpSource() {
+abstract class Multporn : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", HEADER_USER_AGENT)
-        .add("Content-Type", HEADER_CONTENT_TYPE)
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("User-Agent", HEADER_USER_AGENT)
+        set("Content-Type", HEADER_CONTENT_TYPE)
+    }
 
     // Popular
 
-    private fun buildPopularMangaRequest(page: Int, filters: FilterList = FilterList()): Request {
+    private suspend fun fetchPopularManga(page: Int, filters: FilterList): MangasPage {
         val url = "$baseUrl/best".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
-        (if (filters.isEmpty()) getMultpornFilterList(POPULAR_DEFAULT_SORT_BY_FILTER_STATE) else filters).forEach {
+        filters.forEach {
             when (it) {
                 is SortBySelectFilter -> url.addQueryParameter("sort_by", it.selected.uri)
                 is SortOrderSelectFilter -> url.addQueryParameter("sort_order", it.selected.uri)
@@ -45,25 +44,18 @@ abstract class Multporn : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
+        return fetchMangaList(url.build())
     }
 
-    override fun popularMangaRequest(page: Int) = buildPopularMangaRequest(page - 1)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector).map { popularMangaFromElement(it) }
-        val hasNextPage = document.select(popularMangaNextPageSelector).firstOrNull() != null
-        return MangasPage(mangas, hasNextPage)
-    }
+    override suspend fun getPopularManga(page: Int) = fetchPopularManga(page - 1, getMultpornFilterList(POPULAR_DEFAULT_SORT_BY_FILTER_STATE))
 
     // Latest
 
-    private fun buildLatestMangaRequest(page: Int, filters: FilterList = FilterList()): Request {
+    private suspend fun fetchLatestManga(page: Int, filters: FilterList): MangasPage {
         val url = "$baseUrl/new".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
-        (if (filters.isEmpty()) getMultpornFilterList(LATEST_DEFAULT_SORT_BY_FILTER_STATE) else filters).forEach {
+        filters.forEach {
             when (it) {
                 is SortBySelectFilter -> url.addQueryParameter("sort_by", it.selected.uri)
                 is SortOrderSelectFilter -> url.addQueryParameter("sort_order", it.selected.uri)
@@ -72,36 +64,19 @@ abstract class Multporn : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
+        return fetchMangaList(url.build())
     }
 
-    override fun latestUpdatesRequest(page: Int) = buildLatestMangaRequest(page - 1)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector).map { popularMangaFromElement(it) }
-        val hasNextPage = document.select(popularMangaNextPageSelector).firstOrNull() != null
-        return MangasPage(mangas, hasNextPage)
-    }
+    override suspend fun getLatestUpdates(page: Int) = fetchLatestManga(page - 1, getMultpornFilterList(LATEST_DEFAULT_SORT_BY_FILTER_STATE))
 
     // Search
 
-    private fun textSearchFilterParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("#content .col-1:contains(Views:),.col-2:contains(Views:)")
-            .map { popularMangaFromElement(it) }
-
-        val hasNextPage = document.select(popularMangaNextPageSelector).firstOrNull() != null
-
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    private fun buildSearchMangaRequest(page: Int, query: String, filtersArg: FilterList = FilterList()): Request {
+    private suspend fun fetchSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("page", (page - 1).toString())
             .addQueryParameter("search_api_views_fulltext", query)
 
-        (if (filtersArg.isEmpty()) getMultpornFilterList(SEARCH_DEFAULT_SORT_BY_FILTER_STATE) else filtersArg).forEach {
+        filters.forEach {
             when (it) {
                 is SortBySelectFilter -> url.addQueryParameter("sort_by", it.selected.uri)
                 is SearchTypeSelectFilter -> url.addQueryParameter("type", it.selected.uri)
@@ -109,76 +84,51 @@ abstract class Multporn : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
+        return fetchMangaList(url.build())
     }
 
-    private fun buildTextSearchFilterRequests(page: Int, filters: List<TextSearchFilter>): List<Request> = filters.flatMap {
-        it.stateURIs.map { queryURI ->
-            GET("$baseUrl/${it.uri}/$queryURI?page=0,$page")
+    private suspend fun fetchTextSearchFilters(page: Int, filters: List<TextSearchFilter>): MangasPage {
+        val pages = coroutineScope {
+            filters.flatMap {
+                it.stateURIs.map { queryURI ->
+                    async {
+                        val response = client.get("$baseUrl/${it.uri}/$queryURI?page=0,$page", ensureSuccess = false)
+                        if (response.code != 200) {
+                            response.close()
+                            return@async null
+                        }
+
+                        val document = response.asJsoup()
+                        val mangas = document.select("#content .col-1:contains(Views:),.col-2:contains(Views:)")
+                            .map { element -> popularMangaFromElement(element) }
+                        val hasNextPage = document.select(popularMangaNextPageSelector).firstOrNull() != null
+
+                        MangasPage(mangas, hasNextPage)
+                    }
+                }
+            }.awaitAll().filterNotNull()
         }
+
+        return MangasPage(
+            pages.flatMap { it.mangas }.distinctBy { it.url },
+            pages.any { it.hasNextPage },
+        )
     }
 
-    private fun squashMangasPageObservables(observables: List<Observable<MangasPage?>>): Observable<MangasPage> = Observable.from(observables)
-        .flatMap { it.observeOn(Schedulers.io()) }
-        .toList()
-        .map { it.filterNotNull() }
-        .map { pages ->
-            MangasPage(
-                pages.flatMap { it.mangas }.distinctBy { it.url },
-                pages.any { it.hasNextPage },
-            )
-        }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sortByFilterType = filters.firstInstanceOrNull<SortBySelectFilter>()?.requestType ?: POPULAR_REQUEST_TYPE
         val textSearchFilters = filters.filterIsInstance<TextSearchFilter>().filter { it.state.isNotBlank() }
 
         return when {
-            textSearchFilters.isNotEmpty() -> {
-                val requests = buildTextSearchFilterRequests(page - 1, textSearchFilters)
-
-                squashMangasPageObservables(
-                    requests.map {
-                        client.newCall(it).asObservable().map { res ->
-                            if (res.code == 200) {
-                                textSearchFilterParse(res)
-                            } else {
-                                null
-                            }
-                        }
-                    },
-                )
-            }
-
-            query.isNotEmpty() || sortByFilterType == SEARCH_REQUEST_TYPE -> {
-                val request = buildSearchMangaRequest(page - 1, query, filters)
-                client.newCall(request).asObservableSuccess().map { searchMangaParse(it) }
-            }
-
-            sortByFilterType == LATEST_REQUEST_TYPE -> {
-                val request = buildLatestMangaRequest(page - 1, filters)
-                client.newCall(request).asObservableSuccess().map { latestUpdatesParse(it) }
-            }
-
-            else -> {
-                val request = buildPopularMangaRequest(page - 1, filters)
-                client.newCall(request).asObservableSuccess().map { popularMangaParse(it) }
-            }
+            textSearchFilters.isNotEmpty() -> fetchTextSearchFilters(page - 1, textSearchFilters)
+            query.isNotEmpty() || sortByFilterType == SEARCH_REQUEST_TYPE -> fetchSearchManga(page - 1, query, filters)
+            sortByFilterType == LATEST_REQUEST_TYPE -> fetchLatestManga(page - 1, filters)
+            else -> fetchPopularManga(page - 1, filters)
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val sortByFilterType = filters.firstInstanceOrNull<SortBySelectFilter>()?.requestType ?: POPULAR_REQUEST_TYPE
-
-        return when {
-            query.isNotEmpty() || sortByFilterType == SEARCH_REQUEST_TYPE -> buildSearchMangaRequest(page - 1, query, filters)
-            sortByFilterType == LATEST_REQUEST_TYPE -> buildLatestMangaRequest(page - 1, filters)
-            else -> buildPopularMangaRequest(page - 1, filters)
-        }
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private suspend fun fetchMangaList(url: HttpUrl): MangasPage {
+        val document = client.get(url).asJsoup()
         val mangas = document.select(popularMangaSelector).map { popularMangaFromElement(it) }
         val hasNextPage = document.select(popularMangaNextPageSelector).firstOrNull() != null
         return MangasPage(mangas, hasNextPage)
@@ -194,8 +144,7 @@ abstract class Multporn : HttpSource() {
         "field-name-field-rule-63-section",
     ).flatMap { document.select(".$it a").map { a -> a.text() } }
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
+    private fun mangaDetailsParse(manga: SManga, document: Document): SManga = manga.apply {
         title = document.select("h1#page-title").text()
 
         val infoMap = listOf(
@@ -230,30 +179,37 @@ abstract class Multporn : HttpSource() {
             .joinToString("\n\n")
     }
 
-    // Chapters
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedManga = if (fetchDetails) {
+            mangaDetailsParse(manga, client.get(getMangaUrl(manga)).asJsoup())
+        } else {
+            manga
+        }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
-        listOf(
+        val updatedChapters = listOf(
             SChapter.create().apply {
                 url = manga.url
                 name = "Chapter"
                 chapter_number = 1f
             },
-        ),
-    )
+        )
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
 
     // Pages
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".jb-image img").mapIndexed { i, image ->
             Page(i, imageUrl = image.absUrl("src").replace("/styles/juicebox_2k/public", "").substringBefore("?"))
         }
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // Selectors
 
@@ -268,7 +224,7 @@ abstract class Multporn : HttpSource() {
 
     // Filters
 
-    override fun getFilterList() = getMultpornFilterList(POPULAR_DEFAULT_SORT_BY_FILTER_STATE)
+    override fun getFilterList(data: JsonElement?) = getMultpornFilterList(POPULAR_DEFAULT_SORT_BY_FILTER_STATE)
 
     companion object {
         private const val HEADER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"

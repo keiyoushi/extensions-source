@@ -1,23 +1,22 @@
 package eu.kanade.tachiyomi.extension.en.darkscience
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Request
-import okhttp3.Response
+import keiyoushi.utils.tryParseDate
 import org.jsoup.nodes.Document
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class DarkScience : HttpSource() {
+abstract class DarkScience : KeiSource() {
     override val supportsLatest = false
 
     private fun initTheManga(manga: SManga): SManga = manga.apply {
@@ -40,20 +39,27 @@ abstract class DarkScience : HttpSource() {
         initialized = true
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
-        MangasPage(
-            listOf(initTheManga(SManga.create())),
-            false,
-        ),
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(
+        listOf(initTheManga(SManga.create())),
+        false,
     )
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(initTheManga(manga))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapters = mutableListOf<SChapter>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw UnsupportedOperationException()
 
-        var archivePage: Document? = client.newCall(GET(baseUrl + manga.url, headers))
-            .execute().asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedManga = initTheManga(manga)
+        if (!fetchChapters) return SMangaUpdate(updatedManga, chapters)
+
+        val updatedChapters = mutableListOf<SChapter>()
+
+        var archivePage: Document? = client.get(baseUrl + updatedManga.url).asJsoup()
 
         var chLast = 0.0F
 
@@ -61,7 +67,7 @@ abstract class DarkScience : HttpSource() {
             val nextArchivePageUrl = archivePage.selectFirst("""#nav-below .nav-previous > a""")
                 ?.attr("href")
             val nextArchivePage = if (nextArchivePageUrl != null) {
-                client.newCall(GET(nextArchivePageUrl, headers)).execute().asJsoup()
+                client.get(nextArchivePageUrl).asJsoup()
             } else {
                 null
             }
@@ -73,11 +79,11 @@ abstract class DarkScience : HttpSource() {
                     ?.groupValues?.getOrNull(1)?.toFloatOrNull()
                     ?: (chLast + 0.01F)
 
-                chapters.add(
+                updatedChapters.add(
                     SChapter.create().apply {
                         name = chTitle
                         chapter_number = chNum
-                        date_upload = getDate(chLink)
+                        date_upload = dateFormat.tryParseDate(chapterDateRegex.find(chLink)?.groupValues?.get(1))
                         setUrlWithoutDomain(chLink)
                     },
                 )
@@ -90,38 +96,19 @@ abstract class DarkScience : HttpSource() {
             archivePage = nextArchivePage
         }
 
-        return Observable.just(chapters)
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private fun getDate(url: String): Long = try {
-        dateFormat.parse(
-            chapterDateRegex.find(url)!!.groupValues[1],
-        )!!.time
-    } catch (_: Exception) {
-        0L
-    }
-
-    override fun pageListParse(response: Response): List<Page> = listOf(
+    override suspend fun getPageList(chapter: SChapter): List<Page> = listOf(
         Page(
             0,
-            imageUrl = response.asJsoup()
+            imageUrl = client.get(getChapterUrl(chapter)).asJsoup()
                 .selectFirst("article.post img.aligncenter")!!
                 .attr("src"),
         ),
     )
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US)
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.US)
     private val chapterDateRegex = """/(\d\d\d\d/\d\d/\d\d)/""".toRegex()
     private val chapterNumberRegex = """Dark Science #(\d+)""".toRegex()
 }

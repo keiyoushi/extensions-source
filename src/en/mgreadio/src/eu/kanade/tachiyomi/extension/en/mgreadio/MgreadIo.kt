@@ -181,8 +181,8 @@ abstract class MgreadIo : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
         val chapterUrl = document.location()
-        return document.select("#chapter-content img[data-original-src]").mapIndexed { index, element ->
-            Page(index, url = chapterUrl, imageUrl = element.absUrl("data-original-src"))
+        return document.select("#chapter-content img[data-original-src], #chapter-content img[src]").mapIndexed { index, element ->
+            Page(index, url = chapterUrl, imageUrl = element.absUrl("data-original-src").ifEmpty { element.absUrl("src") })
         }
     }
 

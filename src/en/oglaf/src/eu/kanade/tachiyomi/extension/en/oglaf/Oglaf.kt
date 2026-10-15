@@ -1,24 +1,22 @@
 package eu.kanade.tachiyomi.extension.en.oglaf
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 
 @Source
-abstract class Oglaf : HttpSource() {
+abstract class Oglaf : KeiSource() {
 
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val manga = SManga.create().apply {
             title = "Oglaf"
             artist = "Trudy Cooper & Doug Bayne"
@@ -29,15 +27,22 @@ abstract class Oglaf : HttpSource() {
             thumbnail_url = "https://i.ibb.co/tzY0VQ9/oglaf.png"
         }
 
-        return Observable.just(MangasPage(listOf(manga), false))
+        return MangasPage(listOf(manga), false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
+
+        val document = client.get(baseUrl + manga.url).asJsoup()
         val chapterList = document.select("a:has(img[width=400])").mapNotNull { element ->
             val href = element.attr("href")
             val nameMatch = nameRegex.find(href) ?: return@mapNotNull null
@@ -48,14 +53,17 @@ abstract class Oglaf : HttpSource() {
             }
         }.distinct()
 
-        return chapterList.mapIndexed { i, ch ->
-            ch.apply { chapter_number = chapterList.size.toFloat() - i }
-        }
+        return SMangaUpdate(
+            manga,
+            chapterList.mapIndexed { i, ch ->
+                ch.apply { chapter_number = chapterList.size.toFloat() - i }
+            },
+        )
     }
 
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val pages = mutableListOf<Page>()
-        var document = response.asJsoup()
+        var document = client.get(baseUrl + chapter.url).asJsoup()
 
         while (true) {
             val imageUrl = document.selectFirst("img#strip")?.attr("abs:src") ?: break
@@ -63,7 +71,7 @@ abstract class Oglaf : HttpSource() {
 
             val nextUrl = document.selectFirst("a[rel=next]")?.attr("href")
             if (nextUrl != null && urlRegex.matches(nextUrl)) {
-                document = client.newCall(GET(baseUrl + nextUrl, headers)).execute().asJsoup()
+                document = client.get(baseUrl + nextUrl).asJsoup()
             } else {
                 break
             }
@@ -71,19 +79,6 @@ abstract class Oglaf : HttpSource() {
 
         return pages
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     companion object {
         private val nameRegex = """/(.*)/""".toRegex()

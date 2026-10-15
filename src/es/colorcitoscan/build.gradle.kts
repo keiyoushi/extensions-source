@@ -6,13 +6,22 @@ plugins {
 
 keiyoushi {
     name = "Colorcito Scan"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
-    theme = "spicytheme"
+    libVersion = "1.6"
 
     source {
         lang = "es"
-        baseUrl = "https://colorcitoscan.com"
+        baseUrl = "https://coloresito.site"
+    }
+
+    source {
+        name = "Colorcito Toons"
+        lang = "es"
+        baseUrl = "https://colorcitotoons.site"
+    }
+
+    deeplink {
+        path("/ver/..*")
     }
 }

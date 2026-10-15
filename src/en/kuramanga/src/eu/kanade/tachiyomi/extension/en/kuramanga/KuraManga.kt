@@ -1,64 +1,45 @@
 package eu.kanade.tachiyomi.extension.en.kuramanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import okhttp3.Headers
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
+import org.jsoup.nodes.Document
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class KuraManga : HttpSource() {
-
-    override val supportsLatest = true
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+abstract class KuraManga : KeiSource() {
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request = if (page == 1) {
-        GET(baseUrl, headers)
-    } else {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("ajax", "1")
-            .addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
-            .build()
-        GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        if (response.request.url.queryParameter("ajax") == "1") {
-            return searchMangaParse(response)
-        }
-
-        val document = response.asJsoup()
-        val mangas = document.select(".popular-glide .manga-card").mapNotNull { element ->
-            val titleEl = element.selectFirst(".manga-title") ?: return@mapNotNull null
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
+        val mangas = document.select("section:has(h2:contains(Popular)) a.sp-card").mapNotNull { element ->
+            val titleEl = element.selectFirst(".sp-cap h3") ?: return@mapNotNull null
             SManga.create().apply {
                 title = titleEl.text()
                 url = "/" + element.attr("href").removePrefix("/")
-                thumbnail_url = element.selectFirst("img.manga-thumb")?.attr("abs:src")
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
-        return MangasPage(mangas, true)
+        return MangasPage(mangas, false)
     }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val pageUrl = if (page > 1) "$baseUrl/?page=$page" else "$baseUrl/"
+        val document = client.get(pageUrl).asJsoup()
         val mangas = document.select(".update-list .update-row").mapNotNull { element ->
             val link = element.selectFirst("a.update-series-link") ?: return@mapNotNull null
             SManga.create().apply {
@@ -67,17 +48,19 @@ abstract class KuraManga : HttpSource() {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }.distinctBy { it.url }
-        return MangasPage(mangas, false)
+
+        val hasNextPage = document.selectFirst("a[data-lu-next]:not(.is-disabled)") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("ajax", "1")
-            if (query.isNotEmpty()) {
+            addQueryParameter("page", page.toString())
+            if (query.isNotBlank()) {
                 addQueryParameter("name", query)
             }
-            addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
 
             filters.forEach { filter ->
                 when (filter) {
@@ -91,7 +74,7 @@ abstract class KuraManga : HttpSource() {
                     }
                     is StatusFilter -> {
                         if (filter.state != 0) {
-                            addQueryParameter("status", filter.vals[filter.state].lowercase())
+                            addQueryParameter("status", filter.vals[filter.state].replace(" ", "_").lowercase())
                         }
                     }
                     is AdultFilter -> {
@@ -104,72 +87,105 @@ abstract class KuraManga : HttpSource() {
             }
         }.build()
 
-        return GET(url, headers)
-    }
+        val searchHeaders = headers.newBuilder()
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
+        val response = client.get(url, searchHeaders).parseAs<SearchResponse>()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val searchResponse = response.parseAs<SearchResponse>()
-        val mangas = searchResponse.data.map { it.toSManga() }
-        val offset = response.request.url.queryParameter("offset")?.toInt() ?: 0
-        val hasNextPage = (searchResponse.data.size == PAGE_SIZE) && (offset + searchResponse.data.size < searchResponse.total)
+        val mangas = response.data.map { it.toSManga() }
+        val hasNextPage = response.data.size == PAGE_SIZE && (response.total == 0 || page * PAGE_SIZE < response.total)
         return MangasPage(mangas, hasNextPage)
     }
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1.manga-title")!!.text()
-            description = document.selectFirst(".summary-inner")?.text()
-            author = document.selectFirst(".meta-grid div:contains(Author:)")?.text()?.substringAfter("Author:")?.trim()
-            artist = document.selectFirst(".meta-grid div:contains(Artist:)")?.text()?.substringAfter("Artist:")?.trim()
-            genre = document.select(".genre-list a.genre-chip").joinToString { it.text() }
-            status = document.selectFirst(".meta-grid div:contains(Status:)")?.text()?.substringAfter("Status:")?.trim()?.lowercase().parseStatus()
-            thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = runCatching {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.pathSegments.firstOrNull { it.isNotBlank() } ?: return null
+        if (slug in setOf("search", "assets", "api", "login", "register")) return null
+        val document = client.get("$baseUrl/$slug").asJsoup()
+        mangaDetailsParse(document).apply {
+            this.url = "/$slug"
         }
+    }.getOrNull()
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            manga = mangaDetailsParse(document).apply {
+                url = manga.url
+            },
+            chapters = chapterListParse(document),
+        )
+    }
+
+    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1.manga-title")!!.text()
+        description = document.selectFirst(".summary-inner")?.text()
+            ?: document.selectFirst(".mp-synopsis")?.text()
+        val storyAndArt = document.selectFirst(".mp-cred:has(.mp-cred-k:contains(Story & Art)) .mp-cred-v")?.text()
+            ?: document.selectFirst(".mp-cred:has(.mp-cred-k:contains(Author & Artist)) .mp-cred-v")?.text()
+        author = document.selectFirst(".mp-cred:has(.mp-cred-k:contains(Author)) .mp-cred-v")?.text()
+            ?: document.selectFirst(".mp-cred:has(.mp-cred-k:contains(Story)) .mp-cred-v")?.text()
+            ?: storyAndArt
+            ?: document.selectFirst(".meta-grid div:contains(Author:)")?.text()?.substringAfter("Author:")?.trim()
+        artist = document.selectFirst(".mp-cred:has(.mp-cred-k:contains(Artist)) .mp-cred-v")?.text()
+            ?: document.selectFirst(".mp-cred:has(.mp-cred-k:contains(Art)) .mp-cred-v")?.text()
+            ?: storyAndArt
+            ?: document.selectFirst(".meta-grid div:contains(Artist:)")?.text()?.substringAfter("Artist:")?.trim()
+        genre = document.select(".genre-list a.genre-chip").joinToString { it.text() }
+        status = (
+            document.selectFirst(".mp-status")?.text()
+                ?: document.selectFirst(".meta-grid div:contains(Status:)")?.text()?.substringAfter("Status:")
+            )?.trim()?.lowercase().parseStatus()
+        thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
+        initialized = true
     }
 
     private fun String?.parseStatus(): Int = when (this) {
         "ongoing", "upcoming" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
-        "on_hold", "on hold" -> SManga.ON_HIATUS
+        "on_hold", "on hold", "hiatus" -> SManga.ON_HIATUS
+        "canceled", "cancelled" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 
     // ============================== Chapters ==============================
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun chapterListParse(document: Document): List<SChapter> {
         return document.select(".chapter-list .chapter-item").mapNotNull { element ->
             val link = element.selectFirst("a") ?: return@mapNotNull null
             SChapter.create().apply {
                 name = link.text()
                 url = "/" + link.attr("href").removePrefix("/")
-                date_upload = dateFormat.tryParse(element.selectFirst("time")?.text())
+                date_upload = dateFormat.tryParseDate(element.selectFirst("time")?.text())
             }
         }
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("#chapterImages img").mapIndexed { index, img ->
-            Page(index, imageUrl = img.attr("abs:src"))
+            val imageUrl = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
+            Page(index, imageUrl = imageUrl)
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ===============================
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         StatusFilter("Status", statusList),
         AdultFilter("Include Adult Content"),
         GenreFilter("Genres", genreNames.map { Genre(it) }),
     )
 
     // ============================== Private ===============================
-    private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
+    private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
 
     companion object {
-        private const val PAGE_SIZE = 10
+        private const val PAGE_SIZE = 18
     }
 }

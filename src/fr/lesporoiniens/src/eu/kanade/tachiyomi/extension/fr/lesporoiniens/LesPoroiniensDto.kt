@@ -50,32 +50,29 @@ object SafeLongDeserializer : KSerializer<Long> {
 }
 
 @Serializable
-data class ConfigResponse(
+class ConfigResponse(
     @SerialName("LOCAL_SERIES_FILES")
     val localSeriesFiles: List<String>,
 )
 
 @Serializable
-data class SeriesData(
+class SeriesData(
     val title: String,
     val description: String?,
     val artist: String?,
     val author: String?,
     val cover: String?,
-    @SerialName("cover_low")
-    val coverLow: String?,
-    @SerialName("cover_hq")
-    val coverHq: String?,
     val tags: List<String>?,
     @SerialName("release_status")
     val releaseStatus: String?,
     @SerialName("alternative_titles")
     val alternativeTitles: List<String>?,
+    @Serializable(with = ChaptersAsMapSerializer::class)
     val chapters: Map<String, ChapterData>?,
 )
 
 @Serializable
-data class ChapterData(
+class ChapterData(
     val title: String?,
     val volume: String?,
     @SerialName("last_updated")
@@ -112,22 +109,22 @@ object ChaptersAsMapSerializer : JsonTransformingSerializer<Map<String, ChapterD
 }
 
 @Serializable
-data class PageData(
+class PageData(
     val link: String,
 )
 
-// DTO to SManga extension functions
-fun SeriesData.toSManga(useLowQuality: Boolean = false, slugSeparator: String): SManga = SManga.create().apply {
+val SeriesData.mangaUrl: String
+    get() = "/${toSlug(title)}"
+
+fun SeriesData.toSManga(): SManga = SManga.create().apply {
     title = this@toSManga.title
     artist = this@toSManga.artist
     author = this@toSManga.author
-    thumbnail_url = if (useLowQuality) this@toSManga.coverHq else this@toSManga.cover
-    url = "/${toSlug(this@toSManga.title, slugSeparator)}"
+    thumbnail_url = this@toSManga.cover
+    url = this@toSManga.mangaUrl
 }
 
-fun SeriesData.toDetailedSManga(useHighQuality: Boolean = false, slugSeparator: String): SManga = SManga.create().apply {
-    title = this@toDetailedSManga.title
-
+fun SeriesData.toDetailedSManga(): SManga = toSManga().apply {
     val baseDescription = this@toDetailedSManga.description.let {
         if (it?.contains("Pas de synopsis", ignoreCase = true) == true) null else it
     }
@@ -146,37 +143,33 @@ fun SeriesData.toDetailedSManga(useHighQuality: Boolean = false, slugSeparator: 
         baseDescription
     }
 
-    artist = this@toDetailedSManga.artist
-    author = this@toDetailedSManga.author
-    genre = this@toDetailedSManga.tags?.joinToString(", ") ?: ""
+    genre = this@toDetailedSManga.tags?.joinToString().orEmpty()
     status = when (this@toDetailedSManga.releaseStatus) {
         "En cours" -> SManga.ONGOING
         "Finis", "Fini" -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
-    thumbnail_url =
-        if (useHighQuality) this@toDetailedSManga.coverHq else this@toDetailedSManga.cover
-    url = "/${toSlug(this@toDetailedSManga.title, slugSeparator)}"
 }
 
-// Utility function for slug generation
-// URLs are manually calculated using a slugify function
+private val accentsMap = mapOf(
+    'à' to 'a', 'á' to 'a', 'â' to 'a', 'ä' to 'a', 'ã' to 'a',
+    'è' to 'e', 'é' to 'e', 'ê' to 'e', 'ë' to 'e',
+    'ì' to 'i', 'í' to 'i', 'î' to 'i', 'ï' to 'i',
+    'ò' to 'o', 'ó' to 'o', 'ô' to 'o', 'ö' to 'o', 'õ' to 'o',
+    'ù' to 'u', 'ú' to 'u', 'û' to 'u', 'ü' to 'u',
+    'ç' to 'c', 'ñ' to 'n',
+)
+
+private val nonSlugChars = Regex("[^a-z0-9\\s-]")
+private val whitespace = Regex("\\s")
+
 fun toSlug(input: String?, slugSeparator: String = "-"): String {
     if (input == null) return ""
-
-    val accentsMap = mapOf(
-        'à' to 'a', 'á' to 'a', 'â' to 'a', 'ä' to 'a', 'ã' to 'a',
-        'è' to 'e', 'é' to 'e', 'ê' to 'e', 'ë' to 'e',
-        'ì' to 'i', 'í' to 'i', 'î' to 'i', 'ï' to 'i',
-        'ò' to 'o', 'ó' to 'o', 'ô' to 'o', 'ö' to 'o', 'õ' to 'o',
-        'ù' to 'u', 'ú' to 'u', 'û' to 'u', 'ü' to 'u',
-        'ç' to 'c', 'ñ' to 'n',
-    )
 
     return input
         .lowercase()
         .map { accentsMap[it] ?: it }
         .joinToString("")
-        .replace("[^a-z0-9\\s-]".toRegex(), "")
-        .replace("\\s".toRegex(), slugSeparator)
+        .replace(nonSlugChars, "")
+        .replace(whitespace, slugSeparator)
 }

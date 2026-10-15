@@ -2,19 +2,18 @@ package eu.kanade.tachiyomi.extension.all.twicomi
 
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
-val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
-    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
-}
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
+private val tokyoZone = ZoneId.of("Asia/Tokyo")
 
 @Serializable
 class TwicomiResponse<T>(
-    @SerialName("status_code") val statusCode: Int,
     val response: T,
 )
 
@@ -26,14 +25,12 @@ class MangaListWithCount(
 
 @Serializable
 class MangaListItem(
-    val author: AuthorDto,
+    private val author: AuthorDto,
     val tweet: TweetDto,
 ) {
     internal fun toSManga() = SManga.create().apply {
         val tweetAuthor = this@MangaListItem.author
-        val timestamp = runCatching {
-            dateFormat.parse(tweet.tweetCreateTime)!!.time
-        }.getOrDefault(0L)
+        val timestamp = dateFormat.tryParseDateTime(tweet.tweetCreateTime, tokyoZone)
         val extraData = "$timestamp,${tweet.attachImageUrls.joinToString()}"
 
         url = "/manga/${tweetAuthor.screenName}/${tweet.tweetId}#$extraData"
@@ -49,12 +46,6 @@ class MangaListItem(
 }
 
 @Serializable
-class AuthorEditedDto(
-    val description: String? = null,
-    @SerialName("profile_image_large") val profileImageLarge: String,
-)
-
-@Serializable
 class AuthorListWithCount(
     @SerialName("total_count") val totalCount: Int,
     @SerialName("author_list") val authorList: List<AuthorWrapperDto>,
@@ -67,16 +58,10 @@ class AuthorWrapperDto(
 
 @Serializable
 class AuthorDto(
-    val id: Int,
     @SerialName("screen_name") val screenName: String,
-    @SerialName("user_id") val userId: String,
     val name: String,
-    val description: String? = null,
-    @SerialName("profile_image") val profileImage: String? = null,
-    @SerialName("manga_tweet_count") val mangaTweetCount: Int,
-    @SerialName("is_hide") val isHide: Boolean,
-    val flg: Int,
-    val edited: AuthorEditedDto,
+    private val description: String? = null,
+    @SerialName("profile_image") private val profileImage: String? = null,
 ) {
     internal fun toSManga() = SManga.create().apply {
         url = "/author/$screenName"
@@ -89,26 +74,11 @@ class AuthorDto(
 }
 
 @Serializable
-class TweetEditedDto(
-    @SerialName("tweet_text") val tweetText: String,
-)
-
-@Serializable
 class TweetDto(
-    val id: Int,
     @SerialName("tweet_id") val tweetId: String,
     @SerialName("tweet_text") val tweetText: String,
     @SerialName("attach_image_urls") val attachImageUrls: List<String>,
-    @SerialName("system_tags") val systemTags: List<String>,
     val tags: List<String>,
     @SerialName("hash_tags") val hashTags: List<String>,
-    @SerialName("good_count") val goodCount: Int,
-    @SerialName("retweet_count") val retweetCount: Int,
-    @SerialName("retweet_per_hour") val retweetPerHour: Float,
-    val index: Int,
-    @SerialName("is_ignore") val isIgnore: Boolean,
-    @SerialName("is_possibly_sensitive") val isPossiblySensitive: Boolean,
-    val flg: Int,
     @SerialName("tweet_create_time") val tweetCreateTime: String,
-    val edited: TweetEditedDto,
 )

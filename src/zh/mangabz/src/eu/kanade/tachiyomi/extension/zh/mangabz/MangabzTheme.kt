@@ -1,44 +1,18 @@
 package eu.kanade.tachiyomi.extension.zh.mangabz
 
 import android.util.Log
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import keiyoushi.source.KeiSource
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import org.jsoup.select.Evaluator
 
-abstract class MangabzTheme : HttpSource() {
+abstract class MangabzTheme : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga-list-p$page/", headers)
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga-list-0-0-2-p$page/", headers)
-
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = if (query.isEmpty()) {
-        popularMangaRequest(page)
-    } else {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("title", query)
-            .addQueryParameter("page", page.toString())
-        Request.Builder().url(url.build()).headers(headers).build()
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup().also(::parseFilters)
+    protected fun parseMangaList(document: Document): MangasPage {
         val mangas = document.selectFirst(Evaluator.Class("mh-list"))?.children().orEmpty().map { element ->
             SManga.create().apply {
                 title = element.selectFirst(Evaluator.Tag("h2"))!!.text()
@@ -53,31 +27,25 @@ abstract class MangabzTheme : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    protected fun SManga.parseDetails(document: Document) {
         val details = document.selectFirst(Evaluator.Class("detail-info-tip"))!!.children()
-        return SManga.create().apply {
-            url = document.location().removePrefix(baseUrl)
-            title = document.selectFirst(Evaluator.Class("detail-info-title"))!!.ownText()
-            thumbnail_url = document.selectFirst(Evaluator.Class("detail-info-cover"))!!.attr("src")
-            status = when (details[1].child(0).ownText()) {
-                "连载中" -> SManga.ONGOING
-                "已完结" -> SManga.COMPLETED
-                "連載中" -> SManga.ONGOING
-                "已完結" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-            author = details[0].children().joinToString { it.ownText() }
-            genre = details[2].children().joinToString { it.ownText() }
-            description = parseDescription(document.selectFirst(Evaluator.Class("detail-info-content"))!!, title, details)
-            initialized = true
+        title = document.selectFirst(Evaluator.Class("detail-info-title"))!!.ownText()
+        thumbnail_url = document.selectFirst(Evaluator.Class("detail-info-cover"))!!.attr("src")
+        status = when (details[1].child(0).ownText()) {
+            "连载中" -> SManga.ONGOING
+            "已完结" -> SManga.COMPLETED
+            "連載中" -> SManga.ONGOING
+            "已完結" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
+        author = details[0].children().joinToString { it.ownText() }
+        genre = details[2].children().joinToString { it.ownText() }
+        description = parseDescription(document.selectFirst(Evaluator.Class("detail-info-content"))!!, title, details)
     }
 
     abstract fun parseDescription(element: Element, title: String, details: Elements): String
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    protected fun parseChapterList(document: Document): List<SChapter> {
         val needPageCount = needPageCount
         val list = getChapterElements(document).map { element ->
             val chapterName = element.ownText()
@@ -111,9 +79,5 @@ abstract class MangabzTheme : HttpSource() {
 
     protected abstract fun parseDate(listTitle: String): Long
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    protected open fun parseFilters(document: Document) = Unit
-
-    private val floatRegex by lazy { Regex("""\d+(?:\.\d+)?""") }
+    private val floatRegex = Regex("""\d+(?:\.\d+)?""")
 }

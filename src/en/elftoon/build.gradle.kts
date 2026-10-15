@@ -6,13 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Elf Toon"
-    versionCode = 2
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "mangathemesia"
+    libVersion = "1.6"
+    theme = "vinetheme"
 
     source {
         lang = "en"
-        baseUrl = "https://elftoon.com"
+        baseUrl = "https://elftoon.net"
+        versionId = 2
     }
 }

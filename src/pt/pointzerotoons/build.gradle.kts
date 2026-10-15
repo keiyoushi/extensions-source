@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Point Zero Toons"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "mangathemesia"
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"

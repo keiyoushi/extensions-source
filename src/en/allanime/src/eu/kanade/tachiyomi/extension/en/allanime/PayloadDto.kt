@@ -36,6 +36,7 @@ class SearchPayload(
 class MangaUpdateVariables(
     private val id: String,
     private val showId: String,
+    private val search: Map<String, Boolean>,
 )
 
 @Serializable

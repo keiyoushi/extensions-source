@@ -24,6 +24,7 @@ class CategoryFilter :
             Triple("ファンタジー", FilterType.GENRE, "7"),
             Triple("ドリーム・サクセス", FilterType.GENRE, "8"),
             Triple("異世界", FilterType.GENRE, "9"),
+            Triple("新人コミック大賞", FilterType.GENRE, "11"),
         ),
     )
 
