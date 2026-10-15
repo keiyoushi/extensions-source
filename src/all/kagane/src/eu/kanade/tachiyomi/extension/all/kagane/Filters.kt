@@ -47,7 +47,6 @@ private fun getSortFilter() = listOf(
     SelectFilterOption("Popular (Week)", "avg_views_week"),
     SelectFilterOption("Popular (Month)", "avg_views_month"),
     SelectFilterOption("Latest", "updated_at"),
-    SelectFilterOption("By Name", "series_name"),
     SelectFilterOption("Books count", "current_books"),
     SelectFilterOption("Created at", "created_at"),
 )

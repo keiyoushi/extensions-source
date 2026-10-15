@@ -45,7 +45,7 @@ abstract class Kagane :
     ConfigurableSource {
 
     private val kaganeLangs: List<String>
-        get() = if (lang == "zh") listOf("zh-Hans", "zh-Hant") else listOf(lang)
+        get() = listOf(lang)
 
     private val domain get() = baseUrl.removePrefix("https://")
     private val apiUrl get() = "https://$domain/api/v2"
