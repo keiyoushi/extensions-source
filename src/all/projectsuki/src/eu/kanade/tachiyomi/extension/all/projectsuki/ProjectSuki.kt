@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,22 +8,23 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import rx.Observable
 import java.net.URI
 import java.util.Locale
 import kotlin.math.floor
@@ -142,7 +141,7 @@ internal const val UNKNOWN_LANGUAGE: String = "unknown"
 @Suppress("unused")
 @Source
 abstract class ProjectSuki :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val sharedPreferences by getPreferencesLazy()
@@ -153,24 +152,20 @@ abstract class ProjectSuki :
         with(preferences) { screen.configure() }
     }
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2, 1.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2, 1.seconds)
 
-    override fun headersBuilder() = super.headersBuilder()
-        .setRandomUserAgent()
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = setRandomUserAgent()
 
-    override fun popularMangaRequest(page: Int) = GET(
-        homepageUrl.newBuilder()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = homepageUrl.newBuilder()
             .addPathSegment("browse")
             .addPathSegment((page - 1).toString())
-            .build(),
-        headers,
-    )
+            .build()
 
-    override val supportsLatest: Boolean get() = true
+        return searchMangaParse(client.get(url).asJsoup())
+    }
 
-    override fun latestUpdatesRequest(page: Int) = GET(homepageUrl, headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangaParse(client.get(homepageUrl).asJsoup(), overrideHasNextPage = false)
 
     private inline fun <reified T> HttpUrl.Builder.applyPSFilter(
         from: FilterList,
@@ -178,162 +173,77 @@ abstract class ProjectSuki :
         from.firstNotNullOfOrNull { it as? T }?.run { applyFilter() }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
-        homepageUrl.newBuilder()
-            .addPathSegment("search")
-            .addQueryParameter("page", (page - 1).toString())
-            .addQueryParameter("q", query)
-            .applyPSFilter<ProjectSukiFilters.Origin>(from = filters)
-            .applyPSFilter<ProjectSukiFilters.Status>(from = filters)
-            .applyPSFilter<ProjectSukiFilters.Author>(from = filters)
-            .applyPSFilter<ProjectSukiFilters.Artist>(from = filters)
-            .build(),
-        headers,
-    )
+    override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
+        if (url.host != homepageUrl.host) return MangasPage(emptyList(), hasNextPage = false)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document: Document = response.asJsoup()
-        val extractor = DataExtractor(document)
-        val books: Set<DataExtractor.PSBook> = extractor.books
+        val bookUrlMatch = url.matchAgainst(bookUrlPattern)
+        val readUrlMatch = url.matchAgainst(chapterUrlPattern)
 
-        val mangas: List<SManga> = books.map { book ->
-            SManga.create().apply {
-                this.url = book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${book.bookUrl}" }
-                this.title = book.rawTitle
-                this.thumbnail_url = book.thumbnail.toUri().toASCIIString()
-            }
+        val bookid: BookID? = when {
+            bookUrlMatch.doesMatch -> bookUrlMatch.group(1)
+            readUrlMatch.doesMatch -> readUrlMatch.group(1)
+            else -> null
         }
 
-        return MangasPage(
-            mangas = mangas,
-            hasNextPage = mangas.size >= 30,
-        )
+        if (bookid != null) {
+            val rawSManga = SManga.create().apply {
+                this.url = bookid.bookIDToURL().rawRelative ?: reportErrorToUser { "Could not create relative url for bookID: $bookid" }
+            }
+            val manga = fetchMangaUpdate(rawSManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+
+            return MangasPage(listOf(manga), hasNextPage = false)
+        }
+
+        if (url.pathSegments.firstOrNull() == "search") {
+            val urlQuery = url.encodedQuery
+            if (urlQuery.isNullOrBlank()) throw Exception("Empty search query!")
+
+            val searchUrl = homepageUrl.newBuilder()
+                .addPathSegment("search")
+                .encodedQuery(urlQuery)
+                .build()
+
+            return searchMangaParse(client.get(searchUrl).asJsoup(), overrideHasNextPage = false)
+        }
+
+        return MangasPage(emptyList(), hasNextPage = false)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document: Document = response.asJsoup()
-        val extractor = DataExtractor(document)
-        val books: Set<DataExtractor.PSBook> = extractor.books
-
-        return MangasPage(
-            mangas = books.map { book ->
-                SManga.create().apply {
-                    this.url = book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${book.bookUrl}" }
-                    this.title = book.rawTitle
-                    this.thumbnail_url = book.thumbnail.toUri().toASCIIString()
-                }
-            },
-            hasNextPage = false,
-        )
-    }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val searchMode: ProjectSukiFilters.SearchMode = filters.filterIsInstance<ProjectSukiFilters.SearchModeFilter>()
-            .singleOrNull()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val searchMode: ProjectSukiFilters.SearchMode = filters.firstInstanceOrNull<ProjectSukiFilters.SearchModeFilter>()
             ?.state
             ?.let { ProjectSukiFilters.SearchMode.entries[it] } ?: ProjectSukiFilters.SearchMode.SMART
 
-        fun BookID.toMangasPageObservable(): Observable<MangasPage> {
-            val rawSManga = SManga.create().apply {
-                url = bookIDToURL().rawRelative ?: reportErrorToUser { "Could not create relative url for bookID: $this" }
+        return when (searchMode) {
+            ProjectSukiFilters.SearchMode.SMART -> SmartBookSearchHandler(query, ProjectSukiAPI.fetchBookSearch(client, headers)).mangasPage
+
+            ProjectSukiFilters.SearchMode.SIMPLE -> ProjectSukiAPI.fetchBookSearch(client, headers).simpleSearchMangasPage(query)
+
+            ProjectSukiFilters.SearchMode.FULL_SITE -> {
+                val url = homepageUrl.newBuilder()
+                    .addPathSegment("search")
+                    .addQueryParameter("page", (page - 1).toString())
+                    .addQueryParameter("q", query)
+                    .applyPSFilter<ProjectSukiFilters.Origin>(from = filters)
+                    .applyPSFilter<ProjectSukiFilters.Status>(from = filters)
+                    .applyPSFilter<ProjectSukiFilters.Author>(from = filters)
+                    .applyPSFilter<ProjectSukiFilters.Artist>(from = filters)
+                    .build()
+
+                searchMangaParse(client.get(url).asJsoup())
             }
-
-            return client.newCall(mangaDetailsRequest(rawSManga))
-                .asObservableSuccess()
-                .map { response -> mangaDetailsParse(response) }
-                .map { manga -> MangasPage(listOf(manga), hasNextPage = false) }
-        }
-
-        val queryAsURL: HttpUrl? by unexpectedErrorCatchingLazy { query.toHttpUrlOrNull() ?: """$homepageUri$query""".toHttpUrlOrNull() }
-        val bookUrlMatch by unexpectedErrorCatchingLazy { queryAsURL?.matchAgainst(bookUrlPattern) }
-        val readUrlMatch by unexpectedErrorCatchingLazy { queryAsURL?.matchAgainst(chapterUrlPattern) }
-        val isSearchUrl = queryAsURL?.host == homepageUrl.host && queryAsURL?.pathSegments?.firstOrNull() == "search"
-
-        return when {
-            query.startsWith(INTENT_SEARCH_QUERY_PREFIX) -> {
-                val urlQuery = query.removePrefix(INTENT_SEARCH_QUERY_PREFIX)
-                if (urlQuery.isBlank()) throw Exception("Empty search query!")
-
-                val rawUrl = """${homepageUri.toASCIIString()}/search?$urlQuery"""
-                val url = rawUrl.toHttpUrlOrNull() ?: reportErrorToUser { "Invalid search url: $rawUrl" }
-
-                client.newCall(GET(url, headers))
-                    .asObservableSuccess()
-                    .map { response -> searchMangaParse(response, overrideHasNextPage = false) }
-            }
-
-            query.startsWith(INTENT_BOOK_QUERY_PREFIX) -> {
-                val bookid = query.removePrefix(INTENT_BOOK_QUERY_PREFIX)
-                if (bookid.isBlank()) throw Exception("Empty bookid!")
-
-                bookid.toMangasPageObservable()
-            }
-
-            query.startsWith(INTENT_READ_QUERY_PREFIX) -> {
-                val bookid = query.removePrefix(INTENT_READ_QUERY_PREFIX)
-                if (bookid.isBlank()) throw Exception("Empty bookid!")
-
-                bookid.toMangasPageObservable()
-            }
-
-            bookUrlMatch?.doesMatch == true -> {
-                val bookid = bookUrlMatch!!.group(1)!!
-                if (bookid.isBlank()) throw Exception("Empty bookid!")
-
-                bookid.toMangasPageObservable()
-            }
-
-            readUrlMatch?.doesMatch == true -> {
-                val bookid = readUrlMatch!!.group(1)!!
-                if (bookid.isBlank()) throw Exception("Empty bookid!")
-
-                bookid.toMangasPageObservable()
-            }
-
-            isSearchUrl -> {
-                val urlQuery = queryAsURL!!.query ?: throw Exception("Empty search query!")
-                if (urlQuery.isBlank()) throw Exception("Empty search query!")
-
-                val rawUrl = """${homepageUri.toASCIIString()}/search?$urlQuery"""
-                val url = rawUrl.toHttpUrlOrNull() ?: reportErrorToUser { "Invalid search url: $rawUrl" }
-
-                client.newCall(GET(url, headers))
-                    .asObservableSuccess()
-                    .map { response -> searchMangaParse(response, overrideHasNextPage = false) }
-            }
-
-            searchMode == ProjectSukiFilters.SearchMode.SMART -> {
-                client.newCall(ProjectSukiAPI.bookSearchRequest(headers))
-                    .asObservableSuccess()
-                    .map { response -> ProjectSukiAPI.parseBookSearchResponse(response) }
-                    .map { data -> SmartBookSearchHandler(query, data).mangasPage }
-            }
-
-            searchMode == ProjectSukiFilters.SearchMode.SIMPLE -> {
-                client.newCall(ProjectSukiAPI.bookSearchRequest(headers))
-                    .asObservableSuccess()
-                    .map { response -> ProjectSukiAPI.parseBookSearchResponse(response) }
-                    .map { data -> data.simpleSearchMangasPage(query) }
-            }
-
-            else -> client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response -> searchMangaParse(response) }
         }
     }
 
     private fun filterList(vararg sequences: Sequence<Filter<*>>): FilterList = FilterList(sequences.asSequence().flatten().toList())
 
-    override fun getFilterList(): FilterList = filterList(
+    override fun getFilterList(data: JsonElement?): FilterList = filterList(
         ProjectSukiFilters.headersSequence(preferences),
         ProjectSukiFilters.filtersSequence(preferences),
         ProjectSukiFilters.footersSequence(preferences),
     )
 
-    override fun searchMangaParse(response: Response): MangasPage = searchMangaParse(response, null)
-
-    private fun searchMangaParse(response: Response, overrideHasNextPage: Boolean? = null): MangasPage {
-        val document = response.asJsoup()
+    private fun searchMangaParse(document: Document, overrideHasNextPage: Boolean? = null): MangasPage {
         val extractor = DataExtractor(document)
         val books: Set<DataExtractor.PSBook> = extractor.books
 
@@ -351,14 +261,25 @@ abstract class ProjectSuki :
         )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document: Document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document: Document = client.get(getMangaUrl(manga)).asJsoup()
         val extractor = DataExtractor(document)
 
+        return SMangaUpdate(
+            manga = mangaDetailsParse(manga, extractor),
+            chapters = chapterListParse(extractor),
+        )
+    }
+
+    private fun mangaDetailsParse(manga: SManga, extractor: DataExtractor): SManga {
         val data: DataExtractor.PSBookDetails = extractor.bookDetails
 
-        return SManga.create().apply {
-            url = data.book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${data.book.bookUrl}" }
+        return manga.apply {
             title = data.book.rawTitle
             thumbnail_url = data.book.thumbnail.toUri().toASCIIString()
 
@@ -413,9 +334,7 @@ abstract class ProjectSuki :
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document: Document = response.asJsoup()
-        val extractor = DataExtractor(document)
+    private fun chapterListParse(extractor: DataExtractor): List<SChapter> {
         val bookChapters: Map<ScanGroup, List<DataExtractor.BookChapter>> = extractor.bookChapters
 
         val blLangs: Set<String> = preferences.blacklistedLanguages()
@@ -449,30 +368,16 @@ abstract class ProjectSuki :
             }
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val pathMatch: PathMatchResult = (baseUrl + chapter.url).toHttpUrl().matchAgainst(chapterUrlPattern)
         if (!pathMatch.doesMatch) {
             reportErrorToUser { "chapter url ${chapter.url} does not match expected pattern" }
         }
 
-        return client.newCall(ProjectSukiAPI.chapterPagesRequest(headers, pathMatch.group(1)!!, pathMatch.group(2)!!))
-            .asObservableSuccess()
-            .map { ProjectSukiAPI.parseChapterPagesResponse(it) }
-    }
-
-    override fun imageUrlParse(response: Response): String = reportErrorToUser {
-        "invalid ${Thread.currentThread().stackTrace.take(3)}"
-    }
-
-    override fun pageListParse(response: Response): List<Page> = reportErrorToUser("ProjectSuki.pageListParse") {
-        "invalid ${Thread.currentThread().stackTrace.asSequence().drop(1).take(3).toList()}"
+        return ProjectSukiAPI.fetchChapterPages(client, headers, pathMatch.group(1)!!, pathMatch.group(2)!!)
     }
 
     companion object {
         private const val DESCRIPTION_DIVIDER: String = "/=/-/=/-/=/-/=/-/=/-/=/-/=/-/=/"
     }
 }
-
-internal const val INTENT_SEARCH_QUERY_PREFIX: String = "$$SHORT_FORM_ID-search:"
-internal const val INTENT_BOOK_QUERY_PREFIX: String = "$$SHORT_FORM_ID-book:"
-internal const val INTENT_READ_QUERY_PREFIX: String = "$$SHORT_FORM_ID-read:"

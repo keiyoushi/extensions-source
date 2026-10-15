@@ -4,22 +4,20 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
 import okhttp3.Cookie
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.security.SecureRandom
-import java.text.SimpleDateFormat
-import java.util.Locale
-
 @Source
 abstract class MadaraDex : Madara() {
-    override val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
-    override fun headersBuilder() = super.headersBuilder()
-        .set("sec-fetch-site", "same-site")
+
+    override fun Headers.Builder.configureHeaders() = set("sec-fetch-site", "same-site")
 
     override val mangaSubString = "title"
+    override val genreDirectory = "genre"
 
-    private val siteUrl by lazy { baseUrl.toHttpUrl() }
+    private val siteUrl get() = baseUrl.toHttpUrl()
 
     private fun randomHex16() = ByteArray(16)
         .also { SecureRandom().nextBytes(it) }
@@ -49,24 +47,22 @@ abstract class MadaraDex : Madara() {
         }
     }
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            if (request.header("X-Mdx-Auth-Refresh") != null) {
-                return@addInterceptor chain.proceed(
-                    request.newBuilder().removeHeader("X-Mdx-Auth-Refresh").build(),
-                )
-            }
-            client.cookieJar.loadForRequest(siteUrl).let {
-                if (it.none { c -> c.name == "mdx_fp" } || it.none { c -> c.name == "mdx_auth" }) refreshAuth()
-            }
-            chain.proceed(request).also {
-                if (it.code == 403 && request.url.host == "cdn.madaradex.org") {
-                    it.close()
-                    refreshAuth()
-                    return@addInterceptor chain.proceed(request)
-                }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
+        val request = chain.request()
+        if (request.header("X-Mdx-Auth-Refresh") != null) {
+            return@addInterceptor chain.proceed(
+                request.newBuilder().removeHeader("X-Mdx-Auth-Refresh").build(),
+            )
+        }
+        client.cookieJar.loadForRequest(siteUrl).let {
+            if (it.none { c -> c.name == "mdx_fp" } || it.none { c -> c.name == "mdx_auth" }) refreshAuth()
+        }
+        chain.proceed(request).also {
+            if (it.code == 403 && request.url.host == "cdn.madaradex.org") {
+                it.close()
+                refreshAuth()
+                return@addInterceptor chain.proceed(request)
             }
         }
-        .build()
+    }
 }

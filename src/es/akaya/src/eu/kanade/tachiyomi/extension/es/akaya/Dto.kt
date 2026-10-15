@@ -15,3 +15,19 @@ class ChapterImageDto(
     val image: String,
     @SerialName("order_sort") val orderSort: Int = 0,
 )
+
+@Serializable
+class LivewireResponseDto(
+    val components: List<LivewireComponentDto> = emptyList(),
+)
+
+@Serializable
+class LivewireComponentDto(
+    val snapshot: String? = null,
+    val effects: LivewireEffectsDto? = null,
+)
+
+@Serializable
+class LivewireEffectsDto(
+    val html: String? = null,
+)

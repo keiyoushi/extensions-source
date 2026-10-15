@@ -8,7 +8,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.parser.Parser
-import java.text.SimpleDateFormat
+import kotlin.time.Instant
 
 @Serializable
 class ListResponse(
@@ -42,7 +42,7 @@ class DetailsResponse(
     private val chapters: List<ChapterDto>,
 ) {
     fun toSManga(useEnglish: Boolean) = manga.toSManga(useEnglish)
-    fun toSChapterList(dateFormat: SimpleDateFormat) = chapters.map { it.toSChapter(dateFormat, manga.slug) }
+    fun toSChapterList() = chapters.map { it.toSChapter(manga.slug) }
 }
 
 @Serializable
@@ -94,7 +94,7 @@ class ChapterDto(
     private val source: String?,
     @SerialName("published_at") private val publishedAt: String?,
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat, mangaSlug: String) = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         url = "$mangaSlug/$id"
 
         val chStr = chapterNumber?.toFloatOrNull()?.toString()?.removeSuffix(".0")?.let { "Ch. $it" }
@@ -106,7 +106,7 @@ class ChapterDto(
         if (name.isEmpty()) name = "Chapter"
 
         scanlator = source
-        date_upload = dateFormat.tryParse(publishedAt)
+        date_upload = Instant.tryParse(publishedAt)
     }
 }
 

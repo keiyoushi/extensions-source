@@ -3,26 +3,27 @@ package eu.kanade.tachiyomi.extension.id.manhwaindo
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import okhttp3.Headers
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
+import org.jsoup.nodes.Document
 
 @Source
 abstract class ManhwaIndo : MangaThemesia() {
     override val mangaUrlDirectory = "/series"
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
     override val hasProjectPage = true
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
+    }
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::headersInterceptor)
-        .rateLimit(4)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(::headersInterceptor)
+        rateLimit(4)
+    }
 
-    override fun pageListParse(response: Response) = super.pageListParse(response).distinctBy {
+    override fun pageListParse(document: Document) = super.pageListParse(document).distinctBy {
         it.imageUrl!!
     }
 

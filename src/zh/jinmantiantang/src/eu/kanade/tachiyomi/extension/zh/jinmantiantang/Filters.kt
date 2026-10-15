@@ -116,6 +116,10 @@ internal class TypeFilter :
         ),
     )
 
+internal class FavoritesFilter : Filter.Select<String>("收藏夹", arrayOf("关闭", "启用"), 0) {
+    fun isEnabled() = state == 1
+}
+
 /**
  *创建选择过滤器的类。 下拉菜单中的每个条目都有一个名称和一个显示名称。
  *如果选择了一个条目，它将作为查询参数附加到URI的末尾。

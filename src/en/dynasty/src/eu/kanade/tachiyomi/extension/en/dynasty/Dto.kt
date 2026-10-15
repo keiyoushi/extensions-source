@@ -61,7 +61,7 @@ class MangaEntry(
         thumbnail_url = cover
     }
 
-    override fun equals(other: Any?): Boolean = this.url == (other as MangaEntry?)?.url
+    override fun equals(other: Any?): Boolean = other is MangaEntry && this.url == other.url
 
     override fun hashCode(): Int = this.url.hashCode()
 }
@@ -128,11 +128,32 @@ class ChapterResponse(
     val title: String,
     val permalink: String,
     val tags: List<BrowseTag>,
-    val pages: List<Page>,
+    val pages: List<ChapterPage>,
     @SerialName("released_on") val releasedOn: String,
 )
 
 @Serializable
-class Page(
+class ChapterPage(
     val url: String,
 )
+
+@Serializable
+class AuthorResponse(
+    val taggables: List<AuthorTaggable>,
+    val taggings: List<BrowseChapter>,
+)
+
+@Serializable
+class AuthorTaggable(
+    private val type: String,
+    val name: String,
+    val permalink: String,
+) {
+    val directory get() = when (type) {
+        SERIES_TYPE -> SERIES_DIR
+        ANTHOLOGY_TYPE -> ANTHOLOGIES_DIR
+        DOUJIN_TYPE -> DOUJINS_DIR
+        ISSUE_TYPE -> ISSUES_DIR
+        else -> throw Exception("Unsupported Type for directory: $type")
+    }
+}

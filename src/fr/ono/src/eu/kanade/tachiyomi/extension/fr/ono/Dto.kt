@@ -112,3 +112,12 @@ class UnlockResult(
 class PublicationMetadata(
     val pages: List<String> = emptyList(),
 )
+
+@Serializable
+class SearchVariables(private val term: String)
+
+@Serializable
+class StartReadingVariables(private val num: String, private val slug: String)
+
+@Serializable
+class UnlockVariables(private val publicationId: String)

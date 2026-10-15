@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MangaRead.org"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "madara"

@@ -13,31 +13,30 @@ import eu.kanade.tachiyomi.extension.en.mangamo.dto.SeriesDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.UserDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.documents
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.elements
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import rx.Observable
 import java.io.IOException
 
 @Source
 abstract class Mangamo :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -66,13 +65,13 @@ abstract class Mangamo :
         FirestoreRequestFactory(helper, auth)
     }
 
-    private val user by cachedBy({ Pair(userToken, firestore) }) {
-        val response = client.newCall(
-            firestore.getDocument("Users/$userToken") {
-                fields = listOf(UserDto::isSubscribed.name)
-            },
-        ).execute()
-        response.body.string().parseJson<DocumentDto<UserDto>>().fields
+    private suspend fun getUser(): UserDto {
+        val request = firestore.getDocument("Users/$userToken") {
+            fields = listOf(UserDto::isSubscribed.name)
+        }
+        return client.get(request.url, request.headers).use { response ->
+            response.body.string().parseJson<DocumentDto<UserDto>>().fields
+        }
     }
 
     private val coinMangaPref
@@ -80,18 +79,17 @@ abstract class Mangamo :
     private val exclusivesOnlyPref
         get() = preferences.getStringSet(MangamoConstants.EXCLUSIVES_ONLY_PREF, setOf())!!
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor {
-            val request = it.request()
-            val response = it.proceed(request)
+    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor {
+        val request = it.request()
+        val response = it.proceed(request)
 
-            if (request.url.toString().startsWith("${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/page")) {
-                if (response.code == 401) {
-                    throw IOException("You don't have access to this chapter")
-                }
+        if (request.url.toString().startsWith("${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/page")) {
+            if (response.code == 401) {
+                throw IOException("You don't have access to this chapter")
             }
-            response
         }
+        response
+    }
         .addNetworkInterceptor {
             val response = it.proceed(it.request())
 
@@ -103,7 +101,6 @@ abstract class Mangamo :
             }
             response
         }
-        .build()
 
     private val seriesRequiredFields = listOf(
         SeriesDto::id.name,
@@ -140,247 +137,235 @@ abstract class Mangamo :
 
     // Popular manga
 
-    override fun popularMangaRequest(page: Int): Request = firestore.getCollection("Series") {
-        limit = MangamoConstants.BROWSE_PAGE_SIZE
-        offset = (page - 1) * MangamoConstants.BROWSE_PAGE_SIZE
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val request = firestore.getCollection("Series") {
+            limit = MangamoConstants.BROWSE_PAGE_SIZE
+            offset = (page - 1) * MangamoConstants.BROWSE_PAGE_SIZE
 
-        val fields = seriesRequiredFields.toMutableList()
-        this.fields = fields
+            val fields = seriesRequiredFields.toMutableList()
+            this.fields = fields
 
-        if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
-            fields += SeriesDto::onlyTransactional.name
-        }
-
-        val prefFilters =
-            if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_BROWSE)) {
-                isEqual(SeriesDto::onlyOnMangamo.name, true)
-            } else {
-                null
+            if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
+                fields += SeriesDto::onlyTransactional.name
             }
 
-        filter = and(
-            *listOfNotNull(
-                isEqual(SeriesDto::enabled.name, true),
-                prefFilters,
-            ).toTypedArray(),
-        )
-    }
+            val prefFilters =
+                if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_BROWSE)) {
+                    isEqual(SeriesDto::onlyOnMangamo.name, true)
+                } else {
+                    null
+                }
 
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaPage(response) {
-        if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
-            if (it.onlyTransactional == true) {
-                return@parseMangaPage false
+            filter = and(
+                *listOfNotNull(
+                    isEqual(SeriesDto::enabled.name, true),
+                    prefFilters,
+                ).toTypedArray(),
+            )
+        }
+
+        return client.post(request.url, request.headers, request.body!!).use { response ->
+            parseMangaPage(response) {
+                !(coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE) && it.onlyTransactional == true)
             }
         }
-        true
     }
 
     // Latest manga
 
-    override fun latestUpdatesRequest(page: Int): Request = firestore.getCollection("Series") {
-        limit = MangamoConstants.BROWSE_PAGE_SIZE
-        offset = (page - 1) * MangamoConstants.BROWSE_PAGE_SIZE
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val request = firestore.getCollection("Series") {
+            limit = MangamoConstants.BROWSE_PAGE_SIZE
+            offset = (page - 1) * MangamoConstants.BROWSE_PAGE_SIZE
 
-        val fields = seriesRequiredFields.toMutableList()
-        this.fields = fields
+            val fields = seriesRequiredFields.toMutableList()
+            this.fields = fields
 
-        fields += SeriesDto::enabled.name
+            fields += SeriesDto::enabled.name
 
-        if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
-            fields += SeriesDto::onlyTransactional.name
+            if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
+                fields += SeriesDto::onlyTransactional.name
+            }
+
+            if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_BROWSE)) {
+                fields += SeriesDto::onlyOnMangamo.name
+            }
+
+            orderBy = listOf(descending(SeriesDto::updatedAt.name))
+
+            // Filters can't be used with orderBy because firebase wants there to be indexes
+            // on various fields to support those queries and we can't create them.
+            // Therefore, all filtering has to be done on the client in the parse method.
         }
 
-        if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_BROWSE)) {
-            fields += SeriesDto::onlyOnMangamo.name
-        }
-
-        orderBy = listOf(descending(SeriesDto::updatedAt.name))
-
-        // Filters can't be used with orderBy because firebase wants there to be indexes
-        // on various fields to support those queries and we can't create them.
-        // Therefore, all filtering has to be done on the client in the parse method.
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaPage(response) {
-        if (it.enabled != true) {
-            return@parseMangaPage false
-        }
-        if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
-            if (it.onlyTransactional == true) {
-                return@parseMangaPage false
+        return client.post(request.url, request.headers, request.body!!).use { response ->
+            parseMangaPage(response) {
+                it.enabled == true &&
+                    !(coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE) && it.onlyTransactional == true) &&
+                    !(exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_BROWSE) && it.onlyOnMangamo != true)
             }
         }
-        if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_BROWSE)) {
-            if (it.onlyOnMangamo != true) {
-                return@parseMangaPage false
-            }
-        }
-        true
     }
 
     // Search manga
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = firestore.getCollection("Series") {
-        limit = MangamoConstants.BROWSE_PAGE_SIZE
-        offset = (page - 1) * MangamoConstants.BROWSE_PAGE_SIZE
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val request = firestore.getCollection("Series") {
+            limit = MangamoConstants.BROWSE_PAGE_SIZE
+            offset = (page - 1) * MangamoConstants.BROWSE_PAGE_SIZE
 
-        val fields = seriesRequiredFields.toMutableList()
-        this.fields = fields
+            val fields = seriesRequiredFields.toMutableList()
+            this.fields = fields
 
-        if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
-            fields += SeriesDto::onlyTransactional.name
+            if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE)) {
+                fields += SeriesDto::onlyTransactional.name
+            }
+
+            if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_SEARCH)) {
+                fields += SeriesDto::onlyOnMangamo.name
+            }
+
+            // Adding additional filters makes Firestore complain about wanting an index
+            // so we filter on the client in parse, just like for Latest.
+
+            filter = and(
+                isEqual(SeriesDto::enabled.name, true),
+                isGreaterThanOrEqual(SeriesDto::name_lowercase.name, query.lowercase()),
+                isLessThanOrEqual(SeriesDto::name_lowercase.name, query.lowercase() + "\uf8ff"),
+            )
         }
 
-        if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_SEARCH)) {
-            fields += SeriesDto::onlyOnMangamo.name
-        }
-
-        // Adding additional filters makes Firestore complain about wanting an index
-        // so we filter on the client in parse, just like for Latest.
-
-        filter = and(
-            isEqual(SeriesDto::enabled.name, true),
-            isGreaterThanOrEqual(SeriesDto::name_lowercase.name, query.lowercase()),
-            isLessThanOrEqual(SeriesDto::name_lowercase.name, query.lowercase() + "\uf8ff"),
-        )
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaPage(response) {
-        if (coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_SEARCH)) {
-            if (it.onlyTransactional == true) {
-                return@parseMangaPage false
+        return client.post(request.url, request.headers, request.body!!).use { response ->
+            parseMangaPage(response) {
+                !(coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_SEARCH) && it.onlyTransactional == true) &&
+                    !(exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_SEARCH) && it.onlyOnMangamo != true)
             }
         }
-        if (exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_SEARCH)) {
-            if (it.onlyOnMangamo != true) {
-                return@parseMangaPage false
-            }
-        }
-        true
     }
 
     // Manga details
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
         val uri = getMangaUrl(manga).toHttpUrl()
-
         val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
 
-        return firestore.getDocument("Series/$seriesId") {
-            fields = seriesRequiredFields
-        }
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.body.string().parseJson<DocumentDto<SeriesDto>>().fields
-        return processSeries(dto)
-    }
-
-    // Chapter list section
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val uri = getMangaUrl(manga).toHttpUrl()
-
-        val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
-
-        val seriesObservable = client.newCall(
-            firestore.getDocument("Series/$seriesId") {
-                fields = listOf(
-                    SeriesDto::maxFreeChapterNumber.name,
-                    SeriesDto::maxMeteredReadingChapterNumber.name,
-                    SeriesDto::onlyTransactional.name,
-                )
-            },
-        ).asObservableSuccess().map { response ->
-            response.body.string().parseJson<DocumentDto<SeriesDto>>().fields
-        }
-
-        val chaptersObservable = client.newCall(
-            firestore.getCollection("Series/$seriesId/chapters") {
-                fields = listOf(
-                    ChapterDto::enabled.name,
-                    ChapterDto::id.name,
-                    ChapterDto::seriesId.name,
-                    ChapterDto::chapterNumber.name,
-                    ChapterDto::name.name,
-                    ChapterDto::createdAt.name,
-                    ChapterDto::onlyTransactional.name,
-                )
-
-                orderBy = listOf(descending(ChapterDto::chapterNumber.name))
-            },
-        ).asObservableSuccess().map { response ->
-            response.body.string().parseJson<QueryResultDto<ChapterDto>>().elements
-        }
-
-        val hideCoinChapters = coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_CHAPTERS)
-
-        return Observable.combineLatest(seriesObservable, chaptersObservable) { series, chapters ->
-            chapters
-                .mapNotNull { chapter ->
-                    if (chapter.enabled != true) {
-                        return@mapNotNull null
-                    }
-
-                    val isUserSubscribed = user.isSubscribed == true
-
-                    val isFreeChapter = chapter.chapterNumber!! <= (series.maxFreeChapterNumber ?: 0)
-                    val isMeteredChapter = chapter.chapterNumber <= (series.maxMeteredReadingChapterNumber ?: 0)
-                    val isCoinChapter = chapter.onlyTransactional == true ||
-                        (series.onlyTransactional == true && !isFreeChapter)
-
-                    if (hideCoinChapters && isCoinChapter) {
-                        return@mapNotNull null
-                    }
-
-                    SChapter.create().apply {
-                        chapter_number = chapter.chapterNumber
-                        date_upload = chapter.createdAt!!
-                        name = chapter.name +
-                            if (isCoinChapter) {
-                                " \uD83E\uDE99" // coin emoji
-                            } else if (isFreeChapter || isUserSubscribed) {
-                                ""
-                            } else if (isMeteredChapter) {
-                                " \uD83D\uDD52" // three-o-clock emoji
-                            } else {
-                                // subscriber chapter
-                                " \uD83D\uDD12" // lock emoji
-                            }
-                        url = helper.getChapterUrl(chapter)
+        val seriesDeferred = async {
+            if (fetchDetails || fetchChapters) {
+                val request = firestore.getDocument("Series/$seriesId") {
+                    fields = buildList {
+                        if (fetchDetails) {
+                            addAll(seriesRequiredFields)
+                        }
+                        if (fetchChapters) {
+                            add(SeriesDto::maxFreeChapterNumber.name)
+                            add(SeriesDto::maxMeteredReadingChapterNumber.name)
+                            add(SeriesDto::onlyTransactional.name)
+                        }
                     }
                 }
+                client.get(request.url, request.headers).use { response ->
+                    response.body.string().parseJson<DocumentDto<SeriesDto>>().fields
+                }
+            } else {
+                null
+            }
         }
+        val chaptersDeferred = async {
+            if (fetchChapters) {
+                val request = firestore.getCollection("Series/$seriesId/chapters") {
+                    fields = listOf(
+                        ChapterDto::alwaysFree.name,
+                        ChapterDto::enabled.name,
+                        ChapterDto::id.name,
+                        ChapterDto::seriesId.name,
+                        ChapterDto::chapterNumber.name,
+                        ChapterDto::name.name,
+                        ChapterDto::createdAt.name,
+                        ChapterDto::onlyTransactional.name,
+                        ChapterDto::type.name,
+                    )
+
+                    orderBy = listOf(descending(ChapterDto::chapterNumber.name))
+                }
+                client.post(request.url, request.headers, request.body!!).use { response ->
+                    response.body.string().parseJson<QueryResultDto<ChapterDto>>().elements
+                }
+            } else {
+                null
+            }
+        }
+
+        val series = seriesDeferred.await()
+        val chapterList = chaptersDeferred.await()
+        val hideCoinChapters = coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_CHAPTERS)
+
+        if (series == null) return@coroutineScope SMangaUpdate(manga, chapters)
+
+        val updatedManga = if (fetchDetails) processSeries(series) else manga
+        val updatedChapters = if (chapterList != null) {
+            val isUserSubscribed = getUser().isSubscribed == true
+
+            chapterList.mapNotNull { chapter ->
+                if (chapter.enabled != true) {
+                    return@mapNotNull null
+                }
+
+                val chapterNumber = chapter.chapterNumber!!
+                val isFreeChapter = chapter.alwaysFree == true || chapterNumber <= (series.maxFreeChapterNumber ?: 0)
+                val isMeteredChapter = chapterNumber <= (series.maxMeteredReadingChapterNumber?.toFloatOrNull() ?: 0f)
+                val isCoinChapter = chapter.onlyTransactional == true || (series.onlyTransactional == true && chapter.isVolume && !isFreeChapter)
+
+                if (hideCoinChapters && isCoinChapter) {
+                    return@mapNotNull null
+                }
+
+                SChapter.create().apply {
+                    chapter_number = chapterNumber
+                    date_upload = chapter.createdAt!!
+                    name = chapter.name +
+                        if (isCoinChapter) {
+                            " \uD83E\uDE99" // coin emoji
+                        } else if (isFreeChapter || isUserSubscribed) {
+                            ""
+                        } else if (isMeteredChapter) {
+                            " \uD83D\uDD52" // three-o-clock emoji
+                        } else {
+                            // subscriber chapter
+                            " \uD83D\uDD12" // lock emoji
+                        }
+                    url = helper.getChapterUrl(chapter)
+                }
+            }
+        } else {
+            chapters
+        }
+
+        SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    private fun getPagesImagesRequest(series: Int, chapter: Int): Request = POST(
-        "${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/page/$series/$chapter",
-        helper.jsonHeaders,
-        "{\"idToken\":\"${auth.getIdToken()}\"}".toRequestBody(),
-    )
-
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val uri = (baseUrl + chapter.url).toHttpUrl()
 
         val seriesId = uri.queryParameter(MangamoConstants.SERIES_QUERY_PARAM)!!.toInt()
         val chapterId = uri.queryParameter(MangamoConstants.CHAPTER_QUERY_PARAM)!!.toInt()
-
-        return getPagesImagesRequest(seriesId, chapterId)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.body.string().parseJson<List<PageDto>>()
+        val response = client.post(
+            "${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/page/$seriesId/$chapterId",
+            helper.jsonHeaders,
+            "{\"idToken\":\"${auth.getIdToken()}\"}".toRequestBody(),
+        )
+        val data = response.use { it.body.string().parseJson<List<PageDto>>() }
 
         return data.map {
             Page(it.pageNumber - 1, imageUrl = it.uri)
         }.sortedBy { it.index }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val userTokenPref = EditTextPreference(screen.context).apply {

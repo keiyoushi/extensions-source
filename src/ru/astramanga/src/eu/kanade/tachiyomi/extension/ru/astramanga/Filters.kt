@@ -6,15 +6,38 @@ open class SelectFilter(name: String, private val options: Array<Pair<String, St
     val selected: String get() = options[state].first
 }
 
-class TypeFilter : SelectFilter("Тип", TYPES)
-class StatusFilter : SelectFilter("Статус", STATUSES)
-
-class SortFilter : Filter.Sort("Сортировка", SORT_LABELS, Filter.Sort.Selection(0, false)) {
-    val selected: String get() = (if (state?.ascending == true) "" else "-") + SORT_FIELDS[state?.index ?: 0]
+// ============================== Order ===============================
+abstract class OrderByFilter(
+    displayName: String,
+    val options: List<Pair<String, String>>,
+    state: Selection,
+) : Filter.Sort(
+    displayName,
+    options.map { it.first }.toTypedArray(),
+    state,
+) {
+    val selected: String get() = (if (state?.ascending == true) "" else "-") + options[state!!.index].second
 }
 
-class Genre(name: String, val id: String) : Filter.CheckBox(name)
-class GenreFilter : Filter.Group<Genre>("Жанры", GENRES.map { Genre(it.first, it.second) })
+// ============================== TriState ===============================
+internal class TriStateFilter(name: String, val id: String) : Filter.TriState(name)
+
+internal abstract class TriStateGroup(
+    name: String,
+    options: List<Pair<String, String>>,
+) : Filter.Group<TriStateFilter>(
+    name,
+    options.map { TriStateFilter(it.first, it.second) },
+) {
+    val included: List<String>? get() = state.filter { it.isIncluded() }.map { it.id }.takeIf { it.isNotEmpty() }
+    val excluded: List<String>? get() = state.filter { it.isExcluded() }.map { it.id }.takeIf { it.isNotEmpty() }
+}
+
+class TypeFilter : SelectFilter("Тип", TYPES)
+class StatusFilter : SelectFilter("Статус", STATUSES)
+class SortFilter : OrderByFilter("Сортировка", SORT, Selection(1, false))
+internal class GenreFilter : TriStateGroup("Жанры", GENRES)
+internal class TagsFilter : TriStateGroup("Теги", TAGS)
 
 private val TYPES = arrayOf(
     "" to "Все",
@@ -30,19 +53,15 @@ private val STATUSES = arrayOf(
     "paused" to "Приостановлен",
 )
 
-private val SORT_LABELS = arrayOf(
-    "По популярности",
-    "По дате обновления",
-    "По дате добавления",
-    "По рейтингу",
-    "По названию",
-)
-private val SORT_FIELDS = arrayOf(
-    "popularity",
-    "updated_at",
-    "created_at",
-    "rating",
-    "name",
+private val SORT = listOf(
+    "По рейтингу" to "rating",
+    "По популярности" to "popularity",
+    "По просмотрам" to "view_count",
+    "По количеству глав" to "chapter_count",
+    "По дате выхода" to "released_on",
+    "По дате обновления" to "updated_at",
+    "По дате добавления" to "created_at",
+    "По названию" to "name",
 )
 
 // name to genre id (confirmed via /genres endpoint)
@@ -83,6 +102,7 @@ private val GENRES = listOf(
     "Мифология" to "34",
     "Мурим" to "35",
     "Научная фантастика" to "36",
+    "Образовательная литература" to "131",
     "Обратный Гарем" to "37",
     "Омегаверс" to "38",
     "Пародия" to "39",
@@ -112,5 +132,142 @@ private val GENRES = listOf(
     "Экшен" to "63",
     "Элементы юмора" to "64",
     "Юмор" to "65",
-    "Образовательная литература" to "131",
+)
+
+private val TAGS = listOf(
+    "Astramanga Verified" to "136",
+    "Азартные игры" to "1",
+    "Алхимия" to "2",
+    "Ангел" to "3",
+    "Антигерой" to "4",
+    "Аристократия" to "5",
+    "Армия" to "6",
+    "Артефакты" to "7",
+    "Бог" to "8",
+    "Бои на мечах" to "10",
+    "Борьба за власть" to "11",
+    "Брат/сестра" to "12",
+    "Будущее" to "13",
+    "Вампир" to "15",
+    "Ведьма" to "16",
+    "Видеоигры" to "17",
+    "Виртуальная реальность" to "18",
+    "Владыка демонов" to "19",
+    "Война" to "20",
+    "Волшебник / Маг" to "21",
+    "Волшебные существа" to "22",
+    "В основном взрослые" to "14",
+    "Воспоминания из другого мира" to "23",
+    "ГГ женщина" to "24",
+    "ГГ имба" to "26",
+    "ГГ мужчина" to "25",
+    "ГГ не человек" to "27",
+    "Геймеры" to "28",
+    "Гендерная интрига" to "127",
+    "Гильдии" to "29",
+    "Глупый ГГ" to "131",
+    "Гоблин" to "30",
+    "Горничная" to "31",
+    "Грузовик-сан" to "32",
+    "Гурман" to "33",
+    "Гяру" to "34",
+    "Девочки-волшебницы" to "35",
+    "Демонесса" to "37",
+    "Демоны" to "36",
+    "Драконы" to "38",
+    "Дружба" to "39",
+    "Есть аниме-адаптация" to "40",
+    "Жестокий мир" to "41",
+    "Животные компаньоны" to "42",
+    "Зверолюди" to "43",
+    "Злодейка" to "44",
+    "Злой дух" to "45",
+    "Зомби" to "46",
+    "Игра с высокими ставками" to "47",
+    "Игровые элементы" to "48",
+    "Игры" to "49",
+    "Идол" to "50",
+    "ИИ" to "135",
+    "Империи" to "51",
+    "Квесты" to "52",
+    "Китайская одежда" to "53",
+    "Командный спорт" to "54",
+    "Кровь" to "55",
+    "Кроссдрессинг" to "128",
+    "Культура Отаку" to "56",
+    "лгбт на втором плане" to "132",
+    "Легендарное оружие" to "57",
+    "Лоли" to "58",
+    "Любовный многоугольник" to "59",
+    "Магическая академия" to "60",
+    "Магия" to "61",
+    "Мафия" to "62",
+    "Медицина" to "63",
+    "Месть" to "64",
+    "Милые девушки" to "65",
+    "Молодой ГГ" to "66",
+    "Монстр" to "67",
+    "Монстродевушка" to "68",
+    "Музыка" to "69",
+    "Навыки / Способности" to "70",
+    "навязчивая любовь" to "71",
+    "Наёмник" to "72",
+    "Насилие / Жестокость" to "73",
+    "Недоразумения" to "74",
+    "Нежить" to "75",
+    "Ниндзя" to "76",
+    "Обмен телами" to "77",
+    "Оборотни" to "78",
+    "Обратный мир" to "134",
+    "Огнестрельное оружие" to "79",
+    "Офисные работники" to "80",
+    "Официант" to "81",
+    "Пират" to "82",
+    "Подземелье" to "83",
+    "Политика" to "84",
+    "Политический роман" to "85",
+    "Полиция" to "86",
+    "Полноцветный" to "262",
+    "Потеря памяти" to "98",
+    "Преступления" to "87",
+    "Призрак" to "88",
+    "Путешествия во времени" to "89",
+    "Раб" to "90",
+    "Работа" to "91",
+    "Развитие личности" to "92",
+    "Разумные расы" to "93",
+    "Ранги силы" to "94",
+    "Реинкарнация" to "95",
+    "Робот" to "96",
+    "Рыцарь" to "97",
+    "Самурай" to "99",
+    "Свадьба" to "100",
+    "Сводная Сестра/Брат" to "133",
+    "Система" to "101",
+    "Сокрытие личности" to "102",
+    "Спасение мира" to "103",
+    "Спортивное тело" to "104",
+    "Супергерои" to "106",
+    "Супер сила" to "105",
+    "Традиционные игры" to "107",
+    "Умный ГГ" to "109",
+    "Упоротость" to "110",
+    "Управление территорией" to "111",
+    "Учебное заведение" to "112",
+    "Учитель" to "113",
+    "Фермерство" to "114",
+    "Хентай" to "124",
+    "Хикикомори" to "115",
+    "Холодное оружие" to "116",
+    "Шантаж" to "117",
+    "Школа" to "118",
+    "Шоу-бизнес" to "119",
+    "Эльф" to "120",
+    "Эротика" to "125",
+    "Этти" to "126",
+    "юри" to "130",
+    "Якудза" to "121",
+    "Яндере" to "122",
+    "яой" to "129",
+    "Япония" to "123",
 )

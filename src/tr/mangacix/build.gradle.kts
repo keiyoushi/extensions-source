@@ -1,0 +1,21 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "MangaciX"
+    versionCode = 1
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
+
+    source {
+        baseUrl = "https://mangacix.net"
+        lang = "tr"
+    }
+
+    deeplink {
+        path("/books/..*")
+    }
+}

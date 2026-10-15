@@ -1,36 +1,32 @@
 package eu.kanade.tachiyomi.extension.pt.mundohentai
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Headers
+import keiyoushi.utils.firstInstance
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Element
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class MundoHentai : HttpSource() {
+abstract class MundoHentai : KeiSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
-
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", baseUrl)
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds)
 
     private fun genericMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.select("span.thumb-titulo").text()
@@ -38,17 +34,13 @@ abstract class MundoHentai : HttpSource() {
         setUrlWithoutDomain(element.select("a:has(span.thumb-imagem)").attr("href"))
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        val newHeaders = headersBuilder()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val newHeaders = headers.newBuilder()
             .set("Referer", if (page == 1) baseUrl else "$baseUrl/category/doujinshi/page/${page - 1}")
             .build()
 
         val pageStr = if (page != 1) "page/$page" else ""
-        return GET("$baseUrl/category/doujinshi/$pageStr", newHeaders)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get("$baseUrl/category/doujinshi/$pageStr", newHeaders).asJsoup()
         val mangas = document
             .select("div.lista > ul > li div.thumb-conteudo:has(a[href^=$baseUrl]):not(:contains(Tufos))")
             .map(::genericMangaFromElement)
@@ -56,31 +48,28 @@ abstract class MundoHentai : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val document = if (query.isNotEmpty()) {
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("s", query)
-                .toString()
-            return GET(url, headers)
+                .build()
+            client.get(url).asJsoup()
+        } else {
+            val tagFilter = filters.firstInstance<TagFilter>()
+            val tagSlug = tagFilter.values[tagFilter.state].slug
+
+            if (tagSlug.isEmpty()) {
+                return getPopularManga(page)
+            }
+
+            val newHeaders = headers.newBuilder()
+                .set("Referer", if (page == 1) "$baseUrl/tags" else "$baseUrl/tag/$tagSlug/page/${page - 1}")
+                .build()
+
+            val pageStr = if (page != 1) "page/$page" else ""
+            client.get("$baseUrl/tag/$tagSlug/$pageStr", newHeaders).asJsoup()
         }
 
-        val tagFilter = filters[1] as TagFilter
-        val tagSlug = tagFilter.values[tagFilter.state].slug
-
-        if (tagSlug.isEmpty()) {
-            return popularMangaRequest(page)
-        }
-
-        val newHeaders = headersBuilder()
-            .set("Referer", if (page == 1) "$baseUrl/tags" else "$baseUrl/tag/$tagSlug/page/${page - 1}")
-            .build()
-
-        val pageStr = if (page != 1) "page/$page" else ""
-        return GET("$baseUrl/tag/$tagSlug/$pageStr", newHeaders)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
         val mangas = document
             .select("div.lista > ul > li div.thumb-conteudo:has(a[href^=$baseUrl]):not(:contains(Tufos)):not(:has(span.selo-tipo:contains(Legendado)))")
             .map(::genericMangaFromElement)
@@ -88,36 +77,40 @@ abstract class MundoHentai : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val post = document.select("div.post-box")
-        val isMultipleChapters = document.selectFirst("div.listaImagens div.galeriaTab") != null
+        val multipleChapters = document.select("div.listaImagens div.galeriaTab")
 
-        return SManga.create().apply {
+        val updatedManga = SManga.create().apply {
+            url = manga.url
+            title = manga.title
             author = post.select("ul.post-itens li:contains(Artista:) a").text()
             genre = post.select("ul.post-itens li:contains(Tags:) a").joinToString { it.text() }
             description = post.select("ul.post-itens li:contains(Cor:)").text()
             status = SManga.COMPLETED
             thumbnail_url = post.select("div.post-capa img").attr("src")
-            update_strategy = if (isMultipleChapters) UpdateStrategy.ALWAYS_UPDATE else UpdateStrategy.ONLY_FETCH_ONCE
-        }
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val multipleChapters = document.select("div.listaImagens div.galeriaTab")
-
-        if (multipleChapters.isNotEmpty()) {
-            return multipleChapters.map(::chapterFromElement).reversed()
+            update_strategy = if (multipleChapters.isNotEmpty()) UpdateStrategy.ALWAYS_UPDATE else UpdateStrategy.ONLY_FETCH_ONCE
         }
 
-        val singleChapter = SChapter.create().apply {
-            name = "Capítulo"
-            chapter_number = 1f
-            setUrlWithoutDomain(document.location())
+        val chapterList = if (multipleChapters.isNotEmpty()) {
+            multipleChapters.map(::chapterFromElement).reversed()
+        } else {
+            listOf(
+                SChapter.create().apply {
+                    name = "Capítulo"
+                    chapter_number = 1f
+                    setUrlWithoutDomain(document.location())
+                },
+            )
         }
 
-        return listOf(singleChapter)
+        return SMangaUpdate(updatedManga, chapterList)
     }
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
@@ -129,8 +122,8 @@ abstract class MundoHentai : HttpSource() {
         setUrlWithoutDomain("${element.ownerDocument()!!.location()}#$chapterId")
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val chapterId = document.location().substringAfterLast("#", "")
         val gallerySelector = when {
             chapterId.isNotEmpty() -> "div.listaImagens #galeria-$chapterId img"
@@ -141,22 +134,14 @@ abstract class MundoHentai : HttpSource() {
             .mapIndexed { i, el -> Page(i, url = document.location(), imageUrl = el.attr("src")) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Referer", page.url)
+        .build()
 
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", page.url)
-            .build()
-
-        return GET(page.imageUrl!!, newHeaders)
-    }
-
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Os filtros são ignorados na busca!"),
         TagFilter(getTags()),
     )
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 }

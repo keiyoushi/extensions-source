@@ -2,11 +2,10 @@ package eu.kanade.tachiyomi.extension.ja.comicfuz
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.format.DateTimeFormatter
 
 @Serializable
 class MangaListResponse(
@@ -76,15 +75,11 @@ class Chapter(
         } else {
             title
         }
-        date_upload = try {
-            dateFormat.parse(date)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
+        date_upload = dateFormat.tryParseDate(date)
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d")
 
 @Serializable
 class Point(

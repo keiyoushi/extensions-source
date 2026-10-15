@@ -1,78 +1,53 @@
 package eu.kanade.tachiyomi.extension.ja.klto9
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
-abstract class Klto9 : HttpSource() {
+abstract class Klto9 : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    // ============================== Popular ==============================
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
             .addQueryParameter("listType", "pagination")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "views")
             .addQueryParameter("sort_type", "DESC")
             .build()
-        return GET(url, headers)
+        val document = client.get(url).asJsoup()
+        return parseMangasPage(document)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.thumb-item-flow").mapNotNull { element ->
-            val a = element.selectFirst("div.thumb_attr.series-title a") ?: element.selectFirst("a")
-                ?: return@mapNotNull null
-
-            SManga.create().apply {
-                setUrlWithoutDomain(a.absUrl("href"))
-                title = a.text()
-
-                val imgContainer = element.selectFirst("div.content.img-in-ratio")
-                thumbnail_url = imgContainer?.attr("data-bg")?.takeIf { it.isNotEmpty() }
-                    ?: imgContainer?.style()
-            }
-        }
-        val hasNextPage = document.selectFirst("ul.pagination li a:contains(»)") != null
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    // ============================== Latest ===============================
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
             .addQueryParameter("listType", "pagination")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "last_update")
             .addQueryParameter("sort_type", "DESC")
             .build()
-        return GET(url, headers)
+        val document = client.get(url).asJsoup()
+        return parseMangasPage(document)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    // ============================== Search ===============================
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
             .addQueryParameter("listType", "pagination")
             .addQueryParameter("page", page.toString())
@@ -126,24 +101,70 @@ abstract class Klto9 : HttpSource() {
             url.addQueryParameter("ungenre", genreExclude.joinToString(","))
         }
 
-        return GET(url.build(), headers)
+        val document = client.get(url.build()).asJsoup()
+        return parseMangasPage(document)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun parseMangasPage(document: Document): MangasPage {
+        val mangas = document.select("div.thumb-item-flow").mapNotNull { mangaFromElement(it) }
+        val hasNextPage = document.selectFirst("ul.pagination li a[href]:contains(»)") != null
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    // ============================== Details ==============================
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    private fun mangaFromElement(element: Element): SManga? {
+        val a = element.selectFirst("div.thumb_attr.series-title a") ?: element.selectFirst("a") ?: return null
 
         return SManga.create().apply {
-            title = document.select("h3[style*=font-weight:bold]").text().ifEmpty {
-                document.select("ol.breadcrumb li[itemprop=itemListElement]:last-child span").text()
-            }
+            setUrlWithoutDomain(a.absUrl("href"))
+            title = a.text()
+            thumbnail_url = element.selectFirst("div.content.img-in-ratio")?.backgroundUrl()
+        }
+    }
+    private fun Element.backgroundUrl(): String? = absUrl("data-bg").ifBlank {
+        val styleUrl = bgImageRegex.find(attr("style"))?.groupValues?.get(1) ?: return null
+        ownerDocument()?.baseUri()?.toHttpUrl()?.resolve(styleUrl)?.toString()
+    }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        val segment = url.pathSegments.singleOrNull() ?: return null
+        val mangaPath = when {
+            segment.startsWith("teap-") -> "/$segment"
+            segment.startsWith("zmqs-") && segment.contains("-chapter-") ->
+                segment
+                    .substringAfter("zmqs-")
+                    .substringBefore("-chapter-")
+                    .ifEmpty { null }
+                    ?.let { "/teap-$it.html" }
+            else -> null
+        } ?: return null
+
+        return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(mangaPath) }).apply {
+            setUrlWithoutDomain(mangaPath)
+            initialized = true
+        }
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaDeferred = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val chaptersDeferred = async { if (fetchChapters) fetchChapterList(manga) else chapters }
+        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+    }
+
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        return SManga.create().apply {
+            title = document.selectFirst("ol.breadcrumb li[itemprop=itemListElement]:last-child span")!!.text()
 
             val infoUl = document.selectFirst("ul.manga-info") ?: return this
 
-            author = authorRegex.find(infoUl.html())?.groupValues?.get(1) ?: ""
+            author = authorRegex.find(infoUl.html())?.groupValues?.get(1)
 
             val otherNamesLi = infoUl.selectFirst("li:contains(Other name)")
             description = buildString {
@@ -154,22 +175,15 @@ abstract class Klto9 : HttpSource() {
 
                 val descDiv = document.selectFirst("div.row:has(h3:contains(Description))")
                     ?: document.selectFirst("div.row:contains(Description)")
-                val descText = descDiv?.select("p")?.text()
-                if (!descText.isNullOrEmpty()) {
-                    append(descText)
-                }
+                descDiv?.selectFirst("p")
+                    ?.textOrNull()
+                    ?.takeUnless { it == "Updating" }
+                    ?.also { append(it) }
             }
 
-            val genres = infoUl.select("li:contains(Genre) small a").map { it.text() }
-            genre = genres.joinToString()
+            genre = infoUl.select("li:contains(Genre) small a").joinToString { it.text() }.ifEmpty { null }
 
-            val statusText = infoUl.select("li:contains(Status) a").text().lowercase()
-            status = when {
-                statusText.contains("ongoing") || statusText.contains("incomplete") -> SManga.ONGOING
-                statusText.contains("complete") -> SManga.COMPLETED
-                statusText.contains("pause") || statusText.contains("hiatus") -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
+            status = parseStatus(infoUl.selectFirst("li:contains(Status) a")?.textOrNull())
 
             val img = document.selectFirst("div.info-cover img.thumbnail")
             thumbnail_url = img?.absUrl("src")
@@ -178,19 +192,23 @@ abstract class Klto9 : HttpSource() {
         }
     }
 
-    // ============================= Chapters ==============================
+    private fun parseStatus(status: String?): Int = when {
+        status == null -> SManga.UNKNOWN
+        status.contains("ongoing", ignoreCase = true) || status.contains("incomplete", ignoreCase = true) -> SManga.ONGOING
+        status.contains("complete", ignoreCase = true) -> SManga.COMPLETED
+        status.contains("pause", ignoreCase = true) || status.contains("hiatus", ignoreCase = true) -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
-    override fun chapterListRequest(manga: SManga): Request {
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val slug = manga.url.substringAfter("teap-").substringBefore(".html")
         val lstFilename = "${getRandomString(25)}.lst"
         val url = "$baseUrl/$lstFilename".toHttpUrl().newBuilder()
             .addQueryParameter("manga", slug)
             .build()
 
-        return GET(url, headers)
+        return client.get(url).parseAs<List<Dto>>().map { it.toSChapter() }
     }
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<List<Dto>>().map { it.toSChapter() }
 
     override fun getChapterUrl(chapter: SChapter): String {
         val parts = chapter.url.split("#")
@@ -202,15 +220,11 @@ abstract class Klto9 : HttpSource() {
         }
     }
 
-    // =============================== Pages ===============================
-
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val cid = if (chapter.url.contains("#")) {
             chapter.url.substringBefore("#")
         } else {
-            val request = GET(baseUrl + chapter.url, headers)
-            val document = client.newCall(request).execute().use { it.asJsoup() }
-
+            val document = client.get(getChapterUrl(chapter)).asJsoup()
             document.selectFirst("input#chapter")?.attr("value")
                 ?: imageLoadRegex.find(document.html())?.groupValues?.get(1)
                 ?: throw Exception("Could not find chapter ID (cid) in fallback flow")
@@ -221,25 +235,14 @@ abstract class Klto9 : HttpSource() {
             .addQueryParameter("cid", cid)
             .build()
 
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         return document.select("img").mapIndexed { index, img ->
-            val src = (
-                img.attr("data-pagespeed-lazy-src").takeIf { it.isNotEmpty() }
-                    ?: img.absUrl("src")
-                ).trim()
+            val src = img.absUrl("data-pagespeed-lazy-src").ifEmpty { img.absUrl("src") }
             Page(index, imageUrl = src)
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Filters ==============================
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         GenreFilter(getGenresList()),
         StatusFilter(),
         AuthorFilter(),
@@ -247,17 +250,9 @@ abstract class Klto9 : HttpSource() {
         SortFilter(),
     )
 
-    // ============================= Utilities =============================
-
     private val bgImageRegex = Regex("""url\(['"]?([^'"]+)['"]?\)""")
     private val authorRegex = Regex("""Author\(s\)</b>:\s*<small><a[^>]*>([^<]+)""")
     private val imageLoadRegex = Regex("""load_image\((\d+)""")
-
-    private fun Element.style(): String? {
-        val style = attr("style")
-        val match = bgImageRegex.find(style)
-        return match?.groupValues?.get(1)
-    }
 
     private fun getRandomString(length: Int): String {
         val allowedChars = ('A'..'Z') + ('a'..'z') + ('0'..'9')

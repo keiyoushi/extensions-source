@@ -13,12 +13,10 @@ import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
 abstract class AreaManga : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale("ar"))
+    override val datePattern = "yyyy/MM/dd"
 
     override fun searchMangaSelector() = ".listupd .manga-card-v"
     protected val searchMangaTitleSelector = ".bigor .tt, h3 a"

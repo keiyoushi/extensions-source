@@ -2,55 +2,50 @@ package eu.kanade.tachiyomi.extension.es.dragontranslationorg
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.OkHttpClient
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class DragonTranslationOrg : Madara() {
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val supportsPostId = false
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("es"))
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
-    override fun popularMangaSelector() = "div#mkAgrid > a.acard"
+    override val filterGenresSelector = ".filters"
+    override fun archiveSelector() = "a:has(img.ac-cover)"
+    override val archiveUrlSelector = "a"
 
-    override fun popularMangaNextPageSelector() = "div.wp-pagenavi > a.nextpostslink"
+    override val mangaDetailsSelectorTitle = "div.hero h1"
+    override val mangaDetailsSelectorStatus = "div.htags > span.htag"
+    override val mangaDetailsSelectorDescription = "div.syn > p"
+    override val mangaDetailsSelectorThumbnail = "div.hposter img"
+    override val mangaDetailsSelectorGenre = "div.hchips a.chip"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("abs:href"))
-        title = element.selectFirst("div.ac-t")!!.ownText()
-        element.selectFirst(popularMangaUrlSelectorImg)?.let {
-            thumbnail_url = processThumbnail(imageFromElement(it), true)
-        }
+    override val pageListParseSelector = "div.reading-content img.wp-manga-chapter-img"
+
+    override fun archiveManga(element: Element, id: String) = super.archiveManga(element, id)?.apply {
+        element.attr("title").takeIf(String::isNotBlank)?.let { title = it }
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
-    override val mangaDetailsSelectorTitle = "div.hcol > .htitle"
-    override val mangaDetailsSelectorStatus = "div.hcol > .htags > .htag--status"
-    override val mangaDetailsSelectorDescription = "div#syn > p"
-    override val mangaDetailsSelectorThumbnail = "div.hposter__card > img"
-    override val mangaDetailsSelectorGenre = "div.hcol > .hchips--genres > a.chip"
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val scriptData = response.asJsoup().selectFirst("script#mk-chapters-data")!!.data()
-        val dto = scriptData.parseAs<ChapterListDto>()
-        return dto.items.map { chapterDto ->
+    override suspend fun fetchChapters(
+        mangaPath: String,
+        id: String,
+        mangaPage: Document?,
+    ) = mangaPage!!.selectFirst("#mkChapters script[type=application/json]")!!.data()
+        .parseAs<ChapterListDto>().items.map { chapterDto ->
             SChapter.create().apply {
                 setUrlWithoutDomain(chapterDto.url)
                 name = chapterDto.name
                 date_upload = parseChapterDate(chapterDto.ago)
             }
         }
-    }
 }

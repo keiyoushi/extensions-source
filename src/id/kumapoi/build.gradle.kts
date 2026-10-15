@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "KumaPoi"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {

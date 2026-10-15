@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.all.mangadraft.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MangaDraftPageDTO(
+class MangaDraftPageDTO(
     val id: Long,
     val number: Int,
     val url: String,

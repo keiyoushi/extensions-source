@@ -1,7 +1,7 @@
 package keiyoushi.lib.e4p
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.network.get
 import keiyoushi.utils.parseAsProto
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -10,9 +10,8 @@ import okhttp3.OkHttpClient
 class E4PManifestReader(private val client: OkHttpClient, private val requestHeaders: Headers) {
     private val decoder = E4PDecoder()
 
-    fun extractPagesFromEncryptedManifest(manifestUrl: HttpUrl): List<Page> {
-        val manifestResponse = client.newCall(GET(manifestUrl, requestHeaders)).execute()
-        val ticketBytes = manifestResponse.parseAsProto<E4PQSTicket>()
+    suspend fun extractPagesFromEncryptedManifest(manifestUrl: HttpUrl): List<Page> {
+        val ticketBytes = client.get(manifestUrl, requestHeaders).parseAsProto<E4PQSTicket>()
         val decoded = decoder.decodeManifestFull(ticketBytes)
         val pub = decoded.pub
         val manifestQueryNames = manifestUrl.queryParameterNames
@@ -51,9 +50,8 @@ class E4PManifestReader(private val client: OkHttpClient, private val requestHea
         }
     }
 
-    fun extractPagesFromUnencryptedManifest(manifestUrl: HttpUrl): List<Page> {
-        val manifestResponse = client.newCall(GET(manifestUrl, requestHeaders)).execute()
-        val pub = manifestResponse.parseAsProto<ProtoPub>()
+    suspend fun extractPagesFromUnencryptedManifest(manifestUrl: HttpUrl): List<Page> {
+        val pub = client.get(manifestUrl, requestHeaders).parseAsProto<ProtoPub>()
         val manifestQueryNames = manifestUrl.queryParameterNames
 
         return pub.spine.mapIndexedNotNull { index, link ->

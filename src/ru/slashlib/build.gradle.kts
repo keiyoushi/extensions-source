@@ -7,9 +7,9 @@ plugins {
 keiyoushi {
     name = "SlashLib"
     pkgName = "ru.yaoilib"
-    versionCode = 6
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "libgroup"
 
     source {

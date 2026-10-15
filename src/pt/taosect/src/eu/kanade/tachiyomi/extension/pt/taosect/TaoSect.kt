@@ -1,77 +1,69 @@
 package eu.kanade.tachiyomi.extension.pt.taosect
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class TaoSect : HttpSource() {
+abstract class TaoSect : KeiSource() {
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds)
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
+    override fun Headers.Builder.configureHeaders() = set("User-Agent", USER_AGENT)
 
-    private val json: Json by injectLazy()
-
-    private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
+    private val apiHeaders: Headers
+        get() = headers.newBuilder()
+            .add("Accept", ACCEPT_JSON)
+            .build()
 
     private var latestIds: List<String> = emptyList()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", USER_AGENT)
-        .add("Origin", baseUrl)
-        .add("Referer", baseUrl)
+    private var latestChapterPage = 1
 
-    private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
-        .add("Accept", ACCEPT_JSON)
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val apiUrl = "$baseUrl/$API_BASE_PATH/projetos".toHttpUrl().newBuilder()
             .addQueryParameter("order", "desc")
             .addQueryParameter("orderby", "views")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", PROJECTS_PER_PAGE.toString())
             .addQueryParameter("_fields", DEFAULT_FIELDS)
-            .toString()
+            .build()
 
-        return GET(apiUrl, apiHeaders)
+        return projectListParse(client.get(apiUrl, apiHeaders), page)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun projectListParse(response: Response, page: Int): MangasPage {
+        val lastPage = response.headers["X-Wp-TotalPages"]!!.toInt()
         val result = response.parseAs<List<TaoSectProjectDto>>()
 
         val projectList = result.map(::popularMangaFromObject)
 
-        val currentPage = response.request.url.queryParameter("page")
-            .orEmpty().toIntOrNull() ?: 1
-        val lastPage = response.headers["X-Wp-TotalPages"]!!.toInt()
-        val hasNextPage = currentPage < lastPage
-
-        return MangasPage(projectList, hasNextPage)
+        return MangasPage(projectList, page < lastPage)
     }
 
     private fun popularMangaFromObject(obj: TaoSectProjectDto): SManga = SManga.create().apply {
@@ -80,42 +72,39 @@ abstract class TaoSect : HttpSource() {
         setUrlWithoutDomain(obj.link!!)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val apiUrl = "$baseUrl/$API_BASE_PATH/capitulos".toHttpUrl().newBuilder()
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("orderby", "date")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("per_page", (PROJECTS_PER_PAGE * 2).toString())
-            .addQueryParameter("_fields", "post_id")
-            .toString()
-
-        return GET(apiUrl, apiHeaders)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<List<TaoSectChapterDto>>()
-
-        if (result.isEmpty()) {
-            return MangasPage(emptyList(), hasNextPage = false)
-        }
-
-        val currentPage = response.request.url.queryParameter("page")!!.toInt()
-        val lastPage = response.headers["X-Wp-TotalPages"]!!.toInt()
-        val hasNextPage = currentPage < lastPage
-
-        if (currentPage == 1) {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page == 1) {
             latestIds = emptyList()
+            latestChapterPage = 1
         }
 
-        val projectIds = result
-            .map { it.projectId!! }
-            .distinct()
-            .filterNot { latestIds.contains(it) }
+        // Chapters of one project can fill whole pages; an empty page would stop paging in the app
+        var projectIds: List<String>
+        var hasNextPage: Boolean
+        do {
+            val apiUrl = "$baseUrl/$API_BASE_PATH/capitulos".toHttpUrl().newBuilder()
+                .addQueryParameter("order", "desc")
+                .addQueryParameter("orderby", "date")
+                .addQueryParameter("page", latestChapterPage.toString())
+                .addQueryParameter("per_page", LATEST_CHAPTERS_PER_PAGE.toString())
+                .addQueryParameter("_fields", "post_id")
+                .build()
+
+            val response = client.get(apiUrl, apiHeaders)
+            val lastPage = response.headers["X-Wp-TotalPages"]!!.toInt()
+            val result = response.parseAs<List<TaoSectChapterDto>>()
+
+            hasNextPage = latestChapterPage++ < lastPage
+            projectIds = result
+                .map { it.projectId!! }
+                .distinct()
+                .filterNot { latestIds.contains(it) }
+        } while (projectIds.isEmpty() && hasNextPage)
 
         latestIds = latestIds + projectIds
 
         if (projectIds.isEmpty()) {
-            return MangasPage(emptyList(), hasNextPage)
+            return MangasPage(emptyList(), hasNextPage = false)
         }
 
         val projectsApiUrl = "$baseUrl/$API_BASE_PATH/projetos".toHttpUrl().newBuilder()
@@ -123,33 +112,28 @@ abstract class TaoSect : HttpSource() {
             .addQueryParameter("per_page", projectIds.size.toString())
             .addQueryParameter("orderby", "include")
             .addQueryParameter("_fields", DEFAULT_FIELDS)
-            .toString()
-        val projectsRequest = GET(projectsApiUrl, apiHeaders)
-        val projectsResponse = client.newCall(projectsRequest).execute()
-        val projectsResult = projectsResponse.parseAs<List<TaoSectProjectDto>>()
+            .build()
+        val projectsResult = client.get(projectsApiUrl, apiHeaders).parseAs<List<TaoSectProjectDto>>()
 
         val projectList = projectsResult.map(::popularMangaFromObject)
 
         return MangasPage(projectList, hasNextPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val projectSlug = url.pathSegments[1]
-            return fetchSearchManga(page, "$SLUG_PREFIX_SEARCH$projectSlug", filters)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) {
+            return null
         }
-        return super.fetchSearchManga(page, query, filters)
+        val projectSlug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank)
+            ?: return null
+
+        return client.get(projectApiUrl(projectSlug, DEFAULT_FIELDS), apiHeaders)
+            .parseAs<List<TaoSectProjectDto>>()
+            .firstOrNull()
+            ?.let(::popularMangaFromObject)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith(SLUG_PREFIX_SEARCH) && query.removePrefix(SLUG_PREFIX_SEARCH).isNotBlank()) {
-            return mangaDetailsRequest(query.removePrefix(SLUG_PREFIX_SEARCH))
-        }
-
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val apiUrl = "$baseUrl/$API_BASE_PATH/projetos".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", PROJECTS_PER_PAGE.toString())
@@ -162,31 +146,37 @@ abstract class TaoSect : HttpSource() {
         filters.filterIsInstance<QueryParameterFilter>()
             .forEach { it.toQueryParameter(apiUrl, query) }
 
-        return GET(apiUrl.toString(), apiHeaders)
+        return projectListParse(client.get(apiUrl.build(), apiHeaders), page)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    private fun projectApiUrl(projectSlug: String, fields: String): HttpUrl = "$baseUrl/$API_BASE_PATH/projetos".toHttpUrl().newBuilder()
+        .addQueryParameter("per_page", "1")
+        .addQueryParameter("slug", projectSlug)
+        .addQueryParameter("_fields", fields)
+        .build()
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun mangaDetailsRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
-
-    private fun mangaDetailsRequest(mangaUrl: String): Request {
-        val projectSlug = mangaUrl
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val projectSlug = manga.url
             .substringAfterLast("projeto/")
             .substringBefore("/")
 
-        val apiUrl = "$baseUrl/$API_BASE_PATH/projetos".toHttpUrl().newBuilder()
-            .addQueryParameter("per_page", "1")
-            .addQueryParameter("slug", projectSlug)
-            .addQueryParameter("_fields", "title,informacoes,content,thumbnail,link")
-            .toString()
+        val details = if (fetchDetails) async { fetchMangaDetails(manga, projectSlug) } else null
+        val chapterList = if (fetchChapters) async { fetchChapterList(projectSlug) } else null
 
-        return GET(apiUrl, apiHeaders)
+        SMangaUpdate(
+            manga = details?.await() ?: manga,
+            chapters = chapterList?.await() ?: chapters,
+        )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<List<TaoSectProjectDto>>()
+    private suspend fun fetchMangaDetails(manga: SManga, projectSlug: String): SManga {
+        val apiUrl = projectApiUrl(projectSlug, "title,informacoes,content,thumbnail,link")
+        val result = client.get(apiUrl, apiHeaders).parseAs<List<TaoSectProjectDto>>()
 
         if (result.isEmpty()) {
             throw Exception(PROJECT_NOT_FOUND)
@@ -194,7 +184,7 @@ abstract class TaoSect : HttpSource() {
 
         val project = result[0]
 
-        return SManga.create().apply {
+        return manga.apply {
             title = Parser.unescapeEntities(project.title!!.rendered, true)
             author = project.info!!.script
             artist = project.info.art
@@ -207,34 +197,23 @@ abstract class TaoSect : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val projectSlug = manga.url
-            .substringAfterLast("projeto/")
-            .substringBefore("/")
-
+    private suspend fun fetchChapterList(projectSlug: String): List<SChapter> {
         val apiUrl = "$baseUrl/$API_BASE_PATH/capitulos".toHttpUrl().newBuilder()
             .addQueryParameter("projeto", projectSlug)
             .addQueryParameter("per_page", "1000")
             .addQueryParameter("order", "desc")
             .addQueryParameter("orderby", "sequencia")
             .addQueryParameter("_fields", "nome_capitulo,post_id,slug,data_insercao")
-            .toString()
+            .build()
 
-        return GET(apiUrl, apiHeaders)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<List<TaoSectChapterDto>>()
+        val result = client.get(apiUrl, apiHeaders).parseAs<List<TaoSectChapterDto>>()
 
         if (result.isEmpty()) {
             throw Exception(CHAPTERS_NOT_FOUND)
         }
 
         // Count the project views, requested by the scanlator.
-        val countViewRequest = countProjectViewRequest(result[0].projectId!!)
-        runCatching { client.newCall(countViewRequest).execute().close() }
-
-        val projectSlug = response.request.url.queryParameter("projeto")!!
+        countProjectView(result[0].projectId!!)
 
         return result.map { chapterFromObject(it, projectSlug) }
     }
@@ -242,13 +221,11 @@ abstract class TaoSect : HttpSource() {
     private fun chapterFromObject(obj: TaoSectChapterDto, projectSlug: String): SChapter = SChapter.create().apply {
         name = obj.name
         scanlator = this@TaoSect.name
-        date_upload = obj.date.toDate()
+        date_upload = DATE_FORMATTER.tryParseDateTime(obj.date)
         url = "/leitor-online/projeto/$projectSlug/${obj.slug}/"
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val projectSlug = chapter.url
             .substringAfter("projeto/")
             .substringBefore("/")
@@ -260,21 +237,13 @@ abstract class TaoSect : HttpSource() {
             .addPathSegment(projectSlug)
             .addPathSegment(chapterSlug)
             .addQueryParameter("_fields", "id_capitulo,paginas,post_id")
-            .toString()
+            .build()
 
-        return GET(apiUrl, apiHeaders)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<TaoSectChapterDto>()
+        val result = client.get(apiUrl, apiHeaders).parseAs<TaoSectChapterDto>()
 
         if (result.pages.isEmpty()) {
             return emptyList()
         }
-
-        val apiUrlPaths = response.request.url.pathSegments
-        val projectSlug = apiUrlPaths[4]
-        val chapterSlug = apiUrlPaths[5]
 
         val chapterUrl = "$baseUrl/leitor-online/projeto/$projectSlug/$chapterSlug"
 
@@ -283,8 +252,7 @@ abstract class TaoSect : HttpSource() {
         }
 
         // Count the project and chapter views, requested by the scanlator.
-        val countViewRequest = countProjectViewRequest(result.projectId!!, result.id)
-        runCatching { client.newCall(countViewRequest).execute().close() }
+        countProjectView(result.projectId!!, result.id)
 
         // Check if the pages have exceeded the view limit of Google Drive.
         val firstPage = pages[0]
@@ -292,7 +260,7 @@ abstract class TaoSect : HttpSource() {
         val hasExceededViewLimit = runCatching {
             val firstPageRequest = imageRequest(firstPage)
 
-            client.newCall(firstPageRequest).execute().use {
+            client.get(firstPageRequest.url, firstPageRequest.headers, ensureSuccess = false).use {
                 val isHtml = it.headers["Content-Type"]!!.contains("text/html")
 
                 GoogleDriveResponse(!isHtml && it.isSuccessful, it.code)
@@ -309,20 +277,12 @@ abstract class TaoSect : HttpSource() {
         return pages
     }
 
-    override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .header("Accept", ACCEPT_IMAGE)
+        .header("Referer", page.url)
+        .build()
 
-    override fun imageUrlParse(response: Response): String = ""
-
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .add("Accept", ACCEPT_IMAGE)
-            .set("Referer", page.url)
-            .build()
-
-        return GET(page.imageUrl!!, newHeaders)
-    }
-
-    private fun countProjectViewRequest(projectId: String, chapterId: String? = null): Request {
+    private suspend fun countProjectView(projectId: String, chapterId: String? = null) {
         val formBodyBuilder = FormBody.Builder()
             .add("action", "update_views_v2")
             .add("projeto", projectId)
@@ -331,17 +291,12 @@ abstract class TaoSect : HttpSource() {
             formBodyBuilder.add("capitulo", chapterId)
         }
 
-        val formBody = formBodyBuilder.build()
-
-        val newHeaders = headersBuilder()
-            .add("Content-Length", formBody.contentLength().toString())
-            .add("Content-Type", formBody.contentType().toString())
-            .build()
-
-        return POST("$baseUrl/wp-admin/admin-ajax.php", newHeaders, formBody)
+        runCatching {
+            client.post("$baseUrl/wp-admin/admin-ajax.php", formBodyBuilder.build()).close()
+        }
     }
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         CountryFilter(getCountryList()),
         StatusFilter(getStatusList()),
         GenreFilter(getGenreList()),
@@ -349,13 +304,6 @@ abstract class TaoSect : HttpSource() {
         FeaturedFilter(),
         NsfwFilter(),
     )
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(it.body.string())
-    }
-
-    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
-        .getOrNull() ?: 0L
 
     private fun String.toStatus() = when (this) {
         "Ativos" -> SManga.ONGOING
@@ -409,7 +357,7 @@ abstract class TaoSect : HttpSource() {
         Tag("62", "Webtoon"),
     )
 
-    private data class GoogleDriveResponse(val isValid: Boolean, val code: Int) {
+    private class GoogleDriveResponse(val isValid: Boolean, val code: Int) {
         val errorMessage: String
             get() = when (code) {
                 GD_SHARING_RATE_LIMIT_EXCEEDED -> EXCEEDED_GOOGLE_DRIVE_VIEW_LIMIT
@@ -422,10 +370,9 @@ abstract class TaoSect : HttpSource() {
         private const val ACCEPT_JSON = "application/json"
         private val USER_AGENT = "Tachiyomi " + System.getProperty("http.agent")
 
-        const val SLUG_PREFIX_SEARCH = "slug:"
-
         private const val API_BASE_PATH = "wp-json/wp/v2"
         private const val PROJECTS_PER_PAGE = 18
+        private const val LATEST_CHAPTERS_PER_PAGE = 100
         private const val DEFAULT_ORDERBY = 3
         private const val DEFAULT_FIELDS = "title,thumbnail,link"
         private const val PROJECT_NOT_FOUND = "Projeto não encontrado."
@@ -439,9 +386,7 @@ abstract class TaoSect : HttpSource() {
         private const val GD_SHARING_RATE_LIMIT_EXCEEDED = 403
         private const val GD_BACKEND_ERROR = 500
 
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
-        }
+        private val DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
 
         private val SORT_LIST = listOf(
             Tag("date", "Data de criação"),

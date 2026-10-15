@@ -42,13 +42,13 @@ class Source(
 
 @Serializable
 class LastChapter(
-    val timestamp: Int,
+    val timestamp: Int = 0,
 )
 
 @Serializable
 class Chapter(
     val title: String,
-    val volume: String = "",
+    val volume: String? = null,
     val timestamp: Int,
     val teams: List<String>,
     @SerialName("licensed")

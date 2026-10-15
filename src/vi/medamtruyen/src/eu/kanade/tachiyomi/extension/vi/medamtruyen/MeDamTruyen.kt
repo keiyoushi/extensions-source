@@ -16,6 +16,8 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.ui.askPassword
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -24,9 +26,9 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -34,6 +36,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class MeDamTruyen : KeiSource() {
+
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(thumbnailFallbackInterceptor)
         rateLimit(3)
@@ -263,10 +266,13 @@ abstract class MeDamTruyen : KeiSource() {
     private fun chapterFromElement(element: Element): SChapter? {
         val linkElement = element.selectFirst("a.chapter-link[href*=-chap-]") ?: return null
         val rawChapterName = element.selectFirst("p.chapter-title")?.text() ?: linkElement.text()
+        val isLocked = linkElement.selectFirst(".glyphicon-lock, .fa-lock, .icon-lock") != null ||
+            element.selectFirst(".glyphicon-lock, .fa-lock, .icon-lock") != null
 
         return SChapter.create().apply {
             setUrlWithoutDomain(linkElement.absUrl("href"))
-            name = normalizeChapterName(rawChapterName)
+            val normalizedName = normalizeChapterName(rawChapterName)
+            name = if (isLocked) "🔒 $normalizedName" else normalizedName
             date_upload = element.selectFirst("p.chapter-meta")
                 ?.text()
                 ?.let(::parseChapterDate)
@@ -285,24 +291,57 @@ abstract class MeDamTruyen : KeiSource() {
             .replace(multiSpaceRegex, " ")
     }
 
-    private fun parseChapterDate(chapterMeta: String): Long {
-        val dateString = chapterDateRegex.find(chapterMeta)?.value ?: return 0L
-        return runCatching {
-            LocalDate.parse(dateString, chapterDateFormat)
-                .atStartOfDay(dateZone)
-                .toInstant()
-                .toEpochMilli()
-        }.getOrDefault(0L)
-    }
+    private fun parseChapterDate(chapterMeta: String): Long = chapterDateFormat.tryParseDate(chapterDateRegex.find(chapterMeta)?.value, dateZone)
 
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
-        val chapterUrl = response.request.url.toString()
-        val html = response.use { it.body.string() }
-        if (passwordFormRegex.containsMatchIn(html)) {
-            throw Exception(passwordWebviewMessage)
+        val chapterUrl = getChapterUrl(chapter)
+        val response = client.get(chapterUrl)
+        var html = response.body.string()
+        var document = Jsoup.parse(html, chapterUrl)
+
+        val lockForm = document.selectFirst("form.post-password-form")
+        if (lockForm != null) {
+            val hint = extractHintText(document)
+            val message = if (!hint.isNullOrBlank()) {
+                "Chương này yêu cầu mật khẩu\n\n$hint"
+            } else {
+                "Chương này yêu cầu mật khẩu"
+            }
+            val password = askPassword(
+                title = chapter.name,
+                message = message,
+                hint = "Mật khẩu",
+            ) ?: throw Exception("Đã hủy nhập mật khẩu")
+
+            val postAction = lockForm.absUrl("action").ifEmpty {
+                "$baseUrl/wp-login.php?action=postpass"
+            }
+            val formBody = FormBody.Builder()
+                .add("post_password", password)
+                .add("redirect_to", chapterUrl)
+                .add("Submit", "Nhập")
+                .build()
+
+            val postHeaders = headers.newBuilder()
+                .set("Referer", chapterUrl)
+                .build()
+
+            val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
+            val responseUrl = postResponse.request.url.toString()
+            val responseBody = postResponse.body.string()
+
+            html = if (postResponse.isSuccessful && !responseUrl.contains("wp-login.php")) {
+                responseBody
+            } else {
+                client.get(chapterUrl).body.string()
+            }
+
+            document = Jsoup.parse(html, chapterUrl)
+            if (document.selectFirst("form.post-password-form") != null) {
+                throw Exception("Mật khẩu không chính xác")
+            }
         }
 
         val imageUrls = ImageDecryptor.extractImageUrls(html, chapterUrl)
@@ -311,6 +350,13 @@ abstract class MeDamTruyen : KeiSource() {
         return imageUrls.mapIndexed { index, imageUrl ->
             Page(index, url = chapterUrl, imageUrl = imageUrl)
         }
+    }
+
+    private fun extractHintText(document: Document): String? {
+        val raw = document.selectFirst("p:contains(Gợi ý)")?.text()
+            ?: document.select("*:containsOwn(Gợi ý)").firstOrNull()?.parent()?.text()
+            ?: return null
+        return raw.replaceFirst(hintColonRegex, "$1\n").trim()
     }
 
     override fun imageRequest(page: Page): Request {
@@ -367,7 +413,6 @@ abstract class MeDamTruyen : KeiSource() {
 
     private val thumbLowSize = "-150x150"
     private val thumbHighSize = "-720x970"
-    private val passwordWebviewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
 
     private val truyenPathRegex = Regex("""/truyen/""", RegexOption.IGNORE_CASE)
     private val chapterNameRegex = Regex(
@@ -378,11 +423,9 @@ abstract class MeDamTruyen : KeiSource() {
     private val chapterNumberRegex = Regex("""\d+(?:[.,]\d+)?""")
     private val chapterDateRegex = Regex("""\d{2}/\d{2}/\d{2}""")
     private val multiSpaceRegex = Regex("""\s+""")
-    private val passwordFormRegex = Regex(
-        """post-password-form|name=['"]post_password['"]""",
-        RegexOption.IGNORE_CASE,
-    )
     private val thumbFallbackMap = ConcurrentHashMap<String, String>()
     private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
     private val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
+    private val passwordWebviewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
+    private val hintColonRegex = Regex("""(Gợi\s*ý\s*:?)\s*""", RegexOption.IGNORE_CASE)
 }

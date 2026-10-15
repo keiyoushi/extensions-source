@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MangaTek"
-    versionCode = 5
+    versionCode = 8
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

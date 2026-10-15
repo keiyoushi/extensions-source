@@ -1,102 +1,87 @@
 package eu.kanade.tachiyomi.extension.ja.zerosumonline
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAsProto
-import keiyoushi.utils.toRequestBodyProto
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 @Source
-abstract class ZerosumOnline : HttpSource() {
+abstract class ZerosumOnline : KeiSource() {
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrl get() = "https://api.$domain/api/v1"
+
     override val supportsLatest = false
 
-    private val domain = baseUrl.toHttpUrl().host
-    private val apiUrl = "https://api.$domain/api/v1"
-
-    override fun popularMangaRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("list")
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$apiUrl/list".toHttpUrl().newBuilder()
             .addQueryParameter("category", "series")
             .addQueryParameter("sort", "date")
             .build()
-        return GET(url, headers)
+
+        return client.get(url).toMangasPage()
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAsProto<TitleListView>()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstance<SelectFilter>().value
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            if (query.isNotBlank()) {
+                addPathSegment("search")
+                addQueryParameter("keyword", query)
+            } else {
+                addPathSegment("list")
+                addQueryParameter("category", "series")
+                addQueryParameter("sort", sort)
+            }
+        }.build()
+
+        return client.get(url).toMangasPage()
+    }
+
+    private fun Response.toMangasPage(): MangasPage {
+        val result = this.parseAsProto<TitleListView>()
         val mangas = result.titles.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-
-        if (query.isNotEmpty()) {
-            url.addPathSegment("search")
-                .addQueryParameter("keyword", query)
-        } else {
-            url.addPathSegment("list")
-                .addQueryParameter("category", "series")
-
-            val sort = filters.firstInstance<SelectFilter>().selectedValue
-            url.addQueryParameter("sort", sort)
-        }
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfterLast("/")
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("title")
-            .addQueryParameter("tag", slug)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val url = "$apiUrl/title".toHttpUrl().newBuilder()
+            .addQueryParameter("tag", manga.url.substringAfterLast("/"))
             .build()
-        return GET(url, headers)
+
+        val details = client.get(url).parseAsProto<TitleDetailView>()
+        return SMangaUpdate(
+            details.title.toSManga(),
+            details.chapters.map { it.toSChapter(details.title.slug) },
+        )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAsProto<TitleDetailView>()
-        return result.title.toSManga()
-    }
-
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAsProto<TitleDetailView>()
-        val slug = result.title.slug
-        return result.chapters.map { it.toSChapter(slug) }
-    }
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("/")
-
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.url.substringAfterLast("/")
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("viewer")
+        val url = "$apiUrl/viewer".toHttpUrl().newBuilder()
             .addQueryParameter("chapter_id", id)
             .build()
-            .toString()
 
-        val body = ViewerRequest(id.toInt()).toRequestBodyProto()
-        return POST(url, headers, body)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAsProto<ViewerView>()
+        val result = client.post(url, ByteArray(0).toRequestBody()).parseAsProto<ViewerView>()
         return result.pages
             .filter { it.url.isNotEmpty() }
             .mapIndexed { i, img ->
@@ -104,10 +89,14 @@ abstract class ZerosumOnline : HttpSource() {
             }
     }
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("/")
+
     // Filter
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SelectFilter(
-            "Sorting",
+            "Sort by",
             arrayOf(
                 Pair("更新日が新しい順", "date"),
                 Pair("作品名順", "title"),
@@ -117,10 +106,7 @@ abstract class ZerosumOnline : HttpSource() {
     )
 
     private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        val selectedValue: String get() = vals[state].second
+        val value: String
+            get() = vals[state].second
     }
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

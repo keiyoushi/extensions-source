@@ -14,26 +14,27 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.en.mehgazone.interceptors.BasicAuthInterceptor
 import eu.kanade.tachiyomi.extension.en.mehgazone.serialization.ChapterListDto
 import eu.kanade.tachiyomi.extension.en.mehgazone.serialization.PageListDto
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.helper.Validate
 import org.jsoup.nodes.Element
@@ -41,34 +42,24 @@ import org.jsoup.parser.Parser.unescapeEntities
 import org.jsoup.select.Collector
 import org.jsoup.select.Elements
 import org.jsoup.select.QueryParser
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class Mehgazone :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient by lazy {
-        network.client
-            .newBuilder()
-            .addInterceptor(TextInterceptor())
-            .addInterceptor(authInterceptor)
-            .build()
-    }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(TextInterceptor())
+        .addInterceptor(authInterceptor)
 
-    private val uploadDateFormat: SimpleDateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
-    }
+    private val uploadDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
 
     private fun String.unescape() = unescapeEntities(this, false)
 
     private fun String.linkify() = SpannableString(this).apply { Linkify.addLinks(this, Linkify.WEB_URLS) }
-
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
     override fun getMangaUrl(manga: SManga) = manga.url
 
@@ -88,8 +79,8 @@ abstract class Mehgazone :
         return null
     }
 
-    override fun popularMangaParse(response: Response) = MangasPage(
-        response.asJsoup()
+    override suspend fun getPopularManga(page: Int) = MangasPage(
+        client.get(baseUrl).asJsoup()
             .selectFirst("#main aside.primary-sidebar .sidebar-group")!!
             .select("h2")
             .filter { el -> el.text().contains("Latest", true) }
@@ -103,29 +94,41 @@ abstract class Mehgazone :
         false,
     )
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val html = response.asJsoup()
-        val thumbnailRegex = Regex("/[^/]+-([0-9]+\\.png)\$", RegexOption.IGNORE_CASE)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(
+        getPopularManga(0).mangas.filter { m -> m.title.contains(query) },
+        false,
+    )
 
-        title = html.head().selectFirst("title")!!.text().unescape()
-        url = response.request.url.toString()
-        author = "Patricia Barton"
-        status = SManga.ONGOING
-        thumbnail_url =
-            html.select("#content img[src*='.png']")
-                .firstOrNull { it.attr("src").matches(thumbnailRegex) }
-                ?.attr("src")
-                ?.replace(thumbnailRegex, "/\$1")
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = if (fetchDetails) async { fetchMangaDetails(manga) } else null
+        val chapterList = if (fetchChapters) fetchChapterList(manga.url) else chapters
+
+        SMangaUpdate(details?.await() ?: manga, chapterList)
     }
 
-    override fun chapterListRequest(manga: SManga): Request = chapterListRequest(manga.url, 1)
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val html = client.get(manga.url).asJsoup()
 
-    private fun chapterListRequest(url: String, page: Int): Request = GET(
-        "$url/wp-json/wp/v2/posts?per_page=100&page=$page&_fields=id,title,date_gmt,excerpt",
-        headers,
-    )
+        return manga.apply {
+            title = html.head().selectFirst("title")!!.text().unescape()
+            author = "Patricia Barton"
+            status = SManga.ONGOING
+            thumbnail_url =
+                html.select("#content img[src*='.png']")
+                    .firstOrNull { it.attr("src").matches(thumbnailRegex) }
+                    ?.attr("src")
+                    ?.replace(thumbnailRegex, "/\$1")
+        }
+    }
+
+    private fun chapterListUrl(url: String, page: Int) = "$url/wp-json/wp/v2/posts?per_page=100&page=$page&_fields=id,title,date_gmt,excerpt"
 
     private fun hasNextPage(headers: Headers, responseSize: Int, page: Int): Boolean {
         val pages = headers["X-Wp-Totalpages"]?.toInt()
@@ -135,22 +138,18 @@ abstract class Mehgazone :
 
     override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val apiResponse = response.parseAs<List<ChapterListDto>>().toMutableList()
-        val mangaUrl = response.request.url.toString().substringBefore("/wp-json/")
+    private suspend fun fetchChapterList(mangaUrl: String): List<SChapter> {
+        val apiResponse = mutableListOf<ChapterListDto>()
 
-        if (hasNextPage(response.headers, apiResponse.size, 1)) {
-            var page = 1
-            do {
-                page++
-                val tempResponse = client.newCall(chapterListRequest(mangaUrl, page)).execute()
-                val headers = tempResponse.headers
-                val tempApiResponse = tempResponse.parseAs<List<ChapterListDto>>()
+        var page = 0
+        do {
+            page++
+            val response = client.get(chapterListUrl(mangaUrl, page))
+            val headers = response.headers
+            val pageResponse = response.parseAs<List<ChapterListDto>>()
 
-                apiResponse.addAll(tempApiResponse)
-                tempResponse.close()
-            } while (hasNextPage(headers, tempApiResponse.size, page))
-        }
+            apiResponse.addAll(pageResponse)
+        } while (hasNextPage(headers, pageResponse.size, page))
 
         return apiResponse
             .filter { !it.excerpt.rendered.contains("Unlock with Patreon") }
@@ -161,36 +160,32 @@ abstract class Mehgazone :
                     url = "$mangaUrl/?p=${it.id}"
                     name = it.title.rendered.unescape()
                         .ifEmpty { it.date.substringBefore('T') }
-                    date_upload = uploadDateFormat.tryParse(it.date)
+                    date_upload = uploadDateFormat.tryParseDateTime(it.date)
                     chapter_number = i.toFloat()
                 }
             }.reversed()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = chapter.url.toHttpUrl()
         val pageListUrl = chapterUrl
             .newBuilder("/wp-json/wp/v2/posts?per_page=1&_fields=link,content,excerpt,date,title")!!
             .setQueryParameter("include", chapterUrl.queryParameter("p"))
             .build()
-        return GET(pageListUrl.toString(), headers)
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val apiResponse: PageListDto = response.parseAs<List<PageListDto>>().first()
+        val apiResponse: PageListDto = client.get(pageListUrl).parseAs<List<PageListDto>>().first()
 
         val content = Jsoup.parseBodyFragment(apiResponse.content.rendered, apiResponse.link)
 
         val images = content.select("img")
-            .mapIndexed { i, it -> Page(i, "", it.attr("src")) }
+            .mapIndexed { i, it -> Page(i, imageUrl = it.attr("src")) }
             .toMutableList()
 
         if (apiResponse.excerpt.rendered.isNotBlank()) {
             images.add(
                 Page(
                     images.size,
-                    "",
-                    TextInterceptorHelper.createUrl("", Jsoup.parseBodyFragment(apiResponse.excerpt.rendered.unescape()).text()),
+                    imageUrl = TextInterceptorHelper.createUrl("", Jsoup.parseBodyFragment(apiResponse.excerpt.rendered.unescape()).text()),
                 ),
             )
         }
@@ -201,6 +196,8 @@ abstract class Mehgazone :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     companion object {
+        private val thumbnailRegex = Regex("/[^/]+-([0-9]+\\.png)\$", RegexOption.IGNORE_CASE)
+
         private const val WORDPRESS_USERNAME_PREF_KEY = "WORDPRESS_USERNAME"
         private const val WORDPRESS_USERNAME_PREF_TITLE = "WordPress username"
         private const val WORDPRESS_USERNAME_PREF_SUMMARY = "The WordPress username"
@@ -291,21 +288,4 @@ abstract class Mehgazone :
 
         return null
     }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(0).map {
-        MangasPage(
-            it.mangas.filter { m -> m.title.contains(query) },
-            false,
-        )
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }

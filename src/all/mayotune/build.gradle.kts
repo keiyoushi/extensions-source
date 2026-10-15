@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "MayoTune"
-    versionCode = 2
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf("en", "ja").forEach {
         source {

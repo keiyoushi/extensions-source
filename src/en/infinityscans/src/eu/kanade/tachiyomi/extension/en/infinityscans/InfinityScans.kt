@@ -197,7 +197,7 @@ abstract class InfinityScans : KeiSource() {
         val mangaId = chapter.url.split("/")[1]
 
         val pageHeaders = headersBuilder()
-            .set("next-action", "6059eb844d4cb2658ebbdc562485ac7f318a7c89cb")
+            .set("next-action", "603b9ae64dc53c5457f77cf6a4ea08b361e2e36b2f")
             .build()
 
         val body = listOf(mangaId, chapterId).toJsonRequestBody()

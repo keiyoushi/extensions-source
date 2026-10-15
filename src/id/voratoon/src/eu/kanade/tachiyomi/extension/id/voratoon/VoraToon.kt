@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.voratoon
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -27,7 +26,7 @@ abstract class VoraToon : KeiSource() {
 
     private val apiUrl = "https://api.voratoon.com"
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3) { it.host == "api.voratoon.com" }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         add("Accept", "application/json")
@@ -38,9 +37,9 @@ abstract class VoraToon : KeiSource() {
         client.get(
             "$apiUrl/series".toHttpUrl().newBuilder()
                 .addQueryParameter("includeMeta", "true")
-                .addQueryParameter("take", "12")
+                .addQueryParameter("take", "30")
                 .addQueryParameter("page", page.toString())
-                .addQueryParameter("sort", "totalViews")
+                .addQueryParameter("sort", "popularity")
                 .addQueryParameter("sortOrder", "desc")
                 .build(),
         ),
@@ -50,7 +49,7 @@ abstract class VoraToon : KeiSource() {
         client.get(
             "$apiUrl/series".toHttpUrl().newBuilder()
                 .addQueryParameter("includeMeta", "true")
-                .addQueryParameter("take", "12")
+                .addQueryParameter("take", "30")
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("sort", "latest")
                 .addQueryParameter("sortOrder", "desc")
@@ -62,7 +61,7 @@ abstract class VoraToon : KeiSource() {
         client.get(
             "$apiUrl/series".toHttpUrl().newBuilder()
                 .addQueryParameter("includeMeta", "true")
-                .addQueryParameter("take", "12")
+                .addQueryParameter("take", "30")
                 .addQueryParameter("page", page.toString())
                 .apply {
                     if (query.isNotEmpty()) {
@@ -103,11 +102,10 @@ abstract class VoraToon : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.getOrNull(0) != "series") return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
-        return try {
-            client.get("$apiUrl/series/$slug").parseAs<SeriesDetailResponse>().data.toSManga()
-        } catch (_: Exception) {
-            null
+        val manga = SManga.create().apply {
+            this.url = "/series/$slug"
         }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -148,6 +146,10 @@ abstract class VoraToon : KeiSource() {
             .set("Referer", "$baseUrl/")
             .build()
 
-        return GET(page.imageUrl!!, newHeaders)
+        return Request.Builder()
+            .url(page.imageUrl!!)
+            .headers(newHeaders)
+            .get()
+            .build()
     }
 }

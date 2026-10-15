@@ -15,6 +15,8 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.ui.askPassword
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -25,7 +27,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -264,23 +265,55 @@ abstract class TeamLanhLung : KeiSource() {
         return rawName.substringAfterLast("–").substringAfterLast("-").trim()
     }
 
-    private fun parseChapterDate(date: String): Long = runCatching {
-        LocalDate.parse(date, dateFormatFull).atStartOfDay(dateZone).toInstant().toEpochMilli()
-    }.recoverCatching {
-        LocalDate.parse(date, dateFormatShort).atStartOfDay(dateZone).toInstant().toEpochMilli()
-    }.getOrDefault(0L)
+    private fun parseChapterDate(date: String): Long = dateFormatFull.tryParseDate(date, dateZone).takeIf { it != 0L }
+        ?: dateFormatShort.tryParseDate(date, dateZone)
 
     // ============================== Pages ===============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).use { response ->
-        val html = response.body.string()
-        val document = Jsoup.parse(html, response.request.url.toString())
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val response = client.get(chapterUrl)
+        var html = response.body.string()
+        var document = Jsoup.parse(html, chapterUrl)
 
-        if (document.selectFirst("form.post-password-form") != null) {
-            throw Exception(passwordWebViewMessage)
+        val lockForm = document.selectFirst("form.post-password-form")
+        if (lockForm != null) {
+            val password = askPassword(
+                title = chapter.name,
+                message = "Chương này yêu cầu mật khẩu",
+                hint = "Mật khẩu",
+            ) ?: throw Exception("Đã hủy nhập mật khẩu")
+
+            val postAction = lockForm.absUrl("action").ifEmpty {
+                "$baseUrl/wp-login.php?action=postpass"
+            }
+            val formBody = FormBody.Builder()
+                .add("post_password", password)
+                .add("redirect_to", chapterUrl)
+                .add("Submit", "Nhập")
+                .build()
+
+            val postHeaders = headers.newBuilder()
+                .set("Referer", chapterUrl)
+                .build()
+
+            val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
+            val responseUrl = postResponse.request.url.toString()
+            val responseBody = postResponse.body.string()
+
+            html = if (postResponse.isSuccessful && !responseUrl.contains("wp-login.php")) {
+                responseBody
+            } else {
+                client.get(chapterUrl).body.string()
+            }
+
+            document = Jsoup.parse(html, chapterUrl)
+            if (document.selectFirst("form.post-password-form") != null) {
+                throw Exception("Mật khẩu không chính xác")
+            }
         }
 
-        ImageDecryptor.extractImageUrls(html).mapIndexed { index, imageUrl ->
+        return ImageDecryptor.extractImageUrls(html).mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
     }
@@ -327,7 +360,6 @@ abstract class TeamLanhLung : KeiSource() {
         return relatedSection.select(".comic-item").map(::mangaFromComicItem).distinctBy { it.url }
     }
 
-    private val passwordWebViewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
     private val dateFormatFull = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     private val dateFormatShort = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
     private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")

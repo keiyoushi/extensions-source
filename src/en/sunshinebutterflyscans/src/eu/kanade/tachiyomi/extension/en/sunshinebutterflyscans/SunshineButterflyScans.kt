@@ -8,93 +8,94 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
 
 @Source
-abstract class SunshineButterflyScans : HttpSource() {
+abstract class SunshineButterflyScans : KeiSource() {
 
     private val cdnUrl = "$baseUrl/images/projcoverjpeg/"
 
-    override val supportsLatest = true
-
     // Madara -> custom theme
 
-    override val client = network.client.newBuilder()
-        .rateLimit(2)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    private fun apiHeadersBuilder() = headersBuilder().apply {
-        add("Accept", "*/*")
-        add("Host", baseUrl.toHttpUrl().host)
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(2)
     }
 
-    private val apiHeaders by lazy { apiHeadersBuilder().build() }
+    private fun apiHeaders() = headersBuilder().apply {
+        add("Accept", "*/*")
+    }.build()
 
-    private val json: Json by injectLazy()
+    @Volatile
+    private var chaptersData: List<List<EntryDto>>? = null
 
-    private val chaptersData by lazy {
-        client.newCall(
-            GET("$baseUrl/json/chapters.json", apiHeaders),
-        ).execute().parseAs<List<EntryDto>>().groupBy {
-            it.series
-        }.values.map { it.sortedByDescending { it.num } }
+    @Volatile
+    private var initialized = false
+
+    private val mutex = Mutex()
+
+    private suspend fun getChaptersData(): List<List<EntryDto>> {
+        if (initialized) return chaptersData!!
+
+        mutex.withLock {
+            if (!initialized) {
+                initialized = true
+                chaptersData = client.get("$baseUrl/json/chapters.json", apiHeaders()).parseAs<List<EntryDto>>().groupBy {
+                    it.series
+                }.values.map { it.sortedByDescending { it.num } }
+            }
+        }
+
+        return chaptersData!!
     }
 
     // ============================== Popular ===============================
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val mangaList = chaptersData.sortedBy {
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mangaList = getChaptersData().sortedBy {
             it.first().series
         }.map {
             it.first().toSManga(cdnUrl)
         }
 
-        return Observable.just(MangasPage(mangaList, false))
+        return MangasPage(mangaList, false)
     }
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Latest ===============================
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        val mangaList = chaptersData.sortedByDescending {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val mangaList = getChaptersData().sortedByDescending {
             it.first().timestamp.toLongOrNull() ?: Long.MAX_VALUE
         }.map {
             it.first().toSManga(cdnUrl)
         }
 
-        return Observable.just(MangasPage(mangaList, false))
+        return MangasPage(mangaList, false)
     }
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val selectedStatus = filters.filterIsInstance<StatusFilter>().first().toUriPart()
-        val selectedSort = filters.filterIsInstance<SortFilter>().first().getSelection()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val selectedStatus = filters.firstInstance<StatusFilter>().toUriPart()
+        val selectedSort = filters.firstInstance<SortFilter>().getSelection()
 
         val sortedList = if (selectedSort.first == "Name") {
-            chaptersData.sortedBy { it.first().series }
+            getChaptersData().sortedBy { it.first().series }
         } else {
-            chaptersData.sortedByDescending {
+            getChaptersData().sortedByDescending {
                 it.first().timestamp.toLongOrNull() ?: Long.MAX_VALUE
             }
         }
@@ -113,16 +114,30 @@ abstract class SunshineButterflyScans : HttpSource() {
             it.first().toSManga(cdnUrl)
         }
 
-        return Observable.just(MangasPage(mangaList, false))
+        return MangasPage(mangaList, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "projects" || url.queryParameter("n") == null) {
+            return null
+        }
 
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+        val mangaUrl = "/projects?n=${url.queryParameter("n")}"
+        val manga = SManga.create().apply {
+            this.url = mangaUrl
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                initialized = true
+                this.url = mangaUrl
+            }
+    }
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         StatusFilter(),
         SortFilter(),
     )
@@ -156,72 +171,54 @@ abstract class SunshineButterflyScans : HttpSource() {
         }
     }
 
-    // =========================== Manga Details ============================
+    // =========================== Manga Updates ============================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val mangaData = chaptersData.first {
-            it.first().projectName == manga.url.substringAfter("?n=")
-        }.first()
-
-        return Observable.just(mangaData.toSManga(cdnUrl))
-    }
-
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun mangaDetailsRequest(manga: SManga): Request = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    // ============================== Chapters ==============================
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val selectedManga = chaptersData.first {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val mangaData = getChaptersData().first {
             it.first().projectName == manga.url.substringAfter("?n=")
         }
-        val chapterList = selectedManga.map { it.toSChapter() }
-
-        return Observable.just(chapterList)
+        val manga = mangaData.first().toSManga(cdnUrl)
+        val chapters = mangaData.map { it.toSChapter() }
+        return SMangaUpdate(manga, chapters)
     }
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterDto = chaptersData.flatten().first {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterDto = getChaptersData().flatten().first {
             "${it.projectName}&num=${it.num}" == chapter.url.substringAfter("series=")
         }
         val decrypted = CryptoAES.decrypt(chapterDto.albumID, KEY, IV)
+        val isGoogleDrive = decrypted.length > 10
 
-        val url = if (decrypted.length > 10) {
+        val url = if (isGoogleDrive) {
             GOOGLE_DRIVE_FIRST + decrypted + GOOGLE_DRIVE_SECOND
         } else {
             IMGUR_FIRST + decrypted + IMGUR_SECOND
         }
         val headers = headersBuilder().apply {
             set("Host", url.toHttpUrl().host)
-            add("Origin", baseUrl)
             if (decrypted.length <= 10) {
-                add("Authorization", "Bearer $IMGUR_BEARER")
+                add("Authorization", "Client-ID $IMGUR_CLIENT_ID")
             }
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> = if (response.request.url.host.contains("googleapis")) {
-        response.parseAs<GoogleDriveResponseDto>().files.sortedBy {
-            it.name
-        }.mapIndexed { index, file ->
-            Page(index, imageUrl = "https://lh3.googleusercontent.com/d/${file.id}=w${file.metadata.width}")
-        }
-    } else {
-        response.parseAs<ImgurResponseDto>().data.mapIndexed { index, data ->
-            Page(index, imageUrl = data.link)
+        val response = client.get(url, headers)
+        return if (isGoogleDrive) {
+            response.parseAs<GoogleDriveResponseDto>().files.sortedBy {
+                it.name
+            }.mapIndexed { index, file ->
+                Page(index, imageUrl = "https://lh3.googleusercontent.com/d/${file.id}=w${file.metadata.width}")
+            }
+        } else {
+            response.parseAs<ImgurResponseDto>().data.mapIndexed { index, data ->
+                Page(index, imageUrl = data.link)
+            }
         }
     }
 
@@ -234,18 +231,14 @@ abstract class SunshineButterflyScans : HttpSource() {
         return GET(page.imageUrl!!, imgHeaders)
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================= Utilities ==============================
-
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     companion object {
         private const val GOOGLE_DRIVE_FIRST = "https://www.googleapis.com/drive/v3/files?q=\""
         private const val GOOGLE_DRIVE_SECOND = "\"+in+parents&key=AIzaSyDDWjOHN1UPcafkwyJLO7fX1gmVyntIozs&orderBy=name_natural&fields=files(id,name,imageMediaMetadata)&pageSize=250"
         private const val IMGUR_FIRST = "https://api.imgur.com/3/album/"
         private const val IMGUR_SECOND = "/images"
-        private val IMGUR_BEARER = "84155230e6a2d98eaea1cee48d97e6ecff0f6c12"
+        private val IMGUR_CLIENT_ID = "227a2add62d2c9c"
         private val KEY = Base64.decode("YX+1nM4KgfaYwNE3/MPcTg==", Base64.DEFAULT)
         private val IV = Base64.decode("279GjT2Xu9LZBkI4zLzIAg==", Base64.DEFAULT)
     }

@@ -1,28 +1,19 @@
 package eu.kanade.tachiyomi.extension.pt.nocturnesummer
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import okhttp3.Response
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class NocturneSummer : Madara() {
-    override val dateFormat = SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd 'de' MMMM 'de' yyyy", Locale.forLanguageTag("pt-BR"))
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
-
-    override val useNewChapterEndpoint = true
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds)
 
     override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Estado) > div.summary-content"
-
-    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response)
-        .sortedBy(SChapter::name)
-        .reversed()
+    override val chapterMode = ChapterMode.MangaAjax
 }

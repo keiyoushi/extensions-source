@@ -4,32 +4,35 @@ import android.content.SharedPreferences
 import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import kotlin.random.Random
 
 @Source
 abstract class HanaBook :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val apiUrl = "https://api.hana-book.fr/api-ebook/v14"
     private val imgCoverUrl = "https://www.boys-loves.fr/yaoi/images/visuels/manga/mobile_600"
@@ -37,13 +40,7 @@ abstract class HanaBook :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::authInterceptor)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::authInterceptor)
 
     // =============================== HTTP =================================
 
@@ -97,7 +94,7 @@ abstract class HanaBook :
 
     // =============================== Login ================================
 
-    private fun ensureLogin() {
+    private suspend fun ensureLogin() {
         val email = preferences.getString(EMAIL_KEY, "").orEmpty()
         val password = preferences.getString(PASSWORD_KEY, "").orEmpty()
         if (email.isBlank() || password.isBlank()) return
@@ -108,19 +105,19 @@ abstract class HanaBook :
     private fun hasToken(): Boolean = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
         .any { it.name == "tokenEbook" }
 
-    private fun login(email: String, password: String) {
+    private suspend fun login(email: String, password: String) {
         val body = LoginRequest(
             ident = email,
             pass = fill(18, b64(password), 9),
         ).toJsonRequestBody()
 
-        val loginHeaders = headersBuilder()
+        val loginHeaders = headers.newBuilder()
             .set("Authorization", "Bearer null")
             .set("Referer", "$baseUrl/hana-book/login")
             .build()
 
-        val req = POST("$apiUrl/user/", loginHeaders, body)
-        val data = client.newCall(req).execute().parseAs<LoginResponse>(transform = ::stripXssi)
+        val data = client.post("$apiUrl/user/", loginHeaders, body, ensureSuccess = false)
+            .parseAs<LoginResponse>(transform = ::stripXssi)
         val token = data.token ?: throw Exception("Login échoué: ${data.message ?: "identifiants invalides"}")
 
         val wrapped = b64(fill(7, token, 4))
@@ -138,18 +135,15 @@ abstract class HanaBook :
 
     // =============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = produitsInfoRequest(7)
-    override fun popularMangaParse(response: Response): MangasPage = produitsInfoParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = getProduitsInfo(7)
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = produitsInfoRequest(6)
-    override fun latestUpdatesParse(response: Response): MangasPage = produitsInfoParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getProduitsInfo(6)
 
-    private fun produitsInfoRequest(id: Int): Request = GET("$apiUrl/produits/info/?id=$id&option=0&filterAbo=false&filterPasDejaLu=false", headers)
-
-    private fun produitsInfoParse(response: Response): MangasPage {
-        val data = response.parseAs<LatestResponse>(transform = ::stripXssi)
+    private suspend fun getProduitsInfo(id: Int): MangasPage {
+        val data = client.get("$apiUrl/produits/info/?id=$id&option=0&filterAbo=false&filterPasDejaLu=false")
+            .parseAs<LatestResponse>(transform = ::stripXssi)
         val seen = HashSet<String>()
         val mangas = data.ebooks?.ebooks.orEmpty().mapNotNull { e ->
             val ref = e.ref.toIntOrNull() ?: return@mapNotNull null
@@ -170,37 +164,15 @@ abstract class HanaBook :
 
     private fun stripVolumeSuffix(titre: String): String = titre.replace(volumeSuffixRegex, "").trim()
 
-    private fun catalogueParse(response: Response): MangasPage {
-        val data = response.parseAs<CatalogueResponse>(transform = ::stripXssi)
-        val mangas = data.licences.mapNotNull { l ->
-            val ref = l.coverRef ?: return@mapNotNull null
-            SManga.create().apply {
-                title = l.titreSerie
-                thumbnail_url = coverUrl(l.coverRef)
-                genre = l.genres.joinToString { it.nom }
-                setUrlWithoutDomain(mangaUrl(l.idSerie, l.seo, ref))
-            }
-        }
-        return MangasPage(mangas, data.page < data.nbPages)
-    }
-
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = "$apiUrl/search/".toHttpUrl().newBuilder()
                 .addQueryParameter("key", query)
                 .addQueryParameter("filterAbo", "false")
                 .build()
-            return GET(url, headers)
-        }
-        return catalogueRequest(page, filters)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val path = response.request.url.encodedPath
-        return if (path.contains("/search/")) {
-            val data = response.parseAs<SearchResponse>(transform = ::stripXssi)
+            val data = client.get(url).parseAs<SearchResponse>(transform = ::stripXssi)
             val seen = HashSet<Int>()
             val mangas = data.ebooks
                 .filter { seen.add(it.idSerie) }
@@ -213,15 +185,14 @@ abstract class HanaBook :
                         setUrlWithoutDomain(mangaUrl(e.idSerie, e.seo, e.ref))
                     }
                 }
-            MangasPage(mangas, false)
-        } else {
-            catalogueParse(response)
+            return MangasPage(mangas, false)
         }
+        return getCatalogue(page, filters)
     }
 
     // =============================== Catalogue ============================
 
-    private fun catalogueRequest(page: Int, filters: FilterList): Request {
+    private suspend fun getCatalogue(page: Int, filters: FilterList): MangasPage {
         val builder = "$apiUrl/catalogue/".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", "20")
@@ -249,12 +220,28 @@ abstract class HanaBook :
         if (ages.isNotEmpty()) builder.addQueryParameter("ages", ages.joinToString(","))
         if (types.isNotEmpty()) builder.addQueryParameter("types", types.joinToString(","))
 
-        return GET(builder.build(), headers)
+        val data = client.get(builder.build()).parseAs<CatalogueResponse>(transform = ::stripXssi)
+        val mangas = data.licences.mapNotNull { l ->
+            val ref = l.coverRef ?: return@mapNotNull null
+            SManga.create().apply {
+                title = l.titreSerie
+                thumbnail_url = coverUrl(l.coverRef)
+                genre = l.genres.joinToString { it.nom }
+                setUrlWithoutDomain(mangaUrl(l.idSerie, l.seo, ref))
+            }
+        }
+        return MangasPage(mangas, data.page < data.nbPages)
     }
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList = getGlobalFilterList(apiUrl, client, headers)
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/catalogue/filters/?filterAbo=false")
+        .parseAs<FiltersResponse>(transform = ::stripXssi)
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList = getGlobalFilterList(data?.parseAs<FiltersResponse>())
 
     // =========================== Manga Details ============================
 
@@ -265,36 +252,47 @@ abstract class HanaBook :
         return "$baseUrl/ebook/${seo.trimEnd('-')}/$ref"
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        ensureLogin()
         val ref = refFromUrl(manga.url)
-        return GET("$apiUrl/produit/?id=$ref", headers)
-    }
+        val ebook = client.get("$apiUrl/produit/?id=$ref")
+            .parseAs<ProduitResponse>(transform = ::stripXssi).ebook
+            ?: if (fetchDetails) throw Exception("Ebook introuvable") else return SMangaUpdate(manga, emptyList())
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val ebook = response.parseAs<ProduitResponse>(transform = ::stripXssi).ebook
-            ?: throw Exception("Ebook introuvable")
+        return coroutineScope {
+            val details = async {
+                if (fetchDetails) {
+                    val idSerie = ebook.idSerie.takeIf { it != 0 }
 
-        val idSerie = ebook.idSerie.takeIf { it != 0 }
+                    // Optional enrichment via licence-dossier (curated wiki-style data).
+                    val dossier = idSerie?.let { runCatching { fetchDossier(it) }.getOrNull() }
 
-        // Optional enrichment via licence-dossier (curated wiki-style data).
-        val dossier = idSerie?.let { runCatching { fetchDossier(it) }.getOrNull() }
-
-        return SManga.create().apply {
-            title = ebook.titreSerie.ifBlank { stripVolumeSuffix(ebook.titre) }
-            thumbnail_url = dossier?.cover?.jpg ?: dossier?.cover?.webp ?: coverUrl(ebook.ref)
-            author = ebook.auteur
-            description = buildDescription(ebook, dossier)
-            genre = (listOfNotNull(dossier?.categoryLabel) + ebook.genres).distinct().joinToString()
-            status = SManga.UNKNOWN
+                    manga.apply {
+                        title = ebook.titreSerie.ifBlank { stripVolumeSuffix(ebook.titre) }
+                        thumbnail_url = dossier?.cover?.jpg ?: dossier?.cover?.webp ?: coverUrl(ebook.ref)
+                        author = ebook.auteur
+                        description = buildDescription(ebook, dossier)
+                        genre = (listOfNotNull(dossier?.categoryLabel) + ebook.genres).distinct().joinToString()
+                        status = SManga.UNKNOWN
+                    }
+                } else {
+                    manga
+                }
+            }
+            val chapterList = async {
+                if (fetchChapters) getChapterList(ebook) else chapters
+            }
+            SMangaUpdate(details.await(), chapterList.await())
         }
     }
 
-    private fun fetchDossier(idSerie: Int): Dossier? {
-        val req = GET("$apiUrl/licence-dossier/?id_licence=$idSerie", headers)
-        return client.newCall(req).execute().use {
-            it.parseAs<DossierResponse>(transform = ::stripXssi).dossier
-        }
-    }
+    private suspend fun fetchDossier(idSerie: Int): Dossier? = client.get("$apiUrl/licence-dossier/?id_licence=$idSerie")
+        .parseAs<DossierResponse>(transform = ::stripXssi).dossier
 
     private fun buildDescription(e: Ebook, d: Dossier?): String {
         val parts = mutableListOf<String>()
@@ -338,15 +336,7 @@ abstract class HanaBook :
 
     // ============================== Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request {
-        ensureLogin()
-        val ref = refFromUrl(manga.url)
-        return GET("$apiUrl/produit/?id=$ref", headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val ebook = response.parseAs<ProduitResponse>(transform = ::stripXssi).ebook ?: return emptyList()
-
+    private suspend fun getChapterList(ebook: Ebook): List<SChapter> {
         if (ebook.nbProduitsSerie <= 1) {
             return listOf(buildChapter(ebook.ref, ebook.titre, ebook.numVolume ?: 1, ebook.nbPages))
         }
@@ -355,8 +345,8 @@ abstract class HanaBook :
             .addQueryParameter("key", ebook.titreSerie)
             .addQueryParameter("filterAbo", "false")
             .build()
-        val volumes = client.newCall(GET(searchUrl, headers)).execute()
-            .use { it.parseAs<SearchResponse>(transform = ::stripXssi).ebooks }
+        val volumes = client.get(searchUrl)
+            .parseAs<SearchResponse>(transform = ::stripXssi).ebooks
             .filter { it.idSerie == ebook.idSerie }
 
         return volumes
@@ -384,7 +374,7 @@ abstract class HanaBook :
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         ensureLogin()
         val httpUrl = (baseUrl + chapter.url).toHttpUrl()
         val ref = httpUrl.pathSegments.last().toInt()
@@ -399,21 +389,16 @@ abstract class HanaBook :
             .addQueryParameter("nb_pages", nbPages.toString())
             .addQueryParameter("devicePixelRatio", "1.25")
             .build()
-        return GET(url, headers)
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<ImagesResponse>(transform = ::stripXssi)
+        val data = client.get(url).parseAs<ImagesResponse>(transform = ::stripXssi)
         if (data.images.isEmpty()) {
             throw Exception(data.message ?: "Aucune image (connexion ou abonnement requis)")
         }
         return data.images.mapIndexed { i, img ->
-            val url = "$blImgUrl?p=${img.param}&k=$identityKey"
-            Page(i, "", url)
+            val imageUrl = "$blImgUrl?p=${img.param}&k=$identityKey"
+            Page(i, "", imageUrl)
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================ Preferences =============================
 

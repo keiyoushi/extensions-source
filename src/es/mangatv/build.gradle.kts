@@ -8,7 +8,7 @@ keiyoushi {
     name = "Manga TV"
     versionCode = 3
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {
@@ -19,6 +19,5 @@ keiyoushi {
 }
 
 dependencies {
-
     implementation(project(":lib:unpacker"))
 }

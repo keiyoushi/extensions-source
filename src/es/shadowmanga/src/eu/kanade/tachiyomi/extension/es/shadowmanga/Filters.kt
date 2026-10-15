@@ -2,6 +2,14 @@ package eu.kanade.tachiyomi.extension.es.shadowmanga
 
 import eu.kanade.tachiyomi.source.model.Filter
 
+class AdultContentFilter(state: Boolean = false) : Filter.CheckBox("Mostrar contenido adulto", state)
+
+class OrderByFilter :
+    Filter.Select<String>(
+        "Orden",
+        arrayOf("Recientes", "Más vistos", "A-Z"),
+    )
+
 open class UriMultiTriStateOption(name: String, val value: String) : Filter.TriState(name)
 
 class GenreFilter(genres: List<String>) :

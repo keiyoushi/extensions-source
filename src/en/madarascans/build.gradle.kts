@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Madara Scans"
-    versionCode = 3
+    versionCode = 5
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {
         lang = "en"
-        baseUrl = "https://madarascans.org"
+        baseUrl = "https://madarascans.net"
     }
 }

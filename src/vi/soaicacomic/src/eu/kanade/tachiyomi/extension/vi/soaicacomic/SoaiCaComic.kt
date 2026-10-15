@@ -16,6 +16,8 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.ui.askPassword
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -24,9 +26,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -325,22 +327,51 @@ abstract class SoaiCaComic : KeiSource() {
             .ifEmpty { rawName }
     }
 
-    private fun parseChapterDate(dateText: String): Long = runCatching {
-        LocalDate.parse(dateText, dateFormat)
-            .atStartOfDay(dateZone)
-            .toInstant()
-            .toEpochMilli()
-    }.getOrDefault(0L)
+    private fun parseChapterDate(dateText: String): Long = dateFormat.tryParseDate(dateText, dateZone)
 
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val (html, chapterUrl) = client.get("$baseUrl${chapter.url}").use { response ->
-            response.body.string() to response.request.url.toString()
-        }
+        val chapterUrl = getChapterUrl(chapter)
+        val response = client.get(chapterUrl)
+        var html = response.body.string()
+        var document = Jsoup.parse(html, chapterUrl)
 
-        if (passwordFieldRegex.containsMatchIn(html)) {
-            throw Exception(passwordWebviewMessage)
+        val lockForm = document.selectFirst("form.post-password-form")
+        if (lockForm != null) {
+            val password = askPassword(
+                title = chapter.name,
+                message = "Chương này yêu cầu mật khẩu",
+                hint = "Mật khẩu",
+            ) ?: throw Exception("Đã hủy nhập mật khẩu")
+
+            val postAction = lockForm.absUrl("action").ifEmpty {
+                "$baseUrl/wp-login.php?action=postpass"
+            }
+            val formBody = FormBody.Builder()
+                .add("post_password", password)
+                .add("redirect_to", chapterUrl)
+                .add("Submit", "Nhập")
+                .build()
+
+            val postHeaders = headers.newBuilder()
+                .set("Referer", chapterUrl)
+                .build()
+
+            val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
+            val responseUrl = postResponse.request.url.toString()
+            val responseBody = postResponse.body.string()
+
+            html = if (postResponse.isSuccessful && !responseUrl.contains("wp-login.php")) {
+                responseBody
+            } else {
+                client.get(chapterUrl).body.string()
+            }
+
+            document = Jsoup.parse(html, chapterUrl)
+            if (document.selectFirst("form.post-password-form") != null) {
+                throw Exception("Mật khẩu không chính xác")
+            }
         }
 
         val imageUrls = ImageDecryptor.extractImageUrls(html, chapterUrl)
@@ -394,7 +425,5 @@ abstract class SoaiCaComic : KeiSource() {
     private val chapterNameRegex = Regex("chap\\s*\\d+(?:\\.\\d+)?", RegexOption.IGNORE_CASE)
     private val chapterWordRegex = Regex("chap", RegexOption.IGNORE_CASE)
     private val multiSpaceRegex = Regex("\\s+")
-    private val passwordFieldRegex = Regex("name=\\\"post_password\\\"|name=post_password")
     private val thumbnailFallbackFragmentPrefix = "fallback-url:"
-    private val passwordWebviewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
 }

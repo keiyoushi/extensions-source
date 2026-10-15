@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.luscious
 
 const val POPULAR_DEFAULT_SORT_STATE = 0
 const val LATEST_DEFAULT_SORT_STATE = 6
-const val SEARCH_DEFAULT_SORT_STATE = 0
 
 const val FILTER_VALUE_IGNORE = "<ignore>"
 

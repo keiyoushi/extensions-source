@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.mangauno
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,24 +10,19 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-import kotlin.concurrent.thread
 
 @Source
 abstract class Mangauno :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -38,22 +32,23 @@ abstract class Mangauno :
     private val useEnglishTitle: Boolean
         get() = preferences.getString(TITLE_PREF, "english") == "english"
 
-    private var fetchFiltersStatus = FetchFilterStatus.NOT_FETCHED
-    private var facets: FacetsDto? = null
+    override val supportsFilterFetching = true
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/list/popular?page=$page&limit=$PAGE_SIZE", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$apiUrl/list/popular?page=$page&limit=$PAGE_SIZE")
         val data = response.parseAs<ListResponse>()
         val mangas = data.toSMangaList(useEnglishTitle)
         return MangasPage(mangas, mangas.size >= PAGE_SIZE)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/list/latest?page=$page&limit=$PAGE_SIZE", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val response = client.get("$apiUrl/list/latest?page=$page&limit=$PAGE_SIZE")
+        val data = response.parseAs<ListResponse>()
+        val mangas = data.toSMangaList(useEnglishTitle)
+        return MangasPage(mangas, mangas.size >= PAGE_SIZE)
+    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/search/advanced".toHttpUrl().newBuilder()
         url.addQueryParameter("page", page.toString())
         url.addQueryParameter("limit", PAGE_SIZE.toString())
@@ -85,59 +80,43 @@ abstract class Mangauno :
                 else -> {}
             }
         }
-        return GET(url.build(), headers)
+
+        val response = client.get(url.build())
+        val data = response.parseAs<ListResponse>()
+        val mangas = data.toSMangaList(useEnglishTitle)
+        return MangasPage(mangas, mangas.size >= PAGE_SIZE)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.url}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get("$apiUrl/manga/${manga.url}")
         val data = response.parseAs<DetailsResponse>()
-        return data.toSManga(useEnglishTitle).apply {
-            initialized = true
-        }
+        return SMangaUpdate(
+            data.toSManga(useEnglishTitle),
+            data.toSChapterList(),
+        )
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<DetailsResponse>()
-        return data.toSChapterList(dateFormat)
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast("/")
-        return GET("$apiUrl/chapter/$chapterId", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
+        val response = client.get("$apiUrl/chapter/$chapterId")
         val data = response.parseAs<PageListResponse>()
         return data.pages.mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/m/${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/r/${chapter.url}"
 
-    private fun fetchFilters() {
-        fetchFiltersStatus = FetchFilterStatus.FETCHING
-        thread {
-            try {
-                val response = client.newCall(GET("$apiUrl/search/facets", headers)).execute()
-                facets = response.parseAs<FacetsDto>()
-                fetchFiltersStatus = FetchFilterStatus.FETCHED
-            } catch (e: Exception) {
-                fetchFiltersStatus = FetchFilterStatus.FAILED
-            }
-        }
-    }
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/search/facets").parseAs()
 
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>(
             AdultFilter(),
             TypeFilter(),
@@ -146,26 +125,15 @@ abstract class Mangauno :
             YearGroup(),
         )
 
-        when (fetchFiltersStatus) {
-            FetchFilterStatus.NOT_FETCHED, FetchFilterStatus.FAILED -> {
-                filters.add(Filter.Separator())
-                filters.add(Filter.Header("Press 'Reset' to load genres and tags"))
-                fetchFilters()
-            }
-            FetchFilterStatus.FETCHING -> {
-                filters.add(Filter.Separator())
-                filters.add(Filter.Header("Loading genres and tags... Press 'Reset' to refresh"))
-            }
-            FetchFilterStatus.FETCHED -> {
-                val genreList = facets?.genres?.map { CheckBoxFilter(it.name) } ?: emptyList()
-                val tagList = facets?.tags?.map { CheckBoxFilter(it.name) } ?: emptyList()
+        data?.parseAs<FacetsDto>()?.let { facets ->
+            val genreList = facets.genres.map { CheckBoxFilter(it.name) }
+            val tagList = facets.tags.map { CheckBoxFilter(it.name) }
 
-                if (genreList.isNotEmpty()) {
-                    filters.add(GenreGroup(genreList))
-                }
-                if (tagList.isNotEmpty()) {
-                    filters.add(TagGroup(tagList))
-                }
+            if (genreList.isNotEmpty()) {
+                filters.add(GenreGroup(genreList))
+            }
+            if (tagList.isNotEmpty()) {
+                filters.add(TagGroup(tagList))
             }
         }
 
@@ -188,17 +156,5 @@ abstract class Mangauno :
         const val IMG_API_URL = "https://xz7.fstr-cdn.com"
         private const val TITLE_PREF = "PREF_TITLE_LANG"
         private const val PAGE_SIZE = 24
-        val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
-        }
     }
-}
-
-private enum class FetchFilterStatus {
-    NOT_FETCHED,
-    FETCHING,
-    FETCHED,
-    FAILED,
 }

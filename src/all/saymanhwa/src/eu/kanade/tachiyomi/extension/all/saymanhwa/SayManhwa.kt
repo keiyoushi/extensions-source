@@ -30,7 +30,8 @@ abstract class SayManhwa : KeiSource() {
     private val saymanhwaLang: String
         get() = when (lang) {
             "pt" -> "pt-br"
-            "zh" -> "zh-cn"
+            "zh", "zh-Hans" -> "zh-cn"
+            "zh-Hant" -> "zh-tw"
             else -> lang
         }
 

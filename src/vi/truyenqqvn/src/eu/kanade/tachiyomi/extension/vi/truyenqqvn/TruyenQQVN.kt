@@ -39,11 +39,11 @@ abstract class TruyenQQVN : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(listUrl(POPULAR_PATH, page)))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(listUrl("/truyen-hot", page)))
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(listUrl(LATEST_PATH, page)))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(listUrl("/truyen-moi", page)))
 
     // =============================== Search ===============================
 
@@ -57,7 +57,7 @@ abstract class TruyenQQVN : KeiSource() {
             val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected?.takeIf { it.isNotEmpty() }
             val path = genre?.let { "/the-loai/$it" }
                 ?: filters.firstInstanceOrNull<ListFilter>()?.selected
-                ?: POPULAR_PATH
+                ?: "/truyen-hot"
             listUrl(path, page)
         }
 
@@ -179,8 +179,15 @@ abstract class TruyenQQVN : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val images = document.select("img.lazy[data-src]")
 
-        return document.select("img.lazy[data-src]").mapIndexed { index, element ->
+        // Some series hide their chapters behind a Google sign-in. The session cookie set by
+        // logging in through WebView is shared with this client, so that is the way through.
+        if (images.isEmpty() && document.selectFirst("a[href*=/account/google]") != null) {
+            throw Exception("Truyện này yêu cầu đăng nhập. Mở WebView, đăng nhập bằng Google rồi thử lại.")
+        }
+
+        return images.mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("data-src"))
         }
     }
@@ -219,9 +226,6 @@ abstract class TruyenQQVN : KeiSource() {
     }
 
     companion object {
-        private const val POPULAR_PATH = "/truyen-hot"
-        private const val LATEST_PATH = "/truyen-moi"
-
         private val RESERVED_PATHS = setOf("tim-kiem", "truyen-hot", "truyen-moi", "truyen-full", "the-loai")
         private val TIME_ZONE: ZoneId = ZoneId.of("Asia/Ho_Chi_Minh")
         private val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)

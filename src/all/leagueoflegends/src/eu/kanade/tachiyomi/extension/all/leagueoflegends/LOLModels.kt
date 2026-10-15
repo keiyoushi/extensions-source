@@ -4,13 +4,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class LOLHub(
+class LOLHub(
     private val sections: LOLSections,
 ) : Iterable<LOLComic> by sections
 
 @Serializable
-data class LOLSections(
-    val series: LOLData,
+class LOLSections(
+    private val series: LOLData,
     @SerialName("one-shots")
     private val oneShots: LOLData,
 ) : Iterable<LOLComic> {
@@ -18,12 +18,12 @@ data class LOLSections(
 }
 
 @Serializable
-data class LOLData(
+class LOLData(
     private val data: List<LOLComic>,
 ) : Iterable<LOLComic> by data
 
 @Serializable
-data class LOLComic(
+class LOLComic(
     val title: String? = null,
     val subtitle: String? = null,
     val index: Float? = null,
@@ -37,12 +37,12 @@ data class LOLComic(
 }
 
 @Serializable
-data class LOLIssues(
+class LOLIssues(
     private val issues: List<LOLComic>,
 ) : Iterable<LOLComic> by issues.reversed()
 
 @Serializable
-data class LOLPages(
+class LOLPages(
     @SerialName("staging-date")
     val date: String,
     @SerialName("desktop-pages")
@@ -52,11 +52,11 @@ data class LOLPages(
 }
 
 @Serializable
-data class LOLImage(private val uri: String) {
+class LOLImage(private val uri: String) {
     override fun toString() = uri
 }
 
 @Serializable
-data class LOLChampion(private val name: String) {
+class LOLChampion(private val name: String) {
     override fun toString() = name
 }

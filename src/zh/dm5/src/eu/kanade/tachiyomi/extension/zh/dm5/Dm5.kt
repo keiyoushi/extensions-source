@@ -5,22 +5,27 @@ import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.addCookie
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -28,23 +33,23 @@ import java.util.TimeZone
 
 @Source
 abstract class Dm5 :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder().addInterceptor(CommentsInterceptor).build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(CommentsInterceptor)
+        addCookie("isAdult" to "1")
+    }
 
     private val preferences by getPreferencesLazy()
 
-    // Some mangas are blocked without this
-    override fun headersBuilder() = super.headersBuilder().set("Accept-Language", "zh-TW")
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
-
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/manhua-list-p$page/", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override fun Headers.Builder.configureHeaders() = apply {
+        // Some mangas are blocked without this
+        set("Accept-Language", "zh-TW")
+        set("User-Agent", USER_AGENT)
+    }
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/manhua-list-p$page/").asJsoup()
         val mangas = document.select(POPULAR_MANGA_SELECTOR).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(NEXT_PAGE_SELECTOR) != null
         return MangasPage(mangas, hasNextPage)
@@ -57,35 +62,43 @@ abstract class Dm5 :
         setUrlWithoutDomain(element.selectFirst("h2.title > a")!!.absUrl("href"))
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manhua-list-s2-p$page/", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/manhua-list-s2-p$page/").asJsoup()
         val mangas = document.select(POPULAR_MANGA_SELECTOR).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(NEXT_PAGE_SELECTOR) != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/search?title=$query&language=1&page=$page", headers)
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(SEARCH_MANGA_SELECTOR).map { searchMangaFromElement(it) }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val document = client.get("$baseUrl/search?title=$query&language=1&page=$page").asJsoup()
+        val mangas = document.select(SEARCH_MANGA_SELECTOR).map {
+            SManga.create().apply {
+                title = it.selectFirst(".title > a")!!.text()
+                setUrlWithoutDomain(it.selectFirst(".title > a")!!.absUrl("href"))
+                thumbnail_url = it.selectFirst("img")?.absUrl("src")
+                    ?: it.selectFirst("p.mh-cover")?.attr("style")
+                        ?.substringAfter("url(")?.substringBefore(")")
+            }
+        }
         val hasNextPage = document.selectFirst(NEXT_PAGE_SELECTOR) != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst(".title > a")!!.text()
-        setUrlWithoutDomain(element.selectFirst(".title > a")!!.absUrl("href"))
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            ?: element.selectFirst("p.mh-cover")?.attr("style")
-                ?.substringAfter("url(")?.substringBefore(")")
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host.replace("m.", "www.") != baseUrl.toHttpUrl().host) return null
+        if (!url.encodedPath.startsWith("/manhua-")) return null
+        val manga = SManga.create().apply { setUrlWithoutDomain(url.toString()) }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+        manga.apply {
             title = document.selectFirst("div.banner_detail_form p.title")!!.ownText()
             thumbnail_url = document.selectFirst("div.banner_detail_form img")?.absUrl("src")
             author = document.selectFirst("div.banner_detail_form p.subtitle > a")?.text()
@@ -100,10 +113,11 @@ abstract class Dm5 :
                 else -> SManga.UNKNOWN
             }
         }
+        val chapterList = chapterListParse(document)
+        return SMangaUpdate(manga, chapterList)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    fun chapterListParse(document: Document): List<SChapter> {
         // May need to click button on website to read
         document.selectFirst(".warning-bar")?.let { throw Exception(it.text()) }
         val container = document.selectFirst("div#chapterlistload")
@@ -137,8 +151,8 @@ abstract class Dm5 :
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
         val images = document.select("div#barChapter > img.load-src")
         val result: MutableList<Page>
         val script = document.selectFirst("script:containsData(DM5_MID)")!!.data()
@@ -188,13 +202,10 @@ abstract class Dm5 :
         return result
     }
 
-    override fun imageUrlRequest(page: Page): Request {
+    override suspend fun getImageUrl(page: Page): String {
         val referer = page.url.substringBefore("chapterfun.ashx")
-        val header = headers.newBuilder().add("Referer", referer).build()
-        return GET(page.url, header)
-    }
-
-    override fun imageUrlParse(response: Response): String {
+        val newHeaders = headers.newBuilder().set("Referer", referer).build()
+        val response = client.get(page.url, newHeaders)
         val script = Unpacker.unpack(response.body.string())
         val pix = script.substringAfter("var pix=\"").substringBefore("\"")
         val pvalue = script.substringAfter("var pvalue=[\"").substringBefore("\"")
@@ -205,8 +216,12 @@ abstract class Dm5 :
     override fun imageRequest(page: Page): Request {
         val url = page.imageUrl!!.toHttpUrl()
         val cid = url.queryParameter("cid") ?: ""
-        val headers = headers.newBuilder().add("Referer", "$baseUrl/m$cid").build()
-        return GET(url, headers)
+        val newHeaders = headers.newBuilder().set("Referer", "$baseUrl/m$cid").build()
+        return Request.Builder()
+            .url(url)
+            .headers(newHeaders)
+            .get()
+            .build()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -274,5 +289,6 @@ abstract class Dm5 :
         private const val POPULAR_MANGA_SELECTOR = "ul.mh-list > li > div.mh-item"
         private const val NEXT_PAGE_SELECTOR = "div.page-pagination a:contains(>)"
         private const val SEARCH_MANGA_SELECTOR = "ul.mh-list > li, div.banner_detail_form"
+        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
     }
 }

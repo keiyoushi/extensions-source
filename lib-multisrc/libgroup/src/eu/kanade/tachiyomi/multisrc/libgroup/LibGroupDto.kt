@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.libgroup
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -11,6 +12,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.time.Instant
 
 @Serializable
 class Data<T>(
@@ -293,7 +295,7 @@ class Chapter(
             val branchStr = if (branchId != null) "&branch_id=$branchId" else ""
             url = "/$slugUrl/chapter?$branchStr&volume=$volume&number=$number"
             scanlator = getTeamName(branchId) ?: if (isScanUser) getUserName(branchId) else null
-            date_upload = runCatching { LibGroup.simpleDateFormat.parse(first(branchId)!!.createdAt)!!.time }.getOrDefault(0L)
+            date_upload = Instant.tryParse(first(branchId)?.createdAt)
             chapter_number = number.toFloat()
         }
     }

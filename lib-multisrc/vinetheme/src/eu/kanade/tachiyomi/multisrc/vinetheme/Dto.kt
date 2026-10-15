@@ -64,6 +64,7 @@ class MangaDto(
     @SerialName("coverImage")
     val coverUrl: String? = null,
     val slug: String = "",
+    val urlSlug: String? = null,
     val status: String = "",
     val type: String = "",
     val origin: String = "",
@@ -78,15 +79,17 @@ class MangaDto(
     val team: TeamDto? = null,
     val similarSeries: List<MangaDto> = emptyList(),
 ) {
-    fun toSManga(baseUrl: String): SManga = toSManga(baseUrl, SManga.create())
+    fun toSManga(baseUrl: String, manga: SManga = SManga.create(), fallbackSlug: String = ""): SManga = manga.apply {
+        val canonicalSlug = listOf(urlSlug.orEmpty(), memo["slug"]?.string.orEmpty(), fallbackSlug)
+            .firstOrNull { it.isNotBlank() }
+            ?: slug
 
-    fun toSManga(baseUrl: String, manga: SManga): SManga = manga.apply {
         title = this@MangaDto.title
         thumbnail_url = coverUrl?.let { it.toAbsoluteUrl(baseUrl) }
         url = id
         memo = buildJsonObject {
             put("id", id)
-            put("slug", slug)
+            put("slug", canonicalSlug)
         }
         status = this@MangaDto.status.toSMangaStatus()
         author = team?.name

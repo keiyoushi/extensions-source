@@ -1,30 +1,30 @@
 package eu.kanade.tachiyomi.extension.en.templescan
 
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlinx.serialization.json.JsonElement
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import kotlin.time.Instant
 
+/** A series in the catalog the site's app holds on its comics page. */
 @Serializable
 class BrowseSeries(
-    @SerialName("series_slug") private val slug: String,
     val title: String,
+    @SerialName("series_slug") val slug: String,
     @SerialName("alternative_names") val alternativeNames: String? = null,
-    private val thumbnail: String? = null,
+    val thumbnail: String? = null,
+    val badge: String? = null,
     val status: String? = null,
     @SerialName("update_chapter") private val updatedAt: String? = null,
     @SerialName("created_at") private val createdAt: String? = null,
     @SerialName("total_views") val views: Long = 0,
 ) {
-    val updated: Long by lazy {
-        dateFormat.tryParse(updatedAt)
-    }
+    val updated: Long by lazy { Instant.tryParse(updatedAt) }
 
-    val created: Long by lazy {
-        dateFormat.tryParse(createdAt)
-    }
+    val created: Long by lazy { Instant.tryParse(createdAt) }
 
     fun toSManga() = SManga.create().apply {
         url = "/comic/$slug"
@@ -33,68 +33,39 @@ class BrowseSeries(
     }
 }
 
+/** schema.org `ComicSeries` JSON-LD block embedded in the detail page. */
 @Serializable
-class SeriesDetails(
-    @SerialName("series_slug") val slug: String,
-    val title: String,
-    val thumbnail: String? = null,
-    val author: String? = null,
-    val studio: String? = null,
-    @SerialName("release_year") val year: String? = null,
-    @SerialName("alternative_names") val alternativeNames: String? = null,
-    val adult: Boolean = false,
-    val badge: String? = null,
-    val status: String? = null,
+class ComicSeriesLd(
+    @SerialName("@type") private val type: String? = null,
+    val name: String? = null,
     val description: String? = null,
-    @SerialName("tag_series") val tags: List<TagWrapper>? = emptyList(),
-)
-
-@Serializable
-class TagWrapper(
-    val tag: Tag,
-)
-
-@Serializable
-class Tag(
-    val name: String,
-)
-
-@Serializable
-class ChapterList(
-    @SerialName("Season") val seasons: List<Chapters>,
+    val image: String? = null,
+    val author: Author? = null,
+    val alternateName: String? = null,
+    val genre: List<String>? = null,
 ) {
     @Serializable
-    class Chapters(
-        @SerialName("Chapter") val chapters: List<Chapter>,
-    ) {
-        @Serializable
-        class Chapter(
-            @SerialName("chapter_name") val name: String,
-            @SerialName("chapter_title") val title: String? = null,
-            @SerialName("chapter_slug") val slug: String,
-            val price: Int,
-            @SerialName("created_at") private val createdAt: String? = null,
-        ) {
-            val created: Long by lazy {
-                dateFormat.tryParse(createdAt)
-            }
-        }
-    }
+    class Author(val name: String? = null)
+
+    val isSeries: Boolean get() = type == "ComicSeries"
 }
 
 @Serializable
-class PagesList(
-    val pages: List<String>,
+class SiteChapter(
+    val name: String,
+    val title: String? = null,
+    val slug: String,
+    val premium: Boolean = false,
+    val createdAt: Long = 0,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
-
-private fun SimpleDateFormat.tryParse(date: String?): Long {
-    date ?: return 0L
-
-    return try {
-        parse(date)?.time ?: 0L
-    } catch (_: ParseException) {
-        0L
-    }
+/** A page as the WebView loaded it, with the data the site's app holds for it. */
+@Serializable
+class SitePage(
+    val status: Int,
+    val cloudflareChallenge: Boolean,
+    val html: String,
+    val data: JsonElement? = null,
+) {
+    fun document(url: String): Document = Jsoup.parse(html, url)
 }

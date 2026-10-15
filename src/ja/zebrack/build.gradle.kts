@@ -6,12 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Zebrack"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "ja"
         baseUrl = "https://zebrack-comic.shueisha.co.jp"
+        versionId = 2
     }
 }

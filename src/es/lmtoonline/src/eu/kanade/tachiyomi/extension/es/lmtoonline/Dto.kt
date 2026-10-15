@@ -4,16 +4,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.util.Locale
-import java.util.TimeZone
-
-private val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
+import kotlin.time.Instant
 
 @Serializable
 class MangaList(
     val mangas: List<Manga>,
+    val total: Int,
+    val pageSize: Int,
 )
 
 @Serializable
@@ -28,15 +25,11 @@ class Manga(
     val alternativeTitles: List<String>? = null,
     private val description: String? = null,
     private val coverImage: String? = null,
-    val isAdult: Boolean = false,
     val type: String? = null,
     val status: String? = null,
-    val demographic: String? = null,
     val genres: List<String>? = null,
     val author: String? = null,
     val artist: String? = null,
-    val latestChapterCreatedAt: String? = null,
-    val totalViews: Int? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         url = slug
@@ -84,7 +77,7 @@ class Chapter(
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         url = "$mangaSlug/$slug"
         name = "Cap. ${number.toString().removeSuffix(".0")}"
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 

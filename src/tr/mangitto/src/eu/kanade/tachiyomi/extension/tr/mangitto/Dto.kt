@@ -3,35 +3,41 @@ package eu.kanade.tachiyomi.extension.tr.mangitto
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
-class MangttoResponse<T>(
-    val success: Boolean,
-    val data: T,
-)
-
-@Serializable
-class MangttoTrendsData(
-    val mangas: List<MangttoManga> = emptyList(),
+class MangttoPopularData(
+    val mangas: List<MangttoManga>,
+    val total: Int,
 )
 
 @Serializable
 class MangttoLatestData(
-    val chapters: List<MangttoLatestChapter> = emptyList(),
-    val pages: Int = 1,
+    val chapters: List<MangttoLatestChapter>,
+    val total: Int,
+)
+
+@Serializable
+class MangttoLatestChapter(
+    val manga: MangttoManga,
 )
 
 @Serializable
 class MangttoSearchData(
-    val hits: List<MangttoManga> = emptyList(),
-    val estimatedTotalHits: Int = 0,
-    val limit: Int = 42,
+    val hits: List<MangttoSearchHit>,
+    val estimatedTotalHits: Int,
+)
+
+@Serializable
+class MangttoSearchHit(
+    val document: MangttoManga,
 )
 
 @Serializable
 class MangttoManga(
     private val title: String,
-    private val slug: String,
+    val slug: String,
     private val coverImage: String? = null,
 ) {
     fun toSManga() = SManga.create().apply {
@@ -42,17 +48,9 @@ class MangttoManga(
 }
 
 @Serializable
-class MangttoLatestChapter(
-    private val title: String,
-    val slug: String,
-    private val coverImage: String? = null,
-) {
-    fun toSManga() = SManga.create().apply {
-        title = this@MangttoLatestChapter.title
-        url = slug
-        thumbnail_url = coverImage
-    }
-}
+class MangttoGenres(
+    val genres: List<String>,
+)
 
 @Serializable
 class MangttoDetailData(
@@ -61,7 +59,7 @@ class MangttoDetailData(
     private val status: String,
     private val description: String? = null,
     private val coverImage: String? = null,
-    private val genres: List<MangttoGenre> = emptyList(),
+    private val genres: List<MangttoGenre>,
 ) {
     fun toSManga() = SManga.create().apply {
         title = this@MangttoDetailData.title
@@ -70,7 +68,9 @@ class MangttoDetailData(
         description = this@MangttoDetailData.description
         status = when (this@MangttoDetailData.status) {
             "FINISHED" -> SManga.COMPLETED
-            "ONGOING" -> SManga.ONGOING
+            "RELEASING" -> SManga.ONGOING
+            "HIATUS" -> SManga.ON_HIATUS
+            "CANCELLED" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
         genre = genres.joinToString { it.name }
@@ -82,8 +82,8 @@ class MangttoGenre(val name: String)
 
 @Serializable
 class MangttoChapterPageData(
-    val chapters: List<MangttoChapter> = emptyList(),
-    val pages: Int = 1,
+    val chapters: List<MangttoChapter>,
+    val total: Int,
 )
 
 @Serializable
@@ -93,24 +93,22 @@ class MangttoChapter(
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         val chapterStr = chapter.toString().removeSuffix(".0")
         name = "Bölüm $chapterStr"
-        url = "$mangaSlug/$chapterStr"
+        chapter_number = chapter
+        url = chapterStr
+        memo = buildJsonObject {
+            put("mangaSlug", mangaSlug)
+        }
     }
 }
 
 @Serializable
 class MangttoPageData(
-    val chapter: MangttoChapterDetail,
+    val cdn: String,
+    val uploads: List<MangttoUpload>,
 )
 
 @Serializable
-class MangttoChapterDetail(
-    val chapter: Float,
-    val static: List<MangttoStatic> = emptyList(),
-)
-
-@Serializable
-class MangttoStatic(
-    val id: String,
+class MangttoUpload(
     val fansubId: String,
-    val fileSize: Int = 0,
+    val fileLength: Int,
 )

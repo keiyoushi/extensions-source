@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Muito Hentai"
-    versionCode = 4
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"

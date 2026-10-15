@@ -8,7 +8,7 @@ keiyoushi {
     name = "Mihentai"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangathemesia"
 
     source {

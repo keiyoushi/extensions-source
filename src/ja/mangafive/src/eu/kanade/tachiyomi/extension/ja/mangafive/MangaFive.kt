@@ -19,21 +19,22 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.textOrNull
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Source
 abstract class MangaFive :
     KeiSource(),
     ConfigurableSource {
     private val preferences by getPreferencesLazy()
-    private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ROOT)
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd").withZone(ZoneId.of("Asia/Tokyo"))
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(PublusInterceptor())
 
@@ -93,7 +94,7 @@ abstract class MangaFive :
         val mangas = SManga.create().apply {
             title = titleName
             author = detail.select(".author-list .author").joinToString { it.text() }
-            description = detail.selectFirst(".comic-discription-text")?.text()
+            description = detail.selectFirst(".comic-discription-text")?.textOrNull()
             thumbnail_url = document.selectFirst(".comic-main-thum-wrapper img")?.absUrl("src")
             status = if ("完結" in titleName) SManga.COMPLETED else SManga.ONGOING
         }
@@ -110,7 +111,7 @@ abstract class MangaFive :
                     SChapter.create().apply {
                         url = it.attr("data-id")
                         name = (if (locked) "🔒 " else "") + it.selectFirst("h4.title")!!.text()
-                        date_upload = dateFormat.tryParse(it.selectFirst("p.update-date")?.text())
+                        date_upload = dateFormat.tryParseDate(it.selectFirst("p.update-date")?.textOrNull()?.substringBefore(" "))
                     }
                 }
                 val hasNextPage = doc.selectFirst(".pagination-list-item.to-next:not(.disabled)") != null
@@ -150,6 +151,10 @@ abstract class MangaFive :
         val auth = content.authInfo?.toAuth()
         val contentUrl = content.url!!
 
+        if (content.cty == 3) {
+            throw Exception("Novels are not supported!")
+        }
+
         if (content.cty == 6) {
             val packUrl = contentUrl.toHttpUrl().newBuilder()
                 .addPathSegment("content.json")
@@ -167,7 +172,7 @@ abstract class MangaFive :
                 }
         }
 
-        return fetchPages(contentUrl, headers, client, auth)
+        return client.fetchPages(contentUrl, auth)
     }
 
     @Serializable

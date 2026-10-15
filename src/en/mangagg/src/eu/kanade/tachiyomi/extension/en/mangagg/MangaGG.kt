@@ -9,7 +9,8 @@ import java.util.Locale
 
 @Source
 abstract class MangaGG : Madara() {
-    override val chapterMode = ChapterMode.MangaAjax
+    override val mangaSubString = "comic"
+    override val chapterMode = ChapterMode.MangaAjaxPaginated
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.US)
 
     override fun imageFromElement(element: Element): String? {

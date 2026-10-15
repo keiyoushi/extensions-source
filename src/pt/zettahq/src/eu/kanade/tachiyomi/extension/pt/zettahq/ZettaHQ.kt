@@ -1,39 +1,35 @@
 package eu.kanade.tachiyomi.extension.pt.zettahq
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.text.Normalizer
 
 @Source
-abstract class ZettaHQ : HttpSource() {
+abstract class ZettaHQ : KeiSource() {
 
     override val supportsLatest = false
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/page/$page", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = mangasPageParse(client.get("$baseUrl/page/$page").asJsoup())
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        if (genreList.isEmpty()) getFilters()
-        return super.fetchPopularManga(page)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun mangasPageParse(document: Document): MangasPage {
         val mangas = document.select("div.post-item article").map(::mangaFromElement)
         val hasNextPage = document.selectFirst(".next.page-numbers") != null
         return MangasPage(mangas, hasNextPage)
@@ -49,12 +45,11 @@ abstract class ZettaHQ : HttpSource() {
 
     // ============================== Latest ==============================
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ==============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/".toHttpUrl().newBuilder()
 
         var isCategoryEnable = false
@@ -62,8 +57,8 @@ abstract class ZettaHQ : HttpSource() {
         var isAuthorEnable = false
 
         filters
-            .filterNot { it is Filter.Separator }
-            .sortedByDescending { (it as Sort).priority }
+            .filterIsInstance<Sort>()
+            .sortedByDescending { it.priority }
             .forEach { filter ->
                 when (filter) {
                     is GenreList -> {
@@ -116,32 +111,39 @@ abstract class ZettaHQ : HttpSource() {
             .addPathSegment(page.toString())
             .addQueryParameter("s", query)
 
-        return GET(url.build(), headers)
+        return mangasPageParse(client.get(url.build()).asJsoup())
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val item = url.pathSegments.last { it.isNotBlank() }
-            return fetchSearchManga(page, "$PREFIX_SEARCH$item", filters)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) {
+            return null
         }
-        if (query.startsWith(PREFIX_SEARCH)) {
-            val slug = query.substringAfter(PREFIX_SEARCH)
-            return fetchMangaDetails(SManga.create().apply { url = "/$slug" })
-                .map { manga -> MangasPage(listOf(manga), false) }
-        }
-        return super.fetchSearchManga(page, query, filters)
+        val slug = url.pathSegments.last { it.isNotBlank() }
+        return getMangaDetails("/$slug")
     }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedManga = if (fetchDetails) getMangaDetails(manga.url) else manga
+
+        val chapterList = listOf(
+            SChapter.create().apply {
+                name = "Capítulo Único"
+                url = manga.url
+            },
+        )
+
+        return SMangaUpdate(updatedManga, chapterList)
+    }
+
+    private suspend fun getMangaDetails(path: String) = SManga.create().apply {
+        val document = client.get(baseUrl + path).asJsoup()
         title = document.selectFirst("h1")!!.text()
         thumbnail_url = document.selectFirst(".content-container article img:first-child")?.absUrl("src")
         genre = document.select(".tags > a.tag").joinToString { it.text() }
@@ -150,69 +152,44 @@ abstract class ZettaHQ : HttpSource() {
         setUrlWithoutDomain(document.location())
     }
 
-    // ============================== Chapters ==============================
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapters = listOf(
-            SChapter.create().apply {
-                name = "Capítulo Único"
-                url = manga.url
-            },
-        )
-        return Observable.just(chapters)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
         return document.select(".content-container article img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
     // =============================== Filters ===============================
 
-    override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Filter<*>>()
-        if (genreList.isNotEmpty()) {
-            filters += listOf(
-                SelectFilter(title = "Categorias", vals = categoryList, query = "category", priority = 3),
-                Filter.Separator(),
-                SelectFilter(title = "Personagens", vals = characterList, query = "personagem"),
-                Filter.Separator(),
-                SelectFilter(title = "Autor", vals = authorList, query = "autor", priority = 1),
-                Filter.Separator(),
-                SelectFilter(title = "Paródia", vals = parodyList, query = "parodia"),
-                Filter.Separator(),
-                GenreList(title = "Gêneros", genres = genreList, priority = 2),
-            )
-        } else {
-            filters += listOf(Filter.Header("Aperte 'Redefinir' para tentar mostrar os filtros"))
-        }
-        return FilterList(filters)
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/busca-avancada/").asJsoup()
+
+        return FilterData(
+            categories = parseOptions(document, "ofcategory"),
+            authors = parseOptions(document, "ofautor"),
+            characters = parseOptions(document, "ofpersonagem"),
+            parodies = parseOptions(document, "ofparodia"),
+            genres = parseGenres(document),
+        ).toJsonElement()
     }
 
-    private var categoryList = emptyArray<Pair<String, String>>()
-    private var authorList = emptyArray<Pair<String, String>>()
-    private var characterList = emptyArray<Pair<String, String>>()
-    private var parodyList = emptyArray<Pair<String, String>>()
-    private var genreList = emptyList<Genre>()
-
-    private fun getFilters() {
-        val document = client.newCall(GET("$baseUrl/busca-avancada/", headers))
-            .execute()
-            .asJsoup()
-
-        categoryList = parseOptions(document, "ofcategory")
-        authorList = parseOptions(document, "ofautor")
-        characterList = parseOptions(document, "ofpersonagem")
-        parodyList = parseOptions(document, "ofparodia")
-        genreList = parseGenres(document)
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterData>() ?: return FilterList()
+        return FilterList(
+            SelectFilter(title = "Categorias", vals = filterData.categories.toTypedArray(), query = "category", priority = 3),
+            Filter.Separator(),
+            SelectFilter(title = "Personagens", vals = filterData.characters.toTypedArray(), query = "personagem"),
+            Filter.Separator(),
+            SelectFilter(title = "Autor", vals = filterData.authors.toTypedArray(), query = "autor", priority = 1),
+            Filter.Separator(),
+            SelectFilter(title = "Paródia", vals = filterData.parodies.toTypedArray(), query = "parodia"),
+            Filter.Separator(),
+            GenreList(title = "Gêneros", genres = filterData.genres, priority = 2),
+        )
     }
 
     private fun parseGenres(document: Document): List<Genre> = document.select(".cat-item > label")
@@ -223,14 +200,14 @@ abstract class ZettaHQ : HttpSource() {
             )
         }
 
-    private fun parseOptions(document: Document, attr: String): Array<Pair<String, String>> {
+    private fun parseOptions(document: Document, attr: String): List<Pair<String, String>> {
         val options = mutableListOf("Todos" to "")
 
         options += document.select("select[name*=$attr] option").map { option ->
             option.text() to option.text().normalize()
         }
 
-        return options.toTypedArray()
+        return options
     }
 
     private fun String.normalize() = this
@@ -244,7 +221,6 @@ abstract class ZettaHQ : HttpSource() {
     }
 
     companion object {
-        const val PREFIX_SEARCH = "id:"
         val SPACE_REGEX = Regex("""\s+""")
         private val ACCENT_REGEX = Regex("""[\p{InCombiningDiacriticalMarks}]""")
     }

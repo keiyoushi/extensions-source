@@ -5,17 +5,13 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.text.SimpleDateFormat
-import java.util.Locale
+import okhttp3.OkHttpClient
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class CelestialMoon : MangaThemesia() {
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val client = super.client.newBuilder()
-        .addCookie("age_gate" to "18")
-        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addCookie("age_gate" to "18")
+        rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+    }
 }

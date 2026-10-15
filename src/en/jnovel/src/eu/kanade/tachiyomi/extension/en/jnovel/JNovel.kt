@@ -2,44 +2,46 @@ package eu.kanade.tachiyomi.extension.en.jnovel
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.e4p.E4PInterceptor
 import keiyoushi.lib.e4p.E4PManifestReader
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import okhttp3.HttpUrl.Builder
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
 
 @Source
 abstract class JNovel :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
     override val supportsLatest = false
 
-    private val domain = baseUrl.toHttpUrl().host
-    private val viewerUrl = "https://labs.$domain/embed/v2"
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val viewerUrl get() = "https://labs.$domain/embed/v2"
     private val preferences by getPreferencesLazy()
-    private val rscHeaders = headersBuilder()
+    private val manifestReader get() = E4PManifestReader(client, headers)
+    private val rscHeaders get() = headersBuilder()
         .set("rsc", "1")
         .build()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(E4PInterceptor())
-        .addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(E4PInterceptor())
+        addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
             if (!response.isSuccessful && response.request.url.toString().startsWith(viewerUrl)) {
@@ -47,77 +49,73 @@ abstract class JNovel :
             }
             response
         }
-        .build()
+    }
 
-    private val manifestReader = E4PManifestReader(client, headers)
-
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("type", "manga")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, rscHeaders)
+
+        return client.get(url, rscHeaders).toMangasPage()
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.extractNextJs<SeriesResponse>()
-        val mangas = result?.seriesList?.series.orEmpty().map { it.toSManga() }
-        return MangasPage(mangas, result?.seriesList?.hasNextPage() ?: false)
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        fun Builder.addFilter(param: String, filter: SelectFilter) = filter.value.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
-
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/series".toHttpUrl().newBuilder().apply {
             addQueryParameter("type", "manga")
-
-            if (query.isNotEmpty()) {
-                addQueryParameter("search", query)
-            }
-
+            if (query.isNotBlank()) addQueryParameter("search", query)
             addFilter("sort", filters.firstInstance<SortFilter>())
             addFilter("label", filters.firstInstance<LabelFilter>())
             addFilter("status", filters.firstInstance<StatusFilter>())
             addFilter("rentals", filters.firstInstance<RentalFilter>())
         }.build()
-        return GET(url, rscHeaders)
+
+        return client.get(url, rscHeaders).toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", rscHeaders)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.extractNextJs<SeriesDetailsResponse>()
-        val creators = result?.volumes?.firstOrNull()?.volume?.creators.orEmpty()
-        return requireNotNull(result?.series).toSManga(creators)
+    private fun Response.toMangasPage(): MangasPage {
+        val result = this.extractNextJs<SeriesResponse>()
+        val mangas = result?.seriesList?.series.orEmpty().map { it.toSManga() }
+        return MangasPage(mangas, result?.seriesList?.hasNextPage() ?: false)
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val result = requireNotNull(client.get(getMangaUrl(manga), rscHeaders).extractNextJs<SeriesDetailsResponse>())
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val result = response.extractNextJs<SeriesDetailsResponse>()
-        val title = result?.series?.title
-        return result?.volumes.orEmpty().flatMap { volume ->
+        val chapterList = result.volumes.flatMap { volume ->
             val owned = volume.volume?.owned == true
             volume.parts
                 .filter { !hideLocked || !it.isLocked(owned) }
-                .map { it.toSChapter(title!!, owned) }
-        }
-            .reversed()
+                .map { it.toSChapter(result.series.title, owned) }
+        }.reversed()
+
+        val creators = result.volumes.firstOrNull()?.volume?.creators.orEmpty()
+        return SMangaUpdate(
+            result.series.toSManga(creators),
+            chapterList,
+        )
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/read/${chapter.url}", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val embedUrl = document.selectFirst("iframe[src^='$viewerUrl']")?.absUrl("src") ?: throw Exception("Log in via WebView and purchase this chapter to read.")
-        val manifestUrl = client.newCall(GET("$embedUrl/info.json", headers)).execute().parseAs<Manifest>().e4pManifest
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val embedUrl = document.selectFirst("iframe[src^='$viewerUrl']")?.absUrl("src")
+            ?: throw Exception("Log in via WebView and purchase this chapter to read.")
+        val manifestUrl = client.get("$embedUrl/info.json").parseAs<Manifest>().e4pManifest
         return manifestReader.extractPagesFromEncryptedManifest(manifestUrl.toHttpUrl())
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
         LabelFilter(),
         StatusFilter(),
@@ -131,10 +129,6 @@ abstract class JNovel :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"

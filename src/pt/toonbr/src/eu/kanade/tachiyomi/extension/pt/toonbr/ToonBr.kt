@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.toonbr
 
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,46 +9,36 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.serialization.json.JsonElement
+import okhttp3.OkHttpClient
 
 @Source
 abstract class ToonBr :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
 
-    override val supportsLatest = true
-
-    override val client by lazy {
+    override fun OkHttpClient.Builder.configureClient() = apply {
         val token = getToken()
-        network.client.newBuilder()
-            .apply {
-                if (token.isNotEmpty()) {
-                    addCookie({ API_HOST }, "token" to token)
-                }
-            }
-            .rateLimit(2)
-            .build()
+        if (token.isNotEmpty()) {
+            addCookie({ API_HOST }, "token" to token)
+        }
+        rateLimit(2)
     }
 
     private val apiUrl = "https://api.toonbr.com"
     private val cdnUrl = "https://cdn2.toonbr.com"
-
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
-    }
 
     private fun getToken(): String {
         val email = preferences.getString(PREF_EMAIL, "") ?: ""
@@ -61,81 +50,63 @@ abstract class ToonBr :
     }
 
     // ===== Popular =====
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/api/manga/popular?limit=$PAGE_LIMIT", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangaList = response.parseAs<List<MangaDto>>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mangaList = client.get("$apiUrl/api/manga/popular?limit=$PAGE_LIMIT").parseAs<List<MangaDto>>()
         val mangas = mangaList.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, false)
     }
 
     // ===== Latest =====
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/api/manga/latest?limit=$PAGE_LIMIT", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangaList = response.parseAs<List<MangaDto>>()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val mangaList = client.get("$apiUrl/api/manga/latest?limit=$PAGE_LIMIT").parseAs<List<MangaDto>>()
         val mangas = mangaList.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, false)
     }
 
     // ===== Search =====
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = buildString {
             append("$apiUrl/api/manga?page=$page&limit=$PAGE_LIMIT")
             if (query.isNotBlank()) {
                 append("&search=$query")
             }
-            filters.filterIsInstance<CategoryFilter>().firstOrNull()?.selected?.let { categoryId ->
+            filters.firstInstanceOrNull<CategoryFilter>()?.selected?.let { categoryId ->
                 append("&categoryId=$categoryId")
             }
         }
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<MangaListResponse>()
+        val result = client.get(url).parseAs<MangaListResponse>()
         val mangas = result.data.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, false)
     }
 
-    // ===== Manga Details =====
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    // ===== Manga Details / Chapters =====
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/api/manga/$slug", headers)
-    }
+        val mangaDto = client.get("$apiUrl/api/manga/$slug").parseAs<MangaDto>()
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga(cdnUrl)
-
-    // ===== Chapters =====
-    override fun chapterListRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/api/manga/$slug", headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaDto = response.parseAs<MangaDto>()
-        return mangaDto.chapters
-            ?.map { it.toSChapter(dateFormat) }
+        val chapterList = mangaDto.chapters
+            ?.map { it.toSChapter() }
             ?.sortedByDescending { it.chapter_number }
             ?: emptyList()
+
+        return SMangaUpdate(mangaDto.toSManga(cdnUrl), chapterList)
     }
 
     // ===== Pages =====
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast("/")
-        return GET("$apiUrl/api/chapter/$chapterId", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterDto = response.parseAs<ChapterDto>()
+        val chapterDto = client.get("$apiUrl/api/chapter/$chapterId").parseAs<ChapterDto>()
         return chapterDto.pages
             ?.mapIndexedNotNull { index, page ->
                 page.imageUrl?.let { Page(index, imageUrl = "$cdnUrl$it") }
             }
             ?: emptyList()
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
 
     // ====== Utils ======
 
@@ -147,9 +118,9 @@ abstract class ToonBr :
     }
 
     // ===== Authentication =====
+    // runs while the client is being built, so it has to use the base client synchronously
     private fun login(email: String, password: String): String {
-        val payload = """{ "email": "$email", "password": "$password" }"""
-        val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
+        val requestBody = LoginRequest(email, password).toJsonRequestBody()
         val request = POST("$apiUrl/api/auth/login", headers, requestBody)
         val response = network.client.newCall(request).execute()
         if (!response.isSuccessful) {
@@ -186,13 +157,12 @@ abstract class ToonBr :
         }.let(screen::addPreference)
     }
 
-    override fun getFilterList() = getFilters()
+    override fun getFilterList(data: JsonElement?) = getFilters()
 
     companion object {
         private const val PAGE_LIMIT = 150
         private const val API_HOST = "api.toonbr.com"
         private const val PREF_EMAIL = "toonbr_email"
         private const val PREF_PASSWORD = "toonbr_password"
-        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }

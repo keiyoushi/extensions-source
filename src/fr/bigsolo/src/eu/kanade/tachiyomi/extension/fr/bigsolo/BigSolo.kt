@@ -1,134 +1,86 @@
 package eu.kanade.tachiyomi.extension.fr.bigsolo
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.net.URI
 
 @Source
-abstract class BigSolo : HttpSource() {
+abstract class BigSolo : KeiSource() {
 
     override val supportsLatest = true
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/data/series", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val series = response.parseAs<SeriesResponse>()
-        val mangaList = mutableListOf<SManga>()
-
-        for (serie in series.reco) {
-            mangaList.add(serie.toDetailedSManga())
-        }
-
-        return MangasPage(mangaList, false)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val series = client.get("$baseUrl/data/series").parseAs<SeriesResponse>()
+        return MangasPage(series.reco.map { it.toDetailedSManga() }, false)
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/data/series", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val allSeries = fetchAllSeries()
+        return MangasPage(allSeries.map { it.toDetailedSManga() }, false)
+    }
 
     // Search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val slug = url.pathSegments[0]
-            return fetchSearchManga(page, "SLUG:$slug", filters)
-        }
-        return super.fetchSearchManga(page, query, filters)
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val allSeries = fetchAllSeries()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotBlank()) {
-            "$baseUrl/data/series#$query"
-        } else {
-            "$baseUrl/data/series"
-        }
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val series = response.parseAs<SeriesResponse>()
-        val allSeries = (series.series + series.os).sortedByDescending { it.lastChapter?.timestamp }
-        val mangaList = mutableListOf<SManga>()
-
-        val fragment = response.request.url.fragment
-        val searchQuery = fragment ?: ""
-
-        if (searchQuery.startsWith("SLUG:")) {
-            val serie = allSeries.find { it.slug == searchQuery.removePrefix("SLUG:") }
-            if (serie != null) {
-                mangaList.add(serie.toDetailedSManga())
-            }
-            return MangasPage(mangaList, false)
+        val filtered = allSeries.filter { serie ->
+            query.isBlank() ||
+                serie.title.contains(query, ignoreCase = true) ||
+                serie.alternativeTitles.any { it.contains(query, ignoreCase = true) } ||
+                serie.jaTitle.contains(query, ignoreCase = true)
         }
 
-        for (serie in allSeries) {
-            if (searchQuery.isBlank() ||
-                serie.title.contains(searchQuery, ignoreCase = true) ||
-                serie.alternativeTitles.any { it.contains(searchQuery, ignoreCase = true) } ||
-                serie.jaTitle.contains(searchQuery, ignoreCase = true)
-            ) {
-                mangaList.add(serie.toDetailedSManga())
-            }
-        }
-
-        return MangasPage(mangaList, false)
+        return MangasPage(filtered.map { it.toDetailedSManga() }, false)
     }
 
-    // Details
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val splitedPath = URI(manga.url).path.split("/")
-        val slug = splitedPath[1]
-        return GET("$baseUrl/data/series/$slug", headers)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.pathSegments.getOrNull(0) != "manga") return null
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        return client.get("$baseUrl/data/series/$slug").parseAs<Serie>().toDetailedSManga()
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val serie = response.parseAs<Serie>()
-        return serie.toDetailedSManga()
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga${chapter.url}"
+
+    private suspend fun fetchAllSeries(): List<Serie> {
+        val series = client.get("$baseUrl/data/series").parseAs<SeriesResponse>()
+        return (series.series + series.os).sortedByDescending { it.lastChapter?.timestamp }
+    }
+
+    // Details & Chapters
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val slug = manga.url.removePrefix("/")
+        val serie = client.get("$baseUrl/data/series/$slug").parseAs<Serie>()
+        return SMangaUpdate(serie.toDetailedSManga(), buildChapterList(serie))
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request {
-        val splitedPath = URI(chapter.url).path.split("/")
-        val slug = splitedPath[1]
-        val chapterId = splitedPath[2]
-        return GET("$baseUrl/data/series/$slug/$chapterId", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterDetails = response.parseAs<ChapterDetails>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val (slug, chapterId) = chapter.url.removePrefix("/").split("/")
+        val chapterDetails = client.get("$baseUrl/data/series/$slug/$chapterId").parseAs<ChapterDetails>()
         return chapterDetails.images.mapIndexed { index, pageData ->
             Page(index, imageUrl = pageData)
         }
     }
 
-    // Chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        val slug = URI(manga.url).path.split("/")[1]
-        return GET("$baseUrl/data/series/$slug", headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val seriesData = response.parseAs<Serie>()
-        return buildChapterList(seriesData)
-    }
     private fun buildChapterList(serie: Serie): List<SChapter> {
         val chapters = serie.chapters
         val chapterList = mutableListOf<SChapter>()
@@ -142,12 +94,12 @@ abstract class BigSolo : HttpSource() {
 
             val baseName = if (multipleChapters) {
                 buildString {
-                    if (volumeNumber.isNotBlank()) append("Vol. $volumeNumber ")
+                    if (!volumeNumber.isNullOrBlank()) append("Vol. $volumeNumber ")
                     append("Ch. $chapterNumber")
                     if (title.isNotBlank()) append(" – $title")
                 }
             } else {
-                if (title.isNotBlank()) "One Shot – $title" else "One Shot"
+                title.ifBlank { "One Shot" }
             }
 
             val chapter = SChapter.create().apply {
@@ -162,7 +114,4 @@ abstract class BigSolo : HttpSource() {
 
         return chapterList.sortedByDescending { it.chapter_number }
     }
-
-    // Unsupported Stuff
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

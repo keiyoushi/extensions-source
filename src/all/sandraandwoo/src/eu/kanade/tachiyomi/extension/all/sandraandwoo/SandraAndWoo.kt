@@ -5,20 +5,20 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParse
-import okhttp3.Response
+import keiyoushi.utils.tryParseDate
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.net.URI
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.floor
 
 @Source
-abstract class SandraAndWoo : HttpSource() {
+abstract class SandraAndWoo : KeiSource() {
     override val supportsLatest = false
 
     private val writer = "Oliver Knörzer"
@@ -51,11 +51,22 @@ abstract class SandraAndWoo : HttpSource() {
             setUrlWithoutDomain(archive)
         }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(manga), false))
+    override suspend fun getPopularManga(page: Int) = MangasPage(listOf(manga), false)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(this.manga)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = MangasPage(emptyList(), false)
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedChapters = if (fetchChapters) getChapterList(manga) else chapters
+
+        return SMangaUpdate(this.manga, updatedChapters)
+    }
 
     private fun roundHalfwayUp(x: Float) = (x + floor(x + 1)) / 2
 
@@ -65,7 +76,7 @@ abstract class SandraAndWoo : HttpSource() {
 
         val date = if (dateMatch != null) {
             val (_, year, month, day) = dateMatch.groupValues
-            DATE_FORMAT.tryParse("$year-$month-$day")
+            DATE_FORMAT.tryParseDate("$year-$month-$day")
         } else {
             0L
         }
@@ -93,8 +104,8 @@ abstract class SandraAndWoo : HttpSource() {
         return Pair(chapterNumber, chapter)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val elements = document.select("#column a").reversed()
 
         val initial = Pair(0f, SChapter.create())
@@ -104,28 +115,15 @@ abstract class SandraAndWoo : HttpSource() {
         }.drop(1).map { it.second }.reversed()
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val imgUrl = document.selectFirst("#comic img")?.absUrl("src") ?: ""
 
         return listOf(Page(0, imageUrl = imgUrl))
     }
 
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
 
         private val CHAPTER_DATE_REGEX = Regex(""".*/(\d+)/(\d+)/(\d+)/[^/]*/""")
         private val CHAPTER_TITLE_REGEX = Regex("""Permanent Link:\s*((?:\[(\d{4})])?\s*(?:\[[^]]*(\d{4})])?.*)""")

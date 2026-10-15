@@ -113,6 +113,7 @@ abstract class Picacomic :
         var sort: String? = null
         var category: String? = null
         var rankPath: String? = null
+        var onlyFavourite: Boolean? = false
 
         // parse filters
         for (filter in filters) {
@@ -120,8 +121,19 @@ abstract class Picacomic :
                 is SortFilter -> sort = filter.toUriPart()
                 is CategoryFilter -> category = filter.toUriPart()
                 is RankFilter -> rankPath = filter.toUriPart()
+                is FavouriteFilter -> onlyFavourite = filter.state
                 else -> {}
             }
+        }
+
+        // return user's favourite list if check
+        if (onlyFavourite == true) {
+            val url = "$apiUrl/users/favourite".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("s", sort ?: "dd")
+                .build()
+
+            return parseSearchManga(client.get(url))
         }
 
         // return comics from leaderboard
@@ -268,6 +280,7 @@ abstract class Picacomic :
         SortFilter(),
         CategoryFilter(),
         RankFilter(),
+        FavouriteFilter(),
     )
 
     // Preferences

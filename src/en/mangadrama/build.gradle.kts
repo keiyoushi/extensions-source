@@ -8,8 +8,8 @@ keiyoushi {
     name = "Manga Drama"
     versionCode = 0
     contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "initmanga"
 
     source {
         lang = "en"

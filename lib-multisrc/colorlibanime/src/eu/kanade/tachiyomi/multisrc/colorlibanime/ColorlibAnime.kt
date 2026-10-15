@@ -1,45 +1,39 @@
 package eu.kanade.tachiyomi.multisrc.colorlibanime
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-abstract class ColorlibAnime : HttpSource() {
+abstract class ColorlibAnime : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     private val timeRegex = Regex("""Date\((\d+)\)""")
 
     private fun Element.toThumbnail(): String = this.select(".set-bg").attr("abs:data-setbg").substringBeforeLast("?")
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderFilter(0)))
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(OrderFilter(0)))
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(OrderFilter(1)))
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(OrderFilter(1)))
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("manga")
             addQueryParameter("page", page.toString())
@@ -47,11 +41,7 @@ abstract class ColorlibAnime : HttpSource() {
             addQueryParameter("search", query)
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val mangas = document.select(".product__page__content > [style]:has(.col-6) .product__item").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.select("a.img-link").attr("abs:href"))
@@ -65,10 +55,25 @@ abstract class ColorlibAnime : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val element = document.selectFirst(".anime__details__content") ?: return SManga.create()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
+
+        return parseDetails(client.get(url).asJsoup())?.apply { this.url = url.encodedPath }
+    }
+
+    // Details and chapters come from the same page
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(parseDetails(document) ?: manga, parseChapters(document))
+    }
+
+    private fun parseDetails(document: Document): SManga? {
+        val element = document.selectFirst(".anime__details__content") ?: return null
 
         return SManga.create().apply {
             title = element.select("h3").text()
@@ -84,9 +89,7 @@ abstract class ColorlibAnime : HttpSource() {
     }
 
     // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.asJsoup()
-
+    private fun parseChapters(doc: Document): List<SChapter> {
         val time = timeRegex.find(doc.select("script:containsData(lastUpdated)").html())
             ?.let { it.groupValues[1].toLong() } ?: 0L
 
@@ -102,17 +105,15 @@ abstract class ColorlibAnime : HttpSource() {
     }
 
     // Pages
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".container .read-img > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
-
     // Filters
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         OrderFilter(),
     )
 }

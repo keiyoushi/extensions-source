@@ -1,26 +1,17 @@
 package eu.kanade.tachiyomi.extension.es.manhwalatino
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.asJsoup
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class ManhwaLatino : Madara() {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor { chain ->
+abstract class ManhwaLatino : MadaraNoAjax() {
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor { chain ->
             val request = chain.request()
 
             // Only modify Accept-Encoding for image requests to preserve Cloudflare fingerprint
@@ -48,61 +39,12 @@ abstract class ManhwaLatino : Madara() {
 
             return@addInterceptor response
         }
-        .rateLimit(1, 2.seconds)
-        .build()
-
-    override val useNewChapterEndpoint = true
+        rateLimit(1, 2.seconds)
+    }
 
     override val chapterUrlSelector = "div.mini-letters > a"
 
     override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Estado del comic) > div.summary-content"
     override val mangaDetailsSelectorDescription = "div.post-content_item:contains(Resumen) div.summary-container"
     override val pageListParseSelector = "div.page-break img.wp-manga-chapter-img"
-
-    private val chapterListNextPageSelector = "div.pagination > span.current + span"
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaUrl = response.request.url
-        var document = response.asJsoup()
-        launchIO { countViews(document) }
-
-        val chapterList = mutableListOf<SChapter>()
-        var page = 1
-
-        do {
-            val chapterElements = document.select(chapterListSelector())
-            if (chapterElements.isEmpty()) break
-            chapterList.addAll(chapterElements.map { chapterFromElement(it) })
-
-            val hasNextPage = document.selectFirst(chapterListNextPageSelector) != null
-            if (hasNextPage) {
-                page++
-                val nextPageUrl = mangaUrl.newBuilder().setQueryParameter("t", page.toString()).build()
-                document = client.newCall(GET(nextPageUrl, headers)).execute().asJsoup()
-            } else {
-                break
-            }
-        } while (true)
-
-        return chapterList
-    }
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-
-        with(element) {
-            selectFirst(chapterUrlSelector)!!.let { urlElement ->
-                chapter.url = urlElement.attr("abs:href").let {
-                    it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
-                }
-                chapter.name = urlElement.wholeText().substringAfter("\n").trim()
-            }
-
-            chapter.date_upload = selectFirst("img:not(.thumb)")?.attr("alt")?.let { parseRelativeDate(it) }
-                ?: selectFirst("span a")?.attr("title")?.let { parseRelativeDate(it) }
-                ?: parseChapterDate(selectFirst(chapterDateSelector())?.text())
-        }
-
-        return chapter
-    }
 }

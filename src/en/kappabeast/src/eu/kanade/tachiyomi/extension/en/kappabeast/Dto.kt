@@ -5,9 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class SearchResponse(
@@ -26,7 +24,10 @@ class Data(
     private val slug: String,
     private val media: List<Media>?,
     private val category: List<Category>?,
+    private val chapters: List<ChapterData>? = null,
 ) {
+    fun toSChapters() = chapters.orEmpty().map { it.toSChapter(slug, documentId) }
+
     fun toSManga(cdnUrl: String) = SManga.create().apply {
         url = "$slug#$documentId"
         title = this@Data.title
@@ -71,11 +72,14 @@ class Category(
     val name: String,
 )
 
-// Chapters
 @Serializable
-class ChapterResponse(
-    val data: List<ChapterData>,
-    val meta: Meta,
+class ChapterPageResponse(
+    val data: List<ChapterPage>,
+)
+
+@Serializable
+class ChapterPage(
+    val htmlContent: String?,
 )
 
 @Serializable
@@ -83,27 +87,15 @@ class ChapterData(
     private val number: Float,
     private val title: String?,
     private val createdAt: String?,
-    private val manga: Manga,
-    val htmlContent: String?,
 ) {
-    fun toSChapter() = SChapter.create().apply {
+    fun toSChapter(slug: String, documentId: String) = SChapter.create().apply {
         val chapterNum = if (number % 1f == 0f) number.toInt() else number
-        url = "${manga.slug}/$number#${manga.documentId}"
+        url = "$slug/$number#$documentId"
         name = buildString {
             append("Chapter $chapterNum")
             if (!title.isNullOrBlank() && title != "Chapter $chapterNum") append(" - $title")
         }
         chapter_number = number
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.tryParse(createdAt)
     }
 }
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
-
-@Serializable
-class Manga(
-    val documentId: String,
-    val slug: String,
-)

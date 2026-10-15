@@ -6,12 +6,14 @@ plugins {
 
 keiyoushi {
     name = "InkStory"
-    versionCode = 5
-    contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    versionCode = 0
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.6"
+    theme = "inkstory"
 
     source {
         lang = "ru"
         baseUrl = "https://inkstory.net"
+        versionId = 2
     }
 }

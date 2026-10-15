@@ -1,12 +1,40 @@
 package eu.kanade.tachiyomi.extension.zh.favcomic
 
 import android.content.Context
+import android.content.SharedPreferences
+import android.text.InputType
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 
 const val PREF_RANK_TYPE = "RANK_TYPE"
 const val PREF_MANGA_TYPE = "MANGA_TYPE"
+const val PREF_USERNAME = "USERNAME"
+const val PREF_PASSWORD = "PASSWORD"
 
-fun preferencesInternal(context: Context) = arrayOf(
+fun preferencesInternal(context: Context, preferences: SharedPreferences) = arrayOf(
+    EditTextPreference(context).apply {
+        key = PREF_USERNAME
+        title = "账号 (喜漫注册邮箱)"
+        summary = preferences.getString(key, "")?.takeIf(String::isNotEmpty) ?: "未设置"
+        dialogTitle = title
+        setOnPreferenceChangeListener { _, newValue ->
+            summary = (newValue as String).takeIf(String::isNotEmpty) ?: "未设置"
+            true
+        }
+    },
+    EditTextPreference(context).apply {
+        key = PREF_PASSWORD
+        title = "密码"
+        summary = if (preferences.getString(key, "").isNullOrEmpty()) "未设置" else "********"
+        dialogTitle = title
+        setOnBindEditTextListener {
+            it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        setOnPreferenceChangeListener { _, newValue ->
+            summary = if ((newValue as String).isEmpty()) "未设置" else "********"
+            true
+        }
+    },
     ListPreference(context).apply {
         key = PREF_RANK_TYPE
         title = "热门排行"

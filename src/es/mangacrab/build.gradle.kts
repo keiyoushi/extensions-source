@@ -6,18 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Manga Crab"
-    versionCode = 23
+    versionCode = 24
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
 
     source {
         lang = "es"
-        baseUrl = "https://mangacrab.org"
+        baseUrl = "https://es.mangacrab.org"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
 }

@@ -5,18 +5,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.asJsoup
 import okhttp3.OkHttpClient
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class UniversoHentai : Gattsu() {
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 2.seconds)
 
     override fun latestUpdatesSelector() = "div.meio div.videos div.video a[href^=$baseUrl]:not(:has(span.selo-hd))"
 
@@ -26,8 +23,7 @@ abstract class UniversoHentai : Gattsu() {
         setUrlWithoutDomain(element.attr("href"))
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
+    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val postBox = document.selectFirst(chapterListSelector())!!
 
         title = postBox.select("h1.post-titulo").first()!!.text()
@@ -40,12 +36,8 @@ abstract class UniversoHentai : Gattsu() {
             .withoutSize()
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-
-        return document.select(chapterListSelector())
-            .map { chapterFromElement(it) }
-    }
+    override fun chapterListParse(document: Document): List<SChapter> = document.select(chapterListSelector())
+        .map { chapterFromElement(it) }
 
     override fun chapterListSelector() = "div.meio div.post[itemscope]:has(a[title=Abrir galeria])"
 

@@ -3,41 +3,31 @@ package eu.kanade.tachiyomi.extension.en.frierenonline
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.utils.asJsoup
-import okhttp3.Response
-import org.jsoup.nodes.Document
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class FrierenOnline : Madara() {
     override val supportsLatest = false
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val supportsFilterFetching = false
+    override val supportsRelatedMangas = false
 
-    override fun getFilterList() = FilterList()
+    override fun getFilterList(data: JsonElement?) = FilterList()
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".about h1")!!.text()
-        thumbnail_url = document.selectFirst(".cover_managa img")?.attr("abs:src")
-        description = document.selectFirst(".synopsis p")?.text()
-        author = document.selectFirst("h5:contains(Author) + h4")?.text()
-        artist = document.selectFirst("h5:contains(Artist) + h4")?.text()
-        genre = document.select(".tags a[rel=tag]").joinToString { it.text() }
-        status = when (document.selectFirst("h5:contains(Status) + h4")?.text()) {
-            "OnGoing" -> SManga.ONGOING
-            "Completed" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
-    }
+    override val mangaDetailsSelectorTitle = ".about h1"
+    override val mangaDetailsSelectorAuthor = "h5:contains(Author) + h4"
+    override val mangaDetailsSelectorArtist = "h5:contains(Artist) + h4"
+    override val mangaDetailsSelectorStatus = "h5:contains(Status) + h4"
+    override val mangaDetailsSelectorDescription = ".synopsis"
+    override val mangaDetailsSelectorThumbnail = ".cover_managa img"
+    override val mangaDetailsSelectorGenre = ".tags a[rel=tag]"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    override fun chapterListSelector() = "li.m-chapter"
+    override val chapterUrlSelector = "a:has(.chapter-content)"
 
-        return document.select("li.m-chapter a:has(.chapter-content)").map { element ->
-            SChapter.create().apply {
-                setUrlWithoutDomain(element.attr("abs:href"))
-                name = element.selectFirst(".chapter-content > div")!!.text()
-            }
-        }
+    // Prepend /manga since mangaPath becomes / due to redirection
+    override fun getChapterUrl(chapter: SChapter) = super.getChapterUrl(chapter).toHttpUrl().let {
+        it.newBuilder().encodedPath("/manga${it.encodedPath}").build().toString()
     }
 }

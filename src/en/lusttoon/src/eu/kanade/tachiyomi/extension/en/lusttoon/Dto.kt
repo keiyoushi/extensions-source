@@ -2,8 +2,11 @@ package eu.kanade.tachiyomi.extension.en.lusttoon
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 @Serializable
 class SearchResponseDto(
@@ -56,6 +59,7 @@ class SerieDto(
             else -> SManga.UNKNOWN
         }
         genre = genders?.joinToString { it.name }?.takeIf { it.isNotBlank() }
+        initialized = true
     }
 }
 
@@ -74,7 +78,7 @@ class ChapterDto(
     val slug: String? = null,
     private val num: Float? = null,
     private val name: String? = null,
-    val createdAt: String? = null,
+    private val createdAt: String? = null,
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         url = "/comic/$mangaSlug/$slug"
@@ -85,9 +89,25 @@ class ChapterDto(
             "Chapter ${num?.toString()?.removeSuffix(".0") ?: ""}".trim()
         }
         chapter_number = num ?: -1f
+        date_upload = Instant.tryParse(createdAt)
     }
 
     companion object {
         private val digitRegex = Regex("""\d""")
     }
+}
+
+@Serializable
+class PagechesDto(
+    private val urlImg: String? = null,
+) {
+    val images: List<String>
+        get() = runCatching { urlImg?.parseAs<List<String>>() }.getOrNull() ?: emptyList()
+}
+
+@Serializable
+class HomeDto(
+    private val comics: List<SearchItemDto>? = null,
+) {
+    val mangas get() = comics?.filter { it.slug != null }?.map { it.toSManga() } ?: emptyList()
 }

@@ -1,0 +1,3 @@
+0:["$","section",null,{"mangaTitle":"Lazy Manga","children":["$L1","$L2"]}]
+1:"Deferred Title"
+2:"42 chapters"

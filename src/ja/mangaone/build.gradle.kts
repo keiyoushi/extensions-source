@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Manga One"
-    versionCode = 3
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "ja"

@@ -1,34 +1,29 @@
 package eu.kanade.tachiyomi.extension.all.manhwa18net
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Source
-abstract class Manhwa18Net : HttpSource() {
+abstract class Manhwa18Net : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
-
-    private fun Response.asJsoup() = Jsoup.parse(body.string())
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     private fun extractPageDto(response: Response): PageDto {
         val document = response.asJsoup()
@@ -40,14 +35,14 @@ abstract class Manhwa18Net : HttpSource() {
     }
 
     // ============================================================
-    // REQUESTS
+    // LISTS
     // ============================================================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga-list?sort=top&page=$page", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseList(client.get("$baseUrl/manga-list?sort=top&page=$page"))
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga-list?sort=update&page=$page", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseList(client.get("$baseUrl/manga-list?sort=update&page=$page"))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val builder = if (query.isNotEmpty()) {
             "$baseUrl/tim-kiem".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
@@ -73,26 +68,10 @@ abstract class Manhwa18Net : HttpSource() {
             }
         }
 
-        return GET(builder.build().toString(), headers)
+        return parseList(client.get(builder.build()))
     }
 
-    // ============================================================
-    // FILTERS
-    // ============================================================
-
-    override fun getFilterList() = getFilters()
-
-    // ============================================================
-    // LIST PARSING
-    // ============================================================
-
-    override fun popularMangaParse(response: Response) = parseList(response)
-
-    override fun latestUpdatesParse(response: Response) = parseList(response)
-
-    override fun searchMangaParse(response: Response) = parseList(response)
-
-    private fun parseList(response: Response): MangasPage {
+    private suspend fun parseList(response: Response): MangasPage {
         val props = extractPageDto(response).props
 
         val listing = props.paginate
@@ -111,60 +90,69 @@ abstract class Manhwa18Net : HttpSource() {
 
         return MangasPage(mangas, listing.nextPageUrl != null)
     }
+
     // ============================================================
-    // DETAILS
+    // FILTERS
     // ============================================================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val props = extractPageDto(response).props
-        val manga = props.manga ?: throw Exception("Manga details not found")
+    override fun getFilterList(data: JsonElement?) = getFilters()
 
-        return SManga.create().apply {
-            title = manga.name
+    // ============================================================
+    // DETAILS + CHAPTER LIST
+    // ============================================================
 
-            description = manga.pilot?.let { Jsoup.parse(it).text() }
-                ?: manga.description?.let { Jsoup.parse(it).text() }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val props = extractPageDto(client.get(getMangaUrl(manga))).props
 
-            thumbnail_url = fixImageUrl(manga.coverUrl ?: manga.thumbUrl)
+        if (fetchDetails && props.manga == null) throw Exception("Manga details not found")
+        if (fetchChapters && props.chapters == null) throw Exception("Chapters not found")
 
-            genre = manga.genres?.joinToString(", ") { it.name }
+        val newManga = props.manga?.let { mangaDto ->
+            SManga.create().apply {
+                title = mangaDto.name
 
-            author = manga.artists?.joinToString(", ") { it.name }?.ifEmpty { null }
+                description = mangaDto.pilot?.let { Jsoup.parse(it).text() }
+                    ?: mangaDto.description?.let { Jsoup.parse(it).text() }
 
-            artist = author
+                thumbnail_url = fixImageUrl(mangaDto.coverUrl ?: mangaDto.thumbUrl)
 
-            status = when (manga.statusId) {
-                0 -> SManga.ONGOING
-                1, 2 -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
+                genre = mangaDto.genres?.joinToString { it.name }
+
+                author = mangaDto.artists?.joinToString { it.name }?.ifEmpty { null }
+
+                artist = author
+
+                status = when (mangaDto.statusId) {
+                    0 -> SManga.ONGOING
+                    1, 2 -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
             }
-        }
-    }
+        } ?: manga
 
-    // ============================================================
-    // CHAPTER LIST
-    // ============================================================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val props = extractPageDto(response).props
-        val manga = props.manga ?: throw Exception("Manga not found")
-        val chapters = props.chapters ?: throw Exception("Chapters not found")
-
-        return chapters.map { chapter ->
+        val mangaSlug = props.manga?.slug ?: manga.url.substringAfterLast("/")
+        val newChapters = props.chapters?.map { chapter ->
             SChapter.create().apply {
                 name = chapter.name
-                url = "/manga/${manga.slug}/${chapter.slug}"
-                date_upload = parseDate(chapter.createdAt)
+                url = "/manga/$mangaSlug/${chapter.slug}"
+                date_upload = Instant.tryParse(chapter.createdAt)
             }
-        }
+        } ?: chapters
+
+        return SMangaUpdate(newManga, newChapters)
     }
 
     // ============================================================
     // PAGE LIST
     // ============================================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val props = extractPageDto(response).props
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val props = extractPageDto(client.get(getChapterUrl(chapter))).props
         val chapterContent = props.chapterContent
             ?: throw Exception("Chapter content not found")
 
@@ -180,15 +168,6 @@ abstract class Manhwa18Net : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun imageRequest(page: Page): Request = GET(
-        page.imageUrl!!,
-        headersBuilder()
-            .add("Referer", baseUrl)
-            .build(),
-    )
-
     // ============================================================
     // UTIL
     // ============================================================
@@ -198,22 +177,5 @@ abstract class Manhwa18Net : HttpSource() {
         url.startsWith("http") -> url
         url.startsWith("/") -> baseUrl + url
         else -> "$baseUrl/$url"
-    }
-}
-
-private val dateFormat by lazy {
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-}
-
-private fun parseDate(dateStr: String?): Long {
-    if (dateStr.isNullOrEmpty()) return 0L
-    return try {
-        // Strip the microseconds (e.g. ".000000Z" -> "Z") to safely parse
-        val cleanDate = dateStr.substringBefore(".") + "Z"
-        dateFormat.parse(cleanDate)?.time ?: 0L
-    } catch (e: Exception) {
-        0L
     }
 }

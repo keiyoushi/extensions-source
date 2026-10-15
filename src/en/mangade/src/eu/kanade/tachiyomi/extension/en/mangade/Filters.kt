@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mangade
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class SortFilter :
+class SortFilter(defaultState: Int = LATEST) :
     UriPartFilter(
         "Sort by",
         arrayOf(
@@ -13,7 +13,16 @@ class SortFilter :
             Pair("Name A-Z", "a-z"),
             Pair("Name Z-A", "z-a"),
         ),
-    )
+    ) {
+    init {
+        state = defaultState
+    }
+
+    companion object {
+        const val LATEST = 0
+        const val POPULAR = 2
+    }
+}
 
 class StatusFilter :
     UriPartFilter(

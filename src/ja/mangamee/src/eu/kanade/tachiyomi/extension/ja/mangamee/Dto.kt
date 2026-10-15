@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.ja.mangamee
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.protobuf.ProtoNumber
 import kotlin.toString
 
@@ -105,8 +107,11 @@ class ChapterList(
 
     fun toSChapter(titleId: String) = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
-        url = "$id#$titleId"
+        url = id.toString()
         name = lock + title
+        memo = buildJsonObject {
+            put("titleId", titleId)
+        }
     }
 }
 

@@ -6,10 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Manhwa18.cc"
-    versionCode = 7
+    versionCode = 10
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "madara"
 
     listOf("en", "ko", "all").forEach {
         source {

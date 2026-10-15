@@ -6,9 +6,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
-import java.util.Locale
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlin.time.Instant
 
 @Serializable
@@ -93,8 +91,8 @@ class ChapterItem(
     private val chapterIndex: Float? = null,
 ) {
     fun toSChapter(seriesSlug: String?): SChapter = SChapter.create().apply {
-        val index = (data.index ?: chapterIndex)!!
-        val formattedIndex = chapterNumberFormatter.format(index)
+        val index = (data.index ?: chapterIndex) ?: 0f
+        val formattedIndex = index.toString().removeSuffix(".0")
         url = "/series/$seriesSlug/chapter/$formattedIndex"
         name = if (data.title.isNullOrBlank()) {
             "Chapter $formattedIndex"
@@ -106,7 +104,7 @@ class ChapterItem(
     }
 
     fun toPageList(): List<Page> = data.images?.mapIndexed { index, imageUrl ->
-        Page(index, "", imageUrl)
+        Page(index, imageUrl = imageUrl)
     } ?: emptyList()
 }
 
@@ -127,20 +125,15 @@ class ChapterDetailResponse(
     val data: ChapterItem,
 )
 
-private val chapterNumberFormatter = DecimalFormat(
-    "#.##",
-    DecimalFormatSymbols.getInstance(Locale.US),
-)
-
 private fun parseChapterDate(dateString: String): Long = Instant.tryParse(dateString)
 
-fun SManga.getSlug(baseUrl: String): String = "$baseUrl$url".toHttpUrl().pathSegments[1]
+fun SManga.getSlug(baseUrl: String): String = (url.toHttpUrlOrNull() ?: "$baseUrl$url".toHttpUrl()).pathSegments[1]
 
 fun SChapter.getSlugAndIndex(baseUrl: String): Pair<String, String> = if (url.startsWith("/chapter/")) {
     val slug = url.substringAfter("/chapter/").substringBefore("-chapter-")
     val chapterIndex = url.substringAfter("-chapter-").substringBefore("-bahasa-")
     slug to chapterIndex
 } else {
-    val path = "$baseUrl$url".toHttpUrl().pathSegments
-    path[1] to path[3]
+    val httpUrl = url.toHttpUrlOrNull() ?: "$baseUrl$url".toHttpUrl()
+    httpUrl.pathSegments[1] to httpUrl.pathSegments[3]
 }

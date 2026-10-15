@@ -5,39 +5,37 @@ import android.widget.Toast
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
-import rx.Observable
-import java.text.ParseException
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 
 @Source
 abstract class ClownCorps :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(TextInterceptor())
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(TextInterceptor())
 
     private fun getManga() = SManga.create().apply {
         title = name
@@ -52,11 +50,11 @@ abstract class ClownCorps :
         url = "/comic"
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(getManga()), hasNextPage = false))
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(getManga()), hasNextPage = false)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = fetchPopularManga(page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(getManga())
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getPopularManga(page)
 
     @Serializable
     class SerializableChapter(val fullLink: String, val name: String, val dateUpload: Long) {
@@ -64,9 +62,16 @@ abstract class ClownCorps :
         override fun equals(other: Any?) = other is SerializableChapter && fullLink == other.fullLink
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (!fetchChapters) return SMangaUpdate(getManga(), chapters)
+
         // The total number of webpages with chapters on them
-        val document = response.asJsoup()
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val currentPageIndicator = document.select("#paginav li.paginav-pages").text()
         val totalWebpageCount = currentPageIndicator.split(" ").last().toInt()
 
@@ -79,11 +84,11 @@ abstract class ClownCorps :
         }
 
         // Save the chapters to cache
-        val fullJsonString = Json.encodeToString(allChapters)
+        val fullJsonString = allChapters.toJsonString<Set<SerializableChapter>>()
         setChapterCache(fullJsonString)
 
         // Convert the serializable chapters to SChapters
-        return allChapters
+        val chapterList = allChapters
             .sortedByDescending { it.dateUpload }
             .map { chapter ->
                 SChapter.create().apply {
@@ -92,16 +97,18 @@ abstract class ClownCorps :
                     date_upload = chapter.dateUpload
                 }
             }
+
+        return SMangaUpdate(getManga(), chapterList)
     }
 
     private fun getChaptersFromCache(): Set<SerializableChapter> {
         val cachedChaps = getChapterCache() ?: return emptySet()
-        return Json.decodeFromString(cachedChaps)
+        return cachedChaps.parseAs()
     }
 
-    private fun fetchChapterWebpage(webpageIndex: Int): Document {
+    private suspend fun fetchChapterWebpage(webpageIndex: Int): Document {
         val url = "$baseUrl/comic/page/$webpageIndex/"
-        return client.newCall(GET(url, headers)).execute().asJsoup()
+        return client.get(url).asJsoup()
     }
 
     private fun extractChapters(document: Document): List<SerializableChapter> {
@@ -111,23 +118,18 @@ abstract class ClownCorps :
             val title = it.selectFirst(".post-title a")!!.text()
             val postDate = it.selectFirst(".post-date")!!.text()
             val postTime = it.selectFirst(".post-time")!!.text()
-            val date = parseDate("$postDate $postTime")
+            val date = dateFormat.tryParseDateTime("$postDate $postTime")
             SerializableChapter(link, title, date)
         }
     }
 
-    private fun parseDate(dateStr: String): Long = try {
-        dateFormat.parse(dateStr)!!.time
-    } catch (_: ParseException) {
-        0L
-    }
+    private val dateFormat: DateTimeFormatter = DateTimeFormatterBuilder()
+        .parseCaseInsensitive()
+        .appendPattern("MMMM d, yyyy h:mm a")
+        .toFormatter(Locale.ENGLISH)
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("MMMM dd, yyyy hh:mm aa", Locale.ENGLISH)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val doc = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val doc = client.get(getChapterUrl(chapter)).asJsoup()
         val pages = mutableListOf<Page>()
 
         val image = doc.selectFirst("#comic img") ?: return pages
@@ -149,22 +151,6 @@ abstract class ClownCorps :
 
         return pages
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 

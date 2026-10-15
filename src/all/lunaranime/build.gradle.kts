@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Lunar Manga"
-    versionCode = 12
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     val languages = listOf(
         "all", "en", "ar", "bg", "bn", "da", "de", "es", "es-419",
@@ -19,7 +19,7 @@ keiyoushi {
 
     languages.forEach { language ->
         source {
-            baseUrl = "https://lunaranime.ru"
+            baseUrl = "https://lunarx.to"
             lang = language
         }
     }

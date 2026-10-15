@@ -1,44 +1,40 @@
 package eu.kanade.tachiyomi.extension.ru.unicomics
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import okhttp3.Headers
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class UniComics : HttpSource() {
+abstract class UniComics : KeiSource() {
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        connectTimeout(10.seconds)
+        readTimeout(30.seconds)
+        rateLimit(3)
+    }
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(10.seconds)
-        .readTimeout(30.seconds)
-        .rateLimit(3)
-        .build()
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/comics/series/page/$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/comics/series/page/$page").asJsoup()
         val mangas = document.select(".comics-grid .comic-card").mapNotNull { element ->
             popularMangaFromElement(element)
         }
@@ -62,10 +58,8 @@ abstract class UniComics : HttpSource() {
         }
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comics/online/page/$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/comics/online/page/$page").asJsoup()
         val mangas = document.select(".comics-grid .comic-card").mapNotNull { element ->
             popularMangaFromElement(element)
         }
@@ -73,9 +67,12 @@ abstract class UniComics : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
-            val url = HttpUrl.Builder()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val events = filters.firstInstanceOrNull<GetEventsList>()
+        val publisher = filters.firstInstanceOrNull<Publishers>()
+
+        val url = when {
+            query.isNotEmpty() -> HttpUrl.Builder()
                 .scheme("https")
                 .host("yandex.ru")
                 .addPathSegments("search/site/")
@@ -84,33 +81,22 @@ abstract class UniComics : HttpSource() {
                 .addQueryParameter("web", "0")
                 .addQueryParameter("l10n", "ru")
                 .addQueryParameter("p", (page - 1).toString())
-                .build()
-            return GET(url, headers)
+                .build().toString()
+
+            (events?.state ?: 0) > 0 -> "$baseUrl$PATH_EVENTS"
+            (publisher?.state ?: 0) > 0 -> {
+                val publisherName = publisher!!.urls[publisher.state]
+                "$baseUrl$PATH_PUBLISHERS/$publisherName/page/$page"
+            }
+
+            else -> return getPopularManga(page)
         }
 
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-            when (filter) {
-                is GetEventsList -> {
-                    if (filter.state > 0) {
-                        return GET("$baseUrl$PATH_EVENTS", headers)
-                    }
-                }
-                is Publishers -> {
-                    if (filter.state > 0) {
-                        val publisherName = getPublishersList()[filter.state].url
-                        return GET("$baseUrl$PATH_PUBLISHERS/$publisherName/page/$page", headers)
-                    }
-                }
-                else -> {}
-            }
-        }
-        return popularMangaRequest(page)
+        return searchMangaParse(client.get(url).asJsoup())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        if (response.request.url.host.contains("yandex")) {
+    private fun searchMangaParse(document: Document): MangasPage {
+        if (document.location().contains("yandex")) {
             if (document.selectFirst(".CheckboxCaptcha, .captcha__captcha") != null) {
                 throw Exception("Пройдите капчу Yandex в WebView (слишком много запросов)")
             }
@@ -132,7 +118,7 @@ abstract class UniComics : HttpSource() {
             return MangasPage(mangas.distinctBy { it.url }, hasNext)
         }
 
-        if (response.request.url.encodedPath.contains(PATH_EVENTS)) {
+        if (document.location().contains(PATH_EVENTS)) {
             val mangas = document.select(".events-grid .event-card, .list_events").mapNotNull { element ->
                 val a = element.selectFirst("a") ?: return@mapNotNull null
                 val url = a.absUrl("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
@@ -156,32 +142,39 @@ abstract class UniComics : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val titleid = url.pathSegments[2]
-            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleid", filters)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val titleid = url.pathSegments.getOrNull(2) ?: return null
+
+        return mangaDetailsParse(
+            client.get("$baseUrl$PATH_URL$titleid").asJsoup(),
+        ).apply {
+            this.url = PATH_URL + titleid
         }
-        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-            return client.newCall(GET("$baseUrl$PATH_URL$realQuery", headers))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = PATH_URL + realQuery
-                    MangasPage(listOf(details), false)
-                }
-        }
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response -> searchMangaParse(response) }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val updatedManga = async {
+            if (fetchDetails) {
+                mangaDetailsParse(
+                    client.get(getMangaUrl(manga)).asJsoup(),
+                )
+            } else {
+                manga
+            }
+        }
+        val updatedChapters = async {
+            if (fetchChapters) getChapters(manga) else chapters
+        }
+
+        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+    }
+
+    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val isIssue = document.selectFirst(".issue-info-grid") != null
         if (isIssue) {
             title = document.selectFirst(".issue-info h1")?.text() ?: ""
@@ -211,70 +204,76 @@ abstract class UniComics : HttpSource() {
                 document.selectFirst(".series-description")?.text()?.let { append(it) }
             }
         }
+        initialized = true
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+    private suspend fun getChapters(manga: SManga): List<SChapter> = coroutineScope {
         val chapters = mutableListOf<SChapter>()
-        var url = baseUrl + manga.url
+        val url = baseUrl + manga.url
+        val document = client.get(url).asJsoup()
 
-        while (url.isNotBlank()) {
-            val request = GET(url, headers)
-            val response = client.newCall(request).execute()
-            val document = response.asJsoup()
-
-            val isIssue = document.selectFirst(".issue-info-grid") != null
-            if (isIssue) {
-                val chapter = SChapter.create().apply {
-                    name = document.selectFirst(".issue-info h1")?.text() ?: "Глава"
-                    val match = CHAPTER_NUMBER_REGEX.find(name)
-                    if (match != null) {
-                        chapter_number = match.groupValues[1].toFloatOrNull() ?: 1f
-                    }
-
-                    val readBtn = document.selectFirst(".btn-read-online-issues")
-                    if (readBtn != null) {
-                        setUrlWithoutDomain(readBtn.absUrl("href"))
-                    } else {
-                        setUrlWithoutDomain(manga.url)
-                    }
+        val isIssue = document.selectFirst(".issue-info-grid") != null
+        if (isIssue) {
+            val chapter = SChapter.create().apply {
+                name = document.selectFirst(".issue-info h1")?.text() ?: "Глава"
+                val match = CHAPTER_NUMBER_REGEX.find(name)
+                if (match != null) {
+                    chapter_number = match.groupValues[1].toFloatOrNull() ?: 1f
                 }
-                chapters.add(chapter)
-                break
-            }
 
-            document.select(".comics-grid .comic-card").forEach { element ->
-                chapters.add(chapterFromElement(element))
+                val readBtn = document.selectFirst(".btn-read-online-issues")
+                if (readBtn != null) {
+                    setUrlWithoutDomain(readBtn.absUrl("href"))
+                } else {
+                    setUrlWithoutDomain(manga.url)
+                }
             }
-
-            val nextOption = document.selectFirst("select.mobilePageSelector option[selected] ~ option")
-            url = nextOption?.absUrl("value") ?: ""
+            chapters.add(chapter)
+            return@coroutineScope chapters
         }
 
-        chapters.reversed()
+        document.select(".comics-grid .comic-card").forEach { element ->
+            chapters.add(chapterFromElement(element))
+        }
+
+        val pageUrls = document.select("select.mobilePageSelector option")
+            .mapNotNull { it.absUrl("value").takeIf(String::isNotBlank) }
+            .drop(1)
+
+        val pageChapters = pageUrls.map { pageUrl ->
+            async {
+                client.get(pageUrl).asJsoup()
+                    .select(".comics-grid .comic-card")
+                    .map {
+                        chapterFromElement(it)
+                    }
+            }
+        }.awaitAll().flatten()
+
+        chapters.addAll(pageChapters)
+        chapters.reversed().map {
+            it.apply {
+                if (name == manga.title) name = "\u200B" + name
+            }
+        }
     }
 
-    private fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val readUrl = element.selectFirst(".buttons-grid a:contains(Читать)")?.absUrl("href")?.ifEmpty { null }
             ?: element.selectFirst(".comic-title-link")?.absUrl("href") ?: ""
-        chapter.setUrlWithoutDomain(readUrl)
+        setUrlWithoutDomain(readUrl)
 
         val ruTitle = element.selectFirst(".comic-title-ru")?.text() ?: ""
         val enTitle = element.selectFirst(".comic-title-en")?.text() ?: ""
-        chapter.name = ruTitle.ifEmpty { enTitle }
+        name = ruTitle.ifEmpty { enTitle }
 
-        val match = CHAPTER_NUMBER_REGEX.find(chapter.name)
-        if (match != null) {
-            chapter.chapter_number = match.groupValues[1].toFloatOrNull() ?: -1f
+        val match = CHAPTER_NUMBER_REGEX.find(name)?.groupValues?.get(1)?.let {
+            chapter_number = it.toFloatOrNull() ?: -1f
         }
-
-        return chapter
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val options = document.select("select.mobilePageSelector option")
         if (options.isNotEmpty()) {
             return options.mapIndexed { i, option ->
@@ -295,18 +294,26 @@ abstract class UniComics : HttpSource() {
         return listOf(Page(0, url = document.location()))
     }
 
-    override fun imageUrlParse(response: Response): String {
-        val document = response.asJsoup()
+    override suspend fun getImageUrl(page: Page): String {
+        val document = client.get(page.url).asJsoup()
         return document.selectFirst(".image_online, #b_image, #image")?.absUrl("src") ?: ""
     }
 
-    override fun getFilterList() = FilterList(
-        Publishers(publishersName),
-        GetEventsList(),
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData() = client.get("$baseUrl/comics/publishers").asJsoup()
+        .select(".publishers-card > a:first-child")
+        .associate { it.text() to it.attr("href").substringAfterLast("/") }.toJsonElement()
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        buildList {
+            val publishers = data?.parseAs<Map<String, String>>().orEmpty()
+            if (publishers.isNotEmpty()) add(Publishers(publishers))
+            add(GetEventsList())
+        },
     )
 
     companion object {
-        const val PREFIX_SLUG_SEARCH = "slug:"
         private const val PATH_URL = "/comics/series/"
         private const val PATH_PUBLISHERS = "/comics/publishers"
         private const val PATH_EVENTS = "/comics/events"
