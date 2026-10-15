@@ -269,10 +269,16 @@ abstract class InitManga :
         title = if (!siteTitle.isNullOrBlank()) siteTitle else mangaTitle!!
     }
 
+    protected open val useChapterApi get() = true
+
     protected open suspend fun parseChapterList(initialDocument: Document, mangaUrl: HttpUrl): List<SChapter> {
+        if (useChapterApi) {
+            return fetchChapterListFromApi(initialDocument, mangaUrl)
+        }
+
         val items = initialDocument.select(chapterListSelector())
         if (items.isEmpty()) {
-            return fetchChapterListFromApi(initialDocument, mangaUrl)
+            return emptyList()
         }
 
         val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED_KEY, PREF_HIDE_LOCKED_DEFAULT)
@@ -303,7 +309,7 @@ abstract class InitManga :
             if (!response.isSuccessful) break
             document = response.asJsoup()
 
-            val hasNextPage = document.selectFirst("ul.uk-pagination a:not(:matchesOwn(\\S))[href^=http]") != null
+            val hasNextPage = document.selectFirst("ul.uk-pagination > li:last-child:not(.uk-disabled)") != null
         } while (hasNextPage)
 
         return chapters
