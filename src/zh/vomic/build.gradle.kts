@@ -12,8 +12,11 @@ keiyoushi {
 
     source {
         lang = "zh"
-        baseUrl {
-            custom("https://www.vomicmh.com")
-        }
+        baseUrl = "https://vomicmh.com"
+        versionId = 2
+    }
+
+    deeplink {
+        path("/detail/..*")
     }
 }
