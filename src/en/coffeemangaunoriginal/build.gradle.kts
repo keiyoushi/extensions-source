@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Coffee Manga (Unoriginal)"
     theme = "madara"
-    versionCode = 3
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
