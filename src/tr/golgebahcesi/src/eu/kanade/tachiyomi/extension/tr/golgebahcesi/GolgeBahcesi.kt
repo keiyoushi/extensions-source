@@ -10,42 +10,28 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
-import keiyoushi.utils.getTurnstileToken
+import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.buffer
-import okio.source
+import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayInputStream
-import java.io.File
 import java.io.IOException
-import java.util.concurrent.Executors
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
-import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Source
@@ -136,63 +122,43 @@ abstract class GolgeBahcesi : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val (chapterId, series, chapterSlug) = "$baseUrl${chapter.url}".toHttpUrl().encodedPathSegments
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
         val dto = client.get("$apiBaseUrl/chapters/$chapterId").parseAs<ChapterDto>()
         if (dto.isLocked) return emptyList()
         if (dto.deliverySystem != "secure") {
             return dto.pages.orEmpty().map { Page(it.index, imageUrl = it.url) }
         }
-        return dto.pages.orEmpty().indices.map {
-            val imageUrl = HttpUrl.Builder().scheme("https").host(CACHE_HOST)
-                .addEncodedPathSegments("$series/$chapterSlug/$it")
+        return captureSecurePages(getChapterUrl(chapter)).mapIndexed { index, data ->
+            val imageUrl = HttpUrl.Builder().scheme("https").host(PAGE_HOST)
+                .addPathSegment(index.toString())
+                .fragment(data)
                 .build()
-            Page(it, imageUrl = imageUrl.toString())
+            Page(index, imageUrl = imageUrl.toString())
         }
     }
 
-    private val captureMutex = Mutex()
-
-    // Replay a chapter's failed capture for 30 s
-    private var lastFailure: CaptureFailure? = null
-
-    private class CaptureFailure(val filePrefix: String, val error: Exception, val time: Long)
-
-    private suspend fun captureChapter(chapterUrl: String, filePrefix: String) {
-        sweepPageCache()
-        try {
-            captureSecurePages(chapterUrl, filePrefix)
-        } catch (e: ChallengeRequired) {
-            val token = getTurnstileToken(url = chapterUrl, siteKey = e.siteKey)
-            client.post("$apiBaseUrl/chapters/challenge", body = ChallengeBody(token, "turnstile").toJsonRequestBody()).close()
-            captureSecurePages(chapterUrl, filePrefix)
-        }
-    }
-
-    // Decode secure chapters in the site's reader, with a worker hook returning each image
-    private suspend fun captureSecurePages(chapterUrl: String, filePrefix: String) {
+    // Secure chapters decoded by the site's reader
+    private suspend fun captureSecurePages(chapterUrl: String): List<String> {
         val bridge = randomName()
         val channel = randomName()
         val workerHook = "(${asset("worker_hook.js")})(${channel.toJsonString()});\n"
         val bootstrap = "(${asset("reader_capture.js")})(window.$bridge, ${channel.toJsonString()}, ${workerHook.toJsonString()});"
 
         val siteHost = baseUrl.toHttpUrl().host
-        val writer = Executors.newSingleThreadExecutor()
-        try {
-            runWebView<Unit>(timeout = 2.minutes) {
+        val count = AtomicInteger()
+        val challengeSeen = AtomicBoolean()
+        return try {
+            runWebView(timeout = 2.minutes) {
                 domStorageEnabled = true
                 userAgent = headers["User-Agent"]!!
 
-                val count = AtomicInteger()
-                val received = HashSet<Int>()
-                val challenge = AtomicReference<Pair<String, Long>>()
+                val pages = ConcurrentHashMap<Int, String>()
 
                 interceptRequest { request ->
                     val host = request.url.host
                     when {
                         host == "challenges.cloudflare.com" -> {
-                            TURNSTILE_SITE_KEY.find(request.url.toString())?.let {
-                                challenge.compareAndSet(null, it.value to System.currentTimeMillis())
-                            }
+                            challengeSeen.set(true)
                             null
                         }
                         host == null || host == siteHost || host.endsWith(".$siteHost") -> null
@@ -206,92 +172,33 @@ abstract class GolgeBahcesi : KeiSource() {
                         "page" -> {
                             val index = data.substringBefore(',').toInt()
                             require(index in 0 until count.get())
-                            writer.execute {
-                                try {
-                                    val bytes = Base64.decode(data.substringAfter("base64,"), Base64.DEFAULT)
-                                    val file = File(applicationContext.cacheDir, "$filePrefix$index")
-                                    check(File(file.path + ".tmp").apply { writeBytes(bytes) }.renameTo(file))
-                                    received += index
-                                    if (received.size == count.get()) resolve(Unit)
-                                } catch (e: Exception) {
-                                    reject(e)
-                                }
-                            }
+                            pages[index] = data.substringAfter("base64,")
+                            if (pages.size == count.get()) resolve(List(pages.size) { pages.getValue(it) })
                         }
                         "error" -> reject(Exception(data))
                     }
                 }
                 injectAtDocumentStart(bootstrap, setOf(baseUrl))
-                poll(1.seconds) {
-                    val (siteKey, seenAt) = challenge.get() ?: return@poll
-                    if (count.get() == 0 && System.currentTimeMillis() - seenAt > 10.seconds.inWholeMilliseconds) {
-                        reject(ChallengeRequired(siteKey))
-                    }
-                }
 
                 loadUrl(chapterUrl)
             }
-        } finally {
-            writer.shutdownNow()
-        }
-    }
-
-    private class ChallengeRequired(val siteKey: String) : Exception("Turnstile required")
-
-    // Keep captured pages for a day
-    private fun sweepPageCache() {
-        val cutoff = System.currentTimeMillis() - 1.days.inWholeMilliseconds
-        applicationContext.cacheDir.listFiles()?.forEach {
-            if (it.name.startsWith(CACHE_FILE_PREFIX) && it.lastModified() < cutoff) it.delete()
+        } catch (e: WebViewTimeoutException) {
+            if (challengeSeen.get() && count.get() == 0) throw Exception("Turnstile challenge not passed, open the chapter in WebView and try again")
+            throw e
         }
     }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val request = chain.request()
-        if (request.url.host != CACHE_HOST) return@addInterceptor chain.proceed(request)
-        val (series, chapter, index) = request.url.encodedPathSegments
-        val filePrefix = "$CACHE_FILE_PREFIX${series}_${chapter}_"
-        val file = File(applicationContext.cacheDir, "$filePrefix$index")
-        if (!file.exists()) {
-            val call = chain.call()
-            try {
-                runBlocking {
-                    val capture = async {
-                        captureMutex.withLock {
-                            if (file.exists()) return@withLock
-                            lastFailure?.takeIf { it.filePrefix == filePrefix && System.currentTimeMillis() - it.time < 30.seconds.inWholeMilliseconds }
-                                ?.let { throw it.error }
-                            try {
-                                captureChapter("$baseUrl/manga/$series/bolum/$chapter", filePrefix)
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                lastFailure = CaptureFailure(filePrefix, e, System.currentTimeMillis())
-                                throw e
-                            }
-                        }
-                    }
-                    val watcher = launch {
-                        while (!call.isCanceled()) delay(500)
-                        capture.cancel()
-                    }
-                    try {
-                        capture.await()
-                    } finally {
-                        watcher.cancel()
-                    }
-                }
-            } catch (e: Throwable) {
-                throw e as? IOException ?: IOException(e.message, e)
-            }
-        }
-        if (!file.exists()) throw IOException("Page ${index.toInt() + 1} was not captured")
+        if (request.url.host != PAGE_HOST) return@addInterceptor chain.proceed(request)
+        val data = request.url.fragment ?: throw IOException("Page data missing, clear chapter cache and try again")
+        val image = Base64.decode(data, Base64.DEFAULT)
         Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
             .code(200)
             .message("OK")
-            .body(file.source().buffer().asResponseBody())
+            .body(image.toResponseBody())
             .build()
     }
 
@@ -319,8 +226,6 @@ abstract class GolgeBahcesi : KeiSource() {
     )
 
     companion object {
-        private const val CACHE_HOST = "golgebahcesi-pages.local"
-        private const val CACHE_FILE_PREFIX = "golgebahcesi-"
-        private val TURNSTILE_SITE_KEY = Regex("""0x[0-9A-Za-z_-]{20,}""")
+        private const val PAGE_HOST = "golgebahcesi-pages.local"
     }
 }

@@ -88,9 +88,3 @@ class Genre(
     val name: String,
     val slug: String,
 )
-
-@Serializable
-class ChallengeBody(
-    private val token: String,
-    private val provider: String,
-)
