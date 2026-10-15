@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Corocoro Online"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

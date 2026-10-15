@@ -11,6 +11,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesDecryptWithPrependedIv
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
@@ -20,13 +22,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.buffer
-import okio.cipherSource
 import org.jsoup.nodes.Document
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -277,28 +273,12 @@ abstract class StellarSaber : KeiSource() {
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-
-        val fragment = request.url.fragment
-            ?: return response
-
+        val fragment = request.url.fragment ?: return response
         val keyBytes = Base64.decode(fragment, Base64.DEFAULT)
 
-        val source = response.body.source()
-        val iv = source.readByteArray(12)
-
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(
-                Cipher.DECRYPT_MODE,
-                SecretKeySpec(keyBytes, "AES"),
-                GCMParameterSpec(128, iv),
-            )
+        return response.aesDecryptWithPrependedIv(ivSize = 12, contentType = JPEG_MEDIA_TYPE) { iv ->
+            aesGcm(keyBytes, iv)
         }
-
-        val cipherSource = source.cipherSource(cipher)
-
-        return response.newBuilder()
-            .body(cipherSource.buffer().asResponseBody(JPEG_MEDIA_TYPE, -1))
-            .build()
     }
 
     companion object {

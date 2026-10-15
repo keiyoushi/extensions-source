@@ -10,15 +10,18 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
+import java.net.URLEncoder
 
 @Source
 abstract class Ikiru : KeiSource() {
+    // support sugesttion komikku
+    override val supportRelatedMangasBySearch = true
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
@@ -27,7 +30,7 @@ abstract class Ikiru : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
         val response = client.get(url)
-        return parseSearchResponse(response)
+        return parseSearchResponse(response, page)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -37,10 +40,23 @@ abstract class Ikiru : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
         val response = client.get(url)
-        return parseSearchResponse(response)
+        return parseSearchResponse(response, page)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        // the "project" option is a separate listing, the other filters do not apply to it
+        if (filters.firstInstanceOrNull<ProjectFilter>()?.isProject == true) {
+            val url = "$baseUrl/api/public/manga/project".toHttpUrl().newBuilder()
+                .addQueryParameter("layout", "vertical")
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("limit", PROJECT_PAGE_SIZE.toString())
+                .build()
+            val data = client.get(url).parseData<IkiruProjectDataDto>()
+            val projects = data.project.map { it.toSManga() }
+            val hasNextPage = projects.isNotEmpty() && page * PROJECT_PAGE_SIZE < data.total
+            return MangasPage(projects, hasNextPage)
+        }
+
         val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
@@ -53,13 +69,13 @@ abstract class Ikiru : KeiSource() {
         }
 
         val response = client.get(url.build())
-        return parseSearchResponse(response)
+        return parseSearchResponse(response, page)
     }
 
-    private fun parseSearchResponse(response: Response): MangasPage {
-        val res = response.parseAs<IkiruResponseDto<IkiruSearchDataDto>>()
-        val mangaList = res.data?.mangas?.map { it.toSManga() } ?: emptyList()
-        val hasNextPage = mangaList.size >= 20
+    private fun parseSearchResponse(response: Response, page: Int): MangasPage {
+        val data = response.parseData<IkiruSearchDataDto>()
+        val mangaList = data.mangas.map { it.toSManga() }
+        val hasNextPage = mangaList.isNotEmpty() && page * mangaList.size < data.total
         return MangasPage(mangaList, hasNextPage)
     }
 
@@ -68,11 +84,22 @@ abstract class Ikiru : KeiSource() {
         TypeFilter(),
         StatusFilter(),
         GenreFilter(),
+        ProjectFilter(),
     )
 
+    // library entries saved by older versions stored "/manga/<slug>", the absolute url, or a JSON blob
+    private fun SManga.slug(): String {
+        val raw = url.trim()
+        return when {
+            raw.startsWith("{") -> raw.parseAs<IkiruLegacyMangaUrlDto>().slug
+            raw.startsWith("http") -> raw.toHttpUrlOrNull()?.pathSegments?.getOrNull(1) ?: raw
+            else -> raw.removePrefix("/manga/").removePrefix("/")
+        }.trim('/')
+    }
+
     override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.removePrefix("/manga/").trim('/')
-        return "$baseUrl/manga/$slug"
+        val slug = manga.slug()
+        return "$baseUrl/manga/${slug.encodePathSegments()}"
     }
 
     override suspend fun fetchMangaUpdate(
@@ -80,68 +107,51 @@ abstract class Ikiru : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val slug = manga.url.removePrefix("/manga/").trim('/')
+    ): SMangaUpdate {
+        val slug = manga.slug()
+        val url = "$baseUrl/api/public/manga".toHttpUrl().newBuilder()
+            .addPathSegment(slug)
+            .build()
 
-        val detailsDeferred = if (fetchDetails) {
-            async { fetchMangaDetails(slug) }
-        } else {
-            null
-        }
+        // the dedicated chapter endpoint returns an empty list for some manga, while this one
+        // embeds the complete chapter list
+        val detail = client.get(url).parseData<IkiruMangaDetailDto>()
 
-        val chaptersDeferred = if (fetchChapters) {
-            async { fetchChapterList(slug) }
-        } else {
-            null
-        }
-
-        val updatedManga = detailsDeferred?.await() ?: manga
-        val updatedChapters = chaptersDeferred?.await() ?: chapters
-
-        SMangaUpdate(updatedManga, updatedChapters)
+        return SMangaUpdate(
+            manga = detail.toSManga(),
+            chapters = detail.chapters.chapters.map { it.toSChapter(slug) },
+        )
     }
 
-    private suspend fun fetchMangaDetails(slug: String): SManga {
-        val response = client.get("$baseUrl/api/public/manga/$slug")
-        val res = response.parseAs<IkiruResponseDto<IkiruMangaDetailDto>>()
-        return res.data?.toSManga() ?: SManga.create().apply { url = slug }
+    // legacy library entries stored the absolute web URL
+    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) {
+        chapter.url
+    } else {
+        "$baseUrl/${chapter.url.trim('/').encodePathSegments()}"
     }
-
-    private suspend fun fetchChapterList(slug: String): List<SChapter> {
-        val allChapters = mutableListOf<SChapter>()
-        var page = 1
-        var hasMore = true
-
-        while (hasMore) {
-            val url = "$baseUrl/api/public/manga/$slug/chapter".toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .build()
-
-            val response = client.get(url)
-            val res = response.parseAs<IkiruResponseDto<IkiruChapterListDto>>()
-            val data = res.data ?: break
-            val chapters = data.chapters.map { it.toSChapter(slug) }
-
-            if (chapters.isEmpty()) break
-            allChapters.addAll(chapters)
-
-            hasMore = data.hasMore
-            page++
-        }
-
-        return allChapters
-    }
-
-    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) chapter.url else "$baseUrl${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get(getChapterUrl(chapter))
         val document = response.asJsoup()
-        val images = document.select("img[src*='cdn.ikiru.id'], img.is-loading")
+        val images = document.select("img[src*='cdn.ikiru.id']")
 
-        return images.mapIndexedNotNull { idx, img ->
-            val src = img.attr("src").takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
-            Page(idx, imageUrl = src)
+        return images.mapIndexed { idx, img -> Page(idx, imageUrl = img.attr("src")) }
+    }
+
+    // the API returns HTTP 200 with a failure envelope for bad input, so the flag must be checked explicitly
+    private inline fun <reified T> Response.parseData(): T {
+        val res = parseAs<IkiruResponseDto<T>>()
+        val data = res.data
+        if (!res.success || data == null) {
+            throw Exception(res.message?.takeIf { it.isNotBlank() } ?: "Request failed")
         }
+        return data
+    }
+
+    companion object {
+        private const val PROJECT_PAGE_SIZE = 24
     }
 }
+
+// the API only accepts percent-encoded slugs, and some slugs contain spaces or non-ASCII characters
+private fun String.encodePathSegments(): String = split('/').joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }

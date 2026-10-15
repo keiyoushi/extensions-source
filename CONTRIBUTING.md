@@ -52,7 +52,7 @@ or fix them directly by submitting a Pull Request.
         - [JsonElement accessor helpers](#jsonelement-accessor-helpers)
         - [ZIP streaming - `zipDirectoryAsync` / `readZipEntry`](#zip-streaming---zipdirectoryasync--readzipentry)
         - [Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`](#jsoup-helpers---asjsoup--attrornull--textornull)
-        - [Cryptography - `decodeHex` / `rc4`](#cryptography---decodehex--rc4)
+        - [Cryptography - `decodeHex` / `rc4` / AES helpers](#cryptography---decodehex--rc4--aes-helpers)
         - [Binary endian helpers](#binary-endian-helpers)
         - [Decompression - `Inflater.inflate`](#decompression---inflaterinflate)
         - [SeedRandom - seeded pseudo-random generator](#seedrandom---seeded-pseudo-random-generator)
@@ -1158,12 +1158,17 @@ val title = element.textOrNull()
 val directText = element.ownTextOrNull() // excludes text of nested child elements
 ```
 
-##### Cryptography - `decodeHex` / `rc4` / `xor`
+##### Cryptography - `decodeHex` / `rc4` / `xor` / AES helpers
 
-For encrypted APIs and descramblers:
+For encrypted APIs, descramblers, and image decryption:
 
 ```kotlin
 import keiyoushi.network.XorInterceptor
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesDecryptWithPrependedIv
+import keiyoushi.utils.aesEncrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.rc4
 import keiyoushi.utils.xor
@@ -1186,6 +1191,22 @@ client.newBuilder()
 client.newBuilder()
     .addInterceptor(XorInterceptor(keyBytes))
     .build()
+
+// In-memory AES decryption / encryption:
+val decryptedBytes = ciphertext.aesDecrypt(aesCbc(key = keyBytes, iv = ivBytes))
+val encryptedBytes = plaintext.aesEncrypt(aesGcm(key = keyBytes, iv = ivBytes))
+
+// Streaming response AES decryption:
+override fun getImage(page: Page): Response {
+    val response = super.getImage(page)
+    return response.aesDecrypt(aesCbc(key = keyBytes, iv = ivBytes))
+}
+
+// Or decryption for streams with prepended IV:
+override fun getImage(page: Page): Response {
+    val response = super.getImage(page)
+    return response.aesDecryptWithPrependedIv(key = keyBytes, ivSize = 16)
+}
 ```
 
 ##### Binary endian helpers
