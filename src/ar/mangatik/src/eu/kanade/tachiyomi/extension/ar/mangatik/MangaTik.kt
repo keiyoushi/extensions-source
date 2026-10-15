@@ -12,10 +12,13 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Source
 abstract class MangaTik : KeiSource() {
@@ -29,10 +32,9 @@ abstract class MangaTik : KeiSource() {
 
         val mangas = doc.select("article.manga-card").map { article ->
             SManga.create().apply {
-                article.selectFirst("h2.manga-title > a")?.let { a ->
-                    title = a.text().trim()
-                    setUrlWithoutDomain(a.attr("abs:href"))
-                }
+                val a = article.selectFirst(".manga-title > a")!!
+                title = a.text()
+                setUrlWithoutDomain(a.absUrl("href"))
                 thumbnail_url = article.selectFirst("img.manga-poster")?.let {
                     it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
                 }
@@ -78,8 +80,7 @@ abstract class MangaTik : KeiSource() {
     // ========================= Details & Chapters =========================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        check(url.pathSegments.size >= 2) { "Unsupported URL" }
-        val slug = url.pathSegments[1]
+        val slug = url.pathSegments.getOrNull(1) ?: return null
         val manga = SManga.create().apply {
             this.url = "/manga/$slug"
         }
@@ -100,14 +101,14 @@ abstract class MangaTik : KeiSource() {
             ?.parseAs()
             ?: throw Exception("Unable to find manga data")
 
-        val slug = manga.url.removePrefix("/manga/")
-
         val chapterList = doc.select("a.chapter-item-card").map { a ->
             val chapterNumber = a.attr("data-chapter")
+            val spans = a.select("span").eachText()
             SChapter.create().apply {
-                name = a.select("span").firstOrNull { it.text().startsWith("الفصل") }?.text()
-                    ?: "الفصل $chapterNumber"
-                url = "/manga/$slug/$chapterNumber"
+                setUrlWithoutDomain(a.absUrl("href"))
+                name = spans.firstOrNull { it.startsWith("الفصل") } ?: "الفصل $chapterNumber"
+                chapter_number = chapterNumber.toFloatOrNull() ?: -1f
+                date_upload = dateFormat.tryParseDate(spans.lastOrNull())
             }
         }
 
@@ -118,13 +119,21 @@ abstract class MangaTik : KeiSource() {
             genre = data.genre?.joinToString()
             thumbnail_url = data.image?.url
             author = data.author?.name?.takeUnless {
-                it.isEmpty() || it.equals("unknown", true)
+                it.isEmpty() || it.equals("unknown", true) || it.equals("updating", true)
             }
-            status = SManga.UNKNOWN
+            status = doc.select("span.badge").firstNotNullOfOrNull { statusMap[it.text()] } ?: SManga.UNKNOWN
         }
 
         return SMangaUpdate(info, chapterList)
     }
+
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
+
+    private val statusMap = mapOf(
+        "مستمر" to SManga.ONGOING,
+        "مكتمل" to SManga.COMPLETED,
+        "متوقف" to SManga.ON_HIATUS,
+    )
 
     // ============================== Pages ==============================
 
