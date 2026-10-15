@@ -66,6 +66,8 @@ class ChapterDto(
     val title: String,
     val slug: String,
     val pages: List<PageDto>? = null,
+    val deliverySystem: String,
+    val isLocked: Boolean,
     val releaseDate: String? = null,
     val createdAt: String? = null,
 )
@@ -85,4 +87,10 @@ class Recommended(
 class Genre(
     val name: String,
     val slug: String,
+)
+
+@Serializable
+class ChallengeBody(
+    private val token: String,
+    private val provider: String,
 )
