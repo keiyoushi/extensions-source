@@ -99,10 +99,25 @@ abstract class Toonkotsu :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val data = fetchSeries(manga)
+        val uploads = data.chapters.flatMap { it.withAlts() }
+        val chapterList = if (preferences.getBoolean(PREF_DEDUPLICATE_CHAPTERS, false)) deduplicate(data.chapters, uploads) else uploads
         return SMangaUpdate(
             data.series.toSManga(baseUrl),
-            data.chapters.map { it.toSChapter(manga.url) },
+            chapterList.map { it.toSChapter(manga.url) },
         )
+    }
+
+    // Same rows as the site's chapter list
+    private fun deduplicate(listed: List<ChapterDto>, uploads: List<ChapterDto>): List<ChapterDto> {
+        // The site splits rows by volume when 3+ chapter numbers span several volumes
+        val byVolume = uploads.filter { it.n != null && it.volume != null }
+            .groupBy({ it.n }, { it.volume })
+            .count { (_, volumes) -> volumes.distinct().size > 1 } >= 3
+        val rows = (listed + uploads).sortedBy { it.partial }.distinctBy { it.row(byVolume) }
+        val complete = rows.filterNot { it.partial }.mapTo(HashSet()) { it.row(byVolume, byGroup = false) }
+        // Partial-only rows are hidden when another group has the full chapter
+        val shown = rows.filterTo(HashSet()) { !it.partial || it.row(byVolume, byGroup = false) !in complete }
+        return uploads.filter { it in shown }
     }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = fetchSeries(manga).recs.map { it.toSManga(baseUrl) }
@@ -189,10 +204,18 @@ abstract class Toonkotsu :
             summary = "Same as the 18+ option in the site's content rating menu"
             setDefaultValue(false)
         }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_DEDUPLICATE_CHAPTERS
+            title = "Deduplicate chapters"
+            summary = "Show one upload per chapter and group, as the site's chapter list does"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
     }
 
     companion object {
         private const val PREF_ADULT = "show_hentai"
+        private const val PREF_DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val TURNSTILE_SITE_KEY = "0x4AAAAAAFQpQeG5qpmLQtf9"
         private val HID_REGEX = Regex("""^[a-z][0-9a-z]{4}(?=-|$)""")
     }

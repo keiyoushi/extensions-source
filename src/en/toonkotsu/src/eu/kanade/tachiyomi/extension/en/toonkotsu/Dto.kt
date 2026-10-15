@@ -56,10 +56,22 @@ class SeriesResponse(
 @Serializable
 class ChapterDto(
     private val id: Long,
+    val n: Double?,
+    private val vol: String?,
     private val label: String,
     private val at: Long? = null,
     private val group: GroupDto? = null,
+    val partial: Boolean = false,
+    private val alts: List<AltChapterDto> = emptyList(),
 ) {
+    val volume get() = vol?.toDoubleOrNull()
+
+    fun withAlts() = listOf(this) + alts.sortedBy { it.id }.map {
+        ChapterDto(it.id, n, vol, it.label ?: label, it.at ?: at, it.group, it.partial)
+    }
+
+    fun row(byVolume: Boolean, byGroup: Boolean = true) = listOf(n ?: id, volume.takeIf { byVolume }, group?.name.takeIf { byGroup })
+
     fun toSChapter(mangaUrl: String) = SChapter.create().apply {
         url = "$mangaUrl/$id"
         name = label
@@ -67,6 +79,15 @@ class ChapterDto(
         scanlator = group?.name
     }
 }
+
+@Serializable
+class AltChapterDto(
+    val id: Long,
+    val label: String? = null,
+    val at: Long? = null,
+    val group: GroupDto? = null,
+    val partial: Boolean = false,
+)
 
 @Serializable
 class GroupDto(val name: String)
