@@ -264,21 +264,25 @@ abstract class Kagane :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val seriesId = manga.url
-        val dto = getMangaById(seriesId)
 
-        val updatedManga = parseMangaDetails(dto).apply {
-            if (!dto.trackerId.isNullOrEmpty()) {
-                memo = buildJsonObject {
-                    put("trackerId", dto.trackerId)
+        val updatedManga = if (fetchDetails) {
+            val dto = getMangaById(seriesId)
+            parseMangaDetails(dto).apply {
+                if (!dto.trackerId.isNullOrEmpty()) {
+                    memo = buildJsonObject {
+                        put("trackerId", dto.trackerId)
+                    }
                 }
             }
+        } else {
+            manga
         }
         val updatedChapters = if (fetchChapters) {
             val index = client.get("$apiUrl/series/$seriesId/books/index?fields=List")
                 .parseAs<BookIndexDto>()
-            parseChapterList(index.toBooks(), dto.format, seriesId)
+            parseChapterList(index.toBooks(), updatedManga.genre?.substringBefore(", "), seriesId)
         } else {
-            emptyList()
+            chapters
         }
 
         return SMangaUpdate(updatedManga, updatedChapters)
