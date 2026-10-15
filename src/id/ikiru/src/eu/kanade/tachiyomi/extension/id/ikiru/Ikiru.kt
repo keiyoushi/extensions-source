@@ -16,7 +16,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
-import java.io.IOException
 import java.net.URLEncoder
 
 @Source
@@ -109,10 +108,6 @@ abstract class Ikiru : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) {
-            return SMangaUpdate(manga, chapters)
-        }
-
         val slug = manga.slug()
         val url = "$baseUrl/api/public/manga".toHttpUrl().newBuilder()
             .addPathSegment(slug)
@@ -122,14 +117,10 @@ abstract class Ikiru : KeiSource() {
         // embeds the complete chapter list
         val detail = client.get(url).parseData<IkiruMangaDetailDto>()
 
-        val updatedManga = if (fetchDetails) detail.toSManga() else manga
-        val updatedChapters = if (fetchChapters) {
-            detail.chapters.chapters.map { it.toSChapter(slug) }
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
+        return SMangaUpdate(
+            manga = detail.toSManga(),
+            chapters = detail.chapters.chapters.map { it.toSChapter(slug) },
+        )
     }
 
     // legacy library entries stored the absolute web URL
@@ -152,7 +143,7 @@ abstract class Ikiru : KeiSource() {
         val res = parseAs<IkiruResponseDto<T>>()
         val data = res.data
         if (!res.success || data == null) {
-            throw IOException(res.message?.takeIf { it.isNotBlank() } ?: "Request failed")
+            throw Exception(res.message?.takeIf { it.isNotBlank() } ?: "Request failed")
         }
         return data
     }
