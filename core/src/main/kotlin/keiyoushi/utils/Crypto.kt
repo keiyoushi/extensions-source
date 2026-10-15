@@ -1,8 +1,14 @@
 package keiyoushi.utils
 
+import okhttp3.MediaType
+import okhttp3.Response
+import okhttp3.ResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import okio.ForwardingSource
 import okio.Source
+import okio.buffer
+import kotlin.experimental.xor
 
 /**
  * Decodes this hexadecimal string into a [ByteArray].
@@ -121,5 +127,175 @@ private class Rc4(key: ByteArray, skip: Int) {
         }
         this.a = a
         this.b = b
+    }
+}
+
+/**
+ * Decrypts or encrypts this [Source] by applying a single-byte XOR [key] mask in-place.
+ *
+ * @param key the single-byte XOR mask
+ * @return a [Source] streaming the XOR-transformed data
+ */
+fun Source.xor(key: Byte): Source = xor(byteArrayOf(key))
+
+/**
+ * Decrypts or encrypts this [Source] by applying a single-byte XOR [key] mask in-place.
+ *
+ * @param key the single-byte XOR mask (converted to Byte)
+ * @return a [Source] streaming the XOR-transformed data
+ */
+fun Source.xor(key: Int): Source = xor(key.toByte())
+
+/**
+ * Decrypts or encrypts this [Source] by applying a multi-byte XOR [key] cyclically in-place.
+ *
+ * @param key the non-empty byte array key applied cyclically
+ * @return a [Source] streaming the XOR-transformed data
+ * @throws IllegalArgumentException if [key] is empty
+ */
+fun Source.xor(key: ByteArray): Source {
+    require(key.isNotEmpty()) { "XOR key must not be empty" }
+    return XorSource(this, key)
+}
+
+/**
+ * Transforms this [ByteArray] in-place by applying a single-byte XOR [key] mask.
+ *
+ * @param key the single-byte XOR mask
+ * @return this [ByteArray] after modification
+ */
+fun ByteArray.xorInPlace(key: Byte): ByteArray {
+    for (i in indices) {
+        this[i] = this[i] xor key
+    }
+    return this
+}
+
+/**
+ * Transforms this [ByteArray] in-place by applying a single-byte XOR [key] mask.
+ *
+ * @param key the single-byte XOR mask (converted to Byte)
+ * @return this [ByteArray] after modification
+ */
+fun ByteArray.xorInPlace(key: Int): ByteArray = xorInPlace(key.toByte())
+
+/**
+ * Transforms this [ByteArray] in-place by applying a multi-byte XOR [key] cyclically.
+ *
+ * @param key the non-empty byte array key applied cyclically
+ * @return this [ByteArray] after modification
+ * @throws IllegalArgumentException if [key] is empty
+ */
+fun ByteArray.xorInPlace(key: ByteArray): ByteArray {
+    require(key.isNotEmpty()) { "XOR key must not be empty" }
+    var k = 0
+    for (i in indices) {
+        this[i] = this[i] xor key[k]
+        if (++k == key.size) k = 0
+    }
+    return this
+}
+
+/**
+ * Transforms a copy of this [ByteArray] by applying a single-byte XOR [key] mask.
+ *
+ * @param key the single-byte XOR mask
+ * @return a new [ByteArray] with the XOR-transformed data
+ */
+fun ByteArray.xor(key: Byte): ByteArray = copyOf().xorInPlace(key)
+
+/**
+ * Transforms a copy of this [ByteArray] by applying a single-byte XOR [key] mask.
+ *
+ * @param key the single-byte XOR mask (converted to Byte)
+ * @return a new [ByteArray] with the XOR-transformed data
+ */
+fun ByteArray.xor(key: Int): ByteArray = copyOf().xorInPlace(key.toByte())
+
+/**
+ * Transforms a copy of this [ByteArray] by applying a multi-byte XOR [key] cyclically.
+ *
+ * @param key the non-empty byte array key applied cyclically
+ * @return a new [ByteArray] with the XOR-transformed data
+ * @throws IllegalArgumentException if [key] is empty
+ */
+fun ByteArray.xor(key: ByteArray): ByteArray = copyOf().xorInPlace(key)
+
+/**
+ * Wraps this [ResponseBody] source with a single-byte XOR [key] mask transformation.
+ *
+ * @param key the single-byte XOR mask
+ * @param contentType optional explicit [MediaType] override
+ * @return a new [ResponseBody] with the transformed source
+ */
+fun ResponseBody.xor(key: Byte, contentType: MediaType? = contentType()): ResponseBody = source().xor(key).buffer().asResponseBody(contentType, contentLength())
+
+/**
+ * Wraps this [ResponseBody] source with a single-byte XOR [key] mask transformation.
+ *
+ * @param key the single-byte XOR mask (converted to Byte)
+ * @param contentType optional explicit [MediaType] override
+ * @return a new [ResponseBody] with the transformed source
+ */
+fun ResponseBody.xor(key: Int, contentType: MediaType? = contentType()): ResponseBody = xor(key.toByte(), contentType)
+
+/**
+ * Wraps this [ResponseBody] source with a multi-byte cyclic XOR [key] transformation.
+ *
+ * @param key the non-empty byte array key applied cyclically
+ * @param contentType optional explicit [MediaType] override
+ * @return a new [ResponseBody] with the transformed source
+ */
+fun ResponseBody.xor(key: ByteArray, contentType: MediaType? = contentType()): ResponseBody = source().xor(key).buffer().asResponseBody(contentType, contentLength())
+
+/**
+ * Replaces the [Response.body] with a single-byte XOR [key] mask transformed body.
+ *
+ * @param key the single-byte XOR mask
+ * @param contentType optional explicit [MediaType] override
+ * @return a new [Response] with the transformed body
+ */
+fun Response.xor(key: Byte, contentType: MediaType? = body.contentType()): Response = newBuilder().body(body.xor(key, contentType)).build()
+
+/**
+ * Replaces the [Response.body] with a single-byte XOR [key] mask (converted to Byte) transformed body.
+ *
+ * @param key the single-byte XOR mask (converted to Byte)
+ * @param contentType optional explicit [MediaType] override
+ * @return a new [Response] with the transformed body
+ */
+fun Response.xor(key: Int, contentType: MediaType? = body.contentType()): Response = xor(key.toByte(), contentType)
+
+/**
+ * Replaces the [Response.body] with a multi-byte cyclic XOR [key] transformed body.
+ *
+ * @param key the non-empty byte array key applied cyclically
+ * @param contentType optional explicit [MediaType] override
+ * @return a new [Response] with the transformed body
+ */
+fun Response.xor(key: ByteArray, contentType: MediaType? = body.contentType()): Response = newBuilder().body(body.xor(key, contentType)).build()
+
+private class XorSource(delegate: Source, private val key: ByteArray) : ForwardingSource(delegate) {
+    private val cursor = Buffer.UnsafeCursor()
+    private var index = 0
+
+    override fun read(sink: Buffer, byteCount: Long): Long {
+        val read = super.read(sink, byteCount)
+        if (read <= 0L) return read
+
+        sink.readAndWriteUnsafe(cursor).use {
+            var length = it.seek(sink.size - read)
+            var k = index
+            while (length != -1) {
+                val data = it.data!!
+                for (i in it.start until it.start + length) {
+                    data[i] = data[i] xor key[k]
+                    if (++k == key.size) k = 0
+                }
+                length = it.next()
+            }
+            index = k
+        }
+        return read
     }
 }

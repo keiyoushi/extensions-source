@@ -10,10 +10,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.boolean
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
@@ -52,7 +54,11 @@ abstract class Zebrack :
     private var secret: String? = null
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(ImageInterceptor())
+        addInterceptor(
+            XorInterceptor { request ->
+                request.url.fragment?.let { if (it.contains("key=")) it.substringAfter("key=").decodeHex() else null }
+            },
+        )
         addInterceptor(::secretIntercept)
     }
 

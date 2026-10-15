@@ -1148,19 +1148,34 @@ val title = element.textOrNull()
 val directText = element.ownTextOrNull() // excludes text of nested child elements
 ```
 
-##### Cryptography - `decodeHex` / `rc4`
+##### Cryptography - `decodeHex` / `rc4` / `xor`
 
 For encrypted APIs and descramblers:
 
 ```kotlin
+import keiyoushi.network.XorInterceptor
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.rc4
+import keiyoushi.utils.xor
 
 // Decode an even-length hex string into a ByteArray:
 val keyBytes = "616263".decodeHex()
 
 // Symmetric RC4 stream cipher (serves for both encryption and decryption; skip defaults to 0):
 val decrypted = cipherBytes.rc4(key = keyBytes)
+
+// Streaming XOR decryption on Response, ResponseBody, Source, or ByteArray (single-byte or cyclic multi-byte):
+val decryptedResponse = response.xor(keyBytes)
+
+// XOR image interceptor extracting decryption key from request (e.g. from URL fragment):
+client.newBuilder()
+    .addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
+    .build()
+
+// Or with a fixed static key (ByteArray or Byte, optionally pass a request predicate):
+client.newBuilder()
+    .addInterceptor(XorInterceptor(keyBytes))
+    .build()
 ```
 
 ##### Binary endian helpers
