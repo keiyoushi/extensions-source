@@ -102,25 +102,25 @@ abstract class VineTheme :
     override suspend fun fetchFilterData(): JsonElement = client
         .get("$baseUrl/series")
         .extractNextJs<GenreTagListDto>(GenreTagListDto::nextJsFilter)
-        ?.toCachedFilterList()
+        ?.toFilterData()
         .toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val cachedFilterList = try {
-            data?.parseAs<CachedFilterList>() ?: CachedFilterList()
+        val filterData = try {
+            data?.parseAs<FilterData>() ?: FilterData()
         } catch (_: SerializationException) {
             // Fall back to old cached filter format
-            CachedFilterList(
+            FilterData(
                 data?.parseAs<GenreListDto>()?.genres?.associate { it.displayName to it.genreSlug }.orEmpty(),
             )
         }
-        if (data != null && cachedFilterList.outdated) {
+        if (data != null && filterData.outdated) {
             triggerBackgroundFilterFetch()
         }
         return FilterList(
             listOfNotNull(
-                cachedFilterList.genres.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
-                cachedFilterList.tags.takeIf { it.isNotEmpty() }?.let(::TagFilter),
+                filterData.genres.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
+                filterData.tags.takeIf { it.isNotEmpty() }?.let(::TagFilter),
                 TypeFilter(),
                 StatusFilter(),
                 OriginFilter(),
