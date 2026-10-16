@@ -100,25 +100,16 @@ abstract class Toonkotsu :
     ): SMangaUpdate {
         val data = fetchSeries(manga)
         val uploads = data.chapters.flatMap { it.withAlts() }
-        val chapterList = if (preferences.getBoolean(PREF_DEDUPLICATE_CHAPTERS, false)) deduplicate(data.chapters, uploads) else uploads
+        val chapterList = if (preferences.getBoolean(PREF_DEDUPLICATE_CHAPTERS, false)) deduplicate(uploads) else uploads
         return SMangaUpdate(
             data.series.toSManga(baseUrl),
             chapterList.map { it.toSChapter(manga.url) },
         )
     }
 
-    // Same rows as the site's chapter list
-    private fun deduplicate(listed: List<ChapterDto>, uploads: List<ChapterDto>): List<ChapterDto> {
-        // The site splits rows by volume when 3+ chapter numbers span several volumes
-        val byVolume = uploads.filter { it.n != null && it.volume != null }
-            .groupBy({ it.n }, { it.volume })
-            .count { (_, volumes) -> volumes.distinct().size > 1 } >= 3
-        val rows = (listed + uploads).sortedBy { it.partial }.distinctBy { it.row(byVolume) }
-        val complete = rows.filterNot { it.partial }.mapTo(HashSet()) { it.row(byVolume, byGroup = false) }
-        // Partial-only rows are hidden when another group has the full chapter
-        val shown = rows.filterTo(HashSet()) { !it.partial || it.row(byVolume, byGroup = false) !in complete }
-        return uploads.filter { it in shown }
-    }
+    private fun deduplicate(uploads: List<ChapterDto>) = uploads
+        .groupBy { it.n ?: it.id }
+        .map { (_, same) -> same.sortedWith(compareBy({ it.partial }, { !it.isOfficial })).first() }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = fetchSeries(manga).recs.map { it.toSManga(baseUrl) }
 
@@ -208,7 +199,7 @@ abstract class Toonkotsu :
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_DEDUPLICATE_CHAPTERS
             title = "Deduplicate chapters"
-            summary = "Show one upload per chapter and group, as the site's chapter list does"
+            summary = "Show one upload per chapter, preferring complete and Official uploads, then the site's order"
             setDefaultValue(false)
         }.let(screen::addPreference)
     }
