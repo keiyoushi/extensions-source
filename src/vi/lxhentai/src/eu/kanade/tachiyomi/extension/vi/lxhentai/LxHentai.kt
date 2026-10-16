@@ -222,11 +222,13 @@ abstract class LxHentai : KeiSource() {
         val csrfToken = csrfTokenRegex.find(chapterHtml)?.groupValues?.get(1).orEmpty()
         val siteKey = recaptchaRegex.find(chapterHtml)?.groupValues?.get(1).orEmpty()
 
+        val encodedChapterUrl = chapterUrl.toHttpUrlOrNull()?.toString() ?: chapterUrl
+
         val tokenHeaders = headersBuilder()
             .set("Accept", "application/json")
             .set("Content-Type", "application/json")
             .set("X-CSRF-TOKEN", csrfToken)
-            .set("Referer", chapterUrl)
+            .set("Referer", encodedChapterUrl)
             .set("Origin", baseUrl)
             .build()
 
@@ -351,7 +353,7 @@ abstract class LxHentai : KeiSource() {
     }
 
     private fun imageHeaders(chapterUrl: String, actionToken: String) = super.headersBuilder()
-        .add("Referer", chapterUrl)
+        .add("Referer", chapterUrl.toHttpUrlOrNull()?.toString() ?: chapterUrl)
         .add("Origin", baseUrl)
         .apply {
             if (actionToken.isNotEmpty()) {
