@@ -22,7 +22,7 @@ class BaoziBannerInterceptor(var level: Int) : Interceptor {
 
         if (request.tag(ReaderPageImageTag::class.java) == null) return response
 
-        val body = response.body ?: return response
+        val body = response.body
         val contentType = body.contentType() ?: return response
         if (contentType.type != "image") return response
 
@@ -36,21 +36,30 @@ class BaoziBannerInterceptor(var level: Int) : Interceptor {
         val bitmap = BitmapFactory.decodeByteArray(content, 0, content.size)
             ?: return response.newBuilder().body(content.toResponseBody(contentType)).build()
 
-        // Only check when width is large enough for the narrow banner template
-        if (bitmap.width < NARROWBANNER_WIDTH) {
-            return response.newBuilder().body(content.toResponseBody(contentType)).build()
-        }
+        return try {
+            // Only check when width is large enough for the narrow banner template
+            if (bitmap.width < NARROWBANNER_WIDTH) {
+                response.newBuilder().body(content.toResponseBody(contentType)).build()
+            } else {
+                val (top, bottom) = BannerChecker.check(bitmap, currentLevel)
 
-        val (top, bottom) = BannerChecker.check(bitmap, currentLevel)
-
-        return if (top == 0 && bottom == 0) {
-            response.newBuilder().body(content.toResponseBody(contentType)).build()
-        } else {
-            val result = Bitmap.createBitmap(bitmap, 0, top, bitmap.width, bitmap.height - top - bottom)
-            val output = ByteArrayOutputStream()
-            result.compress(Bitmap.CompressFormat.JPEG, 90, output)
-            val responseBody = output.toByteArray().toResponseBody(JPEG_MEDIA_TYPE)
-            response.newBuilder().body(responseBody).build()
+                if (top == 0 && bottom == 0) {
+                    response.newBuilder().body(content.toResponseBody(contentType)).build()
+                } else {
+                    val result = Bitmap.createBitmap(bitmap, 0, top, bitmap.width, bitmap.height - top - bottom)
+                    try {
+                        val output = ByteArrayOutputStream().use {
+                            result.compress(Bitmap.CompressFormat.JPEG, 90, it)
+                            it.toByteArray()
+                        }
+                        response.newBuilder().body(output.toResponseBody(JPEG_MEDIA_TYPE)).build()
+                    } finally {
+                        if (result !== bitmap) result.recycle()
+                    }
+                }
+            }
+        } finally {
+            bitmap.recycle()
         }
     }
 
@@ -59,7 +68,7 @@ class BaoziBannerInterceptor(var level: Int) : Interceptor {
         const val NORMAL = 1
         const val EXTRA = 2
 
-        const val VERSION_NAME = "2.0"
+        const val VERSION_NAME = "2.1"
         const val PREF = "BAOZI_BANNER"
         const val PREF_TITLE = "移除包子漫画横幅 (v$VERSION_NAME)"
         const val PREF_SUMMARY = "已选择：%s\n" +

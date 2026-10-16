@@ -99,11 +99,17 @@ abstract class Toonkotsu :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val data = fetchSeries(manga)
+        val uploads = data.chapters.flatMap { it.withAlts() }
+        val chapterList = if (preferences.getBoolean(PREF_DEDUPLICATE_CHAPTERS, false)) deduplicate(uploads) else uploads
         return SMangaUpdate(
             data.series.toSManga(baseUrl),
-            data.chapters.map { it.toSChapter(manga.url) },
+            chapterList.map { it.toSChapter(manga.url) },
         )
     }
+
+    private fun deduplicate(uploads: List<ChapterDto>) = uploads
+        .groupBy { it.n ?: it.id }
+        .map { (_, same) -> same.sortedWith(compareBy({ it.partial }, { !it.isOfficial })).first() }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = fetchSeries(manga).recs.map { it.toSManga(baseUrl) }
 
@@ -189,10 +195,18 @@ abstract class Toonkotsu :
             summary = "Same as the 18+ option in the site's content rating menu"
             setDefaultValue(false)
         }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_DEDUPLICATE_CHAPTERS
+            title = "Deduplicate chapters"
+            summary = "Show one upload per chapter, preferring complete and Official uploads, then the site's order"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
     }
 
     companion object {
         private const val PREF_ADULT = "show_hentai"
+        private const val PREF_DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val TURNSTILE_SITE_KEY = "0x4AAAAAAFQpQeG5qpmLQtf9"
         private val HID_REGEX = Regex("""^[a-z][0-9a-z]{4}(?=-|$)""")
     }

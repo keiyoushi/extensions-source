@@ -179,7 +179,9 @@ abstract class VineTheme :
             throw Exception("This chapter is locked and requires coins to read")
         }
         val response = client.get(getChapterUrl(chapter), rscHeaders)
-        val dto = response.extractNextJs<ChapterDetailDto> { it is JsonObject && "chapter" in it }
+        val dto = response.extractNextJs<ChapterDetailDto> {
+            it is JsonObject && (it["chapter"] as? JsonObject)?.contains("pages") == true
+        }
         return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
             pageDto.imageUrl?.let { Page(index, imageUrl = it.toAbsoluteUrl(baseUrl)) }
         }

@@ -73,7 +73,7 @@ abstract class ReadComicsOnline : MMRCMS() {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1.text-2xl")?.text() ?: ""
         thumbnail_url = guessCover(document.location(), document.selectFirst("img.w-full.rounded-xl")?.imgAttr())
-        description = document.selectFirst("p.mt-5.text-sm")?.text() ?: ""
+        description = document.selectFirst("div:has(> div > h3:contains(Synopsis)) > div > p")?.text()
 
         document.selectFirst("div.flex.flex-wrap.gap-2 span.rounded-full")?.let {
             status = when (it.text().lowercase()) {
