@@ -48,14 +48,11 @@ abstract class OlympusScanlation :
         }
     }
 
-    private val apiBaseUrl get() = baseUrl.replace("https://", "https://panel.")
-
     private val preferences = getPreferences()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder {
         fetchedDomainUrl()
         return rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
-            .rateLimit(2, 1.seconds) { it.host == apiBaseUrl.toHttpUrl().host }
     }
 
     private var seriesList: List<MangaDto> = emptyList()
@@ -163,7 +160,7 @@ abstract class OlympusScanlation :
         return result.map { it.toSChapter(mangaId) }
     }
 
-    private suspend fun fetchChapterPage(mangaSlug: String, page: Int): PayloadChapterDto = client.get("$apiBaseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic")
+    private suspend fun fetchChapterPage(mangaSlug: String, page: Int): PayloadChapterDto = client.get("$baseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic")
         .parseAs<PayloadChapterDto>()
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -175,10 +172,11 @@ abstract class OlympusScanlation :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val mangaId = chapter.url.substringBefore("/")
-        val chapterId = chapter.url.substringAfter("/")
         val mangaSlug = preferences.slugMap[mangaId.toInt()]!!
+        // The endpoint is keyed by chapter number, not id
+        val chapterNumber = chapter.name.removePrefix("Capitulo ")
 
-        return client.get("$baseUrl/api/capitulo/comic-$mangaSlug/$chapterId")
+        return client.get("$baseUrl/api/capitulo/$mangaSlug/$chapterNumber?type=comic")
             .parseAs<PayloadPagesDto>().chapter.pages.mapIndexed { i, img ->
                 Page(i, imageUrl = img)
             }
