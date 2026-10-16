@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.imagedecoder.ImageDecoder
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -42,11 +43,8 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import tachiyomi.decoder.ImageDecoder
-import java.io.ByteArrayInputStream
 import java.io.IOException
 import kotlin.reflect.KMutableProperty0
-import ca.mpreg.imagedecoder.ImageDecoder as MpregImageDecoder
 
 @Source
 abstract class Procomic :
@@ -293,7 +291,7 @@ abstract class Procomic :
             plan.rects.forEachIndexed { index, rect ->
                 // The reader cancels pages it scrolled past; stop fetching their pieces.
                 if (call.isCanceled()) throw IOException("Canceled")
-                val piece = decodePiece(client.get(plan.pieces[plan.order[index]]).body.bytes())
+                val piece = ImageDecoder.decode(client.get(plan.pieces[plan.order[index]]).body.bytes())
                 val destination = Rect(rect.left, rect.top, rect.left + rect.width, rect.top + rect.height)
                 canvas.drawBitmap(piece, null, destination, null)
                 piece.recycle()
@@ -303,24 +301,6 @@ abstract class Procomic :
             page.recycle()
         }
     }
-
-    // Pieces are AVIF. Komikku ships tachiyomi's image-decoder, Mihon ships ca.mpreg's.
-    private fun decodePiece(data: ByteArray): Bitmap = runCatching {
-        ImageDecoder.newInstance(ByteArrayInputStream(data))?.run {
-            try {
-                decode()
-            } finally {
-                recycle()
-            }
-        }
-    }.getOrNull() ?: runCatching {
-        MpregImageDecoder.open(ByteArrayInputStream(data)).use { decoder ->
-            decoder.decodeNext().use { frame ->
-                Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
-                    .apply { copyPixelsFromBuffer(frame.image) }
-            }
-        }
-    }.getOrNull() ?: throw IOException("Failed to decode piece")
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         TypeFilter(),
