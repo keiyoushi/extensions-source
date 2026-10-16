@@ -69,6 +69,11 @@ jobs:
           # Delete existing release with same tag if present (re-runs)
           gh release delete "$tag" --yes 2>/dev/null || true
           git push origin ":refs/tags/$tag" 2>/dev/null || true
+          # Delete old releases for this branch (keep only the newest)
+          for old_tag in $(gh release list --limit 50 --json tagName -q '.[].tagName' | grep "^test-${{ github.ref_name }}-" | grep -v "^$tag$"); do
+            gh release delete "$old_tag" --yes 2>/dev/null || true
+            git push origin ":refs/tags/$old_tag" 2>/dev/null || true
+          done
           gh release create "$tag" \
             --title "Test build ${{ github.ref_name }} #${{ github.run_number }}" \
             --notes "Automated test build from branch \`${{ github.ref_name }}\`." \
