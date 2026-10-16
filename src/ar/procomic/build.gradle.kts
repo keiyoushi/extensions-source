@@ -13,6 +13,7 @@ keiyoushi {
     source {
         baseUrl = "https://procomic.pro"
         lang = "ar"
+        versionId = 2
     }
 
     deeplink {
