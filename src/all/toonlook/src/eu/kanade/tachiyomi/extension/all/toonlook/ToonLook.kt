@@ -191,7 +191,7 @@ private fun parseMangaDetails(document: Document, slug: String): SManga = SManga
         "ongoing" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
         "hiatus" -> SManga.ON_HIATUS
-        "cancelled" -> SManga.CANCELLED
+        "dropped" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 

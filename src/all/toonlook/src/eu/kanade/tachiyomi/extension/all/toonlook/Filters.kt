@@ -1,8 +1,7 @@
-@file:Suppress("ktlint:standard:filename")
-
 package eu.kanade.tachiyomi.extension.all.toonlook
 
 import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.Filter.Sort.Selection
 
 internal class GenreFilter(genres: List<GenreDto>) : Filter.Select<String>("Genre", (listOf("All") + genres.map { it.name }).toTypedArray()) {
     private val slugs = listOf<String?>(null) + genres.map { it.slug }
@@ -24,13 +23,10 @@ internal class StatusFilter : Filter.Select<String>("Status", STATUS_OPTIONS.map
     }
 }
 
-internal class SortFilter(selection: Filter.Sort.Selection = Filter.Sort.Selection(5, false)) : Filter.Sort("Sort", SORT_OPTIONS.map { it.first }.toTypedArray(), selection) {
+internal class SortFilter(selection: Selection = POPULAR.state!!) : Filter.Sort("Sort", SORT_OPTIONS.map { it.first }.toTypedArray(), selection) {
     fun sortBy(): String = SORT_OPTIONS[state!!.index].second
 
     companion object {
-        val POPULAR get() = SortFilter()
-        val LATEST get() = SortFilter(Filter.Sort.Selection(0, false))
-
         private val SORT_OPTIONS = listOf(
             "Latest Release" to "latest",
             "New Manhwa" to "new",
@@ -43,5 +39,8 @@ internal class SortFilter(selection: Filter.Sort.Selection = Filter.Sort.Selecti
             "Yearly Views" to "yearly_top",
             "All-time Views" to "all_top",
         )
+
+        val POPULAR = SortFilter(Selection(5, false))
+        val LATEST = SortFilter(Selection(0, false))
     }
 }
