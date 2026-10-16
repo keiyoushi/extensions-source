@@ -45,7 +45,6 @@ abstract class TaurusFansub :
     }
 
     override fun chapterFromElement(element: Element, mangaPath: String): SChapter? {
-        // Skip paid chapters with non-http(s) hrefs (e.g. javascript:) that would crash toHttpUrl()
         val url = element.selectFirst(chapterUrlSelector)?.attr("abs:href")?.takeIf(String::isNotBlank)
             ?: return null
         if (!url.startsWith("http", ignoreCase = true)) return null
