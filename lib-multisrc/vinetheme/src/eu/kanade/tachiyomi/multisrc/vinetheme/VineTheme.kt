@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.vinetheme
 
+import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -11,16 +12,20 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.collections.isNotEmpty
 
 abstract class VineTheme :
     KeiSource(),
@@ -56,7 +61,7 @@ abstract class VineTheme :
         val slug = url.pathSegments.getOrNull(2) ?: return null
         if (url.pathSegments.getOrNull(3) == "chapter") return null
         val detail = client.get("$baseUrl/series/comic/$slug", headers = rscHeaders)
-            .extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
+            .extractNextJs<DetailDto>(DetailDto::nextJsFilter)
             ?: return null
         return detail.series.toSManga(baseUrl, fallbackSlug = slug)
     }
@@ -94,20 +99,35 @@ abstract class VineTheme :
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client
+        .get("$baseUrl/series")
+        .extractNextJs<GenreTagListDto>(GenreTagListDto::nextJsFilter)
+        ?.toCachedFilterList()
+        .toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.parseAs<GenreListDto>()?.genres
+        val cachedFilterList = try {
+            data?.parseAs<CachedFilterList>() ?: CachedFilterList()
+        } catch (_: SerializationException) {
+            // Fall back to old cached filter format
+            CachedFilterList(
+                data?.parseAs<GenreListDto>()?.genres?.associate { it.displayName to it.genreSlug }.orEmpty(),
+            )
+        }
+        if (data != null && cachedFilterList.outdated) {
+            triggerBackgroundFilterFetch()
+        }
         return FilterList(
-            buildList {
-                add(SortFilter())
-                add(StatusFilter())
-                add(TypeFilter())
-                add(OriginFilter())
-                if (!genres.isNullOrEmpty()) {
-                    add(GenreFilter(genres.map { it.name.stripEmoji() to it.genreSlug }.toTypedArray()))
-                }
-            },
+            listOfNotNull(
+                cachedFilterList.genres.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
+                cachedFilterList.tags.takeIf { it.isNotEmpty() }?.let(::TagFilter),
+                TypeFilter(),
+                StatusFilter(),
+                OriginFilter(),
+                SaleFilter(),
+                ChapterFilter(),
+                SortFilter(),
+            ),
         )
     }
 
@@ -122,7 +142,7 @@ abstract class VineTheme :
         val detailsUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
             .addQueryParameter("sort", "desc")
             .build()
-        val details = client.get(detailsUrl, rscHeaders).extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
+        val details = client.get(detailsUrl, rscHeaders).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
 
         val updatedManga = details?.series?.toSManga(baseUrl, manga) ?: manga
         val updatedChapters = if (fetchChapters) fetchAllChapters(manga, details, chapters) else chapters
@@ -155,7 +175,7 @@ abstract class VineTheme :
                         .addQueryParameter("page", page.toString())
                         .build(),
                     headers = rscHeaders,
-                ).extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
+                ).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
                     ?.chapters.orEmpty()
             }
         } else {
@@ -179,8 +199,35 @@ abstract class VineTheme :
             throw Exception("This chapter is locked and requires coins to read")
         }
         val response = client.get(getChapterUrl(chapter), rscHeaders)
-        val dto = response.extractNextJs<ChapterDetailDto> {
-            it is JsonObject && (it["chapter"] as? JsonObject)?.contains("pages") == true
+        val dto = response.extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
+        val pages = dto?.chapter?.pages.orEmpty()
+        if (pages.any { it.isEncrypted }) {
+            Toast.makeText(
+                applicationContext,
+                "Some pages are encrypted and may not be displayed properly or skipped.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+        if (pages.any { it.isRedacted }) {
+            Toast.makeText(
+                applicationContext,
+                "Some pages are redacted and may not be displayed properly or skipped.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+        if (pages.any { it.hasFragments }) {
+            Toast.makeText(
+                applicationContext,
+                "Some pages have fragments and may not be displayed properly or skipped.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+        if (pages.any { it.hasStrips }) {
+            Toast.makeText(
+                applicationContext,
+                "Some pages have strips and may not be displayed properly or skipped.",
+                Toast.LENGTH_LONG,
+            ).show()
         }
         return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
             pageDto.imageUrl?.let { Page(index, imageUrl = it.toAbsoluteUrl(baseUrl)) }
