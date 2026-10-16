@@ -19,6 +19,7 @@ import java.net.URI
 abstract class ScanR : KeiSource() {
 
     val cdnUrl = "https://cdn.teamscanr.fr"
+    val imgProxyUrl = "https://img.teamscanr.fr"
     override val supportsLatest = false
     private val seriesDataCache = mutableMapOf<String, Serie>()
 
@@ -94,7 +95,12 @@ abstract class ScanR : KeiSource() {
         val serie = fetchSeriesData(fetchIndex()[slug] ?: "")
         val chapterDetails = serie.chapters[chapterId.replace("-", ".")]
         val cubariProxy = chapterDetails!!.groups.getValue(chapterDetails.groups.keys.first())
-        val images = client.get("https://cubari.moe$cubariProxy").parseAs<List<String>>()
+        val imageUrl = if (cubariProxy.startsWith(imgProxyUrl)) {
+            cubariProxy
+        } else {
+            "https://cubari.moe$cubariProxy"
+        }
+        val images = client.get(imageUrl).parseAs<List<String>>()
         return images.mapIndexed { index, pageData ->
             Page(index, imageUrl = pageData)
         }
