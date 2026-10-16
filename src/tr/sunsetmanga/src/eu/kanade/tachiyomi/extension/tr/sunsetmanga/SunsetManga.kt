@@ -45,7 +45,7 @@ abstract class SunsetManga : KeiSource() {
         return found
     }
 
-    private inline fun <reified T> Response.parseJson(): T = parseAs { removePrefix("\uFEFF") } 
+    private inline fun <reified T> Response.parseJson(): T = parseAs { it.removePrefix("\uFEFF") }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getCatalog(page, "rating")
 
