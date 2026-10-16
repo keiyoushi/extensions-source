@@ -10,102 +10,41 @@ import tachiyomi.decoder.ImageDecoder as TachiyomiImageDecoder
 
 /** Decode images with the host app's decoder */
 object ImageDecoder {
+    // A decoder the host app doesn't ship fails to link; it's dropped for good then
     @Volatile
-    private var selectedDecoder: Decoder? = null
+    private var decoders = listOf(::decodeMihon, ::decodeTachiyomi, ::decodeAndroid)
 
-    private val decoders = listOf(
-        Decoder("ca.mpreg.imagedecoder.ImageDecoder", ::decodeMihon),
-        Decoder("tachiyomi.decoder.ImageDecoder", ::decodeTachiyomi),
-        Decoder("android.graphics.BitmapFactory", ::decodeAndroid),
-    )
-
-    private class Decoder(val name: String, private val decodeImage: (ByteArray) -> Bitmap) {
-        fun decode(data: ByteArray): Bitmap = decodeImage(data)
-
-        fun decodeSafely(data: ByteArray): Result<Bitmap> = try {
-            Result.success(decode(data))
-        } catch (error: Exception) {
-            Result.failure(error)
-        } catch (error: LinkageError) {
-            Result.failure(error)
-        }
-
-        fun failureMessage(error: Throwable): String {
-            val cause = when (error) {
-                is ExceptionInInitializerError -> error.cause ?: error
-                else -> error
+    fun decode(data: ByteArray): Bitmap {
+        val failures = mutableListOf<Throwable>()
+        for (decoder in decoders) {
+            try {
+                return decoder(data)
+            } catch (e: LinkageError) {
+                decoders -= decoder
+                failures += e
+            } catch (e: Exception) {
+                failures += e
             }
-            val description = cause.message
-                .takeIf { cause.javaClass == IOException::class.java || cause.javaClass == Exception::class.java }
-                ?.let { "${cause.javaClass.simpleName}: $it" }
-                ?: cause.javaClass.simpleName
-            return "$name ($description)"
         }
-    }
-
-    fun decode(data: ByteArray): Bitmap = if (selectedDecoder != null) {
-        decodeFirstAvailable(data)
-    } else {
-        synchronized(this) { decodeFirstAvailable(data) }
-    }
-
-    private fun decodeFirstAvailable(data: ByteArray): Bitmap {
-        val preferredDecoder = selectedDecoder
-        val failures = mutableListOf<String>()
-        var lastError: Throwable? = null
-        val candidates = if (preferredDecoder == null) {
-            decoders.asSequence()
-        } else {
-            sequenceOf(preferredDecoder) + decoders.asSequence().filterNot { it === preferredDecoder }
-        }
-        return candidates
-            .firstNotNullOfOrNull { decoder ->
-                decoder.decodeSafely(data)
-                    .onSuccess { if (decoder !== preferredDecoder) selectedDecoder = decoder }
-                    .onFailure { error ->
-                        lastError = error
-                        failures += decoder.failureMessage(error)
-                    }
-                    .getOrNull()
-            } ?: run {
-            val message = buildString {
-                appendLine("No available decoder:")
-                appendLine(failures.joinToString("\n") { "- $it" })
-            }
-            throw IOException(message, lastError)
-        }
+        throw IOException("No decoder could read the image").apply { failures.forEach(::addSuppressed) }
     }
 
     // Used by Mihon v0.21.0+ / r8055+
-    private fun decodeMihon(data: ByteArray): Bitmap {
-        val decoder = MihonImageDecoder.open(ByteArrayInputStream(data), true)
-        return decoder.use { activeDecoder ->
-            val frame = activeDecoder.decodeNext()
-            frame.use { activeFrame ->
-                val isHdr = activeDecoder.isHdr
-                val config = if (isHdr) Bitmap.Config.RGBA_F16 else Bitmap.Config.ARGB_8888
-                val bytesPerPixel = if (isHdr) 8 else 4
-                val frameWidth = activeFrame.width
-                val frameHeight = activeFrame.height
-                val pixels = activeFrame.image.rewind()
-                val requiredSize = frameWidth.toLong() * frameHeight * bytesPerPixel
-                if (pixels.remaining().toLong() < requiredSize) {
-                    throw IOException("pixel buffer too small (${pixels.remaining()} < $requiredSize)")
-                }
-                Bitmap.createBitmap(frameWidth, frameHeight, config).apply {
-                    copyPixelsFromBuffer(pixels)
-                }
+    private fun decodeMihon(data: ByteArray): Bitmap = MihonImageDecoder.open(ByteArrayInputStream(data)).use { decoder ->
+        decoder.decodeNext().use { frame ->
+            val config = if (decoder.isHdr) Bitmap.Config.RGBA_F16 else Bitmap.Config.ARGB_8888
+            Bitmap.createBitmap(frame.width, frame.height, config).apply {
+                copyPixelsFromBuffer(frame.image)
             }
         }
     }
 
     // Used by Tachiyomi v0.11.1+
     private fun decodeTachiyomi(data: ByteArray): Bitmap {
-        val decoder = TachiyomiImageDecoder.Companion.newInstance(ByteArrayInputStream(data), false, null)
+        val decoder = TachiyomiImageDecoder.newInstance(ByteArrayInputStream(data))
             ?: throw IOException("newInstance returned no decoder")
         return try {
-            val rect = Rect(0, 0, decoder.width, decoder.height)
-            decoder.decode(rect, 1) ?: throw IOException("decode returned no bitmap")
+            decoder.decode(Rect(0, 0, decoder.width, decoder.height)) ?: throw IOException("decode returned no bitmap")
         } finally {
             decoder.recycle()
         }
