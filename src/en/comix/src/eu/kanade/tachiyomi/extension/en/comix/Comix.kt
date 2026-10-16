@@ -1,10 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
 import android.content.SharedPreferences
-import android.content.res.Resources
-import android.os.SystemClock
-import android.view.InputDevice
-import android.view.MotionEvent
 import android.webkit.WebResourceResponse
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -23,7 +19,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.WebViewScope
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
@@ -51,9 +46,6 @@ import org.jsoup.nodes.Document
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.concurrent.thread
-import kotlin.math.pow
-import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -714,15 +706,10 @@ abstract class Comix :
 
             jsBridge(bridgeName) { resolve(it) }
             jsBridge(errorBridgeName) { reject(Exception(it)) }
-            // The handler runs on the main thread and the swipe sleeps between frames, so it gets its own thread
-            webMessageBridge(swipeBridgeName, setOf(document.location().toHttpUrl().run { "$scheme://$host" })) { direction ->
-                thread(name = "Comix swipe") {
-                    try {
-                        swipe(towardTop = direction == "down")
-                    } catch (t: Throwable) {
-                        reject(t)
-                    }
-                }
+            webMessageBridge(swipeBridgeName, setOf(document.location().toHttpUrl().run { "$scheme://$host" })) { message ->
+                val points = message.split(',').mapNotNull { it.toFloatOrNull() }
+                if (points.size != 4) throw Exception("Bad swipe from the page: $message")
+                swipe(points[0], points[1], points[2], points[3])
             }
 
             val captureScript = buildScript?.invoke(passPayloadName)
@@ -746,7 +733,7 @@ abstract class Comix :
             val bootstrapScript = """
                 window.$passPayloadName = payload => window.$bridgeName.post(payload);
                 window.$rejectName = message => window.$errorBridgeName.post(message);
-                window.$swipeName = direction => window.$swipeBridgeName.postMessage(String(direction));
+                window.$swipeName = points => window.$swipeBridgeName.postMessage(points.join(","));
                 ${pageScript(passPayloadName, rejectName, swipeName)}
             """.trimIndent()
             val html = document.clone().apply {
@@ -755,48 +742,6 @@ abstract class Comix :
             loadData(document.location(), html)
         }
     }
-
-    private fun WebViewScope<*>.swipe(towardTop: Boolean) {
-        val metrics = Resources.getSystem().displayMetrics
-        val startX = metrics.widthPixels * Random.nextFloat(0.3f, 0.7f)
-        val startY = metrics.heightPixels * if (towardTop) Random.nextFloat(0.25f, 0.45f) else Random.nextFloat(0.55f, 0.75f)
-        val distance = metrics.heightPixels * Random.nextFloat(0.28f, 0.36f) * if (towardTop) -1 else 1
-        val drift = metrics.widthPixels * Random.nextFloat(-0.03f, 0.03f)
-        val frames = Random.nextInt(25, 37)
-        val downTime = SystemClock.uptimeMillis()
-        for (frame in 0..frames + 1) {
-            val action = when (frame) {
-                0 -> MotionEvent.ACTION_DOWN
-                frames + 1 -> MotionEvent.ACTION_UP
-                else -> MotionEvent.ACTION_MOVE
-            }
-            val progress = frame.coerceAtMost(frames).toFloat() / frames
-            // A finger starts slowly, covers most of the distance early, then tails off
-            val eased = 1 - (1 - progress.pow(1.6f)).pow(4)
-            val major = Random.nextInt(SWIPE_CONTACT_MAJOR_MIN, SWIPE_CONTACT_MAJOR_MAX + 1).toFloat()
-            val minor = Random.nextInt(SWIPE_CONTACT_MINOR_MIN, major.toInt() + 1).toFloat()
-            val properties = MotionEvent.PointerProperties().apply { toolType = MotionEvent.TOOL_TYPE_FINGER }
-            val coords = MotionEvent.PointerCoords().apply {
-                x = startX + drift * eased
-                y = startY - distance * eased
-                pressure = 1f
-                size = major / 255
-                touchMajor = major
-                touchMinor = minor
-                toolMajor = touchMajor
-                toolMinor = touchMinor
-            }
-            dispatchInput(
-                MotionEvent.obtain(
-                    downTime, SystemClock.uptimeMillis(), action, 1, arrayOf(properties), arrayOf(coords),
-                    0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0,
-                ),
-            )
-            if (frame <= frames) Thread.sleep(Random.nextLong(14, 19))
-        }
-    }
-
-    private fun Random.nextFloat(from: Float, until: Float) = from + nextFloat() * (until - from)
 
     private fun randomName() = (1..(10..20).random())
         .map { (('a'..'z') + ('A'..'Z')).random() }
@@ -1006,11 +951,6 @@ abstract class Comix :
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
         private const val ALT_HOSTS_FRAGMENT = "alt="
-
-        // Finger contact size in whole device pixels, as a phone touchscreen reports it
-        private const val SWIPE_CONTACT_MAJOR_MIN = 7
-        private const val SWIPE_CONTACT_MAJOR_MAX = 11
-        private const val SWIPE_CONTACT_MINOR_MIN = 6
 
         // Site requests in the WebView that the extension has no use for: error reports, comments, upload images
         private val UNUSED_SITE_PATHS = listOf("/api/v1/client-errors", "/api/v1/threads/", "/assets/uploads/")

@@ -29,7 +29,15 @@
             swiped = null;
             resolve();
         };
-        swipe(window.scrollY > window.innerHeight && Math.random() < SCROLL_BACK_CHANCE ? "down" : "up");
+        // A finger's swipe up, sometimes back down once the page has scrolled, in CSS pixels
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const between = (from, to) => from + Math.random() * (to - from);
+        const back = window.scrollY > height && Math.random() < SCROLL_BACK_CHANCE;
+        const x = width * between(0.3, 0.7);
+        const y = height * (back ? between(0.25, 0.45) : between(0.55, 0.75));
+        const distance = height * between(0.28, 0.36) * (back ? -1 : 1);
+        swipe([x, y, x + width * between(-0.03, 0.03), y - distance]);
     });
 
     const walk = async () => {
