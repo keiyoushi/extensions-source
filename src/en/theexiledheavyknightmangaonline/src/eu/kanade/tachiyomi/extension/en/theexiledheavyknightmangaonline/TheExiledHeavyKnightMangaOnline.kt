@@ -76,7 +76,7 @@ abstract class TheExiledHeavyKnightMangaOnline : KeiSource() {
                 val num = chapterSlugRegex.find(href)?.groupValues?.get(1) ?: return@mapNotNull null
                 if (!seen.add(num)) return@mapNotNull null
                 SChapter.create().apply {
-                    url = href
+                    setUrlWithoutDomain(href)
                     name = "Chapter $num"
                     chapter_number = num.toFloatOrNull() ?: 0f
                 }
@@ -85,7 +85,7 @@ abstract class TheExiledHeavyKnightMangaOnline : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(chapter.url).asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".post-single-content img, .entry-content img")
             .mapNotNull { img ->
                 val url = img.attr("data-src")
