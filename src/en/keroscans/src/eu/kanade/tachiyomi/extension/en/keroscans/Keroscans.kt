@@ -110,9 +110,12 @@ abstract class Keroscans :
         val url = "$baseUrl/api/series"
             .toHttpUrl()
             .newBuilder()
-            .also {
+            .apply {
+                if (query.isNotEmpty()) {
+                    addQueryParameter("q", query)
+                }
                 for (filter in filters) {
-                    (filter as? QueryParamFilter)?.addQueryParameter(it)
+                    (filter as? QueryParamFilter)?.addQueryParameter(this)
                 }
             }
             .addQueryParameter("page", page.toString())
