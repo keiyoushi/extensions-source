@@ -13,8 +13,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -108,11 +106,9 @@ abstract class SunsetManga : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = coroutineScope {
-        val document = async { client.get(getMangaUrl(manga)).asJsoup() }
-        val details = async { if (fetchDetails) parseDetails(document.await(), manga) else manga }
-        val chapterList = async { if (fetchChapters) parseChapters(document.await()) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(parseDetails(document, manga), parseChapters(document))
     }
 
     private fun parseDetails(document: Document, manga: SManga): SManga = SManga.create().apply {
