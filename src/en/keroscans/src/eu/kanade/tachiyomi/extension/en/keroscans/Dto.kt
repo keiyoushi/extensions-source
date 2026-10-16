@@ -21,8 +21,18 @@ internal data class MetaDto(
 
 @Serializable
 internal data class GenresTagsContainerDto(
-    val genres: List<TagDto>,
-    val tags: List<TagDto>,
+    val genres: List<TagFilterDto>,
+    val tags: List<TagFilterDto>,
+)
+
+internal fun List<TagFilterDto>.toMapping(): Map<String, String> = associate { "${it.name} (${it.count})" to it.slug }
+
+@Serializable
+internal data class TagFilterDto(
+    val id: String,
+    val name: String,
+    val slug: String,
+    val count: Int,
 )
 
 @Serializable
@@ -134,7 +144,13 @@ internal data class ChapterSummaryDto(
     val accessible: Boolean = hasAccess ?: (unlockedAt != null)
 
     fun toSChapter(manga: SManga) = SChapter.create().apply {
-        name = if (coinPrice == 0) title else if (accessible) "🔓 $title" else "🔒 $title"
+        name = if (coinPrice == 0) {
+            title
+        } else if (accessible) {
+            "🔓 $title"
+        } else {
+            "🔒 $title"
+        }
         date_upload = Instant.parseOrNull(publishedAt)?.toEpochMilliseconds() ?: 0L
         url = "${manga.url}/chapter/$number"
         scanlator = manga.memo["scanlator"]?.stringOrNull
