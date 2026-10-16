@@ -31,13 +31,13 @@ abstract class FlameComics : KeiSource() {
         .rateLimit(2, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val series = fetchBrowseSeries().sortedByDescending { it.views }
+        val series = fetchBrowseSeries().sortedBy { it.popularityRank ?: Int.MAX_VALUE }
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val series = client.get(dataUrl { addPathSegment("index.json") })
-            .parseAs<NextDataDto<LatestDto>>().pageProps.series
+        val series = client.get(dataUrl { addPathSegment("latest.json") })
+            .parseAs<NextDataDto<LatestDto>>().pageProps.allSeries
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 

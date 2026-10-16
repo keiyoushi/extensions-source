@@ -26,20 +26,8 @@ class BrowseDto(
 
 @Serializable
 class LatestDto(
-    private val latestEntries: LatestEntries,
-) {
-    val series get() = latestEntries.blocks.first().series
-
-    @Serializable
-    class LatestEntries(
-        val blocks: List<Block>,
-    )
-
-    @Serializable
-    class Block(
-        val series: List<SeriesDto>,
-    )
-}
+    val allSeries: List<SeriesDto>,
+)
 
 @Serializable
 class SeriesPageDto(
@@ -55,17 +43,18 @@ class ChapterPageDto(
 @Serializable
 class SeriesDto(
     val title: String,
-    val altTitles: List<String>?,
-    private val description: String?,
+    val altTitles: List<String>? = null,
+    private val description: String? = null,
     private val cover: String,
-    private val type: String,
-    private val tags: List<String>?,
-    private val author: List<String>?,
-    private val artist: List<String>?,
-    private val status: String,
-    @SerialName("series_id") private val seriesId: Int?,
+    private val type: String? = null,
+    private val tags: List<String>? = null,
+    @SerialName("categories") private val categories: List<String>? = null,
+    private val author: List<String>? = null,
+    private val artist: List<String>? = null,
+    private val status: String? = null,
+    @SerialName("series_id") private val seriesId: Int? = null,
     @SerialName("last_edit") private val lastEdit: Long,
-    val views: Int?,
+    val popularityRank: Int? = null,
 ) {
     fun toSManga(): SManga? = seriesId?.let(::toSManga)
 
@@ -96,10 +85,10 @@ class SeriesDto(
             }
         }.takeIf { it.isNotEmpty() }
 
-        genre = (listOf(type) + tags.orEmpty()).joinToString()
+        genre = (listOfNotNull(type) + tags.orEmpty() + categories.orEmpty()).distinct().joinToString()
         author = this@SeriesDto.author?.joinToString()
         artist = this@SeriesDto.artist?.joinToString()
-        status = when (this@SeriesDto.status.lowercase()) {
+        status = when (this@SeriesDto.status?.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "dropped" -> SManga.CANCELLED
             "hiatus" -> SManga.ON_HIATUS
