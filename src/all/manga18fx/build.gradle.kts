@@ -9,6 +9,7 @@ keiyoushi {
     versionCode = 58
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
+    theme = "yiimadara"
 
     listOf("all", "en").forEach { language ->
         source {
@@ -17,5 +18,9 @@ keiyoushi {
 
             if (language == "en") id = 3157287889751723714L
         }
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }
