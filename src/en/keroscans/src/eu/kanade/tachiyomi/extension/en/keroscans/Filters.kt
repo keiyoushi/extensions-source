@@ -114,7 +114,7 @@ internal class TypeFilter : MultiSelectFilter("Type", "type", types, defaultSele
 
 internal class StatusFilter : MultiSelectFilter("Status", "status", statuses)
 
-internal class OriginFilter : MultiSelectFilter("Origins", "origin", origins)
+internal class OriginFilter : MultiSelectFilter("Origin", "origin", origins)
 
 internal class SaleFilter : CheckBoxFilter("On Sale", "sale")
 
