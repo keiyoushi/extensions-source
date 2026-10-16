@@ -42,10 +42,10 @@ class GenreTagListDto(
     val genres: List<GenreDto> = emptyList(),
     val tags: List<GenreDto> = emptyList(),
 ) {
-    fun toCachedFilterList(): CachedFilterList = CachedFilterList(
+    fun toFilterData(): FilterData = FilterData(
         genres.filter { it.count != 0 }.associate { it.displayName to it.genreSlug },
         tags.filter { it.count != 0 }.associate { it.displayName to it.genreSlug },
-        CachedFilterList.CURRENT_VERSION,
+        FilterData.CURRENT_VERSION,
     )
 
     companion object {
@@ -54,7 +54,7 @@ class GenreTagListDto(
 }
 
 @Serializable
-class CachedFilterList(
+class FilterData(
     val genres: Map<String, String> = emptyMap(),
     val tags: Map<String, String> = emptyMap(),
     val version: Int = 0,
