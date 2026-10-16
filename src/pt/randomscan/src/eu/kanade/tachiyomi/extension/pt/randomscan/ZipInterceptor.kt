@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
+import keiyoushi.lib.imagedecoder.ImageDecoder
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -12,8 +13,6 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.buffer
 import okio.cipherSource
-import tachiyomi.decoder.ImageDecoder
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -22,7 +21,6 @@ import java.util.zip.ZipInputStream
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
-import ca.mpreg.imagedecoder.ImageDecoder as MpregImageDecoder
 
 internal fun Response.decrypt(key: String, prefix: Long = 16): Response {
     val source = body.source()
@@ -116,25 +114,8 @@ class ZipInterceptor {
         }
     }
 
-    private fun decodeImage(data: ByteArray, filename: String, entryName: String): Bitmap {
-        val bitmap = runCatching {
-            ImageDecoder.newInstance(ByteArrayInputStream(data), false, null)?.run {
-                try {
-                    decode(Rect(0, 0, width, height), 1)
-                } finally {
-                    recycle()
-                }
-            }
-        }.getOrNull() ?: runCatching {
-            MpregImageDecoder.open(ByteArrayInputStream(data)).use { decoder ->
-                decoder.decodeNext().use { frame ->
-                    Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
-                        .apply { copyPixelsFromBuffer(frame.image) }
-                }
-            }
-        }.getOrNull()
-
-        return bitmap ?: throw IOException("Não foi possível decodificar a imagem $filename#$entryName")
+    private fun decodeImage(data: ByteArray, filename: String, entryName: String): Bitmap = runCatching { ImageDecoder.decode(data) }.getOrElse {
+        throw IOException("Não foi possível decodificar a imagem $filename#$entryName", it)
     }
 
     companion object {
