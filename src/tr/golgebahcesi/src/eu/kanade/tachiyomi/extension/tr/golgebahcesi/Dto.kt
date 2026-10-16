@@ -66,6 +66,8 @@ class ChapterDto(
     val title: String,
     val slug: String,
     val pages: List<PageDto>? = null,
+    val deliverySystem: String,
+    val isLocked: Boolean,
     val releaseDate: String? = null,
     val createdAt: String? = null,
 )
