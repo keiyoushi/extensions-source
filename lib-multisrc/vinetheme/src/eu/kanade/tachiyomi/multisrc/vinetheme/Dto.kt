@@ -10,6 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
 import org.jsoup.nodes.TextNode
+import java.util.Locale
 import kotlin.time.Instant
 
 @Serializable
@@ -104,7 +105,7 @@ class MangaDto(
                 append(it.htmlToText(baseUrl))
             }
             val info = buildList {
-                rating.takeIf { it > 0 }?.let { add("Rating: $it") }
+                rating.takeIf { it > 0 }?.let { add("Rating: ${"%.1f".format(Locale.US, it)}") }
                 type.takeIf { it.isNotBlank() }?.let { add("Type: $it") }
                 origin.takeIf { it.isNotBlank() }?.let { add("Origin: $it") }
                 if (isHot) add("Featured")
