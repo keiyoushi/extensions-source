@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Base64
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -35,7 +35,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okio.Buffer
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -128,40 +128,29 @@ abstract class CatharsisWorld : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$apiUrl/mangas/${chapter.url}"
-        Log.d(TAG, "getPageList: GET $url")
         val dto = try {
             client.get(url).parseAs<PagesDto>()
         } catch (e: HttpException) {
-            Log.e(TAG, "getPageList: failed for $url: ${e.message}", e)
             if (e.code == 401) {
                 throw Exception("This chapter requires login on the website")
             }
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "getPageList: failed for $url: ${e.message}", e)
             throw e
         }
         val token = dto.chapterSessionToken
             ?: throw IllegalStateException("Missing chapter session token")
         val chapterId = token.split(".").firstOrNull()
             ?.let { Base64.decode(it, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP) }
-            ?.let { String(it, Charsets.UTF_8) }
+            ?.decodeToString()
             ?.let { Json.decodeFromString<ChapterTokenPayload>(it).cid }
             ?: throw IllegalStateException("Invalid chapter session token")
-        Log.d(TAG, "getPageList: ok, pages=${dto.paginas.size}")
         return dto.paginas.mapIndexed { i, pageDto ->
-            val ticketRequest = Request.Builder()
-                .url("$apiUrl/mangas/chapters/$chapterId/page-ticket")
-                .post(PageTicketRequest(pageDto.index, token).toJsonRequestBody())
-                .headers(headers)
-                .build()
-            val ticket = client.newCall(ticketRequest).execute().use { response ->
-                if (!response.isSuccessful) throw HttpException(response.code)
-                response.parseAs<PageTicketResponse>()
-            }
+            val ticket = client.post(
+                "$apiUrl/mangas/chapters/$chapterId/page-ticket",
+                headers = headers,
+                body = PageTicketRequest(pageDto.index, token).toJsonRequestBody(),
+            ).parseAs<PageTicketResponse>()
             xorKeys[ticket.signedToken] = ticket.xorByte
             ticket.scrambleKey?.let { scrambleKeys[ticket.signedToken] = it }
-            Log.d(TAG, "getPageList: ticket $i ok, xorByte=${ticket.xorByte}")
             Page(i, imageUrl = "$apiUrl/mangas/pages/${ticket.signedToken}")
         }
     }
@@ -170,23 +159,20 @@ abstract class CatharsisWorld : KeiSource() {
     private val scrambleKeys = ConcurrentHashMap<String, String>()
 
     override fun imageRequest(page: Page): Request {
-        val reqHeaders = headers.newBuilder()
-            .add("X-Catharsis-Reader", "1")
+        return super.imageRequest(page).newBuilder()
+            .addHeader("X-Catharsis-Reader", "1")
             .build()
-        return GET(page.imageUrl!!, reqHeaders)
     }
 
     // Page images are XOR-ed with a single-byte key unless they already start with an image signature
     private fun signatureInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (!request.url.encodedPath.startsWith("/api/")) {
-            Log.d(TAG, "signatureInterceptor: skip non-api path=${request.url.encodedPath}")
             return chain.proceed(request)
         }
         val timestamp = System.currentTimeMillis().toString()
         val nonce = generateNonce()
         val signature = hmacSha256("$timestamp:$nonce:${request.method}", HMAC_KEY)
-        Log.d(TAG, "signatureInterceptor: signing path=${request.url.encodedPath} time=$timestamp")
         val newRequest = request.newBuilder()
             .addHeader("x-catharsis-time", timestamp)
             .addHeader("x-catharsis-nonce", nonce)
@@ -202,8 +188,8 @@ abstract class CatharsisWorld : KeiSource() {
 
     private fun hmacSha256(data: String, key: String): String {
         val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(key.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-        return mac.doFinal(data.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        mac.init(SecretKeySpec(key.encodeToByteArray(), "HmacSHA256"))
+        return mac.doFinal(data.encodeToByteArray()).toHexString()
     }
 
     private fun pageInterceptor(chain: Interceptor.Chain): Response {
@@ -211,7 +197,6 @@ abstract class CatharsisWorld : KeiSource() {
         val path = request.url.encodedPath
         if (!path.startsWith("/api/mangas/pages/")) return chain.proceed(request)
         val response = chain.proceed(request)
-        Log.d(TAG, "pageInterceptor: ${request.method} $path -> ${response.code}")
         if (!response.isSuccessful) return response
 
         val signedToken = request.url.pathSegments.lastOrNull() ?: return response
@@ -222,11 +207,11 @@ abstract class CatharsisWorld : KeiSource() {
         if (!source.request(HEADER_SIZE.toLong())) return response
         if (source.buffer.size < HEADER_SIZE) return response
         val header = source.buffer.snapshot(HEADER_SIZE).toByteArray()
-        val decoded = ByteArray(HEADER_SIZE) { (header[it].toInt() xor xorByte).toByte() }
+        val decoded = header.xor(xorByte)
         if (isImage(header) || !isImage(decoded)) return response
 
         val bytes = body.bytes()
-        val decodedBytes = ByteArray(bytes.size) { (bytes[it].toInt() xor xorByte).toByte() }
+        val decodedBytes = bytes.xor(xorByte)
         val scrambleKey = scrambleKeys[signedToken]
         val bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
         if (bitmap == null || scrambleKey == null || bitmap.width < 800 || bitmap.height < 800) {
@@ -236,13 +221,16 @@ abstract class CatharsisWorld : KeiSource() {
         }
         val descrambled = descramble(bitmap, scrambleKey)
         bitmap.recycle()
-        val out = ByteArrayOutputStream()
-        descrambled.compress(Bitmap.CompressFormat.PNG, 100, out)
+        val out = Buffer()
+        descrambled.compress(Bitmap.CompressFormat.PNG, 100, out.outputStream())
         descrambled.recycle()
         return response.newBuilder()
-            .body(out.toByteArray().toResponseBody("image/png".toMediaType()))
+            .body(out.readByteArray().toResponseBody("image/png".toMediaType()))
             .build()
     }
+
+    private fun ByteArray.xor(key: Int): ByteArray =
+        ByteArray(size) { (this[it].toInt() xor key).toByte() }
 
     private fun imul(a: Int, b: Int): Int = (a.toLong() * b.toLong()).toInt()
 
@@ -361,7 +349,6 @@ abstract class CatharsisWorld : KeiSource() {
     }
 
     companion object {
-        private const val TAG = "CatharsisWorld"
         private const val PAGE_SIZE = 24
         private const val HMAC_KEY = "4$^£]C8j%La3"
         private const val HEADER_SIZE = 12
