@@ -74,25 +74,21 @@ abstract class Keroscans :
 
     // ============================== Filters ==============================
 
+    override val supportsFilterFetching = true
+
     override suspend fun fetchFilterData(): JsonElement {
         val (genres, tags) = client.get("$baseUrl/series").extractNextJs<GenresTagsContainerDto>()
             ?: throw Exception("Genre and tags not found")
-        if (genres.isEmpty()) throw Exception("Genres not found")
-        if (tags.isEmpty()) throw Exception("Tags not found")
-        return mapOf(
-            "genres" to genres.groupBy({ it.name }, { it.slug }),
-            "tags" to tags.groupBy({ it.name }, { it.slug }),
-        ).toJsonElement()
+        return mapOf("genres" to genres.toMapping(), "tags" to tags.toMapping()).toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.jsonObject?.get("genres")?.parseAs<Map<String, String>>()
-        val tags = data?.jsonObject?.get("tags")?.parseAs<Map<String, String>>()
+        val result = data?.parseAs<Map<String, Map<String, String>>>()
 
         return FilterList(
             listOfNotNull(
-                genres?.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
-                tags?.takeIf { it.isNotEmpty() }?.let(::TagFilter),
+                result?.get("genres")?.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
+                result?.get("tags")?.takeIf { it.isNotEmpty() }?.let(::TagFilter),
                 TypeFilter(),
                 StatusFilter(),
                 OriginFilter(),
