@@ -60,6 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="test-${{ github.ref_name }}-${{ github.run_number }}"
+          shopt -s globstar
           apks=(src/**/build/outputs/apk/release/*.apk)
           if [ ! -f "${apks[0]}" ]; then
             echo "No APKs found, skipping release"
