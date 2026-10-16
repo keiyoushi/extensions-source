@@ -6,16 +6,13 @@ plugins {
 
 keiyoushi {
     name = "KeroScans"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "vinetheme"
 
     source {
         baseUrl = "https://keroscans.net"
         lang = "en"
-    }
-
-    deeplink {
-        path("/..*")
     }
 }
