@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
 import android.content.SharedPreferences
+import android.content.res.Resources
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.webkit.WebResourceResponse
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -19,6 +23,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.WebViewScope
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
@@ -46,6 +51,9 @@ import org.jsoup.nodes.Document
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.concurrent.thread
+import kotlin.math.pow
+import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -196,7 +204,7 @@ abstract class Comix :
         )
         val searchResponse = document.extractBrowseResponse() ?: runInWebView(
             document = document,
-            pageScript = { _, _ ->
+            pageScript = { _, _, _ ->
                 """
                 (function () {
                     const key = 'settings_v2';
@@ -548,10 +556,10 @@ abstract class Comix :
         knownIds: List<Int>,
     ): ChapterList {
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
-        val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, rejectName ->
-            "(${asset("capture_items.js")})((${asset("chapter_list.js")})(" +
+        val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, _, swipeName ->
+            "(${asset("chapter_list.js")})(${asset("site_api.js")}, " +
                 "${knownIds.joinToString(",", "[", "]")}, ${JSONObject.quote(mangaId)}, ${JSONObject.quote("/title/$mangaId-")}, " +
-                "$MAX_CHAPTER_PAGES, window.$passPayloadName, window.$rejectName));"
+                "$MAX_CHAPTER_PAGES, window.$swipeName, window.$passPayloadName);"
         }
         return payload.parseAs<ChapterList>()
     }
@@ -630,9 +638,10 @@ abstract class Comix :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterId = chapter.chapterId() ?: throw Exception("Could not find the chapter id")
         val document = client.get(getChapterUrl(chapter)).asJsoup()
-        val payload = runInWebView(document, { it.isChapterPagesRequest() }) { passPayloadName, _ ->
-            "(${asset("capture_items.js")})((${asset("chapter_pages.js")})(window.$passPayloadName));"
+        val payload = runInWebView(document, { it.isChapterPagesRequest() }) { passPayloadName, rejectName, _ ->
+            "(${asset("chapter_pages.js")})(${asset("site_api.js")}, $chapterId, window.$passPayloadName, window.$rejectName);"
         }
 
         return buildPages(payload.parseAs())
@@ -661,16 +670,13 @@ abstract class Comix :
         document: Document,
         isDataRequest: ((HttpUrl) -> Boolean)? = null,
         buildScript: ((passPayloadName: String) -> String)? = null,
-        pageScript: (passPayloadName: String, rejectName: String) -> String,
+        pageScript: (passPayloadName: String, rejectName: String, swipeName: String) -> String,
     ): String {
         val waitSeconds = if (isDataRequest != null) DATA_REQUEST_WAIT_SECONDS else WEBVIEW_TIMEOUT_SECONDS
         val timeoutDeadline = AtomicLong(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
         val dataRequests = AtomicInteger()
-        val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) {
-            (1..(10..20).random())
-                .map { (('a'..'z') + ('A'..'Z')).random() }
-                .joinToString("")
-        }
+        val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) { randomName() }
+        val (swipeBridgeName, swipeName) = List(2) { randomName() }
         return runWebView(timeout = Duration.INFINITE) {
             userAgent = headers["User-Agent"].orEmpty()
             blockImages = true
@@ -708,6 +714,16 @@ abstract class Comix :
 
             jsBridge(bridgeName) { resolve(it) }
             jsBridge(errorBridgeName) { reject(Exception(it)) }
+            // The handler runs on the main thread and the swipe sleeps between frames, so it gets its own thread
+            webMessageBridge(swipeBridgeName, setOf(document.location().toHttpUrl().run { "$scheme://$host" })) { direction ->
+                thread(name = "Comix swipe") {
+                    try {
+                        swipe(towardTop = direction == "down")
+                    } catch (t: Throwable) {
+                        reject(t)
+                    }
+                }
+            }
 
             val captureScript = buildScript?.invoke(passPayloadName)
             if (captureScript != null) {
@@ -730,13 +746,8 @@ abstract class Comix :
             val bootstrapScript = """
                 window.$passPayloadName = payload => window.$bridgeName.post(payload);
                 window.$rejectName = message => window.$errorBridgeName.post(message);
-                // The site's X-Rt flag, raised after a few API calls without user input and blocked on by the server; held at zero
-                const originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
-                XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
-                    if (name.toLowerCase() === "x-rt" && value === "1") value = "0";
-                    return originalSetRequestHeader.call(this, name, value);
-                };
-                ${pageScript(passPayloadName, rejectName)}
+                window.$swipeName = direction => window.$swipeBridgeName.postMessage(String(direction));
+                ${pageScript(passPayloadName, rejectName, swipeName)}
             """.trimIndent()
             val html = document.clone().apply {
                 head().prependElement("script").append(bootstrapScript)
@@ -744,6 +755,52 @@ abstract class Comix :
             loadData(document.location(), html)
         }
     }
+
+    private fun WebViewScope<*>.swipe(towardTop: Boolean) {
+        val metrics = Resources.getSystem().displayMetrics
+        val startX = metrics.widthPixels * Random.nextFloat(0.3f, 0.7f)
+        val startY = metrics.heightPixels * if (towardTop) Random.nextFloat(0.25f, 0.45f) else Random.nextFloat(0.55f, 0.75f)
+        val distance = metrics.heightPixels * Random.nextFloat(0.28f, 0.36f) * if (towardTop) -1 else 1
+        val drift = metrics.widthPixels * Random.nextFloat(-0.03f, 0.03f)
+        val frames = Random.nextInt(25, 37)
+        val downTime = SystemClock.uptimeMillis()
+        for (frame in 0..frames + 1) {
+            val action = when (frame) {
+                0 -> MotionEvent.ACTION_DOWN
+                frames + 1 -> MotionEvent.ACTION_UP
+                else -> MotionEvent.ACTION_MOVE
+            }
+            val progress = frame.coerceAtMost(frames).toFloat() / frames
+            // A finger starts slowly, covers most of the distance early, then tails off
+            val eased = 1 - (1 - progress.pow(1.6f)).pow(4)
+            val major = Random.nextInt(SWIPE_CONTACT_MAJOR_MIN, SWIPE_CONTACT_MAJOR_MAX + 1).toFloat()
+            val minor = Random.nextInt(SWIPE_CONTACT_MINOR_MIN, major.toInt() + 1).toFloat()
+            val properties = MotionEvent.PointerProperties().apply { toolType = MotionEvent.TOOL_TYPE_FINGER }
+            val coords = MotionEvent.PointerCoords().apply {
+                x = startX + drift * eased
+                y = startY - distance * eased
+                pressure = 1f
+                size = major / 255
+                touchMajor = major
+                touchMinor = minor
+                toolMajor = touchMajor
+                toolMinor = touchMinor
+            }
+            dispatchInput(
+                MotionEvent.obtain(
+                    downTime, SystemClock.uptimeMillis(), action, 1, arrayOf(properties), arrayOf(coords),
+                    0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0,
+                ),
+            )
+            if (frame <= frames) Thread.sleep(Random.nextLong(14, 19))
+        }
+    }
+
+    private fun Random.nextFloat(from: Float, until: Float) = from + nextFloat() * (until - from)
+
+    private fun randomName() = (1..(10..20).random())
+        .map { (('a'..'z') + ('A'..'Z')).random() }
+        .joinToString("")
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
@@ -949,6 +1006,11 @@ abstract class Comix :
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
         private const val ALT_HOSTS_FRAGMENT = "alt="
+
+        // Finger contact size in whole device pixels, as a phone touchscreen reports it
+        private const val SWIPE_CONTACT_MAJOR_MIN = 7
+        private const val SWIPE_CONTACT_MAJOR_MAX = 11
+        private const val SWIPE_CONTACT_MINOR_MIN = 6
 
         // Site requests in the WebView that the extension has no use for: error reports, comments, upload images
         private val UNUSED_SITE_PATHS = listOf("/api/v1/client-errors", "/api/v1/threads/", "/assets/uploads/")
