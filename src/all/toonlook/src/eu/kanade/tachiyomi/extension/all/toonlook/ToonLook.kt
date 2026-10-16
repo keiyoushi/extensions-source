@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
@@ -21,125 +20,45 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 private val CHAPTER_DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
 
 @Source
 abstract class ToonLook : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ScrambleInterceptor())
 
-    private var nonce: String? = null
-    private var nonceExpiresAt = 0L
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList(SortFilter.POPULAR))
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::nonceInterceptor)
-        .addInterceptor(ScrambleInterceptor())
-
-    private fun nonceInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val requestWithNonce = if (request.url.encodedPath.endsWith("/wp-admin/admin-ajax.php")) {
-            val body = request.body as? FormBody
-            if (body != null) {
-                request.newBuilder().post(body.withNonce(getNonce())).build()
-            } else {
-                request
-            }
-        } else {
-            request
-        }
-
-        return chain.proceed(requestWithNonce).also(::updateNonce)
-    }
-
-    @Synchronized
-    private fun getNonce(): String {
-        val currentNonce = nonce
-        if (currentNonce != null && System.nanoTime() < nonceExpiresAt) {
-            return currentNonce
-        }
-
-        val request = Request.Builder()
-            .url("$baseUrl/top-manhwa/?sortby=daily_top")
-            .headers(headers)
-            .get()
-            .build()
-        client.newCall(request).execute().use(::updateNonce)
-
-        return nonce ?: throw IOException("Could not find nonce")
-    }
-
-    @Synchronized
-    private fun updateNonce(response: Response) {
-        if (response.request.url.host != baseUrl.toHttpUrl().host) return
-        if (response.body.contentType()?.let { it.type == "text" && it.subtype == "html" } != true) return
-
-        val document = response.peekBody(Int.MAX_VALUE.toLong()).string().asJsoup(baseUrl)
-        val updatedNonce = findNonce(document) ?: return
-        nonce = updatedNonce
-        nonceExpiresAt = System.nanoTime() + NONCE_TIMEOUT_NANOS
-    }
-
-    private fun FormBody.withNonce(value: String): FormBody = FormBody.Builder().apply {
-        var hasNonce = false
-        for (index in 0 until size) {
-            if (name(index) == NONCE_FIELD) {
-                add(NONCE_FIELD, value)
-                hasNonce = true
-            } else {
-                add(name(index), value(index))
-            }
-        }
-        if (!hasNonce) add(NONCE_FIELD, value)
-    }.build()
-
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val pageUrl = "$baseUrl/top-manhwa/"
-        val document = if (page == 1) {
-            client.get("$pageUrl?sortby=daily_top").asJsoup()
-        } else {
-            val body = FormBody.Builder()
-                .add("action", "mangora_get_ranking")
-                .add("nonce", "")
-                .add("period", "daily_top")
-                .add("paged", page.toString())
-                .add("page_url", pageUrl)
-                .build()
-            val requestHeaders = headers.newBuilder()
-                .set("Referer", "$pageUrl?sortby=daily_top&paged=$page")
-                .build()
-            val response = client.post("$baseUrl/wp-admin/admin-ajax.php", requestHeaders, body)
-                .parseAs<RankingResponse>()
-
-            if (!response.success) throw Exception("Ranking request failed")
-            response.data.asJsoup(baseUrl)
-        }
-
-        return parseMangasPage(document)
-    }
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", FilterList(SortFilter.LATEST))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val genre = filters.firstInstanceOrNull<GenreFilter>()?.toSlug()
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            when {
-                query.isNotBlank() -> addQueryParameter("s", query)
-                genre != null -> addPathSegments("genre/$genre/")
-                else -> addPathSegments("manhwa/")
+            if (query.isNotBlank()) {
+                addQueryParameter("s", query)
+            } else {
+                val genre = filters.firstInstanceOrNull<GenreFilter>()?.toSlug()
+                val status = filters.firstInstanceOrNull<StatusFilter>()?.toStatus()
+                val sortFilter = filters.firstInstanceOrNull<SortFilter>() ?: SortFilter()
+                val sortBy = sortFilter.sortBy()
+                val ascending = sortFilter.state?.ascending ?: false
+
+                addPathSegment("manhwa")
+                if (genre != null) addQueryParameter("genre", genre)
+                if (status != null) addQueryParameter("status", status)
+                addQueryParameter("sortby", sortBy)
+                if (ascending) addQueryParameter("order", "asc")
             }
             if (page > 1) {
-                addPathSegments("page/$page/")
+                addPathSegment("page")
+                addPathSegment(page.toString())
+                addPathSegment("")
             }
         }.build()
 
@@ -224,16 +143,15 @@ abstract class ToonLook : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<List<GenreDto>>()?.filter { it.count > 0 }.orEmpty()
-        return FilterList(GenreFilter(genres))
+        return FilterList(
+            SortFilter(),
+            StatusFilter(),
+            GenreFilter(genres),
+        )
     }
 }
 
 private val CHAPTER_DATA_REGEX = """chapterData\s*=\s*(\{.*?\})\s*;""".toRegex(RegexOption.DOT_MATCHES_ALL)
-private const val NONCE_FIELD = "nonce"
-private val NONCE_TIMEOUT_NANOS = TimeUnit.MINUTES.toNanos(10)
-
-private fun findNonce(document: Document): String? = document.selectFirst("#formReport input[name=nonce]")?.attrOrNull("value")
-
 private fun parseMangasPage(document: Document): MangasPage {
     val mangas = document.select(".manga-item").map(::mangaFromElement)
     return MangasPage(mangas, hasNextPage = document.selectFirst("a.next") != null)

@@ -11,12 +11,6 @@ internal class GenreDto(
 )
 
 @Serializable
-internal class RankingResponse(
-    val success: Boolean,
-    val data: String,
-)
-
-@Serializable
 internal class ChapterData(
     val base: String,
     val lang: String,
