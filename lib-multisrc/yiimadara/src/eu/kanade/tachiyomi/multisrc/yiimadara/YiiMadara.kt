@@ -53,9 +53,11 @@ abstract class YiiMadara : KeiSource() {
             else -> RawEntries.SHOW
         }
 
+    // No orderby is the latest updates order, orderby=latest is newest series
     protected open val sortOptions = listOf(
+        "Default" to "",
         "Trending" to "trending",
-        "Latest" to "latest",
+        "Newest" to "latest",
         "Rating" to "rating",
         "A-Z" to "alphabet",
     )
@@ -68,11 +70,13 @@ abstract class YiiMadara : KeiSource() {
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = directoryPage(page, "latest")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = directoryPage(page, null)
 
-    private suspend fun directoryPage(page: Int, order: String): MangasPage {
+    private suspend fun directoryPage(page: Int, order: String?): MangasPage {
         val path = directoryPath!!
-        val url = listUrl(path, page).addQueryParameter("orderby", order).build()
+        val url = listUrl(path, page).apply {
+            if (order != null) addQueryParameter("orderby", order)
+        }.build()
         return mangaListParse(client.get(url).asJsoup(), rawListing = path == rawPath)
     }
 
@@ -178,11 +182,12 @@ abstract class YiiMadara : KeiSource() {
             .ifEmpty { null }
     }
 
-    // Rows are either a .summary-heading/.summary-content pair or a <b> label followed by the value
+    // Rows are either a .summary-heading/.summary-content pair or a <b> label followed by the value,
+    // some sites instead put Status/Type under the cover as `.minfo` with the value in <i>
     private fun Document.info(label: String): Elements? {
         val item = select(".post-content_item").firstOrNull {
             it.selectFirst("> .summary-heading, > b")?.text()?.startsWith(label, ignoreCase = true) == true
-        } ?: return null
+        } ?: return select(".minfo").firstOrNull { it.ownText().startsWith(label, ignoreCase = true) }?.select("> i")
         return item.select("> .summary-content").ifEmpty { item.select("> :not(b)") }
     }
 

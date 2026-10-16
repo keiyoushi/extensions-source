@@ -16,7 +16,7 @@ abstract class Manga18fx : YiiMadara() {
 
     override val sortOptions = listOf(
         "Default" to "",
-        "Latest" to "latest",
+        "Newest" to "latest",
         "Rating" to "rating",
         "Most views" to "views",
     )

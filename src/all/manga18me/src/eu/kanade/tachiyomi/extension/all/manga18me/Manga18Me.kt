@@ -36,7 +36,6 @@ abstract class Manga18Me : YiiMadara() {
         "Mature" to "mature",
         "Mystery" to "mystery",
         "Psychological" to "psychological",
-        "Raw" to "raw",
         "Romance" to "romance",
         "School Life" to "school-life",
         "Sci-Fi" to "sci-fi",
