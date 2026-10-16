@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Base64
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -158,11 +157,9 @@ abstract class CatharsisWorld : KeiSource() {
     private val xorKeys = ConcurrentHashMap<String, Int>()
     private val scrambleKeys = ConcurrentHashMap<String, String>()
 
-    override fun imageRequest(page: Page): Request {
-        return super.imageRequest(page).newBuilder()
-            .addHeader("X-Catharsis-Reader", "1")
-            .build()
-    }
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .addHeader("X-Catharsis-Reader", "1")
+        .build()
 
     // Page images are XOR-ed with a single-byte key unless they already start with an image signature
     private fun signatureInterceptor(chain: Interceptor.Chain): Response {
@@ -229,8 +226,7 @@ abstract class CatharsisWorld : KeiSource() {
             .build()
     }
 
-    private fun ByteArray.xor(key: Int): ByteArray =
-        ByteArray(size) { (this[it].toInt() xor key).toByte() }
+    private fun ByteArray.xor(key: Int): ByteArray = ByteArray(size) { (this[it].toInt() xor key).toByte() }
 
     private fun imul(a: Int, b: Int): Int = (a.toLong() * b.toLong()).toInt()
 
