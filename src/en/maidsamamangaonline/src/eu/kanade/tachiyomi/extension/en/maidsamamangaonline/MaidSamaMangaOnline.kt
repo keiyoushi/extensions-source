@@ -76,7 +76,7 @@ abstract class MaidSamaMangaOnline : KeiSource() {
                 val slug = chapterSlugRegex.find(href)?.groupValues?.get(1) ?: return@mapNotNull null
                 if (!seen.add(slug)) return@mapNotNull null
                 SChapter.create().apply {
-                    url = href
+                    setUrlWithoutDomain(href)
                     name = chapterName(slug)
                     chapter_number = chapterNumber(slug)
                 }
@@ -103,7 +103,7 @@ abstract class MaidSamaMangaOnline : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(chapter.url).asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".entry-content img")
             .mapNotNull { img ->
                 // Pages are lazy-loaded: src holds a data: placeholder, the real
