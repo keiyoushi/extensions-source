@@ -186,6 +186,8 @@ private fun parseMangaDetails(document: Document, slug: String): SManga = SManga
     }
 
     genre = document.select(".manga-genres a").joinToString { it.text() }.ifEmpty { null }
+    author = document.select("div.items-start a[rel=tag][href*='/manga-author/'] > span:first-child").joinToString { it.text() }.ifEmpty { null }
+    artist = document.select("div.items-start a[rel=tag][href*='/artist/'] > span:first-child").joinToString { it.text() }.ifEmpty { null }
 
     status = when (document.selectFirst(".manga-status[data-status]")?.attr("data-status")?.lowercase()) {
         "ongoing" -> SManga.ONGOING
