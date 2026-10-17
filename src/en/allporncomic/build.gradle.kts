@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "AllPornComic"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "madara"
