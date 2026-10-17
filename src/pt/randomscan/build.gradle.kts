@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Lura Toon"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -22,6 +22,5 @@ keiyoushi {
 }
 
 dependencies {
-    compileOnlyApi("ca.mpreg:imagedecoder:16")
-    compileOnlyApi("com.github.tachiyomiorg:image-decoder:e08e9be535")
+    implementation(project(":lib:imagedecoder"))
 }

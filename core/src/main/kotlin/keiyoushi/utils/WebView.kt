@@ -391,6 +391,24 @@ class WebViewScope<T> internal constructor(
         webView.loadDataWithBaseURL(baseUrl, html, mimeType, "UTF-8", null)
     }
 
+    /**
+     * Runs [block] with the run's WebView on the main thread, for what the scope has no API for: right away when
+     * called on the main thread, otherwise posted. Skipped once the run has ended; anything [block] throws fails the
+     * run via [reject]. Don't keep the view past [block], load pages or replace its clients through it. The view is
+     * never attached to a window, so `View.post` runnables don't run; schedule with a main-thread `Handler`.
+     */
+    @NativeWebViewApi
+    fun withNativeWebView(block: (WebView) -> Unit) {
+        runOnMain {
+            if (destroyed || deferred.isCompleted) return@runOnMain
+            try {
+                block(webView)
+            } catch (t: Throwable) {
+                reject(t)
+            }
+        }
+    }
+
     /** Runs [script], optionally passing its JSON-encoded result to [callback]. */
     fun evaluateJs(script: String, callback: ((String) -> Unit)? = null) {
         runOnMain {
@@ -631,3 +649,9 @@ suspend fun getLocalStorage(url: String, key: String): String? = runWebView(time
     }
     loadData(url, """<link rel="icon" href="data:,">""")
 }
+
+/** Marks [WebViewScope.withNativeWebView]. Prefer the scope's own API where it has one. */
+@RequiresOptIn(message = "Avoid depending on native WebView")
+@Retention(AnnotationRetention.BINARY)
+@Target(AnnotationTarget.FUNCTION)
+annotation class NativeWebViewApi
