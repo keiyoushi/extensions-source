@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.unext
 
 import android.util.Base64
+import keiyoushi.utils.aesCbc
 import keiyoushi.utils.parseAs
 import keiyoushi.zip.dataRange
 import keiyoushi.zip.fixedLength
@@ -16,9 +17,6 @@ import okio.ByteString.Companion.decodeHex
 import okio.ByteString.Companion.encodeUtf8
 import okio.buffer
 import okio.cipherSource
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -37,10 +35,9 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(newRequest)
         if (!response.isSuccessful) return response
 
-        val key = SecretKeySpec(Base64.decode(data.key, Base64.DEFAULT), "AES")
-        val iv = IvParameterSpec(Base64.decode(data.iv, Base64.DEFAULT))
-        val cipher = Cipher.getInstance("AES/CBC/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key, iv)
+        val key = Base64.decode(data.key, Base64.DEFAULT)
+        val iv = Base64.decode(data.iv, Base64.DEFAULT)
+        val cipher = aesCbc(key, iv, padding = false)
 
         val ciphertext = readEntry(response.body.source(), data.compressedSize, data.method)
         val image = ciphertext.cipherSource(cipher).fixedLength(data.originalFileSize).buffer()

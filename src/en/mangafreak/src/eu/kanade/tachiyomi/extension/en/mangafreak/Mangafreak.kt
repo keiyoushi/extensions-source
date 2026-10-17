@@ -54,13 +54,14 @@ abstract class Mangafreak : KeiSource() {
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
+        // The homepage mixes today's, yesterday's and older titles, so use the site's Latest page.
         val url = if (page == 1) {
-            baseUrl
+            "$baseUrl/Latest_Releases"
         } else {
             "$baseUrl/Latest_Releases/$page"
         }
         val document = client.get(url).asJsoup()
-        val mangas = document.select("div.latest_item, div.latest_releases_item").map { element ->
+        val mangas = document.select("div.latest_releases_item").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")?.let {
                     val url = it.toHttpUrlOrNull()
@@ -77,16 +78,9 @@ abstract class Mangafreak : KeiSource() {
                     }
                 }
 
-                if (element.hasClass("latest_item")) {
-                    element.selectFirst("a.name")!!.run {
-                        title = text()
-                        setUrlWithoutDomain(absUrl("href"))
-                    }
-                } else {
-                    element.selectFirst("a")!!.run {
-                        title = text()
-                        setUrlWithoutDomain(absUrl("href"))
-                    }
+                element.selectFirst("a")!!.run {
+                    title = text()
+                    setUrlWithoutDomain(absUrl("href"))
                 }
             }
         }

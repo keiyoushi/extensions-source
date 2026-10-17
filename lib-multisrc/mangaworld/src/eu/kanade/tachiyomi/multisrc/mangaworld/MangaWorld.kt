@@ -20,7 +20,7 @@ import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 
-private val chapterNumberRegex = Regex("""(?i)capitolo\s([0-9]+)""")
+private val chapterNumberRegex = Regex("""(?i)capitolo\s([0-9]+(?:\.[0-9]+)?)""")
 private val dateFormat = DateTimeFormatterBuilder()
     .parseCaseInsensitive()
     .appendPattern("d MMMM yyyy")

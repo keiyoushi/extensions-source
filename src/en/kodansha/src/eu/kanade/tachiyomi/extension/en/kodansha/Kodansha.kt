@@ -17,13 +17,16 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.xor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import java.io.IOException
 
 @Source
@@ -33,7 +36,15 @@ abstract class Kodansha :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::imageIntercept)
+
+    private fun imageIntercept(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        if (!response.isSuccessful || chain.request().url.host != CONTENT_HOST) {
+            return response
+        }
+        return response.xor(XOR_KEY)
+    }
 
     override fun Headers.Builder.configureHeaders() = set("azuki-organization-key", ORGANIZATION_KEY)
 
@@ -155,5 +166,7 @@ abstract class Kodansha :
         private const val ORGANIZATION_KEY = "fff36c1f-9b3d-418e-b3a9-d2a537ddac06"
         private const val PAGE_SIZE = 24
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val CONTENT_HOST = "production.image-content.azuki.co"
+        private const val XOR_KEY = 174.toByte()
     }
 }

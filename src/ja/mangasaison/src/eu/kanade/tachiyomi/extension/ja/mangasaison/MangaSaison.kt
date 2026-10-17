@@ -15,6 +15,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
+import keiyoushi.utils.aesCbc
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLBody
@@ -32,9 +33,6 @@ import okhttp3.OkHttpClient
 import okio.buffer
 import java.io.IOException
 import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class MangaSaison :
@@ -186,8 +184,7 @@ abstract class MangaSaison :
         }
 
         // unwrap with the master key (wasm func 89)
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(master, "AES"), IvParameterSpec(ByteArray(cipher.blockSize)))
+        val cipher = aesCbc(master, ByteArray(16))
         val unwrapped = cipher.doFinal(material, TIMESTAMP_HEADER_SIZE, material.size - TIMESTAMP_HEADER_SIZE)
         return ByteArray(AES_KEY_SIZE) { unwrapped[AES_KEY_SIZE + it].toInt().inv().toByte() }.toHexString()
     }

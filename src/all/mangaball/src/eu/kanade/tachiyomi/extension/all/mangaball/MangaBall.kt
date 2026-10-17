@@ -104,11 +104,17 @@ abstract class MangaBall :
     ): MangasPage {
         val sort = filters.firstInstanceOrNull<SortFilter>()
 
+        // The API only orders by relevance when sort_by is omitted, which "Relevance" maps to.
+        // Keyword-less browse falls back to last-updated so it stays ordered.
+        val effectiveSortBy = sortBy ?: sort?.sortBy ?: if (query.isBlank()) "lastupdate" else null
+
         val url = "$baseUrl/api/v1/title/search-advanced".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "24")
-            addQueryParameter("sort_by", sortBy ?: sort?.sortBy ?: "lastupdate")
-            addQueryParameter("sort_order", sortOrder ?: sort?.sortOrder ?: "desc")
+            if (effectiveSortBy != null) {
+                addQueryParameter("sort_by", effectiveSortBy)
+                addQueryParameter("sort_order", sortOrder ?: sort?.sortOrder ?: "desc")
+            }
             addQueryParameter("tag_mode", filters.firstInstanceOrNull<TagModeFilter>()?.selected ?: "AND")
             addQueryParameter("adult_mode", if (hideNsfwPreference()) "no_18" else "all")
 
@@ -187,7 +193,7 @@ abstract class MangaBall :
 
         return if (fetchChapters && titleId != null) {
             coroutineScope {
-                val mangaDeferred = async { if (fetchDetails) getMangaDetails(manga.url) else manga }
+                val mangaDeferred = async { if (fetchDetails) getMangaDetails(titleId) else manga }
                 val chaptersDeferred = async { getChapterList(titleId) }
 
                 SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
@@ -195,7 +201,7 @@ abstract class MangaBall :
         } else {
             // Entries saved by older versions have no id in memo, so one details fetch is needed to
             // resolve it. Returning that manga persists the id, saving the fetch on later refreshes.
-            val updatedManga = if (titleId == null || fetchDetails) getMangaDetails(manga.url) else manga
+            val updatedManga = if (titleId == null || fetchDetails) getMangaDetails(titleId ?: manga.url) else manga
 
             val updatedChapters = if (fetchChapters) {
                 getChapterList(updatedManga.memo.getString("id"))

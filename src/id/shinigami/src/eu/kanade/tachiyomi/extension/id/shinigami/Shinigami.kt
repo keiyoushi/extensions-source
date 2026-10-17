@@ -154,9 +154,7 @@ abstract class Shinigami : KeiSource() {
 
         return manga.apply {
             mangaDetails.title?.takeIf { it.isNotBlank() }?.let { title = it }
-            (mangaDetails.coverPortraitUrl ?: mangaDetails.coverImageUrl)?.takeIf { it.isNotBlank() }?.let {
-                thumbnail_url = it
-            }
+            mangaDetails.thumbnail?.let { thumbnail_url = it }
             author = mangaDetails.taxonomy["Author"]?.joinToString { it.name }.orEmpty()
             artist = mangaDetails.taxonomy["Artist"]?.joinToString { it.name }.orEmpty()
             status = mangaDetails.status.toStatus()

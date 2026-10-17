@@ -11,6 +11,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.parseAs
@@ -25,9 +27,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class Creativecomic : KeiSource() {
@@ -89,10 +88,7 @@ abstract class Creativecomic : KeiSource() {
         val keyBytes = key.decodeHex()
         val ivBytes = iv.decodeHex()
         val cipherBytes = response.body.bytes()
-        val cipher = Cipher.getInstance("AES/CBC/PKCS7PADDING")
-        val keySpec = SecretKeySpec(keyBytes, "AES")
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, IvParameterSpec(ivBytes))
-        val data = cipher.doFinal(cipherBytes).toString(Charsets.UTF_8)
+        val data = cipherBytes.aesDecrypt(aesCbc(keyBytes, ivBytes)).decodeToString()
 
         val image = Base64.decode(data.substringAfter("base64,"), Base64.DEFAULT)
         val mediaType = data.substringAfter("data:").substringBefore(";").toMediaType()

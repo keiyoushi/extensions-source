@@ -239,17 +239,38 @@ abstract class MikoRoku : KeiSource() {
     }
 
     private suspend fun searchBlogger(feedUrl: String, query: String, maxResults: Int): List<BloggerEntry> {
+        searchBloggerWithQuery(feedUrl, query, maxResults).takeIf { it.isNotEmpty() }?.let { return it }
+
+        // Blogger's q= doesn't match "2" with "II", so retry with the
+        // trailing number/roman numeral stripped (e.g. "isekai furin 2" -> "isekai furin").
+        val stripped = query.replace(Regex("\\s+(\\d+|[ivxl]+)$", RegexOption.IGNORE_CASE), "").trim()
+        if (stripped.isNotBlank() && stripped != query) {
+            searchBloggerWithQuery(feedUrl, stripped, maxResults).takeIf { it.isNotEmpty() }?.let { return it }
+        }
+
+        // For conversion mismatches (e.g. "konten" vs "tamashiten"),
+        // trying progressively shorter queries. The titleWordsMatch filter in toSChapter will reject false positives.
+        val words = query.split(Regex("\\s+")).filter { it.isNotBlank() }
+        for (n in listOf(4, 3)) {
+            if (words.size > n) {
+                val short = words.take(n).joinToString(" ")
+                searchBloggerWithQuery(feedUrl, short, maxResults).takeIf { it.isNotEmpty() }?.let { return it }
+            }
+        }
+        return emptyList()
+    }
+
+    private suspend fun searchBloggerWithQuery(feedUrl: String, query: String, maxResults: Int): List<BloggerEntry> {
         val url = feedUrl.toHttpUrl().newBuilder()
             .addQueryParameter("alt", "json")
             .addQueryParameter("max-results", maxResults.toString())
             .addQueryParameter("q", query)
             .build()
 
-        val entries = client.get(url).parseAs<BloggerFeedResponse>().feed.entry
-        return entries
+        return client.get(url).parseAs<BloggerFeedResponse>().feed.entry
     }
 
-    private fun String.normalize(): String = lowercase().filter { it.isLetterOrDigit() }
+    private fun String.normalize(): String = normalized()
 
     private fun String?.nonBlank(): String? = this?.takeIf { it.isNotBlank() }
 

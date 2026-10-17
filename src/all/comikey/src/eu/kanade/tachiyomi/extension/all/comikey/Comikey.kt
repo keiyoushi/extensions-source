@@ -311,9 +311,14 @@ abstract class Comikey :
                 .filter { it.type == "image/webp" }
                 .maxBy { it.dimension(isWebtoon) }
 
-            val url = manifestUrl.resolve(image.href)!!.newBuilder()
-                .encodedQuery(manifestUrl.encodedQuery)
-                .addQueryParameter("act", payload.act)
+            val imageUrl = manifestUrl.resolve(image.href)!!
+            val url = imageUrl.newBuilder()
+                .encodedQuery(imageUrl.encodedQuery ?: manifestUrl.encodedQuery)
+                .apply {
+                    if (imageUrl.queryParameter("act") == null) {
+                        addQueryParameter("act", payload.act)
+                    }
+                }
                 .build()
 
             Page(i, imageUrl = url.toString())

@@ -133,9 +133,12 @@ abstract class MangaHub : KeiSource() {
             .set("Referer", "$baseUrl/manga/${url.pathSegments[1]}")
             .build()
 
+        // Key from the chapter page itself, which redirects for licensed titles a mirror sends to another domain
+        val noRedirectClient = client.newBuilder().followRedirects(false).build()
+
         for (i in 1..2) {
             val query = if (i == 1) "?reloadKey=1" else ""
-            val response = client.get("$url$query", refreshHeaders, ensureSuccess = false)
+            val response = noRedirectClient.get("$url$query", refreshHeaders, ensureSuccess = false)
             val returnedKey = response.headers("Set-Cookie")
                 .firstNotNullOfOrNull { apiRegex.find(it)?.groupValues?.get(1) }
             response.close()

@@ -28,14 +28,14 @@ abstract class TriStateGroupFilter<T>(
 class SortFilter :
     Filter.Sort(
         "Sort By",
-        arrayOf("Latest Updated", "Most Viewed", "Top Rated", "Recently Added", "Title"),
+        arrayOf("Relevance", "Latest Updated", "Most Viewed", "Top Rated", "Recently Added", "Title"),
         Selection(0, false),
     ) {
-    val sortBy get() = SORT_BY[state?.index ?: 0]
+    val sortBy: String? get() = SORT_BY[state?.index ?: 0]
     val sortOrder get() = if (state?.ascending == true) "asc" else "desc"
 
     companion object {
-        private val SORT_BY = arrayOf("lastupdate", "views", "rating", "created_at", "name")
+        private val SORT_BY = arrayOf(null, "lastupdate", "views", "rating", "created_at", "name")
     }
 }
 

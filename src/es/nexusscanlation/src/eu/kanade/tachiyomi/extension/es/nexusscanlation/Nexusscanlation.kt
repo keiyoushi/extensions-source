@@ -190,8 +190,11 @@ abstract class Nexusscanlation : KeiSource() {
             .addPathSegment(chapterSlug)
             .build()
 
-        val response = client.get(url, apiHeaders)
-        val body = response.body.string()
+        // Scramble seeds and page keys are only handed out when the reader sends a public key.
+        val ecies = Ecies()
+        val headers = apiHeaders.newBuilder().add("X-Rs", ecies.publicKey).build()
+
+        val body = client.get(url, headers).body.string()
 
         val chapterPagesDto = runCatching { body.parseAs<ChapterPagesWrapperDto>().data }
             .getOrNull()
@@ -202,23 +205,21 @@ abstract class Nexusscanlation : KeiSource() {
             throw IOException("Premium chapter. Not available.")
         }
 
-        return chapterPagesDto.paginas.orEmpty().mapIndexed { index, page ->
-            val imageUrl = buildString {
-                append(page.url)
-                page.scrambledData?.let {
-                    append("#scramble=")
-                    append(it.columns)
-                    append(',')
-                    append(it.rows)
-                    append(',')
-                    append(it.seed)
-                    append(',')
-                    append(it.version)
-                }
-            }
+        val keys = chapterPagesDto.r?.let(ecies::unwrap)
 
-            Page(index, imageUrl = imageUrl)
+        return chapterPagesDto.paginas.orEmpty().mapIndexed { index, page ->
+            Page(index, imageUrl = page.url + page.scrambleFragment(keys))
         }
+    }
+
+    // `#scramble=<cols>,<rows>,<seed>,<version>,<pageKey>`; empty for unprotected pages.
+    private fun PageEntryDto.scrambleFragment(keys: UnwrappedKeysDto?): String {
+        val scramble = scrambledData
+        val pageKey = keys?.k?.get(orden.toString())
+        if (scramble == null && pageKey == null) return ""
+
+        val seed = keys?.s?.get(orden.toString()) ?: 0L
+        return "#scramble=${scramble?.columns ?: 0},${scramble?.rows ?: 0},$seed,${scramble?.version ?: 1},${pageKey.orEmpty()}"
     }
 
     // ======================= Helpers =======================================

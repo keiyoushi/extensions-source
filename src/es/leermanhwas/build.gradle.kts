@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "LeerManhwas"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
+    theme = "yiimanga"
 
     source {
         baseUrl = "https://leermanhwas.com"
@@ -16,6 +17,6 @@ keiyoushi {
     }
 
     deeplink {
-        path("/..*")
+        path("/manhwa/..*")
     }
 }

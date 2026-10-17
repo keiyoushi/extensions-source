@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "V2PH"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "all"
         baseUrl = "https://www.v2ph.com"
+    }
+
+    deeplink {
+        path("/album/..*")
     }
 }

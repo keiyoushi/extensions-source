@@ -65,7 +65,7 @@ fun getFilters(): FilterList = FilterList(
     ),
     StatusFilter(
         listOf(
-            Pair("Todos", ""),
+            Pair("Todos", "all"),
             Pair("En emisión", "ongoing"),
             Pair("Finalizado", "completed"),
             Pair("Pausado", "paused"),
@@ -73,7 +73,7 @@ fun getFilters(): FilterList = FilterList(
     ),
     DemographicFilter(
         listOf(
-            Pair("Todos", ""),
+            Pair("Todos", "all"),
             Pair("Shounen", "shounen"),
             Pair("Shoujo", "shoujo"),
             Pair("Seinen", "seinen"),
@@ -82,7 +82,7 @@ fun getFilters(): FilterList = FilterList(
     ),
     TypeFilter(
         listOf(
-            Pair("Todos", ""),
+            Pair("Todos", "all"),
             Pair("Manga", "manga"),
             Pair("Manhua", "manhua"),
             Pair("One-shot", "oneshot"),
@@ -90,16 +90,16 @@ fun getFilters(): FilterList = FilterList(
     ),
     NsfwFilter(
         listOf(
-            Pair("Todos", ""),
-            Pair("Sin +18", "hide"),
-            Pair("Solo +18", "only"),
+            Pair("Todos", "all"),
+            Pair("Sin +18", "safe"),
+            Pair("Solo +18", "adult"),
         ),
     ),
     OrderFilter(
         listOf(
-            Pair("A-Z", "a-z"),
-            Pair("Más recientes", "recents"),
-            Pair("Mejor valorados", "views"),
+            Pair("A-Z", "title"),
+            Pair("Más recientes", "recent"),
+            Pair("Mejor valorados", "rating"),
         ),
     ),
 )

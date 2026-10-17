@@ -1,273 +1,210 @@
 package eu.kanade.tachiyomi.extension.pt.rfdragonscan
 
-import android.content.SharedPreferences
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.rateLimit
-import keiyoushi.utils.extractNextJsRsc
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.OkHttpClient
+import okhttp3.RequestBody
 import okhttp3.Response
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 
 @Source
-abstract class RFDragonScan :
-    HttpSource(),
-    ConfigurableSource {
+abstract class RFDragonScan : KeiSource() {
 
-    override val supportsLatest = false
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(::loginInterceptor)
-        .addInterceptor(::migrationInterceptor)
-        .rateLimit(2)
-        .build()
-
-    private val apiHeaders by lazy {
-        headersBuilder().add("Rsc", "1").build()
-    }
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::loginInterceptor)
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/projetos?page=$page", apiHeaders)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.body.string().extractNextJsRsc<ProjectsPageDto>()
-            ?: return MangasPage(emptyList(), false)
-
-        val mangas = dto.projects.map { it.toSManga() }
-
-        return MangasPage(mangas, dto.pagination?.hasNextPage == true)
-    }
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override val supportsLatest = false
+
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/projetos".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
-        if (query.isNotBlank()) {
-            url.addQueryParameter("term", query)
-        }
+        val dto = client.get(
+            url.build(),
+            headersBuilder()
+                .add("Rsc", "1")
+                .build(),
+        ).extractNextJs<ProjectsPageDto>()
+            ?: return MangasPage(emptyList(), false)
 
-        return GET(url.build(), apiHeaders)
+        val mangas = dto.projects.map {
+            it.toSManga()
+        }.filter { it.title.contains(query, true) }
+
+        return MangasPage(mangas, query.isEmpty() && dto.pagination?.hasNextPage == true)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    // ============================ MangaUpdate ============================
 
-    // ============================== Details ==============================
-
-    override fun getMangaUrl(manga: SManga): String {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ) = coroutineScope {
         if (!UUID_REGEX.matches(manga.url)) {
-            return "$baseUrl/projetos?term=${manga.url.trim('/').split('/').last()}"
+            throw Exception("Migrar mangá de $name para $name (mesma extensão)")
         }
-        return baseUrl + manga.url
-    }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        if (!UUID_REGEX.matches(manga.url)) {
-            return GET("$baseUrl/migrate${manga.url}", apiHeaders)
-        }
-        val pathSegments = manga.url.trim('/').split('/').filter { it.isNotEmpty() }
-        val mangaId = pathSegments[0]
-        val mangaSlug = pathSegments[1]
+        val mangaUrl = getMangaUrl(manga)
+        val segments = mangaUrl.toHttpUrl().pathSegments
+        val mangaId = segments[0]
+        val mangaSlug = segments[1]
 
-        val payload = "[\"$mangaId\",\"$mangaSlug\"]"
-        val requestBody = payload.toRequestBody("text/plain;charset=UTF-8".toMediaType())
+        val body = listOf(mangaId, mangaSlug)
+            .toJsonRequestBody()
 
-        val stateTree = """["",{"children":[["projectId","$mangaId","d"],{"children":[["linkId","$mangaSlug","d"],{"children":["__PAGE__",{},null,null]},null,null]}]},null,null,true]"""
+        val updatedManga = async {
+            if (fetchDetails) {
+                val response = mangaUrl.postAction("getOne", body)
+                val dto = response.extractNextJs<MangaDetailsDto> {
+                    it is JsonObject && "synopsis" in it && "title" in it
+                } ?: throw IOException("Manga details not found")
 
-        return POST(
-            baseUrl + manga.url,
-            actionHeaders("60d532a2a6a7a0ff42de5f69dcdf2db5860a2f76b0", baseUrl + manga.url, stateTree),
-            requestBody,
-        )
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.body.string().extractNextJsRsc<MangaDetailsDto> {
-            it is JsonObject && "synopsis" in it && "title" in it
-        } ?: throw IOException("Manga details not found")
-
-        return dto.toSManga()
-    }
-
-    // ============================= Chapters ==============================
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    override fun chapterListRequest(manga: SManga): Request {
-        if (!UUID_REGEX.matches(manga.url)) {
-            return GET("$baseUrl/migrate-chapters${manga.url}", apiHeaders)
-        }
-        val pathSegments = manga.url.trim('/').split('/').filter { it.isNotEmpty() }
-        val mangaId = pathSegments[0]
-        val mangaSlug = pathSegments[1]
-
-        val payload = "[\"$mangaId\",\"$mangaSlug\"]"
-        val requestBody = payload.toRequestBody("text/plain;charset=UTF-8".toMediaType())
-
-        val stateTree = """["",{"children":[["projectId","$mangaId","d"],{"children":[["linkId","$mangaSlug","d"],{"children":["__PAGE__",{},null,null]},null,null]}]},null,null,true]"""
-
-        return POST(
-            baseUrl + manga.url,
-            actionHeaders("607bcd9f90d5db5edaa2cf1aff7a002b5b14ead30a", baseUrl + manga.url, stateTree),
-            requestBody,
-        )
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val seasonList = response.body.string().extractNextJsRsc<SeasonListDto> {
-            it is JsonObject && "groups" in it
-        } ?: throw IOException("Chapters not found")
-
-        val pathSegments = response.request.url.pathSegments.filter { it.isNotEmpty() }
-        val mangaId = pathSegments[pathSegments.size - 2]
-        val mangaSlug = pathSegments.last()
-
-        val chapters = mutableListOf<SChapter>()
-
-        seasonList.groups?.forEach { group ->
-            group.chapters?.forEach { ch ->
-                if (ch.isUpcoming == true || ch.hasRestriction == true) {
-                    return@forEach
-                }
-                chapters.add(ch.toSChapter(mangaId, mangaSlug, dateFormat))
+                dto.toSManga()
+            } else {
+                manga
             }
         }
 
-        return chapters.sortedByDescending {
-            it.name.substringAfter("Capítulo ").toFloatOrNull() ?: 0f
+        val updatedChapters = async {
+            if (fetchChapters) {
+                val response = mangaUrl.postAction("getAllChapters", body)
+                val seasonList = response.extractNextJs<SeasonListDto> {
+                    it is JsonObject && "groups" in it
+                } ?: throw IOException("Chapters not found")
+
+                seasonList.groups.orEmpty()
+                    .flatMap { it.chapters.orEmpty() }
+                    .filter { it.isUpcoming != true && it.hasRestriction != true }
+                    .map { it.toSChapter(mangaId, mangaSlug) }
+                    .sortedByDescending { it.name.substringAfter("Capítulo ").toFloatOrNull() ?: 0f }
+            } else {
+                chapters
+            }
         }
+
+        SMangaUpdate(updatedManga.await(), updatedChapters.await())
     }
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val pathSegments = chapter.url.trim('/').split('/').filter { it.isNotEmpty() }
-        val mangaId = pathSegments[0]
-        val mangaSlug = pathSegments[1]
-        val chapterTitle = pathSegments[3]
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val segments = chapterUrl.toHttpUrl().pathSegments
+        val mangaId = segments[0]
+        val chapterTitle = segments[3]
 
-        val payload = "[\"$mangaId\",\"$chapterTitle\"]"
-        val requestBody = payload.toRequestBody("text/plain;charset=UTF-8".toMediaType())
+        val body = listOf(mangaId, chapterTitle)
+            .toJsonRequestBody()
 
-        val stateTree = """["",{"children":[["projectId","$mangaId","d"],{"children":[["linkId","$mangaSlug","d"],{"children":["capitulo",{"children":[["chapterId","$chapterTitle","d"],{"children":["__PAGE__",{},null,null]}]}]}]}]},null,null,true]"""
-
-        return POST(
-            baseUrl + chapter.url,
-            actionHeaders("60390ae612bb67d3d0614b47c7fa396fa4201aa323", baseUrl + chapter.url, stateTree),
-            requestBody,
-        )
+        return chapterUrl.postAction("getPages", body)
+            .extractNextJs<PagesDto> {
+                it is JsonObject && "pages" in it
+            }?.toPages() ?: throw IOException("Pages not found")
     }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val dto = response.body.string().extractNextJsRsc<PagesDto> {
-            it is JsonObject && "pages" in it
-        } ?: throw IOException("Pages not found")
-
-        return dto.toPages()
-    }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    // ============================== Filters ==============================
 
     // ============================= Utilities =============================
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = EMAIL_PREF
-            title = "Email"
-            summary = "Email utilizado para login no RF Dragon Scan"
-            dialogTitle = "Email"
-        }.also(screen::addPreference)
+    private val actionIds = ConcurrentHashMap(
+        mapOf(
+            "getOne" to "605b188667d9bcd4a1fe806764ae5e8861eff89915",
+            "getAllChapters" to "60a7496d813253cd0acc35e49c36ec1437f4f9f1eb",
+            "getPages" to "701b928d969fea96b2124f4f8453277895cb6fae3b",
+        ),
+    )
 
-        EditTextPreference(screen.context).apply {
-            key = PASSWORD_PREF
-            title = "Senha"
-            summary = "Senha utilizada para login no RF Dragon Scan"
-            dialogTitle = "Senha"
-        }.also(screen::addPreference)
+    private val actionIdsLock = Mutex()
+
+    private suspend fun String.postAction(actionName: String, body: RequestBody): Response {
+        val url = this
+
+        suspend fun send(actionId: String, ensureSuccess: Boolean) = client.post(
+            url,
+            headersBuilder()
+                .add("next-action", actionId)
+                .add("Accept", "text/x-component")
+                .add("Referer", url)
+                .build(),
+            body,
+            ensureSuccess = ensureSuccess,
+        )
+
+        val staleId = actionIds.getValue(actionName)
+        val response = send(staleId, ensureSuccess = false)
+        if (response.isSuccessful) return response
+
+        val code = response.code
+        response.close()
+        if (code != 404) throw IOException("HTTP error $code")
+
+        refreshActionIds(actionName, staleId)
+        return send(actionIds.getValue(actionName), ensureSuccess = true)
     }
 
-    private var actionIdCache: String? = null
+    private suspend fun refreshActionIds(actionName: String, staleId: String) {
+        actionIdsLock.withLock {
+            if (actionIds.getValue(actionName) != staleId) return // already refreshed
 
-    private fun getActionId(): String {
-        actionIdCache?.let { return it }
-
-        val html = network.client.newCall(GET("$baseUrl/login", headers)).execute().use { it.body.string() }
-
-        ACTION_ID_HTML_REGEX.find(html)?.let {
-            val id = it.groupValues[1]
-            actionIdCache = id
-            return id
+            actionIds.putAll(scrapeActionIds())
         }
+    }
 
-        val chunkUrls = CHUNK_URL_REGEX.findAll(html)
-            .map { it.groupValues[1] }
-            .toList()
-
-        for (url in chunkUrls) {
-            try {
-                network.client.newCall(GET(baseUrl + url, headers)).execute().use { res ->
-                    val js = res.body.string()
-                    if (js.contains("\"login\"")) {
-                        val idMatch = ACTION_ID_JS_REGEX.find(js)
-                        if (idMatch != null) {
-                            val id = idMatch.groupValues[1]
-                            actionIdCache = id
-                            return id
-                        }
-                    }
-                }
-            } catch (_: Exception) {
-                // Ignore and continue searching
+    private suspend fun scrapeActionIds(): Map<String, String> = coroutineScope {
+        val scripts = listOf(
+            "$baseUrl/00000000/dummy",
+            "$baseUrl/00000000/dummy/capitulo/1",
+        ).map { url ->
+            async {
+                client.get(url, ensureSuccess = false)
+                    .asJsoup()
+                    .select("script[src]")
+                    .map { it.absUrl("src") }
             }
-        }
+        }.awaitAll()
+            .flatten()
+            .filter { "/_next/static/" in it && ".js" in it }
+            .distinct()
 
-        return "600165150b15a3870c9e076c863daec8d24748e458"
-    }
-
-    private fun actionHeaders(actionId: String, referer: String, stateTree: String): Headers {
-        val encodedStateTree = java.net.URLEncoder.encode(stateTree, "UTF-8")
-        return headersBuilder()
-            .add("next-action", actionId)
-            .add("next-router-state-tree", encodedStateTree)
-            .add("Accept", "text/x-component")
-            .add("Origin", baseUrl)
-            .add("Referer", referer)
-            .build()
+        scripts.map { url ->
+            async {
+                client.get(url, ensureSuccess = false).use {
+                    ACTION_ID_REGEX.findAll(it.body.string()).map { m -> m.destructured }.toList()
+                }
+            }
+        }.awaitAll()
+            .flatten()
+            .associate { (id, name) -> name to id }
+            .filterKeys { actionIds.containsKey(it) }
     }
 
     private fun loginInterceptor(chain: Interceptor.Chain): Response {
@@ -284,112 +221,14 @@ abstract class RFDragonScan :
             response.close()
         }
 
-        if (request.url.pathSegments.lastOrNull() == "login") {
-            return chain.proceed(request)
-        }
-
-        synchronized(this) {
-            val currentCookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-            if (currentCookies.any { it.name == "access_token" && it.value.isNotEmpty() }) {
-                return chain.proceed(request)
-            }
-
-            val email = preferences.getString(EMAIL_PREF, "") ?: ""
-            val password = preferences.getString(PASSWORD_PREF, "") ?: ""
-
-            if (email.isBlank() || password.isBlank()) {
-                throw IOException("Configure seu email e senha nas configurações da extensão para acessar capítulos restritos.")
-            }
-
-            val actionId = getActionId()
-            val payload = "[\"$email\",\"$password\"]"
-            val loginBody = payload.toRequestBody("text/plain;charset=UTF-8".toMediaType())
-
-            val loginHeaders = headersBuilder()
-                .add("next-action", actionId)
-                .add(
-                    "next-router-state-tree",
-                    "%5B%22%22%2C%7B%22children%22%3A%5B%22login%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%2Ctrue%5D%7D%2Cnull%2Cnull%2Ctrue%5D",
-                )
-                .add("Accept", "text/x-component")
-                .add("Origin", baseUrl)
-                .add("Referer", "$baseUrl/login")
-                .build()
-
-            val loginReq = POST("$baseUrl/login", loginHeaders, loginBody)
-
-            val success = network.client.newCall(loginReq).execute().use { loginRes ->
-                if (!loginRes.isSuccessful) {
-                    throw IOException("Falha no login. Verifique suas credenciais.")
-                }
-                client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).any { it.name == "access_token" && it.value.isNotEmpty() }
-            }
-
-            if (!success) {
-                throw IOException("Falha no login. Token de acesso não recebido.")
-            }
-
-            return chain.proceed(request)
-        }
+        throw IOException("Faça login pelo WebView.")
     }
 
-    private fun migrationInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val firstSegment = request.url.pathSegments.firstOrNull()
+    private companion object {
+        val UUID_REGEX = Regex("^/[0-9a-fA-F\\-]{36}/.*")
 
-        if (firstSegment == "migrate" || firstSegment == "migrate-chapters") {
-            val oldPath = request.url.encodedPath
-                .removePrefix("/migrate-chapters")
-                .removePrefix("/migrate")
-            val slug = oldPath.trim('/').split('/').last { it.isNotEmpty() }
-
-            val searchUrl = "$baseUrl/projetos?term=$slug".toHttpUrl()
-            val searchReq = GET(searchUrl, apiHeaders)
-            val searchRes = chain.proceed(searchReq)
-
-            val newUrlPath = searchRes.use { res ->
-                val dto = res.body.string().extractNextJsRsc<ProjectsPageDto>()
-                val project = dto?.projects?.firstOrNull { it.link == slug || it.title.contains(slug, ignoreCase = true) }
-                    ?: throw IOException("Manga not found during migration")
-
-                "/${project.id}/${project.link}"
-            }
-
-            val pathSegments = newUrlPath.trim('/').split('/')
-            val mangaId = pathSegments[0]
-            val mangaSlug = pathSegments[1]
-
-            val actionId = if (firstSegment == "migrate") {
-                "60d532a2a6a7a0ff42de5f69dcdf2db5860a2f76b0"
-            } else {
-                "607bcd9f90d5db5edaa2cf1aff7a002b5b14ead30a"
-            }
-
-            val payload = "[\"$mangaId\",\"$mangaSlug\"]"
-            val requestBody = payload.toRequestBody("text/plain;charset=UTF-8".toMediaType())
-
-            val stateTree = """["",{"children":[["projectId","$mangaId","d"],{"children":[["linkId","$mangaSlug","d"],{"children":["__PAGE__",{},null,null]},null,null]}]},null,null,true]"""
-
-            val actionRequest = POST(
-                "$baseUrl$newUrlPath",
-                actionHeaders(actionId, "$baseUrl$newUrlPath", stateTree),
-                requestBody,
-            )
-
-            return chain.proceed(actionRequest)
-        }
-
-        return chain.proceed(request)
-    }
-
-    companion object {
-        private const val EMAIL_PREF = "pref_email"
-        private const val PASSWORD_PREF = "pref_password"
-
-        private val UUID_REGEX = Regex("^/[0-9a-fA-F\\-]{36}/.*")
-
-        private val ACTION_ID_HTML_REGEX = Regex("""name="\x24ACTION_ID_([a-f0-9]{40})"""")
-        private val CHUNK_URL_REGEX = Regex("""src="(/_next/static/chunks/[^"]+\.js)"""")
-        private val ACTION_ID_JS_REGEX = Regex("""createServerReference\("([a-f0-9]{40})",.*?,"login"\)""")
+        val ACTION_ID_REGEX = Regex(
+            """createServerReference\)?\s*\(\s*"([0-9a-fA-F]+)"[^)]*"([^"]+)"\s*\)""",
+        )
     }
 }

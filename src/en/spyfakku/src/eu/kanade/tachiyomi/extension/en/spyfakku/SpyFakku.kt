@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
 
 import android.annotation.SuppressLint
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,6 +16,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.array
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.int
 import keiyoushi.utils.long
 import keiyoushi.utils.parseAs
@@ -21,6 +25,7 @@ import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -38,7 +43,9 @@ import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class SpyFakku : KeiSource() {
+abstract class SpyFakku :
+    KeiSource(),
+    ConfigurableSource {
 
     private val baseImageUrl = "$TMP_CDN_URL/image"
 
@@ -105,6 +112,16 @@ abstract class SpyFakku : KeiSource() {
 
     // ============================== Search ===============================
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.count(String::isNotBlank) < 2) return null
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = url.encodedPath },
+            emptyList(),
+            true,
+            false,
+        ).manga
+    }
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseApiUrl/library".toHttpUrl().newBuilder().apply {
             val terms = mutableListOf(query.trim())
@@ -139,6 +156,8 @@ abstract class SpyFakku : KeiSource() {
 
     // ============================== Details ==============================
 
+    override val supportRelatedMangasBySearch = true
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -147,13 +166,15 @@ abstract class SpyFakku : KeiSource() {
     ): SMangaUpdate {
         val add = getShortHentai(manga)
 
+        val mangaUrl = manga.url.takeIf { it.contains("&") }
+            ?: manga.url + "?${add.pages}&hash=${add.hash}"
+
         val details = SManga.create().apply {
-            url = manga.url
-            title = manga.title
+            title = if (showFullTitle) add.fullTitle else add.title
             status = SManga.COMPLETED
             with(add) {
                 val groupedTags = tags?.groupBy { it.namespace }
-
+                url = mangaUrl
                 author = (groupedTags?.get("circle") ?: groupedTags?.get("artist"))?.joinToString { it.name }
                 artist = groupedTags?.get("artist")?.joinToString { it.name }
                 thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
@@ -195,7 +216,7 @@ abstract class SpyFakku : KeiSource() {
         val chapterList = listOf(
             SChapter.create().apply {
                 name = "Chapter"
-                url = manga.url
+                url = mangaUrl
                 date_upload = releasedAtFormat.tryParseDateTime(add.releasedAt?.take(19))
             },
         )
@@ -251,6 +272,21 @@ abstract class SpyFakku : KeiSource() {
 
     override fun getFilterList(data: JsonElement?) = getFilters()
 
+    // ============================ Preferences ============================
+
+    private val preferences = getPreferences()
+
+    private val showFullTitle
+        get() = preferences.getBoolean(PREF_FULL_TITLE, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_FULL_TITLE
+            title = "Display Full Title"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     // ============================= Utilities =============================
 
     private suspend fun getShortHentai(manga: SManga): ShortHentai {
@@ -281,6 +317,7 @@ abstract class SpyFakku : KeiSource() {
         val hentaiIndexes = data[1].parseAs<HentaiIndexes>()
 
         val hash = data[hentaiIndexes.hash].string
+        val title = data[hentaiIndexes.title].string
         val thumbnail = data[hentaiIndexes.thumbnail].int
         val description = data[hentaiIndexes.description].jsonPrimitive.contentOrNull
 
@@ -293,6 +330,7 @@ abstract class SpyFakku : KeiSource() {
 
         return ShortHentai(
             hash = hash,
+            title = title,
             thumbnail = thumbnail,
             description = description,
             releasedAt = releasedAt,
@@ -304,7 +342,7 @@ abstract class SpyFakku : KeiSource() {
     }
 
     private fun Hentai.toSManga() = SManga.create().apply {
-        title = this@toSManga.title
+        title = if (showFullTitle) fullTitle else this@toSManga.title
         url = "/g/$id?$pages&hash=$hash"
         author = tags?.filter { it.namespace == "circle" }?.joinToString { it.name }
         artist = tags?.filter { it.namespace == "artist" }?.joinToString { it.name }
@@ -326,6 +364,8 @@ abstract class SpyFakku : KeiSource() {
         private const val TMP_CDN_DOMAIN = "127.0.0.1"
         private const val TMP_CDN_URL = "http://$TMP_CDN_DOMAIN"
         private val ARCHIVE_REGEX = Regex("^/archive/(\\d+)/.*")
+
+        private const val PREF_FULL_TITLE = "display_full_title"
 
         private val dateReformat = DateTimeFormatter.ofPattern("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
             .withZone(ZoneId.systemDefault())

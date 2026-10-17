@@ -18,6 +18,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -42,6 +43,11 @@ abstract class HeanCms :
      * Whether the source supports login and gated (paid) chapters behind a bearer token.
      */
     protected open val enableLogin = false
+
+    /**
+     * Whether details look up the series' listing badge, which marks doujinshi and manga.
+     */
+    protected open val fetchBadge = false
 
     protected open val coverPath: String = ""
 
@@ -152,7 +158,7 @@ abstract class HeanCms :
     private fun parseSearchMangaList(response: Response): MangasPage {
         val result = response.parseAs<HeanCmsQuerySearchDto>()
         val mangaList = result.data.map {
-            it.toSManga(cdnUrl, coverPath, mangaSubDirectory)
+            it.toSManga(cdnUrl, coverPath, mangaSubDirectory, it.format())
         }
 
         return MangasPage(mangaList, result.meta?.hasNextPage() ?: false)
@@ -185,7 +191,6 @@ abstract class HeanCms :
         Status("On hiatus", "Hiatus"),
         Status("Dropped", "Dropped"),
         Status("Completed", "Completed"),
-        Status("Canceled", "Canceled"),
     )
 
     protected open fun getSortProperties(): List<SortProperty> = listOf(
@@ -221,21 +226,29 @@ abstract class HeanCms :
 
     // ============================== Details ==============================
 
-    private suspend fun fetchSeries(slug: String): HeanCmsSeriesDto {
+    private suspend fun fetchMangaDetails(slug: String, knownFormat: String?): SManga {
         val apiHeaders = headers.newBuilder().add("Accept", ACCEPT_JSON).build()
-        return client.get("$apiUrl/series/$slug", apiHeaders).parseAs()
+        val series = client.get("$apiUrl/series/$slug", apiHeaders).parseAs<HeanCmsSeriesDto>()
+
+        // The series endpoint has no badge; look it up in the listing once per entry
+        val format = knownFormat
+            ?: if (fetchBadge) {
+                val searchUrl = queryUrlBuilder(1, series.title, status = "All", order = "desc", orderBy = "total_views", tagIds = "[]")
+                client.get(searchUrl).parseAs<HeanCmsQuerySearchDto>().data
+                    .firstOrNull { it.id == series.id }
+                    ?.format()
+            } else {
+                null
+            }
+
+        return series.toSManga(cdnUrl, coverPath, mangaSubDirectory, format ?: series.format())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) {
-            throw Exception("Unsupported URL")
-        }
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.pathSegments.getOrNull(1) ?: return null
 
-        val slug = url.pathSegments.getOrNull(1)
-            ?: throw Exception("Unsupported URL")
-
-        return fetchSeries(slug)
-            .toSManga(cdnUrl, coverPath, mangaSubDirectory)
+        return fetchMangaDetails(slug, knownFormat = null)
             .apply { initialized = true }
     }
 
@@ -258,7 +271,7 @@ abstract class HeanCms :
         val seriesId = manga.url.substringAfterLast("#")
 
         val mangaDeferred = async {
-            if (fetchDetails) fetchSeries(slug).toSManga(cdnUrl, coverPath, mangaSubDirectory) else manga
+            if (fetchDetails) fetchMangaDetails(slug, manga.memo[FORMAT_MEMO]?.stringOrNull) else manga
         }
         val chaptersDeferred = async {
             if (fetchChapters) fetchChapters(seriesId, slug) else chapters

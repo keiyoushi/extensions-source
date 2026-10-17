@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Kawii Manga"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -16,6 +16,6 @@ keiyoushi {
     }
 
     deeplink {
-        path("/.*/..*")
+        path("/manga/..*")
     }
 }

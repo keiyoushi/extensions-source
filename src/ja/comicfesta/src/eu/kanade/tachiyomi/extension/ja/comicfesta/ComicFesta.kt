@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ja.comicfesta
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.multisrc.clipstudioreader.ClipStudioReader
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,8 +10,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.clipstudioreader.ClipStudioReaderInterceptor
+import keiyoushi.lib.clipstudioreader.fetchPages
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
@@ -23,7 +25,7 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class ComicFesta :
-    ClipStudioReader(),
+    KeiSource(),
     ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
@@ -31,8 +33,10 @@ abstract class ComicFesta :
         .add("rsc", "1")
         .build()
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addClipStudioInterceptors()
-        .addCookie(listOf("checked_age" to "1", "sp_display" to "1", "cf_checked_age_guest" to "1", "cf_checked_age" to "1"))
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ClipStudioReaderInterceptor())
+        addCookie(listOf("checked_age" to "1", "sp_display" to "1", "cf_checked_age_guest" to "1", "cf_checked_age" to "1"))
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/sales_rankings/monthly_general".toHttpUrl().newBuilder()
@@ -120,7 +124,7 @@ abstract class ComicFesta :
             response.close()
             throw Exception("Log in via WebView and purchase this product to read.")
         }
-        return pageListParse(response)
+        return client.fetchPages(response.asJsoup())
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

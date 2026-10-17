@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,13 +29,9 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.Buffer
-import okio.buffer
 import java.util.UUID
 
 @Source
@@ -77,7 +74,7 @@ abstract class MangaPlus :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::sessionTokenIntercept)
-        addInterceptor(::imageIntercept)
+        addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
         rateLimit(1) { it.host == apiUrlHost }
         rateLimit(2) { it.host == baseUrlHost }
     }
@@ -300,44 +297,6 @@ abstract class MangaPlus :
     private fun MangaPlusResponse.successOrThrow(
         errorMessage: (Popup?) -> String = { it?.body?.takeIf(String::isNotEmpty) ?: intl["unknown_error"] },
     ): SuccessResult = success ?: throw Exception(errorMessage(error?.langPopup(internalLangCode)))
-
-    private fun imageIntercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-        val encryptionKey = request.url.fragment
-
-        if (encryptionKey.isNullOrEmpty()) {
-            return response
-        }
-
-        val keyStream = encryptionKey.decodeHex()
-        val contentType = (response.headers["Content-Type"] ?: "image/jpeg").toMediaTypeOrNull()
-        val body = response.body.source()
-
-        val decrypted = object : okio.Source by body {
-            private var index = 0
-            private val buffer = Buffer()
-
-            override fun read(sink: Buffer, byteCount: Long): Long {
-                val read = body.read(buffer, byteCount)
-                if (read == -1L) return -1L
-
-                val bytes = buffer.readByteArray()
-                for (i in bytes.indices) {
-                    bytes[i] = (bytes[i].toInt() xor (keyStream[index++ % keyStream.size].toInt() and 0xFF)).toByte()
-                }
-                sink.write(bytes)
-                return read
-            }
-        }
-
-        return response.newBuilder()
-            .body(
-                decrypted.buffer()
-                    .asResponseBody(contentType, response.body.contentLength()),
-            )
-            .build()
-    }
 
     // ============================= Preferences ============================
 

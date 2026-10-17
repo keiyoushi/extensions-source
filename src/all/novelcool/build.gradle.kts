@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "NovelCool"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -24,5 +24,9 @@ keiyoushi {
             lang = langCode
             baseUrl = "https://$sub.novelcool.com"
         }
+    }
+
+    deeplink {
+        path("/novel/..*")
     }
 }

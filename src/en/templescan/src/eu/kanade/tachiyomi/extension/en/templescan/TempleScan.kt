@@ -10,11 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -30,23 +27,25 @@ abstract class TempleScan :
     KeiSource(),
     ConfigurableSource {
 
-    private val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy {
+        edit().remove("pref_rsc_keys").remove("pref_rsc_key_table").apply()
+    }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1)
     }
 
+    // Headers of an image load in Chrome for Android
     override fun Headers.Builder.configureHeaders() = apply {
-        // Cloudflare rejects the app's default User-Agent (both for pages and for the image CDN),
-        // so a full browser fingerprint is required.
-        set("User-Agent", USER_AGENT)
-        set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-        set("Accept-Language", "en-US,en;q=0.9")
-        set("Sec-Fetch-Dest", "document")
-        set("Sec-Fetch-Mode", "navigate")
-        set("Sec-Fetch-Site", "none")
-        set("Upgrade-Insecure-Requests", "1")
+        removeAll("Origin")
+        set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        set("Sec-Fetch-Site", "same-site")
+        set("Sec-Fetch-Mode", "no-cors")
+        set("Sec-Fetch-Dest", "image")
+        set("Priority", "i")
     }
+
+    private val pages = SitePages(baseUrl) { headers["User-Agent"]!! }
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
 
@@ -92,7 +91,8 @@ abstract class TempleScan :
             return null
         }
 
-        val mangaUrl = "/comic/${url.pathSegments[1]}"
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        val mangaUrl = "/comic/$slug"
         val manga = SManga.create().apply {
             this.url = mangaUrl
         }
@@ -116,17 +116,21 @@ abstract class TempleScan :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringAfterLast('/')
-        val document = client.get("$baseUrl/comic/$slug").asJsoup()
+        val page = pages.get("$baseUrl/comic/$slug", "chapters")
+        val details = if (fetchDetails) parseDetails(page.document(baseUrl), slug) else manga
+        val chapterList = if (fetchChapters) parseChapters(page.data!!.parseAs(), slug) else chapters
+        return SMangaUpdate(details, chapterList)
+    }
 
+    private suspend fun parseDetails(document: Document, slug: String): SManga {
         val series = document.jsonLd<ComicSeriesLd> { it.isSeries }
-        val seriesData = document.mappedPayload(SERIES_FIELDS)?.parseAs<SeriesData>()
         // The status only lives in the browse catalog; the detail page renders it without a stable hook.
         val catalogEntry = fetchCatalog().firstOrNull { it.slug == slug }
 
         val genres = series?.genre.orEmpty()
         val adult = genres.any { it.equals("+18", ignoreCase = true) }
 
-        val manga = SManga.create().apply {
+        return SManga.create().apply {
             url = "/comic/$slug"
             title = series?.name ?: catalogEntry?.title ?: slug
             thumbnail_url = series?.image ?: catalogEntry?.thumbnail
@@ -150,33 +154,32 @@ abstract class TempleScan :
                 }
             }
         }
+    }
 
+    private fun parseChapters(chapters: List<SiteChapter>, slug: String): List<SChapter> {
         val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED_CHAPTERS, true)
-        val chapterList = seriesData?.chapters.orEmpty()
-            .filter { !hideLocked || it.price <= 0 }
+        return chapters
+            .filter { !hideLocked || !it.premium }
             .map { chapter ->
                 SChapter.create().apply {
                     url = "/comic/$slug/${chapter.slug}"
                     name = buildString {
-                        if (chapter.price > 0) append("\uD83D\uDD12 ")
+                        if (chapter.premium) append("\uD83D\uDD12 ")
                         append(chapter.name)
                         if (!chapter.title.isNullOrBlank()) {
                             append(": ", chapter.title)
                         }
                     }
-                    date_upload = chapter.created
+                    date_upload = chapter.createdAt
                 }
             }
-
-        return SMangaUpdate(manga, chapterList)
     }
 
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(baseUrl + chapter.url).asJsoup().mappedPayload(listOf("images"))?.parseAs<PagesList>()
-            ?: return emptyList()
-        return data.images.mapIndexed { idx, url ->
+        val images = pages.get(baseUrl + chapter.url, "pages").data?.parseAs<List<String>>().orEmpty()
+        return images.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
         }
     }
@@ -194,49 +197,7 @@ abstract class TempleScan :
 
     // ============================= Utilities ==============================
 
-    private suspend fun fetchCatalog(): List<BrowseSeries> = client.get("$baseUrl/comics")
-        .asJsoup()
-        .mappedPayload(CATALOG_FIELDS, isList = true)
-        ?.parseAs<List<BrowseSeries>>()
-        .orEmpty()
-
-    /**
-     * Reads the RSC payload node holding [fields] and decodes it with the site's current field keys.
-     *
-     * The keys come from the table cached by [refreshRscKeys]. If they no longer match this payload
-     * the site has renamed its keys, so the table is re-read from the client bundle and the payload
-     * is decoded once more.
-     */
-    private suspend fun Document.mappedPayload(fields: List<String>, isList: Boolean = false): JsonElement? {
-        val keys = cachedRscKeys() ?: refreshRscKeys(this)
-        extractNextJs<JsonElement>(RscKeys.payloadPredicate(fields, keys, isList))
-            ?.let { return RscKeys.remap(it, keys) }
-
-        val refreshed = refreshRscKeys(this)
-        return extractNextJs<JsonElement>(RscKeys.payloadPredicate(fields, refreshed, isList))
-            ?.let { RscKeys.remap(it, refreshed) }
-    }
-
-    private fun cachedRscKeys(): Map<String, String>? = preferences.getString(PREF_RSC_KEYS, null)
-        ?.let(RscKeys::decode)
-        ?.takeIf { it.isNotEmpty() }
-
-    /** Re-reads the field rename table from the site's client bundle and caches it for later runs. */
-    private suspend fun refreshRscKeys(document: Document): Map<String, String> {
-        val chunks = document.select("script[src]")
-            .mapNotNull { element -> element.absUrl("src").takeIf { CHUNK_PATH in it } }
-            .distinct()
-
-        for (chunk in chunks) {
-            val source = client.get(chunk, ensureSuccess = false).use { it.body.string() }
-            val keys = RscKeys.findTable(source) ?: continue
-
-            preferences.edit().putString(PREF_RSC_KEYS, RscKeys.encode(keys)).apply()
-            return keys
-        }
-
-        error("Could not determine the site's RSC field-key table")
-    }
+    private suspend fun fetchCatalog(): List<BrowseSeries> = pages.get("$baseUrl/comics", "catalog").data!!.parseAs()
 
     private inline fun <reified T> Document.jsonLd(predicate: (T) -> Boolean): T? = select("script[type=application/ld+json]")
         .mapNotNull { runCatching { it.data().parseAs<T>() }.getOrNull() }
@@ -248,18 +209,6 @@ abstract class TempleScan :
     }?.takeIf { it.isNotBlank() }
 
     companion object {
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-
-        private const val CHUNK_PATH = "/_next/static/chunks/"
-
-        /** Identifies the browse catalog: the two fields every series entry always carries. */
-        private val CATALOG_FIELDS = listOf("title", "series_slug")
-
-        /** Identifies a series' chapter payload. Both are renamed by the site, unlike `seriesData`. */
-        private val SERIES_FIELDS = listOf("series_slug", "Season")
-
         private const val PREF_HIDE_LOCKED_CHAPTERS = "pref_hide_locked_chapters"
-        private const val PREF_RSC_KEYS = "pref_rsc_keys"
     }
 }
