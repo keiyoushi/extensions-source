@@ -19,6 +19,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.NativeWebViewApi
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
@@ -46,6 +47,7 @@ import org.jsoup.nodes.Document
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -96,15 +98,15 @@ abstract class Comix :
 
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    // Comix blocks clients that page chapter lists faster than this
-    private class RequestPacer(private val intervalMs: Long) {
+    // Comix blocks chapter-list paging that is too fast or evenly spaced
+    private class RequestPacer(private val minGapMs: Long, private val maxGapMs: Long) {
         private var nextNanos = 0L
 
         fun waitForSlot() {
             val waitNanos = synchronized(this) {
                 val now = System.nanoTime()
                 val start = maxOf(now, nextNanos)
-                nextNanos = start + intervalMs * 1_000_000
+                nextNanos = start + Random.nextLong(minGapMs, maxGapMs) * 1_000_000
                 start - now
             }
             if (waitNanos > 0) Thread.sleep(waitNanos / 1_000_000)
@@ -548,10 +550,10 @@ abstract class Comix :
         knownIds: List<Int>,
     ): ChapterList {
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
-        val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, _, swipeName ->
+        val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, _, touchName ->
             "(${asset("chapter_list.js")})(${asset("site_api.js")}, " +
                 "${knownIds.joinToString(",", "[", "]")}, ${JSONObject.quote(mangaId)}, ${JSONObject.quote("/title/$mangaId-")}, " +
-                "$MAX_CHAPTER_PAGES, window.$swipeName, window.$passPayloadName);"
+                "$MAX_CHAPTER_PAGES, window.$touchName, window.$passPayloadName);"
         }
         return payload.parseAs<ChapterList>()
     }
@@ -658,17 +660,18 @@ abstract class Comix :
 
     override fun getFilterList(data: JsonElement?) = sourceFilters().getFilterList()
 
+    @OptIn(NativeWebViewApi::class)
     private suspend fun runInWebView(
         document: Document,
         isDataRequest: ((HttpUrl) -> Boolean)? = null,
         buildScript: ((passPayloadName: String) -> String)? = null,
-        pageScript: (passPayloadName: String, rejectName: String, swipeName: String) -> String,
+        pageScript: (passPayloadName: String, rejectName: String, touchName: String) -> String,
     ): String {
         val waitSeconds = if (isDataRequest != null) DATA_REQUEST_WAIT_SECONDS else WEBVIEW_TIMEOUT_SECONDS
         val timeoutDeadline = AtomicLong(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
         val dataRequests = AtomicInteger()
         val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) { randomName() }
-        val (swipeBridgeName, swipeName) = List(2) { randomName() }
+        val (touchBridgeName, touchName) = List(2) { randomName() }
         return runWebView(timeout = Duration.INFINITE) {
             userAgent = headers["User-Agent"].orEmpty()
             blockImages = true
@@ -706,11 +709,16 @@ abstract class Comix :
 
             jsBridge(bridgeName) { resolve(it) }
             jsBridge(errorBridgeName) { reject(Exception(it)) }
-            webMessageBridge(swipeBridgeName, setOf(document.location().toHttpUrl().run { "$scheme://$host" })) { message ->
+            webMessageBridge(touchBridgeName, setOf(document.location().toHttpUrl().run { "$scheme://$host" })) { message ->
                 val points = message.split(',').mapNotNull { it.toFloatOrNull() }
-                if (points.size != 4) throw Exception("Bad swipe from the page: $message")
-                swipe(points[0], points[1], points[2], points[3])
+                when (points.size) {
+                    2 -> tap(points[0], points[1])
+                    4 -> swipe(points[0], points[1], points[2], points[3])
+                    else -> throw Exception("Bad touch from the page: $message")
+                }
             }
+            // Refuse the site's first-tap ad window
+            withNativeWebView { it.settings.setSupportMultipleWindows(true) }
 
             val captureScript = buildScript?.invoke(passPayloadName)
             if (captureScript != null) {
@@ -733,11 +741,12 @@ abstract class Comix :
             val bootstrapScript = """
                 window.$passPayloadName = payload => window.$bridgeName.post(payload);
                 window.$rejectName = message => window.$errorBridgeName.post(message);
-                window.$swipeName = points => window.$swipeBridgeName.postMessage(points.join(","));
-                ${pageScript(passPayloadName, rejectName, swipeName)}
+                window.$touchName = points => window.$touchBridgeName.postMessage(points.join(","));
+                ${pageScript(passPayloadName, rejectName, touchName)}
             """.trimIndent()
+            // After the site's own head scripts
             val html = document.clone().apply {
-                head().prependElement("script").append(bootstrapScript)
+                head().appendElement("script").append(bootstrapScript)
             }.outerHtml()
             loadData(document.location(), html)
         }
@@ -945,7 +954,7 @@ abstract class Comix :
         private const val DATA_REQUEST_WAIT_SECONDS = 30L
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val MAX_CHAPTER_PAGES = 1000
-        private val chapterListPacer = RequestPacer(intervalMs = 2500)
+        private val chapterListPacer = RequestPacer(minGapMs = 2500, maxGapMs = 5000)
         private const val OFFICIAL_GROUP_ID = 10702
         private const val TAG_ID_CACHE_SIZE = 50
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
