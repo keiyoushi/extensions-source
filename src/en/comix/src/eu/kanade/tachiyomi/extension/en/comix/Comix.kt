@@ -43,6 +43,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
 import org.json.JSONObject
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
@@ -68,7 +69,8 @@ abstract class Comix :
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<String>>?) = size > TAG_ID_CACHE_SIZE
     }
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(Descrambler.interceptor)
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::handleBlockedDocument)
+        .addInterceptor(Descrambler.interceptor)
         .addInterceptor(::altHostFallback)
         .addInterceptor { chain ->
             val request = chain.request()
@@ -95,6 +97,60 @@ abstract class Comix :
         }
         .rateLimit(2) { it.host == baseUrlHost }
         .rateLimit(5)
+
+    // A single primary-domain attempt is only appropriate for the explicit warning on
+    // the public .ws mirror. Never replay API calls, image requests, or arbitrary hosts.
+    private fun handleBlockedDocument(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val host = request.url.host
+        val isDocument = request.method == "GET" &&
+            host in setOf("comix.ws", "www.comix.ws", "comix.to", "www.comix.to") &&
+            (request.url.encodedPath == "/" || request.url.encodedPath == "/browse" ||
+                request.url.encodedPath.startsWith("/title/"))
+        if (!isDocument) return chain.proceed(request)
+
+        var response = chain.proceed(request)
+        if (!response.isThirdPartyBlockPage()) return response
+
+        val responseHost = response.request.url.host
+        if (responseHost == "comix.ws" || responseHost == "www.comix.ws") {
+            val primaryUrl = response.request.url.newBuilder()
+                .scheme("https")
+                .host("comix.to")
+                .port(443)
+                .build()
+            // Do not forward manually supplied credentials across origins. OkHttp's
+            // cookie jar can supply cookies scoped to the new destination normally.
+            val primaryRequest = request.newBuilder()
+                .url(primaryUrl)
+                .removeHeader("Cookie")
+                .removeHeader("Authorization")
+                .removeHeader("Origin")
+                .removeHeader("Referer")
+                .build()
+            response.close()
+            response = chain.proceed(primaryRequest)
+            if (!response.isThirdPartyBlockPage()) return response
+        }
+
+        response.close()
+        throw IOException(
+            "Comix returned its third-party-app restriction page. " +
+                "Use the website in a browser or wait for an extension update. " +
+                "Your library and read progress have not been changed.",
+        )
+    }
+
+    private fun Response.isThirdPartyBlockPage(): Boolean {
+        val type = body?.contentType()
+        if (type != null && type.subtype != "html" && type.subtype != "xhtml+xml") return false
+        // Peeking preserves the response body for the normal parser. Restrict matching
+        // to headings/title so a manga description mentioning the warning cannot trigger it.
+        val headings = Jsoup.parse(peekBody(256L * 1024).string())
+            .select("title, h1, h2, h3, [role=heading]")
+            .text()
+        return THIRD_PARTY_BLOCK_HEADING.containsMatchIn(headings)
+    }
 
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
@@ -241,11 +297,12 @@ abstract class Comix :
 
                         if (window[payloadKey]) return window[payloadKey];
 
-                        try {
-                            const raw = document.querySelector('script#initial-data')?.textContent;
-                            const queries = raw && JSON.parse(raw).queries;
-                            if (queries) Object.values(queries).some(capture);
-                        } catch (e) {}
+                        for (const script of document.querySelectorAll('script')) {
+                            try {
+                                const queries = JSON.parse(script.textContent || '').queries;
+                                if (queries && Object.values(queries).some(capture)) break;
+                            } catch (e) {}
+                        }
 
                         if (window[payloadKey]) return window[payloadKey];
                         if (window.__comixBrowseCaptureInstalled) return null;
@@ -332,10 +389,13 @@ abstract class Comix :
     }
 
     private fun Document.extractInitialQueries(): JsonObject {
-        val initialData = selectFirst("script#initial-data")?.data()
-            ?: throw Exception("Could not find initial data in page")
-        return initialData.parseAs<JsonObject>()["queries"] as? JsonObject
-            ?: throw Exception("Could not find queries in initial data")
+        // Analytics, verification, or module scripts may precede the JSON payload.
+        return select("script").asSequence().mapNotNull { script ->
+            runCatching {
+                script.data().parseAs<JsonObject>()["queries"] as? JsonObject
+            }.getOrNull()
+        }.firstOrNull()
+            ?: throw IOException("Comix page contained no recognised initial queries")
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -960,6 +1020,10 @@ abstract class Comix :
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
         private const val ALT_HOSTS_FRAGMENT = "alt="
+        private val THIRD_PARTY_BLOCK_HEADING = Regex(
+            "third[\\s\\u2010-\\u2015-]*party\\s+apps?\\s+are\\s+not\\s+supported",
+            RegexOption.IGNORE_CASE,
+        )
 
         // Site requests in the WebView that the extension has no use for: error reports, comments, upload images
         private val UNUSED_SITE_PATHS = listOf("/api/v1/client-errors", "/api/v1/threads/", "/assets/uploads/")
