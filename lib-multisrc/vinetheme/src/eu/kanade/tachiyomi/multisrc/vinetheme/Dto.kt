@@ -219,7 +219,7 @@ class ChapterDto(
         if (isLocked) {
             name = "\uD83D\uDD12 $name"
         } else if (coinPrice != 0) {
-            "\uD83D\uDD13 $name"
+            name = "\uD83D\uDD13 $name"
         }
         date_upload = Instant.tryParse(publishedAt)
         chapter_number = number.toFloat()
