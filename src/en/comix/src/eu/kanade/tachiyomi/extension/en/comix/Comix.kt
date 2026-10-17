@@ -709,7 +709,8 @@ abstract class Comix :
 
             jsBridge(bridgeName) { resolve(it) }
             jsBridge(errorBridgeName) { reject(Exception(it)) }
-            webMessageBridge(touchBridgeName, setOf(document.location().toHttpUrl().run { "$scheme://$host" })) { message ->
+            val siteOrigin = document.location().toHttpUrl().run { "$scheme://$host" }
+            webMessageBridge(touchBridgeName, setOf(siteOrigin)) { message ->
                 val points = message.split(',').mapNotNull { it.toFloatOrNull() }
                 when (points.size) {
                     2 -> tap(points[0], points[1])
@@ -738,17 +739,22 @@ abstract class Comix :
                 }
             }
 
+            // Runs before the site's own scripts and leaves no script element behind; the site's
+            // current build flags foreign inline head scripts. The guards keep it to the page we
+            // served, not the site's challenge iframe or later navigations of the same window.
+            val startFlagName = "window.${randomName()}"
             val bootstrapScript = """
+                (() => {
+                if (window.top !== window || $startFlagName) return;
+                $startFlagName = true;
                 window.$passPayloadName = payload => window.$bridgeName.post(payload);
                 window.$rejectName = message => window.$errorBridgeName.post(message);
                 window.$touchName = points => window.$touchBridgeName.postMessage(points.join(","));
                 ${pageScript(passPayloadName, rejectName, touchName)}
+                })();
             """.trimIndent()
-            // After the site's own head scripts
-            val html = document.clone().apply {
-                head().appendElement("script").append(bootstrapScript)
-            }.outerHtml()
-            loadData(document.location(), html)
+            injectAtDocumentStart(bootstrapScript, setOf(siteOrigin))
+            loadData(document.location(), document.outerHtml())
         }
     }
 
