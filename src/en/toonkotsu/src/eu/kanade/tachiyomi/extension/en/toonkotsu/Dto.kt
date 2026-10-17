@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.toonkotsu
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
+import kotlin.math.roundToInt
 
 @Serializable
 class BrowseDto(
@@ -21,13 +22,22 @@ class SeriesDto(
     private val authors: List<String> = emptyList(),
     private val description: String? = null,
     private val alt: List<String> = emptyList(),
+    private val externalIds: ExternalIdsDto? = null,
+    private val mangadex: String? = null,
+    private val score: Int? = null,
+    private val year: Int? = null,
+    private val magazines: List<MagazineDto> = emptyList(),
+    private val muStatus: String? = null,
+    private val adaptation: AdaptationDto? = null,
+    private val editions: List<EditionDto> = emptyList(),
+    private val spoilerTags: List<String> = emptyList(),
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(baseUrl: String, showSpoilerTags: Boolean) = SManga.create().apply {
         url = "/title/$hid"
         title = this@SeriesDto.title
         thumbnail_url = cover?.let { baseUrl + it }
         author = authors.joinToString().ifEmpty { null }
-        genre = (listOfNotNull(type) + tags).joinToString().ifEmpty { null }
+        genre = (listOfNotNull(type) + if (showSpoilerTags) tags else tags - spoilerTags.toSet()).joinToString().ifEmpty { null }
         status = when (this@SeriesDto.status) {
             "Ongoing" -> SManga.ONGOING
             "Complete" -> SManga.COMPLETED
@@ -35,16 +45,55 @@ class SeriesDto(
             "Canceled" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        description = buildString {
-            this@SeriesDto.description?.let { append(it) }
-            if (alt.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("Alternative titles:\n")
-                alt.joinTo(this, "\n") { "- $it" }
-            }
-        }.ifEmpty { null }
+        val info = listOfNotNull(
+            score?.let { (it / 20.0).roundToInt().let { stars -> "★".repeat(stars) + "☆".repeat(5 - stars) } + " $it" },
+            year?.toString(),
+            // MangaUpdates' status, without its per-season breakdown
+            muStatus?.let { it.take(it.indexOf(')') + 1).ifEmpty { it } },
+            // Adaptations with `via` belong to a related series
+            adaptation?.takeIf { it.via == null }?.let {
+                "[Anime](https://anilist.co/anime/${it.id}) (${listOfNotNull(it.format?.replace('_', ' '), it.year).joinToString()})"
+            },
+        )
+        val links = listOfNotNull(
+            externalIds?.anilist?.let { "[AniList](https://anilist.co/manga/$it)" },
+            externalIds?.myanimelist?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
+            externalIds?.mangaupdates?.let { "[MangaUpdates](https://www.mangaupdates.com/series/$it)" },
+            externalIds?.mangabaka?.let { "[MangaBaka](https://mangabaka.org/$it)" },
+            mangadex?.let { "[MangaDex](https://mangadex.org/title/$it)" },
+        )
+        val extra = listOfNotNull(
+            magazines.joinToString { it.name }.ifEmpty { null }?.let { "**Magazines:** $it" },
+            alt.joinToString(" · ").ifEmpty { null }?.let { "**Alt titles:** $it" },
+            editions.joinToString(" · ") { it.toLink(baseUrl) }.ifEmpty { null }?.let { "**Editions:** $it" },
+            links.joinToString(" · ").ifEmpty { null }?.let { "**Links:** $it" },
+        )
+        description = listOfNotNull(
+            info.joinToString(" · ").ifEmpty { null },
+            this@SeriesDto.description,
+            extra.joinToString("\n").ifEmpty { null },
+        ).joinToString("\n\n").ifEmpty { null }
     }
 }
+
+@Serializable
+class MagazineDto(val name: String)
+
+@Serializable
+class AdaptationDto(val id: Long, val format: String? = null, val year: Int? = null, val via: Long? = null)
+
+@Serializable
+class EditionDto(private val hid: String, private val title: String) {
+    fun toLink(baseUrl: String) = "[${title.replace("[", "\\[").replace("]", "\\]")}]($baseUrl/title/$hid)"
+}
+
+@Serializable
+class ExternalIdsDto(
+    val anilist: String? = null,
+    val myanimelist: String? = null,
+    val mangaupdates: String? = null,
+    val mangabaka: String? = null,
+)
 
 @Serializable
 class SeriesResponse(
