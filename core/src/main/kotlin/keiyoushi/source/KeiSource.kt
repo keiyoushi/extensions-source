@@ -318,7 +318,7 @@ abstract class KeiSource : HttpSource() {
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    private fun triggerBackgroundFilterFetch() {
+    protected fun triggerBackgroundFilterFetch() {
         if (filterFetchAttemptCount.get() >= maxFilterFetchAttempts) return
         if (!filterFetchInFlight.compareAndSet(false, true)) return
 
