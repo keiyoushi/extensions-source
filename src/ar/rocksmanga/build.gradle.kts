@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Rocks Manga"
-    versionCode = 4
+    versionCode = 59
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
