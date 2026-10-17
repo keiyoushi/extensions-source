@@ -219,15 +219,14 @@ abstract class MangaCrab : KeiSource() {
             ?.content
             ?: throw Exception("No se pudo obtener la información del capítulo")
 
-        val chapterIndex = chapter.memo["chapterIndex"]
-            ?.jsonPrimitive
-            ?.content
-            ?: throw Exception("No se pudo obtener la información del capítulo")
+        val url = "$baseUrl/api/mv/mangas/$mangaId/chapter"
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("chapter_slug", chapter.url.substringAfterLast('/'))
+            .build()
 
         val chapterDto = client
-            .get(
-                "$baseUrl/api/mv/mangas/$mangaId/chapter?cap_index=$chapterIndex",
-            )
+            .get(url)
             .parseAs<MangaCrabChapterDto>()
 
         if (chapterDto.is_locked || chapterDto.is_vip_chapter || !chapterDto.can_download) {
@@ -303,7 +302,6 @@ abstract class MangaCrab : KeiSource() {
         memo = JsonObject(
             mapOf(
                 "mangaId" to JsonPrimitive(mangaId),
-                "chapterIndex" to JsonPrimitive(index),
             ),
         )
         date_upload = Instant
