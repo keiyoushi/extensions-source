@@ -15,11 +15,24 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import java.io.IOException
 
 @Source
 abstract class ManhwaWeb : KeiSource() {
 
     private val apiUrl = "https://api.manhwaweb.com"
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
+        val request = chain.request()
+        val imageRequest = when (request.url.host) {
+            "img1mw.xyz", "img2mw.xyz" -> request.newBuilder()
+                .header("Referer", "$baseUrl/")
+                .build()
+            else -> request
+        }
+        chain.proceed(imageRequest)
+    }
 
     override fun Headers.Builder.configureHeaders() = add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
 
@@ -123,11 +136,25 @@ abstract class ManhwaWeb : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.removeSuffix("/").substringAfterLast("/")
 
-        val response = client.get("$apiUrl/chapters/see/$slug")
-
-        val result = response.parseAs<PayloadPageDto>()
+        val result = getPageData(slug)
         return result.data.images.filter { it.startsWith("http") }
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
+    }
+
+    private suspend fun getPageData(slug: String): PayloadPageDto {
+        client.get("$apiUrl/chapters/see/$slug", ensureSuccess = false).use { response ->
+            if (response.isSuccessful) return response.parseAs<PayloadPageDto>()
+            if (response.code != 404) throw IOException("HTTP error ${response.code}")
+        }
+
+        // Saved links without an upload version can outlive the original chapter endpoint.
+        val number = slug.substringAfterLast('-').toFloatOrNull() ?: throw IOException("HTTP error 404")
+        val comic = getDetailsBySlug(slug.substringBeforeLast('-'))
+        val version = comic.chapters.firstOrNull { it.number == number }?.espUrl
+            ?.substringAfterLast('/')
+            ?.takeIf { it != slug }
+            ?: throw IOException("HTTP error 404")
+        return client.get("$apiUrl/chapters/see/$version").parseAs<PayloadPageDto>()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(

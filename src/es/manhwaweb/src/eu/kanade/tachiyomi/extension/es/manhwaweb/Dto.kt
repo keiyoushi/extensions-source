@@ -3,6 +3,10 @@ package eu.kanade.tachiyomi.extension.es.manhwaweb
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
+
+// Invalidate cover files cached before the CDN Referer fix without changing the HTTP URL.
+private fun String.coverUrl() = toHttpUrl().newBuilder().fragment("mw-cover-referer-v1").build().toString()
 
 @Serializable
 class PayloadPopularDto(
@@ -24,7 +28,7 @@ class PopularComicDto(
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
-        thumbnail_url = thumbnail
+        thumbnail_url = thumbnail.coverUrl()
         url = slug.removePrefix("/").replace("manga/", "manhwa/")
     }
 }
@@ -50,7 +54,7 @@ class LatestComicDto(
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
-        thumbnail_url = thumbnail
+        thumbnail_url = thumbnail.coverUrl()
         url = "manhwa/$slug"
     }
 }
@@ -69,7 +73,7 @@ class SearchComicDto(
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
-        thumbnail_url = thumbnail
+        thumbnail_url = thumbnail.coverUrl()
         url = "manhwa/$slug"
     }
 }
@@ -91,7 +95,7 @@ class ComicDetailsDto(
     fun toSManga() = SManga.create().apply {
         url = "manhwa/$slug"
         title = this@ComicDetailsDto.title
-        thumbnail_url = thumbnail
+        thumbnail_url = thumbnail.coverUrl()
         description = this@ComicDetailsDto.description
         if (!alternativeName.isNullOrBlank()) {
             if (!description.isNullOrBlank()) description += "\n\n"
@@ -124,7 +128,7 @@ class ChapterDto(
     private val create: Long?,
     private val versions: List<ChapterVersionDto>? = null,
 ) {
-    val espUrl get() = link ?: versions?.firstOrNull()?.link
+    val espUrl get() = versions?.firstOrNull()?.link ?: link
     val createdAt get() = create ?: versions?.firstOrNull()?.create
 }
 
