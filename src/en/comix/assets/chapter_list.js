@@ -115,34 +115,55 @@
         throw new Error("Couldn't tap the chapter list");
     };
 
+    const readPage = async (chapterPage, page) => {
+        await tapSection();
+        let result;
+        try {
+            result = await chapterPage(mangaId, { page, limit: 20, order: { created_at: "desc" } });
+        } catch (e) {
+            const status = e && e.response && e.response.status;
+            throw new Error(status === 502
+                ? `Comix blocked chapter page ${page} (HTTP 502). Try again later, or change the user agent in Advanced settings`
+                : `Chapter page ${page} failed: ${status ? `HTTP ${status}` : e && e.message || e}`);
+        }
+        const items = result && result.items;
+        const meta = result && result.meta;
+        if (!Array.isArray(items) || !items.every(isChapter) || !meta ||
+            typeof meta.lastPage !== "number" || typeof meta.total !== "number") {
+            throw new Error(`Chapter page ${page} came back in a shape the extension doesn't recognise`);
+        }
+        return result;
+    };
+
     const walk = async () => {
         const chapterPage = await findChapterPage();
         if (!chapterPage) return finish(false, "Could not find the site's chapters API");
         await waitForSection();
+        const ids = new Set();
+        let meta;
+        let removed = false;
+        const add = (result) => {
+            chapters.push(...result.items);
+            result.items.forEach((item) => ids.add(item.id));
+            if (meta && result.meta.total < meta.total) removed = true;
+            meta = result.meta;
+        };
         for (let page = 1; ; page++) {
-            await tapSection();
-            let result;
-            try {
-                result = await chapterPage(mangaId, { page, limit: 20, order: { created_at: "desc" } });
-            } catch (e) {
-                const status = e && e.response && e.response.status;
-                return finish(false, status === 502
-                    ? `Comix blocked chapter page ${page} (HTTP 502). Try again later, or change the user agent in Advanced settings`
-                    : `Chapter page ${page} failed: ${status ? `HTTP ${status}` : e && e.message || e}`);
-            }
-            const items = result && result.items;
-            const meta = result && result.meta;
-            if (!Array.isArray(items) || !items.every(isChapter) || !meta ||
-                typeof meta.lastPage !== "number" || typeof meta.total !== "number") {
-                return finish(false, `Chapter page ${page} came back in a shape the extension doesn't recognise`);
-            }
-            chapters.push(...items);
-            if (items.some((item) => known.has(item.id))) return finish(true);
-            if (page >= Math.min(meta.lastPage, maxPages)) {
-                const count = new Set(chapters.map((item) => item.id)).size;
-                return finish(count === meta.total, `Got ${count} of ${meta.total} chapters`);
-            }
+            const result = await readPage(chapterPage, page);
+            add(result);
+            if (result.items.some((item) => known.has(item.id))) return finish(true);
+            if (page >= Math.min(meta.lastPage, maxPages)) break;
         }
+        // Chapters uploaded during the walk, from the top of the list
+        for (let page = 1; ids.size < meta.total && page <= Math.min(meta.lastPage, maxPages); page++) {
+            const result = await readPage(chapterPage, page);
+            const overlaps = result.items.some((item) => ids.has(item.id));
+            add(result);
+            if (overlaps) break;
+        }
+        // A chapter removed during the walk moves the rest up a page boundary, skipping one
+        if (removed) return finish(false, "Chapters were removed on the site during the refresh");
+        return finish(ids.size === meta.total, `Got ${ids.size} of ${meta.total} chapters`);
     };
 
     const start = () => walk().catch((e) => finish(false, e && e.message || String(e)));
