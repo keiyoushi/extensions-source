@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.rocksmanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -34,9 +35,9 @@ class DetailsDto(val manga: MangaDto) {
             artist = artists.joinToString { it.name }.ifEmpty { null }
             description = buildString {
                 synopsis?.let { append(it) }
-                alternativeTitles?.takeIf { it.isNotBlank() }?.let {
+                altTitles().takeIf { it.isNotEmpty() }?.let {
                     if (isNotEmpty()) append("\n\n")
-                    append("أسماء أخرى: ", it)
+                    append("أسماء أخرى:\n", it.joinToString("\n"))
                 }
             }.ifEmpty { null }
             genre = genres.joinToString { it.name }.ifEmpty { null }
@@ -49,10 +50,19 @@ class DetailsDto(val manga: MangaDto) {
                 else -> SManga.UNKNOWN
             }
         }
+
+        // Some entries hold a JSON array of {lang, title} in this string instead of plain text
+        private fun altTitles(): List<String> {
+            val titles = alternativeTitles?.takeIf { it.isNotBlank() } ?: return emptyList()
+            return if (titles.startsWith("[")) titles.parseAs<List<AltTitleDto>>().map { it.title } else listOf(titles)
+        }
     }
 
     @Serializable
     class NameDto(val name: String)
+
+    @Serializable
+    class AltTitleDto(val title: String)
 }
 
 @Serializable
