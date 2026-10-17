@@ -15,16 +15,15 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
-import kotlin.time.Instant
 
 @Source
 abstract class RocksManga : KeiSource() {
+    private val apiUrl get() = baseUrl.replace("://", "://api.")
+
     override val supportsFilterFetching = true
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
@@ -98,7 +97,7 @@ abstract class RocksManga : KeiSource() {
         val chapterList = document.extractNextJs<ChapterListDto> { it is JsonObject && "mangaSlug" in it && "chapters" in it }!!
 
         return SMangaUpdate(
-            details.toSManga(),
+            details.toSManga(apiUrl),
             chapterList.chapters.sortedByDescending { it.id }.map { it.toSChapter(chapterList.mangaSlug) },
         )
     }
@@ -108,7 +107,7 @@ abstract class RocksManga : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.extractNextJs<ReaderDto> { it is JsonObject && "chapter" in it && "manga" in it }!!
-            .chapter.pages.mapIndexed { i, path -> Page(i, imageUrl = "$API_URL$path") }
+            .chapter.pages.mapIndexed { i, path -> Page(i, imageUrl = "$apiUrl$path") }
     }
 
     // ================================= Filters =================================
@@ -129,105 +128,4 @@ abstract class RocksManga : KeiSource() {
         }
         return FilterList(filters)
     }
-}
-
-private const val API_URL = "https://api.rocksmanga.com"
-
-private open class SelectFilter(name: String, private val options: List<Pair<String, String>>) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
-    val selected get() = options[state].second
-}
-
-private class SortFilter :
-    SelectFilter(
-        "ترتيب حسب",
-        listOf(
-            "آخر التحديثات" to "recently_updated",
-            "الأكثر مشاهدة" to "most_viewed",
-            "الأعلى تقييماً" to "highest_rated",
-            "أبجدياً" to "alphabetical",
-            "الأحدث" to "new",
-        ),
-    )
-
-private class TypeFilter :
-    SelectFilter(
-        "النوع",
-        listOf("الكل" to "", "مانجا" to "manga", "مانهوا" to "manhwa", "مانها" to "manhua", "كوميك" to "comic", "رواية" to "novel"),
-    )
-
-private class StatusFilter :
-    SelectFilter(
-        "الحالة",
-        listOf("الكل" to "", "مستمر" to "releasing", "مكتمل" to "completed", "ملغي" to "canceled", "متوقف" to "on_hold"),
-    )
-
-private class Genre(name: String, val value: String) : Filter.TriState(name)
-
-private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("التصنيفات", genres)
-
-@Serializable
-private class GenresDto(val genres: List<GenreDto>) {
-    @Serializable
-    class GenreDto(val name: String, val slug: String)
-}
-
-@Serializable
-private class DetailsDto(val manga: MangaDto) {
-    @Serializable
-    class MangaDto(
-        val slug: String,
-        val title: String,
-        val alternative_titles: String? = null,
-        val synopsis: String? = null,
-        val cover_url: String? = null,
-        val status: String? = null,
-        val authors: List<NameDto> = emptyList(),
-        val artists: List<NameDto> = emptyList(),
-        val genres: List<NameDto> = emptyList(),
-    ) {
-        fun toSManga() = SManga.create().apply {
-            url = "/manga/$slug"
-            title = this@MangaDto.title
-            author = authors.joinToString { it.name }.ifEmpty { null }
-            artist = artists.joinToString { it.name }.ifEmpty { null }
-            description = buildString {
-                synopsis?.let { append(it) }
-                alternative_titles?.takeIf { it.isNotBlank() }?.let {
-                    if (isNotEmpty()) append("\n\n")
-                    append("أسماء أخرى: ", it)
-                }
-            }.ifEmpty { null }
-            genre = genres.joinToString { it.name }.ifEmpty { null }
-            thumbnail_url = cover_url?.let { "$API_URL$it" }
-            status = when (this@MangaDto.status) {
-                "RELEASING" -> SManga.ONGOING
-                "COMPLETED" -> SManga.COMPLETED
-                "CANCELED" -> SManga.CANCELLED
-                "ON_HOLD" -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
-        }
-    }
-
-    @Serializable
-    class NameDto(val name: String)
-}
-
-@Serializable
-private class ChapterListDto(val mangaSlug: String, val chapters: List<ChapterDto>) {
-    @Serializable
-    class ChapterDto(val id: Int, val number: String, val title: String? = null, val created_at: String? = null) {
-        fun toSChapter(slug: String) = SChapter.create().apply {
-            url = "/manga/$slug/chapter/$number"
-            name = "الفصل $number" + (title?.takeIf { it.isNotBlank() }?.let { " - $it" } ?: "")
-            chapter_number = number.toFloatOrNull() ?: -1f
-            date_upload = Instant.tryParse(created_at)
-        }
-    }
-}
-
-@Serializable
-private class ReaderDto(val chapter: ChapterDto) {
-    @Serializable
-    class ChapterDto(val pages: List<String>)
 }
