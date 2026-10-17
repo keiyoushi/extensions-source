@@ -205,7 +205,7 @@ abstract class Nudemoon : KeiSource() {
             Page(index, imageUrl = img.absUrl("data-src"))
         }
         if (pages.isEmpty() && !isUserAuthenticated) {
-            throw Exception("Страницы не найдены. Возможно необходима авторизация в WebView")
+            throw Exception("Страницы не найдены. Возможно, необходима авторизация в WebView")
         }
         return pages
     }
