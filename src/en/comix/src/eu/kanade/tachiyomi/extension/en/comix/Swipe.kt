@@ -72,7 +72,7 @@ private class Finger {
         if (action == MotionEvent.ACTION_DOWN) downTime = SystemClock.uptimeMillis()
         // Contact and pressure shift a little while the finger moves
         fun drift(spread: Double) = if (action == MotionEvent.ACTION_MOVE) Random.nextDouble(1 - spread, 1 + spread).toFloat() else 1f
-        // PointerProperties() starts with id -1, which some vendor gesture detectors abort on
+        // A real first touch has pointer id 0
         val properties = MotionEvent.PointerProperties().apply {
             id = 0
             toolType = MotionEvent.TOOL_TYPE_FINGER
