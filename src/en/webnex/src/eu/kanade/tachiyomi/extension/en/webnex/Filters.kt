@@ -117,18 +117,15 @@ class LanguageFilter :
         ),
     )
 
-class RatingFilter :
-    SelectFilter(
-        "Content rating",
-        "rating",
-        listOf(
-            "Default (Suggestive)" to "",
-            "Up to Safe" to "safe",
-            "Up to Suggestive" to "suggestive",
-            "Up to Erotica" to "erotica",
-            "Up to Pornographic (18+)" to "pornographic",
-        ),
-    )
+val RATING_OPTIONS = listOf(
+    "Default (Suggestive)" to "",
+    "Up to Safe" to "safe",
+    "Up to Suggestive" to "suggestive",
+    "Up to Erotica" to "erotica",
+    "Up to Pornographic (18+)" to "pornographic",
+)
+
+class RatingFilter(default: String) : SelectFilter("Content rating", "rating", RATING_OPTIONS, default)
 
 class ChaptersFilter :
     SelectFilter(

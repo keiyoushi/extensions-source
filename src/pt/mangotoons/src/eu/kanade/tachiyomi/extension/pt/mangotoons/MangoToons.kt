@@ -1,29 +1,75 @@
 package eu.kanade.tachiyomi.extension.pt.mangotoons
 
-import eu.kanade.tachiyomi.multisrc.mangotheme.MangoTheme
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import okhttp3.Headers
+import keiyoushi.network.get
+import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class MangoToons : MangoTheme() {
+abstract class MangoToons : KeiSource() {
 
-    override val apiUrl = "https://api.mangotoons.com/api"
+    private val apiUrl = "https://api.mangotoons.com/api/v1"
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = addMangoThemeHeaders()
-        .set("User-Agent", "-")
-        .set("sec-fetch-mode", "none")
+    // the page manifest answers 429 (Retry-After: 10) from about 12 requests a minute
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 5.seconds) { it.encodedPath.endsWith("/manifest") }
+        .rateLimit(2)
 
-    override val encryptionKey = "abmPisXlFjOLVTnYhbYQTpkWJtOGKwVttzLqstfjRBNVaEtQYG"
+    override suspend fun getPopularManga(page: Int): MangasPage = mangaList(page) { addQueryParameter("ordenar", "populares") }
 
-    override val cdnUrl = "https://cdn.mangotoons.com"
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaList(page) { addQueryParameter("ordenar", "recentes") }
 
-    override val webUrlSalt = "mango-secret-salt-2024"
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = mangaList(page) {
+        query.takeIf { it.isNotBlank() }?.let { addQueryParameter("busca", it) }
+    }
 
-    override val requiresLogin = true
+    private suspend fun mangaList(page: Int, params: HttpUrl.Builder.() -> Unit): MangasPage {
+        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("limite", PAGE_LIMIT.toString())
+            .apply(params)
+            .build()
 
-    override fun getStatusFilterOptions() = MangoToonsFilters.statusOptions
+        return client.get(url).parseAs<MangaListDto>().toMangasPage(baseUrl)
+    }
 
-    override fun getFormatFilterOptions() = MangoToonsFilters.formatOptions
+    // details and chapters come from the same endpoint
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val dto = client.get("$apiUrl/obras/${manga.url.mangaId()}").parseAs<MangaDto>()
 
-    override fun getTagFilterOptions() = MangoToonsFilters.tagOptions
+        return SMangaUpdate(dto.toSManga(baseUrl), dto.chapterList())
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val mangaId = chapter.url.mangaId()
+        val number = chapter.url.chapterNumber()
+
+        return client.get("$apiUrl/leitor/obras/$mangaId/capitulos/$number/manifest")
+            .parseAs<ManifestDto>()
+            .toPageList()
+    }
+
+    // the library stores /obra/{id} and /obra/{id}/capitulo/{numero}; older entries may carry ?slug=
+    private fun String.mangaId(): String = substringAfter("/obra/").substringBefore("/").substringBefore("?")
+
+    private fun String.chapterNumber(): String = substringBefore("?").substringAfterLast("/")
+
+    companion object {
+        private const val PAGE_LIMIT = 24
+    }
 }

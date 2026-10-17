@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
+import keiyoushi.utils.aesCtr
 import keiyoushi.utils.decodeHex
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -18,7 +19,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.crypto.Cipher
 import javax.crypto.Mac
-import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.experimental.xor
 
@@ -153,9 +153,7 @@ class ImageInterceptor : Interceptor {
 
     private fun aesCtrCipher(chapterKey: ByteArray, pageIndex: Int, prefix: String): Cipher {
         val derivedKey = initMac(chapterKey).doFinal("$prefix$pageIndex".toByteArray(Charsets.UTF_8))
-        return Cipher.getInstance("AES/CTR/NoPadding").apply {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(derivedKey, "AES"), IvParameterSpec(ByteArray(16)))
-        }
+        return aesCtr(derivedKey, ByteArray(16))
     }
 
     companion object {

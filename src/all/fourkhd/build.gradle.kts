@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "4KHD"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     source {
@@ -15,8 +15,8 @@ keiyoushi {
     }
 
     deeplink {
-        host("zgmz.uuss.uk")
         host("4khd.com")
+        host("www.4khd.com")
         path("/content/..*")
     }
 }

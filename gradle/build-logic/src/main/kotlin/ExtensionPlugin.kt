@@ -20,6 +20,7 @@ import io.github.keiyoushi.gradle.internal.extensions.kei
 import io.github.keiyoushi.gradle.internal.extensions.ksp
 import io.github.keiyoushi.gradle.internal.extensions.libs
 import io.github.keiyoushi.gradle.internal.extensions.plugins
+import io.github.keiyoushi.gradle.internal.extensionsLib
 import io.github.keiyoushi.gradle.internal.toMetadata
 import io.github.keiyoushi.gradle.tasks.CreateExtensionJarTask
 import io.github.keiyoushi.gradle.tasks.GenerateManifestTask
@@ -244,7 +245,7 @@ class ExtensionPlugin : Plugin<Project> {
             addProvider("implementation", keiyoushi.theme.map { project(":lib-multisrc:$it") })
             implementation(project(":core"))
             compileOnly(libs.bundles.common)
-            compileOnly(keiyoushi.libVersion.flatMap { if (it == "1.6") libs.tachiyomi.lib.v16 else libs.tachiyomi.lib.v14 })
+            compileOnly(keiyoushi.libVersion.flatMap { libs.extensionsLib(it) })
             ksp(project(":compiler"))
         }
 

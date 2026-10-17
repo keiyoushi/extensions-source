@@ -10,6 +10,7 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -27,7 +28,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class LittleTyrant : Madara() {
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("pt-BR"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.forLanguageTag("pt-BR"))
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addNetworkInterceptor(ImageDecoderInterceptor())
@@ -42,22 +43,20 @@ abstract class LittleTyrant : Madara() {
 
     // =============================== Popular =================================
 
-    override fun archiveSelector() = "[id*=manga-entry-]"
-    override val archiveUrlSelector = ".card-title a"
-    override val archiveTitleSelector = "h3"
-    override fun Element.postId() = id().substringAfter("manga-entry-")
+    override fun archiveSelector() = "[id*=-entry-]"
+    override val archiveUrlSelector = ".card-info a"
+    override fun Element.postId() = id().substringAfterLast('-')
     // =============================== Details =================================
 
-    override val mangaDetailsSelectorGenre = ".genres-tax-list a"
-    override val mangaDetailsSelectorDescription = ".summary-content-box"
-    override val mangaDetailsSelectorAuthor = ".attr-item:has(.attr-label:contains(AUTOR)) .attr-value"
-    override val mangaDetailsSelectorArtist = ".attr-item:has(.attr-label:contains(ARTISTA)) .attr-value"
-    override val mangaDetailsSelectorStatus = ".attr-item:has(.attr-label:contains(STATUS)) .attr-value"
+    override val mangaDetailsSelectorDescription = ".summary-text-scroll"
+    override val mangaDetailsSelectorAuthor = ".attr-label:contains(AUTOR) + .attr-value"
+    override val mangaDetailsSelectorArtist = ".attr-label:contains(ARTISTA) + .attr-value"
+    override val mangaDetailsSelectorStatus = ".attr-label:contains(STATUS) + .attr-value"
 
     // =============================== Chapters =================================
 
-    override val chapterNameSelector = ".chapter-name-label"
-    override val chapterDateSelector = ".chapter-pub-date"
+    override val chapterNameSelector = "[class*=-chapter-name]"
+    override val chapterDateSelector = "[class*=-chapter-date]"
 
     override suspend fun fetchChapters(
         mangaPath: String,
@@ -95,7 +94,8 @@ abstract class LittleTyrant : Madara() {
             ?.replace("\\/", "/")
             ?.toHttpUrlOrNull() ?: return emptyList()
 
-        val token = getToken(themePath)
+        val nonce = BROWSER_NONCE_REGEX.find(script)?.groupValues?.last() ?: return emptyList()
+        val token = getToken(themePath, nonce)
 
         val baseUrl = "${themePath.scheme}://${themePath.host}"
 
@@ -111,11 +111,16 @@ abstract class LittleTyrant : Madara() {
             }
     }
 
-    private suspend fun getToken(pageBaseUrl: HttpUrl): String {
+    private suspend fun getToken(pageBaseUrl: HttpUrl, nonce: String): String {
         val pageHeaders = headersBuilder()
             .set("X-Reader-Sec", "tiraninha-web")
             .build()
-        val url = "$pageBaseUrl/gatekeeper.php?t=${System.currentTimeMillis()}"
+        val url = pageBaseUrl.newBuilder()
+            .addPathSegment("gatekeeper.php")
+            .addQueryParameter("t", System.currentTimeMillis().toString())
+            .addQueryParameter("browser_nonce", nonce)
+            .build()
+        client.cookieJar.saveFromResponse(url, listOf(Cookie.parse(url, "lt_browser_nonce=$nonce; path=/")!!))
         return client.get(url, pageHeaders).body.string()
     }
 
@@ -132,6 +137,7 @@ abstract class LittleTyrant : Madara() {
 
     companion object {
         private val PROXY_URLS_REGEX = """_proxyUrls\s*=\s*(\[[^]]+])""".toRegex(RegexOption.IGNORE_CASE)
+        private val BROWSER_NONCE_REGEX = """_browserNonce\s*=\s*"([^"]+)""".toRegex()
         private val BASE_URL_PAGE_REGEX = """_themePath\s+=\s+"([^"]+)""".toRegex(RegexOption.IGNORE_CASE)
     }
 }

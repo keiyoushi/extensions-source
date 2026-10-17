@@ -6,15 +6,19 @@ plugins {
 
 keiyoushi {
     name = "Manhwa18.cc"
-    versionCode = 9
+    versionCode = 65
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "madara"
+    theme = "yiimadara"
 
     listOf("en", "ko", "all").forEach {
         source {
             lang = it
             baseUrl = "https://manhwa18.cc"
         }
+    }
+
+    deeplink {
+        path("/webtoon/..*")
     }
 }

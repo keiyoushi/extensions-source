@@ -41,6 +41,7 @@ abstract class GoodToon : MadaraNoAjax() {
 
     override val searchQueryParameter = "q"
 
+    override val mangaDetailsSelectorTitle = "h1.summary-title, div.post-title h3, div.post-title h1, #manga-title > h1"
     override val mangaDetailsSelectorAuthor = "div.manga-summary-author .author-text, div.manga-summary-author"
     override val mangaDetailsSelectorStatus = "div.summary-meta-row .meta-value"
     override val mangaDetailsSelectorDescription = "div.manga-summary-desc"

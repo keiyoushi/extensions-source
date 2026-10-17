@@ -1,7 +1,6 @@
 package keiyoushi.utils
 
 import keiyoushi.utils.reactFlight.ReactFlightBigInt
-import keiyoushi.utils.reactFlight.ReactFlightDate
 import keiyoushi.utils.reactFlight.ReactFlightNumber
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -12,6 +11,7 @@ import org.junit.BeforeClass
 import org.junit.Test
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
+import kotlin.time.Instant
 
 class NextJsTest {
 
@@ -32,7 +32,7 @@ class NextJsTest {
     data class FixtureMarkers(
         val name: String,
         val big: ReactFlightBigInt,
-        val date: ReactFlightDate,
+        val date: Instant,
         val inf: ReactFlightNumber,
         val negInf: ReactFlightNumber,
         val nan: ReactFlightNumber,
@@ -48,7 +48,7 @@ class NextJsTest {
         m!!
         assertEquals("hello", m.name)
         assertEquals("123456789012345678901234567890", m.big.toString())
-        assertEquals(1704164645000L, m.date.time)
+        assertEquals(1704164645000L, m.date.toEpochMilliseconds())
         assertTrue(m.inf.toDouble() == Double.POSITIVE_INFINITY)
         assertTrue(m.negInf.toDouble() == Double.NEGATIVE_INFINITY)
         assertTrue(m.nan.toDouble().isNaN())

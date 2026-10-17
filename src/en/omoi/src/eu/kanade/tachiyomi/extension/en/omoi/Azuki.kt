@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -39,7 +40,7 @@ abstract class Azuki :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(ImageInterceptor())
+        addInterceptor(XorInterceptor(XOR_KEY) { "drm" in it.url.queryParameterNames })
         addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
@@ -213,5 +214,6 @@ abstract class Azuki :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val XOR_KEY = 174.toByte()
     }
 }

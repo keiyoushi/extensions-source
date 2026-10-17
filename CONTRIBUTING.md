@@ -52,7 +52,7 @@ or fix them directly by submitting a Pull Request.
         - [JsonElement accessor helpers](#jsonelement-accessor-helpers)
         - [ZIP streaming - `zipDirectoryAsync` / `readZipEntry`](#zip-streaming---zipdirectoryasync--readzipentry)
         - [Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`](#jsoup-helpers---asjsoup--attrornull--textornull)
-        - [Cryptography - `decodeHex` / `rc4`](#cryptography---decodehex--rc4)
+        - [Cryptography - `decodeHex` / `rc4` / AES helpers](#cryptography---decodehex--rc4--aes-helpers)
         - [Binary endian helpers](#binary-endian-helpers)
         - [Decompression - `Inflater.inflate`](#decompression---inflaterinflate)
         - [SeedRandom - seeded pseudo-random generator](#seedrandom---seeded-pseudo-random-generator)
@@ -261,8 +261,8 @@ $ python ext-bootstrap.py -n "My Source" -l en -u https://mysource.com
 
 This creates `src/<lang>/<mysourcename>/build.gradle.kts` along with the extension's package
 directory and a starter source class. New (non-multisrc) sources are scaffolded extending
-`KeiSource` with `libVersion = "1.6"`; sources based on an existing multisrc theme (`-m`) inherit
-whatever base class and `libVersion` that theme uses.
+`KeiSource` with `libVersion = "1.6"`; sources based on an existing multisrc theme (`-m`) extend
+that theme's base class and use its `libVersion`.
 
 Available options:
 
@@ -362,7 +362,7 @@ At least one `source {}` block is required for every extension.
 | `name`           | The name of the extension. Should be romanized if site name is not in English.                                                                                                                                                            |
 | `versionCode`    | The extension version code. This must be a positive integer and incremented with any change to the code. Do not bump for changes that do not affect users, such as changing a private function to a public function.                      |
 | `contentWarning` | Content safety classification. Must be set explicitly to one of `ContentWarning.SAFE`, `ContentWarning.MIXED`, or `ContentWarning.NSFW`.                                                                                                  |
-| `libVersion`     | The extension library version. All new extensions must set this to `"1.6"` and implement `KeiSource` (see [Extension main class](#extension-main-class)). `"1.4"` is legacy and only found in extensions that have not yet been migrated. |
+| `libVersion`     | The extension library version. Must be `"1.6"`; the source class must implement `KeiSource` (see [Extension main class](#extension-main-class)). |
 | `theme`          | Name of a multi-source theme from `lib-multisrc/` to inherit from (e.g. `"madara"`). When set, the extension's version code is `theme.baseVersionCode + versionCode`.                                                                     |
 | `pkgName`        | Overrides the application ID suffix (defaults to `<lang>.<source dir>` derived from the module path). Only needed when moving a module to a different directory - see [Moving a source to a different directory](#moving-a-source-to-a-different-directory). |
 | `source {}`      | Declares one source (or multiple, for multi-language or multi-mirror extensions) using KSP code generation. This block is mandatory. See [Source declaration](#source-declaration).                                                       |
@@ -390,7 +390,7 @@ abstract class MySource : KeiSource() {
 }
 ```
 
-New sources must extend `KeiSource` (with `libVersion = "1.6"`), never `HttpSource` directly - see [Extension main class](#extension-main-class) for details.
+Sources must extend `KeiSource` (with `libVersion = "1.6"`), never `HttpSource` directly; the build fails otherwise - see [Extension main class](#extension-main-class) for details.
 
 #### Declare sources in build.gradle.kts
 
@@ -530,6 +530,7 @@ use case. Each lib is self-documented via KDoc comments in its Kotlin source fil
 | [`lib-e4p`](https://github.com/keiyoushi/extensions-source/tree/main/lib/e4p)                             | Decodes and decrypts E4P-format manga page archives (TIFF/XEBP)                         |
 | [`lib-ece`](https://github.com/keiyoushi/extensions-source/tree/main/lib/ece)                             | RFC 8188 `aes128gcm` decryption, HKDF key derivation, and P-256 raw point helpers       |
 | [`lib-i18n`](https://github.com/keiyoushi/extensions-source/tree/main/lib/i18n)                           | Internationalization helper (`Intl`) for multi-language UI strings in extensions        |
+| [`lib-imagedecoder`](https://github.com/keiyoushi/extensions-source/tree/main/lib/imagedecoder)           | Decodes images to a `Bitmap` with the host app's decoder (AVIF, JPEG XL, HEIF)          |
 | [`lib-lzstring`](https://github.com/keiyoushi/extensions-source/tree/main/lib/lzstring)                   | LZ-String decompression and compression                                                 |
 | [`lib-publus`](https://github.com/keiyoushi/extensions-source/tree/main/lib/publus)                       | Handles Publus DRM-protected reader decryption, unscrambling, and page loading          |
 | [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua)                   | Fetches and rotates real-world User-Agent strings (requires overriding `getMangaUrl()`) |
@@ -538,7 +539,6 @@ use case. Each lib is self-documented via KDoc comments in its Kotlin source fil
 | [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony)                 | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox)                     |
 | [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor)     | Renders plain text or HTML as a PNG image page                                          |
 | [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker)                   | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers                    |
-| [`lib-zipinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/zipinterceptor)       | Decodes, stitches, and processes multi-page ZIP/AVIF/SVG image archives                 |
 
 > [!IMPORTANT]
 > If your module uses `:lib:randomua`, the Spotless check requires your extension to override the `getMangaUrl()` method in your main class, or the build will fail.
@@ -881,7 +881,17 @@ val html = runWebView<String> {
 ```
 
 - `runWebView(timeout, configure)` suspends until `resolve`/`reject` is called inside `configure`, or `timeout` (default 30s) elapses; it always runs on the main thread internally.
-- The `WebViewScope` DSL exposes: `javaScriptEnabled`/`domStorageEnabled`/`blockImages`/`useWideViewPort`/`loadWithOverviewMode`/`userAgent` settings, `onPageStarted`/`onPageFinished`/`onReceivedError` hooks, `interceptRequest` to inspect/replace/block resource loads, `jsBridge(name, handler)` to expose a `window.<name>.post(message)` callback from the page, `loadUrl`/`loadData`, `evaluateJs`, and `poll(interval)` to repeat a check until resolved. Setting `userAgent` also spoofs the `Sec-CH-UA` client hints to match it, instead of advertising the real WebView brand and version.
+- The `WebViewScope` DSL exposes:
+  - **Settings:** `javaScriptEnabled`, `domStorageEnabled`, `blockImages`, `useWideViewPort`, `loadWithOverviewMode`, `userAgent` (spoofs matching `Sec-CH-UA` client hints on Chromium 119+), and `includeCookiesOnIntercept` (Chromium 138+; includes the `Cookie` header in requests passed to `interceptRequest`, and accepts `Set-Cookie` from responses it returns). Audio is always muted automatically across all `runWebView` instances (Chromium 122+).
+  - **Navigation hooks:** `onPageStarted`, `onPageFinished`, `onReceivedError`.
+  - **Request interception:** `interceptRequest` to inspect/replace/block resource loads (runs on a background thread).
+  - **Pre-DOM JavaScript Injection** (like the bridges below, call these before `loadUrl`/`loadData`; they only apply to later navigations):
+    - `injectAtDocumentStart(script, allowedOriginRules)`: Injects JavaScript before any page or inline script runs on matching origins. Returns a `ScriptHandle` with `.remove()` to cancel future injections. Essential for hooking APIs (`window.fetch`, `XMLHttpRequest`, `WebSocket`, etc.) before anti-bot scripts execute. Requires Chromium 91+; on older engines (< Chromium 91), falls back to `onPageStarted` injection with debug logging - the fallback only reaches the main frame and may run after inline scripts.
+    - `addJavaScriptOnEvent(script, event, worldName, allowedOriginRules)`: Injects on `InjectionEvent.DOCUMENT_START` (default) or `InjectionEvent.DOCUMENT_END`, optionally targeting an isolated execution `worldName`. **Requires Chromium 146+**; has **no fallback** and immediately fails (`reject`s) on older engines.
+  - **JavaScript Bridges:**
+    - `webMessageBridge(name, allowedOriginRules, handler)`: Modern, asynchronous, origin-scoped 2-way message bridge (`window.<name>.postMessage(msg)` and `window.<name>.onmessage`). The handler receives `(message, replyProxy)` where `replyProxy.postMessage(reply)` and `replyProxy.evaluateJs(script)` can interact with the sender frame, and `replyProxy.sourceOrigin`/`replyProxy.isMainFrame` identify it. A simplified `(message) -> Unit` overload is also available. The handler runs on the main thread. The default `allowedOriginRules` of `*` lets every frame (including third-party iframes) post messages, so restrict it to the expected origin (e.g. `setOf("https://example.com")`) whenever a message can complete the run. Requires Chromium 82+ (`replyProxy.evaluateJs` requires Chromium 146+ and rejects otherwise); on legacy WebView engines (< Chromium 82), transparently falls back to an `addJavascriptInterface` bridge exposing `window.<name>.postMessage(message)` with debug logging (replying via `replyProxy` is unsupported on the fallback path and rejects; origin rules are ignored and the sender origin is null).
+    - `jsBridge(name, handler)`: Deprecated legacy synchronous bridge exposing `window.<name>.post(message)`. Supported on all Android versions. Use `webMessageBridge` instead.
+  - **Execution & Navigation:** `loadUrl`, `loadData`, `stopLoading`, `evaluateJs`, and `poll(interval)` to repeat checks on the main thread until resolved.
 - For the common case of just reading a `localStorage` value after loading a page, use the ready-made `getLocalStorage(url, key)` helper instead of writing your own `runWebView` call.
 - `runWebViewBlocking(call, ...)` exists for non-suspend call sites (e.g. inside an OkHttp interceptor where you must pass the interceptor's chain.call()) - only use it there, never from a suspend function.
 
@@ -1148,19 +1158,55 @@ val title = element.textOrNull()
 val directText = element.ownTextOrNull() // excludes text of nested child elements
 ```
 
-##### Cryptography - `decodeHex` / `rc4`
+##### Cryptography - `decodeHex` / `rc4` / `xor` / AES helpers
 
-For encrypted APIs and descramblers:
+For encrypted APIs, descramblers, and image decryption:
 
 ```kotlin
+import keiyoushi.network.XorInterceptor
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesDecryptWithPrependedIv
+import keiyoushi.utils.aesEncrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.rc4
+import keiyoushi.utils.xor
 
 // Decode an even-length hex string into a ByteArray:
 val keyBytes = "616263".decodeHex()
 
 // Symmetric RC4 stream cipher (serves for both encryption and decryption; skip defaults to 0):
 val decrypted = cipherBytes.rc4(key = keyBytes)
+
+// Streaming XOR decryption on Response, ResponseBody, Source, or ByteArray (single-byte or cyclic multi-byte):
+val decryptedResponse = response.xor(keyBytes)
+
+// XOR image interceptor extracting decryption key from request (e.g. from URL fragment):
+client.newBuilder()
+    .addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
+    .build()
+
+// Or with a fixed static key (ByteArray or Byte, optionally pass a request predicate):
+client.newBuilder()
+    .addInterceptor(XorInterceptor(keyBytes))
+    .build()
+
+// In-memory AES decryption / encryption:
+val decryptedBytes = ciphertext.aesDecrypt(aesCbc(key = keyBytes, iv = ivBytes))
+val encryptedBytes = plaintext.aesEncrypt(aesGcm(key = keyBytes, iv = ivBytes))
+
+// Streaming response AES decryption:
+override fun getImage(page: Page): Response {
+    val response = super.getImage(page)
+    return response.aesDecrypt(aesCbc(key = keyBytes, iv = ivBytes))
+}
+
+// Or decryption for streams with prepended IV:
+override fun getImage(page: Page): Response {
+    val response = super.getImage(page)
+    return response.aesDecryptWithPrependedIv(key = keyBytes, ivSize = 16)
+}
 ```
 
 ##### Binary endian helpers
@@ -1238,10 +1284,9 @@ the main app has at the expense of app size.
 
 ### Extension main class
 
-The class annotated with `@Source` and referenced by your `source {}` block(s). **All new
-extensions must implement `KeiSource`** (`libVersion = "1.6"`). Existing extensions/themes still
-extending `HttpSource` directly are legacy (`libVersion = "1.4"`); do not use `HttpSource` directly
-for new sources.
+The class annotated with `@Source` and referenced by your `source {}` block(s). **All
+extensions must implement `KeiSource`** (`libVersion = "1.6"`), either directly or through a theme.
+A `@Source` class that extends `HttpSource` directly fails the build.
 
 > [!NOTE]
 > `className` is set to `keiyoushi.source.Generated` automatically by the build system.
@@ -1249,8 +1294,8 @@ for new sources.
 | Class              | Description                                                                                                                                                                                     |
 |--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `SourceFactory`    | **Obsolete.** Used to expose multiple `Source`s manually. With `source {}` blocks, this is generated automatically.                                                                             |
-| `KeiSource`        | **The base class for all new online sources** (`libVersion = "1.6"`). A suspend-based API. Use this directly or extend a `KeiSource`-based theme base class. See [KeiSource](#keisource) below. |
-| `HttpSource`       | Legacy base class (`libVersion = "1.4"`). Only found in extensions/themes not yet migrated to `KeiSource`. Do not use for new sources.                                                          |
+| `KeiSource`        | **The base class for all online sources** (`libVersion = "1.6"`). A suspend-based API. Use this directly or extend a `KeiSource`-based theme base class. See [KeiSource](#keisource) below.     |
+| `HttpSource`       | Superclass of `KeiSource`. Do not extend it directly; `@Source` classes that do fail the build.                                                                                                 |
 | `ParsedHttpSource` | Deprecated, use `KeiSource` instead.                                                                                                                                                            |
 
 #### KeiSource
@@ -1746,12 +1791,12 @@ When no `host()` is specified in a theme `deeplink {}` block, the host is resolv
 | Field             | Description                                                                                                                                                                                                                                                              |
 |-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `baseVersionCode` | The theme's base version code. This must be a positive integer and **incremented** whenever a change is made to the theme implementation that affects the extensions.                                                                                                    |
-| `libVersion`      | The extension library version. New themes must set this to `"1.6"` and have their main class extend `KeiSource`. `"1.4"` is legacy and only found in themes not yet migrated. Every extension using the theme inherits this value and must not set its own `libVersion`. |
+| `libVersion`      | The extension library version. Must be `"1.6"`, and the theme's main class must extend `KeiSource`. Every extension using the theme inherits this value and must not set its own `libVersion`. |
 | `deeplink {}`     | Declares URL deeplink patterns inherited by all extensions using this theme. See [URL intent filter](#url-intent-filter).                                                                                                                                                |
 
 #### Theme main class
 
-The theme's main class (e.g., `<ThemeName>.kt`) contains the default implementation for the source sites. It should be declared as an `abstract class` extending `KeiSource` (or `HttpSource` for themes still on `libVersion = "1.4"`), allowing individual extensions to inherit and override its properties and methods.
+The theme's main class (e.g., `<ThemeName>.kt`) contains the default implementation for the source sites. It should be declared as an `abstract class` extending `KeiSource`, allowing individual extensions to inherit and override its properties and methods.
 
 ```kotlin
 package eu.kanade.tachiyomi.multisrc.example // Replace 'example' with your theme name
@@ -1760,7 +1805,7 @@ import keiyoushi.source.KeiSource
 
 abstract class ExampleTheme : KeiSource() {
 
-    // name, lang, and baseUrl are inherited from KeiSource/HttpSource. They are automatically
+    // name, lang, and baseUrl are inherited from KeiSource. They are automatically
     // overridden and injected by the KSP generator via each extension's `source {}`
     // block. Do not declare them in the constructor.
 

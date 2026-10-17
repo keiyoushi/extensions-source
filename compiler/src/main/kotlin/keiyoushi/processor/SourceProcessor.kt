@@ -152,10 +152,9 @@ class SourceProcessor(
             .mapNotNull { it.declaration.qualifiedName?.asString() }
             .toSet()
         val isConfigurable = "eu.kanade.tachiyomi.source.ConfigurableSource" in superTypeNames
-        val isKeiSource = KEI_SOURCE in superTypeNames
 
-        if (HTTP_SOURCE !in superTypeNames) {
-            logger.error("@Source class must derive from HttpSource", annotated)
+        if (KEI_SOURCE !in superTypeNames) {
+            logger.error("@Source class must derive from KeiSource (directly or through a theme); HttpSource is no longer supported", annotated)
             return emptyList()
         }
 
@@ -173,9 +172,9 @@ class SourceProcessor(
 
         val isConcrete = Modifier.ABSTRACT !in annotated.modifiers
         val generatedClass = if (sources.size == 1 && !isConcrete) {
-            buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable, isKeiSource, overridden, annotated, fileProps)
+            buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable, overridden, annotated, fileProps)
         } else {
-            buildSourceFactoryClass(annotatedClass, sources, isConfigurable, isKeiSource, overridden, annotated, fileProps)
+            buildSourceFactoryClass(annotatedClass, sources, isConfigurable, overridden, annotated, fileProps)
         }
 
         FileSpec.builder(GENERATED_CLASS_PACKAGE, GENERATED_CLASS_NAME)
@@ -191,21 +190,19 @@ class SourceProcessor(
         annotatedClass: ClassName,
         source: SourceDef,
         isConfigurable: Boolean,
-        isKeiSource: Boolean,
         overridden: Set<String>,
         node: KSClassDeclaration,
         fileProps: MutableList<PropertySpec>,
     ): TypeSpec = TypeSpec.classBuilder(GENERATED_CLASS_NAME)
         .addModifiers(KModifier.INTERNAL)
         .superclass(annotatedClass)
-        .applySourceMembers(source, "", fileProps, isConfigurable, isKeiSource, overridden, node)
+        .applySourceMembers(source, "", fileProps, isConfigurable, overridden, node)
         .build()
 
     private fun buildSourceFactoryClass(
         annotatedClass: ClassName,
         sources: List<SourceDef>,
         isConfigurable: Boolean,
-        isKeiSource: Boolean,
         overridden: Set<String>,
         node: KSClassDeclaration,
         fileProps: MutableList<PropertySpec>,
@@ -237,7 +234,7 @@ class SourceProcessor(
                             "%L,\n",
                             TypeSpec.anonymousClassBuilder()
                                 .superclass(annotatedClass)
-                                .applySourceMembers(source, index.toString(), fileProps, isConfigurable, isKeiSource, overridden, node)
+                                .applySourceMembers(source, index.toString(), fileProps, isConfigurable, overridden, node)
                                 .build(),
                         )
                     }
@@ -321,22 +318,19 @@ class SourceProcessor(
         suffix: String,
         fileProps: MutableList<PropertySpec>,
         isConfigurable: Boolean,
-        isKeiSource: Boolean,
         overridden: Set<String>,
         node: KSClassDeclaration,
     ): TypeSpec.Builder = apply {
         val className = node.simpleName.asString()
 
-        if (isKeiSource) {
-            if ("filterFetchHint" in overridden) {
-                logger.error("filterFetchHint is owned by the DSL; remove 'override val filterFetchHint' from $className (it is generated per language from core/translations)", node)
-            } else {
-                addProperty(
-                    PropertySpec.builder("filterFetchHint", String::class.asClassName(), KModifier.OVERRIDE, KModifier.PROTECTED)
-                        .getter(FunSpec.getterBuilder().addStatement("return %S", stringsForLang(source.lang).filterFetchHint).build())
-                        .build(),
-                )
-            }
+        if ("filterFetchHint" in overridden) {
+            logger.error("filterFetchHint is owned by the DSL; remove 'override val filterFetchHint' from $className (it is generated per language from core/translations)", node)
+        } else {
+            addProperty(
+                PropertySpec.builder("filterFetchHint", String::class.asClassName(), KModifier.OVERRIDE, KModifier.PROTECTED)
+                    .getter(FunSpec.getterBuilder().addStatement("return %S", stringsForLang(source.lang).filterFetchHint).build())
+                    .build(),
+            )
         }
 
         if ("name" in overridden) {

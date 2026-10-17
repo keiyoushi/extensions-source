@@ -8,15 +8,6 @@ import android.widget.Toast
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
-import eu.kanade.tachiyomi.extension.all.komga.dto.AuthorDto
-import eu.kanade.tachiyomi.extension.all.komga.dto.BookDto
-import eu.kanade.tachiyomi.extension.all.komga.dto.CollectionDto
-import eu.kanade.tachiyomi.extension.all.komga.dto.LibraryDto
-import eu.kanade.tachiyomi.extension.all.komga.dto.PageDto
-import eu.kanade.tachiyomi.extension.all.komga.dto.PageWrapperDto
-import eu.kanade.tachiyomi.extension.all.komga.dto.ReadListDto
-import eu.kanade.tachiyomi.extension.all.komga.dto.SeriesDto
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -51,7 +42,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
 import java.util.Locale
@@ -176,6 +166,8 @@ class Komga(
     }
 
     private fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
+        if (baseUrl.isBlank()) throw Exception("Set Address in Settings")
+
         val collectionId = (filters.find { it is CollectionSelect } as? CollectionSelect)?.let {
             it.collections[it.state].id
         }
@@ -275,6 +267,10 @@ class Komga(
     private val chapterNameTemplate
         get() = preferences.getString(PREF_CHAPTER_NAME_TEMPLATE, PREF_CHAPTER_NAME_TEMPLATE_DEFAULT)!!
 
+    private val separator
+        get() = preferences.getString(PREF_SCANLATOR_SEP, PREF_SCANLATOR_SEP_DEFAULT)!!
+            .let { if (it == ",") "$it " else " $it " }
+
     override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books", "/book")
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
@@ -290,15 +286,15 @@ class Komga(
                 SChapter.create().apply {
                     chapter_number = 1F
                     this.url = "$baseUrl/api/v1/books/${book.id}"
-                    name = book.getChapterName(chapterNameTemplate, isFromReadList = true)
+                    name = book.getChapterName(chapterNameTemplate, isFromReadList = true, manga.title)
                     scanlator = book.metadata.authors
                         .filter { it.role == "translator" }
-                        .joinToString { it.name }
-                    date_upload = when {
-                        book.metadata.releaseDate != null -> parseDate(book.metadata.releaseDate)
-                        book.created != null -> parseDateTime(book.created)
-                        else -> parseDateTime(book.fileLastModified)
-                    }
+                        .joinToString(separator) { it.name }
+                    date_upload = parseDate(
+                        book.metadata.releaseDate
+                            ?: book.created
+                            ?: book.fileLastModified,
+                    )
                 },
             )
         }
@@ -314,20 +310,18 @@ class Komga(
                 SChapter.create().apply {
                     chapter_number = if (!isFromReadList) book.metadata.numberSort else index + 1F
                     this.url = "$baseUrl/api/v1/books/${book.id}"
-                    name = book.getChapterName(chapterNameTemplate, isFromReadList)
+                    name = book.getChapterName(chapterNameTemplate, isFromReadList, manga.title)
                     scanlator = book.metadata.authors
                         .filter { it.role == "translator" }
-                        .joinToString { it.name }
-                    date_upload = when {
-                        book.metadata.releaseDate != null -> parseDate(book.metadata.releaseDate)
-
-                        book.created != null -> parseDateTime(book.created)
-
-                        // XXX: `Book.fileLastModified` actually uses the server's running timezone,
-                        // not UTC, even if the timestamp ends with a Z! We cannot determine the
-                        // server's timezone, which is why this is a last resort option.
-                        else -> parseDateTime(book.fileLastModified)
-                    }
+                        .joinToString(separator) { it.name }
+                    // XXX: `Book.fileLastModified` actually uses the server's running timezone,
+                    // not UTC, even if the timestamp ends with a Z! We cannot determine the
+                    // server's timezone, which is why this is a last resort option.
+                    date_upload = parseDate(
+                        book.metadata.releaseDate
+                            ?: book.created
+                            ?: book.fileLastModified,
+                    )
                 }
             }
             .sortedByDescending { it.chapter_number }
@@ -348,7 +342,8 @@ class Komga(
         }
     }
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers = headersBuilder().add("Accept", "image/*,*/*;q=0.8").build())
+    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder()
+        .header("Accept", "image/*,*/*;q=0.8").build()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filterData = data?.parseAs<FilterData>()
@@ -358,38 +353,28 @@ class Komga(
             InProgressFilter(),
             ReadFilter(),
             TypeSelect(),
-            CollectionSelect(
-                buildList {
-                    add(CollectionFilterEntry("None"))
-                    filterData?.collections?.forEach {
-                        add(CollectionFilterEntry(it.name, it.id))
-                    }
-                },
-            ),
-            LibraryFilter(filterData?.libraries.orEmpty(), defaultLibraries),
-            UriMultiSelectFilter(
-                "Status",
-                "status",
-                listOf("Ongoing", "Ended", "Abandoned", "Hiatus").map {
-                    UriMultiSelectOption(it, it.uppercase(Locale.ROOT))
-                },
-            ),
-            UriMultiSelectFilter(
-                "Genres",
-                "genre",
-                filterData?.genres.orEmpty().map { UriMultiSelectOption(it) },
-            ),
-            UriMultiSelectFilter(
-                "Tags",
-                "tag",
-                filterData?.tags.orEmpty().map { UriMultiSelectOption(it) },
-            ),
-            UriMultiSelectFilter(
-                "Publishers",
-                "publisher",
-                filterData?.publishers.orEmpty().map { UriMultiSelectOption(it) },
-            ),
         ).apply {
+            filterData?.collections?.takeIf { it.isNotEmpty() }
+                ?.map { CollectionFilterEntry(it.name, it.id) }
+                ?.let { add(CollectionSelect(listOf(CollectionFilterEntry("None")) + it)) }
+            filterData?.libraries?.takeIf { it.isNotEmpty() }
+                ?.let { add(LibraryFilter(it, defaultLibraries)) }
+            add(
+                UriMultiSelectFilter(
+                    "Status",
+                    "status",
+                    listOf("Ongoing", "Ended", "Abandoned", "Hiatus").map {
+                        UriMultiSelectOption(it, it.uppercase(Locale.ROOT))
+                    },
+                ),
+            )
+            listOf(
+                Triple("Genres", "genre", filterData?.genres),
+                Triple("Tags", "tag", filterData?.tags),
+                Triple("Publishers", "publisher", filterData?.publishers),
+            ).forEach { (name, key, values) ->
+                if (!values.isNullOrEmpty()) add(UriMultiSelectFilter(name, key, values.map { UriMultiSelectOption(it) }))
+            }
             addAll(filterData?.authors.orEmpty().map { (role, authors) -> AuthorGroup(role, authors.map { AuthorFilter(it) }) })
             add(SeriesSort())
         }
@@ -484,10 +469,9 @@ class Komga(
             default = "",
             summary = addressSummary(baseUrl),
             getSummary = addressSummary,
-            dialogMessage = "The address must not end with a forward slash.",
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
-            validate = { it.toHttpUrlOrNull() != null && !it.endsWith("/") },
-            validationMessage = "The URL is invalid, malformed, or ends with a slash",
+            validate = { it.toHttpUrlOrNull() != null },
+            validationMessage = "The URL is invalid or malformed",
             key = PREF_ADDRESS,
         ) {
             if (apiKey.isNotBlank() || (username.isNotBlank() && password.isNotBlank())) {
@@ -590,6 +574,16 @@ class Komga(
             },
             validationMessage = "Invalid chapter title format",
         )
+
+        screen.addEditTextPreference(
+            key = PREF_SCANLATOR_SEP,
+            title = "Scanlator name separator",
+            summary = "Character to use as delimiter for multiple authors",
+            default = PREF_SCANLATOR_SEP_DEFAULT,
+            inputType = InputType.TYPE_CLASS_TEXT,
+            validate = { it.length == 1 },
+            validationMessage = "Only one character",
+        )
     }
 
     @Serializable
@@ -602,23 +596,21 @@ class Komga(
         val authors: Map<String, List<AuthorDto>>, // roles to list of authors
     )
 
-    override suspend fun fetchFilterData(): JsonElement {
-        assert(baseUrl.isNotBlank())
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val libraries = async { client.get("$baseUrl/api/v1/libraries").parseAs<List<LibraryDto>>() }
+        val collections = async { client.get("$baseUrl/api/v1/collections?unpaged=true").parseAs<PageWrapperDto<CollectionDto>>().content }
+        val genres = async { client.get("$baseUrl/api/v1/genres").parseAs<Set<String>>() }
+        val tags = async { client.get("$baseUrl/api/v1/tags").parseAs<Set<String>>() }
+        val publishers = async { client.get("$baseUrl/api/v1/publishers").parseAs<Set<String>>() }
+        val authors = async { client.get("$baseUrl/api/v1/authors").parseAs<List<AuthorDto>>().groupBy { it.role } }
 
-        val libraries = client.get("$baseUrl/api/v1/libraries").parseAs<List<LibraryDto>>()
-        val collections = client.get("$baseUrl/api/v1/collections?unpaged=true").parseAs<PageWrapperDto<CollectionDto>>().content
-        val genres = client.get("$baseUrl/api/v1/genres").parseAs<Set<String>>()
-        val tags = client.get("$baseUrl/api/v1/tags").parseAs<Set<String>>()
-        val publishers = client.get("$baseUrl/api/v1/publishers").parseAs<Set<String>>()
-        val authors = client.get("$baseUrl/api/v1/authors").parseAs<List<AuthorDto>>().groupBy { it.role }
-
-        return FilterData(
-            libraries = libraries,
-            collections = collections,
-            genres = genres,
-            tags = tags,
-            publishers = publishers,
-            authors = authors,
+        FilterData(
+            libraries = libraries.await(),
+            collections = collections.await(),
+            genres = genres.await(),
+            tags = tags.await(),
+            publishers = publishers.await(),
+            authors = authors.await(),
         ).toJsonElement()
     }
 
@@ -649,5 +641,7 @@ private const val PREF_LIBRARY_LIST = "library_list"
 private const val PREF_DEFAULT_LIBRARIES = "Default libraries"
 private const val PREF_CHAPTER_NAME_TEMPLATE = "Chapter name template"
 private const val PREF_CHAPTER_NAME_TEMPLATE_DEFAULT = "{number} - {title} ({size})"
+private const val PREF_SCANLATOR_SEP = "Scanlator seperator"
+private const val PREF_SCANLATOR_SEP_DEFAULT = ","
 
 private val SUPPORTED_IMAGE_TYPES = listOf("image/jpeg", "image/png", "image/gif", "image/webp", "image/jxl", "image/heif", "image/avif")

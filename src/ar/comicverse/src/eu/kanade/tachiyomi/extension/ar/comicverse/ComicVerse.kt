@@ -8,4 +8,6 @@ import org.jsoup.nodes.Document
 abstract class ComicVerse : ZeistManga() {
 
     override fun getChapterFeedUrl(doc: Document, mangaTitle: String) = super.getChapterFeedUrl(doc, doc.selectFirst("[data-label]")?.attr("data-label")!!)
+
+    override val pageListSelector = "#cvOriginal"
 }
