@@ -63,5 +63,4 @@ class Images(
 class RelatedComic(
     val name: String,
     val url: String,
-    val thumbnail: String?,
 )
