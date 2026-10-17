@@ -43,9 +43,7 @@ abstract class FlameComics : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val normalizedQuery = query.normalizeTitle()
-        val series = fetchBrowseSeries().filter { series ->
-            (listOf(series.title) + series.altTitles.orEmpty()).any { normalizedQuery in it.normalizeTitle() }
-        }
+        val series = fetchBrowseSeries().filter { normalizedQuery in it.title.normalizeTitle() }
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 

@@ -43,18 +43,17 @@ class ChapterPageDto(
 @Serializable
 class SeriesDto(
     val title: String,
-    val altTitles: List<String>? = null,
-    private val description: String? = null,
+    private val altTitles: List<String>?,
+    private val description: String?,
     private val cover: String,
-    private val type: String? = null,
-    private val tags: List<String>? = null,
-    @SerialName("categories") private val categories: List<String>? = null,
-    private val author: List<String>? = null,
-    private val artist: List<String>? = null,
-    private val status: String? = null,
-    @SerialName("series_id") private val seriesId: Int? = null,
+    private val type: String,
+    private val tags: List<String>?,
+    private val author: List<String>?,
+    private val artist: List<String>?,
+    private val status: String,
+    @SerialName("series_id") private val seriesId: Int?,
     @SerialName("last_edit") private val lastEdit: Long,
-    val popularityRank: Int? = null,
+    val popularityRank: Int?,
 ) {
     fun toSManga(): SManga? = seriesId?.let(::toSManga)
 
@@ -85,10 +84,10 @@ class SeriesDto(
             }
         }.takeIf { it.isNotEmpty() }
 
-        genre = (listOfNotNull(type) + tags.orEmpty() + categories.orEmpty()).distinct().joinToString()
+        genre = (listOf(type) + tags.orEmpty()).distinct().joinToString()
         author = this@SeriesDto.author?.joinToString()
         artist = this@SeriesDto.artist?.joinToString()
-        status = when (this@SeriesDto.status?.lowercase()) {
+        status = when (this@SeriesDto.status.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "dropped" -> SManga.CANCELLED
             "hiatus" -> SManga.ON_HIATUS
