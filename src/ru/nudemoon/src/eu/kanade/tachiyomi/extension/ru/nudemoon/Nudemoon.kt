@@ -78,7 +78,7 @@ abstract class Nudemoon : KeiSource() {
         val response = client.get(url, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 404 && query.isNotBlank() && !isUserAuthenticated) {
-                    throw Exception("Поиск доступен только для авторизированных пользователей")
+                    throw Exception("Поиск доступен только для авторизованных пользователей")
                 } else {
                     throw HttpException(response.code)
                 }
