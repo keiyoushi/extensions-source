@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.egotoons
 
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
@@ -68,14 +67,12 @@ class ChapterDetailsDto(
 
 @Serializable
 class ChapterDto(
+    val id: Int,
     @SerialName("obra_id") private val mangaId: Int,
     @SerialName("numero") private val number: String,
     @SerialName("numero_key") private val numberKey: String? = null,
     @SerialName("titulo") private val title: String? = null,
     @SerialName("nome") private val name: String? = null,
-    @SerialName("total_paginas") private val totalPages: Int = 0,
-    @SerialName("page_url_template") private val pageUrlTemplate: String? = null,
-    @SerialName("paginas") private val pages: List<String> = emptyList(),
     @SerialName("criado_em") private val createdAt: String? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
@@ -87,19 +84,19 @@ class ChapterDto(
         chapter_number = number.toFloatOrNull() ?: -1F
         date_upload = createdAt?.let(Instant::parseOrNull)?.toEpochMilliseconds() ?: 0L
     }
-
-    fun toPageList(baseUrl: String): List<Page> {
-        val urls = pages.ifEmpty {
-            pageUrlTemplate?.let { template ->
-                (0 until totalPages).map { template.replace("{index}", it.toString()) }
-            }.orEmpty()
-        }
-        val siteUrl = baseUrl.toHttpUrl()
-        return urls.mapIndexed { index, url ->
-            Page(index, imageUrl = requireNotNull(siteUrl.resolve(url)).toString())
-        }
-    }
 }
+
+@Serializable
+class ChapterManifestDto(
+    val pages: List<ManifestPageDto>,
+    val nextOffset: Int? = null,
+)
+
+@Serializable
+class ManifestPageDto(
+    val index: Int,
+    val url: String,
+)
 
 @Serializable
 class FilterData(

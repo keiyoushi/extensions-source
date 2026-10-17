@@ -1,40 +1,33 @@
 package eu.kanade.tachiyomi.multisrc.manga18
 
 import android.util.Base64
-import android.util.Log
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-abstract class Manga18 : HttpSource() {
+abstract class Manga18 : KeiSource() {
 
-    override val supportsLatest = true
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/list-manga/$page?order_by=views").asJsoup())
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list-manga/$page?order_by=views", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        getTags(document)
-
+    protected open fun popularMangaParse(document: Document): MangasPage {
         val entries = document.select(popularMangaSelector()).map(::popularMangaFromElement)
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
 
@@ -50,11 +43,9 @@ abstract class Manga18 : HttpSource() {
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list-manga/$page", headers)
+    override suspend fun getLatestUpdates(page: Int) = popularMangaParse(client.get("$baseUrl/list-manga/$page").asJsoup())
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             val tag = filters.firstInstanceOrNull<TagFilter>()
             if (query.isNotEmpty() || tag?.selected.isNullOrEmpty()) {
@@ -71,53 +62,53 @@ abstract class Manga18 : HttpSource() {
             }
         }.build()
 
-        return GET(url, headers)
+        return popularMangaParse(client.get(url).asJsoup())
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manhwa") return null
+
+        return mangaDetailsParse(client.get(url).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+    }
 
     protected open val getAvailableTags = true
     protected open val tagsSelector = "div.grid_cate li > a"
 
-    private var tags = emptyList<Pair<String, String>>()
-    private var getTagsAttempts = 0
+    override val supportsFilterFetching get() = getAvailableTags
 
-    protected open fun getTags(document: Document) {
-        if (getAvailableTags && tags.isEmpty() && getTagsAttempts < 3) {
-            try {
-                tags = document.select(tagsSelector).map {
-                    Pair(
-                        it.text(),
-                        it.attr("href")
-                            .removeSuffix("/")
-                            .substringAfterLast("/"),
-                    )
-                }.let {
-                    listOf(Pair("", "")) + it
-                }
-            } catch (e: Exception) {
-                Log.d(name, e.stackTraceToString())
-            } finally {
-                getTagsAttempts++
-            }
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/list-manga/1").asJsoup()
+        val tags = document.select(tagsSelector).map {
+            Pair(
+                it.text(),
+                it.attr("href")
+                    .removeSuffix("/")
+                    .substringAfterLast("/"),
+            )
         }
+        return (listOf(Pair("", "")) + tags).toJsonElement()
     }
 
-    override fun getFilterList(): FilterList {
-        if (!getAvailableTags) return FilterList()
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val tags = data?.parseAs<List<Pair<String, String>>>() ?: return FilterList()
 
-        return if (tags.isEmpty()) {
-            FilterList(
-                Filter.Header("Press 'reset' to attempt to load genres"),
-            )
-        } else {
-            FilterList(
-                Filter.Header("Ignored with text search"),
-                Filter.Separator(),
-                SortFilter(),
-                TagFilter(tags),
-            )
-        }
+        return FilterList(
+            Filter.Header("Ignored with text search"),
+            Filter.Separator(),
+            SortFilter(),
+            TagFilter(tags),
+        )
+    }
+
+    // Details and chapters come from the same page
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(document), document.select(chapterListSelector()).map(::chapterFromElement))
     }
 
     protected open val infoElementSelector = "div.detail_listInfo"
@@ -130,58 +121,50 @@ abstract class Manga18 : HttpSource() {
     protected open val artistSelector = "div.info_label:contains(artist) + div.info_value"
     protected open val thumbnailSelector = "div.detail_avatar > img"
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            val info = document.selectFirst(infoElementSelector)!!
+    protected open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val info = document.selectFirst(infoElementSelector)!!
 
-            title = document.select(titleSelector).text()
-            description = buildString {
-                document.select(descriptionSelector)
-                    .eachText().onEach {
-                        append(it)
-                        append("\n\n")
-                    }
+        title = document.select(titleSelector).text()
+        description = buildString {
+            document.select(descriptionSelector)
+                .eachText().onEach {
+                    append(it)
+                    append("\n\n")
+                }
 
-                info.selectFirst(altNameSelector)
-                    ?.text()
-                    ?.takeIf { it != "Updating" && it.isNotEmpty() }
-                    ?.let {
-                        append("Alternative Names:\n")
-                        append(it)
-                    }
-            }
-            status = when (info.select(statusSelector).text()) {
-                "On Going" -> SManga.ONGOING
-                "Completed" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-            author = info.selectFirst(authorSelector)?.text()?.takeIf { it != "Updating" }
-            artist = info.selectFirst(artistSelector)?.text()?.takeIf { it != "Updating" }
-            genre = info.select(genreSelector).eachText().joinToString()
-            thumbnail_url = document.selectFirst(thumbnailSelector)?.absUrl("src")
+            info.selectFirst(altNameSelector)
+                ?.text()
+                ?.takeIf { it != "Updating" && it.isNotEmpty() }
+                ?.let {
+                    append("Alternative Names:\n")
+                    append(it)
+                }
         }
+        status = when (info.select(statusSelector).text()) {
+            "On Going" -> SManga.ONGOING
+            "Completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        author = info.selectFirst(authorSelector)?.text()?.takeIf { it != "Updating" }
+        artist = info.selectFirst(artistSelector)?.text()?.takeIf { it != "Updating" }
+        genre = info.select(genreSelector).eachText().joinToString()
+        thumbnail_url = document.selectFirst(thumbnailSelector)?.absUrl("src")
     }
 
     protected open fun chapterListSelector() = "div.chapter_box .item"
 
-    protected open val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector()).map(::chapterFromElement)
-    }
+    protected open val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.ENGLISH)
 
     protected open fun chapterFromElement(element: Element) = SChapter.create().apply {
         element.selectFirst("a")!!.run {
             setUrlWithoutDomain(absUrl("href"))
             name = text()
         }
-        date_upload = dateFormat.tryParse(element.selectFirst("p")?.text())
+        date_upload = dateFormat.tryParseDate(element.selectFirst("p")?.text())
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val script = document.selectFirst("script:containsData(slides_p_path)")
             ?: throw Exception("Unable to find script with image data")
 
@@ -200,6 +183,4 @@ abstract class Manga18 : HttpSource() {
             Page(idx, imageUrl = imageUrl)
         }
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

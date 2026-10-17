@@ -34,7 +34,7 @@ internal class SortFilter(
 
     fun toUriPart(): String {
         val base = selected.value
-        val order = if (state?.ascending == true) "" else ",desc"
+        val order = if (state?.ascending == true) ",asc" else ",desc"
         return if (base.isNotEmpty()) base + order else ""
     }
 }
@@ -47,8 +47,7 @@ private fun getSortFilter() = listOf(
     SelectFilterOption("Popular (Week)", "avg_views_week"),
     SelectFilterOption("Popular (Month)", "avg_views_month"),
     SelectFilterOption("Latest", "updated_at"),
-    SelectFilterOption("By Name", "series_name"),
-    SelectFilterOption("Books count", "books_count"),
+    SelectFilterOption("Books count", "current_books"),
     SelectFilterOption("Created at", "created_at"),
 )
 
@@ -57,16 +56,39 @@ internal class SelectFilterOption(val name: String, val value: String)
 internal class ContentRatingFilter(
     defaultRatings: Set<String>,
     ratings: List<FilterData> = CONTENT_RATINGS.map {
-        FilterData(it.replaceFirstChar { c -> c.uppercase() }, it.replaceFirstChar { c -> c.uppercase() })
+        FilterData(it, it.replaceFirstChar { c -> c.uppercase() })
     },
-) : JsonMultiSelectFilter(
+) : Filter.Group<MultiSelectOption>(
     "Content Rating",
-    "content_rating",
     ratings.map {
         MultiSelectOption(it.name, it.id).apply {
-            state = defaultRatings.contains(it.id.lowercase())
+            state = defaultRatings.contains(it.id)
         }
     },
+),
+    JsonFilter {
+    override fun addToJsonObject(
+        builder: JsonObjectBuilder,
+        key: String,
+        matchAll: Boolean?,
+    ) {
+        val selected = state.filter { it.state }.map { it.id }
+        if (selected.isEmpty()) return
+        builder.putJsonArray("age_rating") {
+            selected.map { AGE_RATINGS.getValue(it) }.distinct().forEach { add(it) }
+        }
+        if ("pornographic" !in selected) {
+            builder.put("is_pornographic", false)
+        }
+    }
+}
+
+// The site has no pornographic age rating; is_pornographic covers it.
+private val AGE_RATINGS = mapOf(
+    "safe" to "Safe",
+    "suggestive" to "FifteenPlus",
+    "erotica" to "EighteenPlus",
+    "pornographic" to "EighteenPlus",
 )
 
 internal class GenresFilter(

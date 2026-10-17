@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.rokuhentai
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,32 +9,31 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
-import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class RokuHentai :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
-
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     // Customize
 
@@ -44,9 +42,10 @@ abstract class RokuHentai :
     private val SManga.id get() = url.substringAfterLast('/').substringBefore('#')
 
     companion object {
-        val DATE_FORMAT = SimpleDateFormat("MMM d, yyyy, h:mm a", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
+        val DATE_FORMAT = DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .appendPattern("MMM d, yyyy, h:mm a")
+            .toFormatter(Locale.US)
         val IMG_REGEX = Regex("""background-image: url\("(.+?)"\);""")
         const val THUMBNAIL_PREF = "THUMBNAIL"
     }
@@ -64,16 +63,19 @@ abstract class RokuHentai :
 
     private fun parseManga(e: Element) = SManga.create().apply {
         val info = e.selectFirst(".mdc-typography--caption:last-child")!!.text().split(" images ")
-        setUrlWithoutDomain(e.absUrl("href").substringBeforeLast('/') + "#${info[0]},${DATE_FORMAT.tryParse(info[1])}")
+        setUrlWithoutDomain(e.absUrl("href").substringBeforeLast('/') + "#${info[0]},${DATE_FORMAT.tryParseDateTime(info[1], ZoneOffset.UTC)}")
         title = e.selectFirst(".site-manga-card__title--primary")!!.text()
         thumbnail_url = IMG_REGEX.matchEntire(e.selectFirst(".mdc-card__media")!!.attr("style"))?.groups[1]?.value
     }
 
     // Popular Page
 
-    override fun popularMangaRequest(page: Int) = if (page == 1) GET(baseUrl, headers) else GET("$baseUrl/_search?p=${offset["popular"]}", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = if (page == 1) baseUrl else "$baseUrl/_search?p=${offset["popular"]}"
+        return parseMangasPage(client.get(url))
+    }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangasPage(response: Response): MangasPage {
         val type = response.header("Content-Type")!!
         val mangas = if (type.contains("text/html")) {
             response.asJsoup().select(".mdc-card > .site-popunder-ad-slot").map(::parseManga)
@@ -82,20 +84,20 @@ abstract class RokuHentai :
                 parseManga(Jsoup.parse(it, baseUrl).selectFirst(".site-popunder-ad-slot")!!)
             }
         }
-        response.request.url.queryParameter("q")?.let { offset["search:$it"] = mangas.last().id }
-            ?: run { offset["popular"] = mangas.last().id }
+        mangas.lastOrNull()?.let { last ->
+            val key = response.request.url.queryParameter("q")?.let { "search:$it" } ?: "popular"
+            offset[key] = last.id
+        }
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
     // Latest Page
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
     // Search Page
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Search How-To:"),
         Filter.Header("• Search for a phrase in manga titles: this is a title."),
         Filter.Header("• Search for manga titles containing all phrases (double quotes are required to separate phrases): \"this foo\" \"that bar\"."),
@@ -106,67 +108,59 @@ abstract class RokuHentai :
         Filter.Header("• Negate a filter with \"-\": -language:foo."),
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().addQueryParameter("q", query)
         if (page > 1) {
             url.addPathSegment("_search").addQueryParameter("p", offset["search:$query"])
         }
-        return GET(url.build(), headers)
+        return parseMangasPage(client.get(url.build()))
     }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Manga Detail
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val doc = response.asJsoup()
-        val img = doc.selectFirst(".site-manga-info .mdc-card__media")
-        val titles = doc.select(".site-manga-info__info h6")
-        return SManga.create().apply {
-            thumbnail_url = IMG_REGEX.matchEntire(img!!.attr("style"))?.groups[1]?.value
-            description = titles.getOrNull(1)?.text()
-            genre = doc.select(".mdc-chip").joinToString {
-                val text = it.text().split(": ")
-                if (text[0] == "artist") author = text[1]
-                if (text[1].contains(' ')) "${text[0]}: \"${text[1]}\"" else it.text()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        if (fetchDetails) {
+            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            val img = doc.selectFirst(".site-manga-info .mdc-card__media")
+            val titles = doc.select(".site-manga-info__info h6")
+            manga.apply {
+                thumbnail_url = IMG_REGEX.matchEntire(img!!.attr("style"))?.groups[1]?.value
+                description = titles.getOrNull(1)?.text()
+                genre = doc.select(".mdc-chip").joinToString {
+                    val text = it.text().split(": ")
+                    if (text[0] == "artist") author = text[1]
+                    if (text[1].contains(' ')) "${text[0]}: \"${text[1]}\"" else it.text()
+                }
+                status = SManga.COMPLETED
+                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
+
+        val chapter = SChapter.create().apply {
+            url = manga.id
+            name = manga.title
+            date_upload = manga.url.substringAfter(',').toLong()
+            chapter_number = 0F
+            scanlator = "${manga.url.substringAfter('#').substringBefore(',')}P"
+        }
+
+        return SMangaUpdate(manga, listOf(chapter))
     }
 
     // Chapter
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}/0#top-to-bottom"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
-        listOf(
-            SChapter.create().apply {
-                url = manga.id
-                name = manga.title
-                date_upload = manga.url.substringAfter(',').toLong()
-                chapter_number = 0F
-                scanlator = "${manga.url.substringAfter('#').substringBefore(',')}P"
-            },
-        ),
-    )
-
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
-
     // Page
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val size = chapter.scanlator!!.substringBefore('P').toInt()
         val path = if (pref.getBoolean(THUMBNAIL_PREF, false)) "page-thumbnails" else "pages"
-        return Observable.just(List(size) { i -> Page(i, imageUrl = "$baseUrl/_images/$path/${chapter.url}/$i.jpg") })
+        return List(size) { i -> Page(i, imageUrl = "$baseUrl/_images/$path/${chapter.url}/$i.jpg") }
     }
-
-    // override fun pageListParse(response: Response) = response.asJsoup().select(".site-reader > img").mapIndexed { i, e ->
-    //     Page(i, imageUrl = e.absUrl("data-src"))
-    // }
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
-
-    // Image
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

@@ -1,77 +1,65 @@
 package eu.kanade.tachiyomi.extension.vi.nettruyens
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.util.Calendar
 
 @Source
-abstract class NetTruyenS : HttpSource() {
+abstract class NetTruyenS : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/tim-kiem-nang-cao".toHttpUrl().newBuilder()
             .apply { if (page > 1) addPathSegment(page.toString()) }
             .addQueryParameter("sort", "views")
             .build()
-        return GET(url, headers)
+        return parseMangaList(url)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private suspend fun parseMangaList(url: HttpUrl): MangasPage {
+        val document = client.get(url).asJsoup()
         val mangas = document.select("div.items div.item").map(::mangaFromElement)
         return MangasPage(mangas, hasNextPage(document))
     }
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/danh-sach-truyen" + if (page > 1) "/$page" else "", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.items div.item").map(::mangaFromElement)
-        return MangasPage(mangas, hasNextPage(document))
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(("$baseUrl/danh-sach-truyen" + if (page > 1) "/$page" else "").toHttpUrl())
 
     // ============================== Search ================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .apply { if (page > 1) addPathSegment(page.toString()) }
                 .addQueryParameter("keyword", query)
                 .build()
-            return GET(url, headers)
+            return parseMangaList(url)
         }
 
         val url = "$baseUrl/tim-kiem-nang-cao".toHttpUrl().newBuilder()
@@ -103,13 +91,7 @@ abstract class NetTruyenS : HttpSource() {
             url.addQueryParameter("sort", it.toValue())
         }
 
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.items div.item").map(::mangaFromElement)
-        return MangasPage(mangas, hasNextPage(document))
+        return parseMangaList(url.build())
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -127,8 +109,18 @@ abstract class NetTruyenS : HttpSource() {
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
+    }
+
+    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val info = document.selectFirst("article#item-detail")!!
         title = info.selectFirst("h1.title-detail")!!.text()
         author = info.selectFirst("li.author p.col-xs-8")?.text()
@@ -155,15 +147,12 @@ abstract class NetTruyenS : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div.list-chapter li.row:not(.heading)").map { element ->
-            SChapter.create().apply {
-                val link: Element = element.selectFirst("a")!!
-                name = link.text()
-                setUrlWithoutDomain(link.absUrl("href"))
-                date_upload = element.selectFirst("div.col-xs-4")?.text().parseRelativeDate()
-            }
+    private fun chapterListParse(document: Document): List<SChapter> = document.select("div.list-chapter li.row:not(.heading)").map { element ->
+        SChapter.create().apply {
+            val link: Element = element.selectFirst("a")!!
+            name = link.text()
+            setUrlWithoutDomain(link.absUrl("href"))
+            date_upload = element.selectFirst("div.col-xs-4")?.text().parseRelativeDate()
         }
     }
 
@@ -186,46 +175,38 @@ abstract class NetTruyenS : HttpSource() {
 
     // ============================== Pages =================================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
-            .asObservableSuccess()
-            .flatMap { response ->
-                val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter))
+        val chapterUrl = response.request.url.toString()
+        val document = response.asJsoup()
 
-                val imageUrls = document.select("div.page-chapter > img").mapNotNull { it.imageUrl() }
-                    .filterNot { it.startsWith("data:") }
-                    .distinct()
+        val imageUrls = document.select("div.page-chapter > img").mapNotNull { it.imageUrl() }
+            .filterNot { it.startsWith("data:") }
+            .distinct()
 
-                if (imageUrls.isNotEmpty()) {
-                    Observable.just(imageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) })
-                } else {
-                    val chapterId = CHAPTER_ID_REGEX.find(document.html())?.groupValues?.get(1)
-                        ?: return@flatMap Observable.just(emptyList<Page>())
+        if (imageUrls.isNotEmpty()) {
+            return imageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
+        }
 
-                    val ajaxRequest = POST(
-                        "$baseUrl/ajax/image/list/chap/$chapterId?cache=0",
-                        ajaxHeaders(response.request.url.toString()),
-                    )
-                    client.newCall(ajaxRequest).asObservableSuccess().map { ajaxResponse ->
-                        val html = ajaxResponse.parseAs<AjaxImageListDto>().html
-                        val ajaxDoc = Jsoup.parseBodyFragment(html, baseUrl)
-                        ajaxDoc.select("div.page-chapter > img").mapNotNull { it.imageUrl() }
-                            .filterNot { it.startsWith("data:") }
-                            .distinct()
-                            .mapIndexed { i, url -> Page(i, imageUrl = url) }
-                    }
-                }
-            }
+        val chapterId = CHAPTER_ID_REGEX.find(document.html())?.groupValues?.get(1)
+            ?: return emptyList()
+
+        val ajaxHeaders = headers.newBuilder()
+            .add("X-Requested-With", "XMLHttpRequest")
+            .set("Referer", chapterUrl)
+            .build()
+
+        val html = client.post(
+            "$baseUrl/ajax/image/list/chap/$chapterId?cache=0",
+            ajaxHeaders,
+            FormBody.Builder().build(),
+        ).parseAs<AjaxImageListDto>().html
+        val ajaxDoc = Jsoup.parseBodyFragment(html, baseUrl)
+        return ajaxDoc.select("div.page-chapter > img").mapNotNull { it.imageUrl() }
+            .filterNot { it.startsWith("data:") }
+            .distinct()
+            .mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    private fun ajaxHeaders(referer: String) = headersBuilder()
-        .add("X-Requested-With", "XMLHttpRequest")
-        .add("Referer", referer)
-        .build()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun Element.imageUrl(): String? = when {
         hasAttr("data-original") -> absUrl("data-original")
@@ -236,7 +217,7 @@ abstract class NetTruyenS : HttpSource() {
 
     // ============================== Filters ===============================
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Bộ lọc không dùng được khi tìm kiếm bằng từ khóa"),
         GenreGroupFilter(getGenreList()),
         StatusFilter(),

@@ -10,7 +10,7 @@ import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import okhttp3.MultipartBody
+import okhttp3.FormBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -31,35 +31,51 @@ abstract class AstralScans : MangaThemesia() {
     }
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val body = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart("manga_req", "ping")
+        val body = FormBody.Builder()
+            .add("ts_action", "get_chapters")
             .build()
 
-        return chapterListParse(
-            client.post(
-                baseUrl + manga.url,
-                headers = headersBuilder()
-                    .add("X-Requested-With", "XMLHttpRequest")
-                    .build(),
-                body = body,
-            ).asJsoup(),
+        val response = client.post(
+            baseUrl + manga.url,
+            headers = headersBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .add("X-Protect", "1")
+                .build(),
+            body = body,
         )
+
+        return parseChapters(response.body.string())
     }
 
-    override fun chapterListParse(document: Document): List<SChapter> {
-        val responseString = document.toString()
+    private fun parseChapters(rawResponse: String): List<SChapter> {
+        val responseText = rawResponse.trim()
 
-        if (responseString.startsWith("ASTRAL_")) {
-            val parts = responseString.split("|||")
+        if (responseText.startsWith("AST_")) {
+            try {
+                val payload = responseText.removePrefix("AST_")
+                val decoded = String(Base64.decode(payload.reversed(), Base64.DEFAULT), Charsets.UTF_8)
+                val parts = decoded.split("^^^")
 
-            if (parts.size >= 3) {
-                try {
-                    val rawHtml = String(Base64.decode(parts[1], Base64.DEFAULT), Charsets.UTF_8)
-                    val dynamicDataAttr = parts[2]
+                if (parts.size >= 2) {
+                    val rawHtml = parts[0]
+                    val dynamicDataAttr = parts[1]
 
                     val chapters = rawHtml.asJsoup(baseUrl).select("[$dynamicDataAttr]").mapNotNull { element ->
-                        val isTrap = element.hasClass("trap") ||
+                        val encodedUrl = element.attr(dynamicDataAttr)
+                        val chapterUrl = try {
+                            String(Base64.decode(encodedUrl, Base64.DEFAULT), Charsets.UTF_8)
+                        } catch (_: Exception) {
+                            encodedUrl
+                        }
+
+                        val spans = element.select("span")
+                        val name = spans.firstOrNull()?.text() ?: "Chapter"
+                        val dateText = spans.getOrNull(1)?.text()
+
+                        val isTrap = chapterUrl.contains("chp_trap") ||
+                            name.contains("trap", ignoreCase = true) ||
+                            dateText?.contains("trap", ignoreCase = true) == true ||
+                            element.hasClass("trap") ||
                             element.attr("class").contains("trap") ||
                             element.closest("[class*=trap]") != null
 
@@ -68,20 +84,26 @@ abstract class AstralScans : MangaThemesia() {
                         }
 
                         SChapter.create().apply {
-                            val encodedUrl = element.attr(dynamicDataAttr)
-                            val chapterUrl = String(Base64.decode(encodedUrl, Base64.DEFAULT), Charsets.UTF_8)
                             setUrlWithoutDomain(chapterUrl)
-
-                            name = element.selectFirst("span[class^=n_]")?.text() ?: "Chapter"
-                            date_upload = element.selectFirst("span[class^=d_]")?.text()?.parseChapterDate() ?: 0L
+                            this.name = name
+                            date_upload = dateText?.parseChapterDate() ?: 0L
                         }
                     }
 
                     if (chapters.isNotEmpty()) {
                         return chapters
                     }
-                } catch (_: Exception) {}
-            }
+                }
+            } catch (_: Exception) {}
+        }
+
+        return chapterListParse(responseText.asJsoup(baseUrl))
+    }
+
+    override fun chapterListParse(document: Document): List<SChapter> {
+        val text = document.body().text().trim()
+        if (text.startsWith("AST_")) {
+            return parseChapters(text)
         }
 
         // Fallback: If site reverts to standard MangaThemesia DOM elements

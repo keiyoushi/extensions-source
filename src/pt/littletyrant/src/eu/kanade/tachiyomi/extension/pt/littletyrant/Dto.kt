@@ -16,6 +16,3 @@ class ChapterDto(
 class HtmlDto(
     val html: String,
 )
-
-@Serializable
-class TokenDto(val token: String)

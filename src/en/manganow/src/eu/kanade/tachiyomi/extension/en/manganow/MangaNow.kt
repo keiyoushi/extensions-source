@@ -5,16 +5,13 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import kotlinx.serialization.json.JsonElement
+import okhttp3.OkHttpClient
 
 @Source
 abstract class MangaNow : MangaReader() {
 
-    override val client = super.client.newBuilder()
-        .rateLimit(2)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
     // =============================== Pages ================================
 
@@ -22,7 +19,7 @@ abstract class MangaNow : MangaReader() {
 
     // =============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Note,
         Filter.Separator(),
         TypeFilter(),

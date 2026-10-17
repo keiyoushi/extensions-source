@@ -17,17 +17,15 @@ import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Source
 abstract class MangaDistrict :
     MadaraNoAjax(),
     ConfigurableSource {
 
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
     override val mangaSubString = "series"
     override val genreDirectory = "publication-genre"
+    override fun nextPageSelector() = ".wp-pagenavi a.last"
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 

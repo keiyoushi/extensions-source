@@ -307,32 +307,22 @@ abstract class Comikey :
 
         val isWebtoon = manifest.metadata.readingProgression == "ttb"
 
-        return manifest.readingOrder.mapIndexed { i, it ->
-            val url = manifestUrl.newBuilder().apply {
-                removePathSegment(manifestUrl.pathSize - 1)
+        return manifest.readingOrder.mapIndexed { i, page ->
+            val image = page.variants
+                .filter { it.type == "image/webp" }
+                .maxBy { it.dimension(isWebtoon) }
 
-                if (it.alternate.isNotEmpty()) {
-                    addPathSegments(
-                        if (it.height == 2048 && it.type == "image/jpeg") {
-                            it.alternate.first { alt ->
-                                val dimension = if (isWebtoon) alt.width else alt.height
-
-                                dimension <= 1536 && alt.type == "image/webp"
-                            }
-                        } else {
-                            it.alternate.first { alt ->
-                                alt.type == "image/webp"
-                            }
-                        }.href,
-                    )
-                } else {
-                    addPathSegments(it.href)
+            val imageUrl = manifestUrl.resolve(image.href)!!
+            val url = imageUrl.newBuilder()
+                .encodedQuery(imageUrl.encodedQuery ?: manifestUrl.encodedQuery)
+                .apply {
+                    if (imageUrl.queryParameter("act") == null) {
+                        addQueryParameter("act", payload.act)
+                    }
                 }
+                .build()
 
-                addQueryParameter("act", payload.act)
-            }.toString()
-
-            Page(i, imageUrl = url)
+            Page(i, imageUrl = url.toString())
         }
     }
 

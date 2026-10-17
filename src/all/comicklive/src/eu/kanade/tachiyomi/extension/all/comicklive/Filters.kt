@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.comicklive
 
 import eu.kanade.tachiyomi.source.model.Filter
 import java.util.Calendar
-import kotlin.collections.filter
 
 abstract class SelectFilter(
     name: String,
@@ -58,13 +57,27 @@ class SortFilter :
 class GenreFilter(genres: List<Metadata.Name>) :
     TriStateGroupFilter(
         name = "Genre",
-        options = genres.map { it.name to it.slug },
+        options = genres.sortedBy { it.name }.map { it.name to it.slug },
     )
 
-class TagFilter(tags: List<Metadata.Name>) :
+internal class TagFilters(tags: List<Metadata.Name>) :
+    Filter.Group<TagFilter>(
+        "Tags",
+        tags.sortedBy { it.name }.groupBy {
+            val c = it.name.firstOrNull()?.uppercase()
+            when {
+                c == null || c !in "A".."Z" -> "#"
+                else -> c
+            }
+        }.map { (letter, tagsChunk) ->
+            TagFilter(letter, tagsChunk)
+        },
+    )
+
+internal class TagFilter(letter: String, tags: List<Metadata.Name>) :
     TriStateGroupFilter(
-        name = "Tags",
-        options = tags.map { it.name to it.slug },
+        name = letter,
+        options = tags.sortedBy { it.name }.map { it.name to it.slug },
     )
 
 class TagFilterText :

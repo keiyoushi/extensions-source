@@ -1,100 +1,45 @@
 package eu.kanade.tachiyomi.extension.ja.ichicomi
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.utils.firstInstance
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import org.jsoup.nodes.Element
 
 @Source
 abstract class Ichicomi : GigaViewer() {
-    override val supportsLatest = false
+    override val seriesListIds = listOf("2550912965889047616")
 
-    override val popularMangaSelector: String = "div[class^=Series_series__]"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        title = link.selectFirst("h4[class^=Series_title__]")!!.text()
-        thumbnail_url = link.selectFirst("img[class^=Series_thumbnail__]")?.absUrl("src")
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
-            val url = "$baseUrl/$searchPathSegment".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .build()
-            return GET(url, headers)
-        }
-
-        val filter = filters.firstInstance<CollectionFilter>()
-        val url = "$baseUrl/${filter.getPath()}"
-        return GET(url, headers)
-    }
-
-    override val searchMangaSelector: String = "li[class^=SearchResultItem_li__]"
-
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst("p[class^=SearchResultItem_series_title__]")!!.text()
-        thumbnail_url = link.selectFirst("img")?.absUrl("src")
-    }
-
-    private class CollectionFilter(filters: List<Pair<String, String>>) : Filter.Select<String>("フィルター", filters.map { it.first }.toTypedArray()) {
-        private val paths = filters.map { it.second }
-        fun getPath(): String = paths[state]
-    }
-
-    override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Pair<String, String>>().apply {
-            add(Pair("すべて", ""))
-            addAll(getCollections().map { Pair(it.name, "series/${it.path}") })
-            addAll(getGenres().map { Pair(it.first, "genres/${it.second}") })
-        }
-        return FilterList(CollectionFilter(filters))
-    }
-
-    private fun getGenres(): List<Pair<String, String>> = listOf(
-        Pair("恋愛", "romance"),
-        Pair("ラブコメ", "romantic-comedy"),
-        Pair("コメディ・ギャグ", "comedy"),
-        Pair("ホラー", "horror"),
-        Pair("サスペンス", "suspense"),
-        Pair("アクション・バトル", "action"),
-        Pair("歴史・時代", "history"),
-        Pair("日常", "nichijo"),
-        Pair("ヒューマンドラマ", "drama"),
-        Pair("異世界・転生", "isekai"),
-        Pair("ファンタジー", "fantasy"),
-        Pair("百合", "yuri"),
-        Pair("BL", "bl"),
-        Pair("TL", "tl"),
-        Pair("学園・青春", "school"),
-        Pair("お仕事", "work"),
-        Pair("メディア化", "media"),
-        Pair("新人・読切", "oneshot"),
-        Pair("完結", "finished"),
-        Pair("オリジナル", "original"),
-    )
-
-    override fun getCollections(): List<Collection> = listOf(
-        Collection("echo", "echo"),
-        Collection("gateau", "gateau"),
-        Collection("カラフルハピネス", "colorful_happiness"),
-        Collection("REX", "rex"),
-        Collection("HOWL", "howl"),
-        Collection("POOL", "pool"),
-        Collection("百合姫", "yurihime"),
-        Collection("LAKE", "lake"),
-        Collection("ZERO-SUM", "zerosum"),
-        Collection("ぱれっと", "palette"),
-        Collection("ベビードール", "babydoll"),
-        Collection("一迅プラス", "ichijin-plus"),
+    override fun getFilterOptions() = listOf(
+        "すべて" to seriesListIds,
+        "echo" to listOf("2550912965796689066", "2550912965796689067", "2550912965796689072"),
+        "gateau" to listOf("2550912965796689074", "2550912965796689075", "2550912965796689080"),
+        "カラフルハピネス" to listOf("2550912965796689089", "2550912965796689092", "2550912965796689093"),
+        "REX" to listOf("2550912965796689101", "2550912965796689105", "2550912965796689108"),
+        "HOWL" to listOf("2550912965796689112", "2550912965796689114", "2550912965796689120"),
+        "POOL" to listOf("2550912965796689123", "2550912965796689131", "2550912965796689144"),
+        "百合姫" to listOf("2550912965796689168", "2550912965796689175", "2550912965796689183"),
+        "LAKE" to listOf("2550912965796689148", "2550912965796689158", "2550912965796689163"),
+        "ZERO-SUM" to listOf("2550912965796689187", "2550912965796689195", "2550912965796689196"),
+        "ぱれっと" to listOf("2550912965796689199", "2550912965796689206", "2550912965796689212"),
+        "ベビードール" to listOf("2550912965796689213", "2550912965796689214", "2550912965796689218"),
+        "一迅プラス" to listOf("2550912965796689248", "2550912965796689255", "2550912965796689266"),
+        "恋愛" to listOf("Genre:2550912965827315660"),
+        "ラブコメ" to listOf("Genre:2550912965827315672"),
+        "コメディ・ギャグ" to listOf("Genre:2550912965827315678"),
+        "ホラー" to listOf("Genre:2550912965827315681"),
+        "サスペンス" to listOf("Genre:2550912965827315687"),
+        "アクション・バトル" to listOf("Genre:2550912965827315689"),
+        "歴史・時代" to listOf("Genre:2550912965827315693"),
+        "日常" to listOf("Genre:2550912965827315695"),
+        "ヒューマンドラマ" to listOf("Genre:2550912965827315700"),
+        "異世界・転生" to listOf("Genre:2550912965827315707"),
+        "ファンタジー" to listOf("Genre:2550912965827315710"),
+        "百合" to listOf("Genre:2550912965827315711"),
+        "BL" to listOf("Genre:2550912965827315722"),
+        "TL" to listOf("Genre:2550912965827315725"),
+        "学園・青春" to listOf("Genre:2550912965827315726"),
+        "お仕事" to listOf("Genre:2550912965827315727"),
+        "メディア化" to listOf("Genre:2550912965827315728"),
+        "新人・読切" to listOf("Genre:2550912965827315729"),
+        "完結" to listOf("Genre:2550912965827315734"),
+        "オリジナル" to listOf("Genre:2550912965827315743"),
     )
 }

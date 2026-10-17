@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
@@ -20,19 +19,26 @@ class Hentai(
     val thumbnail: Int,
     val pages: Int,
     val tags: List<Name>? = null,
-)
+) {
+    val fullTitle: String
+        get() = buildFullTitle(title, tags)
+}
 
 @Serializable
 class ShortHentai(
     val hash: String,
+    val title: String,
     val thumbnail: Int,
     val description: String? = null,
-    @SerialName("released_at") val releasedAt: String? = null,
-    @SerialName("created_at") val createdAt: String? = null,
+    val releasedAt: String? = null,
+    val createdAt: String? = null,
     val tags: List<Name>? = null,
     val size: Long,
     val pages: Int,
-)
+) {
+    val fullTitle: String
+        get() = buildFullTitle(title, tags)
+}
 
 @Serializable
 class Name(
@@ -53,11 +59,42 @@ class Data(
 @Serializable
 class HentaiIndexes(
     val hash: Int,
+    val title: Int,
     val thumbnail: Int,
     val description: Int,
-    @SerialName("released_at") val releasedAt: Int,
-    @SerialName("created_at") val createdAt: Int,
+    val releasedAt: Int,
+    val createdAt: Int,
     val tags: Int,
     val size: Int,
     val pages: Int,
 )
+
+private fun buildFullTitle(
+    title: String,
+    tags: List<Name>?,
+): String {
+    val grouped = tags.orEmpty()
+        .filter { it.name.isNotBlank() }
+        .groupBy { it.namespace }
+
+    val circle = grouped["circle"]?.joinToString(" & ") { it.name }
+    val artist = grouped["artist"]?.joinToString(" & ") { it.name }
+    val magazine = grouped["magazine"]?.joinToString(" & ") { it.name }
+
+    return buildString {
+        when {
+            !circle.isNullOrBlank() -> {
+                append("[$circle")
+                if (!artist.isNullOrBlank()) append(" ($artist)")
+                append("] ")
+            }
+            !artist.isNullOrBlank() -> append("[$artist] ")
+        }
+
+        append(title)
+
+        if (!magazine.isNullOrBlank()) {
+            append(" ($magazine)")
+        }
+    }
+}

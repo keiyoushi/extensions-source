@@ -5,22 +5,22 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import org.jsoup.nodes.Document
 
 @Source
-abstract class BroccoliSoup : HttpSource() {
+abstract class BroccoliSoup : KeiSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.client.newBuilder().addInterceptor(TextInterceptor()).build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(TextInterceptor())
 
     // Popular
 
@@ -33,31 +33,32 @@ abstract class BroccoliSoup : HttpSource() {
         thumbnail_url = "https://politeandgood.com/assets/images/static/Bocki%20(correct%20size).png"
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(createManga()), false)
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val chapterList = if (fetchChapters) {
+            chapterListParse(client.get(getMangaUrl(manga)).asJsoup())
+        } else {
+            chapters
+        }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+        return SMangaUpdate(createManga(), chapterList)
+    }
 
     // Chapters
 
@@ -69,14 +70,14 @@ abstract class BroccoliSoup : HttpSource() {
         chapter_number = 0f
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private fun chapterListParse(document: Document): List<SChapter> {
         // Keep track of the last-used chapter number in each "arc" of chapters
         val arcIndexMap = mutableMapOf<String, Int>()
 
         // Add the character summary page as a chapter
         val chaptersList = mutableListOf(createCharacterSummaryChapter())
 
-        response.asJsoup().select("li.archive-marker")
+        document.select("li.archive-marker")
             .flatMapTo(chaptersList) { groupElement ->
                 val arcTitle = groupElement.selectFirst(".archive-header .marker-title")?.text()
                 groupElement.select("li.archive-page")
@@ -124,7 +125,7 @@ abstract class BroccoliSoup : HttpSource() {
 
     // Pages
 
-    private fun characterSummaryPageListParse(response: Response): List<Page> = response.asJsoup().select("section.static-block:has(figure, .block-content)")
+    private fun characterSummaryPageListParse(document: Document): List<Page> = document.select("section.static-block:has(figure, .block-content)")
         .flatMap { sectionElement ->
             val headerText = sectionElement
                 .selectFirst("section > :is(h1, h2, h3, h4)")
@@ -150,17 +151,19 @@ abstract class BroccoliSoup : HttpSource() {
             )
         }
 
-    override fun pageListParse(response: Response): List<Page> {
-        if (response.request.url.pathSegments.lastOrNull() == characterSummaryPathSlug) {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter))
+        val isCharacterSummary = response.request.url.pathSegments.lastOrNull() == characterSummaryPathSlug
+        val document = response.asJsoup()
+
+        if (isCharacterSummary) {
             // The character summary page needs special parsing
-            return characterSummaryPageListParse(response)
+            return characterSummaryPageListParse(document)
         }
 
-        return response.asJsoup().select("#comic img")
+        return document.select("#comic img")
             .mapIndexed { index, element ->
                 Page(index, "", element.attr("abs:src"))
             }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.fuzzydoodle
 
 import eu.kanade.tachiyomi.source.model.Filter
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl
 
 interface UrlPartFilter {
@@ -61,4 +62,11 @@ class GenreFilter(
     "Genres",
     options,
     "genre[]",
+)
+
+@Serializable
+class FilterData(
+    val types: List<Pair<String, String>>,
+    val statuses: List<Pair<String, String>>,
+    val genres: List<Pair<String, String>>,
 )

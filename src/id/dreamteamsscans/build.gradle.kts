@@ -6,17 +6,13 @@ plugins {
 
 keiyoushi {
     name = "DreamTeams Scans"
-    versionCode = 33
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
+    theme = "loneseal"
 
     source {
         lang = "id"
         baseUrl = "https://dreamteams.space"
-    }
-
-    deeplink {
-        host("dreamteams.space")
-        path("/comic/..*")
     }
 }

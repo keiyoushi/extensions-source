@@ -7,9 +7,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class PopularResponse(
@@ -82,21 +80,19 @@ class ChapterDto(
         val numberString = numero.jsonPrimitive.content
         name = "Capítulo $numberString"
         url = "/series/$slug/$numberString" + (pageCount?.let { "?pages=$it" }.orEmpty())
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.tryParse(createdAt)
         chapter_number = numberString.toFloatOrNull() ?: -1f
     }
 }
 
 @Serializable
-class PageList(
-    val imageUrls: List<String>,
+class ChapterIdDto(
+    val capituloId: Int,
 )
 
 @Serializable
-class FetchResult(
-    val success: Boolean,
-    val result: String,
-    val contentType: String? = null,
+class PageList(
+    val pages: List<String>,
 )
 
 private fun parseStatus(status: String?) = when (status?.lowercase()) {
@@ -105,8 +101,4 @@ private fun parseStatus(status: String?) = when (status?.lowercase()) {
     "hiatus" -> SManga.ON_HIATUS
     "cancelled" -> SManga.CANCELLED
     else -> SManga.UNKNOWN
-}
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
 }

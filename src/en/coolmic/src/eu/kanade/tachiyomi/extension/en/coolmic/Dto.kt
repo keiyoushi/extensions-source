@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.en.coolmic
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.collections.flatten
 import kotlin.text.padStart
@@ -87,12 +87,12 @@ class Episode(
         val lock = if (isLocked) "🔒 " else ""
         url = id.toString()
         name = lock + "Chapter $number"
-        date_upload = dateFormat.tryParse(startAt)
+        date_upload = dateFormat.tryParseDate(startAt)
         chapter_number = displayOrder?.toFloat() ?: -1f
     }
 }
 
-private val dateFormat = SimpleDateFormat("MM/dd/yy", Locale.ROOT)
+private val dateFormat = DateTimeFormatter.ofPattern("M/d/yy", Locale.ROOT)
 
 @Serializable
 class ViewerResponse(

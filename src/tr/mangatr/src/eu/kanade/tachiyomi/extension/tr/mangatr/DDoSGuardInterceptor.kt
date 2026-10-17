@@ -12,8 +12,10 @@ class DDoSGuardInterceptor(private val client: OkHttpClient) : Interceptor {
         val response = chain.proceed(originalRequest)
 
         // DDoS-Guard sometimes returns a 200 OK with a JavaScript challenge instead of a 403.
+        // Every response carries "Server: ddos-guard", so that header alone must not trigger
+        // a retry: the chapter list key is bound to the session and re-running the request
+        // after the check refreshes cookies and yields an empty body.
         val isDdosGuard = response.code == 403 ||
-            response.header("Server")?.contains("ddos-guard") == true ||
             (response.code == 200 && response.peekBody(4096).string().contains("check.ddos-guard.net/check.js"))
 
         // Check if DDos-GUARD is on

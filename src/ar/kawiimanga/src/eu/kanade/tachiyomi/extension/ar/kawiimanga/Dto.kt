@@ -2,7 +2,10 @@ package eu.kanade.tachiyomi.extension.ar.kawiimanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
 @Serializable
@@ -66,16 +69,22 @@ class Chapter(
 ) {
 
     fun toSChapter(slug: String) = SChapter.create().apply {
-        url = "$slug/$number#$id"
-        name = buildString {
-            append("الفصل $number")
-            if (this.toString() != title) append(" - $title")
-        }
-        date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
+        url = "$slug/$number"
+        val baseName = "الفصل $number"
+        name = if (title == baseName) baseName else "$baseName - $title"
+        chapter_number = number.toFloat()
+        date_upload = Instant.tryParse(createdAt)
+        memo = buildJsonObject { put("id", id) }
     }
 }
 
 @Serializable
 class Pages(
     val pages: List<String>,
+)
+
+@Serializable
+class Token(
+    val token: String,
+    val expiresIn: Int,
 )

@@ -1,37 +1,30 @@
 package eu.kanade.tachiyomi.extension.en.onlythebesthentai
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Instant
 
 @Source
-abstract class OnlyTheBestHentai : HttpSource() {
-
-    override val supportsLatest = true
-
-    private val preferences by getPreferencesLazy()
+abstract class OnlyTheBestHentai : KeiSource() {
 
     private val challengeInterceptor = Interceptor { chain ->
         val response = chain.proceed(chain.request())
@@ -45,22 +38,18 @@ abstract class OnlyTheBestHentai : HttpSource() {
         response
     }
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(challengeInterceptor)
-        .build()
-
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ENGLISH)
-    }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(challengeInterceptor)
 
     // ============================= Popular / Latest ===========================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/${if (page > 1) "page/$page/" else ""}", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/${if (page > 1) "page/$page/" else ""}")
 
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
+    override val supportsLatest = false
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val doc = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    private suspend fun parseMangaList(url: String): MangasPage {
+        val doc = client.get(url).asJsoup()
         val mangas = doc.select("article.post").map(::elementToManga)
         return MangasPage(mangas, doc.selectFirst("a.next.page-numbers") != null)
     }
@@ -72,43 +61,35 @@ abstract class OnlyTheBestHentai : HttpSource() {
         thumbnail_url = el.selectFirst(".nv-post-thumbnail-wrap img")?.attr("abs:src")
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
     // =============================== Search ==================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("s", query)
                 .apply { if (page > 1) addQueryParameter("paged", page.toString()) }
                 .build()
-            return GET(url, headers)
+            return parseMangaList(url.toString())
         }
 
-        val filterUrl = filters.firstNotNullOfOrNull { filter ->
-            when (filter) {
-                is TagFilter ->
-                    tagList.getOrNull(filter.state - 1)?.let { "$baseUrl/tag/${it.slug}/" }
-                is ParodyFilter ->
-                    parodyList.getOrNull(filter.state - 1)?.let { "$baseUrl/parody/${it.slug}/" }
-                is CharacterFilter ->
-                    characterList.getOrNull(filter.state - 1)?.let { "$baseUrl/characters/${it.slug}/" }
-                is ArtistFilter ->
-                    artistList.getOrNull(filter.state - 1)?.let { "$baseUrl/artist/${it.slug}/" }
-                else -> null
-            }
+        val filterUrl = filters.filterIsInstance<TaxonomyFilter>().firstNotNullOfOrNull { filter ->
+            filter.selectedSlug?.let { "$baseUrl/${filter.path}/$it/" }
         } ?: "$baseUrl/"
 
-        return GET("$filterUrl${if (page > 1) "page/$page/" else ""}", headers)
+        return parseMangaList("$filterUrl${if (page > 1) "page/$page/" else ""}")
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    // ======================== Manga Details / Chapters ========================
 
-    // ============================= Manga Details =============================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val doc = response.asJsoup()
-        return SManga.create().apply {
+        val details = SManga.create().apply {
             title = doc.selectFirst("h1.manga-title")!!.text()
             thumbnail_url = doc.selectFirst(".manga-box .manga-img img")?.attr("abs:src")
             genre = doc.select(
@@ -120,6 +101,22 @@ abstract class OnlyTheBestHentai : HttpSource() {
             description = buildDescription(doc)
             status = SManga.COMPLETED
         }
+
+        val pageCount = doc.select(".manga-tags-container").firstNotNullOfOrNull { container: Element ->
+            val label = container.selectFirst(".manga-tags-label")?.text()
+                ?: return@firstNotNullOfOrNull null
+            if (!label.startsWith("Pages")) return@firstNotNullOfOrNull null
+            container.text().replace(NON_DIGIT_REGEX, "").toIntOrNull()
+        }
+
+        val chapter = SChapter.create().apply {
+            setUrlWithoutDomain(doc.location())
+            name = if (pageCount != null) "Chapter [$pageCount pages]" else "Chapter"
+            chapter_number = 1f
+            date_upload = Instant.tryParse(doc.selectFirst("meta[property=article:published_time]")?.attr("content"))
+        }
+
+        return SMangaUpdate(details, listOf(chapter))
     }
 
     private fun buildDescription(doc: Document): String = buildString {
@@ -145,38 +142,9 @@ abstract class OnlyTheBestHentai : HttpSource() {
         }
     }.trim()
 
-    // ============================== Chapters =================================
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.asJsoup()
-
-        val pageCount = doc.select(".manga-tags-container").firstNotNullOfOrNull { container: Element ->
-            val label = container.selectFirst(".manga-tags-label")?.text()
-                ?: return@firstNotNullOfOrNull null
-            if (!label.startsWith("Pages")) return@firstNotNullOfOrNull null
-            container.text().replace(NON_DIGIT_REGEX, "").toIntOrNull()
-        }
-
-        val rawDate = doc.selectFirst("meta[property=article:published_time]")
-            ?.attr("content")
-            ?.replace(TIMEZONE_COLON_REGEX, "$1$2")
-            ?: ""
-
-        return listOf(
-            SChapter.create().apply {
-                setUrlWithoutDomain(response.request.url.toString())
-                name = if (pageCount != null) "Chapter [$pageCount pages]" else "Chapter"
-                chapter_number = 1f
-                date_upload = dateFormat.tryParse(rawDate)
-            },
-        )
-    }
-
     // ============================== Page List ================================
 
-    override fun pageListParse(response: Response): List<Page> = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
         .select(".manga-gallery-wrapper figure.wp-block-image img")
         .mapIndexed { i: Int, img: Element -> Page(i, imageUrl = bestImageUrl(img)) }
 
@@ -193,38 +161,33 @@ abstract class OnlyTheBestHentai : HttpSource() {
         return img.attr("abs:src")
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ==================================
 
     @Serializable
-    private data class FilterEntry(val name: String, val slug: String, val count: Int) {
+    private class FilterEntry(val name: String, val slug: String, val count: Int) {
         override fun toString() = "$name ($count)"
     }
 
     @Serializable
-    private data class TaxonomyDto(val name: String, val slug: String, val count: Int = 0) {
+    private class TaxonomyDto(private val name: String, private val slug: String, private val count: Int = 0) {
         fun toFilterEntry() = FilterEntry(name, slug, count)
     }
 
-    private var tagList: List<FilterEntry> = emptyList()
-    private var parodyList: List<FilterEntry> = emptyList()
-    private var characterList: List<FilterEntry> = emptyList()
-    private var artistList: List<FilterEntry> = emptyList()
-    private var filtersLoaded = false
-    private var filterFetchInProgress = false
+    @Serializable
+    private class FilterData(
+        val tags: List<FilterEntry>,
+        val parodies: List<FilterEntry>,
+        val characters: List<FilterEntry>,
+        val artists: List<FilterEntry>,
+    )
 
-    // ----------------------- REST API fetch ---------------------------------
-
-    private fun fetchTaxonomy(restPath: String): List<FilterEntry> {
+    private suspend fun fetchTaxonomy(restPath: String): List<FilterEntry> {
         val result = mutableListOf<FilterEntry>()
         var page = 1
         var totalPages = 1
 
         do {
-            val response = client.newCall(
-                GET("$baseUrl/wp-json/wp/v2/$restPath?per_page=100&page=$page", headers),
-            ).execute()
+            val response = client.get("$baseUrl/wp-json/wp/v2/$restPath?per_page=100&page=$page")
             if (page == 1) {
                 totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
             }
@@ -235,111 +198,38 @@ abstract class OnlyTheBestHentai : HttpSource() {
         return result.sortedBy { it.name.lowercase() }
     }
 
-    // ----------------------- Cache ------------------------------------------
+    override val supportsFilterFetching get() = true
 
-    private fun isCacheValid(): Boolean = System.currentTimeMillis() - preferences.getLong(PREF_TIMESTAMP, 0L) < TimeUnit.DAYS.toMillis(1)
+    override suspend fun fetchFilterData(): JsonElement = FilterData(
+        tags = fetchTaxonomy("tags"),
+        parodies = fetchTaxonomy("categories"),
+        characters = fetchTaxonomy("characters"),
+        artists = fetchTaxonomy("artist"),
+    ).toJsonElement()
 
-    private fun loadFiltersFromCache(): Boolean {
-        if (!isCacheValid()) return false
-        val tags = preferences.getString(PREF_TAGS, null)
-            ?.let { runCatching { Json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
-            ?.takeIf { it.isNotEmpty() } ?: return false
-        tagList = tags
-        parodyList = preferences.getString(PREF_PARODIES, null)
-            ?.let { runCatching { Json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
-            ?: emptyList()
-        characterList = preferences.getString(PREF_CHARACTERS, null)
-            ?.let { runCatching { Json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
-            ?: emptyList()
-        artistList = preferences.getString(PREF_ARTISTS, null)
-            ?.let { runCatching { Json.decodeFromString<List<FilterEntry>>(it) }.getOrNull() }
-            ?: emptyList()
-        return true
+    private class TaxonomyFilter(name: String, val path: String, private val entries: List<FilterEntry>) :
+        Filter.Select<String>(
+            name,
+            (listOf("Any") + entries.map { it.toString() }).toTypedArray(),
+        ) {
+        val selectedSlug get() = entries.getOrNull(state - 1)?.slug
     }
 
-    private fun triggerFilterLoad() {
-        if (filtersLoaded || filterFetchInProgress) return
-        if (loadFiltersFromCache()) {
-            filtersLoaded = true
-            return
-        }
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterData>() ?: return FilterList()
 
-        filterFetchInProgress = true
-        Thread {
-            try {
-                tagList = fetchTaxonomy("tags")
-                parodyList = fetchTaxonomy("categories")
-                characterList = fetchTaxonomy("characters")
-                artistList = fetchTaxonomy("artist")
-                preferences.edit()
-                    .putString(PREF_TAGS, tagList.toJsonString())
-                    .putString(PREF_PARODIES, parodyList.toJsonString())
-                    .putString(PREF_CHARACTERS, characterList.toJsonString())
-                    .putString(PREF_ARTISTS, artistList.toJsonString())
-                    .putLong(PREF_TIMESTAMP, System.currentTimeMillis())
-                    .apply()
-                filtersLoaded = true
-            } catch (_: Exception) {
-            } finally {
-                filterFetchInProgress = false
-            }
-        }.start()
-    }
-
-    // ----------------------- Filter classes ---------------------------------
-
-    private inner class TagFilter :
-        Filter.Select<String>(
-            "Tag",
-            (listOf("Any") + tagList.map { it.toString() }).toTypedArray(),
+        return FilterList(
+            Filter.Header("Only one filter applies at a time (first selected wins)"),
+            TaxonomyFilter("Tag", "tag", filterData.tags),
+            TaxonomyFilter("Parody", "parody", filterData.parodies),
+            TaxonomyFilter("Character", "characters", filterData.characters),
+            TaxonomyFilter("Artist", "artist", filterData.artists),
         )
-
-    private inner class ParodyFilter :
-        Filter.Select<String>(
-            "Parody",
-            (listOf("Any") + parodyList.map { it.toString() }).toTypedArray(),
-        )
-
-    private inner class CharacterFilter :
-        Filter.Select<String>(
-            "Character",
-            (listOf("Any") + characterList.map { it.toString() }).toTypedArray(),
-        )
-
-    private inner class ArtistFilter :
-        Filter.Select<String>(
-            "Artist",
-            (listOf("Any") + artistList.map { it.toString() }).toTypedArray(),
-        )
-
-    override fun getFilterList(): FilterList {
-        triggerFilterLoad()
-        return if (!filtersLoaded) {
-            FilterList(
-                Filter.Header("⚠ Press ↺ Reset to load filters"),
-                Filter.Header("Filters load in a few seconds — press Reset again"),
-            )
-        } else {
-            FilterList(
-                Filter.Header("Only one filter applies at a time (first selected wins)"),
-                TagFilter(),
-                ParodyFilter(),
-                CharacterFilter(),
-                ArtistFilter(),
-            )
-        }
     }
 
     companion object {
         private val TITLE_CLEANUP_REGEX = Regex("""\s*\[\d+]\s*$""")
         private val NON_DIGIT_REGEX = Regex("[^0-9]")
-        private val TIMEZONE_COLON_REGEX = Regex("([+-]\\d{2}):(\\d{2})$")
         private val WHITESPACE_REGEX = Regex("\\s+")
-
-        private const val PREF_TAGS = "filter_tags"
-        private const val PREF_PARODIES = "filter_parodies"
-        private const val PREF_CHARACTERS = "filter_characters"
-        private const val PREF_ARTISTS = "filter_artists"
-        private const val PREF_TIMESTAMP = "filter_cache_ts"
     }
 }

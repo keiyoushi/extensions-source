@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "LXManga"
-    versionCode = 40
+    versionCode = 42
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

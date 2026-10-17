@@ -78,7 +78,7 @@ class BrowseManga(
         title = this@BrowseManga.title
 
         thumbnail_url = if (isAdult && hideAdultCovers) {
-            "https://fakeimg.ryd.tools/400x600/?text=NSFW"
+            "https://fakeimg.cnbattle.com/400x600/?text=NSFW"
         } else {
             photo?.let {
                 if (it.startsWith("/")) {
@@ -116,12 +116,14 @@ class MangaData(
     @Serializable
     class Data(
         val manga: Manga,
+        @SerialName("total_volumes")
+        val volumeCount: Int? = null,
     )
 }
 
 @Serializable
 class RelatedData(
-    val suggestions: List<BrowseManga> = emptyList(),
+    val suggestions: List<BrowseManga>? = null,
     val relationsData: RelationsData? = null,
 ) {
     @Serializable
@@ -194,7 +196,7 @@ class Manga(
         private val listRegex = Regex("\n\n(-|•|\\d+\\.)")
     }
 
-    fun toSManga(baseUrl: String, showTags: Boolean = true) = SManga.create().apply {
+    fun toSManga(baseUrl: String, showTags: Boolean = true, extraVolumeCount: Int? = null) = SManga.create().apply {
         url = id.toString()
         title = this@Manga.title
         thumbnail_url = photo?.let {
@@ -246,6 +248,7 @@ class Manga(
             val metaInfo = buildList {
                 year?.let { add("**Year:** $it") }
                 chapterCount?.let { add("**Chapters:** $it") }
+                extraVolumeCount?.let { add("**Volumes:** $it") }
                 trackedCount?.let { add("**Tracked:** $it") }
                 contentRating?.let {
                     add("**Content Rating:** ${it.replaceFirstChar { c -> c.uppercase() }}")

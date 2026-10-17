@@ -4,15 +4,12 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class PaginatedResponseDto<T : EntityDto>(
-    val result: String,
     val data: List<T> = emptyList(),
     val meta: PaginationStateDto,
 )
 
 @Serializable
 class ResponseDto<T : EntityDto>(
-    val result: String,
-    val type: String,
     val data: T? = null,
 )
 

@@ -6,10 +6,10 @@ plugins {
 
 keiyoushi {
     name = "SummerToon"
-    versionCode = 2
+    versionCode = 58
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "mangathemesia"
 
     source {
         lang = "tr"

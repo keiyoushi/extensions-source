@@ -10,6 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
 import org.jsoup.nodes.TextNode
+import java.util.Locale
 import kotlin.time.Instant
 
 @Serializable
@@ -64,6 +65,7 @@ class MangaDto(
     @SerialName("coverImage")
     val coverUrl: String? = null,
     val slug: String = "",
+    val urlSlug: String? = null,
     val status: String = "",
     val type: String = "",
     val origin: String = "",
@@ -78,15 +80,17 @@ class MangaDto(
     val team: TeamDto? = null,
     val similarSeries: List<MangaDto> = emptyList(),
 ) {
-    fun toSManga(baseUrl: String): SManga = toSManga(baseUrl, SManga.create())
+    fun toSManga(baseUrl: String, manga: SManga = SManga.create(), fallbackSlug: String = ""): SManga = manga.apply {
+        val canonicalSlug = listOf(urlSlug.orEmpty(), memo["slug"]?.string.orEmpty(), fallbackSlug)
+            .firstOrNull { it.isNotBlank() }
+            ?: slug
 
-    fun toSManga(baseUrl: String, manga: SManga): SManga = manga.apply {
         title = this@MangaDto.title
         thumbnail_url = coverUrl?.let { it.toAbsoluteUrl(baseUrl) }
         url = id
         memo = buildJsonObject {
             put("id", id)
-            put("slug", slug)
+            put("slug", canonicalSlug)
         }
         status = this@MangaDto.status.toSMangaStatus()
         author = team?.name
@@ -101,7 +105,7 @@ class MangaDto(
                 append(it.htmlToText(baseUrl))
             }
             val info = buildList {
-                rating.takeIf { it > 0 }?.let { add("Rating: $it") }
+                rating.takeIf { it > 0 }?.let { add("Rating: ${"%.1f".format(Locale.US, it)}") }
                 type.takeIf { it.isNotBlank() }?.let { add("Type: $it") }
                 origin.takeIf { it.isNotBlank() }?.let { add("Origin: $it") }
                 if (isHot) add("Featured")

@@ -33,7 +33,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -45,13 +44,13 @@ import kotlin.time.Duration.Companion.seconds
 abstract class BookWalkerJp :
     KeiSource(),
     ConfigurableSource {
-    private val memberApiUrl = "https://member.$DOMAIN/api"
-    private val viewerUrl = "https://viewer.$DOMAIN"
-    private val trialUrl = "https://viewer-trial.$DOMAIN"
-    private val dfViewer = "https://viewer-df.$DOMAIN"
+    private val memberApiUrl get() = "https://member.$DOMAIN/api"
+    private val viewerUrl get() = "https://viewer.$DOMAIN"
+    private val trialUrl get() = "https://viewer-trial.$DOMAIN"
+    private val dfViewer get() = "https://viewer-df.$DOMAIN"
     private val preferences by getPreferencesLazy()
-    private val desktopHeaders = headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
+    private val desktopHeaders get() = headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36")
         .build()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
@@ -264,11 +263,7 @@ abstract class BookWalkerJp :
     private fun Element.bookLink(): Element = selectFirst("a.m-book-item__title")!!
     private fun Element.bookId(): String = bookLink().absUrl("href").toHttpUrl().pathSegments.first()
 
-    private val publusAuth = PublusAuthHandler(
-        client = client,
-        refreshSeconds = AUTH_REFRESH_SECONDS,
-        bid = "0",
-    ) { session, _ ->
+    private val publusAuth = PublusAuthHandler(AUTH_REFRESH_INTERVAL) { session ->
         val cUrl = session["cUrl"]!!.toHttpUrl()
         val cookies = client.cookieJar.loadForRequest(cUrl)
         val refreshUrl = cUrl.newBuilder().apply {
@@ -279,13 +274,13 @@ abstract class BookWalkerJp :
             cookies.find { it.name == "u2" }?.let { addQueryParameter("u2", it.value) }
         }.build()
 
-        GET(refreshUrl, headers)
+        client.get(refreshUrl).parseAs<PublusContent>().authInfo?.toAuth(bid = "0")
     }
 
     override fun getChapterUrl(chapter: SChapter): String = chapter.memo["viewerUrl"]?.string ?: throw Exception("Refresh Chapter List")
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = client.get(getChapterUrl(chapter), desktopHeaders, ensureSuccess = false).request.url
+        val chapterUrl = client.get(getChapterUrl(chapter), desktopHeaders, ensureSuccess = false).use { it.request.url }
         val cid = chapterUrl.queryParameter("cid")
         val cty = chapterUrl.queryParameter("cty")?.toIntOrNull()
         val host = chapterUrl.host
@@ -329,29 +324,27 @@ abstract class BookWalkerJp :
             }.build()
 
             val content = client.get(cApiUrl).parseAs<PublusContent>()
-
-            if (content.status == "401" || content.status == "403") {
-                throw Exception("Log in via WebView and rent or purchase this chapter to read.")
-            }
+            val contentUrl = content.url
+                ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
 
             if (content.cty != 1 && content.cty != 2) {
                 throw Exception("Novels are not supported!")
             }
 
-            val sessionData = buildMap {
-                put("cid", cid)
-                put("isTrial", isTrial.toString())
-                put("cUrl", cApiBase)
-                if (cr != null) put("cr", cr)
-            }
-
             val auth = content.authInfo?.toAuth(bid = "0", includeBookAuth = !isTrial)
 
-            if (!isTrial && auth != null) {
+            val sessionData = if (isTrial || auth == null) {
+                null
+            } else {
                 publusAuth.store(cid, auth)
+                buildMap<String, String> {
+                    put("cid", cid)
+                    put("cUrl", cApiBase)
+                    if (cr != null) put("cr", cr)
+                }
             }
 
-            fetchPages(content.url!!, headers, client, auth, sessionData)
+            client.fetchPages(contentUrl, auth, sessionData)
         } else {
             throw Exception("No preview available, or you need to purchase this volume.")
         }
@@ -380,17 +373,13 @@ abstract class BookWalkerJp :
         }
     }
 
-    private fun authorize(imageUrl: String): String {
-        val url = imageUrl.toHttpUrlOrNull() ?: return imageUrl
-        val session = url.fragment?.parseFragmentOrNull()?.extra ?: return imageUrl
-        if (session["isTrial"] == "true") return imageUrl
-        val key = session["cid"] ?: return imageUrl
-
-        val auth = publusAuth.currentAuth(key, session) ?: return imageUrl
-        return auth.applyTo(url.newBuilder().query(null)).build().toString()
+    override fun imageRequest(page: Page): Request {
+        val request = super.imageRequest(page)
+        val session = request.url.fragment?.parseFragmentOrNull()?.extra ?: return request
+        val auth = runBlocking { publusAuth.currentAuth(session["cid"]!!, session) } ?: return request
+        val url = auth.applyTo(request.url.newBuilder().query(null)).build()
+        return request.newBuilder().url(url).build()
     }
-
-    override fun imageRequest(page: Page): Request = GET(authorize(page.imageUrl!!), headers)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -402,7 +391,7 @@ abstract class BookWalkerJp :
 
     companion object {
         // Normal (non-trial) auth data expires after 60s
-        private const val AUTH_REFRESH_SECONDS = 45L
+        private val AUTH_REFRESH_INTERVAL = 45.seconds
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
         private val SCRIPT_REGEX = Regex("""^(\w+)=function\(\)\{[\s\S]*?\};""", RegexOption.MULTILINE)
     }

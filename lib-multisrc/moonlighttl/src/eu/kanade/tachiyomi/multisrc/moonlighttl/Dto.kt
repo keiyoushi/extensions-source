@@ -6,8 +6,7 @@ import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class ResponseDto<T>(
@@ -87,8 +86,6 @@ class DetailDataNameDto(
     val name: String,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
-
 @Serializable
 class ChapterDto(
     @SerialName("num") private val number: Float,
@@ -101,7 +98,7 @@ class ChapterDto(
         if (!this@ChapterDto.name.isNullOrBlank()) {
             name += " - ${this@ChapterDto.name}"
         }
-        date_upload = dateFormat.tryParse(date)
+        date_upload = Instant.tryParse(date)
         url = "$seriesPath/$seriesSlug/$slug"
     }
 }

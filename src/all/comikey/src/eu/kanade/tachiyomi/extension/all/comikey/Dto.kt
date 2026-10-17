@@ -50,20 +50,24 @@ class ComikeyEpisodeManifestMetadata(
 
 @Serializable
 class ComikeyPage(
-    val href: String,
-    val type: String,
-    val height: Int,
-    val width: Int,
-    val alternate: List<ComikeyAlternatePage> = emptyList(),
-)
+    private val href: String,
+    private val type: String,
+    private val height: Int,
+    private val width: Int,
+    private val alternate: List<ComikeyAlternatePage> = emptyList(),
+) {
+    val variants: List<ComikeyAlternatePage> get() = listOf(ComikeyAlternatePage(href, type, height, width)) + alternate
+}
 
 @Serializable
 class ComikeyAlternatePage(
     val href: String,
     val type: String,
-    val height: Int,
-    val width: Int,
-)
+    private val height: Int,
+    private val width: Int,
+) {
+    fun dimension(isWebtoon: Boolean) = if (isWebtoon) width else height
+}
 
 @Serializable
 class ComikeyNameWrapper(

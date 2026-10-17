@@ -1,38 +1,35 @@
 package eu.kanade.tachiyomi.extension.all.junmeitu
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import okhttp3.Request
-import okhttp3.Response
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class Junmeitu : HttpSource() {
-    override val supportsLatest = true
+abstract class Junmeitu : KeiSource() {
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/beauty/index-$page.html", headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList("$baseUrl/beauty/index-$page.html")
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/beauty/hot-$page.html")
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/beauty/hot-$page.html", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private suspend fun parseMangaList(url: String): MangasPage {
+        val document = client.get(url).asJsoup()
         val mangas = document.select(".pic-list > ul > li").map { element ->
             SManga.create().apply {
                 title = element.select("p").text()
@@ -44,30 +41,38 @@ abstract class Junmeitu : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val tagFilter = filters.firstInstanceOrNull<TagFilter>()
         val modelFilter = filters.firstInstanceOrNull<ModelFilter>()
         val groupFilter = filters.firstInstanceOrNull<GroupFilter>()
         val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
         val sortFilter = filters.firstInstanceOrNull<SortFilter>()
 
-        return when {
-            query.isNotEmpty() -> GET("$baseUrl/search/$query-$page.html", headers)
-            tagFilter != null && tagFilter.state.isNotEmpty() -> GET("$baseUrl/tags/${tagFilter.state}-${categoryFilter?.selected ?: "6"}-$page.html", headers)
-            modelFilter != null && modelFilter.state.isNotEmpty() -> GET("$baseUrl/model/${modelFilter.state}-$page.html", headers)
-            groupFilter != null && groupFilter.state.isNotEmpty() -> GET("$baseUrl/xzjg/${groupFilter.state}-$page.html", headers)
-            categoryFilter != null && categoryFilter.state != 0 -> GET("$baseUrl/${categoryFilter.slug}/${sortFilter?.selected ?: "index"}-$page.html", headers)
-            sortFilter != null && sortFilter.state != 0 -> GET("$baseUrl/${categoryFilter?.slug ?: "beauty"}/${sortFilter.selected}-$page.html", headers)
-            else -> latestUpdatesRequest(page)
+        val url = when {
+            query.isNotEmpty() -> "$baseUrl/search/$query-$page.html"
+            tagFilter != null && tagFilter.state.isNotEmpty() -> "$baseUrl/tags/${tagFilter.state}-${categoryFilter?.selected ?: "6"}-$page.html"
+            modelFilter != null && modelFilter.state.isNotEmpty() -> "$baseUrl/model/${modelFilter.state}-$page.html"
+            groupFilter != null && groupFilter.state.isNotEmpty() -> "$baseUrl/xzjg/${groupFilter.state}-$page.html"
+            categoryFilter != null && categoryFilter.state != 0 -> "$baseUrl/${categoryFilter.slug}/${sortFilter?.selected ?: "index"}-$page.html"
+            sortFilter != null && sortFilter.state != 0 -> "$baseUrl/${categoryFilter?.slug ?: "beauty"}/${sortFilter.selected}-$page.html"
+            else -> "$baseUrl/beauty/index-$page.html"
         }
+
+        return parseMangaList(url)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun mangaDetailsParse(response: Response): SManga {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get(getMangaUrl(manga))
+        val requestUrl = response.request.url.toString()
         val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst(".news-title, .title")?.text() ?: ""
+
+        manga.apply {
+            title = document.selectFirst(".news-title, .title")?.text() ?: title
             description = buildString {
                 append(document.select(".news-info, .picture-details").joinToString(" ") { it.text() })
                 append("\n")
@@ -76,23 +81,23 @@ abstract class Junmeitu : HttpSource() {
             genre = document.select(".relation_tags > a").joinToString(", ") { it.text() }
             status = SManga.COMPLETED
         }
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
         val chapter = SChapter.create().apply {
             val urlElement = document.selectFirst(".position a:last-child")
             val href = urlElement?.attr("abs:href")
-            setUrlWithoutDomain(if (!href.isNullOrEmpty()) href else response.request.url.toString())
+            setUrlWithoutDomain(if (!href.isNullOrEmpty()) href else requestUrl)
             name = "Gallery"
 
-            val dateText = document.select(".picture-details span.gao:contains(日期)").text().substringAfter("日期:").trim()
-            date_upload = dateFormat.tryParse(dateText)
+            val dateText = document.select(".base-info span:contains(日期)").text().substringAfter("日期:").trim()
+            date_upload = dateFormat.tryParseDate(dateText)
         }
-        return listOf(chapter)
+
+        return SMangaUpdate(manga, listOf(chapter))
     }
 
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter))
+        val urlObj = response.request.url
         val document = response.asJsoup()
         val pages = mutableListOf<Page>()
 
@@ -119,7 +124,6 @@ abstract class Junmeitu : HttpSource() {
             val categoryId = scriptData.substringAfter("pc_cid = ").substringBefore(';').trim()
             val contentId = scriptData.substringAfter("pc_id = ").substringBefore(';').trim()
 
-            val urlObj = response.request.url
             val cat = urlObj.pathSegments.getOrNull(0) ?: "beauty"
             val slugFull = urlObj.pathSegments.lastOrNull() ?: ""
             val slug = slugFull.substringBefore(".html").substringBeforeLast("-")
@@ -159,7 +163,6 @@ abstract class Junmeitu : HttpSource() {
                 pages.add(Page(i - 1, url = pageUrl))
             }
         } else {
-            val urlObj = response.request.url
             val slugFull = urlObj.pathSegments.lastOrNull() ?: ""
             val slug = slugFull.substringBefore(".html").substringBeforeLast("-")
 
@@ -175,7 +178,8 @@ abstract class Junmeitu : HttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(response: Response): String {
+    override suspend fun getImageUrl(page: Page): String {
+        val response = client.get(page.url)
         val contentType = response.header("Content-Type") ?: ""
         if (contentType.contains("application/json", ignoreCase = true) || response.request.url.queryParameter("ajax") == "1") {
             val pageDto = response.parseAs<Dto>()
@@ -193,7 +197,7 @@ abstract class Junmeitu : HttpSource() {
         } ?: throw Exception("Image not found in HTML response")
     }
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),
         Filter.Header("NOTE: Filter are weird for this extension!"),
         Filter.Separator(),

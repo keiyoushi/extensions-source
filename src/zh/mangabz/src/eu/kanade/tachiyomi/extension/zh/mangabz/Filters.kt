@@ -2,17 +2,16 @@ package eu.kanade.tachiyomi.extension.zh.mangabz
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.serialization.Serializable
 import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
 
-fun getFilterListInternal(categories: List<CategoryData>): FilterList {
-    val list: List<Filter<*>> = if (categories.isEmpty()) {
-        listOf(Filter.Header("点击“重置”刷新分类"))
-    } else {
-        buildList(categories.size + 1) {
-            add(Filter.Header("分类（搜索文本时无效）"))
-            categories.mapTo(this, CategoryData::toFilter)
-        }
+fun getFilterListInternal(categories: List<CategoryData>?): FilterList {
+    if (categories.isNullOrEmpty()) return FilterList()
+
+    val list = buildList<Filter<*>>(categories.size + 1) {
+        add(Filter.Header("分类（搜索文本时无效）"))
+        categories.mapTo(this, CategoryData::toFilter)
     }
     return FilterList(list)
 }
@@ -53,6 +52,7 @@ fun parseCategories(document: Document): List<CategoryData> {
     return result
 }
 
+@Serializable
 class CategoryData(
     private val name: String,
     private val values: Array<String>,

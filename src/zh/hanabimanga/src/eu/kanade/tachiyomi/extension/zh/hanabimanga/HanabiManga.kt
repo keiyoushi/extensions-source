@@ -42,8 +42,8 @@ private const val ANONYMOUS_TOKEN =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoa3ZxcnhtY2FwZ3Rwc3BnbHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NjgzMjksImV4cCI6MjA3OTU0NDMyOX0.uuHr888lp14ObW5eWowJrHPJGgQf3sF2l7NPmFN84g4"
 private const val COMIC_BODY =
     "id,title,summary,cover_url,release_date,is_finished,authors,region,latest_chapter_title,tags(id,name),categories(id,name)"
-private const val APP_VERSION = "2.4.9"
-private const val APP_VERSION_CODE = 2040999
+private const val APP_VERSION = "2.4.13"
+private const val APP_VERSION_CODE = 2041399
 private const val CERT_FINGERPRINT = "13a8c9fbdaf19115f39b48dc0f3a7c99568ebb0c91ba1a71218c76f53f7877a8"
 private const val NATIVE_SECRET = "7c6cb7f919a688c4c1f5eacf047d97dcd542cae8e3fc84d926160ad879bf3845"
 private const val PAGE_SIZE = 20

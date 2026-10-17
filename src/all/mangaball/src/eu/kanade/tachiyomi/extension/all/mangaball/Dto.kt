@@ -1,87 +1,215 @@
 package eu.kanade.tachiyomi.extension.all.mangaball
 
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 @Serializable
 class SearchResponse(
-    val data: List<SearchManga>,
+    val data: List<MangaDto>,
     private val pagination: Pagination,
 ) {
     @Serializable
     class Pagination(
-        @SerialName("current_page")
-        val currentPage: Int,
-        @SerialName("last_page")
-        val lastPage: Int,
-    )
+        private val page: Int,
+        @SerialName("total_pages")
+        private val totalPages: Int,
+    ) {
+        fun hasNextPage() = page < totalPages
+    }
 
-    fun hasNextPage() = pagination.currentPage < pagination.lastPage
+    fun toMangasPage() = MangasPage(data.map { it.toSManga() }, pagination.hasNextPage())
 }
 
 @Serializable
-class SearchManga(
-    val url: String,
-    val name: String,
-    val cover: String,
-)
-
-@Serializable
-class QuerySearchResponse(
-    val data: MangaList,
+class MangaDto(
+    private val id: String,
+    private val slug: String,
+    private val name: String,
+    private val image: ImageDto? = null,
 ) {
-    @Serializable
-    class MangaList(
-        val manga: List<Manga>,
-    ) {
-        @Serializable
-        class Manga(
-            val title: String,
-            val img: String,
-            val url: String,
-        )
+    fun toSManga() = SManga.create().apply {
+        url = slug
+        title = name
+        thumbnail_url = image?.url
+        memo = buildJsonObject { put("id", id) }
     }
 }
 
 @Serializable
+class TitleResponse(
+    val data: TitleDto,
+)
+
+@Serializable
+class TitleDto(
+    private val id: String,
+    private val slug: String,
+    private val name: String,
+    private val image: ImageDto? = null,
+    private val description: List<String> = emptyList(),
+    private val alternateName: List<String> = emptyList(),
+    private val tags: List<TagDto> = emptyList(),
+    private val author: List<AuthorDto> = emptyList(),
+    private val status: String? = null,
+) {
+    fun toSManga(): SManga {
+        val altNames = alternateName.joinToString("\n") { "- $it" }
+        val description = buildString {
+            append(this@TitleDto.description.joinToString("\n\n"))
+            if (altNames.isNotBlank()) {
+                append("\n\nAlternative Names: \n", altNames)
+            }
+        }.trim()
+
+        return SManga.create().apply {
+            url = slug
+            title = name
+            thumbnail_url = image?.url
+            genre = tags.joinToString { it.name }
+            author = this@TitleDto.author.joinToString { it.name }
+            this.description = description
+            memo = buildJsonObject { put("id", id) }
+            this.status = when (this@TitleDto.status) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                "hiatus" -> SManga.ON_HIATUS
+                "cancelled" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+        }
+    }
+}
+
+@Serializable
+class ImageDto(
+    private val file: String? = null,
+    @SerialName("cdn_mangadex")
+    private val cdnMangadex: String? = null,
+    @SerialName("cdn_mangaupdate")
+    private val cdnMangaupdate: String? = null,
+    @SerialName("cdn_mangaupdates")
+    private val cdnMangaupdates: String? = null,
+    private val cover: CoverDto? = null,
+) {
+    // Mirrors the site's getTitleImage priority: the self-hosted cover first, external mirrors only as fallbacks.
+    val url: String?
+        get() = cover?.url
+            ?: listOf(file, cdnMangadex, cdnMangaupdate, cdnMangaupdates)
+                .firstOrNull { !it.isNullOrBlank() }
+}
+
+@Serializable
+class CoverDto(
+    private val path: String? = null,
+) {
+    // `path` is a Windows-style relative path such as "<titleId>\\cover_123.jpg".
+    val url: String?
+        get() = path?.trim()
+            ?.replace('\\', '/')
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { if (it.startsWith("http")) it else COVER_BASE_URL + it }
+}
+
+@Serializable
+class TagDto(
+    val name: String,
+)
+
+@Serializable
+class AuthorDto(
+    val name: String,
+)
+
+@Serializable
 class ChapterListResponse(
-    @SerialName("ALL_CHAPTERS")
-    val chapters: List<ChapterContainer>,
+    val data: List<ChapterDto>,
 )
 
 @Serializable
-class ChapterContainer(
-    @SerialName("number_float")
-    val number: Float,
-    val translations: List<Chapter>,
-)
+class ChapterDto(
+    private val id: String,
+    private val name: String? = null,
+    private val number: Float? = null,
+    private val volume: Float = 0f,
+    private val lang: String,
+    private val group: GroupDto? = null,
+    @SerialName("created_at")
+    private val createdAt: String? = null,
+) {
+    fun toSChapter(langs: List<String>): SChapter? {
+        if (lang !in langs) return null
+
+        val chapterName = name.orEmpty().trim()
+
+        return SChapter.create().apply {
+            url = id
+            name = buildString {
+                if (volume > 0) {
+                    append("Vol. ", volume.toString().removeSuffix(".0"), " ")
+                }
+                val numberStr = number.toString().removeSuffix(".0")
+                if (chapterName.contains(numberStr)) {
+                    append(chapterName)
+                } else {
+                    append("Ch. ", numberStr)
+                    if (chapterName.isNotEmpty()) {
+                        append(" ", chapterName)
+                    }
+                }
+            }
+            if (number != null) {
+                chapter_number = number
+            }
+            date_upload = dateFormat.tryParseDateTime(createdAt, ZoneOffset.UTC)
+            scanlator = group?.name
+        }
+    }
+}
+
+private val dateFormat = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+
+private const val COVER_BASE_URL = "https://bulbasaur.poke-black-and-white.net/covers/"
 
 @Serializable
-class Chapter(
-    val id: String,
+class GroupDto(
     val name: String,
-    val language: String,
-    val group: Group,
-    val date: String,
-    val volume: Float,
 )
 
 @Serializable
-class Group(
-    @SerialName("_id")
-    val id: String,
-    val name: String,
-)
-
-@Serializable
-class Yoast(
-    @SerialName("@graph")
-    val graph: List<Graph>,
+class ChapterDetailResponse(
+    val data: ChapterDetailData,
 ) {
     @Serializable
-    class Graph(
-        @SerialName("@type")
-        val type: String,
-        val url: String? = null,
+    class ChapterDetailData(
+        val chapter: ChapterDetailDto,
     )
 }
+
+@Serializable
+class ChapterDetailDto(
+    @SerialName("title_id")
+    val titleId: String? = null,
+    val pages: List<String> = emptyList(),
+)
+
+@Serializable
+class TitleIdRequest(
+    @SerialName("title_id")
+    private val titleId: String,
+)
+
+@Serializable
+class ViewRequest(
+    @SerialName("object_id")
+    private val objectId: String,
+    @SerialName("object_type")
+    private val objectType: String,
+)

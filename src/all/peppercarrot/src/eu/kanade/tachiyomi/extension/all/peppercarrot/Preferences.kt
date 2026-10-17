@@ -4,11 +4,13 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
+import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.decodeProtoBase64
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.protoInstance
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToByteArray
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -45,17 +47,18 @@ val SharedPreferences.langData: List<LangData>
         return data.decodeProtoBase64<List<LangData>>()
     }
 
-@Synchronized
-fun updateLangData(client: OkHttpClient, headers: Headers, preferences: SharedPreferences, baseUrl: String) {
-    val lastUpdated = client.newCall(GET("$baseUrl/0_sources/last_updated.txt", headers))
-        .execute().use { it.body.string().substringBefore('\n').toLong() }
+private val langDataMutex = Mutex()
 
-    if (lastUpdated <= preferences.lastUpdated) return
+suspend fun updateLangData(client: OkHttpClient, headers: Headers, preferences: SharedPreferences, baseUrl: String) = langDataMutex.withLock {
+    val lastUpdated = client.get("$baseUrl/0_sources/last_updated.txt", headers)
+        .use { it.body.string().substringBefore('\n').toLong() }
+
+    if (lastUpdated <= preferences.lastUpdated) return@withLock
 
     val editor = preferences.edit().putLong(LAST_UPDATED_PREF, lastUpdated)
 
-    val episodes = client.newCall(GET("$baseUrl/0_sources/episodes.json", headers))
-        .execute().parseAs<List<EpisodeDto>>()
+    val episodes = client.get("$baseUrl/0_sources/episodes.json", headers)
+        .parseAs<List<EpisodeDto>>()
 
     val total = episodes.size
     val translatedCount = episodes.flatMap { it.translatedLanguages }
@@ -68,8 +71,8 @@ fun updateLangData(client: OkHttpClient, headers: Headers, preferences: SharedPr
         null
     }
 
-    val langs = client.newCall(GET("$baseUrl/0_sources/langs.json", headers))
-        .execute().parseAs<LangsDto>().entries.map { (key, dto) ->
+    val langs = client.get("$baseUrl/0_sources/langs.json", headers)
+        .parseAs<LangsDto>().entries.map { (key, dto) ->
             Lang(
                 key = key,
                 name = dto.localName,
@@ -99,9 +102,9 @@ private fun SharedPreferences.Editor.chooseLang(langs: List<Lang>) {
     setLang(result)
 }
 
-private fun fetchTitles(client: OkHttpClient, headers: Headers): Map<String, String> {
+private suspend fun fetchTitles(client: OkHttpClient, headers: Headers): Map<String, String> {
     val url = "https://framagit.org/search?project_id=76196&search=core/mod-header.php:4"
-    val document = client.newCall(GET(url, headers)).execute().use { it.asJsoup() }
+    val document = client.get(url, headers).asJsoup()
     val result = hashMapOf<String, String>()
     for (file in document.selectFirst(Evaluator.Class("search-results"))!!.children()) {
         val filename = file.selectFirst(Evaluator.Tag("strong"))!!.ownText()

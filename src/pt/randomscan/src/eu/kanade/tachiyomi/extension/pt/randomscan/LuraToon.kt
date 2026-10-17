@@ -1,173 +1,218 @@
 package eu.kanade.tachiyomi.extension.pt.randomscan
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Capitulo
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.CapituloPagina
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.MainPage
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Manga
-import eu.kanade.tachiyomi.extension.pt.randomscan.dto.SearchResponse
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import kotlinx.serialization.json.Json
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import okhttp3.CacheControl.Companion.FORCE_NETWORK
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-import kotlin.getValue
+import java.io.IOException
 
 @Source
-abstract class LuraToon :
-    HttpSource(),
-    ConfigurableSource {
-    override val supportsLatest = true
+abstract class LuraToon : KeiSource() {
 
-    private val json: Json by injectLazy()
-
-    override val client = network.client
-        .newBuilder()
-        .addInterceptor(::loggedVerifyInterceptor)
-        .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)
-        .rateLimit(3)
-        .build()
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/api/autocomplete/$query", headers)
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/obra/${manga.url.trimStart('/')}", headers)
-    override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addRandomUAPreference()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addNetworkInterceptor(::pageHeadersInterceptor)
+        addInterceptor(ZipInterceptor()::zipImageInterceptor)
+        addInterceptor(::loggedVerifyInterceptor)
+        rateLimit(3)
     }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val data = response.parseAs<Manga>()
-        title = data.titulo
-        author = data.autor
-        artist = data.artista
-        genre = data.generos.joinToString(", ") { it.name }
-        status = when (data.status) {
-            "Em Lançamento" -> SManga.ONGOING
-            "Finalizado" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
-        thumbnail_url = "$baseUrl${data.capa}"
-
-        val category = data.tipo
-        val synopsis = data.sinopse
-        description = "Tipo: $category\n\n$synopsis"
+    // Popular
+    override suspend fun getPopularManga(page: Int) = coroutineScope {
+        val top10 = async { client.get("$baseUrl/api/main/").parseAs<MainPage>().top10 }
+        val obras = async { client.get("$baseUrl/api/obras/").parseAs<SearchResponse>().obras }
+        MangasPage(
+            (top10.await() + obras.await()).distinctBy {
+                it.slug
+            }.map { it.toSManga(baseUrl) },
+            false,
+        )
     }
 
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<T>(body.string())
+    // Latest
+    override suspend fun getLatestUpdates(page: Int) = client.get(
+        "$baseUrl/api/main/?part=${page - 1}",
+    ).parseAs<MainPage>().latest.map { it.toSManga(baseUrl) }.let {
+        MangasPage(it, page < 2)
+    }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.parseAs<MainPage>()
+    // Search
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val slug = url.pathSegments.getOrNull(0) ?: return null
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = slug },
+            emptyList(),
+            true,
+            false,
+        ).manga
+    }
 
-        val mangas = document.lancamentos.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = "$baseUrl${it.capa}"
-                setUrlWithoutDomain("/${it.slug}/")
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = client.get(
+        "$baseUrl/api/autocomplete/".toHttpUrl().newBuilder()
+            .addPathSegment(query)
+            .build(),
+    ).parseAs<SearchResponse>().obras.map { it.toSManga(baseUrl) }.let {
+        MangasPage(it, false)
+    }
+
+    // MangaUpdate
+    override val supportRelatedMangasBySearch = true
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = chapter.memo["mangaSlug"]?.string
+        return "$baseUrl/$slug/${chapter.url}/"
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val slug = manga.url.trim('/')
+        val res = client.get(
+            "$baseUrl/api/obra/$slug/",
+            ensureSuccess = false,
+        )
+        if (res.code == 404) res.throwError(MIGRATE)
+
+        val comic = res.parseAs<MangaDetail>()
+
+        val updatedManga = SManga.create().apply {
+            with(comic) {
+                url = "/$slug/"
+                title = titulo
+                author = autor
+                artist = artista
+                genre = (
+                    listOf(tipo) + generos.map { it.name }
+                    ).joinToString()
+                this@apply.status = when (status) {
+                    "Em Lançamento" -> SManga.ONGOING
+                    "Finalizado" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+                thumbnail_url = "$baseUrl$capa"
+                description = sinopse
             }
         }
 
-        return MangasPage(mangas, document.lancamentos.isNotEmpty())
-    }
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
-        .asObservable()
-        .map { response ->
-            chapterListParse(manga, response)
-        }
-
-    fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
-        if (response.code == 404) {
-            throw Exception("Capitulos não encontrados, tente migrar o manga, alguns nomes da LuraToon mudaram")
-        }
-
-        val comics = response.parseAs<Manga>()
-
-        return comics.caps.sortedByDescending {
+        val updatedChapters = comic.caps.sortedByDescending {
             it.num
-        }.map { chapterFromElement(manga, it) }
+        }.map { it.toSChapter(slug) }
+
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private fun chapterFromElement(manga: SManga, capitulo: Capitulo) = SChapter.create().apply {
-        val capSlug = capitulo.slug.trimStart('/')
-        val mangaUrl = manga.url.trimEnd('/').trimStart('/')
-        setUrlWithoutDomain("/api/obra/$mangaUrl/$capSlug")
-        name = capitulo.num.toString().removeSuffix(".0")
-        date_upload = runCatching {
-            dateFormat.parse(capitulo.data)!!.time
-        }.getOrDefault(0L)
+    // PageList
+    private var userId: Long? = null
+
+    private suspend fun getUserId() = userId ?: run {
+        client.get("$baseUrl/api/user-info/").parseAs<User>()
+            .takeIf {
+                it.authorized
+            }?.userid.also { userId = it } ?: error(LOGIN)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val capitulo = response.parseAs<CapituloPagina>()
-        val pathSegments = response.request.url.pathSegments
-        return (0 until capitulo.files).map { i ->
-            Page(i, baseUrl, "$baseUrl/api/cap-download/${capitulo.obra.id}/${capitulo.id}/$i?obra_id=${capitulo.obra.id}&cap_id=${capitulo.id}&slug=${pathSegments[2]}&cap_slug=${pathSegments[3]}")
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val mangaSlug = chapter.memo["mangaSlug"]?.string ?: error(REFRESH)
+        val capSlug = chapter.url
+        val userId = getUserId()
+        val res = client.get(
+            baseUrl + "/api/$OBRA_PATH/$mangaSlug/$capSlug/",
+            cacheControl = FORCE_NETWORK,
+        )
+
+        val chapterInfo = res.decrypt(
+            capSlug + mangaSlug + userId,
+            8,
+        ).parseAs<CapituloPagina>()
+
+        val mangaId = chapterInfo.obra.id
+
+        val key = "$mangaId$capSlug$userId"
+        return (0 until chapterInfo.files).map { i ->
+            val token = if (i == 0) res.header("token").orEmpty() else ""
+            Page(
+                i,
+                "$baseUrl/download/$mangaId/$capSlug/$i/?api=2" +
+                    "#$token|$key",
+            )
         }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<SearchResponse>().obras.map {
-            SManga.create().apply {
-                title = it.titulo
-                thumbnail_url = "$baseUrl${it.capa}"
-                setUrlWithoutDomain("/${it.slug}/")
+    // Stateful cookies
+    private val imageMutex = Mutex()
+    override suspend fun getImageUrl(page: Page) = imageMutex.withLock {
+        page.imageUrl ?: page.url
+    }
+
+    // Interceptors
+    private fun pageHeadersInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url
+
+        if ("cap-download" in url.pathSegments) throw IOException(REFRESH)
+
+        if ("download" in url.pathSegments) {
+            val token = url.fragment!!.substringBefore("|")
+
+            if (!token.isNullOrEmpty()) {
+                val cookie = request.header("Cookie")
+                    ?.split("; ")
+                    ?.filterNot { it.startsWith("csac=") }
+                    ?.joinToString("; ")
+                return chain.proceed(
+                    request.newBuilder()
+                        .header("Token", token)
+                        .header("Cookie", cookie.orEmpty())
+                        .build(),
+                )
             }
         }
-
-        return MangasPage(mangas, false)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.parseAs<MainPage>()
-
-        val mangas = document.top_10.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = "$baseUrl${it.capa}"
-                setUrlWithoutDomain("/${it.slug}/")
-            }
-        }
-
-        return MangasPage(mangas, false)
+        return chain.proceed(request)
     }
 
     private fun loggedVerifyInterceptor(chain: Interceptor.Chain): Response {
-        val response = chain.proceed(chain.request())
-        val pathSegments = response.request.url.pathSegments
-        if (response.request.url.pathSegments.contains("login") || pathSegments.isEmpty()) {
-            throw Exception("Faça o login na WebView para acessar o contéudo")
+        with(chain.proceed(chain.request())) {
+            val segments = request.url.pathSegments
+            if (segments.contains("login") || segments.isEmpty()) {
+                throwError(LOGIN)
+            }
+            if (code == 429) throwError(RATELIMITED)
+            if (code == 402) throwError(VIP)
+            return this
         }
-        if (response.code == 429) {
-            throw Exception("A LuraToon lhe bloqueou por acessar rápido demais, aguarde por volta de 1 minuto e tente novamente")
-        }
-        return response
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault()).apply {
-        timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
+    private fun Response.throwError(message: String): Nothing = use {
+        throw IOException(message)
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
+    companion object {
+        const val LOGIN = "Faça o login na WebView para acessar o contéudo"
+        const val MIGRATE = "Capítulos não encontrados. Tente migrar o mangá"
+        const val RATELIMITED =
+            "A LuraToon bloqueou seu acesso. Aguarde 1 minuto e tente novamente."
+        const val VIP = "Assine o VIP para acessar"
+        const val REFRESH = "Atualizar mangá"
+        const val OBRA_PATH = "484d2a13"
+    }
 }

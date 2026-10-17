@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manga District"
-    versionCode = 17
+    versionCode = 18
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "madara"

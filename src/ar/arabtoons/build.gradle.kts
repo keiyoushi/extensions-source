@@ -6,14 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Arab Toons"
-    versionCode = 1
+    versionCode = 57
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         name = "عرب تونز"
         lang = "ar"
         baseUrl = "https://arabtoons.net"
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

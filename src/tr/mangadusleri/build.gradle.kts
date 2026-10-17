@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Mangadusleri"
-    versionCode = 33
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         versionId = 2
@@ -16,5 +16,9 @@ keiyoushi {
         baseUrl {
             custom("https://mangadusleri.mom")
         }
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

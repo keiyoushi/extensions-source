@@ -83,7 +83,7 @@ class E4PDecoder {
             System.arraycopy(wrapper.iv, 0, this, 0, wrapper.iv.size)
             System.arraycopy(wrapper.data, 0, this, wrapper.iv.size, v261)
         }
-        val rc4Out = rc4(rc4Key, rc4Input, 769)
+        val rc4Out = rc4Input.rc4(rc4Key, 769)
 
         // Blowfish-CBC-decrypt the first 32 bytes of the RC4 output
         val newIv = blowfishCbcDecrypt(rc4Out.copyOfRange(0, wrapper.iv.size), blowfishIv)
@@ -172,13 +172,12 @@ class E4PDecoder {
         // vF124 in drm_worker.js:
         // 16 bytes of RC4(key="error", data=[fixed 16 bytes], discard=771)
         private val VF124: ByteArray by lazy {
-            rc4(
+            byteArrayOf(
+                0x8F.toByte(), 0x08, 0xBE.toByte(), 0x6C, 0x0F, 0xDE.toByte(),
+                0x6A, 0xF8.toByte(), 0x20, 0xED.toByte(), 0x7E, 0xAF.toByte(),
+                0x0E, 0x52, 0xDD.toByte(), 0x9D.toByte(),
+            ).rc4(
                 key = byteArrayOf(101, 114, 114, 111, 114), // "error"
-                data = byteArrayOf(
-                    0x8F.toByte(), 0x08, 0xBE.toByte(), 0x6C, 0x0F, 0xDE.toByte(),
-                    0x6A, 0xF8.toByte(), 0x20, 0xED.toByte(), 0x7E, 0xAF.toByte(),
-                    0x0E, 0x52, 0xDD.toByte(), 0x9D.toByte(),
-                ),
                 skip = 771,
             )
         }
@@ -201,8 +200,8 @@ class E4PDecoder {
         private class BlowfishTables(val p: IntArray, val s: Array<IntArray>)
 
         private val BLOWFISH: BlowfishTables by lazy {
-            val sBytes = rc4(UNDEFINED_KEY, Base64.decode(BLOWFISH_S_B64, Base64.NO_WRAP), 769)
-            val pBytes = rc4(UNDEFINED_KEY, Base64.decode(BLOWFISH_P_B64, Base64.NO_WRAP), 769)
+            val sBytes = Base64.decode(BLOWFISH_S_B64, Base64.NO_WRAP).rc4(UNDEFINED_KEY, 769)
+            val pBytes = Base64.decode(BLOWFISH_P_B64, Base64.NO_WRAP).rc4(UNDEFINED_KEY, 769)
             val p = IntArray(18) { i -> pBytes.readIntLittleEndian(i * 4) }
             val s = Array(4) { box -> IntArray(256) { i -> sBytes.readIntLittleEndian((box * 256 + i) * 4) } }
             BlowfishTables(p, s)

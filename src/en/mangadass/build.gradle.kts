@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Manga Dass"
-    versionCode = 1
+    versionCode = 58
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    libVersion = "1.6"
+    theme = "yiimadara"
 
     source {
         lang = "en"
         baseUrl = "https://mangadass.com"
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

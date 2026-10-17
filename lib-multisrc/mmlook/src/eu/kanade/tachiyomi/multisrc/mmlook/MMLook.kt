@@ -1,48 +1,46 @@
 package eu.kanade.tachiyomi.multisrc.mmlook
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 
 // Rumanhua legacy preference:
 // const val APP_CUSTOMIZATION_URL = "APP_CUSTOMIZATION_URL"
 
 /** 漫漫看 */
-abstract class MMLook : HttpSource() {
+abstract class MMLook : KeiSource() {
 
-    protected open val desktopUrl = baseUrl.replace("https://m.", "https://www.")
+    protected open val desktopUrl get() = baseUrl.replace("https://m.", "https://www.")
 
     protected open val useLegacyMangaUrl: Boolean = false
 
-    override val supportsLatest: Boolean get() = true
-
-    override val client = network.client.newBuilder()
-        .followRedirects(false)
+    override fun OkHttpClient.Builder.configureClient() = followRedirects(false)
         .hostnameVerifier { _, _ -> true }
-        .build()
 
     private fun String.certificateWorkaround() = replace("https:", "http:")
 
     private fun SManga.formatUrl() = apply { if (useLegacyMangaUrl) url = "/$url/" }
 
-    private fun rankingRequest(id: String) = GET("$desktopUrl/rank/$id", headers)
+    private suspend fun fetchRanking(id: String) = parseRanking(client.get("$desktopUrl/rank/$id").asJsoup())
 
-    override fun popularMangaRequest(page: Int) = rankingRequest("1")
+    override suspend fun getPopularManga(page: Int) = fetchRanking("1")
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val entries = response.asJsoup().select(".likedata").map { element ->
+    private fun parseRanking(document: Document): MangasPage {
+        val entries = document.select(".likedata").map { element ->
             SManga.create().apply {
                 url = element.select("a").attr("href").mustRemoveSurrounding("/", "/")
                 title = element.selectFirst(".le-t")!!.text()
@@ -55,46 +53,42 @@ abstract class MMLook : HttpSource() {
         return MangasPage(entries, false)
     }
 
-    override fun latestUpdatesRequest(page: Int) = rankingRequest("5")
+    override suspend fun getLatestUpdates(page: Int) = fetchRanking("5")
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         RankingFilter(),
         Filter.Separator(),
         Filter.Header("分类（搜索文本、查看排行榜时无效）"),
         CategoryFilter(),
     )
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
-            return POST(
+            val document = client.post(
                 "$desktopUrl/s",
-                headers,
                 FormBody.Builder().add("k", query.take(12)).build(),
-            )
+            ).asJsoup()
+            return parseSearch(document)
         }
         for (filter in filters) {
             when (filter) {
                 is RankingFilter -> if (filter.state > 0) {
-                    return rankingRequest(filter.options[filter.state].value)
+                    return fetchRanking(filter.options[filter.state].value)
                 }
 
                 is CategoryFilter -> if (filter.state > 0) {
                     val id = filter.options[filter.state].value
-                    return GET("$desktopUrl/sort/$id", headers)
+                    return parseRanking(client.get("$desktopUrl/sort/$id").asJsoup())
                 }
 
                 else -> {}
             }
         }
-        return popularMangaRequest(page)
+        return getPopularManga(page)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.method == "GET") return popularMangaParse(response)
-
-        val entries = response.asJsoup().select(".item-data > div").map { element ->
+    private fun parseSearch(document: Document): MangasPage {
+        val entries = document.select(".item-data > div").map { element ->
             SManga.create().apply {
                 url = element.selectFirst("a")!!.attr("href").mustRemoveSurrounding("/", "/")
                 title = element.selectFirst(".e-title, .title")!!.text()
@@ -111,13 +105,23 @@ abstract class MMLook : HttpSource() {
     }
 
     // Desktop page has consistent template and more initial chapters
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.removeSurrounding("/")
-        return GET("$desktopUrl/$id/", headers)
+    // "more chapter" request must be sent to the same domain
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val mangaId = manga.url.removeSurrounding("/")
+        val document = client.get("$desktopUrl/$mangaId/").asJsoup()
+        return SMangaUpdate(
+            mangaDetailsParse(document),
+            if (fetchChapters) fetchChapterList(document, mangaId) else chapters,
+        )
     }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val comicInfo = response.asJsoup().selectFirst(".comicInfo")!!
+    private fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        val comicInfo = document.selectFirst(".comicInfo")!!
         thumbnail_url = comicInfo.selectFirst("img")!!.attr("data-src")
 
         val container = comicInfo.selectFirst(".detinfo")!!
@@ -147,12 +151,8 @@ abstract class MMLook : HttpSource() {
         description = updated + container.selectFirst(".content")!!.text()
     }
 
-    // Desktop page contains more initial chapters
-    // "more chapter" request must be sent to the same domain
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val container = response.asJsoup().selectFirst(".chapterlistload")!!
+    private suspend fun fetchChapterList(document: Document, mangaId: String): List<SChapter> {
+        val container = document.selectFirst(".chapterlistload")!!
         val chapters = container.child(0).children().mapTo(ArrayList()) { element ->
             SChapter.create().apply {
                 url = element.attr("href").mustRemoveSurrounding("/", ".html")
@@ -160,13 +160,10 @@ abstract class MMLook : HttpSource() {
             }
         }
         if (container.selectFirst(".chaplist-more") != null) {
-            val mangaId = response.request.url.pathSegments[0]
-            val request = POST(
+            client.post(
                 "$desktopUrl/morechapter",
-                headers,
                 FormBody.Builder().addEncoded("id", mangaId).build(),
-            )
-            client.newCall(request).execute().parseAs<ResponseDto>().data
+            ).parseAs<ResponseDto>().data
                 .mapTo(chapters) { it.toSChapter(mangaId) }
         }
         return chapters
@@ -180,10 +177,8 @@ abstract class MMLook : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = chapter.fullUrl().certificateWorkaround()
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.fullUrl(), headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(chapter.fullUrl()).asJsoup()
         val id = document.selectFirst(".readerContainer")!!.attr("data-id").toInt()
         return document.selectFirst("script:containsData(eval)")!!.data()
             .let(Unpacker::unpack)
@@ -192,8 +187,6 @@ abstract class MMLook : HttpSource() {
             .parseAs<List<String>>()
             .mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
 
 private fun String.mustRemoveSurrounding(prefix: String, suffix: String): String {

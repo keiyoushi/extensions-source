@@ -1,34 +1,30 @@
 package eu.kanade.tachiyomi.multisrc.mmrcms
 
 import android.annotation.SuppressLint
-import android.util.Log
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.min
 
@@ -41,9 +37,9 @@ import kotlin.math.min
  * chapterNamePrefix A word that always precedes the chapter title, e.g. "Scan "
  * chapterString The word for "Chapter" in the source's language.
  */
-abstract class MMRCMS : HttpSource() {
+abstract class MMRCMS : KeiSource() {
 
-    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US)
+    protected open val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.US)
 
     protected open val itemPath: String = "manga"
 
@@ -61,11 +57,6 @@ abstract class MMRCMS : HttpSource() {
         else -> "Chapter"
     }
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
     protected val intl = Intl(
         lang,
         setOf("en", "es"),
@@ -73,10 +64,11 @@ abstract class MMRCMS : HttpSource() {
         this::class.java.classLoader!!,
     )
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/filterList?page=$page&sortBy=views&asc=false")
+    protected open fun popularMangaUrl(page: Int) = "$baseUrl/filterList?page=$page&sortBy=views&asc=false"
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(popularMangaUrl(page)).asJsoup())
+
+    protected open fun popularMangaParse(document: Document): MangasPage {
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) != null } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -88,30 +80,15 @@ abstract class MMRCMS : HttpSource() {
 
     protected open fun popularMangaNextPageSelector(): String? = searchMangaNextPageSelector()
 
-    /**
-     * A cache of all titles that have already appeared in latest updates.
-     */
-    private val latestTitles = mutableSetOf<String>()
+    protected open fun latestUpdatesUrl(page: Int) = "$baseUrl/latest-release?page=$page"
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest-release?page=$page", headers)
+    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get(latestUpdatesUrl(page)))
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
+    protected open fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-
-        if (response.request.url.queryParameter("page") == "1") {
-            latestTitles.clear()
-        }
-
-        val manga = document.select(latestUpdatesSelector()).mapNotNull {
-            val item = latestUpdatesFromElement(it)
-
-            if (latestTitles.contains(item.url)) {
-                null
-            } else {
-                latestTitles.add(item.url)
-                item
-            }
-        }
+        val manga = document.select(latestUpdatesSelector())
+            .map { latestUpdatesFromElement(it) }
+            .distinctBy { it.url }
         val hasNextPage = latestUpdatesNextPageSelector()?.let {
             document.selectFirst(it) != null
         } ?: false
@@ -125,85 +102,47 @@ abstract class MMRCMS : HttpSource() {
 
     protected open fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    protected var searchDirectory = emptyList<SuggestionDto>()
-
     private val searchTokenRegex = Regex("""['"]_token['"]\s*:\s*['"]([0-9A-Za-z]+)['"]""")
 
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> {
-        if (query.isNotEmpty()) {
-            if (page == 1) {
-                return client.newCall(searchMangaRequest(page, query, filters))
-                    .asObservableSuccess()
-                    .map { searchMangaParse(it) }
-            }
-            return Observable.just(parseSearchDirectory(page))
-        }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isEmpty() && supportsAdvancedSearch) {
+            val document = client.get("$baseUrl/advanced-search").asJsoup()
+            val params = baseUrl.toHttpUrl().newBuilder().apply {
+                filters.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
+            }.build().encodedQuery.orEmpty()
 
-        if (supportsAdvancedSearch) {
-            return client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    val document = response.asJsoup()
-                    val fragment = response.request.url.fragment ?: return@map null
-                    val body = FormBody.Builder().apply {
-                        val fragmentPage = fragment.substringAfter("page=").substringBefore("&")
+            val body = FormBody.Builder().apply {
+                add("params", params)
+                add("page", page.toString())
 
-                        add("params", fragment.substringAfter("page=$fragmentPage&"))
-                        add("page", fragmentPage)
-
-                        document.selectFirst("script:containsData(_token)")?.data()?.let {
-                            searchTokenRegex.find(it)?.groupValues?.get(1)?.let { token ->
-                                add("_token", token)
-                            }
-                        }
-                    }.build()
-                    POST("$baseUrl/advSearchFilter", headers, body)
-                }
-                .flatMap { request ->
-                    if (request == null) {
-                        Observable.just(MangasPage(emptyList(), false))
-                    } else {
-                        client.newCall(request).asObservableSuccess().map { response ->
-                            val resDoc = response.asJsoup()
-                            val mangas = resDoc.select(searchMangaSelector()).map { searchMangaFromElement(it) }
-                            val hasNextPage = searchMangaNextPageSelector()?.let { resDoc.selectFirst(it) != null } ?: false
-                            MangasPage(mangas, hasNextPage)
-                        }
+                document.selectFirst("script:containsData(_token)")?.data()?.let {
+                    searchTokenRegex.find(it)?.groupValues?.get(1)?.let { token ->
+                        add("_token", token)
                     }
                 }
+            }.build()
+
+            val resDoc = client.post("$baseUrl/advSearchFilter", body = body).asJsoup()
+            val mangas = resDoc.select(searchMangaSelector()).map { searchMangaFromElement(it) }
+            val hasNextPage = searchMangaNextPageSelector()?.let { resDoc.selectFirst(it) != null } ?: false
+            return MangasPage(mangas, hasNextPage)
         }
 
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { searchMangaParse(it) }
+        return searchMangaParse(client.get(searchMangaUrl(page, query, filters)), page)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            val filterList = filters.ifEmpty { getFilterList() }
-
-            if (query.isNotEmpty()) {
-                addPathSegment("search")
-                addQueryParameter("query", query)
-            } else {
-                addPathSegment(if (supportsAdvancedSearch) "advanced-search" else "filterList")
-                addQueryParameter("page", page.toString())
-                filterList.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
-            }
-        }.build()
-
-        return if (query.isEmpty() && supportsAdvancedSearch) {
-            GET(url.toString().replaceFirst("?", "#"), headers)
+    protected open fun searchMangaUrl(page: Int, query: String, filters: FilterList): String = baseUrl.toHttpUrl().newBuilder().apply {
+        if (query.isNotEmpty()) {
+            addPathSegment("search")
+            addQueryParameter("query", query)
         } else {
-            GET(url, headers)
+            addPathSegment("filterList")
+            addQueryParameter("page", page.toString())
+            filters.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
         }
-    }
+    }.build().toString()
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    protected open fun searchMangaParse(response: Response, page: Int): MangasPage {
         val searchType = response.request.url.pathSegments.last()
 
         if (searchType == "filterList") {
@@ -213,8 +152,7 @@ abstract class MMRCMS : HttpSource() {
             return MangasPage(mangas, hasNextPage)
         }
 
-        searchDirectory = response.parseAs<SearchResultDto>().suggestions
-        return parseSearchDirectory(1)
+        return parseSearchDirectory(response.parseAs<SearchResultDto>().suggestions, page)
     }
 
     protected open fun searchMangaSelector(): String = "div.media"
@@ -229,7 +167,7 @@ abstract class MMRCMS : HttpSource() {
 
     protected open fun searchMangaNextPageSelector(): String? = ".pagination a[rel=next]"
 
-    protected open fun parseSearchDirectory(page: Int): MangasPage {
+    protected open fun parseSearchDirectory(searchDirectory: List<SuggestionDto>, page: Int): MangasPage {
         val manga = searchDirectory.subList((page - 1) * 24, min(page * 24, searchDirectory.size))
             .map {
                 SManga.create().apply {
@@ -243,15 +181,30 @@ abstract class MMRCMS : HttpSource() {
         return MangasPage(manga, hasNextPage)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2 || url.pathSegments.first() != itemPath) return null
+
+        return mangaDetailsParse(client.get(url).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+    }
+
+    // Details and chapters come from the same page
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
+    }
+
     protected val detailAuthor = hashSetOf("author(s)", "autor(es)", "auteur(s)", "著作", "yazar(lar)", "mangaka(lar)", "pengarang/penulis", "pengarang", "penulis", "autor", "المؤلف", "перевод", "autor/autorzy")
     protected val detailArtist = hashSetOf("artist(s)", "artiste(s)", "sanatçi(lar)", "artista(s)", "artist(s)/ilustrator", "الرسام", "seniman", "rysownik/rysownicy", "artista")
     protected val detailGenre = hashSetOf("categories", "categorías", "catégories", "ジャンル", "kategoriler", "categorias", "kategorie", "التصنيفات", "жанр", "kategori", "tagi", "género")
     protected val detailStatus = hashSetOf("status", "statut", "estado", "状態", "durum", "الحالة", "статус")
     protected val detailStatusComplete = hashSetOf("complete", "مكتملة", "complet", "completo", "zakończone", "concluído", "finalizado")
-    protected val detailStatusOngoing = hashSetOf("ongoing", "مستمرة", "en cours", "em lançamento", "prace w toku", "ativo", "em andamento", "activo")
+    protected val detailStatusOngoing = hashSetOf("ongoing", "مستمرة", "en cours", "em lançamento", "prace w toku", "ativo", "em andamento", "activo", "publicándose", "publicandose")
     protected val detailStatusDropped = hashSetOf("dropped")
-
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
 
     @SuppressLint("DefaultLocale")
     protected open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
@@ -285,16 +238,13 @@ abstract class MMRCMS : HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    protected open suspend fun chapterListParse(document: Document): List<SChapter> {
         val title = document.selectFirst(detailsTitleSelector)!!.text()
 
         return document.select(chapterListSelector()).map { chapterFromElement(it, title) }
     }
 
     protected open fun chapterListSelector(): String = "ul.chapters > li:not(.btn)"
-
-    protected open fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     protected open fun chapterFromElement(element: Element, mangaTitle: String): SChapter = SChapter.create().apply {
         val titleWrapper = element.selectFirst(".chapter-title-rtl")!!
@@ -303,7 +253,7 @@ abstract class MMRCMS : HttpSource() {
         setUrlWithoutDomain(anchor.absUrl("href"))
         name = cleanChapterName(mangaTitle, titleWrapper.text())
         val dateStr = element.selectFirst(".date-chapter-title-rtl")?.text()
-        date_upload = dateFormat.tryParse(dateStr)
+        date_upload = dateFormat.tryParseDate(dateStr)
     }
 
     /**
@@ -322,22 +272,55 @@ abstract class MMRCMS : HttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
 
     protected open fun pageListParse(document: Document): List<Page> = document.select("#all > img.img-responsive").mapIndexed { i, it ->
         Page(i, imageUrl = it.imgAttr())
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override val supportsFilterFetching get() = fetchFilterOptions
 
-    override fun getFilterList(): FilterList {
-        fetchFilterOptions()
+    override suspend fun fetchFilterData(): JsonElement = if (supportsAdvancedSearch) {
+        val document = client.get("$baseUrl/advanced-search").asJsoup()
+
+        FilterData(
+            categories = document.select("select[name='categories[]'] option").map {
+                it.text() to it.attr("value")
+            },
+            statuses = document.select("select[name='status[]'] option").map {
+                it.text() to it.attr("value")
+            },
+            tags = document.select("select[name='types[]'] option").map {
+                it.text() to it.attr("value")
+            },
+            sortOptions = emptyList(),
+        )
+    } else {
+        val document = client.get("$baseUrl/$itemPath-list").asJsoup()
+
+        FilterData(
+            categories = document.select("a.category").map {
+                it.text() to it.absUrl("href").toHttpUrl().queryParameter("cat")!!
+            },
+            statuses = emptyList(),
+            tags = document.select("div.tag-links a").map {
+                it.text() to it.absUrl("href").toHttpUrl().pathSegments.last()
+            },
+            sortOptions = document.select("#sort-types label:has(input)").map {
+                it.ownText() to it.selectFirst("input")!!.id()
+            },
+        )
+    }.toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterData>()
+        val categories = filterData?.categories.orEmpty()
+        val statuses = filterData?.statuses.orEmpty()
+        val tags = filterData?.tags.orEmpty()
+        val sortOptions = filterData?.sortOptions.orEmpty()
 
         val filters = buildList {
             add(Filter.Header(intl["filter_warning"]))
-            if (fetchFilterOptions && fetchFiltersStatus != FetchFilterStatus.FETCHED) {
-                add(Filter.Header(intl["filter_missing_warning"]))
-            }
             add(Filter.Separator())
 
             if (supportsAdvancedSearch) {
@@ -403,7 +386,7 @@ abstract class MMRCMS : HttpSource() {
                 }
 
                 if (sortOptions.isNotEmpty()) {
-                    add(SortFilter(intl, sortOptions))
+                    add(SortFilter(intl, sortOptions.toTypedArray()))
                 }
             }
         }
@@ -418,65 +401,6 @@ abstract class MMRCMS : HttpSource() {
                 Pair(it.toString(), it.toString())
             }.toTypedArray(),
         )
-    }
-    private var categories = emptyList<Pair<String, String>>()
-    private var statuses = emptyList<Pair<String, String>>()
-    private var tags = emptyList<Pair<String, String>>()
-    private var sortOptions = emptyArray<Pair<String, String>>()
-
-    private var fetchFiltersStatus = FetchFilterStatus.NOT_FETCHED
-    private var fetchFiltersAttempts = 0
-    private val scope = CoroutineScope(Dispatchers.IO)
-
-    protected open fun fetchFilterOptions() {
-        if (!fetchFilterOptions) {
-            return
-        }
-
-        if (fetchFiltersStatus != FetchFilterStatus.NOT_FETCHED || fetchFiltersAttempts >= 3) {
-            return
-        }
-
-        fetchFiltersStatus = FetchFilterStatus.FETCHING
-        fetchFiltersAttempts++
-        scope.launch {
-            try {
-                if (supportsAdvancedSearch) {
-                    val document = client.newCall(GET("$baseUrl/advanced-search", headers))
-                        .await()
-                        .asJsoup()
-
-                    categories = document.select("select[name='categories[]'] option").map {
-                        it.text() to it.attr("value")
-                    }
-                    statuses = document.select("select[name='status[]'] option").map {
-                        it.text() to it.attr("value")
-                    }
-                    tags = document.select("select[name='types[]'] option").map {
-                        it.text() to it.attr("value")
-                    }
-                } else {
-                    val document = client.newCall(GET("$baseUrl/$itemPath-list", headers))
-                        .await()
-                        .asJsoup()
-
-                    categories = document.select("a.category").map {
-                        it.text() to it.absUrl("href").toHttpUrl().queryParameter("cat")!!
-                    }
-                    tags = document.select("div.tag-links a").map {
-                        it.text() to it.absUrl("href").toHttpUrl().pathSegments.last()
-                    }
-                    sortOptions = document.select("#sort-types label:has(input)").map {
-                        it.ownText() to it.selectFirst("input")!!.id()
-                    }.toTypedArray()
-                }
-
-                fetchFiltersStatus = FetchFilterStatus.FETCHED
-            } catch (e: Exception) {
-                fetchFiltersStatus = FetchFilterStatus.NOT_FETCHED
-                Log.e("MMRCMS/$name", "Could not fetch filters", e)
-            }
-        }
     }
 
     protected fun guessCover(mangaUrl: String, url: String?): String = if (url == null || url.endsWith("no-image.png")) {
@@ -497,10 +421,4 @@ abstract class MMRCMS : HttpSource() {
         select("p, br").prepend("\\n")
         text().replace("\\n", "\n").replace("\n ", "\n")
     }
-}
-
-private enum class FetchFilterStatus {
-    NOT_FETCHED,
-    FETCHED,
-    FETCHING,
 }

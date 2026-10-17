@@ -3,30 +3,31 @@ package eu.kanade.tachiyomi.extension.en.killsixbilliondemons
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
-import okhttp3.Request
-import okhttp3.Response
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 
 @Source
 abstract class KillSixBillionDemons :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val supportsLatest: Boolean = false
+    override val supportsLatest = false
 
     private val descriptionKSBD = """
         Q: What is this all about?
@@ -53,21 +54,14 @@ abstract class KillSixBillionDemons :
     }.getOrNull() ?: url
 
     // ========================= Popular =========================
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = generateKSBDMangasPage()
-
-    /**
-     * @return the MangasPage containing the different books of Kill Six Billion Demons as manga
-     */
-    private fun generateKSBDMangasPage(): MangasPage = MangasPage(fetchBooksAsMangas(), false)
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchBooksAsMangas(), false)
 
     /**
      * This fetches the different books of Kill Six Billion Demons as different manga.
      * @return a list of all books in form of multiple manga
      */
-    private fun fetchBooksAsMangas(): List<SManga> {
-        val doc = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
+    private suspend fun fetchBooksAsMangas(): List<SManga> {
+        val doc = client.get(baseUrl).asJsoup()
         val bookElements = doc.select("#chapter option").filter { it.isBookOption }
         return bookElements.map { bookElement ->
             val bookOverviewUrl = bookElement.attr("value")
@@ -80,7 +74,7 @@ abstract class KillSixBillionDemons :
                 author = AUTHOR_KSBD
                 description = descriptionKSBD
                 thumbnail_url = fetchThumbnailUrl(bookOverviewUrl)
-                status = fetchStatusForBook(bookTitle)
+                status = getStatusForBook(bookTitle, doc)
             }
         }
     }
@@ -92,9 +86,8 @@ abstract class KillSixBillionDemons :
      * @param bookOverviewUrl url to the book overview
      * @return url to the cover of the book
      */
-    private fun fetchThumbnailUrl(bookOverviewUrl: String): String {
-        val overviewDoc =
-            client.newCall(GET(bookOverviewUrl + PAGES_ORDER, headers)).execute().asJsoup()
+    private suspend fun fetchThumbnailUrl(bookOverviewUrl: String): String {
+        val overviewDoc = client.get(bookOverviewUrl + PAGES_ORDER).asJsoup()
         return overviewDoc.selectFirst(".comic-thumbnail-in-archive a img")!!.attr("src")
     }
 
@@ -103,11 +96,11 @@ abstract class KillSixBillionDemons :
      * the title of the the given book.
      *
      * @param bookTitle name of the book the status should be fetched for
+     * @param newestPage the home page, which shows the newest page
      * @return the status of the book (as Enum value of SManga because chapters are mangas)
      */
-    private fun fetchStatusForBook(bookTitle: String): Int {
+    private fun getStatusForBook(bookTitle: String, newestPage: Document): Int {
         val bookTitleWithoutBook = bookTitle.substringAfter(": ")
-        val newestPage = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
         val postTitle = newestPage.selectFirst(".post-title")?.text() ?: ""
         // title is "<book name> <page(s)>"
         return if (postTitle.contains(bookTitleWithoutBook, ignoreCase = true)) {
@@ -118,18 +111,27 @@ abstract class KillSixBillionDemons :
     }
 
     // ========================= Latest =========================
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    // ========================= Details & Chapters =========================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (fetchDetails) fetchBooksAsMangas().find { manga.title == it.title } ?: manga else manga
+        }
+        val chapterList = async {
+            if (fetchChapters) fetchChapterList(manga) else chapters
+        }
 
-    // ========================= Details =========================
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(fetchBooksAsMangas().find { manga.title == it.title })
+        SMangaUpdate(details.await(), chapterList.await())
+    }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    // ========================= Chapters =========================
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val doc = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val doc = client.get(baseUrl + manga.url).asJsoup()
         val options = doc.select("#chapter option")
 
         val allOptions = options.filter { it.isValidOption }
@@ -176,124 +178,89 @@ abstract class KillSixBillionDemons :
             }
         }
 
-        return Observable.just(chapters.reversed())
+        return chapters.reversed()
     }
 
     /**
-     * Fetches all pages of the active chapter from the website, creating individual chapter entries for each.
+     * Fetches all pages of the active chapter from the website, following the archive pagination,
+     * creating individual chapter entries for each.
      *
      * @param chapterUrl the relative URL path of the active chapter archive
      * @param chapterTitle the title prefix of the chapter (e.g. "Chapter 6")
      * @param startChapterNumber the base chapter number (e.g. 6.0f)
      * @return a list of page-based SChapter objects
      */
-    private fun fetchActiveChapterPages(
+    private suspend fun fetchActiveChapterPages(
         chapterUrl: String,
         chapterTitle: String,
         startChapterNumber: Float,
     ): List<SChapter> = buildList {
-        fetchActiveChapterPagesTR(baseUrl + chapterUrl + PAGES_ORDER, chapterTitle, startChapterNumber, this)
-    }
+        var currentUrl = baseUrl + chapterUrl + PAGES_ORDER
 
-    /**
-     * Recursively fetches and collects pages from active chapter archive pagination.
-     *
-     * @param currentUrl the current paginated URL to scrape
-     * @param chapterTitle the title prefix of the chapter
-     * @param startChapterNumber the base chapter number
-     * @param pages mutable list where found page-chapters are accumulated
-     */
-    private tailrec fun fetchActiveChapterPagesTR(
-        currentUrl: String,
-        chapterTitle: String,
-        startChapterNumber: Float,
-        pages: MutableList<SChapter>,
-    ) {
-        val currentPage = client.newCall(GET(currentUrl, headers)).execute().asJsoup()
+        while (true) {
+            val currentPage = client.get(currentUrl).asJsoup()
 
-        val links = currentPage.select(".comic-thumbnail-in-archive a")
-        for (link in links) {
-            val href = link.attr("href")
-            val title = link.attr("title").trim()
-            if (href.isNotEmpty()) {
-                val pageNum = pages.size + 1
-                val pageTitle = if (title.isNotEmpty()) "$chapterTitle - $title" else "$chapterTitle Page $pageNum"
-                pages.add(
-                    SChapter.create().apply {
-                        setUrlWithoutDomain(href)
-                        name = pageTitle
-                        chapter_number = startChapterNumber + (pageNum / 1000f)
-                        date_upload = 0L
-                    },
-                )
-            }
-        }
-
-        val potentialNextPageUrl = currentPage.select(".paginav-next a").attr("href")
-        if (potentialNextPageUrl.isNotEmpty()) {
-            fetchActiveChapterPagesTR(potentialNextPageUrl, chapterTitle, startChapterNumber, pages)
-        }
-    }
-
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    // ========================= Pages =========================
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(
-        buildList {
-            fetchPagesTR(baseUrl + chapter.url + PAGES_ORDER, this)
-        },
-    )
-
-    /**
-     * Recursively fetches and collects comic page images for a chapter. Supports both chapter
-     * archives (with multiple thumbnails) and individual comic pages.
-     *
-     * @param currentUrl the current URL to scrape
-     * @param pages mutable list where found Page objects are accumulated
-     */
-    private tailrec fun fetchPagesTR(
-        currentUrl: String,
-        pages: MutableList<Page>,
-    ) {
-        val currentPage = client.newCall(GET(currentUrl, headers)).execute().asJsoup()
-
-        val images = currentPage.select(".comic-thumbnail-in-archive a img")
-        if (images.isNotEmpty()) {
-            for (img in images) {
-                img.attr("src").takeIf { it.isNotEmpty() }?.let { src ->
-                    val imageUrl = src.replace(wordpressThumbnailRegex, "")
-                    pages.add(Page(pages.size + 1, "", imageUrl))
+            val links = currentPage.select(".comic-thumbnail-in-archive a")
+            for (link in links) {
+                val href = link.attr("href")
+                val title = link.attr("title").trim()
+                if (href.isNotEmpty()) {
+                    val pageNum = size + 1
+                    val pageTitle = if (title.isNotEmpty()) "$chapterTitle - $title" else "$chapterTitle Page $pageNum"
+                    add(
+                        SChapter.create().apply {
+                            setUrlWithoutDomain(href)
+                            name = pageTitle
+                            chapter_number = startChapterNumber + (pageNum / 1000f)
+                            date_upload = 0L
+                        },
+                    )
                 }
             }
-        } else {
-            currentPage.selectFirst("#comic img")?.attr("src")?.takeIf { it.isNotEmpty() }?.let { src ->
-                val imageUrl = src.replace(wordpressThumbnailRegex, "")
-                pages.add(Page(pages.size + 1, "", imageUrl))
-            }
-        }
 
-        val potentialNextPageUrl = currentPage.select(".paginav-next a").attr("href")
-        if (potentialNextPageUrl.isNotEmpty()) {
-            fetchPagesTR(potentialNextPageUrl, pages)
+            currentUrl = currentPage.select(".paginav-next a").attr("href")
+            if (currentUrl.isEmpty()) break
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // ========================= Pages =========================
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    /**
+     * Collects comic page images for a chapter, following pagination. Supports both chapter
+     * archives (with multiple thumbnails) and individual comic pages.
+     */
+    override suspend fun getPageList(chapter: SChapter): List<Page> = buildList {
+        var currentUrl = baseUrl + chapter.url + PAGES_ORDER
+
+        while (true) {
+            val currentPage = client.get(currentUrl).asJsoup()
+
+            val images = currentPage.select(".comic-thumbnail-in-archive a img")
+            if (images.isNotEmpty()) {
+                for (img in images) {
+                    img.attr("src").takeIf { it.isNotEmpty() }?.let { src ->
+                        val imageUrl = src.replace(wordpressThumbnailRegex, "")
+                        add(Page(size + 1, "", imageUrl))
+                    }
+                }
+            } else {
+                currentPage.selectFirst("#comic img")?.attr("src")?.takeIf { it.isNotEmpty() }?.let { src ->
+                    val imageUrl = src.replace(wordpressThumbnailRegex, "")
+                    add(Page(size + 1, "", imageUrl))
+                }
+            }
+
+            currentUrl = currentPage.select(".paginav-next a").attr("href")
+            if (currentUrl.isEmpty()) break
+        }
+    }
 
     // ========================= Search =========================
-    override fun fetchSearchManga(
+    override suspend fun getSearchMangaList(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> = throw Exception("Search functionality is not available.")
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    ): MangasPage = throw Exception("Search functionality is not available.")
 
     // ========================= Preferences =========================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

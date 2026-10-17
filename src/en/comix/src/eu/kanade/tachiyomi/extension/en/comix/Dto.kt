@@ -17,6 +17,8 @@ const val CHAPTER_OFFICIAL_MEMO = "official"
 const val CHAPTER_GROUP_ID_MEMO = "groupId"
 const val CHAPTER_LIST_DEDUPLICATED_MEMO = "chapterListDeduplicated"
 const val CHAPTER_LIST_BLACKLIST_MEMO = "chapterListBlacklist"
+const val CHAPTER_LIST_COMPLETE_MEMO = "chapterListComplete"
+const val CHAPTER_LIST_FETCHED_AT_MEMO = "chapterListFetchedAt"
 
 @Serializable
 class Term(
@@ -61,6 +63,7 @@ class Manga(
     private val originalLanguage: String? = null,
     private val links: Map<String, String?>? = null,
     private val url: String? = null,
+    val chapterUpdatedAtFormatted: String? = null,
 ) {
     @Serializable
     class Poster(
@@ -260,22 +263,11 @@ class SearchResponse(
 }
 
 @Serializable
-class ChapterDetailsResponse(
-    val result: Items,
-) {
-    @Serializable
-    class Items(
-        val items: List<Chapter> = emptyList(),
-        private val meta: Meta? = null,
-        private val pagination: Pagination? = null,
-    ) {
-        fun hasNextPage(): Boolean = when {
-            meta != null -> meta.page < meta.actualLastPage
-            pagination != null -> pagination.page < pagination.actualLastPage
-            else -> false
-        }
-    }
-}
+class ChapterList(
+    val chapters: List<Chapter>,
+    val complete: Boolean,
+    val error: String? = null,
+)
 
 @Serializable
 class Chapter(
@@ -293,10 +285,6 @@ class Chapter(
         val id: Int? = null,
         val name: String,
     )
-
-    companion object {
-        private val DATE_REGEX = Regex("""^(\d+)\s*(s|m|h|d|w|mo|mos|y|yr|yrs|min|mins|sec|secs|hr|hrs|day|days|week|weeks|month|months|year|years)$""")
-    }
 
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         url = this@Chapter.url.indexOf("/title/").let { index ->
@@ -327,47 +315,52 @@ class Chapter(
             "Unknown"
         }
     }
-
-    private fun parseRelativeDate(dateStr: String): Long {
-        if (dateStr.isEmpty()) return 0L
-        val trimmed = dateStr.trim().lowercase().removeSuffix(" ago")
-        val match = DATE_REGEX.find(trimmed) ?: return 0L
-
-        val amount = match.groupValues[1].toIntOrNull() ?: return 0L
-        val unit = match.groupValues[2]
-
-        val calendar = Calendar.getInstance()
-        when (unit) {
-            "s", "sec", "secs" -> calendar.add(Calendar.SECOND, -amount)
-            "m", "min", "mins" -> calendar.add(Calendar.MINUTE, -amount)
-            "h", "hr", "hrs" -> calendar.add(Calendar.HOUR_OF_DAY, -amount)
-            "d", "day", "days" -> calendar.add(Calendar.DAY_OF_YEAR, -amount)
-            "w", "week", "weeks" -> calendar.add(Calendar.WEEK_OF_YEAR, -amount)
-            "mo", "mos", "month", "months" -> calendar.add(Calendar.MONTH, -amount)
-            "y", "yr", "yrs", "year", "years" -> calendar.add(Calendar.YEAR, -amount)
-        }
-        return calendar.timeInMillis
-    }
 }
 
 @Serializable
-class ChapterResponse(
-    val result: ChapterResult,
+class ChapterPages(
+    val baseUrl: String = "",
+    val items: List<PageDto>,
+    private val alt: List<String>? = null,
+    private val node: String? = null,
 ) {
-    @Serializable
-    class ChapterResult(
-        val pages: Pages,
-    )
-
-    @Serializable
-    class Pages(
-        val baseUrl: String,
-        val items: List<PageDto>,
-    )
+    // Alt hosts in the site reader's retry order
+    fun altHosts(host: String, index: Int): List<String> {
+        if (alt.isNullOrEmpty()) return emptyList()
+        val label = host.substringBefore('.')
+        val start = index % alt.size
+        val domains = alt.drop(start) + alt.take(start)
+        val hosts = domains.map { "$label.$it" } + domains.map { "${node ?: label}.$it" }
+        return List(6) { hosts[it % hosts.size] }
+    }
 
     @Serializable
     class PageDto(
         val url: String,
         val s: Int = 0,
     )
+}
+
+private val DATE_REGEX = Regex("""^(\d+)\s*(s|m|h|d|w|mo|mos|y|yr|yrs|min|mins|sec|secs|hr|hrs|day|days|week|weeks|month|months|year|years)$""")
+
+// Relative site date ("2w ago"); with latest, the latest time the text can stand for
+fun parseRelativeDate(dateStr: String, latest: Boolean = false): Long {
+    if (dateStr.isEmpty()) return 0L
+    val trimmed = dateStr.trim().lowercase().removeSuffix(" ago")
+    val match = DATE_REGEX.find(trimmed) ?: return 0L
+
+    val amount = (match.groupValues[1].toIntOrNull() ?: return 0L) - if (latest) 1 else 0
+    val unit = match.groupValues[2]
+
+    val calendar = Calendar.getInstance()
+    when (unit) {
+        "s", "sec", "secs" -> calendar.add(Calendar.SECOND, -amount)
+        "m", "min", "mins" -> calendar.add(Calendar.MINUTE, -amount)
+        "h", "hr", "hrs" -> calendar.add(Calendar.HOUR_OF_DAY, -amount)
+        "d", "day", "days" -> calendar.add(Calendar.DAY_OF_YEAR, -amount)
+        "w", "week", "weeks" -> calendar.add(Calendar.WEEK_OF_YEAR, -amount)
+        "mo", "mos", "month", "months" -> calendar.add(Calendar.MONTH, -amount)
+        "y", "yr", "yrs", "year", "years" -> calendar.add(Calendar.YEAR, -amount)
+    }
+    return calendar.timeInMillis
 }

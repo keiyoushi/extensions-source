@@ -2,15 +2,17 @@ package eu.kanade.tachiyomi.extension.all.xcomic
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.stringOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.jsoup.parser.Parser
+import java.time.Instant
+import java.time.ZoneOffset
 
-@Serializable
-class XComicName(val name: String? = null)
-
+// ============================= Shared primitives =============================
 @Serializable
 class XComicData<T>(
     val data: T,
@@ -38,6 +40,12 @@ class DateYMD(
 }
 
 @Serializable
+class XComicStrings(
+    val text: String? = null,
+)
+
+// ====================== Title node (main identity) ========================
+@Serializable
 class ComicTrackingSites(
     @SerialName("mangaupdates") val mangaUpdates: String? = null,
     @SerialName("myanimelist") val myAnimeList: String? = null,
@@ -47,14 +55,135 @@ class ComicTrackingSites(
 )
 
 @Serializable
+class TitleTrackingSites(
+    val anilist: Int? = null,
+    val myanimelist: Int? = null,
+    val mangaupdates: String? = null, // hash slug
+    val kitsu: Int? = null,
+    val animeplanet: String? = null, // text slug
+    val shikimori: String? = null, // = MAL id
+    val mangabaka: Int? = null,
+)
+
+// ============================= Title Browse =============================
+@Serializable
+class TitleBrowseData(
+    @SerialName("get_title_browse_items")
+    val items: List<TitleBrowseNode>? = null,
+)
+
+@Serializable
+class TitleBrowsePagerData(
+    @SerialName("get_title_browse_pager")
+    val pager: XComicPaging,
+)
+
+@Serializable
+class TitleBrowseNode(
+    val id: String? = null,
+    val data: TitleBrowseItem? = null,
+)
+
+// ====================== Comic Probe (edition metadata) ===================
+@Serializable
+class ComicProbeEnvelope(
+    @SerialName("get_comicNode")
+    val response: XComicData<ComicProbeData?>? = null,
+)
+
+@Serializable
+class ComicProbeData(
+    val subName: String? = null,
+    val dbStatus: String? = null,
+    val isPublic: Boolean? = null,
+    val translatedLanguage: String? = null,
+    @SerialName("chaps_normal") val chapsNormal: Int? = null,
+    @SerialName("chapterNode_up_to") val chapterUpTo: ChapterUpToNode? = null,
+) {
+    fun isLive(): Boolean = isPublic != false && (dbStatus == null || dbStatus == "normal")
+}
+
+@Serializable
+class TitleBrowseItem(
+    val title: String? = null,
+    @SerialName("native_title") val nativeTitle: String? = null,
+    @SerialName("romanized_title") val romanizedTitle: String? = null,
+    @SerialName("original_language") val originalLanguage: String? = null,
+    @SerialName("translated_languages") val translatedLanguages: List<String?>? = null, // null elements 3×
+    val type: String? = null,
+    @SerialName("chap_last_public_at") val chapLastPublicAt: Long? = null,
+    @SerialName("cover_local_url") val coverLocalUrl: String? = null, // full-res — prefer
+    @SerialName("cover_url") val coverUrl: String? = null, // x250 thumb — fallback
+    @SerialName("comic_ids") val comicIds: List<String>? = null,
+)
+
+// ====================== Title Node (details backbone) =====================
+@Serializable
+class TitleNodeEnvelope(
+    @SerialName("get_title_titleNode")
+    val response: XComicData<TitleNodeData?>? = null,
+)
+
+@Serializable
+class TitleNodeData(
+    val id: String? = null,
+    val title: String? = null,
+    @SerialName("alt_titles") val altTitles: List<String?>? = null,
+    @SerialName("native_title") val nativeTitle: String? = null,
+    @SerialName("romanized_title") val romanizedTitle: String? = null,
+    @SerialName("original_language") val originalLanguage: String? = null,
+    @SerialName("translated_languages") val translatedLanguages: List<String?>? = null,
+    val authors: List<String>? = null,
+    val artists: List<String>? = null,
+    // taxonomy — SLUG STRINGS (doc's Int claim wrong; triple-verified live)
+    @SerialName("content_rating_id") val contentRating: String? = null,
+    @SerialName("type_id") val typeId: String? = null,
+    @SerialName("demographic_ids") val demographicIds: List<String>? = null,
+    @SerialName("genre_ids") val genreIds: List<String>? = null,
+    @SerialName("format_ids") val formatIds: List<String>? = null,
+    val year: Int? = null,
+    val type: String? = null,
+    val status: String? = null,
+    val description: String? = null,
+    @SerialName("cover_local_url") val coverLocalUrl: String? = null, // full-res — prefer
+    @SerialName("cover_local") val coverLocal: String? = null, // raw key (redundant)
+    @SerialName("cover_url") val coverUrl: String? = null, // x250 thumb — fallback
+    val urlPath: String? = null,
+    @SerialName("total_comics") val totalComics: Int? = null,
+    @SerialName("total_chapters") val totalChapters: Int? = null,
+    @SerialName("total_follows") val totalFollows: Int? = null,
+    @SerialName("total_reviews") val totalReviews: Int? = null,
+    @SerialName("total_comments") val totalComments: Int? = null,
+    @SerialName("vote_avg") val voteAvg: Float? = null,
+    @SerialName("vote_users") val voteUsers: Int? = null,
+    @SerialName("vote_bay") val voteBay: Float? = null,
+    @SerialName("vote_val") val voteVal: Float? = null,
+    @SerialName("chap_last_public_at") val chapLastPublicAt: Long? = null, // work-level freshness
+    @SerialName("created_at") val createdAt: Long? = null,
+    @SerialName("updated_at") val updatedAt: Long? = null,
+    @SerialName("is_merged") val isMerged: Boolean? = null,
+    @SerialName("merged_to") val mergedTo: String? = null,
+    @SerialName("comic_ids") val comicIds: List<String>? = null,
+    @SerialName("tracking_sites") val trackingSites: TitleTrackingSites? = null,
+)
+
+fun TitleTrackingSites?.toMarkdownLinks(): List<String> = buildList {
+    this@toMarkdownLinks?.anilist?.let { add("[AniList](https://anilist.co/manga/$it)") }
+    this@toMarkdownLinks?.myanimelist?.let { add("[MyAnimeList](https://myanimelist.net/manga/$it)") }
+    this@toMarkdownLinks?.mangaupdates?.let { add("[MangaUpdates](https://www.mangaupdates.com/series/$it)") }
+    this@toMarkdownLinks?.kitsu?.let { add("[Kitsu](https://kitsu.app/manga/$it)") }
+    this@toMarkdownLinks?.animeplanet?.let { add("[Anime-Planet](https://www.anime-planet.com/manga/$it)") }
+    this@toMarkdownLinks?.shikimori?.let { add("[Shikimori](https://shikimori.io/mangas/$it)") }
+    this@toMarkdownLinks?.mangabaka?.let { add("[MangaBaka](https://mangabaka.org/$it)") }
+}
+
+// ================== Comic node (source / upload identity) =================
+@Serializable
 class ComicNode(
     private val id: String,
     private val name: String,
+    val subName: String? = null,
     private val altNames: List<String>? = null,
-    private val authors: List<String>? = null,
-    private val authorNodes: List<XComicData<XComicName?>>? = null,
-    private val artists: List<String>? = null,
-    private val artistNodes: List<XComicData<XComicName?>>? = null,
     private val originalLanguage: String? = null,
     val translatedLanguage: String? = null,
     private val originalStatus: String? = null,
@@ -67,204 +196,191 @@ class ComicNode(
     private val contentRating: String? = null,
     private val genres: List<String>? = null,
     private val tags: List<String>? = null,
-    private val publishers: List<String>? = null,
-    private val publisherNodes: List<XComicData<XComicName?>>? = null,
-    private val tagNodes: List<XComicData<XComicName?>>? = null,
     private val summary: XComicStrings? = null,
     private val extraInfo: XComicStrings? = null,
     private val readDirection: String? = null,
-    private val urlPath: String? = null,
-    private val urlCover: String? = null,
-    @SerialName("is_hot")
-    private val isHot: Boolean? = null,
-    @SerialName("is_new")
-    private val isNew: Boolean? = null,
+    private val dbStatus: String? = null,
+    private val isPublic: Boolean? = null,
+    @SerialName("is_hot") private val isHot: Boolean? = null,
+    @SerialName("is_new") private val isNew: Boolean? = null,
     private val follows: Int? = null,
     private val reviews: Int? = null,
-    @SerialName("comments_total")
-    private val commentsTotal: Int? = null,
-    @SerialName("score_val")
-    private val scoreVal: Float? = null,
-    @SerialName("chaps_normal")
-    private val chapsNormal: Int? = null,
+    @SerialName("comments_total") private val commentsTotal: Int? = null,
+    @SerialName("score_val") private val scoreVal: Float? = null,
+    @SerialName("chaps_normal") val chapsNormal: Int? = null,
+    @SerialName("dateUpload") val dateUpload: Long? = null,
+    @SerialName("chapterNode_up_to") val chapterUpTo: ChapterUpToNode? = null,
     private val trackingSites: ComicTrackingSites? = null,
+    private val urlPath: String? = null,
+    private val urlCover: String? = null,
+    @SerialName("title_titleNode") private val titleNodeWrapper: XComicData<TitleNodeData?>? = null,
 ) {
-    fun toSManga(baseUrl: String, cleanTitle: (String) -> String): SManga = SManga.create().apply {
-        url = id
-        title = cleanTitle(name)
+    val titleNode: TitleNodeData?
+        get() = titleNodeWrapper?.data
 
-        author = authorNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
-        artist = artistNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
+    fun isLive(): Boolean = isPublic != false && (dbStatus == null || dbStatus == "normal")
 
-        genre = buildSet {
-            type?.let { add(it.toTitleCase()) }
-            demographics?.forEach { d -> add(d.toTitleCase()) }
-            contentRating?.let { add(it.toTitleCase()) }
-            genres?.forEach { g -> add(g.toTitleCase()) }
-        }.joinToString()
+    fun toSManga(
+        baseUrl: String,
+        cleanTitle: (String) -> String,
+        work: TitleNodeData? = titleNode,
+        uploaders: List<String>? = null,
+    ): SManga {
+        val displayTitle = cleanTitle(work?.title ?: name).unescapeHtml()
+        return SManga.create().apply {
+            url = id
+            title = displayTitle
 
-        memo = buildJsonObject {
-            urlPath?.let { put("urlPath", it) }
-        }
+            author = work?.authors?.takeIf { it.isNotEmpty() }?.joinToString()
+            artist = work?.artists?.takeIf { it.isNotEmpty() }?.joinToString()
 
-        status = run {
-            val statusToCheck = originalStatus ?: uploadStatus
-            when {
-                statusToCheck == null -> SManga.UNKNOWN
-                statusToCheck.contains("pending") -> SManga.UNKNOWN
-                statusToCheck.contains("ongoing") -> SManga.ONGOING
-                statusToCheck.contains("cancelled") -> SManga.CANCELLED
-                statusToCheck.contains("hiatus") -> SManga.ON_HIATUS
-                statusToCheck.contains("completed") -> when {
-                    uploadStatus?.contains("ongoing") == true -> SManga.PUBLISHING_FINISHED
-                    else -> SManga.COMPLETED
-                }
-                else -> SManga.UNKNOWN
+            genre = buildSet {
+                (work?.type ?: work?.typeId ?: type)?.let { add(it.toTitleCase()) }
+                (work?.demographicIds ?: demographics)?.forEach { add(it.toTitleCase()) }
+                (work?.contentRating ?: contentRating)?.let { add(it.toTitleCase()) }
+                (work?.genreIds ?: genres)?.forEach { add(it.toTitleCase()) }
+                work?.formatIds?.forEach { add(it.toTitleCase()) }
+            }.joinToString()
+
+            memo = buildJsonObject {
+                (urlPath ?: work?.urlPath)?.let { put("urlPath", it) }
             }
-        }
-        thumbnail_url = urlCover?.let { if (it.startsWith("http")) it else "$baseUrl$it" }
-        description = buildString {
-            if (isHot == true) append("🔥 HOT ")
-            if (isNew == true) append("✨ NEW")
-            if (isHot == true || isNew == true) append("\n\n")
 
-            val metadata = buildList {
-                originalLanguage?.let { ol ->
-                    val label = languages.firstOrNull { it.second == ol }?.first ?: ol
-                    add("**Original**: $label")
-                }
-                translatedLanguage?.let { tl ->
-                    val label = languages.firstOrNull { it.second == tl }?.first ?: tl
-                    add("**Translated**: $label")
-                }
-                if (originalPubFrom != null) {
-                    val till = originalPubTill?.toString() ?: "Ongoing"
-                    add("**Publication**: $originalPubFrom - $till")
-                }
-                originalPubZone?.takeIf { it.isNotEmpty() }?.let { add("**Region**: $it") }
+            status = parseStatus(work?.status ?: originalStatus ?: uploadStatus, uploadStatus)
+            thumbnail_url = (work?.coverLocalUrl ?: work?.coverUrl ?: urlCover)?.toAbsoluteUrl(baseUrl)
 
-                readDirection?.let { dir ->
-                    val directionValues = listOf(
-                        "ttb" to "⬇️ Top To Bottom",
-                        "rtl" to "⬅️ Right To Left",
-                        "ltr" to "➡️ Left To Right",
+            val descriptionParts = buildList {
+                if (isHot == true || isNew == true) {
+                    add(
+                        buildString {
+                            if (isHot == true) append("🔥 HOT")
+                            if (isNew == true) {
+                                if (isNotEmpty()) append(" ")
+                                append("✨ NEW")
+                            }
+                        },
                     )
-                    val label = directionValues.firstOrNull { it.first == dir }?.second ?: dir
-                    add("**Read Direction**: $label")
+                }
+
+                val metadata = buildList {
+                    val original = work?.originalLanguage ?: originalLanguage
+                    original?.let { add("**Original**: ${languageName(it)}") }
+                    val translated = work?.translatedLanguages?.filterNotNull()?.takeIf { it.isNotEmpty() }
+                        ?: listOfNotNull(translatedLanguage)
+                    translated.takeIf { it.isNotEmpty() }?.let { values ->
+                        add("**Translated**: ${values.joinToString { languageName(it) }}")
+                    }
+                    originalPubFrom?.let { from ->
+                        add("**Publication**: $from - ${originalPubTill ?: "Ongoing"}")
+                    } ?: work?.year?.takeIf { it > 0 }?.let { add("**Released**: $it") }
+                    originalPubZone?.takeIf { it.isNotEmpty() }?.let { add("**Region**: $it") }
+                    readDirection?.let { direction ->
+                        val label = when (direction) {
+                            "ttb" -> "⬇️ Top To Bottom"
+                            "rtl" -> "⬅️ Right To Left"
+                            "ltr" -> "➡️ Left To Right"
+                            else -> direction
+                        }
+                        add("**Read Direction**: $label")
+                    }
+                    work?.chapLastPublicAt?.takeIf { it > 0 }?.let {
+                        val date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                        add("**Updated**: $date")
+                    }
+                }
+                if (metadata.isNotEmpty()) add(metadata.joinToString("\n"))
+
+                val stats = buildList {
+                    (work?.voteVal ?: work?.voteAvg ?: scoreVal)?.takeIf { it > 0 }?.let { add("**Score**: %.1f".format(it)) }
+                    work?.voteUsers?.takeIf { it > 0 }?.let { add("**Votes**: $it") }
+                    (work?.totalFollows ?: follows)?.takeIf { it > 0 }?.let { add("**Follows**: $it") }
+                    (work?.totalReviews ?: reviews)?.takeIf { it > 0 }?.let { add("**Reviews**: $it") }
+                    (work?.totalComments ?: commentsTotal)?.takeIf { it > 0 }?.let { add("**Comments**: $it") }
+                    (work?.totalChapters ?: chapsNormal)?.takeIf { it > 0 }?.let { add("**Chapters**: $it") }
+                }
+                if (stats.isNotEmpty()) add("**Statistics**\n${stats.joinToString(" · ")}")
+
+                (work?.description?.takeIf { it.isNotBlank() } ?: summary?.text?.takeIf { it.isNotBlank() })?.let {
+                    add("**Description**\n${Parser.unescapeEntities(it, false).toMarkdownUrls()}")
+                }
+
+                val links = (work?.trackingSites.toMarkdownLinks() + comicTrackingLinks()).distinct()
+                if (links.isNotEmpty()) add("**External Links**:\n${links.joinToString("\n") { "- $it" }}")
+
+                val extras = buildList {
+                    uploaders?.takeIf { it.isNotEmpty() }?.let { add("**Uploaders**: ${it.joinToString()}") }
+                    tags?.takeIf { it.isNotEmpty() }?.let { add("**Tags**: ${it.joinToString()}") }
+                }
+                addAll(extras)
+
+                val alternatives = buildList {
+                    work?.nativeTitle?.let(::add)
+                    work?.romanizedTitle?.let(::add)
+                    addAll(work?.altTitles.orEmpty().filterNotNull())
+                    addAll(altNames.orEmpty())
+                }.map { Parser.unescapeEntities(it.trim(), false) }
+                    .filter { it.isNotEmpty() && it != displayTitle }
+                    .distinct()
+                if (alternatives.isNotEmpty()) {
+                    add("**Alternative Titles**:\n${alternatives.joinToString("\n") { "- $it" }}")
+                }
+
+                extraInfo?.text?.takeIf { it.isNotBlank() }?.let {
+                    add("**Extra Info**:\n${Parser.unescapeEntities(it, false).toMarkdownUrls()}")
                 }
             }
-
-            if (metadata.isNotEmpty()) {
-                append(metadata.joinToString("\n"))
-                append("\n\n")
-            }
-
-            val stats = buildList {
-                scoreVal?.takeIf { it > 0 }?.let { add("**Score**: %.1f".format(it)) }
-                follows?.takeIf { it > 0 }?.let { add("**Follows**: $it") }
-                reviews?.takeIf { it > 0 }?.let { add("**Reviews**: $it") }
-                commentsTotal?.takeIf { it > 0 }?.let { add("**Comments**: $it") }
-                chapsNormal?.takeIf { it > 0 }?.let { add("**Chapters**: $it") }
-            }
-
-            if (stats.isNotEmpty()) {
-                append("**Statistics**\n${stats.joinToString(" · ")}")
-                append("\n\n")
-            }
-
-            if (metadata.isNotEmpty()) {
-                append("\n\n---\n\n")
-            }
-
-            val summaryText = summary?.text
-            if (!summaryText.isNullOrEmpty()) {
-                append(summaryText.toMarkdownUrls())
-            }
-
-            val links = buildList {
-                trackingSites?.mangaUpdates?.let { add("[MangaUpdates](https://www.mangaupdates.com/series.html?id=$it)") }
-                trackingSites?.myAnimeList?.let { add("[MyAnimeList](https://myanimelist.net/manga/$it)") }
-                trackingSites?.animePlanet?.let { add("[Anime-Planet](https://www.anime-planet.com/manga/$it)") }
-                trackingSites?.aniList?.let { add("[AniList](https://anilist.co/manga/$it)") }
-                trackingSites?.kitsu?.let { add("[Kitsu](https://kitsu.io/manga/$it)") }
-            }
-
-            if (links.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("**External Links**:\n")
-                append(links.joinToString("\n") { "- $it" })
-            }
-
-            val extras = buildList {
-                val pubList = publisherNodes?.mapNotNull { it.data?.name }
-                    ?.takeIf { it.isNotEmpty() } ?: publishers
-                pubList?.takeIf { it.isNotEmpty() }?.let { add("**Publishers**: ${it.joinToString()}") }
-
-                val tagList = tagNodes?.mapNotNull { it.data?.name }
-                    ?.takeIf { it.isNotEmpty() } ?: tags
-                tagList?.takeIf { it.isNotEmpty() }?.let { add("**Tags**: ${it.joinToString()}") }
-            }
-
-            if (extras.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append(extras.joinToString("\n\n"))
-            }
-
-            if (!altNames.isNullOrEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("**Alternative Titles**:\n")
-                append(altNames.joinToString("\n") { "- $it" })
-            }
-
-            val extraInfoText = extraInfo?.text
-            if (!extraInfoText.isNullOrEmpty()) {
-                if (isNotEmpty()) append("\n\n**Extra Info**:\n")
-                append(extraInfoText.toMarkdownUrls())
-            }
+            description = descriptionParts.joinToString("\n\n")
+            initialized = work?.status != null || originalStatus != null || uploadStatus != null
         }
-        initialized = originalStatus != null
+    }
+
+    private fun comicTrackingLinks(): List<String> = buildList {
+        trackingSites?.mangaUpdates?.let { add("[MangaUpdates](https://www.mangaupdates.com/series/$it)") }
+        trackingSites?.myAnimeList?.let { add("[MyAnimeList](https://myanimelist.net/manga/$it)") }
+        trackingSites?.animePlanet?.let { add("[Anime-Planet](https://www.anime-planet.com/manga/$it)") }
+        trackingSites?.aniList?.let { add("[AniList](https://anilist.co/manga/$it)") }
+        trackingSites?.kitsu?.let { add("[Kitsu](https://kitsu.app/manga/$it)") }
     }
 }
 
-// ============================= Helpers ==============================
+private fun languageName(code: String): String = languages.firstOrNull { it.second == code }?.first ?: code
 
-private fun String.toTitleCase(): String = this.replace("_", " ").split(" ").joinToString(" ") { word ->
-    word.lowercase().replaceFirstChar {
-        if (it.isLowerCase()) it.titlecase() else it.toString()
+private fun parseStatus(status: String?, uploadStatus: String?): Int {
+    val lower = status?.lowercase() ?: return SManga.UNKNOWN
+    return when {
+        "pending" in lower -> SManga.UNKNOWN
+        "releasing" in lower || "ongoing" in lower -> SManga.ONGOING
+        "cancelled" in lower -> SManga.CANCELLED
+        "hiatus" in lower -> SManga.ON_HIATUS
+        "completed" in lower -> if (uploadStatus?.lowercase()?.contains("ongoing") == true) SManga.PUBLISHING_FINISHED else SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 }
 
-private val urlRegex = Regex("""(?<![\[(])(https?://[^\s<"]+)""")
+private fun String.unescapeHtml(): String = Parser.unescapeEntities(this, false)
 
-private fun String.toMarkdownUrls(): String = this.replace(urlRegex) { match ->
-    val url = match.value
-    "[$url]($url)"
-}
+private fun String.toAbsoluteUrl(baseUrl: String): String = if (startsWith("http")) this else "$baseUrl$this"
 
-// ============================= Search ===============================
-
-@Serializable
-class SearchPagerData(
-    @SerialName("get_comic_browse_pager")
-    val pager: XComicPaging,
-)
-
-@Serializable
-class SearchItemsData(
-    @SerialName("get_comic_browse_items")
-    val items: List<XComicData<ComicNode>>,
-)
-
-// ============================= Details ==============================
-
+// ======================== Comic details for links =========================
 @Serializable
 class ComicNodeData(
     @SerialName("get_comicNode")
     val response: XComicData<ComicNode>,
 )
 
-// ========================= Chapters List ============================
+@Serializable
+class ChapterUpToNode(
+    val id: String? = null,
+    val data: ChapterUpToData? = null,
+)
 
+@Serializable
+class ChapterUpToData(
+    val dname: String? = null,
+    @SerialName("datePublic") val datePublic: Long? = null,
+)
+
+// ================================ Chapters ================================
 @Serializable
 class ChapterListData(
     @SerialName("get_comic_chapterList_fullList")
@@ -280,28 +396,6 @@ class ChapterListUniqData(
 @Serializable
 class ChapterListItems(
     val paging: XComicPaging,
-    val items: List<ApiChapterWrapper>,
-)
-
-@Serializable
-class ChapterIndexItem(
-    @SerialName("chapter_id") val chapterId: String,
-    val chaNum: Float? = null,
-    val volNum: Float? = null,
-    val title: String? = null,
-    val count: Int? = null,
-    val datePublic: Long? = null,
-)
-
-@Serializable
-class ChapterIndexData(
-    @SerialName("get_comic_chapterIndex")
-    val chapters: List<ChapterIndexItem>,
-)
-
-@Serializable
-class ChapterDuplicationData(
-    @SerialName("get_comic_chapterDuplications")
     val items: List<ApiChapterWrapper>,
 )
 
@@ -331,7 +425,6 @@ class ApiChapterWrapper(
 @Serializable
 class ChapterData(
     private val id: String,
-    private val comicId: String? = null,
     private val dbStatus: String? = null,
     private val isFinal: Boolean? = null,
     private val volume: JsonElement? = null,
@@ -341,16 +434,15 @@ class ChapterData(
     private val title: String? = null,
     private val urlPath: String? = null,
     @SerialName("sfw_result")
-    private val sfwResult: String? = null,
+    private val sfwResult: JsonElement? = null,
     @SerialName("chaDuplications")
-    private val chaDuplications: String? = null,
+    private val chaDuplications: JsonElement? = null,
     private val dateCreate: Long? = null,
     @SerialName("datePublic")
     private val datePublic: Long? = null,
     private val dateModify: Long? = null,
     private val chaNum: Float? = null,
     private val volNum: Float? = null,
-    private val volIdx: JsonElement? = null,
     private val count_images: Int? = null,
     @SerialName("is_new")
     private val isNew: Boolean? = null,
@@ -368,10 +460,14 @@ class ChapterData(
     private val viewsLogin: Int? = null,
     @SerialName("views_guest")
     private val viewsGuest: Int? = null,
-    private val profileNodes: List<XComicData<XComicName?>?>? = null,
 ) {
-    fun toSChapter(): SChapter = SChapter.create().apply {
+    fun toSChapter(comicId: String, editionLabel: String?): SChapter = SChapter.create().apply {
         url = id
+        val uploader = srcName.normalizeEditionLabel()?.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase() else it.toString()
+        }
+        val scanlatorLabel = editionLabel.normalizeEditionLabel() ?: uploader
+
         name = buildString {
             val number = (chaNum ?: serial)?.toString()?.removeSuffix(".0")
             if (number != null && !displayName.contains(number)) {
@@ -389,48 +485,41 @@ class ChapterData(
 
         memo = buildJsonObject {
             urlPath?.let { put("urlPath", it) }
+            put(CHAPTER_COMIC_ID_MEMO, comicId)
+            uploader?.let { put(CHAPTER_UPLOADER_MEMO, it) }
         }
 
         (chaNum ?: serial)?.let { chapter_number = it }
         date_upload = dateModify ?: dateCreate ?: datePublic ?: 0L
 
-        scanlator = srcName?.takeIf { it.isNotEmpty() }?.replaceFirstChar {
-            if (it.isLowerCase()) it.titlecase() else it.toString()
-        } ?: profileNodes?.mapNotNull { it?.data?.name }?.joinToString().takeIf { !it.isNullOrEmpty() }
+        scanlator = scanlatorLabel
     }
 }
 
-// ========================= Latest Uploads ===========================
+internal const val CHAPTER_COMIC_ID_MEMO = "comicId"
+internal const val CHAPTER_UPLOADER_MEMO = "uploader"
 
-@Serializable
-class ApiLatestUploadsSelect(
-    val size: Int? = null,
-    val before: Long? = null,
-    val genre: String? = null,
-)
+internal fun SChapter.comicId(): String? = memo[CHAPTER_COMIC_ID_MEMO]?.stringOrNull
 
-@Serializable
-class ApiLatestUploadsWrapper(val select: ApiLatestUploadsSelect)
+internal fun SChapter.uploader(): String? = memo[CHAPTER_UPLOADER_MEMO]?.stringOrNull
 
-@Serializable
-class LatestUploadsData(
-    @SerialName("get_comic_latestUploads")
-    val response: LatestUploadsResult,
-)
+internal fun String?.normalizeEditionLabel(): String? = this
+    ?.let { Parser.unescapeEntities(it, false).replace(labelWhitespaceRegex, " ").trim() }
+    ?.takeIf { it.isNotEmpty() }
 
-@Serializable
-class LatestUploadsResult(
-    val before: Long? = null,
-    val items: List<LatestUploadsItem>,
-)
+private val labelWhitespaceRegex = Regex("\\s+")
 
-@Serializable
-class LatestUploadsItem(
-    val comic: XComicData<ComicNode?>? = null,
-    val chapters: List<XComicData<ChapterData?>>? = null,
-)
+// ================================ Helpers =================================
 
-@Serializable
-class XComicStrings(
-    val text: String? = null,
-)
+private fun String.toTitleCase(): String = this.replace("_", " ").split(" ").joinToString(" ") { word ->
+    word.lowercase().replaceFirstChar {
+        if (it.isLowerCase()) it.titlecase() else it.toString()
+    }
+}
+
+private val urlRegex = Regex("""(?<![\[(])(https?://[^\s<"]+)""")
+
+fun String.toMarkdownUrls(): String = this.replace(urlRegex) { match ->
+    val url = match.value
+    "[$url]($url)"
+}

@@ -1,29 +1,30 @@
 package eu.kanade.tachiyomi.extension.all.yaoimangaonline
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Response
+import org.jsoup.nodes.Document
 
 @Source
-abstract class YaoiMangaOnline : HttpSource() {
+abstract class YaoiMangaOnline : KeiSource() {
 
     override val supportsLatest = false
 
     // =================== Popular ===================
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/page/$page/", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/page/$page/").asJsoup())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(".post:not(.category-gay-movies):not(.category-yaoi-anime) > div > a")
+    private fun parseMangasPage(document: Document): MangasPage {
+        val mangas = document.select(".post:not(.sticky):not(.category-gay-movies):not(.category-yaoi-anime) > div > a")
             .map { element ->
                 SManga.create().apply {
                     title = element.attr("title")
@@ -37,35 +38,43 @@ abstract class YaoiMangaOnline : HttpSource() {
 
     // =================== Latest ===================
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // =================== Search ===================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = baseUrl.toHttpUrl().newBuilder().run {
-        filters.forEach {
-            when (it) {
-                is CategoryFilter -> if (it.state != 0) {
-                    addQueryParameter("cat", it.toString())
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            filters.forEach {
+                when (it) {
+                    is CategoryFilter -> if (it.state != 0) {
+                        addQueryParameter("cat", it.toString())
+                    }
+                    is TagFilter -> if (it.state != 0) {
+                        addEncodedPathSegments("tag/$it")
+                    }
+                    else -> {}
                 }
-                is TagFilter -> if (it.state != 0) {
-                    addEncodedPathSegments("tag/$it")
-                }
-                else -> {}
             }
-        }
-        addEncodedPathSegments("page/$page")
-        addQueryParameter("s", query)
-        GET(toString(), headers)
-    }
+            addEncodedPathSegments("page/$page")
+            addQueryParameter("s", query)
+        }.build()
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+        return parseMangasPage(client.get(url).asJsoup())
+    }
 
     // =================== Details ===================
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
+    }
+
+    private fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.select("h1.entry-title").text()
             .substringBeforeLast("by").trim()
         thumbnail_url = document.selectFirst(".herald-post-thumbnail img")?.attr("src")
@@ -81,8 +90,7 @@ abstract class YaoiMangaOnline : HttpSource() {
 
     // =================== Chapters ===================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun chapterListParse(document: Document): List<SChapter> {
         val chapters = document.select(".mpp-toc a").map { element ->
             SChapter.create().apply {
                 name = element.ownText()
@@ -93,7 +101,7 @@ abstract class YaoiMangaOnline : HttpSource() {
             listOf(
                 SChapter.create().apply {
                     name = "Chapter"
-                    url = response.request.url.encodedPath
+                    url = document.location().toHttpUrl().encodedPath
                 },
             )
         }.reversed()
@@ -101,11 +109,9 @@ abstract class YaoiMangaOnline : HttpSource() {
 
     // =================== Pages ===================
 
-    override fun pageListParse(response: Response) = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url).asJsoup()
         .select(".entry-content img")
         .mapIndexed { idx, img -> Page(idx, imageUrl = img.attr("src")) }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(CategoryFilter(), TagFilter())
+    override fun getFilterList(data: JsonElement?) = FilterList(CategoryFilter(), TagFilter())
 }

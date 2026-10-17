@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.hanabimanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -38,8 +39,12 @@ class Comic(
         title = this@Comic.title!!
         thumbnail_url = coverUrl
         author = authors?.joinToString("，")
-        description = summary
-        genre = (tags.orEmpty().map { it.name } + listOfNotNull(categories?.name, region())).joinToString()
+        description = summary?.trimIndent()
+        genre = buildList {
+            tags.orEmpty().mapTo(this, Tag::name)
+            categories?.name?.let(::add)
+            region()?.let(::add)
+        }.joinToString()
         status = when (isFinished) {
             true -> SManga.COMPLETED
             false -> SManga.ONGOING
@@ -66,7 +71,7 @@ class Chapter(
         url = id.toString()
         name = title
         // chapter_number = idx.toFloat()
-        date_upload = Instant.parse(updatedAt).toEpochMilliseconds()
+        date_upload = Instant.tryParse(updatedAt)
         scanlator = when (category) {
             "normal" -> "连载"
             "special" -> "特典番外"

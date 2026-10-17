@@ -2,39 +2,35 @@ package eu.kanade.tachiyomi.extension.en.revivalscans
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import okhttp3.Headers
 
 @Source
 abstract class RevivalScans :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
 
     private val preferences by getPreferencesLazy()
 
-    private val apiHeaders = headersBuilder().add("RSC", "1").build()
+    private val apiHeaders: Headers get() = headers.newBuilder().add("RSC", "1").build()
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series", apiHeaders)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.body.string().extractNextJsRsc<SeriesResponseDto>()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val dto = client.get("$baseUrl/series", apiHeaders).extractNextJs<SeriesResponseDto>()
             ?: throw Exception("Failed to extract popular manga")
 
         val mangas = dto.series.map { it.toSManga(baseUrl) }
@@ -43,55 +39,40 @@ abstract class RevivalScans :
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = client.newCall(popularMangaRequest(page))
-        .asObservableSuccess()
-        .map { response ->
-            val pageData = popularMangaParse(response)
-            val filtered = pageData.mangas.filter {
-                it.title.contains(query, ignoreCase = true)
-            }
-            MangasPage(filtered, false)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val filtered = getPopularManga(page).mangas.filter {
+            it.title.contains(query, ignoreCase = true)
         }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException("Not used")
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Not used")
+        return MangasPage(filtered, false)
+    }
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", apiHeaders)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.body.string().extractNextJsRsc<ManhwaResponseDto>()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val dto = client.get("$baseUrl/series/${manga.url}", apiHeaders).extractNextJs<ManhwaResponseDto>()
             ?: throw Exception("Failed to extract manga details")
 
-        return dto.manhwa.toSManga(baseUrl)
-    }
-
-    // ============================= Chapters ==============================
-
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", apiHeaders)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = response.body.string().extractNextJsRsc<ManhwaResponseDto>()
-            ?: throw Exception("Failed to extract chapter list")
-
         val showPremium = preferences.getBoolean(PREF_SHOW_PREMIUM, PREF_SHOW_PREMIUM_DEFAULT)
-        return dto.manhwa.toSChapterList(showPremium)
+
+        return SMangaUpdate(
+            manga = dto.manhwa.toSManga(baseUrl),
+            chapters = dto.manhwa.toSChapterList(showPremium),
+        )
     }
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, apiHeaders)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val dto = response.body.string().extractNextJsRsc<PagesResponseDto>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val dto = client.get(baseUrl + chapter.url, apiHeaders).extractNextJs<PagesResponseDto>()
             ?: throw Exception("Failed to extract pages")
 
         return dto.pages.mapIndexed { index, pageDto ->
@@ -103,8 +84,6 @@ abstract class RevivalScans :
             Page(index, imageUrl = imageUrl)
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
 
     // ============================= Utilities =============================
 

@@ -9,63 +9,65 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 import java.util.Date
 
 @Source
 abstract class QuestionableContent :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(TextInterceptor())
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(TextInterceptor())
+        // The site's zstd responses get cut off after the first frame, which truncates the archive page
+        addNetworkInterceptor { chain ->
+            chain.proceed(chain.request().newBuilder().header("Accept-Encoding", "br, gzip").removeHeader("Origin").build())
+        }
+    }
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
-            title = name
-            artist = AUTHOR
-            author = AUTHOR
-            status = SManga.ONGOING
-            url = "/archive.php"
-            description = "An internet comic strip about romance and robots"
-            thumbnail_url = "https://i.ibb.co/ZVL9ncS/qc-teh.png"
-            initialized = true
-        }
-
-        return Observable.just(MangasPage(listOf(manga), false))
+    private fun createManga() = SManga.create().apply {
+        title = name
+        artist = AUTHOR
+        author = AUTHOR
+        status = SManga.ONGOING
+        url = "/archive.php"
+        description = "An internet comic strip about romance and robots"
+        thumbnail_url = "https://i.ibb.co/ZVL9ncS/qc-teh.png"
+        initialized = true
     }
 
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(createManga()), false)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = if (fetchDetails) createManga() else manga
+        val chapterList = if (fetchChapters) fetchChapterList(manga) else chapters
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1).map { it.mangas.first() }
+        return SMangaUpdate(details, chapterList)
+    }
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
 
         val chapters = document.select("""div#container a[href^="view.php?comic="]""")
             .map { element ->
@@ -74,11 +76,13 @@ abstract class QuestionableContent :
 
                 SChapter.create().apply {
                     setUrlWithoutDomain("/$chapterUrl")
-                    name = element.text()
+                    name = element.text().let { text ->
+                        LINK_TEXT_REGEX.matchEntire(text)?.destructured?.let { (num, title) -> "$num: $title" } ?: text
+                    }
                     chapter_number = number.toFloat()
                 }
             }
-            .distinct()
+            .distinctBy { it.url }
 
         if (chapters.isNotEmpty()) {
             val firstChapter = chapters.first()
@@ -97,8 +101,8 @@ abstract class QuestionableContent :
         return chapters
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val pages = document.select("#strip").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }.toMutableList()
@@ -111,8 +115,6 @@ abstract class QuestionableContent :
         }
         return pages
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
 
@@ -132,5 +134,6 @@ abstract class QuestionableContent :
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
         private const val AUTHOR = "Jeph Jacques"
         private val URL_REGEX = """view\.php\?comic=(.*)""".toRegex()
+        private val LINK_TEXT_REGEX = """See #(\d+): "(.*)" with newspost""".toRegex()
     }
 }

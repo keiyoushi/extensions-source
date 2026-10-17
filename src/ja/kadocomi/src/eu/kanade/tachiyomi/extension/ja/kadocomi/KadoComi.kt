@@ -11,8 +11,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -30,7 +32,7 @@ abstract class KadoComi :
     private val apiUrl get() = "$baseUrl/api"
     private val pageLimit = 30
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(XorInterceptor { it.url.fragment?.decodeHex() })
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val offset = (page - 1) * pageLimit

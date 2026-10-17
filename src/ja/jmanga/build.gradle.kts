@@ -8,13 +8,13 @@ keiyoushi {
     name = "Jmanga"
     versionCode = 6
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangareader"
 
     source {
         lang = "ja"
         baseUrl {
-            custom("https://jmanga.email")
+            custom("https://jmanga.cyou")
         }
     }
 }

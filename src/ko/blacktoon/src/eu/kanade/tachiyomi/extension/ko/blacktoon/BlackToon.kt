@@ -6,30 +6,29 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import okio.IOException
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import kotlin.math.min
 import kotlin.random.Random
 
 @Source
-abstract class BlackToon : HttpSource() {
+abstract class BlackToon : KeiSource() {
 
     private var currentBaseUrlHost = ""
 
-    private val cdnUrl = "https://blacktoonimg.com/"
-
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder().addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
         if (currentBaseUrlHost.isBlank()) {
             noRedirectClient.newCall(GET(baseUrl, headers)).execute().use {
                 currentBaseUrlHost = it.headers["location"]?.toHttpUrlOrNull()?.host
@@ -50,48 +49,64 @@ abstract class BlackToon : HttpSource() {
         }.build()
 
         return@addInterceptor chain.proceed(request)
-    }.build()
+    }
 
-    private val noRedirectClient = network.client.newBuilder()
-        .followRedirects(false)
-        .build()
+    private val noRedirectClient by lazy {
+        network.client.newBuilder()
+            .followRedirects(false)
+            .build()
+    }
 
-    private val json by injectLazy<Json>()
+    private var db: List<SeriesItem>? = null
+    private val dbMutex = Mutex()
 
-    private val db by lazy {
-        val doc = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
-        doc.select("script[src*=data/webtoon]").flatMap { scriptEl ->
-            var listIdx: Int
-            client.newCall(GET(scriptEl.absUrl("src"), headers))
-                .execute().body.string()
-                .also {
-                    listIdx = it.substringBefore(" = ")
-                        .substringAfter("data")
-                        .toInt()
-                }
+    private suspend fun getDb(): List<SeriesItem> = db ?: dbMutex.withLock {
+        db ?: fetchDb().also { db = it }
+    }
+
+    // Data scripts, chapter lists and images are served from separate hosts that the site
+    // declares in inline scripts (inc_url1/inc_url2) and /data/config.js (img_domain).
+    private class Hosts(val toonList: String, val webtoon: String, val image: String)
+
+    private var hosts: Hosts? = null
+    private val hostsMutex = Mutex()
+
+    private suspend fun getHosts(): Hosts = hosts ?: hostsMutex.withLock {
+        hosts ?: run {
+            val home = client.get(baseUrl).use { it.body.string() }
+            val config = client.get("$baseUrl/data/config.js").use { it.body.string() }
+            Hosts(
+                toonList = INC_URL1_REGEX.find(home)!!.groupValues[1],
+                webtoon = INC_URL2_REGEX.find(home)!!.groupValues[1],
+                image = IMG_DOMAIN_REGEX.find(config)!!.groupValues[1].removeSuffix("/") + "/",
+            )
+        }.also { hosts = it }
+    }
+
+    private suspend fun fetchDb(): List<SeriesItem> {
+        val hosts = getHosts()
+        return listOf(0, 1).flatMap { listIdx ->
+            client.get("${hosts.webtoon}/webtoon_$listIdx.js")
+                .use { it.body.string() }
                 .substringAfter(" = ")
                 .removeSuffix(";")
-                .let { json.decodeFromString<List<SeriesItem>>(it) }
+                .parseAs<List<SeriesItem>>()
                 .onEach { it.listIndex = listIdx }
         }
     }
 
-    private fun List<SeriesItem>.getPageChunk(page: Int): MangasPage = MangasPage(
+    private suspend fun List<SeriesItem>.getPageChunk(page: Int): MangasPage = MangasPage(
         mangas = subList((page - 1) * 24, min(page * 24, size))
-            .map { it.toSManga(cdnUrl) },
+            .map { it.toSManga(getHosts().image) },
         hasNextPage = (page + 1) * 24 <= size,
     )
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
-        db.sortedByDescending { it.hot }.getPageChunk(page),
-    )
+    override suspend fun getPopularManga(page: Int): MangasPage = getDb().sortedByDescending { it.hot }.getPageChunk(page)
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.just(
-        db.sortedByDescending { it.updatedAt }.getPageChunk(page),
-    )
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getDb().sortedByDescending { it.updatedAt }.getPageChunk(page)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        var list = db
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        var list = getDb()
 
         if (query.isNotBlank()) {
             val stdQuery = query.trim()
@@ -105,14 +120,10 @@ abstract class BlackToon : HttpSource() {
             list = it.applyFilter(list)
         }
 
-        return Observable.just(
-            list.getPageChunk(page),
-        )
+        return list.getPageChunk(page)
     }
 
-    override fun getFilterList() = getFilters()
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/webtoon/${manga.url}.html#${manga.status}", headers)
+    override fun getFilterList(data: JsonElement?) = getFilters()
 
     override fun getMangaUrl(manga: SManga): String = buildString {
         if (currentBaseUrlHost.isBlank()) {
@@ -126,32 +137,37 @@ abstract class BlackToon : HttpSource() {
         append(".html")
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val doc = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = if (fetchDetails) async { fetchDetails(manga) } else null
+        val chapterList = if (fetchChapters) async { fetchChapterList(manga) } else null
+
+        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+    }
+
+    private suspend fun fetchDetails(manga: SManga): SManga {
+        val doc = client.get("$baseUrl/webtoon/${manga.url}.html").asJsoup()
         return SManga.create().apply {
+            title = manga.title
             description = doc.select("p.mt-2").last()?.text()
-            thumbnail_url = doc.selectFirst("script:containsData(+img_domain+)")?.data()?.let {
-                cdnUrl + it.substringAfter("+'").substringBefore("'+")
-            }
-            status = response.request.url.fragment!!.toInt()
+            thumbnail_url = doc.selectFirst("img.thumb2[o_src]")?.let { getHosts().image + it.attr("o_src") }
+                ?: manga.thumbnail_url
+            status = manga.status
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = "$baseUrl/data/toonlist/${manga.url}.js?v=${"%.17f".format(Random.nextDouble())}"
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val url = "${getHosts().toonList}/data/toonlist/${manga.url}.js?v=${"%.17f".format(Random.nextDouble())}"
 
-        return GET(url, headers)
-    }
+        val data = client.get(url).parseAs<List<Chapter>> {
+            it.substringAfter(" = ").removeSuffix(";")
+        }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaId = response.request.url.pathSegments.last().removeSuffix(".js")
-
-        val data = response.body.string()
-            .substringAfter(" = ")
-            .removeSuffix(";")
-            .let { json.decodeFromString<List<Chapter>>(it) }
-
-        return data.map { it.toSChapter(mangaId) }.reversed()
+        return data.map { it.toSChapter(manga.url) }.reversed()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = buildString {
@@ -166,22 +182,18 @@ abstract class BlackToon : HttpSource() {
         append(".html")
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/webtoons/${chapter.url}.html", headers)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get("$baseUrl/webtoons/${chapter.url}.html").asJsoup()
+        val imageHost = getHosts().image
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-
-        return document.select("#toon_content_imgs img").map {
-            Page(0, imageUrl = cdnUrl + it.attr("o_src"))
+        return document.select("#toon_content_imgs img").mapIndexed { i, img ->
+            Page(i, imageUrl = imageHost + img.attr("o_src"))
         }
     }
 
-    // unused
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    companion object {
+        private val INC_URL1_REGEX = Regex("""inc_url1\s*=\s*"([^"]+)"""")
+        private val INC_URL2_REGEX = Regex("""inc_url2\s*=\s*"([^"]+)"""")
+        private val IMG_DOMAIN_REGEX = Regex("""var img_domain\s*=\s*"([^"]+)"""")
+    }
 }
