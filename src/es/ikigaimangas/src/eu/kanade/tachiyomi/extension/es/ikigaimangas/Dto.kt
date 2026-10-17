@@ -57,19 +57,22 @@ class QwikData(
     fun unwrapJson(el: JsonElement?): JsonElement = when (el) {
         is JsonPrimitive -> el
         is JsonObject -> el
-        is JsonArray -> JsonArray(el.map { unwrapJson(it) })
+        is JsonArray -> JsonArray(el.map { unwrapJson(objects.getOrNull(it.jsonPrimitive.content.toInt(radix = 36))) })
         else -> JsonNull
     }
 }
 
 @Serializable
 class QwikSeriesDto(
-    val name: String,
+    private val name: String,
+    @SerialName("other_names") private val otherNames: List<String>? = null,
     private val slug: String,
     private val cover: String? = null,
     val type: String? = null,
     @SerialName("is_mature") val isMature: Boolean = false,
 ) {
+    val titles get() = listOf(name) + otherNames.orEmpty()
+
     fun toSManga(imageCdnUrl: String) = SManga.create().apply {
         url = slug
         title = name
