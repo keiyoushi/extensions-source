@@ -1,14 +1,11 @@
 package eu.kanade.tachiyomi.extension.tr.mangaruhu
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.initmanga.InitManga
+import keiyoushi.annotation.Source
 
-class MangaRuhu : Madara(
-    "Manga Ruhu",
-    "https://mangaruhu.com",
-    "tr",
-    SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-) {
-    override val filterNonMangaItems = false
+@Source
+abstract class MangaRuhu : InitManga() {
+    override val mangaUrlDirectory = "manga"
+    override val latestUrlSlug = "recently-updated"
+    override val popularUrlSlug = "manga-ranking"
 }
