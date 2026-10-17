@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Serializable
 class QwikData(
@@ -73,6 +74,6 @@ class QwikSeriesDto(
     fun toSManga(imageCdnUrl: String) = SManga.create().apply {
         url = slug
         title = name
-        thumbnail_url = cover?.let { "$imageCdnUrl/$it" }
+        thumbnail_url = cover?.let { imageCdnUrl.toHttpUrl().resolve(it)?.toString() }
     }
 }

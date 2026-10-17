@@ -28,7 +28,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -40,6 +42,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -48,7 +51,16 @@ abstract class IkigaiMangas :
     ConfigurableSource {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(::nsfwCookieInterceptor)
-        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val imageRequest = if (request.url.host.endsWith(".ikigaimangas.cloud")) {
+                request.newBuilder().header("Sec-Fetch-Dest", "image").build()
+            } else {
+                request
+            }
+            chain.proceed(imageRequest)
+        }
+        .rateLimit(2, 1.seconds, interval = 500.milliseconds) { it.host == baseUrl.toHttpUrl().host }
 
     private val domainMutex = Mutex()
     private var domainFetched = false
@@ -280,12 +292,26 @@ abstract class IkigaiMangas :
             .select("section.card > ul.grid a.card")
             .map(::chapterFromElement)
 
+        val chapterCount = document.selectFirst("section.card h2:containsOwn(Capítulos)")
+            ?.text()?.substringAfterLast(" ")?.toIntOrNull()
+
+        // A full details refresh still reloads every page, including edits to older chapters.
+        if (!fetchDetails &&
+            firstPageChapters.isNotEmpty() &&
+            chapterCount == chapters.size &&
+            chapters.map { it.url }.distinct().size == chapters.size &&
+            firstPageChapters.map { it.url } == chapters.take(firstPageChapters.size).map { it.url }
+        ) {
+            return SMangaUpdate(updatedManga, firstPageChapters + chapters.drop(firstPageChapters.size))
+        }
+
         val lastPage = document.select("nav[aria-label=pagination] > a[q:key^=page-]").lastOrNull()
             ?.attr("q:key")?.let {
                 it.substringAfter("-").toIntOrNull()
             } ?: 1
 
         val remainingChapters = coroutineScope {
+            val semaphore = Semaphore(3)
             (2..lastPage).map { page ->
                 async {
                     val url = "$baseUrl/series/${manga.url}/"
@@ -294,9 +320,11 @@ abstract class IkigaiMangas :
                         .addQueryParameter("pagina", page.toString())
                         .build()
 
-                    client.get(url).asJsoup()
-                        .select("section.card > ul.grid a.card")
-                        .map(::chapterFromElement)
+                    semaphore.withPermit {
+                        client.get(url).asJsoup()
+                            .select("section.card > ul.grid a.card")
+                            .map(::chapterFromElement)
+                    }
                 }
             }.awaitAll()
         }.flatten()
@@ -339,8 +367,15 @@ abstract class IkigaiMangas :
                 .build()
             document = client.newCall(newRequest).awaitSuccess().asJsoup()
         }
-        return document.select("section div > img").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
+        val imageUrls = document.select("section div > img").map { it.attr("abs:src") }
+            .ifEmpty {
+                QWIK_PAGE_URL_REGEX.findAll(document.select("script[type=qwik/json]").joinToString { it.data() })
+                    .map { it.value }
+                    .distinct()
+                    .toList()
+            }
+        return imageUrls.mapIndexed { i, imageUrl ->
+            Page(i, imageUrl = imageUrl)
         }
     }
 
@@ -362,6 +397,7 @@ abstract class IkigaiMangas :
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_NSFW_PREF
             title = "Mostrar contenido NSFW"
+            summary = "Incluye en la búsqueda las obras que el sitio marca como contenido adulto."
             setDefaultValue(false)
         }.also { screen.addPreference(it) }
 
@@ -463,5 +499,6 @@ abstract class IkigaiMangas :
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
         private const val PAGE_SIZE = 20
         private const val ENABLE_NSFW_HEADER = "X-Add-Nsfw-Cookie"
+        private val QWIK_PAGE_URL_REGEX = Regex("""https://image3\.ikigaimangas\.cloud/series/[^"\\<>]+""")
     }
 }
