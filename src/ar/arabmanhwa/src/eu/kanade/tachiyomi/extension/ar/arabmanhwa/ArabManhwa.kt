@@ -13,8 +13,8 @@ import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import java.time.ZonedDateTime
-import java.time.temporal.ChronoUnit
+import java.time.Duration
+import java.time.Instant
 
 @Source
 abstract class ArabManhwa : KeiSource() {
@@ -65,11 +65,12 @@ abstract class ArabManhwa : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
+        val knownDates = chapters.associate { it.url to it.date_upload }
         val chapterList = document.select("a.chapter-row").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 name = element.selectFirst(".chapter-row__l")!!.text()
-                date_upload = parseRelativeDate(element.selectFirst(".chapter-row__d")?.text().orEmpty())
+                date_upload = parseRelativeDate(element.selectFirst(".chapter-row__d")?.text().orEmpty(), knownDates[url])
             }
         }
         return SMangaUpdate(parseDetails(document), chapterList)
@@ -87,14 +88,20 @@ abstract class ArabManhwa : KeiSource() {
         }
     }
 
-    // The site only shows times like "منذ 8 أشهر" (8 months ago). Two of a unit is written in the
-    // dual form without a number ("منذ شهرين"), one of a unit has neither.
-    private fun parseRelativeDate(text: String): Long {
-        val count = NUMBER_REGEX.find(text)?.value?.toInt()
+    // The site only shows times like "منذ 8 أشهر" (8 months ago), truncated to whole units with
+    // 30-day months. Two of a unit is written in the dual form without a number ("منذ شهرين"),
+    // one of a unit has neither. A date stored by an earlier refresh is kept while it still fits
+    // the text, so coarse values like "8 months ago" don't move it on every refresh. The window
+    // reaches 5 minutes further back as pages can come from the site's cache (s-maxage=300).
+    private fun parseRelativeDate(text: String, knownDate: Long?): Long {
+        val count = NUMBER_REGEX.find(text)?.value?.toLong()
         val (amount, unit) = RELATIVE_UNITS.firstNotNullOfOrNull { (words, unit) ->
-            words.firstOrNull(text::contains)?.let { word -> (count ?: if (word in DUALS) 2 else 1) to unit }
+            words.firstOrNull(text::contains)?.let { word -> (count ?: if (word in DUALS) 2L else 1L) to unit }
         } ?: return 0L
-        return ZonedDateTime.now().minus(amount.toLong(), unit).toInstant().toEpochMilli()
+        val now = Instant.now()
+        val newest = now.minus(unit.multipliedBy(amount)).toEpochMilli()
+        val oldest = now.minus(unit.multipliedBy(amount + 1)).minus(PAGE_CACHE_MAX_AGE).toEpochMilli()
+        return knownDate?.takeIf { it in oldest..newest } ?: newest
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
@@ -102,16 +109,17 @@ abstract class ArabManhwa : KeiSource() {
         .mapIndexed { i, img -> Page(i, imageUrl = img.absUrl("data-src")) }
 
     companion object {
+        private val PAGE_CACHE_MAX_AGE = Duration.ofMinutes(5)
         private val NUMBER_REGEX = Regex("""\d+""")
         private val DUALS = setOf("دقيقتين", "ساعتين", "يومين", "أسبوعين", "شهرين", "سنتين")
         private val RELATIVE_UNITS = listOf(
-            listOf("ثانية", "ثوان") to ChronoUnit.SECONDS,
-            listOf("دقيقتين", "دقيقة", "دقائق") to ChronoUnit.MINUTES,
-            listOf("ساعتين", "ساعة", "ساعات") to ChronoUnit.HOURS,
-            listOf("يومين", "يوم", "أيام") to ChronoUnit.DAYS,
-            listOf("أسبوعين", "أسبوع", "أسابيع") to ChronoUnit.WEEKS,
-            listOf("شهرين", "شهر", "أشهر", "شهور") to ChronoUnit.MONTHS,
-            listOf("سنتين", "سنة", "سنوات") to ChronoUnit.YEARS,
+            listOf("ثانية", "ثوان") to Duration.ofSeconds(1),
+            listOf("دقيقتين", "دقيقة", "دقائق") to Duration.ofMinutes(1),
+            listOf("ساعتين", "ساعة", "ساعات") to Duration.ofHours(1),
+            listOf("يومين", "يوم", "أيام") to Duration.ofDays(1),
+            listOf("أسبوعين", "أسبوع", "أسابيع") to Duration.ofDays(7),
+            listOf("شهرين", "شهر", "أشهر", "شهور") to Duration.ofDays(30),
+            listOf("سنتين", "سنة", "سنوات") to Duration.ofDays(365),
         )
     }
 }
