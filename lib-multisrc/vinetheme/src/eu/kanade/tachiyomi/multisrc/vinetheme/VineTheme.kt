@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.vinetheme
 
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -46,6 +48,20 @@ abstract class VineTheme :
 
     companion object {
         private const val HIDE_LOCKED_PREF = "pref_hide_locked_chapters"
+    }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun runOnMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
+        } else {
+            mainHandler.post(block)
+        }
+    }
+
+    private fun showToast(message: String) = runOnMain {
+        Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
     }
 
     // ------------------------- Browse (Popular) -------------------------
@@ -106,21 +122,14 @@ abstract class VineTheme :
         .toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val filterData = try {
-            data?.parseAs<FilterData>() ?: FilterData()
-        } catch (_: SerializationException) {
-            // Fall back to old cached filter format
-            FilterData(
-                data?.parseAs<GenreListDto>()?.genres?.associate { it.displayName to it.genreSlug }.orEmpty(),
-            )
+        val filterData = data?.parseAs<FilterData>()?.apply {
+            if (outdated) throw Exception("Filter data outdated")
         }
-        if (data != null && filterData.outdated) {
-            triggerBackgroundFilterFetch()
-        }
+
         return FilterList(
             listOfNotNull(
-                filterData.genres.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
-                filterData.tags.takeIf { it.isNotEmpty() }?.let(::TagFilter),
+                filterData?.genres?.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
+                filterData?.tags?.takeIf { it.isNotEmpty() }?.let(::TagFilter),
                 TypeFilter(),
                 StatusFilter(),
                 OriginFilter(),
@@ -202,32 +211,16 @@ abstract class VineTheme :
         val dto = response.extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
         val pages = dto?.chapter?.pages.orEmpty()
         if (pages.any { it.isEncrypted }) {
-            Toast.makeText(
-                applicationContext,
-                "Some pages are encrypted and may not be displayed properly or skipped.",
-                Toast.LENGTH_LONG,
-            ).show()
+            showToast("Some pages are encrypted and may not be displayed properly or skipped.")
         }
         if (pages.any { it.isRedacted }) {
-            Toast.makeText(
-                applicationContext,
-                "Some pages are redacted and may not be displayed properly or skipped.",
-                Toast.LENGTH_LONG,
-            ).show()
+            showToast("Some pages are redacted and may not be displayed properly or skipped.")
         }
         if (pages.any { it.hasFragments }) {
-            Toast.makeText(
-                applicationContext,
-                "Some pages have fragments and may not be displayed properly or skipped.",
-                Toast.LENGTH_LONG,
-            ).show()
+            showToast("Some pages have fragments and may not be displayed properly or skipped.")
         }
         if (pages.any { it.hasStrips }) {
-            Toast.makeText(
-                applicationContext,
-                "Some pages have strips and may not be displayed properly or skipped.",
-                Toast.LENGTH_LONG,
-            ).show()
+            showToast("Some pages have strips and may not be displayed properly or skipped.")
         }
         return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
             pageDto.imageUrl?.let { Page(index, imageUrl = it.toAbsoluteUrl(baseUrl)) }
