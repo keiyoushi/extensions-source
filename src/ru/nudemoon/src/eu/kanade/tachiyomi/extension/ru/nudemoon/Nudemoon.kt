@@ -78,7 +78,7 @@ abstract class Nudemoon : KeiSource() {
         val response = client.get(url, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 404 && query.isNotBlank() && !isUserAuthenticated) {
-                    throw Exception("Поиск доступен только для авторизированных пользователей")
+                    throw Exception("Поиск доступен только для авторизованных пользователей")
                 } else {
                     throw HttpException(response.code)
                 }
@@ -91,7 +91,7 @@ abstract class Nudemoon : KeiSource() {
     private fun parseMangaElement(element: Element): SManga? = SManga.create().apply {
         element.selectFirst("a:has(h2)")?.let {
             title = it.text().substringBefore(" / ").substringBefore(" №")
-            setUrlWithoutDomain(it.absUrl("href"))
+            url = it.absUrl("href").toHttpUrl().encodedPath
         } ?: return null
         thumbnail_url = element.selectFirst("a img")?.absUrl("src")
     }
@@ -101,6 +101,11 @@ abstract class Nudemoon : KeiSource() {
         val hasNextPage = document.selectFirst(NEXT_PAGE_SELECTOR) != null
         return MangasPage(mangas, hasNextPage)
     }
+
+    // Entries with bracketed slugs added before v32 store absolute urls
+    override fun getMangaUrl(manga: SManga): String = if (manga.url.startsWith("http")) manga.url else baseUrl + manga.url
+
+    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) chapter.url else baseUrl + chapter.url
 
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -158,7 +163,7 @@ abstract class Nudemoon : KeiSource() {
                 SChapter.create().apply {
                     val nameAndUrl = element.selectFirst("tr[valign=top] a:has(h2)")
                     name = nameAndUrl?.selectFirst("h2")?.text() ?: return@mapNotNull null
-                    setUrlWithoutDomain(nameAndUrl.absUrl("href"))
+                    url = nameAndUrl.absUrl("href").toHttpUrl().encodedPath
                     val informBlock = element.selectFirst("tr[valign=top] td[align=left]")
                     scanlator = informBlock?.selectFirst("a[href*=perevod]")?.text()
 
@@ -200,7 +205,7 @@ abstract class Nudemoon : KeiSource() {
             Page(index, imageUrl = img.absUrl("data-src"))
         }
         if (pages.isEmpty() && !isUserAuthenticated) {
-            throw Exception("Страницы не найдены. Возможно необходима авторизация в WebView")
+            throw Exception("Страницы не найдены. Возможно, необходима авторизация в WebView")
         }
         return pages
     }
