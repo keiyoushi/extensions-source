@@ -97,6 +97,10 @@ abstract class VerComics : KeiSource() {
     protected open fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     // ============================== Details ==============================
+    protected open val detailsSelector = "div.tax_post"
+
+    protected open val genreSelector = "div.tax_box:has(div.title:contains(Etiquetas)) a[rel=tag]"
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -111,12 +115,12 @@ abstract class VerComics : KeiSource() {
 
             sManga = SManga.create().apply {
                 url = manga.url
-                document.selectFirst("div.tax_post")?.let {
+                document.selectFirst(detailsSelector)?.let {
                     status = SManga.COMPLETED
                     update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                    val genreList = document.select("div.tax_box:has(div.title:contains(Etiquetas)) a[rel=tag]")
+                    val genreList = document.select(genreSelector)
                     genre = genreList.joinToString { genre ->
-                        val text = genre.text().replaceFirstChar { it.uppercase() }
+                        val text = genre.text().removePrefix("#").replaceFirstChar { it.uppercase() }
                         val slug = genre.attr("href").substringAfter("$baseUrl/$genreSuffix/").removeSuffix("/")
                         val newPair = Pair(text, slug)
 
