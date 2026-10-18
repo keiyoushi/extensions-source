@@ -105,21 +105,23 @@ abstract class DeviantArt :
     private fun parseGalleryDetails(document: Document, link: String): SManga {
         val gallery = document.selectFirst("#content")
 
-        // If manga is sub-gallery then use sub-gallery name, else use gallery name
-        val galleryName = gallery?.selectFirst(".DWReDc")?.ownText()
-            ?: gallery?.selectFirst("[aria-haspopup=listbox] > div")!!.ownText()
+        // "{artist}'s Gallery on DeviantArt" or "{folder} by {artist} on DeviantArt"
+        val pageTitle = document.title().removeSuffix(" on DeviantArt")
+        val isAllGallery = link.toHttpUrl().pathSegments[2] == "all"
+        val artistName = pageTitle.removeSuffix("'s Gallery").substringAfterLast(" by ")
+        val galleryName = if (isAllGallery) "All" else pageTitle.substringBeforeLast(" by ")
         val artistInTitle = (preferences.artistInTitle == ArtistInTitle.ALWAYS.name) ||
-            ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && (galleryName == "All"))
+            ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && isAllGallery)
 
         return SManga.create().apply {
             setUrlWithoutDomain(link)
-            author = document.title().substringBefore(" ")
+            author = artistName
             title = when {
-                artistInTitle -> "$author - $galleryName"
+                artistInTitle -> "$artistName - $galleryName"
                 else -> galleryName
             }
-            description = gallery.selectFirst(".legacy-journal")?.wholeText()
-            thumbnail_url = gallery.selectFirst("img[property=contentUrl]")?.absUrl("src")
+            description = gallery?.selectFirst(".legacy-journal")?.wholeText()
+            thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
         }
     }
 
