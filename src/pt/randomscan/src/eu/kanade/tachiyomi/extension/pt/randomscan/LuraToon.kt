@@ -173,19 +173,16 @@ abstract class LuraToon : KeiSource() {
 
         if ("download" in url.pathSegments) {
             val token = url.fragment!!.substringBefore("|")
-
+            val cookie = request.header("Cookie")
+                ?.split("; ")
+                ?.filterNot { it.startsWith("csac=") }
+                ?.joinToString("; ")
+            val builder = request.newBuilder()
+                .header("Cookie", cookie.orEmpty())
             if (!token.isNullOrEmpty()) {
-                val cookie = request.header("Cookie")
-                    ?.split("; ")
-                    ?.filterNot { it.startsWith("csac=") }
-                    ?.joinToString("; ")
-                return chain.proceed(
-                    request.newBuilder()
-                        .header("Token", token)
-                        .header("Cookie", cookie.orEmpty())
-                        .build(),
-                )
+                builder.header("Token", token)
             }
+            return chain.proceed(builder.build())
         }
         return chain.proceed(request)
     }
