@@ -23,7 +23,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -140,7 +139,7 @@ abstract class CatharsisWorld : KeiSource() {
         val chapterId = token.split(".").firstOrNull()
             ?.let { Base64.decode(it, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP) }
             ?.decodeToString()
-            ?.let { Json.decodeFromString<ChapterTokenPayload>(it).cid }
+            ?.let { it.parseAs<ChapterTokenPayload>().cid }
             ?: throw IllegalStateException("Invalid chapter session token")
         return dto.paginas.mapIndexed { i, pageDto ->
             val ticket = client.post(
