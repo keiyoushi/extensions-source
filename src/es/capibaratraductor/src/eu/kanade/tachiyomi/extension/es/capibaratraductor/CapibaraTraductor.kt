@@ -166,9 +166,11 @@ abstract class CapibaraTraductor : KeiSource() {
 
         val result = client.get("$baseUrl/api/manga-custom/$seriesSlug/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
             .parseAs<Data<List<PageDto>>>()
-        return result.data.mapIndexed { i, page ->
-            Page(i, imageUrl = page.imageUrl)
-        }
+        return result.data
+            .filterNot { "/promo/" in it.imageUrl }
+            .mapIndexed { i, page ->
+                Page(i, imageUrl = page.imageUrl)
+            }
     }
 
     companion object {
