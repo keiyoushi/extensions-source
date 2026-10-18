@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Nivera Fansub"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "tr"
-        baseUrl = "https://niverafansub.one"
+        baseUrl = "https://niverafansub.dev"
     }
 }
