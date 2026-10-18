@@ -35,7 +35,7 @@ abstract class LunarAnime : KeiSource() {
     private val apiurlHost by lazy { API_URL.toHttpUrl().host }
     private val cdnurlHost by lazy { CDN_URL.toHttpUrl().host }
 
-    private val serenity by lazy { LunarSerenity(API_URL) }
+    private val serenity by lazy { LunarSerenity(API_URL, id) }
 
     private class Clearance(val thumbprint: String, val expiresAt: Long)
 

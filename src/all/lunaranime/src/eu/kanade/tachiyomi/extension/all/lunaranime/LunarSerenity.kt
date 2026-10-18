@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
-import android.content.Context
 import android.util.Base64
-import keiyoushi.utils.applicationContext
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import java.math.BigInteger
@@ -24,12 +23,13 @@ import java.util.UUID
  */
 class LunarSerenity(
     private val apiUrl: String,
+    private val sourceId: Long,
 ) {
 
     @Volatile
     private var keyPair: KeyPair = loadOrGenerateKeyPair()
 
-    private fun prefs() = applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs() = getPreferences(sourceId)
 
     private fun loadOrGenerateKeyPair(): KeyPair {
         val prefs = prefs()
@@ -68,7 +68,6 @@ class LunarSerenity(
     }
 
     companion object {
-        private const val PREFS_NAME = "lunar_serenity"
         private const val KEY_PRIVATE = "ec_private_key"
         private const val KEY_PUBLIC = "ec_public_key"
         private const val PROOF_HEADER = "cant-catch-this-monkey"
