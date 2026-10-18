@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.rawxz
+package eu.kanade.tachiyomi.extension.ja.miuraw
 
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,7 +15,7 @@ import org.jsoup.nodes.Document
 import java.util.Calendar
 
 @Source
-abstract class RawXZ : KeiSource() {
+abstract class MiuRaw : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/manga/page/$page/?orderby=views").asJsoup()
         return parseMangasPage(document)
