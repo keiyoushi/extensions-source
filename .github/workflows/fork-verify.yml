@@ -1,0 +1,81 @@
+name: Fork verify
+
+on:
+  push:
+    branches-ignore: [main]
+    paths: ["src/**", ".github/workflows/fork-verify.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 25
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve changed extension modules
+        id: mods
+        run: |
+          set -euo pipefail
+          base=$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD~1)
+          mods=$(git diff --name-only "$base"...HEAD -- src | grep -oE "^src/[^/]+/[^/]+" | sort -u | while read -r d; do
+            if [ -f "$d/build.gradle.kts" ]; then echo -n ":${d//\//:} "; fi
+          done)
+          echo "modules=$mods" >> "$GITHUB_OUTPUT"
+          echo "Modules: $mods"
+
+      - name: Build extensions
+        if: steps.mods.outputs.modules != ''
+        run: |
+          tasks=()
+          for m in ${{ steps.mods.outputs.modules }}; do
+            tasks+=("$m:assembleRelease")
+          done
+          ./gradlew "${tasks[@]}" --no-daemon --stacktrace
+
+      - name: Upload APKs
+        if: steps.mods.outputs.modules != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: apks-${{ github.ref_name }}
+          path: src/**/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+
+      - name: Publish APK release
+        if: steps.mods.outputs.modules != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="test-${{ github.ref_name }}-${{ github.run_number }}"
+          shopt -s globstar
+          apks=(src/**/build/outputs/apk/release/*.apk)
+          if [ ! -f "${apks[0]}" ]; then
+            echo "No APKs found, skipping release"
+            exit 0
+          fi
+          # Delete existing release with same tag if present (re-runs)
+          gh release delete "$tag" --yes 2>/dev/null || true
+          git push origin ":refs/tags/$tag" 2>/dev/null || true
+          # Delete old releases for this branch (keep only the newest)
+          for old_tag in $(gh release list --limit 50 --json tagName -q '.[].tagName' | grep "^test-${{ github.ref_name }}-" | grep -v "^$tag$"); do
+            gh release delete "$old_tag" --yes 2>/dev/null || true
+            git push origin ":refs/tags/$old_tag" 2>/dev/null || true
+          done
+          gh release create "$tag" \
+            --title "Test build ${{ github.ref_name }} #${{ github.run_number }}" \
+            --notes "Automated test build from branch \`${{ github.ref_name }}\`." \
+            --prerelease \
+            "${apks[@]}"
