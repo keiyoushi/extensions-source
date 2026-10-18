@@ -8,6 +8,14 @@ class GenreFilter(title: String, genres: List<Genre>) : Filter.Group<Genre>(titl
 class Status(title: String, val id: Long) : Filter.CheckBox(title)
 class StatusFilter(title: String, statuses: List<Status>) : Filter.Group<Status>(title, statuses)
 
+class ContentFilter : Filter.Select<String>("Contenido", arrayOf("Todos", "Seguro", "+18")) {
+    fun matches(isMature: Boolean) = when (state) {
+        1 -> !isMature
+        2 -> isMature
+        else -> true
+    }
+}
+
 class SortByFilter(title: String, private val sortProperties: List<SortProperty>) :
     Filter.Sort(
         title,
