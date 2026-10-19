@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -125,20 +126,23 @@ class Komga(
 
         val newToken = synchronized(loginLock) {
             // Another request may have logged in while this one waited
-            val latest = session?.takeIf { it.first == credentials && it.second != token }?.second
-            if (latest == null) {
-                val response = chain.proceed(
-                    request.newBuilder()
-                        .header("Authorization", credentials)
-                        .header("X-Auth-Token", "")
-                        .build(),
-                )
-                session = response.header("X-Auth-Token")?.let { credentials to it }
-                return response
-            }
-            latest
+            session?.takeIf { it.first == credentials && it.second != token }?.second
+                ?: login(chain, credentials)
         }
-        return chain.proceed(request.newBuilder().header("X-Auth-Token", newToken).build())
+        // An empty token keeps Komga off another source's session cookie
+        return chain.proceed(request.newBuilder().header("X-Auth-Token", newToken.orEmpty()).build())
+    }
+
+    // Session in a header for this source, and as a cookie for the app's Komga tracker
+    private fun login(chain: Interceptor.Chain, credentials: String): String? {
+        val loginHeaders = headers.newBuilder()
+            .set("Authorization", credentials)
+            .set("X-Auth-Token", "")
+            .build()
+        chain.proceed(GET("$baseUrl/api/v1/login/set-cookie", loginHeaders)).use { response ->
+            session = response.header("X-Auth-Token")?.let { credentials to it }
+        }
+        return session?.second
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
