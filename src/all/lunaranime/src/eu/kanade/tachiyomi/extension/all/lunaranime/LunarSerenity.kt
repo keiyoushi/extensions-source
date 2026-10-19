@@ -1,15 +1,18 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
 import android.util.Base64
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import java.math.BigInteger
+import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.Signature
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
+import java.security.spec.PKCS8EncodedKeySpec
 import java.util.UUID
 
 /**
@@ -18,10 +21,42 @@ import java.util.UUID
  * the `cant-catch-this-monkey` header. The key pair is never issued or acknowledged by the
  * server, so one generated here is just as valid.
  */
-class LunarSerenity(private val apiUrl: String) {
+class LunarSerenity(
+    private val apiUrl: String,
+    private val sourceId: Long,
+) {
 
     @Volatile
-    private var keyPair: KeyPair = generateKeyPair()
+    private var keyPair: KeyPair = loadOrGenerateKeyPair()
+
+    private fun prefs() = getPreferences(sourceId)
+
+    private fun loadOrGenerateKeyPair(): KeyPair {
+        val prefs = prefs()
+        val privB64 = prefs.getString(KEY_PRIVATE, null)
+        val pubB64 = prefs.getString(KEY_PUBLIC, null)
+        if (privB64 != null && pubB64 != null) {
+            try {
+                val kf = KeyFactory.getInstance("EC")
+                val privateKey = kf.generatePrivate(
+                    PKCS8EncodedKeySpec(Base64.decode(privB64, Base64.NO_WRAP)),
+                )
+                val publicKey = kf.generatePublic(
+                    java.security.spec.X509EncodedKeySpec(Base64.decode(pubB64, Base64.NO_WRAP)),
+                )
+                return KeyPair(publicKey, privateKey)
+            } catch (e: Exception) {
+            }
+        }
+        return generateKeyPair().also { saveKeyPair(it) }
+    }
+
+    private fun saveKeyPair(pair: KeyPair) {
+        prefs().edit()
+            .putString(KEY_PRIVATE, Base64.encodeToString(pair.private.encoded, Base64.NO_WRAP))
+            .putString(KEY_PUBLIC, Base64.encodeToString(pair.public.encoded, Base64.NO_WRAP))
+            .apply()
+    }
 
     private fun generateKeyPair(): KeyPair = KeyPairGenerator.getInstance("EC").apply {
         initialize(ECGenParameterSpec("secp256r1"))
@@ -29,7 +64,14 @@ class LunarSerenity(private val apiUrl: String) {
 
     @Synchronized
     fun reset() {
-        keyPair = generateKeyPair()
+        keyPair = generateKeyPair().also { saveKeyPair(it) }
+    }
+
+    companion object {
+        private const val KEY_PRIVATE = "ec_private_key"
+        private const val KEY_PUBLIC = "ec_public_key"
+        private const val PROOF_HEADER = "cant-catch-this-monkey"
+        private const val COORDINATE_SIZE = 32
     }
 
     private val publicPoint get() = (keyPair.public as ECPublicKey).w
@@ -80,9 +122,7 @@ class LunarSerenity(private val apiUrl: String) {
         response
     }
 
-    private fun okhttp3.Request.withProof() = newBuilder()
-        .header(PROOF_HEADER, proof(method, url))
-        .build()
+    private fun okhttp3.Request.withProof(): okhttp3.Request = newBuilder().header(PROOF_HEADER, proof(method, url)).build()
 
     private fun sha256(bytes: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(bytes)
 
@@ -125,10 +165,5 @@ class LunarSerenity(private val apiUrl: String) {
             bytes.size > COORDINATE_SIZE -> bytes.copyOfRange(bytes.size - COORDINATE_SIZE, bytes.size)
             else -> ByteArray(COORDINATE_SIZE).also { bytes.copyInto(it, COORDINATE_SIZE - bytes.size) }
         }
-    }
-
-    companion object {
-        private const val PROOF_HEADER = "cant-catch-this-monkey"
-        private const val COORDINATE_SIZE = 32
     }
 }

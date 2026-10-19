@@ -14,6 +14,7 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
@@ -21,6 +22,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class LunarAnime : KeiSource() {
@@ -33,7 +35,36 @@ abstract class LunarAnime : KeiSource() {
     private val apiurlHost by lazy { API_URL.toHttpUrl().host }
     private val cdnurlHost by lazy { CDN_URL.toHttpUrl().host }
 
-    private val serenity = LunarSerenity(API_URL)
+    private val serenity by lazy { LunarSerenity(API_URL, id) }
+
+    private class Clearance(val thumbprint: String, val expiresAt: Long)
+
+    private val clearances = ConcurrentHashMap<String, Clearance>()
+
+    private fun hasClearance(slug: String): Boolean {
+        val clearance = clearances[slug] ?: return false
+        return clearance.thumbprint == serenity.thumbprint && clearance.expiresAt > System.currentTimeMillis()
+    }
+
+    private fun markCleared(slug: String, ttlSeconds: Long?) {
+        val ttlMs = ((ttlSeconds ?: DEFAULT_CLEARANCE_TTL_S) - CLEARANCE_MARGIN_S).coerceAtLeast(0) * 1000
+        clearances[slug] = Clearance(serenity.thumbprint, System.currentTimeMillis() + ttlMs)
+    }
+
+    private var cachedSiteKey: String? = null
+
+    private suspend fun siteKey(): String {
+        cachedSiteKey?.let { return it }
+        val key = runCatching {
+            client.get("$API_URL/api/captcha/config".toHttpUrl())
+                .parseAs<LunarCaptchaConfig>()
+                .readerPrimarySitekey
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: FALLBACK_SITE_KEY
+        cachedSiteKey = key
+        return key
+    }
+
+    private suspend fun solveTurnstile(): String = getTurnstileToken(url = baseUrl, siteKey = siteKey())
 
     override fun OkHttpClient.Builder.configureClient() = this
         .addInterceptor(serenity.interceptor())
@@ -188,10 +219,14 @@ abstract class LunarAnime : KeiSource() {
     // =============================== Pages ================================
 
     private suspend fun viewChapter(slug: String, number: String, lang: String) {
-        client.get("$API_URL/api/manga/rating/status/$slug/$number", ensureSuccess = false).close()
+        val ratingUrl = "$API_URL/api/manga/rating/status/$slug/$number"
+        val ratingResp = client.get(ratingUrl, ensureSuccess = false)
+        ratingResp.close()
 
         val body = ViewRequestBody(slug, number, lang).toJsonRequestBody()
-        client.post("$API_URL/api/manga/chapter/view", body, ensureSuccess = false).close()
+        val viewUrl = "$API_URL/api/manga/chapter/view"
+        val viewResp = client.post(viewUrl, body, ensureSuccess = false)
+        viewResp.close()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -200,10 +235,38 @@ abstract class LunarAnime : KeiSource() {
         val (slug, chapterNumber) = chapterUrl.pathSegments.takeLast(2)
 
         val seeds = crypto.extractSeeds(client.get(chapterUrl).asJsoup())
-        val minted = crypto.mint(seeds, slug, chapterNumber)
 
         // Required requests or fake images are returned
         viewChapter(slug, chapterNumber, language)
+
+        val token = if (hasClearance(slug)) null else solveTurnstile()
+        var result = fetchChapter(seeds, slug, chapterNumber, language, token)
+
+        if (result.needsRevalidation()) {
+            clearances.remove(slug)
+            serenity.reset()
+            result = fetchChapter(seeds, slug, chapterNumber, language, solveTurnstile())
+        }
+
+        if (result.needsRevalidation()) {
+            error("Could not load images. Open in WebView and try again.")
+        }
+
+        markCleared(slug, result.cacheTtl)
+
+        return result.data.images.mapIndexed { index, imageUrl ->
+            Page(index, chapter.url, imageUrl)
+        }
+    }
+
+    private suspend fun fetchChapter(
+        seeds: LunarSeeds,
+        slug: String,
+        chapterNumber: String,
+        language: String,
+        turnstileToken: String?,
+    ): LunarPageListDecrypted {
+        val minted = crypto.mint(seeds, slug, chapterNumber)
 
         val url = API_URL.toHttpUrl().newBuilder()
             .addPathSegments("api/manga/r")
@@ -211,16 +274,25 @@ abstract class LunarAnime : KeiSource() {
             .apply { if (language != "en") addQueryParameter("language", language) }
             .build()
 
-        val sessionData = client.get(url).parseAs<LunarPageListResponse>()
+        val requestHeaders = headersBuilder().apply {
+            if (turnstileToken != null) {
+                set("Catch-Me-If-You-Can-Monkey", turnstileToken)
+                set("Which-Monkey", "turnstile")
+            }
+        }.build()
+
+        val sessionData = client.get(url, requestHeaders).parseAs<LunarPageListResponse>()
             .data?.sessionData
             ?: error("session_data is empty")
 
-        val images = crypto.unpack(sessionData, seeds, minted.nonce)
-            .parseAs<LunarPageListDecrypted>().data.images
+        return crypto.unpack(sessionData, seeds, minted.nonce).parseAs<LunarPageListDecrypted>()
+    }
 
-        return images.mapIndexed { index, imageUrl ->
-            Page(index, chapter.url, imageUrl)
-        }
+    private fun LunarPageListDecrypted.needsRevalidation(): Boolean {
+        val images = data.images
+        return cacheStatus == "revalidate" ||
+            images.isEmpty() ||
+            images.all { it.contains(DECOY_PATH) }
     }
 
     override fun imageRequest(page: Page): Request {
@@ -256,5 +328,9 @@ abstract class LunarAnime : KeiSource() {
     companion object {
         private const val API_URL = "https://api.lunarx.to"
         private const val CDN_URL = "https://vault.lunarx.to"
+        private const val DECOY_PATH = "/api/cdn/p/"
+        private const val FALLBACK_SITE_KEY = "0x4AAAAAAEweOgJ6zfOKhkgq"
+        private const val DEFAULT_CLEARANCE_TTL_S = 300L
+        private const val CLEARANCE_MARGIN_S = 30L
     }
 }

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.pam
 
+import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.parseAs
@@ -11,8 +12,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import okhttp3.Headers.Companion.toHeaders
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
@@ -100,6 +103,9 @@ internal class SitePages(
                     if (UNUSED_PATHS.any(path::startsWith)) return@interceptRequest blockedResponse()
                     // Styles and fonts only for the reader's fingerprint
                     if (!reader && STYLE_EXTENSIONS.any(path::endsWith)) return@interceptRequest emptyResponse()
+                    if (reader && requestUrl.getQueryParameter(bridge) != null) {
+                        return@interceptRequest rewrittenWorker(webRequest, bridge)
+                    }
                     if (!reader || !path.startsWith("/p/")) return@interceptRequest null
                     synchronized(lock) {
                         pageRequests += path to webRequest.requestHeaders
@@ -126,8 +132,7 @@ internal class SitePages(
                     }
                 }
                 if (readerScript != null) {
-                    onPageStarted { evaluateJs(readerScript) }
-                    onPageFinished { evaluateJs(readerScript) }
+                    injectAtDocumentStart(readerScript, setOf("${baseHttpUrl.scheme}://${baseHttpUrl.host}"))
                 }
                 onReceivedError { webRequest, error ->
                     if (webRequest.isForMainFrame) reject(IOException(error.description.toString()))
@@ -166,6 +171,25 @@ internal class SitePages(
     }
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
+
+    /** Reader worker, with its HKDF page-key import reported to reader.js. */
+    private fun rewrittenWorker(webRequest: WebResourceRequest, bridge: String): WebResourceResponse {
+        val url = webRequest.url.toString().toHttpUrl().newBuilder().removeAllQueryParameters(bridge).build()
+        val request = Request.Builder().url(url).headers(webRequest.requestHeaders.toHeaders()).build()
+        client().newCall(request).execute().use { upstream ->
+            // The unpatched worker would only time out without the page key
+            if (!upstream.isSuccessful) throw IOException("The site's reader did not load (HTTP ${upstream.code}), try opening the chapter in WebView")
+            val script = "(${asset("worker.js")})(\"$bridge\");\n" + upstream.body.string()
+            return WebResourceResponse(
+                "text/javascript",
+                Charsets.UTF_8.name(),
+                upstream.code,
+                upstream.message.ifBlank { "OK" },
+                mapOf("Cache-Control" to "no-store"),
+                ByteArrayInputStream(script.encodeToByteArray()),
+            )
+        }
+    }
 
     /** A response that never sends its body before [released]. */
     private fun heldResponse(released: CountDownLatch) = WebResourceResponse(

@@ -28,17 +28,49 @@ private val SORTS = listOf(
 
 class TypeFilter(types: List<String>) : SelectFilter("Type", "type", listOf("Any" to "") + types.map { it to it })
 
+class CheckBoxOption(name: String, val value: String) : Filter.CheckBox(name)
+
+open class CheckBoxGroup(
+    name: String,
+    val param: String,
+    options: List<Pair<String, String>>,
+) : Filter.Group<CheckBoxOption>(name, options.map { CheckBoxOption(it.first, it.second) }) {
+    val values get() = state.filter { it.state }.map { it.value }
+}
+
 class StatusFilter :
-    SelectFilter(
+    CheckBoxGroup(
         "Status",
         "status",
-        listOf("Any" to "", "Ongoing" to "Ongoing", "Complete" to "Complete", "Hiatus" to "Hiatus", "Canceled" to "Canceled"),
+        listOf("Ongoing" to "Ongoing", "Complete" to "Complete", "Hiatus" to "Hiatus", "Canceled" to "Canceled"),
     )
 
-class DemographicFilter : SelectFilter("Demographic", "demographic", listOf("Any" to "") + DEMOGRAPHICS.map { it to it })
+class DemographicFilter : CheckBoxGroup("Demographic", "demographic", DEMOGRAPHICS.map { it to it } + ("None" to "none"))
 
-class GenreTriState(name: String) : Filter.TriState(name)
+class CountryFilter :
+    CheckBoxGroup(
+        "Country",
+        "originalLanguage",
+        listOf("Japan" to "ja", "Korea" to "ko", "China" to "zh", "Western" to "en"),
+    )
 
-class GenreFilter(genres: List<String>) : Filter.Group<GenreTriState>("Genres", genres.map(::GenreTriState))
+class TagTriState(name: String) : Filter.TriState(name)
+
+open class TagGroup(name: String, tags: List<String>) : Filter.Group<TagTriState>(name, tags.map(::TagTriState))
+
+class GenreFilter(genres: List<String>) : TagGroup("Genres", genres)
+
+class ThemeFilter(themes: List<String>) : TagGroup("Themes", themes)
+
+class GenreModeFilter : SelectFilter("Included genres and themes", "genreMode", listOf("Match all" to "all", "Match any" to "any"))
+
+class ExcludeModeFilter : SelectFilter("Excluded genres and themes", "excludeMode", listOf("Match any" to "any", "Match all" to "all"))
+
+class NumberFilter(name: String, val param: String) : Filter.Text(name)
 
 val DEMOGRAPHICS = listOf("Shounen", "Shoujo", "Seinen", "Josei")
+
+// Tags the site's own tag picker leaves out
+val HIDDEN_TAGS = DEMOGRAPHICS + listOf("Lolicon", "Shotacon", "Other")
+
+val ADULT_TAGS = listOf("Hentai", "Adult", "Smut")
