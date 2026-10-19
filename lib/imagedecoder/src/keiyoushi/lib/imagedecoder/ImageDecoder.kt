@@ -6,13 +6,14 @@ import android.graphics.Rect
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import ca.mpreg.imagedecoder.ImageDecoder as MihonImageDecoder
+import eu.kanade.tachiyomi.util.ImageDecoder as AppImageDecoder
 import tachiyomi.decoder.ImageDecoder as TachiyomiImageDecoder
 
 /** Decode images with the host app's decoder */
 object ImageDecoder {
     // A decoder the host app doesn't ship fails to link; it's dropped for good then
     @Volatile
-    private var decoders = listOf(::decodeMihon, ::decodeTachiyomi, ::decodeAndroid)
+    private var decoders = listOf(::decodeApp, ::decodeMihon, ::decodeTachiyomi, ::decodeAndroid)
 
     fun decode(data: ByteArray): Bitmap {
         val failures = mutableListOf<Throwable>()
@@ -28,6 +29,9 @@ object ImageDecoder {
         }
         throw IOException("No decoder could read the image").apply { failures.forEach(::addSuppressed) }
     }
+
+    // Used by apps that implement extensions-lib's ImageDecoder
+    private fun decodeApp(data: ByteArray): Bitmap = AppImageDecoder.decode(ByteArrayInputStream(data))
 
     // Used by Mihon v0.21.0+ / r8055+
     private fun decodeMihon(data: ByteArray): Bitmap = MihonImageDecoder.open(ByteArrayInputStream(data)).use { decoder ->
