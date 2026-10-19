@@ -488,7 +488,7 @@ abstract class Hiper :
     // manga: /manga/<slug|(#ID)>
     // chapter: /manga/slug(#ID)/<chapter-XX|(XX.X)>
 
-    fun String.getSlug() = this.substringAfterLast("$mangaPath/")
+    fun String.getSlug() = this.substringAfter("/$mangaPath/")
         .substringBefore("/")
         .substringBefore("#")
         .takeIf(String::isNotBlank)

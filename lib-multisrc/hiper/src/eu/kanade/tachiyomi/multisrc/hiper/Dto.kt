@@ -68,7 +68,7 @@ class ChapterDto(
 
     private fun buildChapterName(): String = title?.let {
         when {
-            NUMBER_REGEX.containsMatchIn(it) -> it
+            NUMBER_REGEX.findAll(it).any { match -> match.value.toFloat() == number } -> it
             else -> "$labelNumber $it"
         }
     } ?: labelNumber
@@ -76,7 +76,7 @@ class ChapterDto(
     private val labelNumber: String get() = "Chapter ${number.toString().replace(".0", "")}"
 
     companion object {
-        private val NUMBER_REGEX = """\d+""".toRegex()
+        private val NUMBER_REGEX = """\d+(?:\.\d+)?""".toRegex()
     }
 }
 
