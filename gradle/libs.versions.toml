@@ -37,7 +37,7 @@ okhttp-brotli = { module = "com.squareup.okhttp3:okhttp-brotli", version.ref = "
 okhttp-zstd = { module = "com.squareup.okhttp3:okhttp-zstd", version.ref = "okhttp" }
 quickjs = { module = "com.github.zhanghai.quickjs-java:quickjs-android", version = "547f5b1597" }
 #noinspection SimilarGradleDependency
-tachiyomi-lib-v16 = { module = "com.github.keiyoushi:extensions-lib", version = "42255ee5fa" }
+tachiyomi-lib-v16 = { module = "com.github.hazptr:extensions-lib", version = "fa55b92814" }
 
 # Required by Kotlin 2.x compiler to resolve type-use annotations (e.g. org.jspecify.annotations.Nullable) used in Jsoup's API signatures
 jspecify = { module = "org.jspecify:jspecify", version = "1.0.1" }
