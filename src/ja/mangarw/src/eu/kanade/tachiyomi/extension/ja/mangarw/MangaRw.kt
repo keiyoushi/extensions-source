@@ -87,7 +87,7 @@ abstract class MangaRw : KeiSource() {
 
         val chaptersDeferred = async {
             if (fetchChapters) {
-                val mangaId = manga.url.substringAfterLast("/").substringBefore("?")
+                val mangaId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
                 val response = client.get("$baseUrl/api/v1/chapters?id=$mangaId").asJsoup()
                 response.select("option").mapNotNull { option ->
                     val name = option.text().trim()
