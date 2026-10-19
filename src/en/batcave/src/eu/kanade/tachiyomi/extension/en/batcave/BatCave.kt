@@ -82,7 +82,7 @@ abstract class BatCave : KeiSource() {
                     setUrlWithoutDomain(absUrl("href"))
                     title = ownText()
                 }
-                thumbnail_url = element.selectFirst(".latest__img img")?.absUrl("src")
+                thumbnail_url = posterUrl(this.url)
             }
         }
 
@@ -150,7 +150,7 @@ abstract class BatCave : KeiSource() {
                     setUrlWithoutDomain(absUrl("href"))
                     title = ownText()
                 }
-                thumbnail_url = element.selectFirst(".readed__img img")?.absUrl("data-src")
+                thumbnail_url = posterUrl(url)
             }
         }
         val hasNextPage = document.selectFirst("div.pagination__pages")
@@ -211,8 +211,7 @@ abstract class BatCave : KeiSource() {
                 val similar = anchor.mapNotNull {
                     val title = it.selectFirst(".poster__title")?.text()?.takeIf { str -> str.isNotBlank() }
                     val url = it.attr("href").takeIf { str -> str.isNotBlank() }
-                    val thumb = it.selectFirst("img")?.attr("data-src")
-                    if (title != null && url != null) RelatedComic(title, url, thumb) else null
+                    if (title != null && url != null) RelatedComic(title, url) else null
                 }
 
                 put("similarComics", similar.toJsonElement())
@@ -251,8 +250,8 @@ abstract class BatCave : KeiSource() {
         return related?.parseAs<List<RelatedComic>>()?.map {
             SManga.create().apply {
                 title = it.name
-                thumbnail_url = "$baseUrl${it.thumbnail}"
                 setUrlWithoutDomain(it.url)
+                thumbnail_url = posterUrl(url)
             }
         } ?: emptyList()
     }
@@ -316,6 +315,9 @@ abstract class BatCave : KeiSource() {
         ?.selectFirst("> a")
         ?.text()
         ?.takeIf { it.isNotBlank() }
+
+    // List pages only have 64x96 to 142x212 previews; the full poster is keyed by the comic id.
+    private fun posterUrl(mangaUrl: String) = "$baseUrl/uploads/posts/hd/${mangaUrl.substringAfterLast('/').substringBefore('-')}.webp"
 
     companion object {
         private val intRegex = Regex("""^\d+""")

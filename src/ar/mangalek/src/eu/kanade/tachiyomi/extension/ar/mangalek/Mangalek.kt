@@ -9,6 +9,8 @@ import java.util.Locale
 @Source
 abstract class Mangalek : Madara() {
 
+    override val filterNonMangaItems get() = false
+
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("ar"))
     private val formatTwo = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
 

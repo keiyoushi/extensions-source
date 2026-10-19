@@ -201,6 +201,9 @@ abstract class Kagane :
                     }
 
                     is SourcesFilter -> {
+                        if (filter.state.count { it.state } > MAX_SOURCE_FILTER) {
+                            throw Exception("Select at most $MAX_SOURCE_FILTER sources in the Sources filter")
+                        }
                         filter.addToJsonObject(this)
                     }
 
@@ -498,6 +501,7 @@ abstract class Kagane :
     // ============================= Utilities ==============================
 
     companion object {
+        private const val MAX_SOURCE_FILTER = 50
         private const val CONTENT_RATING = "pref_content_rating"
         private const val CONTENT_RATING_DEFAULT = "pornographic"
         internal val CONTENT_RATINGS = arrayOf(

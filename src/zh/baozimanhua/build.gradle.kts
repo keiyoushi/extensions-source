@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Baozi Manhua"
-    versionCode = 30
+    versionCode = 31
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

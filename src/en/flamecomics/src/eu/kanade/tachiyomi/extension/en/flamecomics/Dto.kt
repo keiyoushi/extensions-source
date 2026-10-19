@@ -26,20 +26,8 @@ class BrowseDto(
 
 @Serializable
 class LatestDto(
-    private val latestEntries: LatestEntries,
-) {
-    val series get() = latestEntries.blocks.first().series
-
-    @Serializable
-    class LatestEntries(
-        val blocks: List<Block>,
-    )
-
-    @Serializable
-    class Block(
-        val series: List<SeriesDto>,
-    )
-}
+    val allSeries: List<SeriesDto>,
+)
 
 @Serializable
 class SeriesPageDto(
@@ -55,7 +43,7 @@ class ChapterPageDto(
 @Serializable
 class SeriesDto(
     val title: String,
-    val altTitles: List<String>?,
+    private val altTitles: List<String>?,
     private val description: String?,
     private val cover: String,
     private val type: String,
@@ -65,7 +53,7 @@ class SeriesDto(
     private val status: String,
     @SerialName("series_id") private val seriesId: Int?,
     @SerialName("last_edit") private val lastEdit: Long,
-    val views: Int?,
+    val popularityRank: Int?,
 ) {
     fun toSManga(): SManga? = seriesId?.let(::toSManga)
 
@@ -96,7 +84,7 @@ class SeriesDto(
             }
         }.takeIf { it.isNotEmpty() }
 
-        genre = (listOf(type) + tags.orEmpty()).joinToString()
+        genre = (listOf(type) + tags.orEmpty()).distinct().joinToString()
         author = this@SeriesDto.author?.joinToString()
         artist = this@SeriesDto.artist?.joinToString()
         status = when (this@SeriesDto.status.lowercase()) {

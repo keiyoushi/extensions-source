@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,16 +13,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -32,12 +32,11 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
 import org.jsoup.nodes.Element
+import java.text.Normalizer
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
@@ -47,7 +46,7 @@ abstract class IkigaiMangas :
     KeiSource(),
     ConfigurableSource {
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(::nsfwCookieInterceptor)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addCookie("is-adult-enabled" to "true")
         .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     private val domainMutex = Mutex()
@@ -78,34 +77,6 @@ abstract class IkigaiMangas :
 
     private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
 
-    private fun nsfwCookieInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        return request.header(ENABLE_NSFW_HEADER)?.let { value ->
-            val newRequest = request.newBuilder()
-                .removeHeader(ENABLE_NSFW_HEADER)
-                .setCookie("is-adult-enabled", value)
-                .build()
-            chain.proceed(newRequest)
-        } ?: chain.proceed(request)
-    }
-
-    private fun Request.Builder.setCookie(name: String, value: String): Request.Builder {
-        val existingHeader = this.build().header("Cookie") ?: ""
-
-        val cookies = existingHeader
-            .split(";")
-            .mapNotNull {
-                val parts = it.trim().split("=", limit = 2)
-                if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
-            }.toMap().toMutableMap()
-
-        cookies[name] = value
-
-        val mergedHeader = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-
-        return this.header("Cookie", mergedHeader)
-    }
-
     private val preferences = getPreferences()
 
     override fun Headers.Builder.configureHeaders() = apply {
@@ -119,11 +90,7 @@ abstract class IkigaiMangas :
     override suspend fun getPopularManga(page: Int): MangasPage {
         fetchDomainUrl()
 
-        val headers = headersBuilder()
-            .enableNsfw(preferences.showNsfwPref)
-            .build()
-
-        val document = client.get("$baseUrl/clasificacion/", headers).asJsoup()
+        val document = client.get("$baseUrl/clasificacion/").asJsoup()
 
         val mangaList = document.select("div.grid > div.card").map { element ->
             SManga.create().apply {
@@ -139,11 +106,7 @@ abstract class IkigaiMangas :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         fetchDomainUrl()
 
-        val headers = headersBuilder()
-            .enableNsfw(preferences.showNsfwPref)
-            .build()
-
-        val document = client.get("$baseUrl/?pagina=$page", headers).asJsoup()
+        val document = client.get("$baseUrl/?pagina=$page").asJsoup()
 
         val mangaList = document.select("section[aria-labelledby=new-chapters-heading] > ul.grid:last-of-type a.card").map { element ->
             SManga.create().apply {
@@ -160,12 +123,8 @@ abstract class IkigaiMangas :
         fetchDomainUrl()
 
         if (query.isNotEmpty()) {
-            return qwikDataParse(query, getQuerySeriesList(), page)
+            return qwikDataParse(query, filters.firstInstance<ContentFilter>(), getQuerySeriesList(), page)
         }
-
-        val headers = headersBuilder()
-            .enableNsfw(preferences.showNsfwPref)
-            .build()
 
         val searchUrl = "$baseUrl/series/".toHttpUrl().newBuilder()
             .addQueryParameter("tipos[]", "comic")
@@ -196,7 +155,7 @@ abstract class IkigaiMangas :
 
         searchUrl.addQueryParameter("pagina", page.toString())
 
-        val document = client.get(searchUrl.build(), headers).asJsoup()
+        val document = client.get(searchUrl.build()).asJsoup()
 
         val mangaList = document.select("section[aria-labelledby=archive-heading] > ul.grid a.card").map { element ->
             SManga.create().apply {
@@ -209,36 +168,33 @@ abstract class IkigaiMangas :
         return MangasPage(mangaList, hasNextPage)
     }
 
-    private var seriesCache: Deferred<List<QwikSeriesDto>>? = null
+    private val seriesMutex = Mutex()
+    private var seriesCache: List<QwikSeriesDto>? = null
 
-    private suspend fun getQuerySeriesList(): List<QwikSeriesDto> {
-        val deferred = seriesCache ?: coroutineScope {
-            async {
-                val qfunc = getQfuncFromWebView(baseUrl, headers)
-                val url = baseUrl.toHttpUrl().newBuilder()
-                    .addQueryParameter("qfunc", qfunc)
-                    .build()
-                val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
-                val body = payload.toRequestBody()
-                val headers = headersBuilder()
-                    .set("X-QRL", qfunc)
-                    .set("Content-Type", "application/qwik-json")
-                    .build()
-                client.post(url, headers, body).use { response ->
-                    response.parseAs<QwikData>().parseAsList<QwikSeriesDto>()
-                }
-            }.also { seriesCache = it }
-        }
-        return deferred.await()
+    private suspend fun getQuerySeriesList(): List<QwikSeriesDto> = seriesMutex.withLock {
+        seriesCache ?: fetchQuerySeriesList().also { seriesCache = it }
     }
 
-    private fun qwikDataParse(query: String, seriesList: List<QwikSeriesDto>, page: Int): MangasPage {
-        val nsfwEnabled = preferences.showNsfwPref
+    private suspend fun fetchQuerySeriesList(): List<QwikSeriesDto> {
+        val qfunc = getQfuncFromWebView(baseUrl, headers)
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("qfunc", qfunc)
+            .build()
+        val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
+        val body = payload.toRequestBody()
+        val headers = headersBuilder()
+            .set("X-QRL", qfunc)
+            .set("Content-Type", "application/qwik-json")
+            .build()
+        return client.post(url, headers, body).parseAs<QwikData>().parseAsList<QwikSeriesDto>()
+    }
+
+    private fun qwikDataParse(query: String, contentFilter: ContentFilter, seriesList: List<QwikSeriesDto>, page: Int): MangasPage {
+        val searchTerm = query.toSearchTerm()
 
         val filteredSeries = seriesList
-            .filter { it.type == "comic" }
-            .filter { nsfwEnabled || !it.isMature }
-            .filter { it.name.contains(query, ignoreCase = true) }
+            .filter { it.type == "comic" && contentFilter.matches(it.isMature) }
+            .filter { series -> series.titles.any { it.toSearchTerm().contains(searchTerm) } }
 
         val pagedSeries = filteredSeries
             .drop((page - 1) * PAGE_SIZE)
@@ -247,6 +203,10 @@ abstract class IkigaiMangas :
 
         return MangasPage(pagedSeries, filteredSeries.size > page * PAGE_SIZE)
     }
+
+    private fun String.toSearchTerm() = Normalizer.normalize(this, Normalizer.Form.NFD)
+        .replace(DIACRITICS_REGEX, "")
+        .lowercase()
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}/"
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
@@ -327,18 +287,7 @@ abstract class IkigaiMangas :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         fetchDomainUrl()
 
-        val headers = headersBuilder()
-            .enableNsfw(preferences.showNsfwPref)
-            .build()
-
-        var document = client.get(baseUrl + chapter.url, headers).asJsoup()
-        document.selectFirst("button > span:contains(permitir nsfw)")?.let {
-            val newRequest = GET(baseUrl + chapter.url, headers)
-                .newBuilder()
-                .enableNsfw(true)
-                .build()
-            document = client.newCall(newRequest).awaitSuccess().asJsoup()
-        }
+        val document = client.get(baseUrl + chapter.url).asJsoup()
         return document.select("section div > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
@@ -351,7 +300,8 @@ abstract class IkigaiMangas :
         .build()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Header("Nota: Los filtros son ignorados si se realiza una búsqueda por texto."),
+        ContentFilter(),
+        Filter.Header("Nota: Al buscar por texto solo se aplica el filtro de contenido."),
         Filter.Separator(),
         SortByFilter("Ordenar por", getSortProperties()),
         StatusFilter("Estados", getStatusFilters()),
@@ -359,12 +309,6 @@ abstract class IkigaiMangas :
     )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_NSFW_PREF
-            title = "Mostrar contenido NSFW"
-            setDefaultValue(false)
-        }.also { screen.addPreference(it) }
-
         SwitchPreferenceCompat(screen.context).apply {
             key = FETCH_DOMAIN_PREF
             title = "Buscar dominio automáticamente"
@@ -374,12 +318,6 @@ abstract class IkigaiMangas :
     }
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
-
-    private var SharedPreferences.showNsfwPref: Boolean
-        get() = getBoolean(SHOW_NSFW_PREF, false)
-        set(value) {
-            edit().putBoolean(SHOW_NSFW_PREF, value).apply()
-        }
 
     private suspend fun getQfuncFromWebView(
         url: String,
@@ -395,73 +333,51 @@ abstract class IkigaiMangas :
         blockImages = true
         userAgent = headers["User-Agent"].orEmpty()
 
-        jsBridge(interfaceName) { qfunc ->
-            resolve(qfunc)
+        webMessageBridge(interfaceName) { qfunc, replyProxy ->
+            if (replyProxy.isMainFrame != false) resolve(qfunc)
         }
 
-        onPageFinished {
-            evaluateJs(
-                """
-                    (function () {
-                        const originalFetch = window.fetch;
-                        window.fetch = async function(resource, options) {
-                            let url = "";
-                            if (typeof resource === "string") {
-                                url = resource;
-                            } else if (resource && resource.url) {
-                                url = resource.url;
-                            }
-                            if (url.includes("qfunc")) {
-                                const match = url.match(/[?&]qfunc=([^&]+)/);
-                                if (match) {
-                                    const qfunc = decodeURIComponent(match[1]);
-                                    window.$interfaceName.post(qfunc);
-                                }
-                            }
-                            return originalFetch.apply(this, arguments);
-                        };
-                    })();
-                """.trimIndent(),
-            )
+        injectAtDocumentStart(
+            """
+                (function () {
+                    const originalFetch = window.fetch;
+                    window.fetch = function (resource, options) {
+                        const url = typeof resource === "string" ? resource : resource?.url ?? "";
+                        const qfunc = url.match(/[?&]qfunc=([^&]+)/)?.[1];
+                        if (qfunc) {
+                            window.$interfaceName.postMessage(decodeURIComponent(qfunc));
+                            return new Promise(() => {});
+                        }
+                        return originalFetch.apply(this, arguments);
+                    };
 
-            evaluateJs(
-                """
-                    (function () {
-                        let tries = 0;
+                    const clickSearch = () => {
                         const interval = setInterval(() => {
-                            const btn = [...document.querySelectorAll('button')]
-                                .find(button =>
-                                    [...button.querySelectorAll('span')]
-                                        .some(span =>
-                                            span.textContent?.trim().includes('Buscar...')
-                                        )
-                                );
-                            if (btn) {
+                            const button = [...document.querySelectorAll("button")]
+                                .find((button) => [...button.querySelectorAll("span")]
+                                    .some((span) => span.textContent?.trim().includes("Buscar...")));
+                            if (button) {
                                 clearInterval(interval);
-                                btn.click();
-                                return;
-                            }
-                            tries++;
-                            if (tries >= 20) {
-                                clearInterval(interval);
+                                button.click();
                             }
                         }, 500);
-                    })();
-                """.trimIndent(),
-            )
-        }
+                    };
+                    if (document.readyState === "loading") {
+                        document.addEventListener("DOMContentLoaded", clickSearch);
+                    } else {
+                        clickSearch();
+                    }
+                })();
+            """.trimIndent(),
+        )
 
         loadUrl(url)
     }
 
-    private fun Headers.Builder.enableNsfw(flag: Boolean) = this.set(ENABLE_NSFW_HEADER, flag.toString())
-    private fun Request.Builder.enableNsfw(flag: Boolean) = this.header(ENABLE_NSFW_HEADER, flag.toString())
-
     companion object {
-        private const val SHOW_NSFW_PREF = "pref_show_nsfw"
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
         private const val PAGE_SIZE = 20
-        private const val ENABLE_NSFW_HEADER = "X-Add-Nsfw-Cookie"
+        private val DIACRITICS_REGEX = Regex("""\p{Mn}+""")
     }
 }

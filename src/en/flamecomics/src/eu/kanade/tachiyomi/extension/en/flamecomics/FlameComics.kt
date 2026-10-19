@@ -31,21 +31,19 @@ abstract class FlameComics : KeiSource() {
         .rateLimit(2, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val series = fetchBrowseSeries().sortedByDescending { it.views }
+        val series = fetchBrowseSeries().sortedBy { it.popularityRank ?: Int.MAX_VALUE }
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val series = client.get(dataUrl { addPathSegment("index.json") })
-            .parseAs<NextDataDto<LatestDto>>().pageProps.series
+        val series = client.get(dataUrl { addPathSegment("latest.json") })
+            .parseAs<NextDataDto<LatestDto>>().pageProps.allSeries
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val normalizedQuery = query.normalizeTitle()
-        val series = fetchBrowseSeries().filter { series ->
-            (listOf(series.title) + series.altTitles.orEmpty()).any { normalizedQuery in it.normalizeTitle() }
-        }
+        val series = fetchBrowseSeries().filter { normalizedQuery in it.title.normalizeTitle() }
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 
