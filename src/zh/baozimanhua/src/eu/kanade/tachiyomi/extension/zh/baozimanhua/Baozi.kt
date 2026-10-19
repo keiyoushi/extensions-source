@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.baozimanhua
 
-import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -48,7 +47,6 @@ abstract class Baozi :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(bannerInterceptor)
         addNetworkInterceptor(MissingImageInterceptor)
-        addNetworkInterceptor(RedirectDomainInterceptor { baseUrl.toHttpUrl().host })
         rateLimit(2)
     }
 
@@ -201,97 +199,35 @@ abstract class Baozi :
         }
     }
 
-    // --- Pages (with REMOVE_DUPLICATE_IMAGES merged) ---
+    // --- Pages ---
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val urls = mutableListOf<String>()
-        val isQuickPage = preferences.getBoolean(QUICK_PAGES_PREF, true)
+    // Web mirrors now serve an app-download wall with placeholder images instead of the chapter;
+    // only the app reader still has the real pages
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(appChapterUrl(chapter.url)).asJsoup()
+        .select(
+            ".comic-contain amp-img, .comic-contain img, .comic-article img, " +
+                ".chapter-img amp-img, .chapter-img img, " +
+                ".comic-page amp-img, .comic-page img, " +
+                "[class*=chapter] amp-img, [class*=chapter] img, " +
+                "[class*=comic] amp-img, [class*=comic] img",
+        )
+        .mapNotNull { it.absUrl("data-src").ifEmpty { it.absUrl("src") }.ifEmpty { null } }
+        .filter { !isExcludedImage(it) }
+        .distinct()
+        .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
 
-        var chapterUrl = if (chapter.url.startsWith("http")) {
-            chapter.url
+    private fun appChapterUrl(chapterUrl: String): String {
+        val url = baseUrl.toHttpUrl().resolve(chapterUrl)!!
+        val comicId = url.queryParameter("comic_id")
+        val (id, slot) = if (comicId != null) {
+            comicId to "${url.queryParameter("section_slot")}_${url.queryParameter("chapter_slot")}.html"
         } else {
-            siteBaseUrl + chapter.url
+            val segments = url.pathSegments
+            val index = segments.indexOf("chapter")
+            segments[index + 1] to segments[index + 2]
         }
-
-        // Only convert/quickpage on app mirrors (to avoid breaking web mirrors)
-        if (isAppMirror && isQuickPage) {
-            chapterUrl = quickPageUrl(chapterUrl)
-        }
-
-        val isAlreadyAppFormat = try {
-            val u = chapterUrl.toHttpUrl()
-            u.querySize == 0 && u.encodedPath.contains(Regex("""/\d+_\d+\.html$"""))
-        } catch (_: Throwable) {
-            false
-        }
-
-        val shouldSkipPagination = isAppMirror && isQuickPage && isAlreadyAppFormat
-
-        var requestUrl = chapterUrl
-        var lastImageId: Int? = null
-
-        while (true) {
-            val (document, responseUrl) = client.get(requestUrl).use { resp ->
-                resp.asJsoup() to resp.request.url.toString()
-            }
-
-            val pageImages = document.select(
-                ".comic-contain amp-img, .comic-contain img, .comic-article img, " +
-                    ".chapter-img amp-img, .chapter-img img, " +
-                    ".comic-page amp-img, .comic-page img, " +
-                    "[class*=chapter] amp-img, [class*=chapter] img, " +
-                    "[class*=comic] amp-img, [class*=comic] img",
-            )
-                .mapNotNull {
-                    val src = it.absUrl("data-src").ifEmpty { it.absUrl("src") }
-                    src.ifEmpty { null }
-                }
-                .filter { !isExcludedImage(it) }
-                .distinct()
-
-            val filteredImages = if (
-                preferences.getBoolean(REMOVE_DUPLICATE_IMAGES_PREF, false) && lastImageId != null
-            ) {
-                filterImagesByMinId(pageImages, lastImageId!! + 1)
-            } else {
-                pageImages
-            }
-
-            urls.addAll(filteredImages)
-            lastImageId = filteredImages.maxOfOrNull { extractImageId(it) } ?: lastImageId
-
-            if (shouldSkipPagination) break
-
-            val nextButton = document.selectFirst("#next-chapter, .next-page, a:contains(下一页), a:contains(下一頁)")
-            val nextUrl = nextButton?.attr("abs:href")
-
-            if (nextUrl != null &&
-                nextUrl != responseUrl &&
-                (nextButton.text().contains("下一页") || nextButton.text().contains("下一頁"))
-            ) {
-                requestUrl = nextUrl
-            } else {
-                break
-            }
-        }
-
-        return urls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
-    }
-
-    private fun quickPageUrl(url: String): String {
-        val httpUrl = url.toHttpUrl()
-        val isAppFormat = httpUrl.querySize == 0
-        return if (isAppFormat) {
-            url
-        } else {
-            siteBaseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegments("comic/chapter")
-                httpUrl.queryParameter("comic_id")?.let { addPathSegment(it) }
-                val section = httpUrl.queryParameter("section_slot")
-                val chapter = httpUrl.queryParameter("chapter_slot")
-                addPathSegment("${section}_$chapter.html")
-            }.build().toString()
-        }
+        val appBaseUrl = if (isAppMirror) baseUrl else APP_BASE_URL
+        return "$appBaseUrl/baozimhapp/comic/chapter/$id/$slot"
     }
 
     private fun isExcludedImage(url: String): Boolean = url.contains("/cover/") ||
@@ -303,32 +239,16 @@ abstract class Baozi :
         url.contains("banner") ||
         url.contains("recommend")
 
-    private fun extractImageId(imageUrl: String): Int {
-        val clean = imageUrl.substringBefore('?')
-        val regex = """/(\d+)\.(jpg|jpeg|png|webp|gif)$""".toRegex(RegexOption.IGNORE_CASE)
-        val match = regex.find(clean)
-        return match?.groupValues?.get(1)?.toIntOrNull() ?: 0
-    }
-
-    private fun filterImagesByMinId(imageUrls: List<String>, minId: Int): List<String> = imageUrls.filter { extractImageId(it) >= minId }
-
-    override fun imageRequest(page: Page): Request {
-        val original = page.imageUrl!!
-            .replace(".baozicdn.com", ".baozimh.com")
-
-        return GET(original, headers).newBuilder()
-            .tag(BaoziBannerInterceptor.ReaderPageImageTag::class.java, BaoziBannerInterceptor.ReaderPageImageTag)
-            .tag(RedirectDomainInterceptor.Tag::class.java, RedirectDomainInterceptor.Tag())
-            .build()
-    }
+    // baozicdn.com geo-redirects to regional nodes that are sometimes unreachable, baozimh.com serves directly
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!.replace(".baozicdn.com", ".baozimh.com"), headers).newBuilder()
+        .tag(BaoziBannerInterceptor.ReaderPageImageTag::class.java, BaoziBannerInterceptor.ReaderPageImageTag)
+        .build()
 
     // --- Search ---
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val requestUrl = if (query.isNotEmpty()) {
-            val searchDomain = baseUrl.toHttpUrl().host.replace(".dinnerku.com", ".baozimh.com")
-            val searchPath = if (searchDomain.startsWith("app")) "/baozimhapp" else ""
-            "https://$searchDomain$searchPath".toHttpUrl().newBuilder()
+            siteBaseUrl.toHttpUrl().newBuilder()
                 .addEncodedPathSegment("search")
                 .addQueryParameter("q", query)
                 .toString()
@@ -397,13 +317,6 @@ abstract class Baozi :
             }
         }.let(screen::addPreference)
 
-        CheckBoxPreference(screen.context).apply {
-            key = REMOVE_DUPLICATE_IMAGES_PREF
-            title = "移除新頁面重複圖片"
-            summary = "包子漫畫分頁會顯示上一頁最後幾張圖片，開啓功能可以移除重複的圖片"
-            setDefaultValue(false)
-        }.let(screen::addPreference)
-
         ListPreference(screen.context).apply {
             key = CHAPTER_ORDER_PREF
             title = "修复章节顺序错误导致的错标已读"
@@ -414,13 +327,6 @@ abstract class Baozi :
             entries = arrayOf("关闭", "开启 (对有标号的章节有效)", "强力模式 (对所有章节有效)")
             entryValues = arrayOf(CHAPTER_ORDER_DISABLED, CHAPTER_ORDER_ENABLED, CHAPTER_ORDER_AGGRESSIVE)
             setDefaultValue(CHAPTER_ORDER_DISABLED)
-        }.let(screen::addPreference)
-
-        CheckBoxPreference(screen.context).apply {
-            key = QUICK_PAGES_PREF
-            title = "Quick Pages/快速页面"
-            summary = "跳过页面上的重定向。五月休息。(对不起，必须使用翻译器)"
-            setDefaultValue(true)
         }.let(screen::addPreference)
     }
 
@@ -447,6 +353,8 @@ abstract class Baozi :
             "www.dinnerku.com",
         )
 
+        private const val APP_BASE_URL = "https://appcn.baozimh.com"
+
         private const val DEFAULT_LEVEL = BaoziBannerInterceptor.NORMAL.toString()
 
         private const val CHAPTER_ORDER_PREF = "CHAPTER_ORDER"
@@ -455,8 +363,5 @@ abstract class Baozi :
         private const val CHAPTER_ORDER_AGGRESSIVE = "2"
 
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy年MM月dd日", Locale.ENGLISH)
-
-        private const val QUICK_PAGES_PREF = "QUICK_PAGES"
-        private const val REMOVE_DUPLICATE_IMAGES_PREF = "REMOVE_DUPLICATE_IMAGES"
     }
 }

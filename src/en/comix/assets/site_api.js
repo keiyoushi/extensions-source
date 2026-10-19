@@ -1,6 +1,7 @@
-// The site's own API client: a route from its route table and its GET helper, which resolves to the response body,
-// from the chunks next to the running entry
-(isRoute) => async () => {
+// The site's own API client, from the chunks next to the running entry. Every build re-mangles
+// names, so members are resolved by source shape; the selector receives the exported members
+// found so far, each with the object holding it, and returns what it needs.
+(select) => async () => {
     const FIND_TIMEOUT_MS = 10000;
     const isGet = (value) => typeof value === "function" &&
         String(value).includes(".get(") &&
@@ -14,15 +15,20 @@
         const directory = entry.slice(0, entry.lastIndexOf("/") + 1);
         const members = [];
         for (const url of new Set(scripts.filter((url) => url.startsWith(directory)))) {
-            for (const value of Object.values(await import(url))) {
-                if (value && typeof value === "object") members.push(...Object.values(value));
+            for (const [, exported] of Object.entries(await import(url))) {
+                if (exported && typeof exported === "object") {
+                    for (const [key, member] of Object.entries(exported)) {
+                        members.push({ owner: exported, key, value: member });
+                        if (member && typeof member === "object") {
+                            for (const [nestedKey, nested] of Object.entries(member)) {
+                                members.push({ owner: member, key: nestedKey, value: nested });
+                            }
+                        }
+                    }
+                }
             }
-            const route = members
-                .filter((group) => group && typeof group === "object")
-                .flatMap((group) => Object.values(group))
-                .find(isRoute);
-            const get = members.find(isGet);
-            if (route && get) return (id, params) => get(route(id), { params });
+            const found = select(members, isGet);
+            if (found) return found;
         }
         return null;
     };

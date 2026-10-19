@@ -12,11 +12,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -28,6 +31,8 @@ abstract class KillSixBillionDemons :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val supportsLatest = false
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     private val descriptionKSBD = """
         Q: What is this all about?
@@ -225,35 +230,29 @@ abstract class KillSixBillionDemons :
 
     // ========================= Pages =========================
 
-    /**
-     * Collects comic page images for a chapter, following pagination. Supports both chapter
-     * archives (with multiple thumbnails) and individual comic pages.
-     */
-    override suspend fun getPageList(chapter: SChapter): List<Page> = buildList {
-        var currentUrl = baseUrl + chapter.url + PAGES_ORDER
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        var document = client.get(baseUrl + chapter.url + PAGES_ORDER).asJsoup()
 
-        while (true) {
-            val currentPage = client.get(currentUrl).asJsoup()
-
-            val images = currentPage.select(".comic-thumbnail-in-archive a img")
-            if (images.isNotEmpty()) {
-                for (img in images) {
-                    img.attr("src").takeIf { it.isNotEmpty() }?.let { src ->
-                        val imageUrl = src.replace(wordpressThumbnailRegex, "")
-                        add(Page(size + 1, "", imageUrl))
-                    }
-                }
-            } else {
-                currentPage.selectFirst("#comic img")?.attr("src")?.takeIf { it.isNotEmpty() }?.let { src ->
-                    val imageUrl = src.replace(wordpressThumbnailRegex, "")
-                    add(Page(size + 1, "", imageUrl))
+        val imageUrls = if (document.selectFirst(".comic-thumbnail-in-archive") == null) {
+            document.comicImageUrls()
+        } else {
+            // An archive shows one thumbnail per post; posts can hold several images
+            val postUrls = buildList {
+                while (true) {
+                    document.select(".comic-thumbnail-in-archive a").mapTo(this) { it.absUrl("href") }
+                    val nextUrl = document.selectFirst(".paginav-next a")?.absUrl("href") ?: break
+                    document = client.get(nextUrl).asJsoup()
                 }
             }
-
-            currentUrl = currentPage.select(".paginav-next a").attr("href")
-            if (currentUrl.isEmpty()) break
+            coroutineScope {
+                postUrls.map { async { client.get(it).asJsoup().comicImageUrls() } }.awaitAll().flatten()
+            }
         }
+
+        return imageUrls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
+
+    private fun Document.comicImageUrls(): List<String> = select("#comic img").map { it.absUrl("src").replace(wordpressThumbnailRegex, "") }
 
     // ========================= Search =========================
     override suspend fun getSearchMangaList(
