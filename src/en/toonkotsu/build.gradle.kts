@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Toonkotsu"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -17,5 +17,9 @@ keiyoushi {
 
     deeplink {
         path("/title/..*")
+        path("/author/..*")
+        path("/tag/..*")
+        path("/year/..*")
+        path("/group/..*")
     }
 }
