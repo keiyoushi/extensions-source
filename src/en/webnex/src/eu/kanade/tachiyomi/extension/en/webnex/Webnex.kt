@@ -171,7 +171,8 @@ abstract class Webnex :
         val preferredGroups = commaList(PREF_PREFERRED_GROUPS, DEFAULT_PREFERRED_GROUPS)
         val onePerChapter = preferences.getString(PREF_CHAPTER_LIST, ONE_PER_GROUP) == ONE_PER_CHAPTER
 
-        return document.select("li.ch-row").flatMap { element ->
+        // Hidden rows are decoys the site's own page never shows
+        return document.select("li.ch-row:not([aria-hidden=true]):not([style*=display:none])").flatMap { element ->
             val link = element.selectFirst("a.ch-link")!!
             val number = link.selectFirst(".ch-num")!!
             val title = link.selectFirst(".ch-title")!!
