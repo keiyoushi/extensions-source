@@ -186,7 +186,7 @@ internal class SitePages(
                 upstream.code,
                 upstream.message.ifBlank { "OK" },
                 mapOf("Cache-Control" to "no-store"),
-                ByteArrayInputStream(script.toByteArray(Charsets.UTF_8)),
+                ByteArrayInputStream(script.encodeToByteArray()),
             )
         }
     }
