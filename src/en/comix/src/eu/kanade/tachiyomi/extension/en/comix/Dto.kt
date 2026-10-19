@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.math.BigDecimal
@@ -267,6 +268,7 @@ class ChapterList(
     val chapters: List<Chapter>,
     val complete: Boolean,
     val error: String? = null,
+    val queries: JsonObject? = null,
 )
 
 @Serializable
