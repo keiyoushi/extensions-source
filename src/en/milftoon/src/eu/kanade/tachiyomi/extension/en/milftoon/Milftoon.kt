@@ -11,8 +11,9 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.time.Instant
+import kotlin.time.Instant
 
 @Source
 abstract class Milftoon : KeiSource() {
@@ -104,13 +105,7 @@ abstract class Milftoon : KeiSource() {
                 SChapter.create().apply {
                     name = chapter.name.ifBlank { "Chapter" }
                     setUrlWithoutDomain(manga.url)
-                    date_upload = chapter.publishedAt?.let {
-                        try {
-                            Instant.parse(it).toEpochMilli()
-                        } catch (_: Exception) {
-                            0L
-                        }
-                    } ?: 0L
+                    date_upload = Instant.tryParse(chapter.publishedAt)
                 },
             )
         }.orEmpty()
