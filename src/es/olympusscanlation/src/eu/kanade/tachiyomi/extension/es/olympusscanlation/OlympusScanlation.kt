@@ -23,6 +23,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
 @Source
@@ -117,6 +119,15 @@ abstract class OlympusScanlation :
     override fun getMangaUrl(manga: SManga): String {
         val slug = preferences.slugMap[manga.url.toInt()]!!
         return "$baseUrl/series/comic-$slug"
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
+        val series = url.pathSegments.getOrNull(1)?.takeIf { it.startsWith("comic-") } ?: return null
+        val slug = series.removePrefix("comic-").takeIf(String::isNotBlank) ?: return null
+        val manga = client.get("$baseUrl/api/series/$slug?type=comic").parseAs<MangaDetailDto>().data
+        preferences.slugMap += manga.id to manga.slug
+        return manga.toSMangaDetails()
     }
 
     override suspend fun fetchMangaUpdate(
