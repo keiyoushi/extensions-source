@@ -6,6 +6,8 @@ import keiyoushi.utils.string
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
@@ -36,26 +38,72 @@ class GenreListDto(
 )
 
 @Serializable
+class GenreTagListDto(
+    val genres: List<GenreDto> = emptyList(),
+    val tags: List<GenreDto> = emptyList(),
+) {
+    fun toFilterData(): FilterData = FilterData(
+        genres.filter { it.count != 0 }.associate { it.displayName to it.genreSlug },
+        tags.filter { it.count != 0 }.associate { it.displayName to it.genreSlug },
+        FilterData.CURRENT_VERSION,
+    )
+
+    companion object {
+        fun nextJsFilter(element: JsonElement): Boolean = element is JsonObject && "tagTotal" in element
+    }
+}
+
+@Serializable
+class FilterData(
+    val genres: Map<String, String> = emptyMap(),
+    val tags: Map<String, String> = emptyMap(),
+    val version: Int = 0,
+) {
+    val outdated: Boolean
+        get() = version < CURRENT_VERSION
+
+    companion object {
+        const val CURRENT_VERSION = 1
+    }
+}
+
+@Serializable
 class DetailDto(
     val series: MangaDto,
     val chapters: List<ChapterDto> = emptyList(),
     val totalPages: Int = 1,
-)
+) {
+    companion object {
+        fun nextJsFilter(element: JsonElement): Boolean = element is JsonObject && "series" in element && "chapters" in element
+    }
+}
 
 @Serializable
 class ChapterDetailDto(
     val chapter: ChapterPagesDto,
-)
+) {
+    companion object {
+        fun nextJsFilter(element: JsonElement): Boolean = element is JsonObject && element["chapter"]?.let(ChapterPagesDto::nextJsFilter) == true
+    }
+}
 
 @Serializable
 class ChapterPagesDto(
     val pages: List<PageDto> = emptyList(),
-)
+) {
+    companion object {
+        fun nextJsFilter(element: JsonElement): Boolean = element is JsonObject && "pages" in element
+    }
+}
 
 @Serializable
 class PageDto(
     val imageUrl: String? = null,
     val kind: String = "CONTENT",
+    val isEncrypted: Boolean = false,
+    val isRedacted: Boolean = false,
+    val hasFragments: Boolean = false,
+    val hasStrips: Boolean = false,
 )
 
 @Serializable
@@ -77,6 +125,7 @@ class MangaDto(
     val aliases: List<String> = emptyList(),
     val description: String? = null,
     val genres: List<GenreDto> = emptyList(),
+    val tags: List<GenreDto> = emptyList(),
     val team: TeamDto? = null,
     val similarSeries: List<MangaDto> = emptyList(),
 ) {
@@ -99,6 +148,7 @@ class MangaDto(
             origin.takeIf { it.isNotBlank() }?.let(::add)
             if (isMature) add("Mature")
             addAll(genres.map { it.displayName })
+            addAll(tags.map { it.displayName })
         }.distinct().joinToString()
         description = buildString {
             this@MangaDto.description?.also {
@@ -134,9 +184,10 @@ class GenreDto(
     val name: String = "",
     val slug: String = "",
     val genre: GenreSlugDto? = null,
+    val count: Int? = null,
 ) {
     val displayName: String
-        get() = (if (name.isNotBlank()) name else genre?.slug.orEmpty()).stripEmoji()
+        get() = (name.ifBlank { genre?.slug.orEmpty() }).stripEmoji().let { if (count == null) it else "$it ($count)" }
 
     val genreSlug: String
         get() = slug.ifBlank { genre?.slug.orEmpty() }
@@ -160,11 +211,16 @@ class ChapterDto(
     val publishedAt: String? = null,
     @SerialName("isLocked")
     val isLocked: Boolean = false,
+    val coinPrice: Int = if (isLocked) 1 else 0,
 ) {
     fun toSChapter(manga: SManga): SChapter = SChapter.create().apply {
         val numberString = number.toString().removeSuffix(".0")
         name = if (title.isNullOrBlank() || title == numberString) "Chapter $numberString" else title
-        if (isLocked) name = "\uD83D\uDD12 $name"
+        if (isLocked) {
+            name = "\uD83D\uDD12 $name"
+        } else if (coinPrice != 0) {
+            name = "\uD83D\uDD13 $name"
+        }
         date_upload = Instant.tryParse(publishedAt)
         chapter_number = number.toFloat()
         val mangaSlug = manga.memo["slug"]?.string.orEmpty()
@@ -182,7 +238,10 @@ fun String.toSMangaStatus(): Int = when (this) {
     "ONGOING" -> SManga.ONGOING
     "COMPLETED" -> SManga.COMPLETED
     "HIATUS" -> SManga.ON_HIATUS
+    "DROPPED" -> SManga.CANCELLED
     "CANCELLED" -> SManga.CANCELLED
+    "DISCONTINUED" -> SManga.CANCELLED
+    "UPCOMING" -> SManga.ONGOING
     else -> SManga.UNKNOWN
 }
 

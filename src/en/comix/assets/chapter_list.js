@@ -44,7 +44,12 @@
         };
         return { method, records };
     });
-    const finish = (complete, error) => pass(JSON.stringify({ chapters, complete, error }));
+    // The detail lives in the same document, so the caller reads the manga from this one load
+    const queries = () => {
+        try { return JSON.parse(document.querySelector("script#initial-data")?.textContent || "null")?.queries || null; }
+        catch (e) { return null; }
+    };
+    const finish = (complete, error) => pass(JSON.stringify({ chapters, complete, error, queries: queries() }));
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const between = (from, to) => from + Math.random() * (to - from);
     const section = () => document.querySelector(".mpage__chapters");

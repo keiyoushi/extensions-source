@@ -135,7 +135,7 @@ abstract class HDoujin :
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
         }.build()
 
-        return client.get(url).parseEntries()
+        return clearanceRequest(url.toString()).parseEntries()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -150,7 +150,7 @@ abstract class HDoujin :
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
         }.build()
 
-        return client.get(url).parseEntries()
+        return clearanceRequest(url.toString()).parseEntries()
     }
 
     private fun Response.parseEntries(): MangasPage {
@@ -211,7 +211,7 @@ abstract class HDoujin :
             addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(url).parseEntries()
+        return clearanceRequest(url.toString()).parseEntries()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters()
@@ -264,7 +264,7 @@ abstract class HDoujin :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaDetail = client.get("$bookApiUrl/detail/${manga.url}").parseAs<MangaDetail>()
+        val mangaDetail = clearanceRequest("$bookApiUrl/detail/${manga.url}").parseAs<MangaDetail>()
 
         val updatedManga = mangaDetail.toSManga().apply {
             url = manga.url

@@ -162,7 +162,7 @@ abstract class ScanReader : KeiSource() {
         if (mangaId.isBlank() || nonce.isBlank()) return emptyList()
 
         val ajaxHeaders = headersBuilder()
-            .set("Referer", mangaUrl)
+            .set("Referer", mangaUrl.toHttpUrl().toString())
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 

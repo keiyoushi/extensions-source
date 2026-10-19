@@ -25,6 +25,7 @@ class MangaDto(
     @SerialName("nombre_alt_2") private val nombreAlt2: String? = null,
     @SerialName("fk_generos") private val generos: List<MangaGenreDto> = emptyList(),
     val capitulos: List<ChapterDto> = emptyList(),
+    @SerialName("requires_login") val requiresLogin: Boolean = false,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = id.toString()
@@ -82,4 +83,35 @@ class ChapterDto(
 }
 
 @Serializable
-class PagesDto(val paginas: List<String>)
+class PagesDto(
+    val paginas: List<PageDto>,
+    val chapterSessionToken: String? = null,
+)
+
+@Serializable
+class PageDto(
+    val pageId: String,
+    val id: String,
+    val index: Int,
+)
+
+@Serializable
+class PageTicketRequest(
+    private val pageIndex: Int,
+    private val sessionToken: String,
+)
+
+@Serializable
+class PageTicketResponse(
+    val signedToken: String,
+    private val pageId: String,
+    val scrambleKey: String? = null,
+    val xorByte: Int,
+)
+
+@Serializable
+class ChapterTokenPayload(
+    val cid: Int,
+    private val ip: String? = null,
+    private val exp: Long? = null,
+)
