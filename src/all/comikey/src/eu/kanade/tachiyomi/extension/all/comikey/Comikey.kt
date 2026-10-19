@@ -262,27 +262,28 @@ abstract class Comikey :
                     // In order to avoid requesting again later, we intercept it here.
                     interceptRequest { request ->
                         val url = request.url
-                        if (url.host?.matches(RELAY_HOST_REGEX) == true || url.path?.endsWith("/manifest") == true) {
-                            val requestHeaders = headers.newBuilder().apply {
-                                request.requestHeaders.entries.forEach {
-                                    set(it.key, it.value)
-                                }
-                                removeAll("X-Requested-With")
-                            }.build()
-
-                            val response = client.newCall(GET(url.toString(), requestHeaders)).execute()
-                            manifestRedirect = response.request.url
-
-                            WebResourceResponse(
-                                response.headers["Content-Type"] ?: "application/divina+json+vnd.e4p.drm",
-                                null,
-                                response.code,
-                                "OK",
-                                response.headers.toMap(),
-                                response.body.byteStream(),
-                            )
+                        if (url.host?.matches(RELAY_HOST_REGEX) != true || url.path?.endsWith("/manifest") != true) {
+                            return@interceptRequest null
                         }
-                        null
+
+                        val requestHeaders = headers.newBuilder().apply {
+                            request.requestHeaders.entries.forEach {
+                                set(it.key, it.value)
+                            }
+                            removeAll("X-Requested-With")
+                        }.build()
+
+                        val response = client.newCall(GET(url.toString(), requestHeaders)).execute()
+                        manifestRedirect = response.request.url
+
+                        WebResourceResponse(
+                            response.headers["Content-Type"] ?: "application/divina+json+vnd.e4p.drm",
+                            null,
+                            response.code,
+                            "OK",
+                            response.headers.toMap(),
+                            response.body.byteStream(),
+                        )
                     }
 
                     loadUrl(

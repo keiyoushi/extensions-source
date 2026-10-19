@@ -42,6 +42,8 @@ abstract class Toonkotsu :
 
     private val preferences by getPreferencesLazy()
 
+    private val showSpoilerTags get() = preferences.getBoolean(PREF_SPOILER_TAGS, false)
+
     override val supportsFilterFetching = true
 
     override val supportsRelatedMangas = true
@@ -82,7 +84,7 @@ abstract class Toonkotsu :
             params()
         }.build()
         val data = client.get(url).parseAs<BrowseDto>()
-        return MangasPage(data.items.map { it.toSManga(baseUrl) }, data.hasNextPage)
+        return MangasPage(data.items.map { it.toSManga(baseUrl, showSpoilerTags) }, data.hasNextPage)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -102,7 +104,7 @@ abstract class Toonkotsu :
         val uploads = data.chapters.flatMap { it.withAlts() }
         val chapterList = if (preferences.getBoolean(PREF_DEDUPLICATE_CHAPTERS, false)) deduplicate(uploads) else uploads
         return SMangaUpdate(
-            data.series.toSManga(baseUrl),
+            data.series.toSManga(baseUrl, showSpoilerTags),
             chapterList.map { it.toSChapter(manga.url) },
         )
     }
@@ -111,7 +113,7 @@ abstract class Toonkotsu :
         .groupBy { it.n ?: it.id }
         .map { (_, same) -> same.sortedWith(compareBy({ it.partial }, { !it.isOfficial })).first() }
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = fetchSeries(manga).recs.map { it.toSManga(baseUrl) }
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = fetchSeries(manga).recs.map { it.toSManga(baseUrl, showSpoilerTags) }
 
     private suspend fun fetchSeries(manga: SManga): SeriesResponse {
         val hid = getMangaUrl(manga).toHttpUrl().pathSegments[1]
@@ -202,11 +204,19 @@ abstract class Toonkotsu :
             summary = "Show one upload per chapter, preferring complete and Official uploads, then the site's order"
             setDefaultValue(false)
         }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SPOILER_TAGS
+            title = "Show spoiler tags"
+            summary = "Include tags the site marks as spoilers in the genres"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
     }
 
     companion object {
         private const val PREF_ADULT = "show_hentai"
         private const val PREF_DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
+        private const val PREF_SPOILER_TAGS = "pref_spoiler_tags"
         private const val TURNSTILE_SITE_KEY = "0x4AAAAAAFQpQeG5qpmLQtf9"
         private val HID_REGEX = Regex("""^[a-z][0-9a-z]{4}(?=-|$)""")
     }

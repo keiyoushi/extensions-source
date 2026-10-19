@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Rocks Manga"
-    versionCode = 3
+    versionCode = 59
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "ar"

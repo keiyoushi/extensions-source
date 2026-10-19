@@ -199,6 +199,7 @@ abstract class Guya :
 
     private fun String.toCoverUrl(): String? = when {
         startsWith("http") -> this
+        startsWith("/") -> "$baseUrl$this"
         isNotEmpty() -> "$baseUrl/$this"
         else -> null
     }

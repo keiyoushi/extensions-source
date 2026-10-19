@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Manga Draft"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         name = "MangaDraft"
         lang = "all"
-        baseUrl = "https://mangadraft.com"
+        baseUrl = "https://www.mangadraft.com"
     }
 }
