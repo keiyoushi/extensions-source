@@ -119,18 +119,13 @@ class CreatorDto(
 @Serializable
 class ChapterDto(
     @SerialName("chapter") val number: Float,
-    @SerialName("link_raw") val rawUrl: String? = null,
-    private val link: String? = null,
-    private val create: Long?,
-    private val versions: List<ChapterVersionDto>? = null,
-) {
-    val espUrl get() = link ?: versions?.firstOrNull()?.link
-    val createdAt get() = create ?: versions?.firstOrNull()?.create
-}
+    val versions: List<ChapterVersionDto>,
+)
 
 @Serializable
 class ChapterVersionDto(
-    val link: String? = null,
+    val link: String,
+    val joint: List<CreatorDto> = emptyList(),
     val create: Long? = null,
 )
 
