@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.multisrc.vinetheme
 
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -11,16 +14,19 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.collections.isNotEmpty
 
 abstract class VineTheme :
     KeiSource(),
@@ -43,6 +49,20 @@ abstract class VineTheme :
         private const val HIDE_LOCKED_PREF = "pref_hide_locked_chapters"
     }
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun runOnMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
+        } else {
+            mainHandler.post(block)
+        }
+    }
+
+    private fun showToast(message: String) = runOnMain {
+        Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
+    }
+
     // ------------------------- Browse (Popular) -------------------------
 
     override suspend fun getPopularManga(page: Int): MangasPage = getApiMangasPage(page, "popular")
@@ -56,7 +76,7 @@ abstract class VineTheme :
         val slug = url.pathSegments.getOrNull(2) ?: return null
         if (url.pathSegments.getOrNull(3) == "chapter") return null
         val detail = client.get("$baseUrl/series/comic/$slug", headers = rscHeaders)
-            .extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
+            .extractNextJs<DetailDto>(DetailDto::nextJsFilter)
             ?: return null
         return detail.series.toSManga(baseUrl, fallbackSlug = slug)
     }
@@ -94,20 +114,28 @@ abstract class VineTheme :
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client
+        .get("$baseUrl/series")
+        .extractNextJs<GenreTagListDto>(GenreTagListDto::nextJsFilter)
+        ?.toFilterData()
+        .toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.parseAs<GenreListDto>()?.genres
+        val filterData = data?.parseAs<FilterData>()?.apply {
+            if (outdated) throw Exception("Filter data outdated")
+        }
+
         return FilterList(
-            buildList {
-                add(SortFilter())
-                add(StatusFilter())
-                add(TypeFilter())
-                add(OriginFilter())
-                if (!genres.isNullOrEmpty()) {
-                    add(GenreFilter(genres.map { it.name.stripEmoji() to it.genreSlug }.toTypedArray()))
-                }
-            },
+            listOfNotNull(
+                filterData?.genres?.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
+                filterData?.tags?.takeIf { it.isNotEmpty() }?.let(::TagFilter),
+                TypeFilter(),
+                StatusFilter(),
+                OriginFilter(),
+                SaleFilter(),
+                ChapterFilter(),
+                SortFilter(),
+            ),
         )
     }
 
@@ -122,7 +150,7 @@ abstract class VineTheme :
         val detailsUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
             .addQueryParameter("sort", "desc")
             .build()
-        val details = client.get(detailsUrl, rscHeaders).extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
+        val details = client.get(detailsUrl, rscHeaders).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
 
         val updatedManga = details?.series?.toSManga(baseUrl, manga) ?: manga
         val updatedChapters = if (fetchChapters) fetchAllChapters(manga, details, chapters) else chapters
@@ -155,7 +183,7 @@ abstract class VineTheme :
                         .addQueryParameter("page", page.toString())
                         .build(),
                     headers = rscHeaders,
-                ).extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
+                ).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
                     ?.chapters.orEmpty()
             }
         } else {
@@ -179,8 +207,19 @@ abstract class VineTheme :
             throw Exception("This chapter is locked and requires coins to read")
         }
         val response = client.get(getChapterUrl(chapter), rscHeaders)
-        val dto = response.extractNextJs<ChapterDetailDto> {
-            it is JsonObject && (it["chapter"] as? JsonObject)?.contains("pages") == true
+        val dto = response.extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
+        val pages = dto?.chapter?.pages.orEmpty()
+        if (pages.any { it.isEncrypted }) {
+            showToast("Some pages are encrypted and may not be displayed properly or skipped.")
+        }
+        if (pages.any { it.isRedacted }) {
+            showToast("Some pages are redacted and may not be displayed properly or skipped.")
+        }
+        if (pages.any { it.hasFragments }) {
+            showToast("Some pages have fragments and may not be displayed properly or skipped.")
+        }
+        if (pages.any { it.hasStrips }) {
+            showToast("Some pages have strips and may not be displayed properly or skipped.")
         }
         return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
             pageDto.imageUrl?.let { Page(index, imageUrl = it.toAbsoluteUrl(baseUrl)) }
