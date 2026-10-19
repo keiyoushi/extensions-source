@@ -77,11 +77,6 @@ abstract class ComicAsura : MangaThemesia() {
 
     override fun imageRequest(page: Page): Request = super.imageRequest(page)
         .newBuilder()
-        .header("Sec-Fetch-Dest", "image")
-        .header("Sec-Fetch-Mode", "no-cors")
-        .header("Sec-Fetch-Site", "cross-site")
-        .header("Sec-Fetch-Storage-Access", "none")
-        .header("Sec-GPC", "1")
         .removeHeader("Origin")
         .build()
 
