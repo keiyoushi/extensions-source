@@ -4,12 +4,15 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
 import keiyoushi.lib.imagedecoder.ImageDecoder
+import keiyoushi.utils.readIntBigEndian
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
+import java.io.IOException
 import java.security.MessageDigest
 
 /**
@@ -22,35 +25,42 @@ class ScrambleInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+
         val fragment = request.url.fragment
-        if (fragment == null || !fragment.startsWith(SCRAMBLE_PREFIX)) {
-            return chain.proceed(request)
-        }
+        if (fragment == null || !fragment.startsWith(SCRAMBLE_PREFIX)) return chain.proceed(request)
 
         val params = fragment.removePrefix(SCRAMBLE_PREFIX).split(SEPARATOR, limit = 3)
-        if (params.size < 3) {
-            return chain.proceed(request)
-        }
+        if (params.size != 3) throw IOException("Invalid scramble parameters")
+
         val (lang, stripHeightValue, salt) = params
-        val stripHeight = stripHeightValue.toIntOrNull() ?: DEFAULT_STRIP_HEIGHT
+        val stripHeight = stripHeightValue.toInt()
+        if (stripHeight <= 0) throw IOException("Strip height must be positive")
 
         val response = chain.proceed(request)
-        if (!response.isSuccessful) {
-            return response
-        }
+        if (!response.isSuccessful) return response
 
         response.use {
-            val scrambled = ImageDecoder.decode(it.body.bytes())
-            val unscrambled = descramble(scrambled, request.url, lang, stripHeight, salt)
-            if (scrambled !== unscrambled) {
-                scrambled.recycle()
+            val bytes = response.body.bytes()
+            val scrambled = ImageDecoder.decode(bytes)
+            val unscrambled = AutoCloseable { scrambled.recycle() }.use {
+                if (scrambled.height / stripHeight <= 1) {
+                    return response.newBuilder()
+                        .body(bytes.toResponseBody(response.body.contentType()))
+                        .build()
+                }
+                descramble(scrambled, request.url, lang, stripHeight, salt)
             }
 
             val buffer = Buffer()
-            unscrambled.compress(WEBP_FORMAT, 90, buffer.outputStream())
-            unscrambled.recycle()
+            AutoCloseable { unscrambled.recycle() }.use {
+                if (!unscrambled.compress(WEBP_FORMAT, 90, buffer.outputStream())) {
+                    throw IOException("Could not encode descrambled image")
+                }
+            }
 
-            return it.newBuilder()
+            return response.newBuilder()
+                .header("Content-Type", WEBP_MEDIA_TYPE.toString())
+                .header("Content-Length", buffer.size.toString())
                 .body(buffer.asResponseBody(WEBP_MEDIA_TYPE, buffer.size))
                 .build()
         }
@@ -60,9 +70,6 @@ class ScrambleInterceptor : Interceptor {
         val width = image.width
         val height = image.height
         val strips = height / stripHeight
-        if (strips <= 1) {
-            return image
-        }
 
         val result = Bitmap.createBitmap(width, height, image.config ?: Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
@@ -111,10 +118,7 @@ class ScrambleInterceptor : Interceptor {
 
     private fun seedFromKey(key: String): UInt {
         val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
-        return ((digest[0].toUInt() and 0xFFu) shl 24) or
-            ((digest[1].toUInt() and 0xFFu) shl 16) or
-            ((digest[2].toUInt() and 0xFFu) shl 8) or
-            (digest[3].toUInt() and 0xFFu)
+        return digest.readIntBigEndian(0).toUInt()
     }
 
     private fun mulberry32Next(value: UInt): Pair<UInt, Double> {
@@ -129,7 +133,6 @@ class ScrambleInterceptor : Interceptor {
     companion object {
         private const val SCRAMBLE_PREFIX = "scramble="
         private const val SEPARATOR = ","
-        private const val DEFAULT_STRIP_HEIGHT = 500
 
         @Suppress("DEPRECATION")
         private val WEBP_FORMAT = Bitmap.CompressFormat.WEBP
