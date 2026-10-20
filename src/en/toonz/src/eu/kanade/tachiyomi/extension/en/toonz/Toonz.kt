@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -36,7 +35,14 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Toonz : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
-        .addCookie("reader_prefs" to "%7B%22rating%22%3A%22pornographic%22%7D")
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val cookies = request.header("Cookie")?.split("; ")?.filterNot { it.startsWith("reader_prefs=") }
+            val newRequest = request.newBuilder().apply {
+                if (cookies.isNullOrEmpty()) removeHeader("Cookie") else header("Cookie", cookies.joinToString("; "))
+            }.build()
+            chain.proceed(newRequest)
+        }
 
     private val isToonx get() = name == "Toonx"
 
