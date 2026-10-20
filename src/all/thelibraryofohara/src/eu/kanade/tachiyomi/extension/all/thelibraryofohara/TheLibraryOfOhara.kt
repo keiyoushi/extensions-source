@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParse
+import okhttp3.Headers
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import kotlin.time.Instant
@@ -30,6 +31,8 @@ abstract class TheLibraryOfOhara : KeiSource() {
         }
 
     override val supportsLatest = false
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", System.getProperty("http.agent")!!)
 
     // Popular
 
