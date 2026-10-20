@@ -8,7 +8,6 @@ import android.widget.Toast
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -41,7 +40,6 @@ import okhttp3.Dns
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
@@ -99,50 +97,17 @@ class Komga(
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(::authenticate)
-        dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
-    }
-
-    // Cookies are shared between Komga sources on the same host, so the session goes in a header
-    @Volatile
-    private var session: Pair<String, String>? = null
-    private val loginLock = Any()
-
-    private fun authenticate(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (apiKey.isNotBlank() || username.isBlank()) {
-            return chain.proceed(request)
-        }
-
-        val credentials = Credentials.basic(username, password)
-        val token = session?.takeIf { it.first == credentials }?.second
-        if (token != null) {
-            val response = chain.proceed(request.newBuilder().header("X-Auth-Token", token).build())
-            if (response.code != 401) {
-                return response
+        // One session cookie per host, shared with the app's Komga tracker, so one user per host
+        authenticator { _, response ->
+            if (apiKey.isNotBlank() || response.request.header("Authorization") != null) {
+                null // Give up if API key is set or we've already failed to authenticate.
+            } else {
+                response.request.newBuilder()
+                    .addHeader("Authorization", Credentials.basic(username, password))
+                    .build()
             }
-            response.close()
         }
-
-        val newToken = synchronized(loginLock) {
-            // Another request may have logged in while this one waited
-            session?.takeIf { it.first == credentials && it.second != token }?.second
-                ?: login(chain, credentials)
-        }
-        // An empty token keeps Komga off another source's session cookie
-        return chain.proceed(request.newBuilder().header("X-Auth-Token", newToken.orEmpty()).build())
-    }
-
-    // Session in a header for this source, and as a cookie for the app's Komga tracker
-    private fun login(chain: Interceptor.Chain, credentials: String): String? {
-        val loginHeaders = headers.newBuilder()
-            .set("Authorization", credentials)
-            .set("X-Auth-Token", "")
-            .build()
-        chain.proceed(GET("$baseUrl/api/v1/login/set-cookie", loginHeaders)).use { response ->
-            session = response.header("X-Auth-Token")?.let { credentials to it }
-        }
-        return session?.second
+        dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
