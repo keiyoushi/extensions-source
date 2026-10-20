@@ -40,7 +40,6 @@ import okhttp3.Dns
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
@@ -98,47 +97,17 @@ class Komga(
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(::authenticate)
+        // One session cookie per host, shared with the app's Komga tracker, so one user per host
+        authenticator { _, response ->
+            if (apiKey.isNotBlank() || response.request.header("Authorization") != null) {
+                null // Give up if API key is set or we've already failed to authenticate.
+            } else {
+                response.request.newBuilder()
+                    .addHeader("Authorization", Credentials.basic(username, password))
+                    .build()
+            }
+        }
         dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
-    }
-
-    // Cookies are shared between Komga sources on the same host, so the session goes in a header
-    @Volatile
-    private var session: Pair<String, String>? = null
-    private val loginLock = Any()
-
-    private fun authenticate(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (apiKey.isNotBlank() || username.isBlank()) {
-            return chain.proceed(request)
-        }
-
-        val credentials = Credentials.basic(username, password)
-        val token = session?.takeIf { it.first == credentials }?.second
-        if (token != null) {
-            val response = chain.proceed(request.newBuilder().header("X-Auth-Token", token).build())
-            if (response.code != 401) {
-                return response
-            }
-            response.close()
-        }
-
-        val newToken = synchronized(loginLock) {
-            // Another request may have logged in while this one waited
-            val latest = session?.takeIf { it.first == credentials && it.second != token }?.second
-            if (latest == null) {
-                val response = chain.proceed(
-                    request.newBuilder()
-                        .header("Authorization", credentials)
-                        .header("X-Auth-Token", "")
-                        .build(),
-                )
-                session = response.header("X-Auth-Token")?.let { credentials to it }
-                return response
-            }
-            latest
-        }
-        return chain.proceed(request.newBuilder().header("X-Auth-Token", newToken).build())
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -469,6 +438,7 @@ class Komga(
             default = "",
             summary = addressSummary(baseUrl),
             getSummary = addressSummary,
+            dialogMessage = "Komga sources on the same hostname share one login, even on different ports. To use another account on the same server, add it under another hostname (an extra DNS entry).",
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
             validate = { it.toHttpUrlOrNull() != null },
             validationMessage = "The URL is invalid or malformed",
