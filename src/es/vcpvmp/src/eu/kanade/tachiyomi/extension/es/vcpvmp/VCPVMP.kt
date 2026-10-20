@@ -9,50 +9,28 @@ import org.jsoup.nodes.Element
 abstract class VCPVMP : VerComics() {
     override val urlSuffix = when (name) {
         "VCP" -> "sex-comics"
-        "VMP" -> "xxx"
+        "VMP" -> "manga-hentai-xxx"
         else -> super.urlSuffix
     }
 
-    override val genreSuffix = when (name) {
-        "VCP" -> "tags"
-        "VMP" -> "tag"
-        else -> super.genreSuffix
+    override val genreSuffix = "tags"
+
+    override fun popularMangaSelector() = "section.pp-section:not(:has(.pp-random-more)) article.pp-card:not(.pp-card-pinned)"
+
+    override fun popularMangaNextPageSelector() = "a.next.page-numbers"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        val link = element.selectFirst("a.pp-card-link")!!
+        setUrlWithoutDomain(link.absUrl("href"))
+        title = link.selectFirst("h3.pp-card-title")!!.text()
+        thumbnail_url = link.selectFirst("img")?.imgAttr()
     }
 
-    override fun popularMangaSelector() = when (name) {
-        "VCP" -> "article.pp-card:not(.pp-card-pinned)"
-        else -> super.popularMangaSelector()
-    }
+    override val detailsSelector = "article.pp-single"
 
-    override fun popularMangaNextPageSelector() = when (name) {
-        "VCP" -> "a.next.page-numbers"
-        else -> super.popularMangaNextPageSelector()
-    }
+    override val genreSelector = "div.pp-taglist a.pp-tag"
 
-    override fun popularMangaFromElement(element: Element) = when (name) {
-        "VCP" -> SManga.create().apply {
-            val link = element.selectFirst("a.pp-card-link")!!
-            setUrlWithoutDomain(link.absUrl("href"))
-            title = link.selectFirst("h3.pp-card-title")!!.text()
-            thumbnail_url = link.selectFirst("img")?.imgAttr()
-        }
-        else -> super.popularMangaFromElement(element)
-    }
-
-    override val detailsSelector = when (name) {
-        "VCP" -> "div.pp-single"
-        else -> super.detailsSelector
-    }
-
-    override val genreSelector = when (name) {
-        "VCP" -> "div.pp-taglist a.pp-tag"
-        else -> super.genreSelector
-    }
-
-    override val pageListSelector = when (name) {
-        "VCP" -> "div.pp-comic-content img"
-        else -> super.pageListSelector
-    }
+    override val pageListSelector = "div.pp-comic-content img"
 
     override var genres = when (name) {
         "VCP" -> arrayOf(
@@ -79,26 +57,26 @@ abstract class VCPVMP : VerComics() {
         )
         "VMP" -> arrayOf(
             Pair("Ver todos", ""),
-            Pair("Ahegao", "ahegao"),
+            Pair("Ahegao", "ahegao-xxx"),
             Pair("Anal", "anal"),
-            Pair("Big Ass", "big-ass"),
-            Pair("Big Breasts", "big-breasts"),
-            Pair("Big Penis", "big-penis"),
-            Pair("BlowJob", "blowjob"),
-            Pair("Creampie", "creampie"),
-            Pair("Cum", "cum"),
-            Pair("Hairy", "hairy"),
+            Pair("Big Ass", "big-ass-xxx"),
+            Pair("Big Breasts", "big-breasts-xxx"),
+            Pair("Big Penis", "big-penis-xxx"),
+            Pair("BlowJob", "blowjob-xxx"),
+            Pair("Creampie", "creampie-xxx"),
+            Pair("Cum", "cum-xxx"),
+            Pair("Hairy", "hairy-xxx"),
             Pair("Incest", "incest"),
-            Pair("Manga Hentai", "manga-hentai"),
-            Pair("Milf", "milf"),
-            Pair("Mosaic Censorship", "mosaic-censorship"),
-            Pair("Nakadashi", "nakadashi"),
+            Pair("Manga Hentai", "xxx-manga-hentai"),
+            Pair("Milf", "milfs-xxx-xxx"),
+            Pair("Mosaic Censorship", "mosaic-censorship-xxx"),
+            Pair("Nakadashi", "nakadashi-xxx"),
             Pair("Paizuri", "paizuri"),
             Pair("Schoolgirl Uniform", "schoolgirl-uniform"),
-            Pair("Sin Censura", "sin-censura"),
-            Pair("Squirting", "squirting"),
-            Pair("Student", "student"),
-            Pair("Unusual Pupils", "unusual-pupils"),
+            Pair("Sin Censura", "sin-censura-xxx"),
+            Pair("Squirting", "squirting-xxx"),
+            Pair("Student", "student-xxx"),
+            Pair("Unusual Pupils", "unusual-pupils-xxx"),
         )
         else -> super.genres
     }
