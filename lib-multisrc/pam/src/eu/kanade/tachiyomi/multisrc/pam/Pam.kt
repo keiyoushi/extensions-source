@@ -43,7 +43,6 @@ import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import kotlin.math.abs
 import kotlin.time.Duration.Companion.seconds
 
 abstract class Pam :
@@ -263,14 +262,12 @@ abstract class Pam :
         }
     }
 
-    /** The reader v2 session and manifest from a chapter page loaded with the reader. */
-    private fun encryptedSession(site: SitePage): Pair<EncryptedSession, ReaderResult.Manifest> {
-        val result = site.reader!!
-
+    /** The reader v2 session and the page path from a chapter page loaded with the reader. */
+    private fun encryptedSession(site: SitePage): Pair<EncryptedSession, MatchResult> {
         // Used in page URLs and headers
-        val manifest = result.manifest.takeIf { MANIFEST_BASE_REGEX.matches(it.base) && it.count > 0 }
-        val contentKey = runCatching { Base64.decode(result.contentKey, Base64.DEFAULT) }.getOrNull()?.takeIf { it.size == 32 }
-        if (manifest == null || contentKey == null) throw IOException("Unexpected reader result")
+        val pagePath = site.pagePath?.let(PAGE_PATH_REGEX::matchEntire)
+        val contentKey = runCatching { Base64.decode(site.reader!!.contentKey, Base64.DEFAULT) }.getOrNull()?.takeIf { it.size == 32 }
+        if (pagePath == null || contentKey == null) throw IOException("Unexpected reader result")
         // The site's X- headers on page requests, less the WebView's X-Requested-With
         val siteHeaders = Headers.Builder().apply {
             site.pageHeaders
@@ -282,7 +279,7 @@ abstract class Pam :
                 .forEach { (name, value) -> add(name, value) }
         }.build()
 
-        return EncryptedSession(contentKey, siteHeaders) to manifest
+        return EncryptedSession(contentKey, siteHeaders) to pagePath
     }
 
     private suspend fun ensureSession(serieSlug: String, chapterSlug: String): SignedSession {
@@ -314,17 +311,15 @@ abstract class Pam :
             }
         }
 
-        val (session, manifest) = encryptedSession(site)
+        val (session, pagePath) = encryptedSession(site)
         sessions[id] = session
+        val (base, variant) = pagePath.destructured
 
-        // Some sites list oversized variants they never serve.
-        val variant = manifest.variants.minByOrNull { abs(it - MAX_VARIANT_WIDTH) }?.let { "-$it" }.orEmpty()
-
-        return (1..manifest.count).map { idx ->
+        return (1..props.data.pageCount).map { idx ->
             Page(
                 index = idx - 1,
                 url = "$id#$idx",
-                imageUrl = "$baseUrl${manifest.base}$idx$variant.ece#$id",
+                imageUrl = "$baseUrl$base$idx$variant.ece#$id",
             )
         }
     }
@@ -470,10 +465,9 @@ abstract class Pam :
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
-private val MANIFEST_BASE_REGEX = Regex("""/p/[\w-]+/\d+/[\w-]+/""")
+private val PAGE_PATH_REGEX = Regex("""(/p/[\w-]+/\d+/[\w-]+/)\d+(-\d+)?\.ece""")
 private val HEADER_VALUE_REGEX = Regex("""[!-~]+""")
 private val SITE_HEADER_REGEX = Regex("""X-[\w-]+""", RegexOption.IGNORE_CASE)
-private const val MAX_VARIANT_WIDTH = 2160
 private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
 private const val CHUNK_SIZE = 65536 + 17 // libsodium secretstream chunk + ABYTES
 private const val PREFIX_LENGTH = 192

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.pam
 
-import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.parseAs
@@ -12,10 +11,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import okhttp3.Headers.Companion.toHeaders
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
@@ -33,6 +30,7 @@ internal class SitePage(
     val fetched: JsonElement? = null,
     val chapters: List<ChapterListItem>? = null,
     val reader: ReaderResult? = null,
+    val pagePath: String? = null,
     val pageHeaders: Map<String, String> = emptyMap(),
 ) {
     fun fetched() = fetched ?: throw IOException("Missing API response")
@@ -75,7 +73,7 @@ internal class SitePages(
 
         val bridge = "k" + ByteArray(8).also(SecureRandom()::nextBytes).joinToString("") { "%02x".format(it) }
         val readScript = "(${asset("site.js")})(\"$bridge\", ${request.toJsonString()})"
-        val readerScript = if (reader) "(${asset("reader.js")})(\"$bridge\")" else null
+        val readerScript = if (reader) "(${asset("reader.js")})(\"$bridge\", ${asset("worker.js").toJsonString()})" else null
         var site: SitePage? = null
         var challengePolls = 0
         val released = CountDownLatch(1)
@@ -85,14 +83,15 @@ internal class SitePages(
                 blockImages = true
                 val lock = Any()
                 var readerV2 = false
+                var chapterUid = ""
                 var readerResult: ReaderResult? = null
                 val pageRequests = mutableListOf<Pair<String, Map<String, String>>>()
                 fun resolveWhenReady() {
                     val page = site ?: return
                     if (!readerV2) return resolve(page)
                     val captured = readerResult ?: return
-                    val pageHeaders = pageRequests.firstOrNull { (path, _) -> path.startsWith(captured.manifest.base) }?.second ?: return
-                    resolve(SitePage(page.page, reader = captured, pageHeaders = pageHeaders))
+                    val (pagePath, pageHeaders) = pageRequests.firstOrNull { (path, _) -> path.startsWith("/p/$chapterUid/") } ?: return
+                    resolve(SitePage(page.page, reader = captured, pagePath = pagePath, pageHeaders = pageHeaders))
                 }
                 // Site host and Turnstile only; reader page requests stay open until the WebView closes
                 interceptRequest { webRequest ->
@@ -103,9 +102,6 @@ internal class SitePages(
                     if (UNUSED_PATHS.any(path::startsWith)) return@interceptRequest blockedResponse()
                     // Styles and fonts only for the reader's fingerprint
                     if (!reader && STYLE_EXTENSIONS.any(path::endsWith)) return@interceptRequest emptyResponse()
-                    if (reader && requestUrl.getQueryParameter(bridge) != null) {
-                        return@interceptRequest rewrittenWorker(webRequest, bridge)
-                    }
                     if (!reader || !path.startsWith("/p/")) return@interceptRequest null
                     synchronized(lock) {
                         pageRequests += path to webRequest.requestHeaders
@@ -124,7 +120,11 @@ internal class SitePages(
                             }
                             else -> {
                                 val page = message.page ?: return@jsBridge reject(IOException("Missing page data"))
-                                readerV2 = reader && page.parseAs<PageListResponse>().props.readerV2
+                                if (reader) {
+                                    val props = page.parseAs<PageListResponse>().props
+                                    readerV2 = props.readerV2
+                                    chapterUid = props.data.uid
+                                }
                                 site = SitePage(page, message.fetched, message.chapters)
                             }
                         }
@@ -171,25 +171,6 @@ internal class SitePages(
     }
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
-
-    /** Reader worker, with its HKDF page-key import reported to reader.js. */
-    private fun rewrittenWorker(webRequest: WebResourceRequest, bridge: String): WebResourceResponse {
-        val url = webRequest.url.toString().toHttpUrl().newBuilder().removeAllQueryParameters(bridge).build()
-        val request = Request.Builder().url(url).headers(webRequest.requestHeaders.toHeaders()).build()
-        client().newCall(request).execute().use { upstream ->
-            // The unpatched worker would only time out without the page key
-            if (!upstream.isSuccessful) throw IOException("The site's reader did not load (HTTP ${upstream.code}), try opening the chapter in WebView")
-            val script = "(${asset("worker.js")})(\"$bridge\");\n" + upstream.body.string()
-            return WebResourceResponse(
-                "text/javascript",
-                Charsets.UTF_8.name(),
-                upstream.code,
-                upstream.message.ifBlank { "OK" },
-                mapOf("Cache-Control" to "no-store"),
-                ByteArrayInputStream(script.encodeToByteArray()),
-            )
-        }
-    }
 
     /** A response that never sends its body before [released]. */
     private fun heldResponse(released: CountDownLatch) = WebResourceResponse(

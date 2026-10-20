@@ -127,7 +127,10 @@ class PageListResponse(
     ) {
         @Serializable
         class Data(
+            val uid: String,
             val slug: String,
+            @SerialName("page_count")
+            val pageCount: Int = 0,
             val serie: Serie,
         )
 
@@ -157,16 +160,8 @@ class SiteMessage(
 /** What reader.js hands back. */
 @Serializable
 class ReaderResult(
-    val manifest: Manifest,
     val contentKey: String,
-) {
-    @Serializable
-    class Manifest(
-        val base: String,
-        val count: Int,
-        val variants: List<Int> = emptyList(),
-    )
-}
+)
 
 @Serializable
 class ChapterListItem(

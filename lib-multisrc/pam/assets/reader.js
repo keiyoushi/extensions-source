@@ -1,58 +1,21 @@
 // The download WebView is off-screen, so the reader never starts, and its page key is imported
 // in the reader worker rather than on this window.
-(bridge) => {
+(bridge, workerPatch) => {
     const installed = Symbol.for(`${bridge}-reader`);
     if (window[installed]) return;
     window[installed] = true;
 
-    const post = (reader) => window[bridge].post(JSON.stringify({ reader }));
-    const defineProperty = Object.defineProperty;
-
     // Proxied native getters, so they still read as native code
     for (const [name, value] of [["visibilityState", "visible"], ["hidden", false]]) {
         const descriptor = Object.getOwnPropertyDescriptor(Document.prototype, name);
-        defineProperty(Document.prototype, name, { ...descriptor, get: new Proxy(descriptor.get, { apply: () => value }) });
+        Object.defineProperty(Document.prototype, name, { ...descriptor, get: new Proxy(descriptor.get, { apply: () => value }) });
     }
 
-    // Only the first manifest and key are sent, so a preloaded chapter's can't be paired with them.
-    let manifest = null;
-    let contentKey = null;
-    let published = false;
-    const publish = () => {
-        if (published || !manifest || !contentKey) return;
-        published = true;
-        post({ manifest, contentKey });
-    };
-
-    const specs = new WeakMap();
-    Object.defineProperty = new Proxy(defineProperty, {
-        apply(target, thisArg, args) {
-            const defined = Reflect.apply(target, thisArg, args);
-            const [obj, key, desc] = args;
-            if (!obj || (key !== "base" && key !== "count" && key !== "variants")) return defined;
-            let spec = specs.get(obj);
-            if (!spec) specs.set(obj, (spec = {}));
-            const value = desc && desc.value;
-            if (key === "base" && typeof value === "string" && value.startsWith("/p/")) spec.base = value;
-            else if (key === "count" && Number.isInteger(value) && value > 0) spec.count = value;
-            else if (key === "variants" && Array.isArray(value)) spec.variants = value;
-            if (!spec.scheduled) {
-                spec.scheduled = true;
-                queueMicrotask(() => {
-                    spec.scheduled = false;
-                    if (manifest || typeof spec.base !== "string" || !Number.isInteger(spec.count)) return;
-                    manifest = { base: spec.base, count: spec.count, variants: spec.variants || [] };
-                    publish();
-                });
-            }
-            return defined;
-        },
-    });
-
+    let posted = false;
     new BroadcastChannel(bridge).onmessage = (event) => {
-        if (contentKey || typeof event.data !== "string" || !event.data) return;
-        contentKey = event.data;
-        publish();
+        if (posted || typeof event.data !== "string" || !event.data) return;
+        posted = true;
+        window[bridge].post(JSON.stringify({ reader: { contentKey: event.data } }));
     };
 
     // Each observer's first target is reported visible; the off-screen view's own "not intersecting"
@@ -100,10 +63,13 @@
     const NativeWorker = window.Worker;
     window.Worker = new Proxy(NativeWorker, {
         construct(target, args, newTarget) {
-            const absolute = new URL(String(args[0]), location.href);
-            if (!absolute.pathname.endsWith(".js")) return Reflect.construct(target, args, newTarget);
-            absolute.searchParams.set(bridge, "");
-            return Reflect.construct(target, [absolute, args[1]], newTarget);
+            const [url, options] = args;
+            if (!options || options.type !== "module") return Reflect.construct(target, args, newTarget);
+            const script = (source) => URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+            const patch = script(`(${workerPatch})(${JSON.stringify(bridge)});`);
+            const original = new URL(String(url), location.href).href;
+            const wrapper = script(`import ${JSON.stringify(patch)};\nimport ${JSON.stringify(original)};`);
+            return Reflect.construct(target, [wrapper, options], newTarget);
         },
     });
 }
