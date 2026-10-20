@@ -37,7 +37,7 @@ abstract class SchaleScans :
 
     private val preferences by getPreferencesLazy()
 
-    private val domain get() = baseUrl.toHttpUrl().host
+    private val domain get() = baseUrl.toHttpUrl().topPrivateDomain()!!
 
     private val apiHeaders: Headers get() = headersBuilder().add("apikey", API_KEY).build()
 

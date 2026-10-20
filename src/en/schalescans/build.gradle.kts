@@ -12,11 +12,10 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl = "https://schalescans.com"
+        baseUrl = "https://www.schalescans.com"
     }
 
     deeplink {
-        host("schalescans.com")
         host("www.schalescans.com")
         host("r18.schalescans.com")
         path("/manga/..*")

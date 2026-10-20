@@ -163,7 +163,7 @@ class ChapterDto(
         name = buildString {
             volumeNumber?.let { append("Vol. ${it.toString().removeSuffix(".0")} ") }
             append("Ch. $number")
-            title?.takeIf { it.isNotBlank() }?.let { append(": $it") }
+            title?.let { append(": $it") }
         }
         chapter_number = chapterNumber
         date_upload = (publishedAt ?: createdAt).toEpochMilliseconds()
