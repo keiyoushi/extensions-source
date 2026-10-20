@@ -438,6 +438,7 @@ class Komga(
             default = "",
             summary = addressSummary(baseUrl),
             getSummary = addressSummary,
+            dialogMessage = "Komga sources on the same hostname share one login, even on different ports. To use another account on the same server, add it under another hostname (an extra DNS entry).",
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
             validate = { it.toHttpUrlOrNull() != null },
             validationMessage = "The URL is invalid or malformed",
