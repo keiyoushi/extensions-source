@@ -3,12 +3,14 @@ package eu.kanade.tachiyomi.extension.en.comicasura
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import kotlin.time.Duration.Companion.seconds
@@ -72,6 +74,11 @@ abstract class ComicAsura : MangaThemesia() {
     }
 
     override val pageSelector = "div > img.object-cover.mx-auto"
+
+    override fun imageRequest(page: Page): Request = super.imageRequest(page)
+        .newBuilder()
+        .removeHeader("Origin")
+        .build()
 
     override val orderByFilterOptions = arrayOf(
         Pair(intl["order_by_filter_default"], ""),
