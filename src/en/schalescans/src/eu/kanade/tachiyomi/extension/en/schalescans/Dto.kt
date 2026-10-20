@@ -10,8 +10,9 @@ import kotlin.time.Instant
 
 @Serializable
 class SeriesDto(
+    val id: String,
     private val title: String,
-    val slug: String,
+    private val slug: String,
     @SerialName("cover_url") private val coverUrl: String? = null,
     @SerialName("is_r18") private val isR18: Boolean,
     @SerialName("created_at") private val createdAt: Instant,
@@ -28,10 +29,13 @@ class SeriesDto(
     val latestAt get() = chapters.firstOrNull()?.date ?: createdAt
 
     fun toSManga() = SManga.create().apply {
-        url = slug
+        url = id
         title = this@SeriesDto.title
         thumbnail_url = coverUrl
-        memo = buildJsonObject { put(MEMO_R18, isR18) }
+        memo = buildJsonObject {
+            put(MEMO_SLUG, slug)
+            put(MEMO_R18, isR18)
+        }
     }
 }
 
@@ -45,6 +49,7 @@ class LatestChapterDto(
 
 @Serializable
 class SeriesDetailsDto(
+    private val id: String,
     private val title: String,
     private val slug: String,
     @SerialName("cover_url") private val coverUrl: String? = null,
@@ -70,7 +75,7 @@ class SeriesDetailsDto(
     }
 
     fun toSManga() = SManga.create().apply {
-        url = slug
+        url = id
         title = this@SeriesDetailsDto.title
         thumbnail_url = coverUrl
         author = authors?.filter { it.role == "author" }?.joinToString { it.name }?.ifEmpty { null }
@@ -97,7 +102,10 @@ class SeriesDetailsDto(
                 links.joinTo(this, "\n") { "- $it" }
             }
         }
-        memo = buildJsonObject { put(MEMO_R18, isR18) }
+        memo = buildJsonObject {
+            put(MEMO_SLUG, slug)
+            put(MEMO_R18, isR18)
+        }
     }
 
     fun toSChapterList() = chapters.map { it.toSChapter(slug, isR18) }

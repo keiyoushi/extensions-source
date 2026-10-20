@@ -67,7 +67,7 @@ abstract class SchaleScans :
             addQueryParameter(
                 "select",
                 buildString {
-                    append("title,slug,cover_url,is_r18,created_at,chapters(published_at,created_at)")
+                    append("id,title,slug,cover_url,is_r18,created_at,chapters(published_at,created_at)")
                     if (genre != null) append(",series_genres!inner(genres!inner(name))")
                 },
             )
@@ -94,7 +94,13 @@ abstract class SchaleScans :
         if (url.pathSegments.firstOrNull() !in setOf("manga", "read")) return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
 
-        return fetchMangaUpdate(SManga.create().apply { this.url = slug }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        val apiUrl = "$API_URL/series".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "id,title,slug,cover_url,is_r18,created_at,chapters(published_at,created_at)")
+            .addQueryParameter("slug", "eq.$slug")
+            .addQueryParameter("chapters.limit", "1")
+            .build()
+
+        return client.get(apiUrl, apiHeaders).parseAs<List<SeriesDto>>().firstOrNull()?.toSManga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -106,10 +112,10 @@ abstract class SchaleScans :
         val url = "$API_URL/series".toHttpUrl().newBuilder()
             .addQueryParameter(
                 "select",
-                "title,slug,cover_url,description,status,is_r18,alt_titles,authors,mangadex_id,anilist_id,mal_id,store_links,read_elsewhere,series_genres(genres(name))," +
+                "id,title,slug,cover_url,description,status,is_r18,alt_titles,authors,mangadex_id,anilist_id,mal_id,store_links,read_elsewhere,series_genres(genres(name))," +
                     "chapters(id,chapter_number,volume_number,title,published_at,created_at)",
             )
-            .addQueryParameter("slug", "eq.${manga.url}")
+            .addQueryParameter("id", "eq.${manga.url}")
             .addQueryParameter("chapters.pages_ready", "eq.true")
             .addQueryParameter("chapters.order", "chapter_number.desc")
             .build()
@@ -120,7 +126,7 @@ abstract class SchaleScans :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val url = "$API_URL/series".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "title,slug,cover_url,is_r18,content_rating,created_at,series_genres(genres(name)),chapters(published_at,created_at)")
+            .addQueryParameter("select", "id,title,slug,cover_url,is_r18,content_rating,created_at,series_genres(genres(name)),chapters(published_at,created_at)")
             .addQueryParameter("is_r18", "eq.${manga.memo[MEMO_R18]!!.boolean}")
             .addQueryParameter("chapters.pages_ready", "eq.true")
             .addQueryParameter("chapters.order", "published_at.desc.nullslast")
@@ -128,11 +134,11 @@ abstract class SchaleScans :
             .build()
 
         val series = client.get(url, apiHeaders).parseAs<List<SeriesDto>>()
-        val genres = series.first { it.slug == manga.url }.genres
+        val genres = series.first { it.id == manga.url }.genres
         val showNsfw = showNsfw
 
         return series
-            .filter { it.slug != manga.url && it.hasChapters && (showNsfw || !it.isAdult) }
+            .filter { it.id != manga.url && it.hasChapters && (showNsfw || !it.isAdult) }
             .map { it to it.genres.let { other -> (genres intersect other).size.toFloat() / (genres union other).size } }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<SeriesDto, Float>> { it.second }.thenByDescending { it.first.latestAt })
@@ -154,7 +160,7 @@ abstract class SchaleScans :
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String = "${siteUrl(manga.memo[MEMO_R18]!!.boolean)}/manga/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "${siteUrl(manga.memo[MEMO_R18]!!.boolean)}/manga/${manga.memo[MEMO_SLUG]!!.string}"
 
     override fun getChapterUrl(chapter: SChapter): String {
         val slug = chapter.memo[MEMO_SLUG]!!.string
