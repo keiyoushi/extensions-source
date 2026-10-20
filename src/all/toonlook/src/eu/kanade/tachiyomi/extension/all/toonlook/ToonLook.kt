@@ -68,7 +68,9 @@ abstract class ToonLook : KeiSource() {
     }
 
     private fun parseMangasPage(document: Document): MangasPage {
-        val mangas = document.select(".manga-item").map(::mangaFromElement)
+        val mangas = document.select(".manga-item")
+            .filterNot { lang == "zh" && it.selectFirst("img.mangora-flag--card[alt=中文]") == null }
+            .map(::mangaFromElement)
         return MangasPage(mangas, hasNextPage = document.selectFirst("a.next") != null)
     }
 
