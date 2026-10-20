@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.toonz
 
+import android.webkit.CookieManager
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -37,9 +38,16 @@ abstract class Toonz : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
         .addNetworkInterceptor { chain ->
             val request = chain.request()
-            val cookies = request.header("Cookie")?.split("; ")?.filterNot { it.startsWith("reader_prefs=") }
+            val cookies = request.header("Cookie")?.split("; ")
+            if (cookies?.any { it.startsWith("reader_prefs=") } != true) return@addNetworkInterceptor chain.proceed(request)
+
+            CookieManager.getInstance().apply {
+                setCookie(baseUrl, "reader_prefs=; Max-Age=-1; Path=/")
+                setCookie(baseUrl, "reader_prefs=; Max-Age=-1; Domain=${request.url.host}; Path=/")
+            }
+            val remaining = cookies.filterNot { it.startsWith("reader_prefs=") }
             val newRequest = request.newBuilder().apply {
-                if (cookies.isNullOrEmpty()) removeHeader("Cookie") else header("Cookie", cookies.joinToString("; "))
+                if (remaining.isEmpty()) removeHeader("Cookie") else header("Cookie", remaining.joinToString("; "))
             }.build()
             chain.proceed(newRequest)
         }
