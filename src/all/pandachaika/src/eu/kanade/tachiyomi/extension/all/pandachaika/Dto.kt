@@ -43,7 +43,7 @@ class LongArchive(
     private val filesize: Double,
     private val tags: List<String>,
     @SerialName("title_jpn") private val titleJpn: String?,
-    private val uploader: String,
+    private val uploader: String? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         val groups = filterTags("group", tags = tags)
@@ -63,7 +63,7 @@ class LongArchive(
         artist = artists
         genre = listOfNotNull(male, female, others).joinToString()
         description = buildString {
-            append("Uploader: ", uploader.ifEmpty { "Anonymous" }, "\n")
+            append("Uploader: ", uploader?.ifEmpty { null } ?: "Anonymous", "\n")
             publishers?.let {
                 append("Publishers: ", it, "\n")
             }
