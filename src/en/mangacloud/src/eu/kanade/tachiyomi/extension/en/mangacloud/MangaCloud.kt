@@ -13,18 +13,18 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebViewBlocking
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import kotlin.time.Duration.Companion.seconds
 
 const val DOMAIN = "mangacloud.org"
 const val API_URL = "https://api.$DOMAIN"
@@ -48,16 +48,14 @@ abstract class MangaCloud : KeiSource() {
         val failedAt = System.currentTimeMillis()
         synchronized(this) {
             if (lastHandshake > failedAt) return@synchronized
-            val start = System.currentTimeMillis()
-            runWebViewBlocking<Unit>(chain.call(), 60.seconds) {
-                userAgent = headers["User-Agent"]!!
-                poll {
-                    evaluateJs("Number(localStorage.getItem('sd')) > $start") {
-                        if (it == "true") resolve(Unit)
-                    }
-                }
-                // the site skips the handshake while its last one is fresh
-                loadData(baseUrl, "<script>localStorage.removeItem('sd');location.replace('$baseUrl')</script>")
+            runBlocking {
+                val token = getTurnstileToken(
+                    url = baseUrl,
+                    siteKey = TURNSTILE_SITE_KEY,
+                    action = "guard",
+                )
+                val payload = HandshakePayload(token).toJsonRequestBody()
+                client.post("$API_URL/auth/handshake", body = payload)
             }
             lastHandshake = System.currentTimeMillis()
         }
@@ -208,3 +206,5 @@ abstract class MangaCloud : KeiSource() {
         }
     }
 }
+
+private const val TURNSTILE_SITE_KEY = "0x4AAAAAADLVIGf7KBRQctG1"
