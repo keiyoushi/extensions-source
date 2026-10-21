@@ -83,7 +83,7 @@ abstract class Dilar : KeiSource() {
             val response = client.get("$baseUrl/api/series/${manga.getMangaId()}/chapters")
             response.parseAs<ChapterListDto>().chapters.flatMap { chapter ->
                 chapter.releases.map { it.toSChapter(chapter, manga.url) }
-            }
+            }.sortedByDescending { it.chapter_number }
         }
 
         SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())

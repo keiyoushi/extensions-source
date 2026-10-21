@@ -114,6 +114,7 @@ class ReleaseDto(
         val number = chapter.chapter.removeSuffix(".00")
         url = "$mangaUrl/$number#$id"
         name = "$number$title"
+        chapter_number = chapter.chapter.toFloatOrNull() ?: -1F
         date_upload = Instant.tryParse(createdAt)
     }
 }
