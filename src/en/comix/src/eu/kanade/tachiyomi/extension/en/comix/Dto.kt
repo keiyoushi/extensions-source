@@ -206,7 +206,6 @@ class Manga(
         return knownLinks + unknownLinks
     }
 
-    // Tags are separate from the curated genres in the site's detail UI.
     private fun getGenres(showTags: Boolean) = buildList {
         when (type) {
             "manhwa" -> add("Manhwa")
@@ -326,7 +325,7 @@ class ChapterPages(
     private val alt: List<String>? = null,
     private val node: String? = null,
 ) {
-    // Alt hosts in the site reader's retry order
+
     fun altHosts(host: String, index: Int): List<String> {
         if (alt.isNullOrEmpty()) return emptyList()
         val label = host.substringBefore('.')
@@ -345,7 +344,6 @@ class ChapterPages(
 
 private val DATE_REGEX = Regex("""^(\d+)\s*(s|m|h|d|w|mo|mos|y|yr|yrs|min|mins|sec|secs|hr|hrs|day|days|week|weeks|month|months|year|years)$""")
 
-// Relative site date ("2w ago"); with latest, the latest time the text can stand for
 fun parseRelativeDate(dateStr: String, latest: Boolean = false): Long {
     if (dateStr.isEmpty()) return 0L
     val trimmed = dateStr.trim().lowercase().removeSuffix(" ago")

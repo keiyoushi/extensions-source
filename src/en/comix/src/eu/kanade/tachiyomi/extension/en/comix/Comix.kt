@@ -94,7 +94,6 @@ abstract class Comix :
 
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    // Comix blocks chapter-list paging that is too fast or evenly spaced
     private class RequestPacer(private val minGapMs: Long, private val maxGapMs: Long) {
         private var nextNanos = 0L
 
@@ -109,7 +108,6 @@ abstract class Comix :
         }
     }
 
-    // Retry failed images on alt hosts, like the site's reader
     private fun altHostFallback(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val altHosts = request.url.altHosts()
@@ -405,7 +403,7 @@ abstract class Comix :
         synchronized(tagIdCache) { tagIdCache[cacheKey] }?.let { return it }
 
         val payload = runInWebView("$baseUrl/browse") { passPayloadName, rejectName, _ ->
-            "(${asset("tags_search.js")})(${asset("site_api.js")}, " +
+            "(${asset("loader.js")})(${asset("vendor.js")}, " +
                 "${JSONObject.quote(type)}, ${JSONObject.quote(name)}, " +
                 "window.$passPayloadName, window.$rejectName);"
         }
@@ -429,7 +427,7 @@ abstract class Comix :
         val deduplicateChapters = preferences.deduplicateChapters()
         val scanlatorBlacklist = preferences.scanlatorBlacklist()
         val blacklistSignature = scanlatorBlacklist.sorted().joinToString(",")
-        // List settings live on the newest chapter; browse and search results replace a non-library entry's memo
+
         val listMemo = chapters.firstOrNull()?.memo?.takeIf { CHAPTER_LIST_DEDUPLICATED_MEMO in it } ?: manga.memo
         val fetchUntilKnown = fetchChapters &&
             preferences.fetchChaptersUntilKnown() &&
@@ -438,9 +436,8 @@ abstract class Comix :
             listMemo[CHAPTER_LIST_COMPLETE_MEMO]?.booleanOrNull != false
         val knownIds = if (fetchUntilKnown) chapters.mapNotNull { it.chapterId() } else emptyList()
 
-        // Only the unchanged-list skip needs the detail before the walk; otherwise the walk's own page carries it
         val detailBeforeChapters = if (fetchUntilKnown) getQueries().mangaDetail() else null
-        // Skip the chapter list when the site's last chapter upload is older than the last full read of it
+
         val unchanged = fetchUntilKnown && run {
             val fetchedAt = listMemo[CHAPTER_LIST_FETCHED_AT_MEMO]?.long ?: return@run false
             val uploadedBy = detailBeforeChapters?.chapterUpdatedAtFormatted?.let { parseRelativeDate(it, latest = true) } ?: 0L
@@ -448,14 +445,13 @@ abstract class Comix :
         }
         var walkedQueries: JsonObject? = null
         val updatedChapters = if (fetchChapters && !unchanged) {
-            // Site dates are relative ("2w ago"), so keep the date a chapter was first stored with
             val knownDates = chapters.mapNotNull { chapter ->
                 chapter.chapterId()?.let { it to chapter.date_upload }?.takeIf { it.second > 0 }
             }.toMap()
             val mangaSlug = manga.url.removePrefix("/")
             val fetchStartedAt = System.currentTimeMillis()
             val chapterList = getWebViewChapterList(manga, knownIds)
-            // The chapter page carried the detail too, so the manga comes from this same navigation
+
             walkedQueries = chapterList.queries?.also {
                 cachedQueries = it
                 rememberQueries(getMangaUrl(manga), it)
@@ -466,7 +462,7 @@ abstract class Comix :
             val fetched = chapterList.chapters.map { it.toSChapter(mangaSlug) }.onEach { chapter ->
                 chapter.chapterId()?.let(knownDates::get)?.let { chapter.date_upload = it }
             }
-            // An incomplete list keeps the stored chapters, and the next refresh walks the whole list again
+
             val candidates = if (fetchUntilKnown || !chapterList.complete) fetched + chapters else fetched
             selectChapters(candidates, deduplicateChapters, scanlatorBlacklist).also { selected ->
                 selected.firstOrNull()?.apply {
@@ -499,7 +495,6 @@ abstract class Comix :
         ?.parseAs<Manga>()
         ?: throw Exception("Could not find manga detail in queries")
 
-    // The title route refuses the app's OkHttp client, so read the page's initial data from a WebView navigation
     private suspend fun navigateForQueries(url: String): JsonObject {
         val payload = runInWebView(
             url = url,
@@ -519,7 +514,6 @@ abstract class Comix :
             .also { rememberQueries(url, it) }
     }
 
-    // The detail page's data, reused briefly so opening a title and its related list is one navigation
     private var lastQueries: CachedQueries? = null
 
     private class CachedQueries(val url: String, val atNanos: Long, val queries: JsonObject)
@@ -571,7 +565,7 @@ abstract class Comix :
     ): ChapterList {
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
         val payload = runInWebView(getMangaUrl(manga), { it.isChapterListRequest() }) { passPayloadName, _, touchName ->
-            "(${asset("chapter_list.js")})(${asset("site_api.js")}, " +
+            "(${asset("bundle.js")})(${asset("vendor.js")}, " +
                 "${knownIds.joinToString(",", "[", "]")}, ${JSONObject.quote(mangaId)}, ${JSONObject.quote("/title/$mangaId-")}, " +
                 "$MAX_CHAPTER_PAGES, window.$touchName, window.$passPayloadName);"
         }
@@ -641,7 +635,6 @@ abstract class Comix :
 
     private fun SChapter.groupId(): Int? = memo[CHAPTER_GROUP_ID_MEMO]?.int
 
-    // Comix image domains block any image requests with Referer/Origin
     override fun imageRequest(page: Page): Request {
         val imageUrl = page.imageUrl ?: return super.imageRequest(page)
         val requestHeaders = headersBuilder()
@@ -654,7 +647,7 @@ abstract class Comix :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.chapterId() ?: throw Exception("Could not find the chapter id")
         val payload = runInWebView(getChapterUrl(chapter), { it.isChapterPagesRequest() }) { passPayloadName, rejectName, _ ->
-            "(${asset("chapter_pages.js")})(${asset("site_api.js")}, $chapterId, window.$passPayloadName, window.$rejectName);"
+            "(${asset("common.js")})(${asset("vendor.js")}, $chapterId, window.$passPayloadName, window.$rejectName);"
         }
 
         return buildPages(payload.parseAs())
@@ -664,7 +657,7 @@ abstract class Comix :
         val base = pages.baseUrl.trimEnd('/')
         return pages.items.mapIndexed { index, img ->
             val full = (if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}").toHttpUrl()
-            // V3 pages need the query flag so the server returns grid-scramble headers
+
             val isV3 = img.s == 1 || "v3" in full.queryParameterNames
             val url = full.newBuilder().apply {
                 if (isV3 && "v3" !in full.queryParameterNames) {
@@ -700,14 +693,14 @@ abstract class Comix :
                 val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                     ?: return@interceptRequest emptyResponse
                 if (UNUSED_SITE_PATHS.any(requestUrl.encodedPath::startsWith)) return@interceptRequest emptyResponse
-                // The solver's own request for this path reads the site's page
+
                 val isFrameLoad = request.requestHeaders["Accept"].orEmpty().contains("text/html")
                 if (requestUrl.encodedPath == WAF_CHALLENGE_PATH && isFrameLoad) {
                     if (!preferences.solveCaptchas()) {
                         reject(Exception("Open in WebView to solve the captcha, or turn on \"Solve captchas\" in extension settings"))
                         return@interceptRequest emptyResponse
                     }
-                    val page = "<script>(${asset("solve_captcha.js")})(parent.$rejectName)</script>"
+                    val page = "<script>(${asset("polyfill.js")})(parent.$rejectName)</script>"
                     return@interceptRequest WebResourceResponse("text/html", "utf-8", page.byteInputStream())
                 }
                 val isData = isDataRequest?.invoke(requestUrl) == true
@@ -737,7 +730,7 @@ abstract class Comix :
                     else -> throw Exception("Bad touch from the page: $message")
                 }
             }
-            // Refuse the site's first-tap ad window
+
             withNativeWebView { it.settings.setSupportMultipleWindows(true) }
 
             val captureScript = buildScript?.invoke(passPayloadName)
@@ -758,13 +751,12 @@ abstract class Comix :
                 }
             }
 
-            // The site's current build flags foreign inline head scripts, so inject with no element left behind
             val startFlagName = "window.${randomName()}"
             val bootstrapScript = """
                 (() => {
                 if (window.top !== window || $startFlagName) return;
                 $startFlagName = true;
-                // Mark the site's ad overlay as already shown so it never covers the page
+
                 try { localStorage.setItem("__pu1", "[" + Date.now() + "]"); } catch (e) {}
                 window.$passPayloadName = payload => window.$bridgeName.post(payload);
                 window.$rejectName = message => window.$errorBridgeName.post(message);
@@ -946,8 +938,6 @@ abstract class Comix :
 
     private fun SharedPreferences.blockedGenres(): Set<String> = getStringSet(PREF_BLOCKED_GENRES, emptySet()) ?: emptySet()
 
-    // The legacy "Hide NSFW" boolean still exists in some users' preferences;
-    // map it to a sensible default until they pick a value explicitly.
     private fun SharedPreferences.contentRating(): String {
         if (contains(PREF_CONTENT_RATING)) {
             return getString(PREF_CONTENT_RATING, DEFAULT_CONTENT_RATING) ?: DEFAULT_CONTENT_RATING
@@ -987,13 +977,10 @@ abstract class Comix :
         private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
         private const val ALT_HOSTS_FRAGMENT = "alt="
 
-        // Site requests in the WebView that the extension has no use for: error reports, comments, upload images
         private val UNUSED_SITE_PATHS = listOf("/api/v1/client-errors", "/api/v1/threads/", "/assets/uploads/")
 
-        // Site's captcha page, shown when the API answers 403 captcha_required
         private const val WAF_CHALLENGE_PATH = "/@waf/challenge"
 
-        // Site's captcha endpoints, which also keep a WebView run alive while the solver works
         private const val WAF_PATH = "/@waf/"
     }
 }

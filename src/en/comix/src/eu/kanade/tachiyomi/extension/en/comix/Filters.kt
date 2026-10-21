@@ -181,7 +181,7 @@ class Filters(
         UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             val checked = state.filter { it.state }
-            // Ignore when no explicit inclusion (default)
+
             if (onlyIfSome && checked.size == vals.size) return
 
             checked.forEach {
@@ -192,7 +192,6 @@ class Filters(
 
     private open class UriTriSelectOption(name: String, val value: String) : Filter.TriState(name)
 
-    // The API ignores demographic exclusions, so this must remain include/off.
     private class DemographicFilter(
         demographics: Array<Pair<String, String>>,
         selectedValues: Set<String>,
