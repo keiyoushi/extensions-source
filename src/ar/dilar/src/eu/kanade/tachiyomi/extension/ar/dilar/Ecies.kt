@@ -6,6 +6,8 @@ import keiyoushi.lib.aessiv.AesSiv
 import keiyoushi.lib.ece.Ece
 import keiyoushi.lib.secretstream.ChaCha20
 import keiyoushi.lib.secretstream.Poly1305
+import keiyoushi.utils.readIntLittleEndian
+import keiyoushi.utils.writeIntLittleEndian
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
@@ -17,7 +19,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-// ECIES response decryption, protocol versions 1-15.
+// ECIES response decryption, protocol versions 1-16.
 internal class Ecies {
     private val ecKeyPair: KeyPair = KeyPairGenerator.getInstance("EC").apply {
         initialize(ECGenParameterSpec(CURVE_NAME))
@@ -152,6 +154,20 @@ internal class Ecies {
                 keyBytes = 64,
             )
 
+            16 -> CipherSpec(
+                hmac(
+                    key = joinBytes(clientPubRaw, iv),
+                    data = lengthPrefixed(serverPubRaw),
+                    algorithm = "HmacSHA384",
+                ),
+                "dilar.response.ecies.v16|${data.e}|${sha384(joinBytes(lengthPrefixed(iv), lengthPrefixed(serverPubRaw))).toBase64Url().take(22)}".toByteArray(),
+                hash = "HmacSHA384",
+                derivedNonce = true,
+                aad = aad("dilar.response.ecies.v16", data, serverPubRaw, iv, ct.size),
+                xchacha = true,
+                nonceBytes = 24,
+            )
+
             else -> error("Unsupported encryption protocol version: ${data.v}")
         }
 
@@ -159,11 +175,11 @@ internal class Ecies {
             ikm = sharedSecret,
             salt = spec.salt,
             info = spec.info,
-            length = if (spec.derivedNonce) spec.keyBytes + 12 else 32,
+            length = if (spec.derivedNonce) spec.keyBytes + spec.nonceBytes else 32,
             algorithm = spec.hash,
         )
         val key = keyMaterial.copyOf(spec.keyBytes)
-        val nonce = if (spec.derivedNonce) keyMaterial.copyOfRange(spec.keyBytes, spec.keyBytes + 12) else iv
+        val nonce = if (spec.derivedNonce) keyMaterial.copyOfRange(spec.keyBytes, spec.keyBytes + spec.nonceBytes) else iv
 
         if (spec.chacha) {
             return chacha20Poly1305Decrypt(key, nonce, ct, tag, spec.aad ?: ByteArray(0)).toString(Charsets.UTF_8)
@@ -175,6 +191,10 @@ internal class Ecies {
 
         if (spec.aessiv) {
             return AesSiv.decrypt(key, tag + ct, spec.aad ?: ByteArray(0), nonce).toString(Charsets.UTF_8)
+        }
+
+        if (spec.xchacha) {
+            return xchacha20Poly1305Decrypt(key, nonce, ct, tag, spec.aad ?: ByteArray(0)).toString(Charsets.UTF_8)
         }
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
@@ -221,6 +241,130 @@ internal class Ecies {
         return plain
     }
 
+    // XChaCha20-Poly1305 AEAD: HChaCha20 derives a subkey from the first 16 bytes
+    // of the 24-byte nonce, then delegates to ChaCha20-Poly1305 with the subkey
+    // and a 12-byte nonce built from 4 zero bytes + the last 8 nonce bytes.
+    private fun xchacha20Poly1305Decrypt(
+        key: ByteArray,
+        nonce: ByteArray,
+        ct: ByteArray,
+        tag: ByteArray,
+        aad: ByteArray,
+    ): ByteArray {
+        val subkey = hchacha20(key, nonce)
+        val subNonce = ByteArray(12)
+        System.arraycopy(nonce, 16, subNonce, 4, 8)
+        return chacha20Poly1305Decrypt(subkey, subNonce, ct, tag, aad)
+    }
+
+    // HChaCha20: 20-round ChaCha core on (key, nonce[0..15]) returning 32 bytes
+    // of internal state (words 0-3 and 12-15).
+    private fun hchacha20(key: ByteArray, nonce: ByteArray): ByteArray {
+        var x0 = 0x61707865
+        var x1 = 0x3320646e
+        var x2 = 0x79622d32
+        var x3 = 0x6b206574
+        var x4 = key.readIntLittleEndian(0)
+        var x5 = key.readIntLittleEndian(4)
+        var x6 = key.readIntLittleEndian(8)
+        var x7 = key.readIntLittleEndian(12)
+        var x8 = key.readIntLittleEndian(16)
+        var x9 = key.readIntLittleEndian(20)
+        var x10 = key.readIntLittleEndian(24)
+        var x11 = key.readIntLittleEndian(28)
+        var x12 = nonce.readIntLittleEndian(0)
+        var x13 = nonce.readIntLittleEndian(4)
+        var x14 = nonce.readIntLittleEndian(8)
+        var x15 = nonce.readIntLittleEndian(12)
+
+        repeat(10) {
+            x0 += x4
+            x12 = (x12 xor x0).rotl(16)
+            x8 += x12
+            x4 = (x4 xor x8).rotl(12)
+            x0 += x4
+            x12 = (x12 xor x0).rotl(8)
+            x8 += x12
+            x4 = (x4 xor x8).rotl(7)
+
+            x1 += x5
+            x13 = (x13 xor x1).rotl(16)
+            x9 += x13
+            x5 = (x5 xor x9).rotl(12)
+            x1 += x5
+            x13 = (x13 xor x1).rotl(8)
+            x9 += x13
+            x5 = (x5 xor x9).rotl(7)
+
+            x2 += x6
+            x14 = (x14 xor x2).rotl(16)
+            x10 += x14
+            x6 = (x6 xor x10).rotl(12)
+            x2 += x6
+            x14 = (x14 xor x2).rotl(8)
+            x10 += x14
+            x6 = (x6 xor x10).rotl(7)
+
+            x3 += x7
+            x15 = (x15 xor x3).rotl(16)
+            x11 += x15
+            x7 = (x7 xor x11).rotl(12)
+            x3 += x7
+            x15 = (x15 xor x3).rotl(8)
+            x11 += x15
+            x7 = (x7 xor x11).rotl(7)
+
+            x0 += x5
+            x15 = (x15 xor x0).rotl(16)
+            x10 += x15
+            x5 = (x5 xor x10).rotl(12)
+            x0 += x5
+            x15 = (x15 xor x0).rotl(8)
+            x10 += x15
+            x5 = (x5 xor x10).rotl(7)
+
+            x1 += x6
+            x12 = (x12 xor x1).rotl(16)
+            x11 += x12
+            x6 = (x6 xor x11).rotl(12)
+            x1 += x6
+            x12 = (x12 xor x1).rotl(8)
+            x11 += x12
+            x6 = (x6 xor x11).rotl(7)
+
+            x2 += x7
+            x13 = (x13 xor x2).rotl(16)
+            x8 += x13
+            x7 = (x7 xor x8).rotl(12)
+            x2 += x7
+            x13 = (x13 xor x2).rotl(8)
+            x8 += x13
+            x7 = (x7 xor x8).rotl(7)
+
+            x3 += x4
+            x14 = (x14 xor x3).rotl(16)
+            x9 += x14
+            x4 = (x4 xor x9).rotl(12)
+            x3 += x4
+            x14 = (x14 xor x3).rotl(8)
+            x9 += x14
+            x4 = (x4 xor x9).rotl(7)
+        }
+
+        val out = ByteArray(32)
+        out.writeIntLittleEndian(0, x0)
+        out.writeIntLittleEndian(4, x1)
+        out.writeIntLittleEndian(8, x2)
+        out.writeIntLittleEndian(12, x3)
+        out.writeIntLittleEndian(16, x12)
+        out.writeIntLittleEndian(20, x13)
+        out.writeIntLittleEndian(24, x14)
+        out.writeIntLittleEndian(28, x15)
+        return out
+    }
+
+    private fun Int.rotl(n: Int): Int = (this shl n) or (this ushr (32 - n))
+
     private class CipherSpec(
         val salt: ByteArray,
         val info: ByteArray,
@@ -230,7 +374,9 @@ internal class Ecies {
         val chacha: Boolean = false,
         val gcmsiv: Boolean = false,
         val aessiv: Boolean = false,
+        val xchacha: Boolean = false,
         val keyBytes: Int = 32,
+        val nonceBytes: Int = 12,
     )
 
     // Shared by v12 and v13; v12 truncates the result to 32 bytes.
