@@ -40,7 +40,7 @@ class SortFilter(state: Selection = Selection(2, false)) : Filter.Sort("Sort by"
             "Title" to "az",
         )
 
-        val LATEST = FilterList(SortFilter(election(0, false)))
-        val POPULAR = FilterList(SortFilter(election(2, false)))
+        val LATEST = FilterList(SortFilter(Selection(0, false)))
+        val POPULAR = FilterList(SortFilter(Selection(2, false)))
     }
 }
