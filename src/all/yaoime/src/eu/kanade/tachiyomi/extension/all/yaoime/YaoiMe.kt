@@ -46,9 +46,9 @@ abstract class YaoiMe :
 
     private val siteLang get() = lang.lowercase()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter()))
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.POPULAR)
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(SortFilter.LATEST)))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.LATEST)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/browse".toHttpUrl().newBuilder().apply {
@@ -161,6 +161,7 @@ abstract class YaoiMe :
                 links.joinTo(this, "\n") { "- $it" }
             }
         }.ifEmpty { null }
+        initialized = true
     }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()

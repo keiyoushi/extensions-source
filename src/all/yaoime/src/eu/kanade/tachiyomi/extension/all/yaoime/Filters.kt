@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.yaoime
 
 import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 
 class TriStateOption(name: String) : Filter.TriState(name)
 
@@ -39,6 +40,7 @@ class SortFilter(state: Selection = Selection(2, false)) : Filter.Sort("Sort by"
             "Title" to "az",
         )
 
-        val LATEST = Selection(0, false)
+        val LATEST = FilterList(SortFilter(election(0, false)))
+        val POPULAR = FilterList(SortFilter(election(2, false)))
     }
 }
