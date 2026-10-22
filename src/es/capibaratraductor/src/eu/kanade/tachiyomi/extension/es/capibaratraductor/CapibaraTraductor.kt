@@ -13,11 +13,17 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import java.io.IOException
 
 @Source
 abstract class CapibaraTraductor : KeiSource() {
@@ -143,8 +149,7 @@ abstract class CapibaraTraductor : KeiSource() {
     ): SMangaUpdate {
         val (seriesSlug, organizationSlug) = manga.url.split("/", limit = 2)
         val result = client.get("$baseUrl/api/manga-custom/$seriesSlug", getScanHeaders(organizationSlug))
-            .parseAs<Data<SeriesDto>>()
-            .data
+            .parseData<SeriesDto>()
 
         val chapterList = result.chapters
             ?.filter { it.isUnreleased.not() }
@@ -164,13 +169,50 @@ abstract class CapibaraTraductor : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (chapterSlug, seriesSlug, organizationSlug) = chapter.url.split("/", limit = 3)
 
-        val result = client.get("$baseUrl/api/manga-custom/$seriesSlug/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
-            .parseAs<Data<List<PageDto>>>()
-        return result.data
-            .filterNot { "/promo/" in it.imageUrl }
-            .mapIndexed { i, page ->
-                Page(i, imageUrl = page.imageUrl)
+        return client.get("$baseUrl/api/manga-custom/$seriesSlug/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
+            .parseData<List<PageDto>>()
+            .mapNotNull { page ->
+                val url = baseUrl.toHttpUrl().resolve(page.imageUrl) ?: return@mapNotNull null
+                if (url.scheme != "http" && url.scheme != "https") return@mapNotNull null
+                if ("promo" in url.pathSegments) return@mapNotNull null
+                // Legacy files host does not resolve. Pages on the content CDN stay in the list.
+                if (url.host == "files.capibaratraductor.com") return@mapNotNull null
+                url.toString()
             }
+            .mapIndexed { i, imageUrl ->
+                Page(i, imageUrl = imageUrl)
+            }
+    }
+
+    private inline fun <reified T> Response.parseData(): T {
+        val root = parseAs<JsonElement>()
+
+        if (root is JsonObject) {
+            val data = root["data"]
+            if (data != null && data !is JsonNull) {
+                return data.parseAs()
+            }
+            if (T::class == SeriesDto::class && "manga" in root && "title" in root && "organization" in root) {
+                return root.parseAs()
+            }
+        }
+
+        if (T::class == List::class &&
+            root is JsonArray &&
+            root.all { it is JsonObject && "imageUrl" in it }
+        ) {
+            return root.parseAs()
+        }
+
+        val obj = root as? JsonObject
+        val message = obj?.get("message").apiText() ?: obj?.get("error").apiText()
+        throw IOException(message ?: "Error")
+    }
+
+    private fun JsonElement?.apiText(): String? {
+        val primitive = this as? JsonPrimitive ?: return null
+        if (!primitive.isString) return null
+        return primitive.content.takeIf { it.isNotBlank() }
     }
 
     companion object {
