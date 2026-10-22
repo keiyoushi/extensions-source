@@ -74,7 +74,7 @@ abstract class Iken :
      * Hides novels that `api/query` lists under a comic series type,
      * using the novel ids from `api/posts`.
      */
-    protected open val fetchNovelIds = false
+    protected open val hideNovelsListedAsComics = false
 
     // ============================== Popular ==============================
 
@@ -126,7 +126,7 @@ abstract class Iken :
     protected open suspend fun parseSearchMangaList(response: Response): MangasPage {
         val data = response.parseAs<SearchResponse>()
         val page = response.request.url.queryParameter("page")!!.toInt()
-        val novelIds = if (fetchNovelIds) getNovelIds() else emptySet()
+        val novelIds = if (hideNovelsListedAsComics) getNovelIds() else emptySet()
 
         val entries = data.posts
             .filterNot { it.isNovel || it.id in novelIds }

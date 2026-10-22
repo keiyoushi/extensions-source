@@ -5,5 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class VortexScans : Iken() {
-    override val fetchNovelIds = true
+    override val hideNovelsListedAsComics = true
 }
