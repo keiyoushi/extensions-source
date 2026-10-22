@@ -34,23 +34,8 @@ abstract class PandaChaika : KeiSource() {
         get() = when (lang) {
             "en" -> "english"
             "zh" -> "chinese"
-            "ko" -> "korean"
-            "es" -> "spanish"
-            "ru" -> "russian"
-            "pt" -> "portuguese"
-            "fr" -> "french"
-            "th" -> "thai"
-            "vi" -> "vietnamese"
             "ja" -> "japanese"
             "id" -> "indonesian"
-            "ar" -> "arabic"
-            "uk" -> "ukrainian"
-            "tr" -> "turkish"
-            "cs" -> "czech"
-            "tl" -> "tagalog"
-            "fi" -> "finnish"
-            "jv" -> "javanese"
-            "el" -> "greek"
             else -> ""
         }
 

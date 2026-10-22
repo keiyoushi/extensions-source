@@ -27,6 +27,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -44,6 +45,11 @@ abstract class Webnex :
     ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
+
+    // The site rejects the app's default Cache-Control (max-age=600)
+    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor { chain ->
+        chain.proceed(chain.request().newBuilder().removeHeader("Cache-Control").build())
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("coverage"), RatingFilter(preferences.rating)))
 

@@ -10,10 +10,9 @@ import kotlin.time.Instant
 
 @Serializable
 class BrowseDto(
-    val initialResults: List<BrowseMangaDto>,
+    val results: List<BrowseMangaDto>,
     val totalCount: Int,
     val page: Int,
-    val pageSize: Int,
 )
 
 @Serializable
@@ -44,6 +43,7 @@ class GenreDto(
 class MangaPageDto(
     val manga: MangaDto,
     val chapters: List<ChapterDto>,
+    val jsonLd: String? = null,
 )
 
 @Serializable

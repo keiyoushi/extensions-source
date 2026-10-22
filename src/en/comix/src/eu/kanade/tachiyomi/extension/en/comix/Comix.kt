@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
+import android.app.Application
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.webkit.WebResourceResponse
+import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -41,7 +45,10 @@ import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
 import org.json.JSONObject
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
@@ -55,6 +62,22 @@ abstract class Comix :
     ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    // A full chapter walk pages through the whole list at a paced rate, so warn once per session
+    private val chapterListHintShown = AtomicBoolean(false)
+
+    private fun showChapterListHint() {
+        if (!chapterListHintShown.compareAndSet(false, true)) return
+        Handler(Looper.getMainLooper()).post {
+            runCatching {
+                Toast.makeText(
+                    Injekt.get<Application>(),
+                    "Chapter List loading takes time for first time",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
 
     private val tagIdCache = object : LinkedHashMap<String, List<String>>(
         TAG_ID_CACHE_SIZE,
@@ -569,6 +592,7 @@ abstract class Comix :
         manga: SManga,
         knownIds: List<Int>,
     ): ChapterList {
+        if (knownIds.isEmpty()) showChapterListHint()
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
         val payload = runInWebView(getMangaUrl(manga), { it.isChapterListRequest() }) { passPayloadName, _, touchName ->
             "(${asset("chapter_list.js")})(${asset("site_api.js")}, " +
@@ -759,12 +783,12 @@ abstract class Comix :
             }
 
             // The site's current build flags foreign inline head scripts, so inject with no element left behind
+            // The bootstrap also marks the site's ad overlay as already shown (the __pu1 localStorage flag below) so it never covers the page
             val startFlagName = "window.${randomName()}"
             val bootstrapScript = """
                 (() => {
                 if (window.top !== window || $startFlagName) return;
                 $startFlagName = true;
-                // Mark the site's ad overlay as already shown so it never covers the page
                 try { localStorage.setItem("__pu1", "[" + Date.now() + "]"); } catch (e) {}
                 window.$passPayloadName = payload => window.$bridgeName.post(payload);
                 window.$rejectName = message => window.$errorBridgeName.post(message);

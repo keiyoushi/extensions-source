@@ -9,11 +9,9 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
@@ -29,18 +27,18 @@ abstract class Komix : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter("date")))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$baseUrl/browse".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/api/page-data/browse".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) addQueryParameter("q", query.trim())
             filters.filterIsInstance<SelectFilter>().forEach { it.addToUrl(this) }
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        val browse = client.get(url).extractNextJs<BrowseDto>()!!
+        val browse = client.get(url).parseAs<BrowseDto>()
         val baseHttpUrl = baseUrl.toHttpUrl()
 
         return MangasPage(
-            browse.initialResults.map { it.toSManga(baseHttpUrl) },
-            browse.page * browse.pageSize < browse.totalCount,
+            browse.results.map { it.toSManga(baseHttpUrl) },
+            browse.page * PAGE_SIZE < browse.totalCount,
         )
     }
 
@@ -64,12 +62,8 @@ abstract class Komix : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
-        val mangaPage = document.extractNextJs<MangaPageDto> {
-            it is JsonObject && it["manga"] is JsonObject && it["chapters"] is JsonArray
-        }!!
-        val synopsis = document.selectFirst("script[type=application/ld+json]")
-            ?.data()
+        val mangaPage = client.get("$baseUrl/api/page-data/title/${manga.url}").parseAs<MangaPageDto>()
+        val synopsis = mangaPage.jsonLd
             ?.parseAs<LdJsonDto>()
             ?.graph
             ?.firstOrNull { it.type == "Book" }
@@ -95,7 +89,7 @@ abstract class Komix : KeiSource() {
         }
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/browse").extractNextJs<GenresDto>()!!.allGenres.toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/page-data/browse").parseAs<GenresDto>().allGenres.toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         listOfNotNull(
@@ -106,3 +100,5 @@ abstract class Komix : KeiSource() {
         ),
     )
 }
+
+private const val PAGE_SIZE = 60
