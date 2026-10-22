@@ -137,25 +137,53 @@ abstract class Hentairead : KeiSource() {
         }
     }
 
+    private fun resolveUrl(path: String): HttpUrl {
+        val base = baseUrl.toHttpUrl()
+        val url = base.resolve(path)
+        if (url == null || url.scheme != base.scheme || url.host != base.host) {
+            throw Exception("Invalid URL: $path")
+        }
+        return url
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        val document = client.get(resolveUrl(manga.url)).asJsoup()
+        val collectionsUrl = document.select("#mangaCollection a").first()?.absUrl("href")
         val details = if (fetchDetails) {
             mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup()).apply { url = manga.url }
         } else {
             manga
         }
-        val chapter = SChapter.create().apply {
-            name = "Chapter"
-            url = manga.url
+
+        fun createChapter(chapNum: Float = -1.0f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
+            val titleText = chapTitle.ifBlank { document.select("div.manga-titles h1").first()!!.text() }
+            chapter_number = if (chapNum > 0f) chapNum else 1f
+            name = "${if (chapter_number % 1f == 0f) chapter_number.toInt() else chapter_number} - $titleText"
+            url = chapUrl.ifBlank { manga.url }
             if (details.description?.contains("Scanlators") == true) {
                 scanlator = details.description?.substringAfter("Scanlators: ")?.substringBefore("\n")
             }
         }
-        return SMangaUpdate(details, listOf(chapter))
+
+        val allChapters = mutableListOf<SChapter>()
+
+        if (collectionsUrl.isNullOrBlank()) {
+            allChapters.add(createChapter())
+        } else {
+            val collectionsPage = client.get(collectionsUrl).asJsoup()
+            for (element: Element in collectionsPage.select("div.manga-item__wrapper")) {
+                val chapNum = element.selectFirst("div.collection-badge")!!.text().toFloat()
+                val chapUrl = element.selectFirst("a.manga-item__link")!!.absUrl("href")
+                val chapTitle = element.selectFirst("a.manga-item__link")!!.text()
+                allChapters.add(createChapter(chapNum, chapUrl, chapTitle))
+            }
+        }
+        return SMangaUpdate(details, allChapters)
     }
 
     private fun mangaDetailsParse(document: Document): SManga {
