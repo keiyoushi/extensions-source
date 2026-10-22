@@ -6,13 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Yaoi Fan Club"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "zeistmanga"
+    theme = "madara"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://www.yaoifanclub.com"
+        baseUrl = "https://yaoifanclub.com"
+        versionId = 2
     }
 }
