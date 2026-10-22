@@ -165,7 +165,7 @@ abstract class Hiper :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val slug = url.toString().getSlug()
+        val slug = url.getSlug()
         return getMangaBySlug(slug)
     }
 
@@ -488,10 +488,13 @@ abstract class Hiper :
     // manga: /manga/<slug|(#ID)>
     // chapter: /manga/slug(#ID)/<chapter-XX|(XX.X)>
 
-    fun String.getSlug() = this.substringAfterLast("$mangaPath/")
-        .substringBefore("/")
-        .substringBefore("#")
-        .takeIf(String::isNotBlank)
+    fun String.getSlug(): String = baseUrl.toHttpUrl().resolve(this)?.getSlug()
+        ?: throw IOException("Migrate from $name to $name")
+
+    fun HttpUrl.getSlug(): String = pathSegments
+        .takeIf { it.firstOrNull() == mangaPath }
+        ?.getOrNull(1)
+        ?.takeIf(String::isNotBlank)
         ?: throw IOException("Migrate from $name to $name")
 
     fun SChapter.getNumber() = if (chapter_number > 0) {
