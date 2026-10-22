@@ -34,7 +34,15 @@ abstract class CapibaraTraductor : KeiSource() {
 
     private fun getScanHeaders(organizationSlug: String): Headers = headers.newBuilder()
         .add("x-organization", organizationSlug)
+        .apply {
+            authToken()?.let { set("Authorization", "Bearer $it") }
+        }
         .build()
+
+    private fun authToken(): String? = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+        .firstOrNull { it.name == "token" }
+        ?.value
+        ?.takeUnless { it.isBlank() || it.equals("deleted", ignoreCase = true) }
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular".toHttpUrl(), page, headers)
 
@@ -205,6 +213,9 @@ abstract class CapibaraTraductor : KeiSource() {
         }
 
         val obj = root as? JsonObject
+        if (obj?.get("errorType").apiText() == "login_required") {
+            throw IOException("Log in via WebView to read this chapter.")
+        }
         val message = obj?.get("message").apiText() ?: obj?.get("error").apiText()
         throw IOException(message ?: "Error")
     }
