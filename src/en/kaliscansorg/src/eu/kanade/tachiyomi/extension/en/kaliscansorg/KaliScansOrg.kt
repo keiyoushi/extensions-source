@@ -34,8 +34,8 @@ abstract class KaliScansOrg : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
-    // The site's pages send no Referer to the image host, which answers 403 to one
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Referer")
+    // Image host 403s requests with a Referer
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Referer").removeAll("Origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(listingUrl("popular", page))
 
