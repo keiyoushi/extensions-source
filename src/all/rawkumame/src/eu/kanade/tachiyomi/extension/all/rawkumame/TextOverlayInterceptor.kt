@@ -20,7 +20,7 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
-class TextOverlayInterceptor(private val baseUrl: String) : Interceptor {
+class TextOverlayInterceptor(private val baseUrl: () -> String) : Interceptor {
 
     private val typefaces = ConcurrentHashMap<String, Typeface>()
 
@@ -112,7 +112,7 @@ class TextOverlayInterceptor(private val baseUrl: String) : Interceptor {
     private fun Interceptor.Chain.typeface(family: String): Typeface {
         typefaces[family]?.let { return it }
         // the site serves its reader fonts from /media/_fonts/, the chapter payload lists which ones it uses
-        val request = request().newBuilder().url("$baseUrl/media/_fonts/$family.ttf").build()
+        val request = request().newBuilder().url("${baseUrl()}/media/_fonts/$family.ttf").build()
         val typeface = try {
             proceed(request).use { response ->
                 if (!response.isSuccessful) return Typeface.DEFAULT_BOLD
