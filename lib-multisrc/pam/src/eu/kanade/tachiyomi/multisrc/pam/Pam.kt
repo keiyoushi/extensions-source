@@ -264,10 +264,11 @@ abstract class Pam :
 
     /** The reader v2 session and the page path from a chapter page loaded with the reader. */
     private fun encryptedSession(site: SitePage): Pair<EncryptedSession, MatchResult> {
+        val reader = site.reader!!
         // Used in page URLs and headers
         val pagePath = site.pagePath?.let(PAGE_PATH_REGEX::matchEntire)
-        val contentKey = runCatching { Base64.decode(site.reader!!.contentKey, Base64.DEFAULT) }.getOrNull()?.takeIf { it.size == 32 }
-        if (pagePath == null || contentKey == null) throw IOException("Unexpected reader result")
+        val contentKey = runCatching { Base64.decode(reader.contentKey, Base64.DEFAULT) }.getOrNull()?.takeIf { it.size == 32 }
+        if (pagePath == null || contentKey == null || reader.count <= 0) throw IOException("Unexpected reader result")
         // The site's X- headers on page requests, less the WebView's X-Requested-With
         val siteHeaders = Headers.Builder().apply {
             site.pageHeaders
@@ -315,7 +316,8 @@ abstract class Pam :
         sessions[id] = session
         val (base, variant) = pagePath.destructured
 
-        return (1..props.data.pageCount).map { idx ->
+        // page count from reader.js, base and size variant from the reader's first page request
+        return (1..site.reader!!.count).map { idx ->
             Page(
                 index = idx - 1,
                 url = "$id#$idx",

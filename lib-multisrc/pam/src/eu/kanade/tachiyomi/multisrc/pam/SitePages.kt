@@ -65,7 +65,7 @@ internal class SitePages(
         return challengeClearance == null || clearance().let { it == null || it == challengeClearance }
     }
 
-    /** Loads [url] and reads its Inertia page data; with [reader], also the reader v2 manifest, page key and page request headers. */
+    /** loads [url] and reads its inertia page data; with [reader], also the reader v2 page key, page count, and first page request with its headers. */
     suspend fun load(url: String, request: SiteRequest = SiteRequest(), reader: Boolean = false): SitePage = mutex.withLock {
         if (failure?.isActive() == true) throw IOException(SOLVE_IN_WEBVIEW)
         lastLoad?.let { delay(LOAD_INTERVAL - it.elapsedNow()) }
@@ -90,6 +90,7 @@ internal class SitePages(
                     val page = site ?: return
                     if (!readerV2) return resolve(page)
                     val captured = readerResult ?: return
+                    // this chapter's first page request, not a preloaded chapter's
                     val (pagePath, pageHeaders) = pageRequests.firstOrNull { (path, _) -> path.startsWith("/p/$chapterUid/") } ?: return
                     resolve(SitePage(page.page, reader = captured, pagePath = pagePath, pageHeaders = pageHeaders))
                 }
@@ -137,9 +138,16 @@ internal class SitePages(
                 onReceivedError { webRequest, error ->
                     if (webRequest.isForMainFrame) reject(IOException(error.description.toString()))
                 }
+                // one evaluation at a time, until site.js has started reading
+                var evaluating = false
+                var started = false
                 // Challenges that pass by themselves take a few seconds; the rest need the user
                 poll(POLL_INTERVAL) {
+                    if (evaluating || started) return@poll
+                    evaluating = true
                     evaluateJs(readScript) {
+                        evaluating = false
+                        started = it == "\"started\""
                         if (it != "\"challenge\"") {
                             challengePolls = 0
                         } else if (POLL_INTERVAL * ++challengePolls > CHALLENGE_WAIT) {

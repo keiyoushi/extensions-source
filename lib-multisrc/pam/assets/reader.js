@@ -1,21 +1,25 @@
 // The download WebView is off-screen, so the reader never starts, and its page key is imported
 // in the reader worker rather than on this window.
+// it's injected once per document, so it doesn't mark the window: the site looks for such markers
 (bridge, workerPatch) => {
-    const installed = Symbol.for(`${bridge}-reader`);
-    if (window[installed]) return;
-    window[installed] = true;
-
     // Proxied native getters, so they still read as native code
     for (const [name, value] of [["visibilityState", "visible"], ["hidden", false]]) {
         const descriptor = Object.getOwnPropertyDescriptor(Document.prototype, name);
         Object.defineProperty(Document.prototype, name, { ...descriptor, get: new Proxy(descriptor.get, { apply: () => value }) });
     }
 
+    // the page data no longer has a page count and the manifest's keys change every build, so the
+    // reader's plates are counted instead. its placeholder plates have no canvas until the manifest is in
     let posted = false;
+    const post = (contentKey) => {
+        const plates = [...document.querySelectorAll("[data-reader-plate]")];
+        if (!plates.length || plates.some((plate) => !plate.querySelector("canvas"))) return setTimeout(post, 100, contentKey);
+        window[bridge].post(JSON.stringify({ reader: { contentKey, count: plates.length } }));
+    };
     new BroadcastChannel(bridge).onmessage = (event) => {
         if (posted || typeof event.data !== "string" || !event.data) return;
         posted = true;
-        window[bridge].post(JSON.stringify({ reader: { contentKey: event.data } }));
+        post(event.data);
     };
 
     // Each observer's first target is reported visible; the off-screen view's own "not intersecting"
@@ -60,6 +64,8 @@
         },
     });
 
+    // the reader worker is an inline module (blob: url). static imports run the patch first without
+    // dropping the page's first messages; classic workers are cloudflare's and are left alone
     const NativeWorker = window.Worker;
     window.Worker = new Proxy(NativeWorker, {
         construct(target, args, newTarget) {

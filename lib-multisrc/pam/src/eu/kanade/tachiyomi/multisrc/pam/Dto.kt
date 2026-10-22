@@ -129,8 +129,6 @@ class PageListResponse(
         class Data(
             val uid: String,
             val slug: String,
-            @SerialName("page_count")
-            val pageCount: Int = 0,
             val serie: Serie,
         )
 
@@ -161,6 +159,7 @@ class SiteMessage(
 @Serializable
 class ReaderResult(
     val contentKey: String,
+    val count: Int,
 )
 
 @Serializable

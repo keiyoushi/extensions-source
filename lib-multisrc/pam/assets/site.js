@@ -11,9 +11,6 @@
     const app = document.getElementById("app");
     const data = app?.dataset.page ?? document.querySelector('script[data-page="app"][type="application/json"]')?.textContent;
     if (!data) return null;
-    const started = Symbol.for(`${bridge}-read`);
-    if (window[started]) return null;
-    window[started] = true;
 
     const xsrf = decodeURIComponent(document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1] ?? "");
     const api = async (path) => {
@@ -40,5 +37,6 @@
         }
         post(result);
     })().catch((e) => post({ error: String(e?.message ?? e) }));
-    return null;
+    // the caller stops evaluating this once it has started, so nothing is left on the window
+    return "started";
 }
