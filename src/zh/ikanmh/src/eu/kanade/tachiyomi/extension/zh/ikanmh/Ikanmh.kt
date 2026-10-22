@@ -100,9 +100,7 @@ abstract class Ikanmh : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        val details = if (fetchDetails) document.parseDetails(manga) else manga
-        val chapterList = if (fetchChapters) document.parseChapters() else chapters
-        return SMangaUpdate(details, chapterList)
+        return SMangaUpdate(document.parseDetails(manga), document.parseChapters())
     }
 
     private fun Document.parseDetails(manga: SManga): SManga = manga.apply {
@@ -138,12 +136,8 @@ abstract class Ikanmh : KeiSource() {
                 }
             }
             .asReversed()
-            .mapIndexed { index, chapter ->
-                chapter.apply {
-                    // 站点无 per-chapter 日期，整书更新日只赋给最新一章
-                    if (index == 0) date_upload = updatedDate
-                }
-            }
+            // 站点无 per-chapter 日期，整书更新日只赋给最新一章
+            .also { it[0].date_upload = updatedDate }
     }
 
     // ---- URL 搜索（在搜索框粘贴站点链接） ----
