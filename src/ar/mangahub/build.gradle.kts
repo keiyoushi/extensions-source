@@ -14,5 +14,6 @@ keiyoushi {
     source {
         lang = "ar"
         baseUrl = "https://mangaxhentai.com"
+        versionId = 2
     }
 }
