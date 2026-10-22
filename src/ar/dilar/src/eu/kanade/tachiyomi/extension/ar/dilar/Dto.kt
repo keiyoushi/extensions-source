@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.dilar
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
@@ -113,9 +114,8 @@ class ReleaseDto(
         val number = chapter.chapter.removeSuffix(".00")
         url = "$mangaUrl/$number#$id"
         name = "$number$title"
-        date_upload = createdAt?.let {
-            Instant.parseOrNull(it)?.toEpochMilliseconds()
-        } ?: 0L
+        chapter_number = chapter.chapter.toFloatOrNull() ?: -1F
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
