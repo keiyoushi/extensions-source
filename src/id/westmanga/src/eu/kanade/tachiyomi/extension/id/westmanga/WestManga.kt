@@ -19,14 +19,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class WestManga : KeiSource() {
-    private val apiUrl = "https://data.mantweh.online"
-
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortFilter.popular)
 
     override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", SortFilter.latest)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$apiUrl/api/contents".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/api/contents".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("q", query)
             }
@@ -39,14 +37,14 @@ abstract class WestManga : KeiSource() {
         }.build()
 
         val data = client.get(url, apiHeaders(url)).parseAs<PaginatedData<BrowseManga>>()
-        val entries = data.data.map { it.toSManga() }
+        val entries = data.data.map { it.toSManga(baseUrl) }
         return MangasPage(entries, data.paginator.hasNextPage())
     }
 
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val url = "$apiUrl/api/contents/genres".toHttpUrl()
+        val url = "$baseUrl/api/contents/genres".toHttpUrl()
         return client.get(url, apiHeaders(url, includeToken = false)).parseAs()
     }
 
@@ -66,9 +64,11 @@ abstract class WestManga : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.pathSegments.firstOrNull() != "comic") return null
-        val slug = url.pathSegments.getOrNull(1) ?: return null
-        val api = "$apiUrl/api/comic/$slug".toHttpUrl()
+        val slug = when (url.pathSegments.firstOrNull()) {
+            "comic", "manga" -> url.pathSegments.getOrNull(1)
+            else -> null
+        } ?: return null
+        val api = "$baseUrl/api/comic/$slug".toHttpUrl()
 
         return client.get(api, apiHeaders(api)).parseAs<Data<Manga>>().data
             .toSManga(baseUrl)
@@ -83,7 +83,7 @@ abstract class WestManga : KeiSource() {
         val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
         require(path.size == 3) { "Migrate from $name to $name" }
         val slug = path[1]
-        val api = "$apiUrl/api/comic/$slug".toHttpUrl()
+        val api = "$baseUrl/api/comic/$slug".toHttpUrl()
 
         val data = client.get(api, apiHeaders(api)).parseAs<Data<Manga>>().data
         return SMangaUpdate(
@@ -102,10 +102,11 @@ abstract class WestManga : KeiSource() {
         require(path.isNotEmpty()) { "Refresh Chapter List" }
         val slug = path.first()
 
-        val url = "$apiUrl/api/v/$slug".toHttpUrl()
+        val url = "$baseUrl/api/v/$slug".toHttpUrl()
         val data = client.get(url, apiHeaders(url)).parseAs<Data<ImageList>>().data
         return data.images.mapIndexed { idx, img ->
-            Page(idx, imageUrl = img)
+            val imgUrl = if (img.startsWith("http")) img else "$baseUrl$img"
+            Page(idx, imageUrl = imgUrl)
         }
     }
 
@@ -119,7 +120,11 @@ abstract class WestManga : KeiSource() {
 
     private suspend fun bearerToken(): String? {
         if (tokenChecked) return tokenCache
-        tokenCache = runCatching { getLocalStorage(baseUrl, "access_token") }.getOrNull()?.takeIf { it.isNotBlank() }
+        tokenCache = runCatching {
+            getLocalStorage(baseUrl, "global-app-storage")?.let {
+                it.parseAs<GlobalAppStorage>().state.session.accsessToken?.takeIf { token -> token.isNotBlank() }
+            }
+        }.getOrNull()
         tokenChecked = true
         return tokenCache
     }

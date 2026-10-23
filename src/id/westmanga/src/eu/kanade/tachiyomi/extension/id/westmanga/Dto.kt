@@ -31,11 +31,13 @@ class BrowseManga(
     private val slug: String,
     private val cover: String? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
         // old urls compatibility
         url = "/manga/$slug/"
         title = this@BrowseManga.title
-        thumbnail_url = this@BrowseManga.cover
+        thumbnail_url = this@BrowseManga.cover?.let {
+            if (it.startsWith("http")) it else "$baseUrl$it"
+        }
     }
 }
 
@@ -57,7 +59,9 @@ class Manga(
         // old urls compatibility
         url = "/manga/$slug/"
         title = this@Manga.title
-        thumbnail_url = this@Manga.cover
+        thumbnail_url = this@Manga.cover?.let {
+            if (it.startsWith("http")) it else "$baseUrl$it"
+        }
         author = this@Manga.author
         status = when (this@Manga.status?.lowercase()) {
             "ongoing" -> SManga.ONGOING
@@ -124,4 +128,19 @@ class ApiGenre(
     val id: Int,
     val name: String,
     val slug: String,
+)
+
+@Serializable
+class GlobalAppStorage(
+    val state: GlobalAppState,
+)
+
+@Serializable
+class GlobalAppState(
+    val session: GlobalAppSession,
+)
+
+@Serializable
+class GlobalAppSession(
+    val accsessToken: String? = null,
 )
