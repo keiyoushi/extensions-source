@@ -123,10 +123,8 @@ abstract class WestManga : KeiSource() {
         if (tokenChecked) return tokenCache
         tokenCache = runCatching {
             getLocalStorage(baseUrl, "global-app-storage")?.let {
-                runCatching {
-                    it.parseAs<GlobalAppStorage>().state.session.accsessToken?.takeIf { token -> token.isNotBlank() }
-                }.getOrNull()
-            } ?: getLocalStorage(baseUrl, "access_token")?.takeIf { it.isNotBlank() }
+                it.parseAs<GlobalAppStorage>().state.session.accsessToken?.takeIf { token -> token.isNotBlank() }
+            }
         }.getOrNull()
         tokenChecked = true
         return tokenCache
