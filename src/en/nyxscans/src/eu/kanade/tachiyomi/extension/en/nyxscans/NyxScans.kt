@@ -4,4 +4,6 @@ import eu.kanade.tachiyomi.multisrc.iken.Iken
 import keiyoushi.annotation.Source
 
 @Source
-abstract class NyxScans : Iken()
+abstract class NyxScans : Iken() {
+    override val hideNovelsListedAsComics = true
+}
