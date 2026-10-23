@@ -155,7 +155,7 @@ abstract class Hentairead : KeiSource() {
         val document = client.get(resolveUrl(manga.url)).asJsoup()
         val collectionsUrl = document.select("#mangaCollection a").first()?.absUrl("href")
         val details = if (fetchDetails) {
-            mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup()).apply { url = manga.url }
+            mangaDetailsParse(document).apply { url = manga.url }
         } else {
             manga
         }
