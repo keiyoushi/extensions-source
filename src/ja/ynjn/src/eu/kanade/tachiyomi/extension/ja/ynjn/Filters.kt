@@ -7,8 +7,8 @@ class CategoryFilter :
         "Category",
         arrayOf(
             // Label
-            Triple("ウルトラジャンプ", "LABEL", "9"),
-            Triple("ヤングジャンプ", "LABEL", "10"),
+            Triple("ウルトラジャンプ", "LABEL", "12"),
+            Triple("ヤングジャンプ", "LABEL", "1"),
             Triple("グランドジャンプ", "LABEL", "15"),
             Triple("ヤンジャン＋オリジナル作品", "LABEL", "17"),
             Triple("異世界ヤンジャン", "LABEL", "6"),

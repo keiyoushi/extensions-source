@@ -78,7 +78,7 @@ abstract class YnJn :
                 addQueryParameter("id", category.value)
             }
             addQueryParameter("page", page.toString())
-            addQueryParameter("sort", "POPULARITY")
+            addQueryParameter("sort", "TITLE_SORT_POPULARITY")
         }.build()
 
         val result = client.get(url).parseAs<DataResponse>().data
