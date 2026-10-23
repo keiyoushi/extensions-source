@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Softkomik"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -14,8 +14,4 @@ keiyoushi {
         lang = "id"
         baseUrl = "https://softkomik.app"
     }
-}
-
-dependencies {
-    implementation(project(":lib:cryptoaes"))
 }

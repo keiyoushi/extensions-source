@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Sunshine Butterfly Scans"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -19,9 +19,4 @@ keiyoushi {
     deeplink {
         path("/projects")
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cryptoaes"))
 }

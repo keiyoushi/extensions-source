@@ -147,4 +147,19 @@ class CryptoTest {
             "what do ya want for nothing?".hmacSha256("Jefe".encodeToByteArray()).toHexString(),
         )
     }
+
+    @Test
+    fun testEvpBytesToKey() {
+        // openssl enc -aes-128-cbc -md md5 -S 0102030405060708 -pass pass:secret -P
+        val (key, iv) = evpBytesToKey("secret".encodeToByteArray(), "0102030405060708".decodeHex(), keyLen = 16, ivLen = 16)
+        assertEquals("c9e5a1bd216dbe1317e230cef48f38ee", key.toHexString())
+        assertEquals("7f0e17ad64022144bccec4a1aa2879ab", iv.toHexString())
+    }
+
+    @Test
+    fun testCryptoJsDecrypt() {
+        // printf 'Hello, CryptoJS!' | openssl enc -aes-256-cbc -md md5 -pass pass:secret -base64
+        val payload = java.util.Base64.getDecoder().decode("U2FsdGVkX18ks2hXA0V9h0iEJt3uLcXhs5HgKM25zFZvk5XdG2Hw+YjirlLB9sFo")
+        assertEquals("Hello, CryptoJS!", payload.cryptoJsDecrypt("secret").decodeToString())
+    }
 }
