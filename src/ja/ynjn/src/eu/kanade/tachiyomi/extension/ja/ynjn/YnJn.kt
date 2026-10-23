@@ -16,9 +16,11 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.time.LocalDate
@@ -89,16 +91,24 @@ abstract class YnJn :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/title/${manga.url}"
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != domain || url.pathSegments.firstOrNull() !in setOf("title", "viewer")) return null
+        val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
+        return fetchBook(id.toString()).apply { initialized = true }
+    }
+
+    private suspend fun fetchBook(titleId: String): SManga = client.get("$apiUrl/book/$titleId").parseAs<TitleDetails>().data.book.toSManga()
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, true)
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/book/${manga.url}").parseAs<TitleDetails>().data.book.toSManga()
+            fetchBook(manga.url)
         }
 
         val chapterList = async {
@@ -137,15 +147,19 @@ abstract class YnJn :
         }
     }
 
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/labels").parseAs<LabelsResponse>().data.labels.toJsonElement()
+
     override fun getFilterList(data: JsonElement?) = FilterList(
-        CategoryFilter(),
+        CategoryFilter(data?.parseAs<List<Label>>().orEmpty()),
     )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_LOCKED_PREF_KEY
             title = "Hide Locked Chapters"
-            setDefaultValue(false)
+            setDefaultValue(true)
         }.also(screen::addPreference)
     }
 

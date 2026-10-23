@@ -59,6 +59,22 @@ class MangaDetails(
 }
 
 @Serializable
+class LabelsResponse(
+    val data: LabelsData,
+)
+
+@Serializable
+class LabelsData(
+    val labels: List<Label>,
+)
+
+@Serializable
+class Label(
+    val id: Int,
+    val name: String,
+)
+
+@Serializable
 class TitleDetails(
     val data: TitleData,
 )

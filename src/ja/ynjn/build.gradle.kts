@@ -14,4 +14,9 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://ynjn.jp"
     }
+
+    deeplink {
+        path("/title/..*")
+        path("/viewer/..*")
+    }
 }
