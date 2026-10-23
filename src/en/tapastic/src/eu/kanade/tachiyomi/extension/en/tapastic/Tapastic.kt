@@ -189,6 +189,7 @@ abstract class Tapastic :
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
         var page = 1
         val chapters = mutableListOf<SChapter>()
+        val showEpisodeNumber = showEpisodeNumberPref
         do {
             val url = "$baseUrl${manga.url}/episodes".toHttpUrl().newBuilder()
                 .addQueryParameter("page", (page++).toString())
@@ -202,7 +203,7 @@ abstract class Tapastic :
             val dto = response.parseAs<DataWrapper<ChapterListDto>>()
             chapters += dto.data.episodes
                 .filter { it.isPaywalledVisible() && it.isScheduledVisible() }
-                .map(ChapterDto::toSChapter)
+                .map { it.toSChapter(showEpisodeNumber) }
         } while (dto.data.hasNextPage())
 
         return chapters
@@ -284,6 +285,13 @@ abstract class Tapastic :
                 true
             }
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_EPISODE_NUMBER_KEY
+            title = "Show episode number in chapter name"
+            summary = "Prefix chapter names with their episode number (e.g. \"1 - Title\"). Refresh the chapter list to apply. Existing downloads won't be recognized after toggling this."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     private var showLockedChapterPref: Boolean get() =
@@ -309,10 +317,15 @@ abstract class Tapastic :
                 .putBoolean(SHOW_AUTHORS_NOTES_KEY, value)
                 .apply()
         }
+
+    private val showEpisodeNumberPref: Boolean
+        get() = preferences.getBoolean(SHOW_EPISODE_NUMBER_KEY, false)
+
     companion object {
         private const val LOCKED_CHAPTER_VISIBILITY_PREF = "lockedChapterVisibilityPref"
         private const val SCHEDULED_CHAPTER_VISIBILITY_PREF = "scheduledChapterVisibilityPref"
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
+        private const val SHOW_EPISODE_NUMBER_KEY = "showEpisodeNumber"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:105.0) Gecko/20100101 Firefox/105.0"
     }
 }
