@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import keiyoushi.lib.imagedecoder.ImageDecoder
 import keiyoushi.utils.readIntBigEndian
+import keiyoushi.utils.sha256
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -13,7 +14,6 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import java.io.IOException
-import java.security.MessageDigest
 
 /**
  * Reverses the per-strip shuffle the reader applies to every page image.
@@ -117,7 +117,7 @@ class ScrambleInterceptor : Interceptor {
     }
 
     private fun seedFromKey(key: String): UInt {
-        val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
+        val digest = key.sha256()
         return digest.readIntBigEndian(0).toUInt()
     }
 

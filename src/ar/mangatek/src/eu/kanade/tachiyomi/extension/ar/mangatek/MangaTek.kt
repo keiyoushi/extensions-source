@@ -16,6 +16,7 @@ import keiyoushi.utils.aesGcm
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.JsonArray
@@ -30,7 +31,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.security.MessageDigest
 
 @Source
 abstract class MangaTek : KeiSource() {
@@ -199,7 +199,7 @@ abstract class MangaTek : KeiSource() {
     }
 
     private suspend fun unlockOverlay(chapterId: Long, unlockToken: String): Pair<OverlayData, Int?>? {
-        val proof = "$UNLOCK_PROOF_SALT|$unlockToken|$chapterId".sha256Hex()
+        val proof = "$UNLOCK_PROOF_SALT|$unlockToken|$chapterId".sha256().toHexString()
         val payload = buildJsonObject {
             put("chapterId", chapterId)
             put("token", unlockToken)
@@ -215,10 +215,6 @@ abstract class MangaTek : KeiSource() {
         val overlayData = decrypt(overlay, key)
         return overlayData to unlockResponse.overlayPageOffset
     }
-
-    private fun String.sha256Hex(): String = MessageDigest.getInstance("SHA-256")
-        .digest(toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
 
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")

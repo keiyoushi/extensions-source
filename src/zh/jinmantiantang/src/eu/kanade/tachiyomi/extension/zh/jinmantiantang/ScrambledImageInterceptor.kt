@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
+import keiyoushi.utils.md5
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -11,7 +12,6 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import java.io.ByteArrayInputStream
 import java.io.InputStream
-import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
 import kotlin.math.floor
 
@@ -73,8 +73,7 @@ object ScrambledImageInterceptor : Interceptor {
     private const val SCRAMBLE_ID = 220980
 
     private fun md5LastCharCode(input: String): Int {
-        val md5 = MessageDigest.getInstance("MD5")
-        val lastByte = md5.digest(input.toByteArray()).last().toInt() and 0xFF
+        val lastByte = input.md5().last().toInt() and 0xFF
         return lastByte.toString(16).last().code
     }
 

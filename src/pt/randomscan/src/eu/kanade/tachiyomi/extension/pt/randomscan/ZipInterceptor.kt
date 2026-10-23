@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
 import keiyoushi.lib.imagedecoder.ImageDecoder
+import keiyoushi.utils.sha256
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -16,7 +17,6 @@ import okio.cipherSource
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
@@ -24,7 +24,7 @@ import javax.crypto.spec.SecretKeySpec
 
 internal fun Response.decrypt(key: String, prefix: Long = 16): Response {
     val source = body.source()
-    val keyHash = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
+    val keyHash = key.sha256()
     val iv = IvParameterSpec(source.readByteArray(prefix))
 
     val cipher = Cipher.getInstance("AES/CTR/NoPadding")

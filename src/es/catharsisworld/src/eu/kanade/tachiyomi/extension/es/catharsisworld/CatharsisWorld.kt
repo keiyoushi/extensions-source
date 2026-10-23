@@ -20,6 +20,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
@@ -35,8 +36,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import java.util.concurrent.ConcurrentHashMap
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
@@ -168,7 +167,7 @@ abstract class CatharsisWorld : KeiSource() {
         }
         val timestamp = System.currentTimeMillis().toString()
         val nonce = generateNonce()
-        val signature = hmacSha256("$timestamp:$nonce:${request.method}", HMAC_KEY)
+        val signature = "$timestamp:$nonce:${request.method}".hmacSha256(HMAC_KEY.encodeToByteArray()).toHexString()
         val newRequest = request.newBuilder()
             .addHeader("x-catharsis-time", timestamp)
             .addHeader("x-catharsis-nonce", nonce)
@@ -180,12 +179,6 @@ abstract class CatharsisWorld : KeiSource() {
     private fun generateNonce(): String {
         val chars = ('a'..'z') + ('A'..'Z') + ('0'..'9')
         return (1..16).map { chars[Random.nextInt(chars.size)] }.joinToString("")
-    }
-
-    private fun hmacSha256(data: String, key: String): String {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(key.encodeToByteArray(), "HmacSHA256"))
-        return mac.doFinal(data.encodeToByteArray()).toHexString()
     }
 
     private fun pageInterceptor(chain: Interceptor.Chain): Response {

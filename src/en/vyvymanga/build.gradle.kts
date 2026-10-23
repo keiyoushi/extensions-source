@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "VyvyManga"
-    versionCode = 44
+    versionCode = 45
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
