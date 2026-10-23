@@ -43,10 +43,29 @@ data class ChapterPageImagesDto(
 @Serializable
 data class ChapterPageDataDto(
     @SerialName("_id") val id: String,
-    val imageSrc: List<String> = emptyList(),
     val storageInter2: Boolean? = false,
     val backBS3: Boolean? = false,
-    @SerialName("created_at") val createdAt: String,
+)
+
+@Serializable
+class EncryptedPropsDto(
+    @SerialName("_stk") val stk: String,
+)
+
+@Serializable
+class MangaPropsDto(
+    val data: MangaDetailsDto,
+)
+
+@Serializable
+class ChapterPropsDto(
+    val data: ChapterPropsDataDto,
+    val imgList: List<String> = emptyList(),
+)
+
+@Serializable
+class ChapterPropsDataDto(
+    val data: ChapterPageDataDto,
 )
 
 @Serializable
