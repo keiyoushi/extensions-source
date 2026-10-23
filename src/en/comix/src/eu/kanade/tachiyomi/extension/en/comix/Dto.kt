@@ -20,6 +20,7 @@ const val CHAPTER_LIST_DEDUPLICATED_MEMO = "chapterListDeduplicated"
 const val CHAPTER_LIST_BLACKLIST_MEMO = "chapterListBlacklist"
 const val CHAPTER_LIST_COMPLETE_MEMO = "chapterListComplete"
 const val CHAPTER_LIST_FETCHED_AT_MEMO = "chapterListFetchedAt"
+const val CHAPTER_DATA_VERSION_MEMO = "chapterDataVersion"
 
 @Serializable
 class Term(

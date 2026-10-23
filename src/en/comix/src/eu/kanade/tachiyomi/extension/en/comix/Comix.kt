@@ -390,6 +390,7 @@ abstract class Comix :
             preferences.fetchChaptersUntilKnown() &&
             listMemo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull == deduplicateChapters &&
             listMemo[CHAPTER_LIST_BLACKLIST_MEMO]?.string == blacklistSignature &&
+            listMemo[CHAPTER_DATA_VERSION_MEMO]?.int == CHAPTER_DATA_VERSION &&
             listMemo[CHAPTER_LIST_COMPLETE_MEMO]?.booleanOrNull != false
         val knownIds = if (fetchUntilKnown) chapters.mapNotNull { it.chapterId() } else emptyList()
 
@@ -429,6 +430,7 @@ abstract class Comix :
                         memo.forEach { (key, value) -> if (key != CHAPTER_LIST_FETCHED_AT_MEMO) put(key, value) }
                         put(CHAPTER_LIST_DEDUPLICATED_MEMO, deduplicateChapters)
                         put(CHAPTER_LIST_BLACKLIST_MEMO, blacklistSignature)
+                        put(CHAPTER_DATA_VERSION_MEMO, CHAPTER_DATA_VERSION)
                         put(CHAPTER_LIST_COMPLETE_MEMO, chapterList.complete)
                         if (chapterList.complete) put(CHAPTER_LIST_FETCHED_AT_MEMO, fetchStartedAt)
                     }
@@ -544,10 +546,10 @@ abstract class Comix :
                         id: ch.id,
                         url: ch.url,
                         number: ch.number,
-                        name: '',
-                        votes: 0,
+                        name: ch.name,
+                        votes: ch.votes,
                         createdAtFormatted: dateOf(ch.text),
-                        group: ch.group ? { name: ch.group } : null,
+                        group: ch.group,
                         isOfficial: false
                     })),
                     complete: !!result.complete,
@@ -994,6 +996,7 @@ abstract class Comix :
         private const val MAX_CHAPTER_PAGES = 1000
         private val chapterListPacer = RequestPacer(minGapMs = 2500, maxGapMs = 5000)
         private const val OFFICIAL_GROUP_ID = 10702
+        private const val CHAPTER_DATA_VERSION = 1
         private const val TAG_ID_CACHE_SIZE = 50
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
