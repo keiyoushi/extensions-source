@@ -81,7 +81,7 @@ class TitleDetails(
 
 @Serializable
 class TitleData(
-    val book: TitleBook,
+    val book: TitleBook?,
 )
 
 @Serializable

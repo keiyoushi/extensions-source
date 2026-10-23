@@ -94,10 +94,9 @@ abstract class YnJn :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != domain || url.pathSegments.firstOrNull() !in setOf("title", "viewer")) return null
         val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        return fetchBook(id.toString()).apply { initialized = true }
+        return client.get("$apiUrl/book/$id", ensureSuccess = false).parseAs<TitleDetails>()
+            .data.book?.toSManga()?.apply { initialized = true }
     }
-
-    private suspend fun fetchBook(titleId: String): SManga = client.get("$apiUrl/book/$titleId").parseAs<TitleDetails>().data.book.toSManga()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -108,7 +107,7 @@ abstract class YnJn :
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, true)
         val details = async {
             if (!fetchDetails) return@async manga
-            fetchBook(manga.url)
+            client.get("$apiUrl/book/${manga.url}").parseAs<TitleDetails>().data.book!!.toSManga()
         }
 
         val chapterList = async {
@@ -137,12 +136,7 @@ abstract class YnJn :
             .addQueryParameter("episodeId", chapter.url)
             .build()
 
-        val pages = client.get(url).parseAs<ViewerDetails>().data.pages
-        if (pages.isEmpty()) {
-            throw Exception("Log in via WebView and purchase this chapter to read.")
-        }
-
-        return pages.mapNotNull { it.mangaPage }.map {
+        return client.get(url).parseAs<ViewerDetails>().data.pages.mapNotNull { it.mangaPage }.map {
             Page(it.pageNumber, imageUrl = "${it.pageImageUrl}#scramble")
         }
     }
