@@ -111,43 +111,46 @@
         return anchor;
     };
 
-    const cardTitle = (card, anchor, img) => {
-        const alt = img ? (img.getAttribute("alt") || "").trim() : "";
-        if (alt) return alt;
-        const own = textOf(anchor);
-        if (own) return own;
-        let scope = card;
-        for (let depth = 0; scope && depth < 4; depth++) {
-            const heading = scope.querySelector("h1, h2, h3, h4");
-            if (heading && textOf(heading)) return textOf(heading);
-            scope = scope.parentElement;
-            if (scope) {
-                const mangaLinks = Array.from(scope.querySelectorAll("a[href]"))
-                    .filter((x) => parseMangaPath(pathOf(x.getAttribute("href") || "")));
-                if (mangaLinks.length > 1) break;
-            }
+    const bestTitle = (entry) => {
+        const candidates = [];
+        for (const anchor of entry.anchors) {
+            const img = anchor.querySelector("img");
+            if (img) candidates.push((img.getAttribute("alt") || "").trim());
+            candidates.push(textOf(anchor));
+            candidates.push((anchor.getAttribute("aria-label") || "").trim());
+            candidates.push((anchor.getAttribute("title") || "").trim());
         }
-        const text = card ? textOf(card) : "";
-        return text.length > 80 ? text.slice(0, 80).trim() : text;
+        const usable = candidates.filter((t) => t && t.length >= 2 && t.length <= 140);
+        if (usable.length) return usable[0];
+        const slug = (entry.url.split("/").pop() || "").replace(/^[a-z0-9]+-/i, "");
+        const words = slug.replace(/-/g, " ").trim();
+        return words ? words.replace(/\b\w/g, (c) => c.toUpperCase()) : "";
     };
 
     const collect = () => {
-        const seen = new Map();
+        const byHid = new Map();
         for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
             const path = pathOf(anchor.getAttribute("href") || "");
             const manga = parseMangaPath(path);
             if (!manga || parseChapterPath(path)) continue;
-            if (seen.has(manga.hid)) continue;
-            const card = cardRoot(anchor);
-            const img = card ? card.querySelector("img") : null;
-            seen.set(manga.hid, {
-                hid: manga.hid,
-                url: path,
-                title: cardTitle(card, anchor, img),
-                cover: img ? imageSrc(img) : null,
-            });
+            let entry = byHid.get(manga.hid);
+            if (!entry) {
+                entry = { hid: manga.hid, url: path, anchors: [], cover: null };
+                byHid.set(manga.hid, entry);
+            }
+            entry.anchors.push(anchor);
+            if (!entry.cover) {
+                const card = cardRoot(anchor);
+                const img = card ? card.querySelector("img") : null;
+                if (img) entry.cover = imageSrc(img);
+            }
         }
-        return Array.from(seen.values());
+        return Array.from(byHid.values()).map((entry) => ({
+            hid: entry.hid,
+            url: entry.url,
+            title: bestTitle(entry),
+            cover: entry.cover,
+        }));
     };
 
     const harvest = async () => {
@@ -165,10 +168,13 @@
             items = await waitForStable(collect,
                 { timeoutMs: Math.min(OPTIONS.timeoutMs, 8000), intervalMs: OPTIONS.pollMs, stableRounds: OPTIONS.stableRounds }) || items;
         }
+        const lateData = readInitialData(document);
+        const lateList = lateData ? findListParams(lateData) : null;
+        const finalList = lateList || list;
         return {
             page: "browse",
-            listParams: list ? list.params : null,
-            perPage: list ? list.perPage : null,
+            listParams: finalList ? finalList.params : null,
+            perPage: finalList ? finalList.perPage : null,
             count: items.length,
             items,
         };

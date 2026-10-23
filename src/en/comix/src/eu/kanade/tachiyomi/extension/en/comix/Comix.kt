@@ -251,7 +251,7 @@ abstract class Comix :
                                     poster: item.cover ? { small: item.cover, medium: item.cover, large: item.cover } : null,
                                 }));
                                 const page = (result.listParams && result.listParams.page) || 1;
-                                const perPage = result.perPage || (result.listParams && result.listParams.limit) || items.length;
+                                const perPage = result.perPage || (result.listParams && result.listParams.limit) || 28;
                                 const hasNext = items.length > 0 && items.length >= perPage;
                                 const payload = { result: { items: items, meta: { page: page, lastPage: hasNext ? page + 1 : page, hasNext: hasNext } } };
                                 window[payloadKey] = JSON.stringify(payload);
@@ -534,9 +534,10 @@ abstract class Comix :
                 window.__comixHarvestOptions = {
                     timeoutMs: 60000,
                     settleMs: 6000,
-                    maxRounds: 60,
+                    maxRounds: 1000,
                     stopAtIds: ${knownIds.joinToString(",", "[", "]")}
                 };
+                window.__comixNativeTap = function (x, y) { try { window.$touchName([x, y]); } catch (e) {} };
                 ${asset("harvest_chapters.js")}
                 const wrap = (result, queries) => ({
                     chapters: (result.chapters || []).map(ch => ({

@@ -78,7 +78,7 @@
     const textOf = (el) => (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
 
     const OPTIONS = Object.assign(
-        { timeoutMs: 45000, settleMs: 5000, pollMs: 250, maxRounds: 40, stopAtIds: [] },
+        { timeoutMs: 45000, settleMs: 5000, pollMs: 100, maxRounds: 40, stopAtIds: [] },
         window.__comixHarvestOptions || {});
     const stopAt = new Set((OPTIONS.stopAtIds || []).map(Number));
 
@@ -100,14 +100,42 @@
         const own = textOf(anchor);
         if (own) rest = rest.split(own).join(" ");
         rest = rest.replace(new RegExp("chapter\\s*" + number, "i"), " ");
-        rest = rest.replace(/\b\d+\s*(?:seconds?|mins?|minutes?|hours?|days?|weeks?|months?|years?)\s*ago\b/gi, " ");
+        rest = rest.replace(/·\s*\d+\s*·/g, " ");
+        rest = rest.replace(/\b\d+\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?|mos?|years?|yrs?|[smhdwy])\s*ago\b/gi, " ");
         rest = rest.replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ");
         rest = rest.replace(/\s+/g, " ").trim();
         return rest.length >= 2 && rest.length <= 60 && /[a-z]/i.test(rest) ? rest : null;
     };
 
-    const findMoreControl = () => {
-        const controls = Array.from(document.querySelectorAll("button, a[href], [role='button']"));
+    const findMoreControl = (scope) => {
+        const inOrder = Array.from(document.querySelectorAll("a[href], button, [role='button']"));
+        const orderOf = new Map(inOrder.map((el, i) => [el, i]));
+        let lastAnchorIdx = -1;
+        for (const el of inOrder) {
+            const href = el.getAttribute("href");
+            if (href && parseChapterPath(pathOf(href))) lastAnchorIdx = orderOf.get(el);
+        }
+        const currents = inOrder.filter((el) => (orderOf.get(el) ?? -1) > lastAnchorIdx &&
+            (el.getAttribute("aria-current") === "page" || /\bis-active\b/.test(String(el.className || ""))) &&
+            /^\d{1,4}$/.test((textOf(el) || "").trim()));
+        if (currents.length) {
+            const cur = currents[0];
+            const curNum = parseInt((textOf(cur) || "").trim(), 10);
+            let box = cur.parentElement;
+            for (let d = 0; d < 3 && box && box.tagName !== "NAV"; d++) box = box.parentElement;
+            const boxEls = Array.from((box || cur.parentElement || document)
+                .querySelectorAll("button, a[href], [role='button']"));
+            let nextBtn = null;
+            let numbered = null;
+            for (const el of boxEls) {
+                if (el.disabled || el.getAttribute("aria-disabled") === "true") continue;
+                const label = (textOf(el) || el.getAttribute("aria-label") || "").trim();
+                if (/next/i.test(label)) nextBtn = el;
+                else if (/^\d{1,4}$/.test(label) && parseInt(label, 10) === curNum + 1) numbered = el;
+            }
+            return nextBtn || numbered || null;
+        }
+        const controls = Array.from((scope || document).querySelectorAll("button, a[href], [role='button']"));
         const scored = [];
         for (const el of controls) {
             if (el.disabled) continue;
@@ -115,16 +143,30 @@
             if (el.getAttribute("aria-disabled") === "true") continue;
             const href = el.getAttribute("href");
             if (href && parseChapterPath(pathOf(href))) continue;
+            if (/desc/i.test(String(el.className || ""))) continue;
             const label = (textOf(el) || el.getAttribute("aria-label") || "").trim();
             if (!label) continue;
+            const afterList = lastAnchorIdx < 0 || (orderOf.get(el) ?? -1) > lastAnchorIdx;
             let score = -1;
-            if (/load\s*more|show\s*more|view\s*more|more\s+chapters/i.test(label)) score = 3;
-            else if (/^next\b|next\s*(page)?\s*[›»→>]*$/i.test(label)) score = 2;
+            if (/next/i.test(label)) score = afterList ? 5 : 2;
+            else if (/load\s*more|show\s*more|view\s*more|more\s+chapters/i.test(label)) score = afterList ? 4 : -1;
             else if (/^\d{1,4}$/.test(label)) score = 1;
             if (score >= 0) scored.push({ el, score });
         }
         scored.sort((a, b) => b.score - a.score);
         return scored.length ? scored[0].el : null;
+    };
+
+    const describe = (el) => el ? {
+        tag: el.tagName,
+        cls: String(el.className || "").slice(0, 60),
+        label: (textOf(el) || el.getAttribute("aria-label") || "").trim().slice(0, 40),
+    } : null;
+
+    const reportedTotal = () => {
+        if (!document.body) return null;
+        const m = /Showing\s+\d+\s+to\s+\d+\s+of\s+([\d,]+)\s+items/i.exec(textOf(document.body));
+        return m ? parseInt(m[1].replace(/,/g, ""), 10) : null;
     };
 
     const harvest = async () => {
@@ -159,31 +201,112 @@
         await waitFor(() => (absorb(), byId.size > 0) || null,
             { timeoutMs: OPTIONS.timeoutMs, intervalMs: OPTIONS.pollMs });
 
+        const sectionRoot = () => {
+            const first = Array.from(document.querySelectorAll("a[href]"))
+                .find((a) => {
+                    const c = parseChapterPath(pathOf(a.getAttribute("href") || ""));
+                    return c && (!hid || c.hid === hid);
+                });
+            if (!first) return document.body;
+            const rendered = Array.from(document.querySelectorAll("a[href]"))
+                .filter((a) => {
+                    const c = parseChapterPath(pathOf(a.getAttribute("href") || ""));
+                    return c && (!hid || c.hid === hid);
+                }).length;
+            let root = first;
+            for (let depth = 0; depth < 12 && root.parentElement; depth++) {
+                const parent = root.parentElement;
+                const inside = Array.from(parent.querySelectorAll("a[href]"))
+                    .filter((a) => {
+                        const c = parseChapterPath(pathOf(a.getAttribute("href") || ""));
+                        return c && (!hid || c.hid === hid);
+                    }).length;
+                if (inside >= rendered) root = parent;
+                else break;
+            }
+            return root;
+        };
+
+        const activate = async (el, entry) => {
+            const r0 = el.getBoundingClientRect();
+            const inView = r0.width > 0 && r0.top >= 0 && r0.bottom <= window.innerHeight &&
+                r0.left >= 0 && r0.right <= window.innerWidth;
+            if (!inView) {
+                try { el.scrollIntoView({ block: "center" }); } catch (e) {}
+                await sleep(350);
+            } else {
+                await sleep(60);
+            }
+            let tapped = false;
+            if (typeof window.__comixNativeTap === "function") {
+                const r = el.getBoundingClientRect();
+                if (entry) {
+                    entry.rect = [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
+                    const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                    entry.atPoint = describe(at);
+                }
+                if (r.width > 0 && r.height > 0) {
+                    try {
+                        window.__comixNativeTap(r.left + r.width / 2, r.top + r.height / 2);
+                        tapped = true;
+                    } catch (e) {}
+                }
+            }
+            if (!tapped) {
+                try { el.click(); } catch (e) {}
+            }
+            return tapped;
+        };
+
+        const diag = [];
         let rounds = 0;
         let complete = false;
         let stoppedAtKnown = reachedKnown();
         while (!stoppedAtKnown && rounds < OPTIONS.maxRounds) {
-            const control = findMoreControl();
+            let control = findMoreControl(sectionRoot());
+            if (!control) control = findMoreControl(document);
             if (!control) {
                 complete = byId.size > 0;
                 break;
             }
             const before = byId.size;
-            try { control.click(); } catch (e) { break; }
             rounds++;
-            const grew = await waitFor(() => (absorb(), byId.size > before) || null,
+            const entry = {
+                round: rounds,
+                control: describe(control),
+                before,
+                tapBridge: typeof window.__comixNativeTap === "function",
+                total: reportedTotal(),
+            };
+            const usedTap = await activate(control, entry);
+            entry.method = usedTap ? "tap" : "click";
+            let grew = await waitFor(() => (absorb(), byId.size > before) || null,
                 { timeoutMs: OPTIONS.settleMs, intervalMs: OPTIONS.pollMs });
+            if (!grew && !reachedKnown()) {
+                await activate(control, null);
+                grew = await waitFor(() => (absorb(), byId.size > before) || null,
+                    { timeoutMs: OPTIONS.settleMs, intervalMs: OPTIONS.pollMs });
+            }
+            if (!grew && !reachedKnown()) {
+                try { control.click(); } catch (e) {}
+                grew = await waitFor(() => (absorb(), byId.size > before) || null,
+                    { timeoutMs: OPTIONS.settleMs, intervalMs: OPTIONS.pollMs });
+            }
+            entry.after = byId.size;
+            entry.url = location.href;
+            diag.push(entry);
             if (reachedKnown()) {
                 stoppedAtKnown = true;
                 break;
             }
             if (!grew) {
-
                 complete = byId.size > 0;
                 break;
             }
         }
 
+        const total = reportedTotal();
+        if (total != null && byId.size < total && !stoppedAtKnown) complete = false;
         const chapters = Array.from(byId.values())
             .sort((a, b) => (b.number - a.number) || (b.id - a.id));
         return {
@@ -194,6 +317,8 @@
             complete,
             stoppedAtKnown,
             rounds,
+            reportedTotal: total,
+            diag: diag.slice(0, 12),
             chapters,
         };
     };
