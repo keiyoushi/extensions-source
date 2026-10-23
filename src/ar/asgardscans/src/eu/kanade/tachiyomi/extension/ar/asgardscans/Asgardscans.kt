@@ -46,16 +46,22 @@ abstract class Asgardscans : KeiSource() {
         addQueryParameter("q", query)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
+        return getMangaUpdate(SManga.create().apply { this.url = "/manga/$slug" }, emptyList(), true, false).manga
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}").asJsoup()
 
-        val updatedManga = if (fetchDetails) parseDetails(document, manga) else manga
-        val updatedChapters = if (fetchChapters) parseChapters(document) else chapters
+        val updatedManga = parseDetails(document, manga)
+        val updatedChapters = parseChapters(document)
 
         return SMangaUpdate(updatedManga, updatedChapters)
     }
@@ -109,7 +115,7 @@ abstract class Asgardscans : KeiSource() {
         val script = document.select("script:not([src])")
             .map { it.data() }
             .firstOrNull { "pages:" in it && "/api/public/page/" in it }
-            ?: throw Exception("Chapter pages not found")
+            ?: return emptyList()
 
         return pageRegex.findAll(script)
             .mapIndexed { i, m ->
