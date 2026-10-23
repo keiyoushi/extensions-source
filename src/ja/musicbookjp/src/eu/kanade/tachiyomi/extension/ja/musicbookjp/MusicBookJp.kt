@@ -18,6 +18,7 @@ import keiyoushi.utils.aesCbc
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonRequestBody
@@ -27,7 +28,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.io.IOException
-import java.security.MessageDigest
 
 @Source
 abstract class MusicBookJp :
@@ -168,7 +168,7 @@ abstract class MusicBookJp :
     }
 
     private fun String.decrypt(key: String): String {
-        val md5Key = MessageDigest.getInstance("MD5").digest(key.toByteArray())
+        val md5Key = key.md5()
         return Base64.decode(this, Base64.DEFAULT).aesDecrypt(aesCbc(md5Key, IV)).decodeToString()
     }
 

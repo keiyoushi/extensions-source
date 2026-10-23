@@ -17,14 +17,34 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 
 @Source
 abstract class CapibaraTraductor : KeiSource() {
 
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { it.host == baseUrlHost }
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(3) { it.host == baseUrlHost }
+        addInterceptor(::authorizationInterceptor)
+    }
+
+    private fun authorizationInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        val token = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+            .firstOrNull { it.name == "token" }
+
+        if (token == null) return chain.proceed(request)
+
+        val newRequest = request.newBuilder().apply {
+            header("Authorization", "Bearer ${token.value}")
+        }.build()
+
+        return chain.proceed(newRequest)
+    }
 
     private fun getScanHeaders(organizationSlug: String): Headers = headers.newBuilder()
         .add("x-organization", organizationSlug)
@@ -142,17 +162,18 @@ abstract class CapibaraTraductor : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val (seriesSlug, organizationSlug) = manga.url.split("/", limit = 2)
-        val result = client.get("$baseUrl/api/manga-custom/$seriesSlug", getScanHeaders(organizationSlug))
+        val seriesPath = if (manga.memo["jointSlug"] != null) "joint" else "manga-custom"
+        val result = client.get("$baseUrl/api/$seriesPath/$seriesSlug", getScanHeaders(organizationSlug))
             .parseAs<Data<SeriesDto>>()
             .data
 
         val chapterList = result.chapters
             ?.filter { it.isUnreleased.not() }
-            ?.map { it.toSChapter(result.manga.slug, result.organization.slug) }
+            ?.map { it.toSChapter(seriesSlug, organizationSlug) }
             ?.filter { it.date_upload < System.currentTimeMillis() }
             ?: emptyList()
 
-        return SMangaUpdate(result.toSMangaDetails(), chapterList)
+        return SMangaUpdate(result.toSMangaDetails(organizationSlug), chapterList)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -164,7 +185,9 @@ abstract class CapibaraTraductor : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (chapterSlug, seriesSlug, organizationSlug) = chapter.url.split("/", limit = 3)
 
-        val result = client.get("$baseUrl/api/manga-custom/$seriesSlug/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
+        val seriesPath = if (chapter.memo["jointId"] != null) "joint" else "manga-custom"
+
+        val result = client.get("$baseUrl/api/$seriesPath/$seriesSlug/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
             .parseAs<Data<List<PageDto>>>()
         return result.data
             .filterNot { "/promo/" in it.imageUrl }

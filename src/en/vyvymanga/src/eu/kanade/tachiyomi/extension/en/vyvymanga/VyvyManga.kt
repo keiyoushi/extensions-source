@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
@@ -19,7 +20,6 @@ import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
-import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -135,10 +135,7 @@ abstract class VyvyManga : KeiSource() {
                 val chapterDate = parseChapterDate(element.selectFirst("> p")?.text())
                 val title = element.selectFirst("span")!!.text()
                 // Avoid the dynamic URLs
-                url = MessageDigest.getInstance("MD5")
-                    .digest("$chapterDate:$title".toByteArray())
-                    .joinToString("") { "%02x".format(it) }
-                    .takeLast(10)
+                url = "$chapterDate:$title".md5().toHexString().takeLast(10)
                 name = title
                 date_upload = chapterDate
                 memo = buildJsonObject {

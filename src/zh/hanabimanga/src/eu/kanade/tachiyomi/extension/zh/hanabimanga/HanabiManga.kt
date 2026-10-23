@@ -17,8 +17,10 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLong
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getString
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -33,10 +35,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.io.IOException
-import java.security.MessageDigest
 import java.util.Locale
-import javax.crypto.Mac.getInstance
-import javax.crypto.spec.SecretKeySpec
 
 private const val ANONYMOUS_TOKEN =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoa3ZxcnhtY2FwZ3Rwc3BnbHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NjgzMjksImV4cCI6MjA3OTU0NDMyOX0.uuHr888lp14ObW5eWowJrHPJGgQf3sF2l7NPmFN84g4"
@@ -81,7 +80,7 @@ abstract class HanabiManga :
 
     // Customize
 
-    private val signatureKey by lazy { sha256Bytes(NATIVE_SECRET.hexToBytes() + CERT_FINGERPRINT.hexToBytes()) }
+    private val signatureKey by lazy { (NATIVE_SECRET.hexToBytes() + CERT_FINGERPRINT.hexToBytes()).sha256() }
 
     private suspend fun token(): String {
         val httpUrl = getHomeUrl().toHttpUrl()
@@ -146,10 +145,7 @@ abstract class HanabiManga :
         val pages = List(chapter.memo["size"]!!.int) { "%03d".format(Locale.ROOT, it + 1) }
         val timestamp = System.currentTimeMillis() / 1000
         val canonicalPayload = "v1|comic_id=$comicId|chapter_id=${chapter.url}|pages=${pages.joinToString(",")}|timestamp=$timestamp"
-        val signature = getInstance("HmacSHA256").run {
-            init(SecretKeySpec(signatureKey, this.algorithm))
-            doFinal(canonicalPayload.encodeToByteArray()).toHex()
-        }
+        val signature = canonicalPayload.hmacSha256(signatureKey).toHexString()
         return buildJsonObject {
             put("comic_id", comicId)
             put("chapter_id", chapter.url)
@@ -159,7 +155,7 @@ abstract class HanabiManga :
             putJsonObject("client_diag") {
                 put("native_status", "ok")
                 put("native_fingerprint_prefix", CERT_FINGERPRINT.take(8))
-                put("canonical_payload_sha256", sha256Bytes(canonicalPayload.encodeToByteArray()).toHex())
+                put("canonical_payload_sha256", canonicalPayload.sha256().toHexString())
                 put("signature_prefix", signature.take(16))
                 put("app_version", APP_VERSION)
                 put("app_version_code", APP_VERSION_CODE)
@@ -172,11 +168,7 @@ abstract class HanabiManga :
         }
     }
 
-    private fun sha256Bytes(value: ByteArray) = MessageDigest.getInstance("SHA-256").digest(value)
-
     private fun String.hexToBytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-
-    private fun ByteArray.toHex() = joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
 
     // Popular
 

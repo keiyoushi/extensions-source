@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.kuromangas
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.readIntBigEndian
 import keiyoushi.utils.readIntLittleEndian
@@ -111,10 +112,7 @@ class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient, val rel
 
     fun derivePassword(date: String = LocalDate.now(ZoneOffset.UTC).toString()): String {
         val toHash = "$date$HOSTNAME_PART$ANTIBOT"
-        val md5Part = MessageDigest.getInstance("MD5")
-            .digest(toHash.toByteArray())
-            .joinToString("") { "%02x".format(it) }
-            .substring(0, 8)
+        val md5Part = toHash.md5().toHexString().substring(0, 8)
         return viteApiEncKey + md5Part
     }
 

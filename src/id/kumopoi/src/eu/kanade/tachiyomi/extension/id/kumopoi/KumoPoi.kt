@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -17,8 +18,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.net.URLEncoder
 import java.util.Random
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -163,11 +162,7 @@ abstract class KumoPoi : KeiSource() {
 
     private fun generateSignature(path: String, timestamp: String, nonce: String): String {
         val message = "GET:$path:$timestamp:$nonce"
-        val mac = Mac.getInstance("HmacSHA256")
-        val secretKey = SecretKeySpec(SIGNING_KEY.toByteArray(Charsets.UTF_8), "HmacSHA256")
-        mac.init(secretKey)
-        val hash = mac.doFinal(message.toByteArray(Charsets.UTF_8))
-        return hash.joinToString("") { "%02x".format(it) }
+        return message.hmacSha256(SIGNING_KEY.encodeToByteArray()).toHexString()
     }
 
     companion object {
