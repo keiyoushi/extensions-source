@@ -235,100 +235,32 @@ abstract class Comix :
             },
             buildScript = { passPayloadName ->
                 """
-                    (function () {
-                        const payloadKey = '__comixBrowsePayload';
-                        const expectedKeyword = $expectedKeyword;
-                        const capture = (parsed, allowEmpty = false) => {
+                (function () {
+                    const payloadKey = '__comixA1BrowsePayload';
+                    if (window[payloadKey]) return window[payloadKey];
+                    if (!window.__comixA1BrowseStarted) {
+                        window.__comixA1BrowseStarted = true;
+                        window.__comixHarvestOptions = { timeoutMs: 60000, settleMs: 4000 };
+                        ${asset("harvest_browse.js")}
+                        window.__comixHarvestPromise.then(result => {
                             try {
-                                if (parsed && Array.isArray(parsed.items)) {
-                                    parsed = { result: parsed };
-                                }
-                                if (
-                                    parsed &&
-                                    parsed.result &&
-                                    Array.isArray(parsed.result.items) &&
-                                    (allowEmpty || parsed.result.items.length > 0)
-                                ) {
-                                    window[payloadKey] = JSON.stringify(parsed);
-                                    window.$passPayloadName(window[payloadKey]);
-                                    return true;
-                                }
+                                const items = (result.items || []).map(item => ({
+                                    hid: item.hid,
+                                    title: item.title || '',
+                                    url: item.url,
+                                    poster: item.cover ? { small: item.cover, medium: item.cover, large: item.cover } : null,
+                                }));
+                                const page = (result.listParams && result.listParams.page) || 1;
+                                const perPage = result.perPage || (result.listParams && result.listParams.limit) || 28;
+                                const hasNext = items.length > 0 && items.length >= perPage;
+                                const payload = { result: { items: items, meta: { page: page, lastPage: hasNext ? page + 1 : page, hasNext: hasNext } } };
+                                window[payloadKey] = JSON.stringify(payload);
+                                window.$passPayloadName(window[payloadKey]);
                             } catch (e) {}
-                            return false;
-                        };
-
-                        if (window[payloadKey]) return window[payloadKey];
-
-                        try {
-                            const raw = document.querySelector('script#initial-data')?.textContent;
-                            const queries = raw && JSON.parse(raw).queries;
-                            if (queries) Object.values(queries).some(capture);
-                        } catch (e) {}
-
-                        if (window[payloadKey]) return window[payloadKey];
-                        if (window.__comixBrowseCaptureInstalled) return null;
-                        window.__comixBrowseCaptureInstalled = true;
-
-                        const captureText = text => {
-                            try {
-                                if (text) capture(JSON.parse(text), true);
-                            } catch (e) {}
-                        };
-
-                        const shouldCaptureUrl = rawUrl => {
-                            try {
-                                const url = new URL(rawUrl || '', window.location.origin);
-                                if (!url.pathname.includes('/api/v1/manga')) return false;
-                                if (!expectedKeyword) return true;
-                                return url.searchParams.get('keyword') === expectedKeyword;
-                            } catch (e) {
-                                return false;
-                            }
-                        };
-
-                        const originalFetch = window.fetch;
-                        if (typeof originalFetch === 'function') {
-                            window.fetch = function () {
-                                return originalFetch.apply(this, arguments).then(response => {
-                                    try {
-                                        const url = response && response.url || '';
-                                        if (shouldCaptureUrl(url)) {
-                                            response.clone().text().then(captureText).catch(() => {});
-                                        }
-                                    } catch (e) {}
-                                    return response;
-                                });
-                            };
-                        }
-
-                        const originalOpen = XMLHttpRequest.prototype.open;
-                        const originalSend = XMLHttpRequest.prototype.send;
-                        XMLHttpRequest.prototype.open = function (method, url) {
-                            this.__comixBrowseUrl = String(url || '');
-                            return originalOpen.apply(this, arguments);
-                        };
-                        XMLHttpRequest.prototype.send = function () {
-                            this.addEventListener('load', function () {
-                                try {
-                                    if (shouldCaptureUrl(this.__comixBrowseUrl)) {
-                                        captureText(this.responseText);
-                                    }
-                                } catch (e) {}
-                            });
-                            return originalSend.apply(this, arguments);
-                        };
-
-                        const originalParse = JSON.parse;
-                        const proxiedParse = new Proxy(originalParse, {
-                            apply(target, thisArg, args) {
-                                const parsed = Reflect.apply(target, thisArg, args);
-                                if (!expectedKeyword) capture(parsed);
-                                return parsed;
-                            }
-                        });
-                        JSON.parse = proxiedParse;
-                        return window[payloadKey] || null;
-                    })();
+                        }).catch(() => {});
+                    }
+                    return window[payloadKey] || null;
+                })();
                 """.trimIndent()
             },
         ).parseAs<SearchResponse>()
@@ -595,9 +527,49 @@ abstract class Comix :
         if (knownIds.isEmpty()) showChapterListHint()
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
         val payload = runInWebView(getMangaUrl(manga), { it.isChapterListRequest() }) { passPayloadName, _, touchName ->
-            "(${asset("chapter_list.js")})(${asset("site_api.js")}, " +
-                "${knownIds.joinToString(",", "[", "]")}, ${JSONObject.quote(mangaId)}, ${JSONObject.quote("/title/$mangaId-")}, " +
-                "$MAX_CHAPTER_PAGES, window.$touchName, window.$passPayloadName);"
+            """
+            (function () {
+                if (window.__comixA1ChaptersStarted) return;
+                window.__comixA1ChaptersStarted = true;
+                window.__comixHarvestOptions = {
+                    timeoutMs: 60000,
+                    settleMs: 6000,
+                    maxRounds: 1000,
+                    stopAtIds: ${knownIds.joinToString(",", "[", "]")}
+                };
+                window.__comixNativeTap = function (x, y) { try { window.$touchName([x, y]); } catch (e) {} };
+                ${asset("harvest_chapters.js")}
+                const wrap = (result, queries) => ({
+                    chapters: (result.chapters || []).map(ch => ({
+                        id: ch.id,
+                        url: ch.url,
+                        number: ch.number,
+                        name: '',
+                        votes: 0,
+                        createdAtFormatted: dateOf(ch.text),
+                        group: ch.group ? { name: ch.group } : null,
+                        isOfficial: false
+                    })),
+                    complete: !!result.complete,
+                    error: result.error || null,
+                    queries: queries
+                });
+                const dateOf = text => {
+                    const m = /(\d+)\s*(s|m|h|d|w|mo|mos|y|yr|yrs|min|mins|sec|secs|hr|hrs|day|days|week|weeks|month|months|year|years)\s+ago/i.exec(text || '');
+                    return m ? m[1] + ' ' + m[2] + ' ago' : '';
+                };
+                window.__comixHarvestPromise.then(result => {
+                    let queries = null;
+                    try {
+                        const raw = document.querySelector('script#initial-data')?.textContent;
+                        if (raw) queries = JSON.parse(raw).queries || null;
+                    } catch (e) {}
+                    window.$passPayloadName(JSON.stringify(wrap(result, queries)));
+                }).catch(e => {
+                    window.$passPayloadName(JSON.stringify({ chapters: [], complete: false, error: String(e), queries: null }));
+                });
+            })();
+            """.trimIndent()
         }
         return payload.parseAs<ChapterList>()
     }
@@ -678,7 +650,23 @@ abstract class Comix :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.chapterId() ?: throw Exception("Could not find the chapter id")
         val payload = runInWebView(getChapterUrl(chapter), { it.isChapterPagesRequest() }) { passPayloadName, rejectName, _ ->
-            "(${asset("chapter_pages.js")})(${asset("site_api.js")}, $chapterId, window.$passPayloadName, window.$rejectName);"
+            """
+            (function () {
+                if (window.__comixA1PagesStarted) return;
+                window.__comixA1PagesStarted = true;
+                window.__comixHarvestOptions = { timeoutMs: 45000, settleMs: 4000 };
+                ${asset("harvest_pages.js")}
+                window.__comixHarvestPromise.then(result => {
+                    const payload = {
+                        baseUrl: '',
+                        items: (result.images || []).map(u => ({ url: u, s: (u.indexOf('?v3') !== -1 || u.indexOf('&v3') !== -1) ? 1 : 0 }))
+                    };
+                    window.$passPayloadName(JSON.stringify(payload));
+                }).catch(() => {
+                    window.$passPayloadName(JSON.stringify({ baseUrl: '', items: [] }));
+                });
+            })();
+            """.trimIndent()
         }
 
         return buildPages(payload.parseAs())

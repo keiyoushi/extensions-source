@@ -9,8 +9,10 @@ import okio.ForwardingSource
 import okio.Source
 import okio.buffer
 import okio.cipherSource
+import java.security.MessageDigest
 import java.security.spec.AlgorithmParameterSpec
 import javax.crypto.Cipher
+import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -43,6 +45,69 @@ private fun decodeHexDigit(c: Char): Int = when (c) {
     in 'A'..'F' -> c - 'A' + 10
     else -> throw IllegalArgumentException("Unexpected hex digit: $c")
 }
+
+/**
+ * Computes the MD5 digest of this [ByteArray].
+ *
+ * Use [toHexString] on the result for the usual lowercase hex form.
+ *
+ * @return the MD5 digest bytes
+ */
+fun ByteArray.md5(): ByteArray = MessageDigest.getInstance("MD5").digest(this)
+
+/**
+ * Computes the MD5 digest of this string's UTF-8 bytes.
+ *
+ * @return the MD5 digest bytes
+ */
+fun String.md5(): ByteArray = encodeToByteArray().md5()
+
+/**
+ * Computes the SHA-256 digest of this [ByteArray].
+ *
+ * @return the SHA-256 digest bytes
+ */
+fun ByteArray.sha256(): ByteArray = MessageDigest.getInstance("SHA-256").digest(this)
+
+/**
+ * Computes the SHA-256 digest of this string's UTF-8 bytes.
+ *
+ * @return the SHA-256 digest bytes
+ */
+fun String.sha256(): ByteArray = encodeToByteArray().sha256()
+
+/**
+ * Computes the SHA-512 digest of this [ByteArray].
+ *
+ * @return the SHA-512 digest bytes
+ */
+fun ByteArray.sha512(): ByteArray = MessageDigest.getInstance("SHA-512").digest(this)
+
+/**
+ * Computes the SHA-512 digest of this string's UTF-8 bytes.
+ *
+ * @return the SHA-512 digest bytes
+ */
+fun String.sha512(): ByteArray = encodeToByteArray().sha512()
+
+/**
+ * Computes the HMAC-SHA256 of this [ByteArray] with [key].
+ *
+ * @param key the HMAC key bytes
+ * @return the HMAC-SHA256 bytes
+ */
+fun ByteArray.hmacSha256(key: ByteArray): ByteArray = Mac.getInstance("HmacSHA256").run {
+    init(SecretKeySpec(key, "HmacSHA256"))
+    doFinal(this@hmacSha256)
+}
+
+/**
+ * Computes the HMAC-SHA256 of this string's UTF-8 bytes with [key].
+ *
+ * @param key the HMAC key bytes
+ * @return the HMAC-SHA256 bytes
+ */
+fun String.hmacSha256(key: ByteArray): ByteArray = encodeToByteArray().hmacSha256(key)
 
 /**
  * Encrypts or decrypts this [ByteArray] using the RC4 stream cipher with [key].

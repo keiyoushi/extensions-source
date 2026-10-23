@@ -23,6 +23,8 @@ import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Call
 import okhttp3.Callback
@@ -32,6 +34,7 @@ import okhttp3.Response
 import okhttp3.internal.closeQuietly
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.hours
 
 abstract class Iken :
     KeiSource(),
@@ -67,6 +70,12 @@ abstract class Iken :
      */
     protected open val sortPagesByFilename = false
 
+    /**
+     * Hides novels that `api/query` lists under a comic series type,
+     * using the novel ids from `api/posts`.
+     */
+    protected open val hideNovelsListedAsComics = false
+
     // ============================== Popular ==============================
 
     // Popular (Search with popular order and nothing else)
@@ -87,54 +96,65 @@ abstract class Iken :
 
     // ============================== Search ===============================
 
+    // Server pages skipped per query for holding only novels
+    private val skippedPages = ConcurrentHashMap<String, Int>()
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/api/query".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
             addQueryParameter("perPage", perPage.toString())
             addQueryParameter("searchTerm", query.trim())
             filters.filterIsInstance<UrlPartFilter>().forEach {
                 it.addUrlParameter(this)
             }
         }.build()
+        val key = url.toString()
+        var skipped = if (page == 1) 0 else skippedPages[key] ?: 0
 
-        return parseSearchMangaList(client.get(url))
+        while (true) {
+            val pageUrl = url.newBuilder()
+                .addQueryParameter("page", (page + skipped).toString())
+                .build()
+            val mangasPage = parseSearchMangaList(client.get(pageUrl))
+            if (mangasPage.mangas.isNotEmpty() || !mangasPage.hasNextPage) {
+                if (mangasPage.hasNextPage && skipped > 0) skippedPages[key] = skipped else skippedPages.remove(key)
+                return mangasPage
+            }
+            skipped++
+        }
     }
-
-    // Tracks the current page
-    private val pageNumber = ConcurrentHashMap<String, Int>()
-
-    private fun keyFromUrl(url: HttpUrl): String = url.queryParameterNames
-        .sorted()
-        .mapNotNull { paramName ->
-            val value = url.queryParameter(paramName)
-            if (value.isNullOrBlank()) null else "$paramName=$value"
-        }.joinToString("&")
 
     protected open suspend fun parseSearchMangaList(response: Response): MangasPage {
         val data = response.parseAs<SearchResponse>()
-        var page = response.request.url.queryParameter("page")!!.toInt()
+        val page = response.request.url.queryParameter("page")!!.toInt()
+        val novelIds = if (hideNovelsListedAsComics) getNovelIds() else emptySet()
 
         val entries = data.posts
-            .filterNot { it.isNovel }
+            .filterNot { it.isNovel || it.id in novelIds }
             .map { it.toSManga() }
 
-        val hasNextPage = data.totalCount > (page * perPage)
+        return MangasPage(entries, data.totalCount > (page * perPage))
+    }
 
-        val key = keyFromUrl(response.request.url)
-        if (page == 1) pageNumber[key] = 1
+    private var cachedNovelIds: Set<Int>? = null
+    private var novelIdsFetchTime = 0L
+    private val novelIdsMutex = Mutex()
 
-        if (entries.isEmpty() && hasNextPage) {
-            pageNumber[key] = pageNumber[key]!! + 1
-            val newUrl = response.request.url.newBuilder()
-                .setQueryParameter("page", pageNumber[key]!!.toString())
-                .build()
-
-            return parseSearchMangaList(client.get(newUrl))
-        }
-
-        if (!hasNextPage) pageNumber.remove(key)
-
-        return MangasPage(entries, hasNextPage)
+    private suspend fun getNovelIds(): Set<Int> = novelIdsMutex.withLock {
+        cachedNovelIds?.takeIf { System.currentTimeMillis() - novelIdsFetchTime < 1.hours.inWholeMilliseconds }
+            ?: buildSet {
+                var page = 1
+                do {
+                    val url = "$apiUrl/api/posts".toHttpUrl().newBuilder()
+                        .addQueryParameter("page", page++.toString())
+                        .addQueryParameter("perPage", "100")
+                        .build()
+                    val data = client.get(url).parseAs<PostsResponse>()
+                    data.novelPosts.mapTo(this) { it.id }
+                } while (data.novelPosts.isNotEmpty() && size < data.novelTotalCount)
+            }.also {
+                cachedNovelIds = it
+                novelIdsFetchTime = System.currentTimeMillis()
+            }
     }
 
     // ============================== Filters ==============================

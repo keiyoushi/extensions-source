@@ -12,11 +12,11 @@ import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.security.MessageDigest
 import java.util.Locale
 
 @Source
@@ -142,11 +142,7 @@ abstract class KissLove : KeiSource() {
     private fun sigAppend(): Headers = headersBuilder().apply {
         val timestamp = (System.currentTimeMillis() / 1000).toString()
         val payload = "$timestamp.$CLIENT_ID"
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hashBytes = digest.digest(payload.toByteArray(Charsets.UTF_8))
-        val signature = hashBytes.joinToString("") { byte ->
-            "%02x".format(byte)
-        }
+        val signature = payload.sha256().toHexString()
         add("X-Client-Sig", signature)
         add("X-Client-Ts", timestamp)
     }.build()

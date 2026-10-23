@@ -14,9 +14,11 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
@@ -463,107 +465,23 @@ abstract class LectorXd : KeiSource() {
 
     private fun chapterListParse(
         document: Document,
-    ): List<SChapter> {
-        val mangaType = document
-            .select("script")
-            .firstNotNullOfOrNull { script ->
-                MANGA_TYPE_REGEX
-                    .find(script.html())
-                    ?.groupValues
-                    ?.getOrNull(1)
-            }
-
-        val mangaSlug = document
-            .select("script")
-            .firstNotNullOfOrNull { script ->
-                MANGA_SLUG_REGEX
-                    .find(script.html())
-                    ?.groupValues
-                    ?.getOrNull(1)
-            }
-
-        val chaptersJson = document
-            .select("script")
-            .firstNotNullOfOrNull { script ->
-                CHAPTERS_LIST_REGEX
-                    .find(script.html())
-                    ?.groupValues
-                    ?.getOrNull(1)
-            }
-
-        if (
-            mangaType == null ||
-            mangaSlug == null ||
-            chaptersJson == null
-        ) {
-            return parseVisibleChapters(document)
-        }
-
-        return chaptersJson.parseAs<JsonElement>()
-            .jsonArray
-            .map { element ->
-                val chapter = element.jsonObject
-                val chapterNumber = chapter.getValue("chapter")
-                    .jsonPrimitive.content
-                val groupId = chapter["groupId"]
-                    ?.jsonPrimitive
-                    ?.contentOrNull
-
-                SChapter.create().apply {
-                    name = "Capítulo $chapterNumber"
-                    url = buildString {
-                        append("/")
-                        append(mangaType)
-                        append("/")
-                        append(mangaSlug)
-                        append("/leer/")
-                        append(chapterNumber)
-
-                        groupId?.let {
-                            append("?g=")
-                            append(it)
-                        }
-                    }
-                    date_upload = 0L
-                }
-            }
-            .distinctBy { it.url }
-            .reversed()
-    }
-
-    private fun parseVisibleChapters(
-        document: Document,
     ): List<SChapter> = document
-        .select(
-            """a[href*="/leer/"][title^="Leer Capítulo "]""",
-        )
-        .mapNotNull { element ->
-            val url = element.attr("href").trim()
+        .selectFirst("astro-island[component-url*=ChapterList]")!!
+        .attr("props")
+        .parseAs<JsonElement>()
+        .unwrapAstro()
+        .parseAs<ChapterListProps>()
+        .toSChapterList()
 
-            val chapterNumber = element
-                .attr("title")
-                .substringAfter(
-                    "Leer Capítulo ",
-                    missingDelimiterValue = "",
-                )
-                .substringBefore(
-                    " de ",
-                    missingDelimiterValue = "",
-                )
-                .trim()
-                .takeIf { it.isNotBlank() }
-
-            if (url.isBlank() || chapterNumber == null) {
-                null
-            } else {
-                SChapter.create().apply {
-                    name = "Capítulo $chapterNumber"
-                    this.url = url
-                    date_upload = 0L
-                }
-            }
+    // Astro island props: every value is a [type, value] pair
+    private fun JsonElement.unwrapAstro(): JsonElement = when (this) {
+        is JsonArray -> when {
+            size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
+            else -> JsonArray(map { it.unwrapAstro() })
         }
-        .distinctBy { it.url }
+        is JsonObject -> JsonObject(mapValues { it.value.unwrapAstro() })
+        else -> this
+    }
 
     override suspend fun getPageList(
         chapter: SChapter,
@@ -693,19 +611,6 @@ abstract class LectorXd : KeiSource() {
     companion object {
         private val TAG_QUERY_REGEX = Regex(
             """(?:[?&])tags=\d+(?:&|$)""",
-        )
-
-        private val MANGA_TYPE_REGEX = Regex(
-            """const\s+mangaType\s*=\s*"([^"]+)";""",
-        )
-
-        private val MANGA_SLUG_REGEX = Regex(
-            """const\s+mangaSlug\s*=\s*"([^"]+)";""",
-        )
-
-        private val CHAPTERS_LIST_REGEX = Regex(
-            """const\s+chaptersList\s*=\s*(\[.*?]);""",
-            RegexOption.DOT_MATCHES_ALL,
         )
     }
 }
