@@ -50,11 +50,12 @@ abstract class ComputeContentHashTask : DefaultTask() {
         update("manifest", manifest.toByteArray())
 
         val apk = apkDir.get().asFile.walkTopDown().first { it.extension == "apk" }
-        // The binary manifest carries the version; its content is covered by the merged manifest above.
-        apk.forEachEntry({ it != "AndroidManifest.xml" && !it.startsWith("META-INF/") }) { name, bytes ->
+        // The manifests carry the version; their content is covered by the merged manifest above.
+        // The apk is signed outside its entries (v2+), the jar with v1 signature files.
+        apk.forEachEntry({ it != "AndroidManifest.xml" }) { name, bytes ->
             update("apk/$name", if (DEX_ENTRY.matches(name)) normalizeDex(bytes) else bytes)
         }
-        extensionJar.get().asFile.forEachEntry({ it.endsWith(".class") }) { name, bytes ->
+        extensionJar.get().asFile.forEachEntry({ it != "AndroidManifest.xml" && !JAR_SIGNATURE.matches(it) }) { name, bytes ->
             update("jar/$name", bytes)
         }
 
@@ -64,6 +65,7 @@ abstract class ComputeContentHashTask : DefaultTask() {
 
 private val VERSION_ATTRIBUTE = Regex("""\s+android:version(Code|Name)="[^"]*"""")
 private val DEX_ENTRY = Regex("""classes\d*\.dex""")
+private val JAR_SIGNATURE = Regex("""META-INF/(MANIFEST\.MF|[^/]+\.(SF|RSA|DSA|EC))""")
 
 // R8 embeds a hash of mapping.txt as each class's SourceFile and in its marker string, so it changes
 // whenever a line number shifts in inlined code (e.g. an import added to a core file).
