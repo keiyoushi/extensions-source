@@ -27,6 +27,7 @@ import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.md5
 import keiyoushi.utils.newAesCipher
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -49,7 +50,6 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.InputStream
-import java.security.MessageDigest
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -497,10 +497,7 @@ abstract class Mangago :
         }
     }
 
-    private fun stableChapterId(date: Long, name: String, scanlator: String?): String = MessageDigest.getInstance("MD5")
-        .digest("$date:$name:${scanlator.orEmpty()}".toByteArray())
-        .joinToString("") { "%02x".format(it) }
-        .takeLast(10)
+    private fun stableChapterId(date: Long, name: String, scanlator: String?): String = "$date:$name:${scanlator.orEmpty()}".md5().toHexString().takeLast(10)
 
     private val removeRaws get() = preferences.getBoolean(REMOVE_RAW_PREF, true)
     private val removeTitleVersion get() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)

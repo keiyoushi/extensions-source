@@ -1,10 +1,9 @@
 package eu.kanade.tachiyomi.extension.vi.dualeotruyen
 
 import android.util.Base64
+import keiyoushi.utils.hmacSha256
+import keiyoushi.utils.sha256
 import org.jsoup.nodes.Document
-import java.security.MessageDigest
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 class ImageDecryptor {
 
@@ -75,7 +74,7 @@ class ImageDecryptor {
             var offset = 0
             var counter = 0
             while (offset < stream.size) {
-                val block = sha256("$secret|STREAM|$nonce|$salt|$counter")
+                val block = "$secret|STREAM|$nonce|$salt|$counter".sha256()
                 val count = minOf(block.size, stream.size - offset)
                 System.arraycopy(block, 0, stream, offset, count)
                 offset += count
@@ -87,7 +86,7 @@ class ImageDecryptor {
             }
             val name = String(nameBytes, Charsets.UTF_8)
 
-            val expectedMac = hmacSha256Hex("V5|$nonce|$salt|$name", secret)
+            val expectedMac = "V5|$nonce|$salt|$name".hmacSha256(secret.encodeToByteArray()).toHexString()
             if (!expectedMac.equals(mac, ignoreCase = true)) {
                 return null
             }
@@ -104,12 +103,6 @@ class ImageDecryptor {
             }
         }
         return Base64.decode(padded, Base64.DEFAULT)
-    }
-
-    private fun hmacSha256Hex(message: String, secret: String): String {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-        return mac.doFinal(message.toByteArray(Charsets.UTF_8)).toHex()
     }
 
     private fun decodeV4(
@@ -133,9 +126,9 @@ class ImageDecryptor {
                 return null
             }
 
-            val k1 = sha256("$secret|A|$nonce|$salt")
-            val k1Hex = k1.toHex()
-            val k2 = sha256("$secret|B|$salt|$nonce|$k1Hex")
+            val k1 = "$secret|A|$nonce|$salt".sha256()
+            val k1Hex = k1.toHexString()
+            val k2 = "$secret|B|$salt|$nonce|$k1Hex".sha256()
             val key = k1 + k2
 
             val rawBytes = base64UrlDecode(rawB64)
@@ -146,30 +139,14 @@ class ImageDecryptor {
             }
             val name = String(nameBytes, Charsets.UTF_8)
 
-            val verify = sha256("V4|$secret|$nonce|$salt|$name")
-            val verifyHex = verify.toHex()
+            val verify = "V4|$secret|$nonce|$salt|$name".sha256()
+            val verifyHex = verify.toHexString()
             if (!verifyHex.startsWith(checksum)) {
                 return null
             }
 
             "$basePath$name$extension"
         }.getOrNull()
-    }
-
-    private fun sha256(text: String): ByteArray {
-        val md = MessageDigest.getInstance("SHA-256")
-        return md.digest(text.toByteArray(Charsets.UTF_8))
-    }
-
-    private fun ByteArray.toHex(): String {
-        val hexChars = "0123456789abcdef"
-        val result = StringBuilder(size * 2)
-        for (b in this) {
-            val octet = b.toInt() and 0xFF
-            result.append(hexChars[octet ushr 4])
-            result.append(hexChars[octet and 0x0F])
-        }
-        return result.toString()
     }
 
     private val secretRegex = """OBF_SECRET\s*=\s*['"]([^'"]+)['"]""".toRegex()

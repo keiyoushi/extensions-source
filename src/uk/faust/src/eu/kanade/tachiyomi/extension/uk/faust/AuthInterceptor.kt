@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.uk.faust
 
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import kotlinx.serialization.Serializable
@@ -16,8 +17,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.Base64
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 class AuthInterceptor(
     private val clientProvider: () -> OkHttpClient,
@@ -35,8 +34,6 @@ class AuthInterceptor(
             byteArrayOf()
         }
     }
-
-    private val secretKeySpec by lazy { SecretKeySpec(secretBytes, "HmacSHA256") }
 
     private var accessToken: String? = null
     private var tokenExpiresAt: Long = 0L
@@ -57,7 +54,7 @@ class AuthInterceptor(
         val currentToken = getValidAccessToken()
         val timestamp = Instant.now().epochSecond.toString()
         val pathAndQuery = url.encodedPath + if (url.encodedQuery != null) "?${url.encodedQuery}" else ""
-        val signature = hmacSha256("$timestamp:$pathAndQuery")
+        val signature = sign("$timestamp:$pathAndQuery")
 
         val requestBuilder = originalRequest.newBuilder()
             .header(HEADER_TIMESTAMP, timestamp)
@@ -78,7 +75,7 @@ class AuthInterceptor(
                 val freshToken = refreshAccessToken()
                 if (!freshToken.isNullOrEmpty()) {
                     val retryTimestamp = Instant.now().epochSecond.toString()
-                    val retrySignature = hmacSha256("$retryTimestamp:$pathAndQuery")
+                    val retrySignature = sign("$retryTimestamp:$pathAndQuery")
                     val retryRequest = originalRequest.newBuilder()
                         .header(HEADER_TIMESTAMP, retryTimestamp)
                         .header(HEADER_SIGN, retrySignature)
@@ -124,7 +121,7 @@ class AuthInterceptor(
         try {
             val url = "${baseUrlProvider()}$AUTH_PATH"
             val timestamp = Instant.now().epochSecond.toString()
-            val signature = hmacSha256("$timestamp:$AUTH_PATH")
+            val signature = sign("$timestamp:$AUTH_PATH")
 
             val request = Request.Builder()
                 .url(url)
@@ -175,11 +172,9 @@ class AuthInterceptor(
         Instant.now().epochSecond + 3600
     }
 
-    private fun hmacSha256(data: String): String {
+    private fun sign(data: String): String {
         if (secretBytes.isEmpty()) return ""
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(secretKeySpec)
-        return mac.doFinal(data.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        return data.hmacSha256(secretBytes).toHexString()
     }
 
     private fun xorDecrypt(cipherBytes: ByteArray, timestamp: String, secret: ByteArray): ByteArray {

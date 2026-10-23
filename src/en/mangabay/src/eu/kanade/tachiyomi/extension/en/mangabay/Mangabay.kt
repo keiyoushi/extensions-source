@@ -14,6 +14,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
@@ -24,7 +25,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.security.MessageDigest
 
 @Source
 abstract class Mangabay : KeiSource() {
@@ -277,8 +277,7 @@ abstract class Mangabay : KeiSource() {
 
     private fun hdPosterUrl(mangaUrl: String): String? {
         val slug = MANGA_PATH_REGEX.matchEntire(mangaUrl)?.groupValues?.get(1) ?: return null
-        val firstByte = MessageDigest.getInstance("MD5").digest(slug.toByteArray())[0].toInt() and 0xff
-        val prefix = "%02x".format(firstByte)
+        val prefix = slug.md5().toHexString().take(2)
         return "$baseUrl/uploads/posts/poster/$prefix/$slug.jpg"
     }
 
