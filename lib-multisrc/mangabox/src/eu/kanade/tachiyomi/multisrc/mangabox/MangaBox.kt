@@ -64,8 +64,6 @@ abstract class MangaBox :
 
     private fun SharedPreferences.getMergeImagesPref(): Boolean = getBoolean(PREF_MERGE_IMAGES, false)
 
-    private fun SharedPreferences.getImageSizeRetries(): Int = getString(PREF_RETRIEVE_IMAGE_SIZE_RETRIES, "0")?.toIntOrNull() ?: 0
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private var mergeImages: Boolean? = null
@@ -75,16 +73,6 @@ abstract class MangaBox :
             }
 
             field = preferences.getMergeImagesPref()
-            return field
-        }
-
-    private var retrieveImageSizeRetries: Int = -1
-        get() {
-            if (field != -1) {
-                return field
-            }
-
-            field = preferences.getImageSizeRetries()
             return field
         }
 
@@ -477,23 +465,17 @@ abstract class MangaBox :
                 val headers = headersBuilder().set("Range", WebpSizeGetter.RANGE).build()
                 val deferredSizes = imageUrls.map { url ->
                     async {
-                        for (attempt in 0..retrieveImageSizeRetries) {
-                            if (attempt > 0) {
-                                delay((500 * (1 shl attempt)..<1000 * (1 shl attempt)).random().milliseconds)
-                            }
-                            try {
-                                val response = client.newCall(
-                                    GET(url, headers)
-                                        .newBuilder()
-                                        .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag())
-                                        .build(),
-                                ).awaitSuccess()
-                                WebpSizeGetter(response.body.byteStream()).get()?.let {
-                                    return@async it
-                                }
-                            } catch (_: Exception) {}
+                        try {
+                            val response = client.newCall(
+                                GET(url, headers)
+                                    .newBuilder()
+                                    .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag())
+                                    .build(),
+                            ).awaitSuccess()
+                            WebpSizeGetter(response.body.byteStream()).get()
+                        } catch (_: Exception) {
+                            null
                         }
-                        null
                     }
                 }
 
@@ -630,56 +612,24 @@ abstract class MangaBox :
     // ============================= Utilities =============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val mergeImagesPref = SwitchPreferenceCompat(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
             key = PREF_MERGE_IMAGES
             title = "Merge Split Images"
             summary = "Images are sometimes split vertically. " +
                 "This setting enables detecting and merging split images. " +
                 "Note that this isn't 100% accurate."
             setDefaultValue(false)
-        }.also(screen::addPreference)
-
-        val retrieveImageSizeRetriesPref = EditTextPreference(screen.context).apply {
-            key = PREF_RETRIEVE_IMAGE_SIZE_RETRIES
-            title = "Retries for retrieving image sizes"
-            val summaryFormat = "When merging split images, image sizes are retrieved from " +
-                "image metadata, retrying up to %d times."
-            summary = summaryFormat.format(retrieveImageSizeRetries)
-            setDefaultValue("0")
-            setVisible(mergeImages == true)
 
             setOnPreferenceChangeListener { _, newValue ->
                 // Update values
-                val newIntValue = (newValue as String).toIntOrNull()
-                if (newIntValue == null || newIntValue < 0) {
-                    Toast.makeText(
-                        screen.context,
-                        "$newValue is not a valid retry count. Resetting to $retrieveImageSizeRetries.",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    preferences
-                        .edit()
-                        .putString(PREF_RETRIEVE_IMAGE_SIZE_RETRIES, retrieveImageSizeRetries.toString())
-                        .apply()
-                } else {
-                    retrieveImageSizeRetries = newIntValue
-                    summary = summaryFormat.format(retrieveImageSizeRetries)
-                }
+                mergeImages = newValue as Boolean
                 true
             }
         }.also(screen::addPreference)
-
-        mergeImagesPref.setOnPreferenceChangeListener { _, newValue ->
-            // Update values
-            mergeImages = newValue as Boolean
-            retrieveImageSizeRetriesPref.setVisible(newValue)
-            true
-        }
     }
 
     companion object {
         private const val PREF_MERGE_IMAGES = "pref_merge_images"
-        private const val PREF_RETRIEVE_IMAGE_SIZE_RETRIES = "pref_retrieve_image_size_retries"
         private const val URL_PREFIX = "https://"
 
         private val cdnsRegex = Regex("""cdns\s*=\s*\[([^]]+)]""")
