@@ -12,7 +12,17 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl = "https://v1.westmanga.my"
+        baseUrl {
+            mirrors(
+                "https://v1.westmanga.my",
+                "https://v1.westmanga.top",
+            )
+        }
         id = 8883916630998758688L
+    }
+
+    deeplink {
+        path("/comic/..*")
+        path("/manga/..*")
     }
 }
