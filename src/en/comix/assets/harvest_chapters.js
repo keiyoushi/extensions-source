@@ -94,10 +94,10 @@
         return el;
     };
 
-    // The link holds "Ch.<n>", then the chapter's name when it has one
+    // "Ch.<n>", then the name
     const nameOf = (anchor) => Array.from(anchor.children).slice(1).map(textOf).join(" ").trim();
 
-    // The group link, or the uploader for chapters without a group
+    // The group, or the uploader when there is none
     const groupOf = (row) => {
         if (!row) return null;
         const group = row.querySelector('a[href^="/groups/"]');
@@ -109,7 +109,7 @@
         return uploader && textOf(uploader) ? { id: null, name: textOf(uploader) } : null;
     };
 
-    // Vote count, shown as "70" or "1.2k"
+    // "70" or "1.2k"
     const votesOf = (row) => {
         if (!row) return 0;
         for (const span of row.querySelectorAll("span")) {

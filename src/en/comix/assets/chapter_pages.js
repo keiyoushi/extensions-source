@@ -1,6 +1,5 @@
-// Reader page urls, read as the reader loads each page and posted one message at a time: "total" once the
-// page count is known, "page" per page, "miss" for a page that didn't load, then "done".
-// window[seekName] holds [page waited on, retry count]; a new retry count gives a missed page another try.
+// Every build you re-mangle, this file gets a little shorter. Love, the mouse.
+// Posts "total", then "page" or "miss" per page, then "done"; window[seekName] is [page waited on, retry count]
 (pass, reject, seekName, knownIndices) => {
     const startedAt = Date.now();
     const FIRST_PAGE_TIMEOUT_MS = 30000;
@@ -13,9 +12,7 @@
     let slots = [];
     let total = 0;
     const shapeOf = (element) => element.tagName + "." + (element.getAttribute("class") || "");
-    // The pages are the run of same-shaped children holding an image from another site, in the innermost,
-    // tallest element inside a scrolling box; when the reader shows a "<current> / <total>" counter, the run
-    // must be that long. Comments and posters come from the site itself.
+    // Pages: same-shaped children holding off-site images, innermost and tallest in a scroller
     const site = location.hostname.replace(/^www\./, "");
     const isForeignImage = (img) => {
         try {
@@ -48,7 +45,7 @@
             if (totals.size && !totals.has(count)) continue;
             if (insideScroller(element)) matches.push({ element, shape });
         }
-        // Wrappers around the pages match too, so only the innermost matches count
+        // Wrappers match too; keep the innermost
         let best = null;
         for (const match of matches) {
             if (matches.some((other) => other !== match && match.element.contains(other.element))) continue;
@@ -59,7 +56,7 @@
             slots: Array.prototype.filter.call(best.element.children, (child) => shapeOf(child) === best.shape),
         };
     };
-    // Taken once the same reader is found twice in a row, and looked up again if the page replaces it
+    // Settled after two matching polls; found again if replaced
     let candidate = null;
     const attachReader = () => {
         if (container && container.isConnected) return true;
@@ -79,7 +76,7 @@
         return slots.indexOf(slot);
     };
 
-    // Each page's latest url: the reader may move a page to another host after a failed load
+    // Latest url per page; the reader swaps hosts on failure
     const captured = new Map(knownIndices.map((index) => [index, null]));
     const missed = new Set();
     const record = (img) => {
@@ -94,8 +91,7 @@
         pass(JSON.stringify({ type: "page", index, url: url.href }));
     };
 
-    // Only the long-strip reader lays out every page, so a saved paged reader is switched to it for this run,
-    // and put back once the reader has started (it reads the setting only then)
+    // A saved paged reader becomes the strip until the reader starts
     const savedReader = {};
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -114,7 +110,7 @@
         Object.keys(savedReader).forEach((key) => delete savedReader[key]);
     };
 
-    // Watches image urls as the reader sets them; started at document-start, before the reader runs
+    // Started at document-start, before the reader runs
     const recordImage = (node) => {
         if (node.tagName === "IMG") record(node);
         else if (node.querySelectorAll) node.querySelectorAll("img[src]").forEach(record);
@@ -153,7 +149,7 @@
         pass(JSON.stringify({ type: "total", total }));
         const done = (i) => captured.has(i) || missed.has(i);
         while (Date.now() < startedAt + WALK_TIMEOUT_MS) {
-            // The page being waited on first, then forward from it, then anything left behind it
+            // Waited-on page first, then forward, then the rest
             const seek = readSeek();
             let target = seek >= 0 && seek < total && !done(seek) ? seek : -1;
             for (let i = Math.max(seek, 0); target < 0 && i < total; i++) if (!done(i)) target = i;
@@ -167,7 +163,7 @@
                 pass(JSON.stringify({ type: "miss", index: target }));
                 continue;
             }
-            // Images the observer saw before their page took its place in the list
+            // Pages the observer saw before they joined the list
             if (attachReader()) {
                 container.querySelectorAll("img[src]").forEach(record);
                 slots[target].scrollIntoView({ block: "center" });

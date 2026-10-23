@@ -12,10 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 
-/**
- * Hosts an offscreen [WebView] on a private virtual display, so it renders and takes native taps like a
- * WebView on screen. The display shows nothing and needs no permission.
- */
+/** Hosts an offscreen [WebView] on a private virtual display, so it renders like one on screen. */
 internal class BackgroundSurface private constructor(
     private val imageReader: ImageReader,
     private val virtualDisplay: VirtualDisplay,
@@ -29,14 +26,14 @@ internal class BackgroundSurface private constructor(
     }
 
     companion object {
-        // Released when the run ends and takes the WebView off it
+        // Released when the WebView leaves it
         fun host(webView: WebView) {
             val metrics = webView.resources.displayMetrics
             val width = metrics.widthPixels
             val height = metrics.heightPixels
 
             val imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-            // Drain every frame: an undrained reader fills after two and the WebView stops rendering
+            // An undrained reader stops the WebView after two frames
             val drainThread = HandlerThread("comix-webview-drain").apply { start() }
             imageReader.setOnImageAvailableListener(
                 { reader -> reader.acquireLatestImage()?.close() },
@@ -77,7 +74,7 @@ internal class BackgroundSurface private constructor(
             }
         }
 
-        // The drain thread stops before the reader closes, so it never reads a closed reader
+        // Stop draining before closing the reader
         private fun stopDrain(imageReader: ImageReader, drainThread: HandlerThread) {
             imageReader.setOnImageAvailableListener(null, null)
             drainThread.quitSafely()

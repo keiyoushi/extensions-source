@@ -94,11 +94,11 @@ abstract class Comix :
         }
     }
 
-    // Reader page captures by chapter url, least recently used first; only finished ones are dropped
+    // Reader captures by chapter url, LRU; only finished ones are dropped
     private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val captures = LinkedHashMap<String, ChapterCapture>(MAX_CAPTURES + 1, 0.75f, true)
 
-    // When each chapter's reader was last walked, so it is loaded only a few times in a while
+    // Walk start times per chapter, for the walk limit
     private val walkStarts = HashMap<String, MutableList<Long>>()
     private val walkSlots = Semaphore(MAX_RUNNING_WALKS)
 
@@ -113,7 +113,7 @@ abstract class Comix :
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(Descrambler.interceptor)
         .addInterceptor { chain ->
             val request = chain.request()
-            // The reader already moved a failing page to another host, so page images aren't retried
+            // The reader already retries failing pages on other hosts
             if (request.url.host == baseUrlHost || request.url.isPageImage()) {
                 return@addInterceptor chain.proceed(request)
             }
@@ -141,7 +141,6 @@ abstract class Comix :
 
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    // Page images are the urls the reader capture handed over
     private fun HttpUrl.isPageImage(): Boolean {
         val url = toString()
         return synchronized(captures) { captures.values.any { url in it.pages.values } }
@@ -633,7 +632,7 @@ abstract class Comix :
 
     // Comix image domains block any image requests with Referer/Origin
     override fun imageRequest(page: Page): Request {
-        // The reader may have moved the page to another host since its url was handed over
+        // The reader may have moved the page to another host
         val imageUrl = synchronized(captures) { captures[page.url]?.pages?.get(page.index) }
             ?: page.imageUrl
             ?: return super.imageRequest(page)
@@ -644,8 +643,7 @@ abstract class Comix :
         return GET(imageUrl, requestHeaders)
     }
 
-    // The reader only gives each page its url as it loads it, so getPageList returns the page count and
-    // getImageUrl waits for that page's url from a walk through the site's reader running in the background
+    // The page count; getImageUrl waits for each url from a background reader walk
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         val capture = capture(chapterUrl)
@@ -659,7 +657,7 @@ abstract class Comix :
 
     override suspend fun getImageUrl(page: Page): String {
         var capture = capture(page.url)
-        // A new request for a page the walk gave up on has it tried again, once the walk knows which page
+        // Asking again retries a missed page
         capture.seek.set(page.index)
         if (capture.missed.remove(page.index)) capture.retries.incrementAndGet()
         val deadline = System.nanoTime() + READER_PAGE_SECONDS.seconds.inWholeNanoseconds
@@ -680,11 +678,10 @@ abstract class Comix :
 
     private fun pageError(page: Page, capture: ChapterCapture) = Exception(capture.walkError?.message ?: "Page ${page.index + 1} didn't load in the reader")
 
-    // Returns the chapter's capture, starting its walk when it has none, or walking again when the last walk
-    // ended with pages missing
+    // Starts a walk if there is none, or walks again for missing pages
     private fun capture(chapterUrl: String): ChapterCapture = synchronized(captures) {
         var capture = captures[chapterUrl] ?: ChapterCapture()
-        // Without a page count the capture can't be resumed; after a failure, only once the retry delay is over
+        // A capture without a page count restarts, after the retry delay if it failed
         val failed = capture.error != null && System.nanoTime() - capture.endedAtNanos < CAPTURE_ERROR_RETRY_NANOS
         if (capture.done && capture.pageCount == null && !failed) capture = ChapterCapture()
         captures[chapterUrl] = capture
@@ -731,7 +728,7 @@ abstract class Comix :
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                // Once the page count is out, a failed walk only leaves pages to walk again for
+                // After the page count, a failure only leaves pages to walk again
                 if (capture.total.isCompleted) capture.walkError = e else capture.error = e
             } finally {
                 capture.endedAtNanos = System.nanoTime()
@@ -739,7 +736,7 @@ abstract class Comix :
                 capture.done = true
             }
         }
-        // Pause once neither the reader nor the downloader has asked for a page in a while
+        // Pause when no page has been asked for in a while
         while (walk.isActive) {
             delay(CAPTURE_IDLE_CHECK_MS)
             if (capture.pageCount != null && System.nanoTime() - capture.lastUsedNanos > CAPTURE_IDLE_NANOS) {
@@ -773,7 +770,7 @@ abstract class Comix :
         @Volatile
         var pageCount: Int? = null
 
-        // The page last asked for, which the walk loads first, and how many times a missed page was asked for again
+        // Page to load first, and how often a missed page was asked for again
         val seek = AtomicInteger(-1)
         val retries = AtomicInteger()
 
@@ -783,18 +780,18 @@ abstract class Comix :
         @Volatile
         var endedAtNanos = 0L
 
-        // Failed before the page count, so nothing can load until it is walked again
+        // Failed before the page count
         @Volatile
         var error: Throwable? = null
 
-        // Failed after the page count; shown for pages it left missing
+        // Failed after it; shown for missing pages
         @Volatile
         var walkError: Throwable? = null
 
         @Volatile
         var done = false
 
-        // Stopped for being idle, so walking again doesn't count against the limit
+        // Idle stop; resuming doesn't count against the limit
         @Volatile
         var paused = false
 
@@ -809,10 +806,10 @@ abstract class Comix :
         url: String,
         isDataRequest: ((HttpUrl) -> Boolean)? = null,
         buildScript: ((passPayloadName: String) -> String)? = null,
-        // Loads images and hosts the WebView on an offscreen display, so the site's reader lays out its pages
+        // The reader run: images on, offscreen display
         loadImages: Boolean = false,
         timeoutSeconds: Long = if (isDataRequest != null) DATA_REQUEST_WAIT_SECONDS else WEBVIEW_TIMEOUT_SECONDS,
-        // Takes every payload instead of the first ending the run; the run ends when it calls done()
+        // Gets every payload; the run ends on done()
         onPayload: ((payload: String, done: () -> Unit) -> Unit)? = null,
         pollScript: (() -> String)? = null,
         pageScript: (passPayloadName: String, rejectName: String, touchName: String) -> String = { _, _, _ -> "" },
@@ -853,7 +850,7 @@ abstract class Comix :
                     requestUrl.host == "comix.ws" ||
                     requestUrl.host.endsWith(".comix.ws") ||
                     requestUrl.host == "challenges.cloudflare.com"
-                // The reader's pages come from image hosts outside the site
+                // Page images are off-site
                 if (allowed || loadImages) null else emptyResponse
             }
 
@@ -911,7 +908,7 @@ abstract class Comix :
                 })();
             """.trimIndent()
             injectAtDocumentStart(bootstrapScript, setOf(siteOrigin))
-            // The reader route refuses an app package in X-Requested-With, which some apps' WebViews send
+            // The reader route refuses an app package here
             if (loadImages) loadUrl(url, mapOf("X-Requested-With" to "com.android.chrome")) else loadUrl(url)
         }
     }
