@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "SayManhwa"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -16,7 +16,7 @@ keiyoushi {
         source {
             lang = it
             baseUrl {
-                custom("https://saymanhwa.com")
+                custom("https://saymanhwa.net")
             }
             if (it == "zh-Hans") {
                 id = 6326978194357900073L
