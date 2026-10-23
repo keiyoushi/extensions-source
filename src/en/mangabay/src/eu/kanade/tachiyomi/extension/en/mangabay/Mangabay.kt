@@ -233,7 +233,7 @@ abstract class Mangabay : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
         val data = extractData(document)?.parseAs<PageListDto>() ?: return emptyList()
-        return data.images.mapIndexed { idx, img ->
+        return data.images.take(data.pages).mapIndexed { idx, img ->
             val imageUrl = if (img.startsWith("http")) img.trim() else baseUrl + img.trim()
             Page(idx, imageUrl = imageUrl)
         }
@@ -244,7 +244,7 @@ abstract class Mangabay : KeiSource() {
             ?: return null
         return script
             .substringAfter("window.__DATA__ = ")
-            .substringBefore(";window.")
+            .substringBefore(";if(")
             .trim()
             .removeSuffix(";")
             .trim()
