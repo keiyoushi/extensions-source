@@ -137,32 +137,19 @@ abstract class Hentairead : KeiSource() {
         }
     }
 
-    private fun resolveUrl(path: String): HttpUrl {
-        val base = baseUrl.toHttpUrl()
-        val url = base.resolve(path)
-        if (url == null || url.scheme != base.scheme || url.host != base.host) {
-            throw Exception("Invalid URL: $path")
-        }
-        return url
-    }
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(resolveUrl(manga.url)).asJsoup()
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val collectionsUrl = document.select("#mangaCollection a").first()?.absUrl("href")
-        val details = if (fetchDetails) {
-            mangaDetailsParse(document).apply { url = manga.url }
-        } else {
-            manga
-        }
+        val details = mangaDetailsParse(document).apply { url = manga.url }
 
-        fun createChapter(chapNum: Float = -1.0f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
+        fun createChapter(chapNum: Float = -1f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
             val titleText = chapTitle.ifBlank { document.select("div.manga-titles h1").first()!!.text() }
-            chapter_number = if (chapNum > 0f) chapNum else 1f
+            chapter_number = if (chapNum == -1f) 1f else chapNum
             name = "${if (chapter_number % 1f == 0f) chapter_number.toInt() else chapter_number} - $titleText"
             url = chapUrl.ifBlank { manga.url }
             if (details.description?.contains("Scanlators") == true) {
@@ -174,7 +161,7 @@ abstract class Hentairead : KeiSource() {
 
         if (collectionsUrl.isNullOrBlank()) {
             allChapters.add(createChapter())
-        } else {
+        } else if (fetchChapters) {
             val collectionsPage = client.get(collectionsUrl).asJsoup()
             for (element: Element in collectionsPage.select("div.manga-item__wrapper")) {
                 val chapNum = element.selectFirst("div.collection-badge")!!.text().toFloat()
