@@ -16,6 +16,7 @@ import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha512
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
@@ -26,7 +27,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import java.security.MessageDigest
 
 @Source
 abstract class Creativecomic : KeiSource() {
@@ -67,8 +67,7 @@ abstract class Creativecomic : KeiSource() {
     private suspend fun getPageKeyIv(): Pair<ByteArray, ByteArray> {
         pageIv?.also { return Pair(pageKey!!, pageIv!!) }
         val token = (getToken() ?: "freeforccc2020reading").toByteArray()
-        val md = MessageDigest.getInstance("SHA-512")
-        val digest = md.digest(token)
+        val digest = token.sha512()
         pageKey = digest.sliceArray(0..31)
         pageIv = pageKey!!.sliceArray(15..30)
         return Pair(pageKey!!, pageIv!!)

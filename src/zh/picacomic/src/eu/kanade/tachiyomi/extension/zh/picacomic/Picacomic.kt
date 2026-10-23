@@ -16,6 +16,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
@@ -351,7 +352,7 @@ abstract class Picacomic :
         val apiKey = basicHeaders["api-key"]
         val path = url.substringAfter("$apiUrl/")
         val raw = "$path$time$nonce${method}$apiKey".lowercase(Locale.ROOT)
-        return hmacSHA256(hmacSha256Key, raw).convertToString()
+        return raw.hmacSha256(hmacSha256Key.encodeToByteArray()).toHexString()
     }
 
     private fun getToken() {

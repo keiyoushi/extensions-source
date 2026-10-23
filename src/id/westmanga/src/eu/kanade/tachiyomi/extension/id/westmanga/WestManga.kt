@@ -10,13 +10,12 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLocalStorage
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class WestManga : KeiSource() {
@@ -129,9 +128,7 @@ abstract class WestManga : KeiSource() {
         val timestamp = (System.currentTimeMillis() / 1000).toString()
         val message = "wm-api-request"
         val key = timestamp + "GET" + url.encodedPath + ACCESS_KEY + SECRET_KEY
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(key.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-        val signature = mac.doFinal(message.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        val signature = message.hmacSha256(key.encodeToByteArray()).toHexString()
 
         return headersBuilder().apply {
             if (includeToken) {
