@@ -46,6 +46,7 @@ internal class LatestChapterDto(
     val releaseDate: String?,
 )
 
+@Serializable
 internal class ChapterDto(
     val id: String,
     val number: Double,
