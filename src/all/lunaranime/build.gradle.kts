@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Lunar Manga"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -23,8 +23,4 @@ keiyoushi {
             lang = language
         }
     }
-}
-
-dependencies {
-    implementation(project(":lib:cryptoaes"))
 }

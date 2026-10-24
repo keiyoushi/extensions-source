@@ -9,10 +9,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
+import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebViewBlocking
@@ -118,9 +118,7 @@ abstract class Softkomik : KeiSource() {
     private suspend inline fun <reified T> getPageProps(url: String): T {
         val stk = client.get(url).extractNextJs<EncryptedPropsDto>()?.stk
             ?: throw Exception("Could not find page data")
-        return CryptoAES.decrypt(stk, pagePropsKey)
-            .ifEmpty { throw Exception("Could not decrypt page data") }
-            .parseAs()
+        return stk.cryptoJsDecrypt(pagePropsKey).parseAs()
     }
 
     private suspend fun getMangaDetails(slug: String): SManga {
