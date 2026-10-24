@@ -55,6 +55,7 @@ class SortFilter :
             Pair("New Manga", "create_date"),
             Pair("Latest Update", "update_date"),
         ),
+        firstIsUnspecified = false,
     )
 
 class GenreFilter(name: String) : Filter.TriState(name)
