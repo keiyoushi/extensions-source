@@ -38,7 +38,6 @@ abstract class SchaleNetwork :
     private val searchLang: String
         get() = when (lang) {
             "en" -> "english"
-            "ja" -> "japanese"
             "zh" -> "chinese"
             else -> ""
         }

@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "SchaleNetwork"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     pkgName = "all.koharu"
 
-    listOf("all", "en", "ja", "zh").forEach {
+    listOf("all", "en", "zh").forEach {
         source {
             lang = it
             if (it == "en") id = 1484902275639232927L
