@@ -11,7 +11,10 @@ keiyoushi {
     libVersion = "1.6"
 
     val languages = listOf(
-        "all", "en", "id", "ja",
+        "all",
+        "en",
+        "id",
+        "ja",
     )
 
     languages.forEach { language ->
