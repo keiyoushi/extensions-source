@@ -41,6 +41,7 @@ class SeriesDto(
     private val title: String,
     private val cover: String? = null,
     private val type: String? = null,
+    private val originalLanguage: String? = null,
     private val status: String? = null,
     private val tags: List<String> = emptyList(),
     private val spoilerTags: List<String> = emptyList(),
@@ -58,6 +59,8 @@ class SeriesDto(
     private val editionOf: EditionDto? = null,
     private val editions: List<EditionDto> = emptyList(),
 ) {
+    val isEnglishOriginal get() = originalLanguage == "en"
+
     fun toSManga(baseUrl: String, showSpoilerTags: Boolean) = SManga.create().apply {
         url = "/title/$hid"
         title = this@SeriesDto.title
@@ -185,6 +188,17 @@ class SeriesResponse(
     val chapters: List<ChapterDto>,
     val recs: List<SeriesDto> = emptyList(),
 )
+
+@Serializable
+class CoversDto(private val covers: List<CoverDto>) {
+    fun earliestEnglishUrl(baseUrl: String) = covers
+        .filter { it.locale == "en" }
+        .minByOrNull { it.volume?.toFloatOrNull() ?: Float.MAX_VALUE }
+        ?.let { "$baseUrl${it.full}" }
+}
+
+@Serializable
+class CoverDto(val volume: String? = null, val locale: String, val full: String)
 
 @Serializable
 class ChapterDto(

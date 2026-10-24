@@ -167,14 +167,23 @@ abstract class Toonkotsu :
     ): SMangaUpdate = coroutineScope {
         val hid = getMangaUrl(manga).toHttpUrl().pathSegments[1]
         val mangabaka = if (fetchDetails) async { fetchMangabaka(hid) } else null
+        val englishCovers = preferences.getBoolean(PREF_ENGLISH_COVERS, false)
+        val covers = if (fetchDetails && englishCovers) async { fetchCovers(hid) } else null
         val data = client.get("$baseUrl/cdn/v1/series/$hid").parseAs<SeriesResponse>()
         // Without details the description stays null, which the app keeps as stored
         val details = mangabaka?.let { data.series.toSMangaDetails(baseUrl, showSpoilerTags, showAdult, it.await()) }
             ?: data.series.toSManga(baseUrl, showSpoilerTags)
+        // Null keeps the stored cover on a chapters-only refresh
+        if (englishCovers && !data.series.isEnglishOriginal) {
+            details.thumbnail_url = covers?.await()?.earliestEnglishUrl(baseUrl) ?: details.thumbnail_url.takeIf { fetchDetails }
+        }
         // One per chapter ranks by likes, a request of its own
         val needsLikes = preferences.getString(PREF_CHAPTER_LIST, ONE_PER_GROUP) == ONE_PER_CHAPTER
         SMangaUpdate(details, if (fetchChapters || !needsLikes) chapterList(data, manga.url) else chapters)
     }
+
+    // The site's Covers tab
+    private suspend fun fetchCovers(hid: String): CoversDto = client.get("$baseUrl/cdn/v1/series/$hid/covers").parseAs()
 
     // The site's Details tab and External Links; `{"available":false}` when it has none
     private suspend fun fetchMangabaka(hid: String): MangabakaDto = client.get("$baseUrl/api/v1/series/$hid/mangabaka").parseAs()
@@ -401,6 +410,13 @@ abstract class Toonkotsu :
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_ENGLISH_COVERS
+            title = "Prefer English covers"
+            summary = "From the site's Covers tab"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SPOILER_TAGS
             title = "Show spoiler tags"
             summary = "Include tags the site marks as spoilers in the genres"
@@ -419,6 +435,7 @@ abstract class Toonkotsu :
         private const val PREF_PREFERRED_SOURCES = "pref_preferred_sources"
         private const val PREF_PREFERRED_GROUPS = "pref_preferred_groups"
         private const val PREF_HIDDEN_GROUPS = "pref_hidden_groups"
+        private const val PREF_ENGLISH_COVERS = "pref_english_covers"
         private const val DEFAULT_PREFERRED_GROUPS = "Official"
         private const val ALL_UPLOADS = "all"
         private const val ONE_PER_GROUP = "group"
