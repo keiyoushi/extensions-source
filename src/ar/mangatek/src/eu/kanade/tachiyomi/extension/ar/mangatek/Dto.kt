@@ -55,7 +55,7 @@ class Chapter(
     private val isAI: Int,
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        val title = this@Chapter.title?.takeIf { it.isNotBlank() } ?: "Chapter $chapterNumber"
+        val title = this@Chapter.title?.takeIf { it.isNotEmpty() } ?: "Chapter $chapterNumber"
         name = if (isAI == 1) "$title (مترجم)" else title
         url = "/reader/$mangaSlug/$chapterNumber"
         date_upload = Instant.tryParse(createdAt)

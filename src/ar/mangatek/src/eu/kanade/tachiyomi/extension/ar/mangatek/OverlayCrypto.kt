@@ -13,6 +13,8 @@ import kotlinx.coroutines.ensureActive
 // plain SHA-256 over these inputs and AES-GCM is done in JS.
 object OverlayCrypto {
 
+    private const val KEY = "ff453871399fe268588a0936b45376022d85ed0fd1292001d5102f6a30291dc1"
+
     private const val PROOF_SALT = "cc9544a33ccbc953b9e7546c9b134524f3c3a06e81d392f0"
     private const val READER_SEED = "2435eb747e78f582e781909ebbfc14826e4f3954b4268850"
 
@@ -39,7 +41,7 @@ object OverlayCrypto {
     }
 
     // "ivHex:ctHex:tagHex", AES-GCM
-    fun decryptHexBlob(blob: String, keyHex: String): String {
+    fun decryptHexBlob(blob: String, keyHex: String = KEY): String {
         val (iv, ciphertext, tag) = blob.split(":").also {
             require(it.size == 3) { "Unexpected overlay format" }
         }.map { it.decodeHex() }

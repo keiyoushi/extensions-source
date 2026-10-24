@@ -155,7 +155,7 @@ abstract class MangaTek : KeiSource() {
         val document = client.get("$baseUrl${chapter.url}").asJsoup()
         val props: ChapterProps = document.extractAstroProp("imageUrls")
 
-        val overlayData = props.overlayBlob?.let { OverlayCrypto.decryptHexBlob(it, KEY).parseAs<OverlayData>() }
+        val overlayData = props.overlayBlob?.let { OverlayCrypto.decryptHexBlob(it).parseAs<OverlayData>() }
             ?: unlockOverlay(props)
 
         val offset = props.overlayPageOffset ?: 0
@@ -214,7 +214,6 @@ abstract class MangaTek : KeiSource() {
 
     companion object {
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?[^#]*)?#\[.*?]""", RegexOption.IGNORE_CASE)
-        private const val KEY = "ff453871399fe268588a0936b45376022d85ed0fd1292001d5102f6a30291dc1"
         private const val API_BASE = "https://api.mangatek.com"
         private const val UNLOCK_API_URL = "$API_BASE/api/reader/unlock"
     }
