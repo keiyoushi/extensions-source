@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "HanabiManga"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

@@ -21,7 +21,7 @@ abstract class MadaraDex : Madara() {
 
     private fun randomHex16() = ByteArray(16)
         .also { SecureRandom().nextBytes(it) }
-        .joinToString("") { "%02x".format(it) }
+        .toHexString()
 
     private fun refreshAuth() {
         if (client.cookieJar.loadForRequest(siteUrl).none { it.name == "mdx_fp" }) {

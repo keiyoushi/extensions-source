@@ -18,6 +18,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCtr
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
@@ -35,10 +37,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.buffer
-import okio.cipherSource
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class Toonkotsu :
@@ -292,10 +290,7 @@ abstract class Toonkotsu :
 
         val key = Base64.decode(fragment.substringBefore("."), Base64.URL_SAFE)
         val nonce = Base64.decode(fragment.substringAfter("."), Base64.URL_SAFE)
-        val cipher = Cipher.getInstance("AES/CTR/NoPadding").apply {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(nonce.copyOf(16)))
-        }
-        val body = response.body.source().cipherSource(cipher).buffer()
+        val body = response.body.source().aesDecrypt(aesCtr(key, nonce.copyOf(16))).buffer()
             .asResponseBody(response.body.contentType(), response.body.contentLength())
         return response.newBuilder().body(body).build()
     }

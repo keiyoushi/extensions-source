@@ -41,7 +41,6 @@ import java.util.Date
 import java.util.UUID
 import javax.crypto.Cipher
 import kotlin.random.Random
-import kotlin.random.nextUBytes
 import kotlin.time.Duration.Companion.minutes
 
 @Source
@@ -134,14 +133,12 @@ abstract class Manhuaren :
         return Base64.encodeToString(cipher.doFinal(message.toByteArray()), Base64.NO_WRAP)
     }
 
-    @OptIn(ExperimentalUnsignedTypes::class)
     private suspend fun getAnonyUser(): Response {
         val url = baseHttpUrl.newBuilder()
             .addPathSegments("v1/user/createAnonyUser2")
             .build()
 
-        val androidId = Random.nextUBytes(8)
-            .joinToString("") { it.toString(16).padStart(2, '0') }
+        val androidId = Random.nextBytes(8).toHexString()
             .replaceFirst(leadingZeros, "")
             .uppercase()
 
