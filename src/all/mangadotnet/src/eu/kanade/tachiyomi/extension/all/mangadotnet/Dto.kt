@@ -235,6 +235,7 @@ class Manga(
             else -> when (this@Manga.status?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
+                "hiatus" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
         }
