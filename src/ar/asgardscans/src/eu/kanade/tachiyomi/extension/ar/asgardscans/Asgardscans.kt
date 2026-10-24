@@ -13,6 +13,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter
@@ -70,35 +71,57 @@ abstract class Asgardscans : KeiSource() {
         val series = document.select("script[type=application/ld+json]")
             .map { it.data() }
             .firstOrNull { "\"CreativeWorkSeries\"" in it }
-            ?.let { JSONObject(it) }
+            ?.let(::parseSeriesJson)
 
         return manga.apply {
             title = document.selectFirst("h1")!!.text()
-            thumbnail_url = document.selectFirst("img[itemprop=image]")?.attr("abs:src")
-            description = series?.optString("description")
-                ?.takeIf { it.isNotBlank() }
-                ?.let { desc ->
-                    val alt = series.optString("alternateName")
-                    if (alt.isNotBlank()) "$desc\n\nAlternative: $alt" else desc
-                }
-            genre = document.select("a[href^=/manga?genres=]").joinToString { it.text() }
+            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
+            description = series?.stringOrArray("description")?.let { desc ->
+                series.stringOrArray("alternateName")
+                    ?.let { alt -> "$desc\n\nAlternative: $alt" }
+                    ?: desc
+            }
+            genre = series?.stringOrArray("genre")
+                ?: document.select("a[href^=/manga?genres=]").joinToString { it.text() }
             status = document.selectFirst("span:containsOwn(الحالة) + span")?.text().toStatus()
         }
     }
 
-    private fun String?.toStatus() = when (this) {
-        "مستمر" -> SManga.ONGOING
-        "مكتمل" -> SManga.COMPLETED
-        "متوقف" -> SManga.ON_HIATUS
+    private fun parseSeriesJson(script: String): JSONObject? {
+        val json = JSONObject(script)
+        if (json.optString("@type") == "CreativeWorkSeries") return json
+
+        val graph = json.optJSONArray("@graph") ?: return null
+        return (0 until graph.length())
+            .map { graph.optJSONObject(it) }
+            .firstOrNull { it?.optString("@type") == "CreativeWorkSeries" }
+    }
+
+    private fun JSONObject.stringOrArray(key: String): String? = when (val value = opt(key)) {
+        is String -> value.takeIf { it.isNotBlank() }
+        is JSONArray ->
+            (0 until value.length())
+                .mapNotNull { value.optString(it) }
+                .filter { it.isNotBlank() }
+                .joinToString(", ")
+                .takeIf { it.isNotEmpty() }
+        else -> null
+    }
+
+    private fun String?.toStatus() = when {
+        this == null -> SManga.UNKNOWN
+        contains("مستمر") -> SManga.ONGOING
+        contains("مكتمل") -> SManga.COMPLETED
+        contains("متوقف") -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 
-    private fun parseChapters(document: Document): List<SChapter> = document.select("ol > li > a[href]").map { element ->
+    private fun parseChapters(document: Document): List<SChapter> = document.select("ol > li > a[dir=ltr]").map { element ->
         SChapter.create().apply {
             name = element.selectFirst("div[dir=rtl] span")!!.text()
             setUrlWithoutDomain(element.absUrl("href"))
             date_upload = dateFormat.tryParseDate(
-                element.selectFirst("span.tabular")?.text(),
+                element.selectFirst("div[dir=rtl] span.tabular")?.text(),
             )
         }
     }
