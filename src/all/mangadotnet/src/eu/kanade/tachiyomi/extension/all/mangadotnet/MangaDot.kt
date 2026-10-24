@@ -603,6 +603,11 @@ abstract class MangaDot :
             allChapters
         }
 
+        val hasScanlator = finalChapters.any { it.scanlator != null }
+        if (hasScanlator) {
+            finalChapters.forEach { it.scanlator = it.scanlator ?: "\u200B" }
+        }
+
         finalChapters
     }
 
