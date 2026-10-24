@@ -22,8 +22,11 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -32,6 +35,7 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
@@ -44,7 +48,8 @@ abstract class CatharsisWorld : KeiSource() {
 
     private val apiUrl get() = "$baseUrl/api"
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 1.seconds) { it.encodedPath.endsWith("/page-ticket") }
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .addInterceptor(::signatureInterceptor)
         .addInterceptor(::pageInterceptor)
 
@@ -125,14 +130,10 @@ abstract class CatharsisWorld : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$apiUrl/mangas/${chapter.url}"
-        val dto = try {
-            client.get(url).parseAs<PagesDto>()
-        } catch (e: HttpException) {
-            if (e.code == 401) {
-                throw Exception("This chapter requires login on the website")
-            }
-            throw e
-        }
+        val pass = readerPass()
+        val dto = fetchChapterPages(url, pass)
+            ?: fetchChapterPages(url, readerPass(rejected = pass))
+            ?: throw HttpException(403)
         val token = dto.chapterSessionToken
             ?: throw IllegalStateException("Missing chapter session token")
         val chapterId = token.split(".").firstOrNull()
@@ -141,15 +142,40 @@ abstract class CatharsisWorld : KeiSource() {
             ?.let { it.parseAs<ChapterTokenPayload>().cid }
             ?: throw IllegalStateException("Invalid chapter session token")
         return dto.paginas.mapIndexed { i, pageDto ->
-            val ticket = client.post(
-                "$apiUrl/mangas/chapters/$chapterId/page-ticket",
-                headers = headers,
-                body = PageTicketRequest(pageDto.index, token).toJsonRequestBody(),
-            ).parseAs<PageTicketResponse>()
-            xorKeys[ticket.signedToken] = ticket.xorByte
-            ticket.scrambleKey?.let { scrambleKeys[ticket.signedToken] = it }
-            Page(i, imageUrl = "$apiUrl/mangas/pages/${ticket.signedToken}")
+            Page(i, url = "$apiUrl/mangas/chapters/$chapterId/page-ticket#${pageDto.index}:$token")
         }
+    }
+
+    // Null when the site asks for a new reader pass
+    private suspend fun fetchChapterPages(url: String, pass: ReaderPassDto): PagesDto? {
+        val passHeaders = headers.newBuilder().set("X-Catharsis-Reader-Pass", pass.pass).build()
+        val response = client.get(url, passHeaders, ensureSuccess = false)
+        return when {
+            response.isSuccessful -> response.parseAs<PagesDto>()
+            response.code == 401 -> {
+                response.close()
+                throw Exception("This chapter requires login on the website")
+            }
+            response.code == 403 &&
+                response.header("Content-Type")?.startsWith("application/json") == true &&
+                response.parseAs<ApiErrorDto>().code == "READER_PASS_REQUIRED" -> null
+            else -> {
+                response.close()
+                throw HttpException(response.code)
+            }
+        }
+    }
+
+    // Tickets are minted per page: minting a whole chapter at once trips the site's speed limit
+    override suspend fun getImageUrl(page: Page): String {
+        val (pageIndex, token) = page.url.toHttpUrl().fragment!!.split(":", limit = 2)
+        val ticket = client.post(
+            page.url,
+            body = PageTicketRequest(pageIndex.toInt(), token).toJsonRequestBody(),
+        ).parseAs<PageTicketResponse>()
+        xorKeys[ticket.signedToken] = ticket.xorByte
+        ticket.scrambleKey?.let { scrambleKeys[ticket.signedToken] = it }
+        return "$apiUrl/mangas/pages/${ticket.signedToken}"
     }
 
     private val xorKeys = ConcurrentHashMap<String, Int>()
@@ -158,6 +184,51 @@ abstract class CatharsisWorld : KeiSource() {
     override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
         .addHeader("X-Catharsis-Reader", "1")
         .build()
+
+    private var currentReaderPass: ReaderPassDto? = null
+    private val readerPassMutex = Mutex()
+
+    // Reader pass from the site's Cap proof-of-work
+    private suspend fun readerPass(rejected: ReaderPassDto? = null): ReaderPassDto = readerPassMutex.withLock {
+        currentReaderPass
+            ?.takeIf { it !== rejected && it.expiresAt > System.currentTimeMillis() + 60_000 }
+            ?.let { return@withLock it }
+        val system = client.get("$apiUrl/system").parseAs<SystemDto>()
+        val capUrl = system.capApiEndpoint.toHttpUrl()
+        val challenge = client.post(capUrl.resolve("challenge")!!, RequestBody.EMPTY).parseAs<CapChallengeResponse>()
+        val solutions = (1..challenge.challenge.count).map { i ->
+            solveCap(
+                salt = capPrng("${challenge.token}$i", challenge.challenge.saltSize),
+                target = capPrng("${challenge.token}${i}d", challenge.challenge.difficulty),
+            )
+        }
+        val redeemed = client.post(
+            capUrl.resolve("redeem")!!,
+            CapRedeemRequest(challenge.token, solutions).toJsonRequestBody(),
+        ).parseAs<CapRedeemResponse>()
+        val capToken = redeemed.token?.takeIf { redeemed.success }
+            ?: throw Exception("Reader verification failed")
+        client.post(
+            "$apiUrl/mangas/reader-pass",
+            ReaderPassRequest(capToken, system.capSitekey).toJsonRequestBody(),
+        ).parseAs<ReaderPassDto>().also { currentReaderPass = it }
+    }
+
+    // FNV-1a seeded xorshift32, as hex
+    private fun capPrng(seed: String, length: Int): String {
+        var state = seed.fold(FNV_OFFSET_BASIS) { hash, char -> (hash xor char.code) * FNV_PRIME }
+        return buildString {
+            while (this.length < length) {
+                state = state xor (state shl 13)
+                state = state xor (state ushr 17)
+                state = state xor (state shl 5)
+                append(state.toUInt().toString(16).padStart(8, '0'))
+            }
+        }.take(length)
+    }
+
+    private fun solveCap(salt: String, target: String): Int = generateSequence(0) { it + 1 }
+        .first { "$salt$it".sha256().toHexString().startsWith(target) }
 
     // Page images are XOR-ed with a single-byte key unless they already start with an image signature
     private fun signatureInterceptor(chain: Interceptor.Chain): Response {
@@ -340,5 +411,7 @@ abstract class CatharsisWorld : KeiSource() {
         private const val PAGE_SIZE = 24
         private const val HMAC_KEY = "4$^£]C8j%La3"
         private const val HEADER_SIZE = 12
+        private const val FNV_OFFSET_BASIS = -0x7ee3623b
+        private const val FNV_PRIME = 0x01000193
     }
 }

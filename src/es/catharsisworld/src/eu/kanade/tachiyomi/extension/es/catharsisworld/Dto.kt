@@ -115,3 +115,51 @@ class ChapterTokenPayload(
     private val ip: String? = null,
     private val exp: Long? = null,
 )
+
+@Serializable
+class SystemDto(
+    @SerialName("cap_sitekey") val capSitekey: String,
+    @SerialName("cap_api_endpoint") val capApiEndpoint: String,
+)
+
+@Serializable
+class CapChallengeResponse(
+    val challenge: CapChallenge,
+    val token: String,
+)
+
+@Serializable
+class CapChallenge(
+    @SerialName("c") val count: Int,
+    @SerialName("s") val saltSize: Int,
+    @SerialName("d") val difficulty: Int,
+)
+
+@Serializable
+class CapRedeemRequest(
+    private val token: String,
+    private val solutions: List<Int>,
+)
+
+@Serializable
+class CapRedeemResponse(
+    val success: Boolean,
+    val token: String? = null,
+)
+
+@Serializable
+class ApiErrorDto(
+    val code: String? = null,
+)
+
+@Serializable
+class ReaderPassRequest(
+    private val token: String,
+    private val sitekey: String,
+)
+
+@Serializable
+class ReaderPassDto(
+    val pass: String,
+    val expiresAt: Long,
+)
