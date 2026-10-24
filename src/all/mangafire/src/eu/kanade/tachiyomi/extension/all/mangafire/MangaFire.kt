@@ -57,6 +57,7 @@ abstract class MangaFire :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
             addQueryParameter("order[views_30d]", "desc")
+            addQueryParameter("languages[]", langCode)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
             ContentRatingFilter(contentRating).addToUri(this)
@@ -71,6 +72,7 @@ abstract class MangaFire :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
             addQueryParameter("order[chapter_updated_at]", "desc")
+            addQueryParameter("languages[]", langCode)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
             ContentRatingFilter(contentRating).addToUri(this)
@@ -114,6 +116,7 @@ abstract class MangaFire :
             if (query.isNotBlank()) {
                 addQueryParameter("keyword", query.trim())
             }
+            addQueryParameter("languages[]", langCode)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
 
