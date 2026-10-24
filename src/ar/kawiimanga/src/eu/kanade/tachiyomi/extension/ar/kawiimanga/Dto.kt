@@ -64,15 +64,16 @@ class Manga(
 class Chapter(
     private val id: String,
     private val title: String,
-    private val number: Int,
+    private val number: Float,
     private val createdAt: String,
 ) {
 
     fun toSChapter(slug: String) = SChapter.create().apply {
-        url = "$slug/$number"
-        val baseName = "الفصل $number"
+        val numberText = number.toString().removeSuffix(".0")
+        url = "$slug/$numberText"
+        val baseName = "الفصل $numberText"
         name = if (title == baseName) baseName else "$baseName - $title"
-        chapter_number = number.toFloat()
+        chapter_number = number
         date_upload = Instant.tryParse(createdAt)
         memo = buildJsonObject { put("id", id) }
     }
