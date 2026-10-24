@@ -169,7 +169,10 @@ abstract class Hentairead : KeiSource() {
                 val chapTitle = element.selectFirst("a.manga-item__link")!!.text()
                 allChapters.add(createChapter(chapNum, chapUrl, chapTitle))
             }
+        } else {
+            return SMangaUpdate(details, chapters)
         }
+
         return SMangaUpdate(details, allChapters)
     }
 
