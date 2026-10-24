@@ -454,6 +454,8 @@ abstract class Comix :
             buildScript = { passPayloadName ->
                 """
                 (function () {
+                    // script#initial-data is partial while the document is still parsing
+                    if (document.readyState === 'loading') return;
                     const raw = document.querySelector('script#initial-data')?.textContent;
                     if (raw) window.$passPayloadName(raw);
                 })();
