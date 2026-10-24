@@ -35,14 +35,10 @@ abstract class TempleScan :
         rateLimit(1)
     }
 
-    // Headers of an image load in Chrome for Android
+    // the image cdn answers 403 to any request carrying Sec-Fetch-Dest, so no browser fetch metadata here
     override fun Headers.Builder.configureHeaders() = apply {
         removeAll("Origin")
         set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        set("Sec-Fetch-Site", "same-site")
-        set("Sec-Fetch-Mode", "no-cors")
-        set("Sec-Fetch-Dest", "image")
-        set("Priority", "i")
     }
 
     private val pages = SitePages(baseUrl) { headers["User-Agent"]!! }
