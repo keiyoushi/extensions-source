@@ -189,14 +189,19 @@ internal open class JsonMultiSelectTriFilter(
     }
 }
 
-internal class FormatFilter :
-    JsonMultiSelectFilter(
-        "Format",
-        "format",
-        FORMAT_OPTIONS.map { MultiSelectOption(it) },
-    )
+internal class FormatFilter(
+    excluded: Set<String> = emptySet(),
+) : JsonMultiSelectFilter(
+    "Format",
+    "format",
+    FORMAT_OPTIONS.map {
+        MultiSelectOption(it).apply {
+            state = excluded.isNotEmpty() && it !in excluded
+        }
+    },
+)
 
-private val FORMAT_OPTIONS = listOf("Manga", "Manhwa", "Manhua", "Comic", "Other")
+internal val FORMAT_OPTIONS = listOf("Manga", "Manhwa", "Manhua", "Comic", "Other")
 
 internal class PublicationStatusFilter :
     JsonMultiSelectFilter(
