@@ -91,7 +91,8 @@ class CachedPost(
     val hasPages: Boolean,
 ) {
     val chapterNumber: Float
-        get() = number.toFloat() + (part?.toFloat()?.div(10) ?: 0f)
+        // part 1 is the plain chapter, part 2 is .5, later parts stay below the next chapter
+        get() = number.toFloat() + (part?.toFloat()?.let { (it - 1) / it } ?: 0f)
 
     fun toSChapter(chapterLabel: String, partLabel: String) = SChapter.create().apply {
         url = id.toString()
