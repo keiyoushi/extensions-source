@@ -6,15 +6,15 @@ plugins {
 
 keiyoushi {
     name = "NamiComi"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     listOf(
-        "en", "ar", "bg", "ca", "zh-Hans", "zh-Hant", "hr", "cs", "da", "nl",
-        "et", "fil", "fi", "fr", "de", "el", "he", "hi", "hu", "is",
-        "ga", "id", "it", "ja", "ko", "lt", "ms", "ne", "no", "pa",
-        "fa", "pl", "pt-BR", "pt", "ru", "sk", "sl", "es-419", "es", "sv",
+        "en", "ar", "bg", "ca", "zh-Hans", "zh-Hant", "cs", "da",
+        "fil", "fr", "de", "he", "hi", "hu",
+        "id", "it", "ja", "ko", "ms",
+        "pl", "pt-BR", "pt", "ru", "es-419", "es",
         "th", "tr", "uk",
     ).forEach {
         source {
