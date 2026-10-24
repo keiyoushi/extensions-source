@@ -94,17 +94,29 @@
         return el;
     };
 
-    const groupOf = (row, anchor, number) => {
+    // "Ch.<n>", then the name
+    const nameOf = (anchor) => Array.from(anchor.children).slice(1).map(textOf).join(" ").trim();
+
+    // The group, or the uploader when there is none
+    const groupOf = (row) => {
         if (!row) return null;
-        let rest = textOf(row);
-        const own = textOf(anchor);
-        if (own) rest = rest.split(own).join(" ");
-        rest = rest.replace(new RegExp("chapter\\s*" + number, "i"), " ");
-        rest = rest.replace(/·\s*\d+\s*·/g, " ");
-        rest = rest.replace(/\b\d+\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?|mos?|years?|yrs?|[smhdwy])\s*ago\b/gi, " ");
-        rest = rest.replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ");
-        rest = rest.replace(/\s+/g, " ").trim();
-        return rest.length >= 2 && rest.length <= 60 && /[a-z]/i.test(rest) ? rest : null;
+        const group = row.querySelector('a[href^="/groups/"]');
+        if (group && textOf(group)) {
+            const id = /^\/groups\/(\d+)/.exec(group.getAttribute("href") || "");
+            return { id: id ? Number(id[1]) : null, name: textOf(group) };
+        }
+        const uploader = row.querySelector('a[href^="/u/"]');
+        return uploader && textOf(uploader) ? { id: null, name: textOf(uploader) } : null;
+    };
+
+    // "70" or "1.2k"
+    const votesOf = (row) => {
+        if (!row) return 0;
+        for (const span of row.querySelectorAll("span")) {
+            const match = span.querySelector("svg") && /^(\d+(?:\.\d+)?)(k?)$/i.exec(textOf(span));
+            if (match) return Math.round(parseFloat(match[1]) * (match[2] ? 1000 : 1));
+        }
+        return 0;
     };
 
     const findMoreControl = (scope) => {
@@ -190,7 +202,9 @@
                     number: chapter.number,
                     url: path,
                     text: row ? textOf(row) : textOf(anchor),
-                    group: groupOf(row, anchor, chapter.number),
+                    name: nameOf(anchor),
+                    votes: votesOf(row),
+                    group: groupOf(row),
                 });
                 added++;
             }
