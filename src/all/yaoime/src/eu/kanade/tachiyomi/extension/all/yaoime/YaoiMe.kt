@@ -20,8 +20,10 @@ import keiyoushi.utils.decodeHex
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -29,9 +31,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
-import java.security.MessageDigest
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class YaoiMe :
@@ -190,9 +189,7 @@ abstract class YaoiMe :
     private suspend fun readerChapter(seriesId: Int, chapterId: Long): ReaderChapterDto {
         val path = "/api/reader/chapter?s=$seriesId&c=$chapterId"
         val time = System.currentTimeMillis().toString()
-        val signature = Mac.getInstance("HmacSHA256")
-            .apply { init(SecretKeySpec(SIGN_KEY.decodeHex(), "HmacSHA256")) }
-            .doFinal("$path $time".toByteArray())
+        val signature = "$path $time".hmacSha256(SIGN_KEY.decodeHex())
         val signedHeaders = headersBuilder()
             .set("x-yf-t", time)
             .set("x-yf-s", Base64.encodeToString(signature, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP))
@@ -204,7 +201,7 @@ abstract class YaoiMe :
         val data = Base64.decode(sealed, Base64.URL_SAFE)
         val salt = data.copyOfRange(0, 16)
         val iv = data.copyOfRange(16, 28)
-        val key = MessageDigest.getInstance("SHA-256").digest(SEAL_KEY.decodeHex() + salt)
+        val key = (SEAL_KEY.decodeHex() + salt).sha256()
         return data.copyOfRange(28, data.size)
             .aesDecrypt(aesGcm(key, iv))
             .decodeToString()
