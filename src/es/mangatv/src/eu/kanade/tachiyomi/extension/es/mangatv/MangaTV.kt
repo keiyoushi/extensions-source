@@ -5,13 +5,12 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class MangaTV : MangaThemesia() {
@@ -40,14 +39,8 @@ abstract class MangaTV : MangaThemesia() {
     }
 
     private fun decryptReaderBlob(blob: ReaderBlob): List<String> {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(
-                Cipher.DECRYPT_MODE,
-                SecretKeySpec(Base64.decode(blob.k, Base64.DEFAULT), "AES"),
-                GCMParameterSpec(128, Base64.decode(blob.iv, Base64.DEFAULT)),
-            )
-        }
-        val plaintext = cipher.doFinal(Base64.decode(blob.c, Base64.DEFAULT)).decodeToString()
+        val cipher = aesGcm(Base64.decode(blob.k, Base64.DEFAULT), Base64.decode(blob.iv, Base64.DEFAULT))
+        val plaintext = Base64.decode(blob.c, Base64.DEFAULT).aesDecrypt(cipher).decodeToString()
         return plaintext.parseAs<ReaderImages>().p
     }
 

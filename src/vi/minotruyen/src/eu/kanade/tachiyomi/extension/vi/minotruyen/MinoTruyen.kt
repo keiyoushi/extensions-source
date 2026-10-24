@@ -8,11 +8,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -151,8 +151,7 @@ abstract class MinoTruyen : KeiSource() {
 
             val encData = encrypted.substringAfter(":")
 
-            val decrypted = CryptoAES.decrypt(encData, aesKey)
-            if (decrypted.isBlank()) return emptyList()
+            val decrypted = encData.cryptoJsDecrypt(aesKey)
 
             val servers = decrypted.parseAs<List<ChapterServer>>()
 

@@ -32,6 +32,7 @@ private val dateFormat = DateTimeFormatter.ofPattern("d.M.yyyy")
 @Serializable
 class PageListDto(
     val images: List<String>,
+    val pages: Int,
 )
 
 @Serializable

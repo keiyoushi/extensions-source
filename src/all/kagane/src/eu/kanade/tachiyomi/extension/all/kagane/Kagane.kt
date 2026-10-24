@@ -101,6 +101,7 @@ abstract class Kagane :
         FilterList(
             SortFilter(Filter.Sort.Selection(1, false)),
             ContentRatingFilter(contentRating.toSet()),
+            FormatFilter(excludedFormats),
             GenresFilter(emptyList(), excludedGenreIds),
 
         ),
@@ -114,6 +115,7 @@ abstract class Kagane :
         FilterList(
             SortFilter(Filter.Sort.Selection(6, false)),
             ContentRatingFilter(contentRating.toSet()),
+            FormatFilter(excludedFormats),
             GenresFilter(emptyList(), excludedGenreIds),
         ),
     )
@@ -395,6 +397,9 @@ abstract class Kagane :
     private val excludedGenreIds: Set<String>
         get() = prefs.getStringSet(GENRES_ID_PREF, emptySet()) ?: emptySet()
 
+    private val excludedFormats: Set<String>
+        get() = prefs.getStringSet(FORMATS_PREF, emptySet()) ?: emptySet()
+
     private val sourceDisplayMode: String
         get() = prefs.getString(SOURCE_DISPLAY_MODE, SOURCE_DISPLAY_MODE_DEFAULT) ?: SOURCE_DISPLAY_MODE_DEFAULT
 
@@ -442,6 +447,21 @@ abstract class Kagane :
                 @Suppress("UNCHECKED_CAST")
                 val selected = values as Set<String>
                 this.summary = selected.mapNotNull { genreMap[it] }.joinToString()
+                true
+            }
+        }.let(screen::addPreference)
+
+        MultiSelectListPreference(screen.context).apply {
+            key = FORMATS_PREF
+            title = "Exclude Formats"
+            entries = FORMAT_OPTIONS.toTypedArray()
+            entryValues = FORMAT_OPTIONS.toTypedArray()
+            summary = FORMAT_OPTIONS.filter { it in excludedFormats }.joinToString()
+            setDefaultValue(emptySet<String>())
+            setOnPreferenceChangeListener { _, values ->
+                @Suppress("UNCHECKED_CAST")
+                val selected = values as Set<String>
+                this.summary = FORMAT_OPTIONS.filter { it in selected }.joinToString()
                 true
             }
         }.let(screen::addPreference)
@@ -512,6 +532,7 @@ abstract class Kagane :
         )
 
         private const val GENRES_ID_PREF = "pref_genre_id_exclude"
+        private const val FORMATS_PREF = "pref_format_exclude"
 
         private const val SOURCE_DISPLAY_MODE = "pref_source_display_mode"
         private const val SOURCE_DISPLAY_MODE_DEFAULT = "all"
@@ -587,7 +608,7 @@ abstract class Kagane :
         val filters = mutableListOf(
             SortFilter(),
             ContentRatingFilter(contentRating.toSet()),
-            FormatFilter(),
+            FormatFilter(excludedFormats),
             PublicationStatusFilter(),
             Filter.Separator(),
         )

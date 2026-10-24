@@ -10,6 +10,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesEncrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -20,9 +22,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okio.ByteString.Companion.toByteString
 import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -139,7 +138,6 @@ abstract class Mangacix : KeiSource() {
 
     private class MangacixAuthInterceptor : Interceptor {
         private val keyBytes = ("i4C7R2fXGocdYg" + "FLzCbDlsJ" + "jukf8G58b").toByteArray(Charsets.UTF_8)
-        private val secretKey = SecretKeySpec(keyBytes, "AES")
         private val random = SecureRandom()
 
         override fun intercept(chain: Interceptor.Chain): Response {
@@ -158,10 +156,8 @@ abstract class Mangacix : KeiSource() {
 
         private fun generateXeh(queryString: String): String {
             val iv = ByteArray(12).apply { random.nextBytes(this) }
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
             val plaintext = ("{version}" + queryString).toByteArray(Charsets.UTF_8)
-            val ciphertext = cipher.doFinal(plaintext)
+            val ciphertext = plaintext.aesEncrypt(aesGcm(keyBytes, iv, encrypt = true))
             return "${ciphertext.toByteString().base64()}.${iv.toByteString().base64()}"
         }
     }

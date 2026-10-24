@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.aesCbc
@@ -164,7 +163,7 @@ abstract class Creativecomic : KeiSource() {
         val encryptedKey = client.get("$apiUrl/book/chapter/image/${page.url}", getApiHeaders())
             .parseAs<ImageUrlResponseDto>().data.key
         val (pageKey, pageIv) = getPageKeyIv()
-        val decryptedKey = CryptoAES.decrypt(encryptedKey, pageKey, pageIv)
+        val decryptedKey = Base64.decode(encryptedKey, Base64.DEFAULT).aesDecrypt(aesCbc(pageKey, pageIv)).decodeToString()
         return "https://storage.googleapis.com/ccc-www/fs/chapter_content/encrypt/${page.url}/2#$decryptedKey"
     }
 

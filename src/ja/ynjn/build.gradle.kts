@@ -6,12 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Young Jump+"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "ja"
         baseUrl = "https://ynjn.jp"
+    }
+
+    deeplink {
+        path("/title/..*")
+        path("/viewer/..*")
     }
 }

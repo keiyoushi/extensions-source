@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Nekopost"
-    versionCode = 16
+    versionCode = 17
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -19,9 +19,4 @@ keiyoushi {
         path("/manga/..*")
         path("/editor/..*")
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cryptoaes"))
 }

@@ -31,6 +31,20 @@ import keiyoushi.utils.long
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -47,13 +61,14 @@ import okio.Buffer
 import org.json.JSONObject
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -79,6 +94,14 @@ abstract class Comix :
         }
     }
 
+    // Reader captures by chapter url, LRU; only finished ones are dropped
+    private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val captures = LinkedHashMap<String, ChapterCapture>(MAX_CAPTURES + 1, 0.75f, true)
+
+    // Walk start times per chapter, for the walk limit
+    private val walkStarts = HashMap<String, MutableList<Long>>()
+    private val walkSlots = Semaphore(MAX_RUNNING_WALKS)
+
     private val tagIdCache = object : LinkedHashMap<String, List<String>>(
         TAG_ID_CACHE_SIZE,
         0.75f,
@@ -88,10 +111,10 @@ abstract class Comix :
     }
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(Descrambler.interceptor)
-        .addInterceptor(::altHostFallback)
         .addInterceptor { chain ->
             val request = chain.request()
-            if (request.url.fragment?.startsWith(ALT_HOSTS_FRAGMENT) == true || request.url.host == baseUrlHost) {
+            // The reader already retries failing pages on other hosts
+            if (request.url.host == baseUrlHost || request.url.isPageImage()) {
                 return@addInterceptor chain.proceed(request)
             }
 
@@ -113,9 +136,15 @@ abstract class Comix :
             response
         }
         .rateLimit(2) { it.host == baseUrlHost }
+        .rateLimit(2) { it.isPageImage() }
         .rateLimit(5)
 
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
+
+    private fun HttpUrl.isPageImage(): Boolean {
+        val url = toString()
+        return synchronized(captures) { captures.values.any { url in it.pages.values } }
+    }
 
     // Comix blocks chapter-list paging that is too fast or evenly spaced
     private class RequestPacer(private val minGapMs: Long, private val maxGapMs: Long) {
@@ -131,44 +160,6 @@ abstract class Comix :
             if (waitNanos > 0) Thread.sleep(waitNanos / 1_000_000)
         }
     }
-
-    // Retry failed images on alt hosts, like the site's reader
-    private fun altHostFallback(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val altHosts = request.url.altHosts()
-        if (altHosts.isEmpty()) return chain.proceed(request)
-
-        val urls = listOf(request.url) + altHosts.mapIndexed { i, host ->
-            request.url.newBuilder()
-                .host(host)
-                .setQueryParameter("r", (i + 1).toString())
-                .build()
-        }
-        var failed: Response? = null
-        var error: IOException? = null
-        for (url in urls) {
-            if (failed != null) {
-                failed.close()
-                failed = null
-                runCatching { Thread.sleep(2000) }
-            }
-            try {
-                val response = chain.proceed(request.newBuilder().url(url).build())
-                if (response.isSuccessful) return response
-                failed = response
-            } catch (e: IOException) {
-                if (chain.call().isCanceled()) throw e
-                error = e
-            }
-        }
-        return failed ?: throw error!!
-    }
-
-    private fun HttpUrl.altHosts(): List<String> = fragment
-        ?.takeIf { it.startsWith(ALT_HOSTS_FRAGMENT) }
-        ?.removePrefix(ALT_HOSTS_FRAGMENT)
-        ?.split(',')
-        .orEmpty()
 
     private fun proceedWithRetry(chain: Interceptor.Chain, request: Request): Response {
         var response = chain.proceed(request)
@@ -390,6 +381,7 @@ abstract class Comix :
             preferences.fetchChaptersUntilKnown() &&
             listMemo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull == deduplicateChapters &&
             listMemo[CHAPTER_LIST_BLACKLIST_MEMO]?.string == blacklistSignature &&
+            listMemo[CHAPTER_DATA_VERSION_MEMO]?.int == CHAPTER_DATA_VERSION &&
             listMemo[CHAPTER_LIST_COMPLETE_MEMO]?.booleanOrNull != false
         val knownIds = if (fetchUntilKnown) chapters.mapNotNull { it.chapterId() } else emptyList()
 
@@ -429,6 +421,7 @@ abstract class Comix :
                         memo.forEach { (key, value) -> if (key != CHAPTER_LIST_FETCHED_AT_MEMO) put(key, value) }
                         put(CHAPTER_LIST_DEDUPLICATED_MEMO, deduplicateChapters)
                         put(CHAPTER_LIST_BLACKLIST_MEMO, blacklistSignature)
+                        put(CHAPTER_DATA_VERSION_MEMO, CHAPTER_DATA_VERSION)
                         put(CHAPTER_LIST_COMPLETE_MEMO, chapterList.complete)
                         if (chapterList.complete) put(CHAPTER_LIST_FETCHED_AT_MEMO, fetchStartedAt)
                     }
@@ -544,10 +537,10 @@ abstract class Comix :
                         id: ch.id,
                         url: ch.url,
                         number: ch.number,
-                        name: '',
-                        votes: 0,
+                        name: ch.name,
+                        votes: ch.votes,
                         createdAtFormatted: dateOf(ch.text),
-                        group: ch.group ? { name: ch.group } : null,
+                        group: ch.group,
                         isOfficial: false
                     })),
                     complete: !!result.complete,
@@ -639,7 +632,10 @@ abstract class Comix :
 
     // Comix image domains block any image requests with Referer/Origin
     override fun imageRequest(page: Page): Request {
-        val imageUrl = page.imageUrl ?: return super.imageRequest(page)
+        // The reader may have moved the page to another host
+        val imageUrl = synchronized(captures) { captures[page.url]?.pages?.get(page.index) }
+            ?: page.imageUrl
+            ?: return super.imageRequest(page)
         val requestHeaders = headersBuilder()
             .removeAll("Origin")
             .removeAll("Referer")
@@ -647,46 +643,160 @@ abstract class Comix :
         return GET(imageUrl, requestHeaders)
     }
 
+    // The page count; getImageUrl waits for each url from a background reader walk
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = chapter.chapterId() ?: throw Exception("Could not find the chapter id")
-        val payload = runInWebView(getChapterUrl(chapter), { it.isChapterPagesRequest() }) { passPayloadName, rejectName, _ ->
-            """
-            (function () {
-                if (window.__comixA1PagesStarted) return;
-                window.__comixA1PagesStarted = true;
-                window.__comixHarvestOptions = { timeoutMs: 45000, settleMs: 4000 };
-                ${asset("harvest_pages.js")}
-                window.__comixHarvestPromise.then(result => {
-                    const payload = {
-                        baseUrl: '',
-                        items: (result.images || []).map(u => ({ url: u, s: (u.indexOf('?v3') !== -1 || u.indexOf('&v3') !== -1) ? 1 : 0 }))
-                    };
-                    window.$passPayloadName(JSON.stringify(payload));
-                }).catch(() => {
-                    window.$passPayloadName(JSON.stringify({ baseUrl: '', items: [] }));
-                });
-            })();
-            """.trimIndent()
+        val chapterUrl = getChapterUrl(chapter)
+        val capture = capture(chapterUrl)
+        val total = try {
+            withTimeout(READER_FIRST_PAGE_SECONDS.seconds) { capture.total.await() }
+        } catch (_: TimeoutCancellationException) {
+            throw Exception("The reader didn't load any pages")
         }
-
-        return buildPages(payload.parseAs())
+        return List(total) { Page(it, url = chapterUrl) }
     }
 
-    private fun buildPages(pages: ChapterPages): List<Page> {
-        val base = pages.baseUrl.trimEnd('/')
-        return pages.items.mapIndexed { index, img ->
-            val full = (if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}").toHttpUrl()
-            // V3 pages need the query flag so the server returns grid-scramble headers
-            val isV3 = img.s == 1 || "v3" in full.queryParameterNames
-            val url = full.newBuilder().apply {
-                if (isV3 && "v3" !in full.queryParameterNames) {
-                    addQueryParameter("v3", null)
-                }
-                val altHosts = pages.altHosts(full.host, index)
-                if (altHosts.isNotEmpty()) fragment(ALT_HOSTS_FRAGMENT + altHosts.joinToString(","))
-            }.build().toString()
-            Page(index, imageUrl = url)
+    override suspend fun getImageUrl(page: Page): String {
+        var capture = capture(page.url)
+        // Asking again retries a missed page
+        capture.seek.set(page.index)
+        if (capture.missed.remove(page.index)) capture.retries.incrementAndGet()
+        val deadline = System.nanoTime() + READER_PAGE_SECONDS.seconds.inWholeNanoseconds
+        while (true) {
+            capture.lastUsedNanos = System.nanoTime()
+            capture.seek.set(page.index)
+            capture.pages[page.index]?.let { return it }
+            capture.error?.let { throw it }
+            if (page.index in capture.missed) throw pageError(page, capture)
+            if (capture.done) {
+                capture = capture(page.url)
+                if (capture.done) throw pageError(page, capture)
+            }
+            if (System.nanoTime() > deadline) throw Exception("Timed out loading page ${page.index + 1}")
+            delay(READER_POLL_MS)
         }
+    }
+
+    private fun pageError(page: Page, capture: ChapterCapture) = Exception(capture.walkError?.message ?: "Page ${page.index + 1} didn't load in the reader")
+
+    // Starts a walk if there is none, or walks again for missing pages
+    private fun capture(chapterUrl: String): ChapterCapture = synchronized(captures) {
+        var capture = captures[chapterUrl] ?: ChapterCapture()
+        // A capture without a page count restarts, after the retry delay if it failed
+        val failed = capture.error != null && System.nanoTime() - capture.endedAtNanos < CAPTURE_ERROR_RETRY_NANOS
+        if (capture.done && capture.pageCount == null && !failed) capture = ChapterCapture()
+        captures[chapterUrl] = capture
+        if (captures.size > MAX_CAPTURES) {
+            captures.entries.firstOrNull { it.key != chapterUrl && it.value.done }?.let { captures.remove(it.key) }
+        }
+
+        val pageCount = capture.pageCount
+        val missing = pageCount == null || (0 until pageCount).any { !capture.pages.containsKey(it) }
+        val canWalk = capture.job == null || (capture.done && capture.error == null && missing)
+        if (canWalk && (capture.paused || takeWalk(chapterUrl))) {
+            capture.done = false
+            capture.paused = false
+            capture.lastUsedNanos = System.nanoTime()
+            capture.job = captureScope.launch { walkSlots.withPermit { runCaptureWalk(chapterUrl, capture) } }
+        }
+        capture
+    }
+
+    private fun takeWalk(chapterUrl: String): Boolean {
+        val now = System.nanoTime()
+        walkStarts.values.forEach { starts -> starts.removeAll { now - it > CHAPTER_WALK_WINDOW_NANOS } }
+        walkStarts.values.removeAll { it.isEmpty() }
+        val starts = walkStarts.getOrPut(chapterUrl) { mutableListOf() }
+        if (starts.size >= MAX_CHAPTER_WALKS) return false
+        starts += now
+        return true
+    }
+
+    private suspend fun runCaptureWalk(chapterUrl: String, capture: ChapterCapture) = coroutineScope {
+        val seekName = randomName()
+        val walk = launch {
+            try {
+                runInWebView(
+                    chapterUrl,
+                    loadImages = true,
+                    timeoutSeconds = READER_TIMEOUT_SECONDS,
+                    onPayload = { payload, done -> onCaptureMessage(payload, capture, done) },
+                    pollScript = { "window.$seekName = [${capture.seek.get()}, ${capture.retries.get()}];" },
+                ) { passPayloadName, rejectName, _ ->
+                    "(${asset("chapter_pages.js")})(window.$passPayloadName, window.$rejectName, \"$seekName\", " +
+                        "${capture.pages.keys.toList().toJsonString()});"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // After the page count, a failure only leaves pages to walk again
+                if (capture.total.isCompleted) capture.walkError = e else capture.error = e
+            } finally {
+                capture.endedAtNanos = System.nanoTime()
+                capture.total.completeExceptionally(capture.error ?: Exception("The reader didn't load any pages"))
+                capture.done = true
+            }
+        }
+        // Pause when no page has been asked for in a while
+        while (walk.isActive) {
+            delay(CAPTURE_IDLE_CHECK_MS)
+            if (capture.pageCount != null && System.nanoTime() - capture.lastUsedNanos > CAPTURE_IDLE_NANOS) {
+                capture.paused = true
+                walk.cancel()
+            }
+        }
+    }
+
+    private fun onCaptureMessage(payload: String, capture: ChapterCapture, done: () -> Unit) {
+        val message = payload.parseAs<CaptureMessage>()
+        when (message.type) {
+            "total" -> {
+                capture.pageCount = message.total!!
+                capture.total.complete(message.total)
+            }
+            "page" -> {
+                capture.pages[message.index!!] = message.url!!
+                capture.missed.remove(message.index)
+            }
+            "miss" -> capture.missed.add(message.index!!)
+            "done" -> done()
+        }
+    }
+
+    private class ChapterCapture {
+        val total = CompletableDeferred<Int>()
+        val pages = ConcurrentHashMap<Int, String>()
+        val missed: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+
+        @Volatile
+        var pageCount: Int? = null
+
+        // Page to load first, and how often a missed page was asked for again
+        val seek = AtomicInteger(-1)
+        val retries = AtomicInteger()
+
+        @Volatile
+        var lastUsedNanos = System.nanoTime()
+
+        @Volatile
+        var endedAtNanos = 0L
+
+        // Failed before the page count
+        @Volatile
+        var error: Throwable? = null
+
+        // Failed after it; shown for missing pages
+        @Volatile
+        var walkError: Throwable? = null
+
+        @Volatile
+        var done = false
+
+        // Idle stop; resuming doesn't count against the limit
+        @Volatile
+        var paused = false
+
+        @Volatile
+        var job: Job? = null
     }
 
     override fun getFilterList(data: JsonElement?) = sourceFilters().getFilterList()
@@ -696,16 +806,21 @@ abstract class Comix :
         url: String,
         isDataRequest: ((HttpUrl) -> Boolean)? = null,
         buildScript: ((passPayloadName: String) -> String)? = null,
+        // The reader run: images on, offscreen display
+        loadImages: Boolean = false,
+        timeoutSeconds: Long = if (isDataRequest != null) DATA_REQUEST_WAIT_SECONDS else WEBVIEW_TIMEOUT_SECONDS,
+        // Gets every payload; the run ends on done()
+        onPayload: ((payload: String, done: () -> Unit) -> Unit)? = null,
+        pollScript: (() -> String)? = null,
         pageScript: (passPayloadName: String, rejectName: String, touchName: String) -> String = { _, _, _ -> "" },
     ): String {
-        val waitSeconds = if (isDataRequest != null) DATA_REQUEST_WAIT_SECONDS else WEBVIEW_TIMEOUT_SECONDS
-        val timeoutDeadline = AtomicLong(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
+        val timeoutDeadline = AtomicLong(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
         val dataRequests = AtomicInteger()
         val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) { randomName() }
         val (touchBridgeName, touchName) = List(2) { randomName() }
         return runWebView(timeout = Duration.INFINITE) {
             userAgent = headers["User-Agent"].orEmpty()
-            blockImages = true
+            blockImages = !loadImages
 
             val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
             interceptRequest { request ->
@@ -726,7 +841,7 @@ abstract class Comix :
                 if (isData) dataRequests.incrementAndGet()
                 if (requestUrl.isChapterListRequest()) chapterListPacer.waitForSlot()
                 if (isData || requestUrl.encodedPath.startsWith(WAF_PATH)) {
-                    timeoutDeadline.set(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
+                    timeoutDeadline.set(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
                 }
                 val allowed = requestUrl.host == baseUrlHost ||
                     requestUrl.host.endsWith(".$baseUrlHost") ||
@@ -735,12 +850,16 @@ abstract class Comix :
                     requestUrl.host == "comix.ws" ||
                     requestUrl.host.endsWith(".comix.ws") ||
                     requestUrl.host == "challenges.cloudflare.com"
-                if (allowed) null else emptyResponse
+                // Page images are off-site
+                if (allowed || loadImages) null else emptyResponse
             }
 
-            jsBridge(bridgeName) { resolve(it) }
-            jsBridge(errorBridgeName) { reject(Exception(it)) }
             val siteOrigin = url.toHttpUrl().run { "$scheme://$host" }
+            webMessageBridge(bridgeName, setOf(siteOrigin)) { payload ->
+                val sink = onPayload
+                if (sink != null) sink(payload) { resolve(payload) } else resolve(payload)
+            }
+            webMessageBridge(errorBridgeName, setOf(siteOrigin)) { reject(Exception(it)) }
             webMessageBridge(touchBridgeName, setOf(siteOrigin)) { message ->
                 val points = message.split(',').mapNotNull { it.toFloatOrNull() }
                 when (points.size) {
@@ -750,7 +869,10 @@ abstract class Comix :
                 }
             }
             // Refuse the site's first-tap ad window
-            withNativeWebView { it.settings.setSupportMultipleWindows(true) }
+            withNativeWebView {
+                if (loadImages) BackgroundSurface.host(it)
+                it.settings.setSupportMultipleWindows(true)
+            }
 
             val captureScript = buildScript?.invoke(passPayloadName)
             if (captureScript != null) {
@@ -765,9 +887,10 @@ abstract class Comix :
                         else -> "Nothing read from ${dataRequests.get()} site requests"
                     }
                     reject(Exception(message))
-                } else if (captureScript != null) {
-                    evaluateJs(captureScript)
+                    return@poll
                 }
+                if (captureScript != null) evaluateJs(captureScript)
+                pollScript?.let { evaluateJs(it()) }
             }
 
             // The site's current build flags foreign inline head scripts, so inject with no element left behind
@@ -778,14 +901,15 @@ abstract class Comix :
                 if (window.top !== window || $startFlagName) return;
                 $startFlagName = true;
                 try { localStorage.setItem("__pu1", "[" + Date.now() + "]"); } catch (e) {}
-                window.$passPayloadName = payload => window.$bridgeName.post(payload);
-                window.$rejectName = message => window.$errorBridgeName.post(message);
+                window.$passPayloadName = payload => window.$bridgeName.postMessage(payload);
+                window.$rejectName = message => window.$errorBridgeName.postMessage(message);
                 window.$touchName = points => window.$touchBridgeName.postMessage(points.join(","));
                 ${pageScript(passPayloadName, rejectName, touchName)}
                 })();
             """.trimIndent()
             injectAtDocumentStart(bootstrapScript, setOf(siteOrigin))
-            loadUrl(url)
+            // The reader route refuses an app package here
+            if (loadImages) loadUrl(url, mapOf("X-Requested-With" to "com.android.chrome")) else loadUrl(url)
         }
     }
 
@@ -794,11 +918,6 @@ abstract class Comix :
         .joinToString("")
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
-
-    private fun HttpUrl.isChapterPagesRequest(): Boolean = pathSegments.size == 4 &&
-        pathSegments[0] == "api" &&
-        pathSegments[1] == "v1" &&
-        pathSegments[2] == "chapters"
 
     private fun HttpUrl.isChapterListRequest(): Boolean = pathSegments.size == 5 &&
         pathSegments[0] == "api" &&
@@ -994,10 +1113,21 @@ abstract class Comix :
         private const val MAX_CHAPTER_PAGES = 1000
         private val chapterListPacer = RequestPacer(minGapMs = 2500, maxGapMs = 5000)
         private const val OFFICIAL_GROUP_ID = 10702
+        private const val CHAPTER_DATA_VERSION = 1
         private const val TAG_ID_CACHE_SIZE = 50
+        private const val READER_TIMEOUT_SECONDS = 240L
+        private const val READER_FIRST_PAGE_SECONDS = 45L
+        private const val READER_PAGE_SECONDS = 120L
+        private const val READER_POLL_MS = 250L
+        private const val MAX_CAPTURES = 8
+        private const val MAX_RUNNING_WALKS = 3
+        private const val MAX_CHAPTER_WALKS = 3
+        private val CHAPTER_WALK_WINDOW_NANOS = 10.minutes.inWholeNanoseconds
+        private const val CAPTURE_IDLE_CHECK_MS = 5000L
+        private val CAPTURE_IDLE_NANOS = 45.seconds.inWholeNanoseconds
+        private val CAPTURE_ERROR_RETRY_NANOS = 10.seconds.inWholeNanoseconds
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
-        private const val ALT_HOSTS_FRAGMENT = "alt="
 
         // Site requests in the WebView that the extension has no use for: error reports, comments, upload images
         private val UNUSED_SITE_PATHS = listOf("/api/v1/client-errors", "/api/v1/threads/", "/assets/uploads/")

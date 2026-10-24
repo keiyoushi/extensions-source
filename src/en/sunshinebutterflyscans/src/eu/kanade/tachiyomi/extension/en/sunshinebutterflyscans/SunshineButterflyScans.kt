@@ -10,10 +10,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.sync.Mutex
@@ -193,7 +194,7 @@ abstract class SunshineButterflyScans : KeiSource() {
         val chapterDto = getChaptersData().flatten().first {
             "${it.projectName}&num=${it.num}" == chapter.url.substringAfter("series=")
         }
-        val decrypted = CryptoAES.decrypt(chapterDto.albumID, KEY, IV)
+        val decrypted = Base64.decode(chapterDto.albumID, Base64.DEFAULT).aesDecrypt(aesCbc(KEY, IV)).decodeToString()
         val isGoogleDrive = decrypted.length > 10
 
         val url = if (isGoogleDrive) {

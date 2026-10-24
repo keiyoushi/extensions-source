@@ -525,7 +525,6 @@ use case. Each lib is self-documented via KDoc comments in its Kotlin source fil
 | Module                                                                                                    | Description                                                                             |
 |-----------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
 | [`lib-aessiv`](https://github.com/keiyoushi/extensions-source/tree/main/lib/aessiv)                       | AES-SIV (RFC 5297) and AES-GCM-SIV (RFC 8452) AEAD decryption                           |
-| [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes)                 | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation                       |
 | [`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage)                 | Decodes base64 `data:image` strings into mock URLs that OkHttp can handle               |
 | [`lib-e4p`](https://github.com/keiyoushi/extensions-source/tree/main/lib/e4p)                             | Decodes and decrypts E4P-format manga page archives (TIFF/XEBP)                         |
 | [`lib-ece`](https://github.com/keiyoushi/extensions-source/tree/main/lib/ece)                             | RFC 8188 `aes128gcm` decryption, HKDF key derivation, and P-256 raw point helpers       |
@@ -1169,6 +1168,7 @@ import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.aesDecryptWithPrependedIv
 import keiyoushi.utils.aesEncrypt
 import keiyoushi.utils.aesGcm
+import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.md5
@@ -1210,6 +1210,10 @@ override fun getImage(page: Page): Response {
     val response = super.getImage(page)
     return response.aesDecrypt(aesCbc(key = keyBytes, iv = ivBytes))
 }
+
+// CryptoJS.AES.decrypt(ciphertext, passphrase) compatible (Base64 "Salted__" payload, EVP_BytesToKey MD5).
+// Throws on failure. Use evpBytesToKey() directly for other ciphers or key sizes:
+val json = encrypted.cryptoJsDecrypt(PASSPHRASE)
 
 // Or decryption for streams with prepended IV:
 override fun getImage(page: Page): Response {

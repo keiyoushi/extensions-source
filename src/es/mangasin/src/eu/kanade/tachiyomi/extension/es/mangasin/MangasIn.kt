@@ -9,10 +9,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.lib.synchrony.Deobfuscator
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
@@ -108,10 +108,10 @@ abstract class MangasIn : MMRCMS() {
         val unsaltedCipherText = Base64.decode(chapterData.ct, Base64.DEFAULT)
         val cipherText = SALTED + salt + unsaltedCipherText
 
-        val decrypted = CryptoAES.decrypt(Base64.encodeToString(cipherText, Base64.DEFAULT), key).ifEmpty {
+        val decrypted = runCatching { cipherText.cryptoJsDecrypt(key) }.getOrElse {
             key = getKey()
-            CryptoAES.decrypt(Base64.encodeToString(cipherText, Base64.DEFAULT), key)
-        }.ifEmpty { throw Exception("No se pudo desencriptar los capítulos") }
+            cipherText.cryptoJsDecrypt(key)
+        }.decodeToString()
 
         val unescaped = decrypted.unescapeJava().removeSurrounding("\"").unescape()
 
