@@ -49,13 +49,12 @@ class SortFilter :
         "Sort",
         "sortby",
         arrayOf(
-            Pair("Random", "random"),
+            Pair("Default", "random"),
             Pair("Views", "view"),
-            Pair("Comment Count", "comment_count"),
-            Pair("Creation Date", "create_date"),
-            Pair("Update Date", "update_date"),
+            Pair("Popular", "comment_count"),
+            Pair("New Manga", "create_date"),
+            Pair("Latest Update", "update_date"),
         ),
-        state = 1,
     )
 
 class GenreFilter(name: String) : Filter.TriState(name)
@@ -63,5 +62,5 @@ class GenreFilter(name: String) : Filter.TriState(name)
 class GenreFilterGroup(genres: List<String>) :
     Filter.Group<GenreFilter>(
         "Genres",
-        genres.map(::GenreFilter),
+        genres.sorted().map(::GenreFilter),
     )
