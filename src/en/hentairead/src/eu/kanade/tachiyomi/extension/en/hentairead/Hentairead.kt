@@ -148,7 +148,7 @@ abstract class Hentairead : KeiSource() {
         val details = mangaDetailsParse(document).apply { url = manga.url }
 
         fun createChapter(chapNum: Float = -1f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
-            val titleText = chapTitle.ifBlank { document.select("div.manga-titles h1").first()!!.text() }
+            val titleText = chapTitle.ifBlank { document.selectFirst("div.manga-titles h1")!!.text() }
             chapter_number = if (chapNum == -1f) 1f else chapNum
             name = "${if (chapter_number % 1f == 0f) chapter_number.toInt() else chapter_number} - $titleText"
             url = chapUrl.ifBlank { manga.url }
