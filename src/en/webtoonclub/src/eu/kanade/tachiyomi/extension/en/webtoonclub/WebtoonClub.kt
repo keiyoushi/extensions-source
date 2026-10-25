@@ -25,7 +25,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -148,7 +149,7 @@ abstract class WebtoonClub :
                 book.character.joinToString(" · ") { it.name }.ifEmpty { null }?.let { "**Characters:** $it" },
             ).joinToString("\n").ifEmpty { null },
         ).joinToString("\n\n").ifEmpty { null }
-        memo = JsonObject(memo + (COMIC_ID to JsonPrimitive(document.selectFirst("[data-comic-id]")!!.attr("data-comic-id").toInt())))
+        memo = buildJsonObject { put(COMIC_ID, document.selectFirst("[data-comic-id]")!!.attr("data-comic-id").toInt()) }
     }
 
     private fun Document.fact(name: String) = selectFirst("dt:matchesOwn(^$name$) + dd")?.textOrNull()
