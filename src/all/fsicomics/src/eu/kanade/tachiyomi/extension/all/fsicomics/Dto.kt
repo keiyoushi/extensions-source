@@ -47,6 +47,11 @@ class WPTagDto(
     val slug: String = "",
 )
 
+@Serializable
+class FilterData(
+    val categories: List<WPCategoryDto> = emptyList(),
+)
+
 fun WPPostDto.toSManga(): SManga {
     val renderedTitle = Parser.unescapeEntities(title.rendered, false)
     return SManga.create().apply {
