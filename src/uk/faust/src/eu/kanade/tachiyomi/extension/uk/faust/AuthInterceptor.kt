@@ -2,7 +2,9 @@ package eu.kanade.tachiyomi.extension.uk.faust
 
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.string
+import keiyoushi.utils.xorInPlace
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
@@ -14,7 +16,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import java.security.MessageDigest
 import java.time.Instant
 import java.util.Base64
 
@@ -179,16 +180,8 @@ class AuthInterceptor(
 
     private fun xorDecrypt(cipherBytes: ByteArray, timestamp: String, secret: ByteArray): ByteArray {
         if (secret.isEmpty()) return cipherBytes
-        val digest = MessageDigest.getInstance("SHA-256")
-        digest.update("$timestamp:".toByteArray(Charsets.UTF_8))
-        digest.update(secret)
-        val key = digest.digest()
-
-        val decrypted = ByteArray(cipherBytes.size)
-        for (i in cipherBytes.indices) {
-            decrypted[i] = (cipherBytes[i].toInt() xor key[i % key.size].toInt()).toByte()
-        }
-        return decrypted
+        val key = ("$timestamp:".encodeToByteArray() + secret).sha256()
+        return cipherBytes.xorInPlace(key)
     }
 
     companion object {

@@ -145,6 +145,10 @@ internal class JsLiteralParser(
         "true" -> JsonPrimitive(true)
         "false" -> JsonPrimitive(false)
         "null", "undefined" -> JsonNull
+        "void" -> {
+            parseValue()
+            JsonNull
+        }
         else -> fail("Unsupported value '$value'")
     }
 

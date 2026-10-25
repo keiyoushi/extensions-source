@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangalix
 
-import android.util.JsonReader
-import android.util.JsonToken
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -22,17 +20,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
-import java.io.InputStreamReader
 import java.util.Locale
-import java.util.zip.GZIPInputStream
-import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Mangalix : KeiSource() {
@@ -41,12 +35,6 @@ abstract class Mangalix : KeiSource() {
         val host = baseUrl.toHttpUrl().host
         rateLimit(2) { it.host == host }
     }
-
-    private val archiveHeaders: Headers
-        get() = headersBuilder()
-            .set("Accept", "application/gzip")
-            .set("Accept-Encoding", "identity")
-            .build()
 
     private val imageHeaders: Headers
         get() = headersBuilder()
@@ -173,10 +161,10 @@ abstract class Mangalix : KeiSource() {
 
     private suspend fun loadCatalog(): List<MangaDto> {
         val document = client.get(baseUrl).asJsoup()
-        val scriptUrl = document.selectFirst("script[type=module][src*=assets/main-], script[src*=assets/main-]")
-            ?.absUrl("src")
+        val scriptUrl = document.selectFirst("link[rel=modulepreload][href*=/assets/manga-data-]")
+            ?.absUrl("href")
             ?.takeIf(String::isNotBlank)
-            ?: throw IOException("Main script not found")
+            ?: throw IOException("Catalog script not found")
 
         val script = client.get(scriptUrl).body.string()
 
@@ -201,65 +189,7 @@ abstract class Mangalix : KeiSource() {
         return terms.all(searchable::contains)
     }
 
-    private suspend fun readChapters(slug: String): List<ChapterDto> = client.get("$baseUrl/chapters.json.gz", archiveHeaders, ARCHIVE_CACHE_CONTROL).use { response ->
-        JsonReader(InputStreamReader(GZIPInputStream(response.body.byteStream()), Charsets.UTF_8)).use { reader ->
-            var chapters: List<ChapterDto> = emptyList()
-            reader.beginObject()
-            while (reader.hasNext()) {
-                if (reader.nextName() == slug) {
-                    chapters = reader.readChapterArray()
-                    break
-                }
-                reader.skipValue()
-            }
-            chapters
-        }
-    }
-
-    private fun JsonReader.readChapterArray(): List<ChapterDto> {
-        val chapters = mutableListOf<ChapterDto>()
-        beginArray()
-        while (hasNext()) {
-            beginObject()
-            var id = ""
-            var number = 0.0
-            var title = ""
-            var releaseDate: String? = null
-            var pages = emptyList<String>()
-
-            while (hasNext()) {
-                when (nextName()) {
-                    "id" -> id = nextString()
-                    "number" -> number = nextDouble()
-                    "title" -> title = nextString()
-                    "releaseDate" -> releaseDate = nextNullableString()
-                    "pages" -> pages = readStringArray()
-                    else -> skipValue()
-                }
-            }
-            endObject()
-            if (id.isNotBlank()) {
-                chapters += ChapterDto(id, number, title, pages, releaseDate)
-            }
-        }
-        endArray()
-        return chapters
-    }
-
-    private fun JsonReader.readStringArray(): List<String> {
-        val values = mutableListOf<String>()
-        beginArray()
-        while (hasNext()) values += nextString()
-        endArray()
-        return values
-    }
-
-    private fun JsonReader.nextNullableString(): String? = if (peek() == JsonToken.NULL) {
-        nextNull()
-        null
-    } else {
-        nextString()
-    }
+    private suspend fun readChapters(slug: String): List<ChapterDto> = client.get("$baseUrl/chapters/$slug.json").parseAs()
 
     private fun String.resolveImageUrl(): String = when {
         startsWith("\$TEMP") -> replaceFirst("\$TEMP", "https://temp.compsci88.com")
@@ -274,7 +204,6 @@ abstract class Mangalix : KeiSource() {
     }
 
     companion object {
-        private val ARCHIVE_CACHE_CONTROL = CacheControl.Builder().maxAge(30.minutes).build()
         private val CATALOG_START_REGEX = Regex("""\[\{id\s*:""")
         private val WHITESPACE_REGEX = Regex("""\s+""")
     }
