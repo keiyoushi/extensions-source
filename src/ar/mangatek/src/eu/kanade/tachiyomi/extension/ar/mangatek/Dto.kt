@@ -52,11 +52,11 @@ class Chapter(
     private val chapterNumber: String,
     @SerialName("created_at")
     private val createdAt: String,
+    private val isAI: Int,
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        name = this@Chapter.title?.takeIf {
-            it.isNotBlank()
-        } ?: "Chapter $chapterNumber"
+        val title = this@Chapter.title?.takeIf { it.isNotEmpty() } ?: "Chapter $chapterNumber"
+        name = if (isAI == 1) "$title (مترجم)" else title
         url = "/reader/$mangaSlug/$chapterNumber"
         date_upload = Instant.tryParse(createdAt)
     }
@@ -105,14 +105,28 @@ class Bubble(
 class ChapterProps(
     val imageUrls: List<String> = emptyList(),
     val overlayBlob: String? = null,
-    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
+    val overlayPageOffset: Int? = null,
+    val textMode: String? = null,
     val chapterId: Long? = null,
     val unlockToken: String? = null,
 )
 
 @Serializable
+class UnlockRequest(
+    private val chapterId: Long,
+    private val token: String,
+    private val proof: String,
+    private val esid: String,
+    private val nonce: String? = null,
+    private val pow: String? = null,
+)
+
+@Serializable
 class UnlockResponse(
     val overlay: String? = null,
+    val ks: String? = null,
     val key: String? = null,
-    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
+    @SerialName("needs_challenge") val needsChallenge: Boolean = false,
+    val nonce: String? = null,
+    @SerialName("pow_bits") val powBits: Int? = null,
 )

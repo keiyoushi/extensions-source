@@ -11,20 +11,14 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.aesDecrypt
-import keiyoushi.utils.aesGcm
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -161,36 +155,22 @@ abstract class MangaTek : KeiSource() {
         val document = client.get("$baseUrl${chapter.url}").asJsoup()
         val props: ChapterProps = document.extractAstroProp("imageUrls")
 
-        val (overlayData, apiOffset) = props.overlayBlob?.let { blob ->
-            decrypt(blob) to props.overlayPageOffset
-        } ?: run {
-            val chapterId = props.chapterId
-            val unlockToken = props.unlockToken
-            if (chapterId != null && unlockToken != null) {
-                unlockOverlay(chapterId, unlockToken)
-            } else {
-                null
-            }
-        } ?: (null to null)
+        val overlayData = props.overlayBlob?.let { OverlayCrypto.decryptHexBlob(it).parseAs<OverlayData>() }
+            ?: unlockOverlay(props)
 
-        val offset = apiOffset ?: props.overlayPageOffset ?: 0
-        val overlaysByPageNumber: Map<Int, OverlayPage> = overlayData?.pages
-            ?.associateBy { it.pageNumber } ?: emptyMap()
+        // page_number counts from 1 after the overlayPageOffset images
+        val firstOverlayImage = props.overlayPageOffset ?: 0
+        val overlaysByImage = overlayData?.pages.orEmpty()
+            .associate { firstOverlayImage + it.pageNumber - 1 to it.overlays }
 
         return props.imageUrls.mapIndexed { index, imageUrl ->
-            val overlayPage = if (overlaysByPageNumber.isNotEmpty()) {
-                overlaysByPageNumber[index - offset + 1]
-                    ?: overlaysByPageNumber[index - offset]
-                    ?: overlaysByPageNumber[index]
-            } else {
-                null
-            }
+            val overlays = overlaysByImage[index]
 
-            if (overlayPage == null || overlayPage.overlays.isEmpty()) {
+            if (overlays.isNullOrEmpty()) {
                 Page(index, imageUrl = imageUrl)
             } else {
                 val url = imageUrl.toHttpUrl().newBuilder()
-                    .fragment(overlayPage.overlays.toJsonString())
+                    .fragment(overlays.toJsonString())
                     .build().toString()
 
                 Page(index, imageUrl = url)
@@ -198,22 +178,24 @@ abstract class MangaTek : KeiSource() {
         }
     }
 
-    private suspend fun unlockOverlay(chapterId: Long, unlockToken: String): Pair<OverlayData, Int?>? {
-        val proof = "$UNLOCK_PROOF_SALT|$unlockToken|$chapterId".sha256().toHexString()
-        val payload = buildJsonObject {
-            put("chapterId", chapterId)
-            put("token", unlockToken)
-            put("proof", proof)
+    private suspend fun unlockOverlay(props: ChapterProps): OverlayData? {
+        if (props.textMode != "overlay") return null
+        val chapterId = props.chapterId ?: return null
+        val token = props.unlockToken ?: return null
+        val proof = OverlayCrypto.proof(token, chapterId)
+        val request = UnlockRequest(chapterId, token, proof, OverlayCrypto.esid)
+
+        var response = client.post(UNLOCK_API_URL, body = request.toJsonRequestBody()).parseAs<UnlockResponse>()
+        val nonce = response.nonce
+        if (response.needsChallenge && nonce != null) {
+            val pow = response.powBits?.let { OverlayCrypto.pow(nonce, it) }
+            val retry = UnlockRequest(chapterId, token, proof, OverlayCrypto.esid, nonce, pow)
+            response = client.post(UNLOCK_API_URL, body = retry.toJsonRequestBody()).parseAs<UnlockResponse>()
         }
-        val response = client.post(
-            url = UNLOCK_API_URL,
-            body = payload.toJsonRequestBody(),
-        )
-        val unlockResponse = response.parseAs<UnlockResponse>()
-        val overlay = unlockResponse.overlay ?: return null
-        val key = unlockResponse.key ?: KEY
-        val overlayData = decrypt(overlay, key)
-        return overlayData to unlockResponse.overlayPageOffset
+
+        val overlay = response.overlay ?: return null
+        return OverlayCrypto.decryptOverlay(overlay, response.ks, response.key, token, chapterId)
+            ?.parseAs<OverlayData>()
     }
 
     private fun Element.imgAttr(): String = when {
@@ -225,27 +207,8 @@ abstract class MangaTek : KeiSource() {
         else -> attr("abs:src")
     }
 
-    // decrypt
-
-    private fun decrypt(blob: String, keyHex: String = KEY): OverlayData {
-        val (ivHex, ctHex, tagHex) = blob.split(":").also {
-            require(it.size == 3) { "unexpected overlayBlob format" }
-        }
-
-        val iv = ivHex.decodeHex()
-        val ciphertext = ctHex.decodeHex()
-        val tag = tagHex.decodeHex()
-
-        return (ciphertext + tag)
-            .aesDecrypt(aesGcm(keyHex.decodeHex(), iv, tagLength = tag.size * 8))
-            .decodeToString()
-            .parseAs<OverlayData>()
-    }
-
     companion object {
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?[^#]*)?#\[.*?]""", RegexOption.IGNORE_CASE)
-        private const val KEY = "ff453871399fe268588a0936b45376022d85ed0fd1292001d5102f6a30291dc1"
-        private const val UNLOCK_PROOF_SALT = "80c55d2d1f1432551b82f5304b60e1aced87f823a6ed309d"
         private const val API_BASE = "https://api.mangatek.com"
         private const val UNLOCK_API_URL = "$API_BASE/api/reader/unlock"
     }
