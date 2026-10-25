@@ -28,14 +28,14 @@ abstract class MoonlightTL : KeiSource() {
 
     private val seriesPath = "/ver"
 
+    // novel chapters are text without images, so they always end up as "No pages found"
+    private suspend fun getComics(): List<SeriesDto> = client.get("$baseUrl/api/comics").parseAs<ResponseDto<List<SeriesDto>>>().response
+        .filterNot { it.isNovel }
+
+    // /api/topSerie has no type field to filter novels with
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val responseData = client.get("$baseUrl/api/topSerie").parseAs<ResponseDto<TopSeriesDto>>()
-
-        val topDaily = responseData.response.topDaily.flatten().map { it.data }
-        val topWeekly = responseData.response.topWeekly.flatten().map { it.data }
-        val topMonthly = responseData.response.topMonthly.flatten().map { it.data }
-
-        val mangas = (topDaily + topWeekly + topMonthly).distinctBy { it.slug }
+        val mangas = getComics()
+            .sortedByDescending { it.trending?.monthlyViews ?: 0 }
             .map { it.toSManga(seriesPath) }
 
         return MangasPage(mangas, false)
@@ -45,15 +45,13 @@ abstract class MoonlightTL : KeiSource() {
         val responseData = client.get("$baseUrl/api/lastUpdates").parseAs<ResponseDto<List<SeriesDto>>>()
 
         val mangas = responseData.response
+            .filterNot { it.isNovel }
             .map { it.toSManga(seriesPath) }
 
         return MangasPage(mangas, false)
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val comics = client.get("$baseUrl/api/comics").parseAs<ResponseDto<List<SeriesDto>>>().response
-        return applyFilters(comics, query, filters)
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = applyFilters(getComics(), query, filters)
 
     private fun applyFilters(comics: List<SeriesDto>, query: String, filterList: FilterList): MangasPage {
         var filteredList = mutableListOf<SeriesDto>()
