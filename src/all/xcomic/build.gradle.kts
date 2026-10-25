@@ -6,20 +6,20 @@ plugins {
 
 keiyoushi {
     name = "XCOMIC"
-    versionCode = 9
+    versionCode = 10
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     listOf(
         "all", "en", "fr", "es", "es-419", "pt", "pt-BR", "ja", "ko", "zh", "zh-Hant", "ru", "id",
-        "ab", "af", "sq", "am", "ar", "hy", "az", "be", "bn", "bs", "bg", "my", "km",
-        "ca", "ceb", "hr", "cs", "cv", "da", "nl", "et", "eo", "eu", "fo", "fil", "fi",
-        "ka", "de", "el", "gn", "gu", "ht", "ha", "he", "hi", "hu", "is", "ig", "ga",
-        "gl", "it", "jv", "kn", "kk", "ku", "ky", "la", "lo", "lv", "lt", "lb", "mk",
-        "mg", "ms", "ml", "mt", "mi", "mr", "mo", "mn", "ne", "no", "ny", "ps", "fa",
-        "pl", "ro", "rm", "sm", "sr", "sh", "ss", "st", "sn", "sd", "si", "sk", "sl",
-        "so", "sw", "sv", "tg", "ta", "te", "th", "ti", "to", "tr", "tk", "uk", "ur",
-        "uz", "vi", "yo", "zu", "other",
+        "af", "sq", "ar", "az", "be", "bn", "bg", "my", "km",
+        "ca", "ceb", "hr", "cs", "cv", "da", "nl", "et", "eo", "eu", "fil", "fi",
+        "ka", "de", "el", "gu", "he", "hi", "hu", "is", "ga",
+        "gl", "it", "jv", "kk", "la", "lv", "lt",
+        "ms", "ml", "mr", "mo", "mn", "ne", "no", "fa",
+        "pl", "ro", "sr", "sh", "ss", "si", "sk", "sl",
+        "sv", "ta", "te", "th", "tr", "uk", "ur",
+        "uz", "vi", "zu", "other",
     ).forEach {
         source {
             lang = it

@@ -6,16 +6,15 @@ plugins {
 
 keiyoushi {
     name = "GlobalComix"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     listOf(
         "sq", "ar", "bg", "bn", "pt-BR", "zh-Hans", "cs", "de", "da", "el",
         "en", "es", "fa", "fi", "fil", "fr", "hi", "hu", "id", "it",
-        "he", "ja", "ko", "lv", "ms", "nl", "no", "pl", "pt", "ro",
-        "ru", "sv", "sk", "sl", "ta", "th", "tr", "uk", "ur", "vi",
-        "zh-Hant",
+        "he", "ja", "ko", "ms", "nl", "pl", "pt", "ro",
+        "ru", "sv", "sl", "ta", "th", "tr", "uk", "ur", "vi",
     ).forEach { langCode ->
         source {
             lang = langCode
