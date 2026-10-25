@@ -47,11 +47,8 @@ abstract class DeviantArt :
     // ============================== Search ===================================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
-
-        val username = url.pathSegments.getOrNull(0) ?: return null
-        val folderId = url.pathSegments.getOrNull(2) ?: return null
-        val link = "$baseUrl/$username/gallery/$folderId"
+        val path = url.toGalleryPath(baseUrl) ?: return null
+        val link = "$baseUrl$path"
         val document = client.get(link).asJsoup()
 
         return parseGalleryDetails(document, link)
@@ -176,20 +173,9 @@ abstract class DeviantArt :
     // ============================== Pages =====================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
-        val buttons = document.selectFirst("[draggable=false]")?.children()
-        return if (buttons == null) {
-            val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
-            listOf(Page(0, imageUrl = imageUrl))
-        } else {
-            buttons.mapIndexed { i, button ->
-                // Remove everything past "/v1/" to get original instead of thumbnail
-                // But need to preserve the query parameter where the token is
-                val imageUrl = button.selectFirst("img")?.absUrl("src")
-                    ?.replaceFirst(IMAGE_ORIGINAL_URL_REGEX, "")
-                Page(i, imageUrl = imageUrl)
-            }
-        }
+        val url = getChapterUrl(chapter).toHttpUrl()
+        val document = client.get(url).asJsoup()
+        return document.parsePages(url.pathSegments.last().substringAfterLast('-'))
     }
 
     private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
@@ -228,9 +214,8 @@ abstract class DeviantArt :
         get() = getString(ArtistInTitle.PREF_KEY, ArtistInTitle.defaultValue.name)
 
     companion object {
-        private const val SEARCH_FORMAT_MSG = "Please enter a query in the format of gallery:{username} or gallery:{username}/{folderId}"
+        private const val SEARCH_FORMAT_MSG = "Please enter a DeviantArt gallery URL, gallery:{username} or gallery:{username}/{folderId}"
         private val GALLERY_QUERY_REGEX = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
-        private val IMAGE_ORIGINAL_URL_REGEX = Regex("""/v1(/.*)?(?=\?)""")
     }
 }
 
