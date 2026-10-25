@@ -13,9 +13,15 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -88,19 +94,29 @@ abstract class ManhwaIndo : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
-        val details = parseMangaDetails(document).apply { url = manga.url }
-        if (!fetchChapters) return SMangaUpdate(details, chapters)
+        val seriesId = manga.memo.getStringOrNull("seriesId")
 
-        val seriesId = document.select("script").firstNotNullOfOrNull { seriesIdRegex.find(it.data()) }!!.groupValues[1]
-        val chapterList = client.get("$baseUrl/wp-json/agc/v1/chapters?series=$seriesId").parseAs<List<ChapterDto>>().map {
-            SChapter.create().apply {
-                setUrlWithoutDomain(it.url)
-                name = "Chapter ${it.chapter}"
-                date_upload = parseRelativeDate(it.time)
+        return if (fetchChapters && seriesId != null) {
+            coroutineScope {
+                val chapterList = async { fetchChapterList(seriesId) }
+                val details = async { if (fetchDetails) getMangaDetails(manga) else manga }
+                SMangaUpdate(details.await(), chapterList.await())
             }
+        } else {
+            val details = getMangaDetails(manga)
+            val chapterList = if (fetchChapters) fetchChapterList(details.memo.getString("seriesId")) else chapters
+            SMangaUpdate(details, chapterList)
         }
-        return SMangaUpdate(details, chapterList)
+    }
+
+    private suspend fun getMangaDetails(manga: SManga) = parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup()).apply { url = manga.url }
+
+    private suspend fun fetchChapterList(seriesId: String) = client.get("$baseUrl/wp-json/agc/v1/chapters?series=$seriesId").parseAs<List<ChapterDto>>().map {
+        SChapter.create().apply {
+            setUrlWithoutDomain(it.url)
+            name = "Chapter ${it.chapter}"
+            date_upload = parseRelativeDate(it.time)
+        }
     }
 
     private fun parseMangaDetails(document: Document) = SManga.create().apply {
@@ -116,6 +132,9 @@ abstract class ManhwaIndo : KeiSource() {
             badges.any { it.equals("Completed", true) } -> SManga.COMPLETED
             badges.any { it.equals("Hiatus", true) } -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
+        }
+        memo = buildJsonObject {
+            put("seriesId", document.select("script").firstNotNullOfOrNull { seriesIdRegex.find(it.data()) }!!.groupValues[1])
         }
     }
 
