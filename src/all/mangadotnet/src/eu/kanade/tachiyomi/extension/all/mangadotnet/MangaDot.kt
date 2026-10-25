@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.devalue.decodeDevalue
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
@@ -32,12 +33,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
@@ -152,7 +149,7 @@ abstract class MangaDot :
             browseStatusPref()?.also { addQueryParameter("status", it) }
         }.build()
 
-        val data = client.get(url).use { it.decodeRscAs<Data<ViewAllData>>().data }
+        val data = client.get(url).use { it.decodeDevalueAs<Data<ViewAllData>>().data }
 
         return MangasPage(
             data.data.mangaList.orEmpty().map { it.toSManga(baseUrl) },
@@ -478,7 +475,7 @@ abstract class MangaDot :
         val detailsDeferred = async {
             if (fetchDetails) {
                 val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
-                val data = client.get(url).use { it.decodeRscAs<Data<MangaData>>().data }
+                val data = client.get(url).use { it.decodeDevalueAs<Data<MangaData>>().data }
                 data.mangaData.manga.toSManga(baseUrl, showTagsPref(), data.mangaData.volumeCount)
             } else {
                 manga
@@ -494,7 +491,7 @@ abstract class MangaDot :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = coroutineScope {
         val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
-        val dataDeferred = async { client.get(url).use { it.decodeRscAs<Data<RelatedData>>().data } }
+        val dataDeferred = async { client.get(url).use { it.decodeDevalueAs<Data<RelatedData>>().data } }
         val followingReadsDeferred = async { fetchFollowingReads() }
         val forYouDeferred = async { fetchForYouItems() }
 
@@ -737,9 +734,7 @@ abstract class MangaDot :
 
     // ============================= Bookmarks =============================
     private fun parseBookmarksResponse(response: Response): MangasPage = try {
-        val decoded = response.decodeRsc()
-            ?: throw Exception("Login through WebView to view bookmarks")
-        val routeContent = decoded.jsonObject["pages/BookmarksPage"]
+        val routeContent = response.decodeDevalue("pages/BookmarksPage")
             ?: throw Exception("Login through WebView to view bookmarks")
 
         val container = findRscObjectContaining(routeContent, "entries")
@@ -919,68 +914,22 @@ abstract class MangaDot :
         }
     }
 
-    // ============================ RSC Decoder ============================
-    private inline fun <reified T> Response.decodeRscAs(): T {
-        val decoded = decodeRsc()
-            ?: throw IllegalStateException("Failed to decode RSC response")
+    // ============================ Devalue Decoder ============================
+    private inline fun <reified T> Response.decodeDevalueAs(): T {
         val routes = request.url.queryParameter("_routes")
-        return if (routes != null) {
-            val routeElement = decoded.jsonObject[routes]
-                ?: throw IllegalStateException("Route '$routes' not found in RSC response")
-            routeElement.parseAs()
-        } else {
-            decoded.parseAs()
-        }
+        return decodeDevalue(routes).parseAs()
     }
 
-    private fun Response.decodeRsc(): JsonElement? {
-        val lines = body.string().lines()
-        val flat = lines.first().parseAs<JsonArray>().toMutableList()
-
-        // Values the server sent after the first line, by placeholder slot
-        val promises = mutableMapOf<Int, Int>()
-        for (line in lines.drop(1).filter { it.isNotEmpty() }) {
-            val (head, payload) = line.split(':', limit = 2)
-            val value = payload.parseAs<JsonElement>()
-            val valueIndex = if (value is JsonArray) {
-                val start = flat.size
-                flat.addAll(value)
-                start
-            } else {
-                value.jsonPrimitive.int
-            }
-            if (head[0] == 'P') promises[head.drop(1).toInt()] = valueIndex
+    private inline fun Response.decodeDevalue(route: String?): JsonElement {
+        val decoded = body.string().decodeDevalue()
+            ?: throw IllegalStateException("Failed to decode Devalue response")
+        return if (route != null) {
+            val routeElement = decoded.jsonObject[route]
+                ?: throw IllegalStateException("Route '$route' not found in Devalue response")
+            routeElement
+        } else {
+            decoded
         }
-
-        val cache = arrayOfNulls<Any>(flat.size)
-        val nil = Any()
-        fun resolve(i: Int): JsonElement? {
-            if (i < 0) return null
-            cache[i]?.let { return if (it === nil) null else it as JsonElement }
-            val result = when (val el = flat[i]) {
-                is JsonNull -> null
-                is JsonPrimitive -> if (el.isString) JsonPrimitive(el.content) else el
-                // Placeholder for a late value, or a pointer to a value sent earlier
-                is JsonArray -> when (el.firstOrNull()) {
-                    JsonPrimitive("P") -> promises[el[1].jsonPrimitive.int]?.let(::resolve)
-                    JsonPrimitive("Z") -> resolve(el[1].jsonPrimitive.int)
-                    else -> JsonArray(
-                        el.map {
-                            resolve((it as JsonPrimitive).int) ?: JsonNull
-                        },
-                    )
-                }
-                is JsonObject -> JsonObject(
-                    el.entries.associate { (k, v) ->
-                        (flat[k.removePrefix("_").toInt()] as JsonPrimitive).content to
-                            (resolve((v as JsonPrimitive).int) ?: JsonNull)
-                    },
-                )
-            }
-            cache[i] = result ?: nil
-            return result
-        }
-        return resolve(0)
     }
 }
 
