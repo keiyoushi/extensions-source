@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Omicaso"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "mangathemesia"
 
     source {
         lang = "id"
