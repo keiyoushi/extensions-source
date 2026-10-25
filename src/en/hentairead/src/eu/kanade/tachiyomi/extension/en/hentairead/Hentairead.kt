@@ -145,6 +145,7 @@ abstract class Hentairead : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
         val collectionsUrl = document.selectFirst("#mangaCollection a")?.absUrl("href")
+        val collectionSize = document.selectFirst("div.collection-listing div")?.childrenSize()
         val details = mangaDetailsParse(document).apply { url = manga.url }
 
         fun createChapter(chapNum: Float = -1f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
@@ -159,7 +160,7 @@ abstract class Hentairead : KeiSource() {
 
         val allChapters = mutableListOf<SChapter>()
 
-        if (collectionsUrl.isNullOrBlank()) {
+        if (collectionsUrl.isNullOrBlank() || collectionSize == 1) {
             allChapters.add(createChapter())
         } else if (fetchChapters) {
             val collectionsPage = client.get(collectionsUrl).asJsoup()
