@@ -17,6 +17,9 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -29,6 +32,15 @@ abstract class FsiComics : KeiSource() {
     private val apiLimit = 20
 
     private val scaledSuffix = """-scaled(\.\w+)$""".toRegex()
+
+    // The publisher paragraph follows the description; non-EN sites machine-translate it.
+    private val descriptionEndMarkers = when (lang) {
+        "es" -> listOf("es el editor de este episodio")
+        "fr" -> listOf("est l’auteur de cet épisode", "publie cet épisode")
+        "de" -> listOf("ist der Herausgeber dieser", "ist die Herausgeberin dieser")
+        "it" -> listOf("è l’editore di questo episodio")
+        else -> listOf("Publisher of This Comic Book Episode", "Watch comics feature genres")
+    }
 
     // Only the EN site has a video category; other locales returned none.
     private val excludedCategories: Set<Int> = when (lang) {
@@ -74,6 +86,7 @@ abstract class FsiComics : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", apiLimit.toString())
             .addQueryParameter("_embed", "wp:featuredmedia")
+            .addQueryParameter("_fields", "link,title,categories,_embedded,_links.wp:featuredmedia")
             .build()
         return fetchPosts(url)
     }
@@ -104,27 +117,44 @@ abstract class FsiComics : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val genre = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart()?.takeIf { it.isNotEmpty() }
+        val category = filters.firstInstanceOrNull<CategoryFilter>()?.toUriPart()?.takeIf { it.isNotEmpty() }
         val tagQuery = filters.firstInstanceOrNull<TagFilter>()?.state?.takeIf { it.isNotBlank() }
         val tag = tagQuery?.let {
             val key = it.trim().lowercase()
             tagIdCache[key] ?: runCatching { resolveTagId(it) }.getOrNull()?.also { id -> tagIdCache.put(key, id) }
         }
         if (tagQuery != null && tag == null) return MangasPage(emptyList(), false)
-        val sort = filters.firstInstanceOrNull<SortFilter>()?.state
-        val sorted = query.isNotEmpty() || (sort?.index ?: 0) != 0 || sort?.ascending == true
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.state ?: 0
 
         val url = "$baseUrl/wp-json/wp/v2/posts".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", apiLimit.toString())
             .addQueryParameter("_embed", "wp:featuredmedia")
+            .addQueryParameter("_fields", "link,title,categories,_embedded,_links.wp:featuredmedia")
             .apply {
                 if (query.isNotEmpty()) addQueryParameter("search", query)
-                genre?.let { addQueryParameter("categories", it) }
+                category?.let { addQueryParameter("categories", it) }
                 tag?.let { addQueryParameter("tags", it) }
-                if (sorted) {
-                    addQueryParameter("orderby", if (sort?.index == 1) "date" else "relevance")
-                    addQueryParameter("order", if (sort?.ascending == true) "asc" else "desc")
+                when (sort) {
+                    1 -> {
+                        addQueryParameter("orderby", "date")
+                        addQueryParameter("order", "asc")
+                    }
+
+                    2 -> {
+                        if (query.isNotEmpty()) {
+                            addQueryParameter("orderby", "relevance")
+                            addQueryParameter("order", "desc")
+                        } else {
+                            addQueryParameter("orderby", "date")
+                            addQueryParameter("order", "desc")
+                        }
+                    }
+
+                    3 -> {
+                        addQueryParameter("orderby", "title")
+                        addQueryParameter("order", "asc")
+                    } else -> addQueryParameter("orderby", "date")
                 }
             }
             .build()
@@ -136,11 +166,11 @@ abstract class FsiComics : KeiSource() {
         val tags = client.get(
             "$baseUrl/wp-json/wp/v2/tags".toHttpUrl().newBuilder()
                 .addQueryParameter("search", query.trim())
-                .addQueryParameter("per_page", "5")
+                .addQueryParameter("per_page", "100")
                 .addQueryParameter("_fields", "id,name,slug")
                 .build(),
         ).parseAs<List<WPTagDto>>()
-        return (tags.firstOrNull { it.name.lowercase() == norm || it.slug == norm } ?: tags.firstOrNull())
+        return tags.firstOrNull { it.name.equals(norm, ignoreCase = true) || it.slug.equals(norm, ignoreCase = true) }
             ?.id?.toString()
     }
 
@@ -158,7 +188,10 @@ abstract class FsiComics : KeiSource() {
         val updatedManga = SManga.create().apply {
             url = manga.url
             title = mangaTitle
-            description = document.selectFirst("meta[property=\"og:description\"]")?.attr("content")
+            description = document.select("div.entry-content > p.wp-block-paragraph")
+                .takeWhile { p -> descriptionEndMarkers.none { p.text().contains(it, ignoreCase = true) } }
+                .joinToString("\n\n") { it.text() }
+                .ifBlank { null }
             genre = document.select("a[rel=tag]").joinToString { it.text() }
             status = SManga.COMPLETED
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
@@ -178,34 +211,40 @@ abstract class FsiComics : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
         .select(".entry-content .wp-block-gallery img")
         .map { it.attr("abs:src") }
-        .distinct()
         .filter { it.isNotEmpty() && !it.startsWith("data:image") }
         .map { scaledSuffix.replace(it, "$1") }
+        .distinct()
         .mapIndexed { i, url -> Page(i, imageUrl = url) }
 
     // ============================== Filters ==============================
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement {
-        val all = buildList {
-            for (page in 1..10) {
-                val batch = client.get("$baseUrl/wp-json/wp/v2/categories?per_page=100&page=$page&_fields=id,parent,name,slug")
-                    .parseAs<List<WPCategoryDto>>()
-                addAll(batch)
-                if (batch.size < 100) break
-            }
-        }
-        return all.toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val first = client.get("$baseUrl/wp-json/wp/v2/categories?per_page=100&page=1&_fields=id,parent,name,slug")
+        val totalPages = first.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
+        val categories = first.parseAs<List<WPCategoryDto>>() +
+            (2..totalPages).map { page ->
+                async {
+                    client.get("$baseUrl/wp-json/wp/v2/categories?per_page=100&page=$page&_fields=id,parent,name,slug")
+                        .parseAs<List<WPCategoryDto>>()
+                }
+            }.awaitAll().flatten()
+
+        FilterData(categories).toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val all = data?.parseAs<List<WPCategoryDto>>().orEmpty()
-        val children = all.groupBy { it.parent }
+        val filterData = data?.parseAs<FilterData>() ?: FilterData()
+        val children = filterData.categories.groupBy { it.parent }
         fun subtree(id: Int): List<Int> = listOf(id) + children[id].orEmpty().flatMap { subtree(it.id) }
-        val genres = all
+        val categories = filterData.categories
             .filter { it.parent == filterParentId && it.slug != "uncategorized" && it.slug != "uncategorised" }
             .map { it.name to subtree(it.id).joinToString(",") }
-        return FilterList(GenreFilter(listOf("Any" to "") + genres), TagFilter(), SortFilter())
+        return FilterList(
+            SortFilter(),
+            CategoryFilter(listOf("Any" to "") + categories),
+            TagFilter(),
+        )
     }
 }
