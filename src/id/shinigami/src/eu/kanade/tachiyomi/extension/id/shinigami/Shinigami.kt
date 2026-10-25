@@ -107,6 +107,8 @@ abstract class Shinigami : KeiSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
+
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != "shinigami.asia" && !url.host.endsWith(".shinigami.asia")) return null
         val firstSegment = url.pathSegments.firstOrNull()
