@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "X-Manga"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "fr"
