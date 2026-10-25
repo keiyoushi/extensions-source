@@ -49,7 +49,7 @@ class DetailDto(
             if (!altTitles.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\n")
                 append("Alternative titles:\n")
-                altTitles.joinTo(this, "\n") { "• $it" }
+                altTitles.joinTo(this, "\n") { "- $it" }
             }
         }
         genre = (listOfNotNull(format) + this@DetailDto.genre + themes).distinct().joinToString()
