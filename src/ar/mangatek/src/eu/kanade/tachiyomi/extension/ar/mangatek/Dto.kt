@@ -1,10 +1,13 @@
 package eu.kanade.tachiyomi.extension.ar.mangatek
 
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
 @Serializable
@@ -109,7 +112,29 @@ class ChapterProps(
     val textMode: String? = null,
     val chapterId: Long? = null,
     val unlockToken: String? = null,
-)
+) {
+    fun toPageList(overlay: OverlayData?, apiOffset: Int? = null): List<Page> {
+        val offset = apiOffset ?: overlayPageOffset ?: 0
+        val overlays = overlay?.pages?.associateBy { it.pageNumber }.orEmpty()
+        val firstPageNumber = if (overlays.containsKey(0)) 0 else 1
+
+        return imageUrls.mapIndexed { index, imageUrl ->
+            val bubbles = if (index >= offset) {
+                overlays[index - offset + firstPageNumber]?.overlays.orEmpty()
+            } else {
+                emptyList()
+            }
+            val url = if (bubbles.isEmpty()) {
+                imageUrl
+            } else {
+                imageUrl.toHttpUrl().newBuilder()
+                    .fragment(bubbles.toJsonString())
+                    .build().toString()
+            }
+            Page(index, imageUrl = url)
+        }
+    }
+}
 
 @Serializable
 class UnlockRequest(
@@ -129,4 +154,5 @@ class UnlockResponse(
     @SerialName("needs_challenge") val needsChallenge: Boolean = false,
     val nonce: String? = null,
     @SerialName("pow_bits") val powBits: Int? = null,
+    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
 )

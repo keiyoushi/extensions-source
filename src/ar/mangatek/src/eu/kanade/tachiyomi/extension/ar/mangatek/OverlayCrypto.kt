@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangatek
 
-import android.util.Base64
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.aesGcm
 import keiyoushi.utils.decodeHex
@@ -8,6 +7,7 @@ import keiyoushi.utils.readUShortBigEndian
 import keiyoushi.utils.sha256
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import java.util.Base64
 
 // The site reader's overlay unlock (proof, esid, pow, overlay key unwrap); its WASM module is
 // plain SHA-256 over these inputs and AES-GCM is done in JS.
@@ -34,10 +34,9 @@ object OverlayCrypto {
         return null
     }
 
-    fun decryptOverlay(overlay: String, ks: String?, key: String?, token: String, chapterId: Long): String? = when {
+    fun decryptOverlay(overlay: String, ks: String?, key: String?, token: String, chapterId: Long): String = when {
         ks != null -> decryptEnvelope(overlay, ks, token, chapterId)
-        key != null -> decryptHexBlob(overlay, key)
-        else -> null
+        else -> decryptHexBlob(overlay, key ?: KEY)
     }
 
     // "ivHex:ctHex:tagHex", AES-GCM
@@ -50,7 +49,7 @@ object OverlayCrypto {
 
     // Version byte, then [tagLen u16][ivLen u16][tag][ct][iv] XORed with a SHA-256 keystream
     private fun decryptEnvelope(overlay: String, ks: String, token: String, chapterId: Long): String {
-        val bytes = Base64.decode(overlay, Base64.URL_SAFE)
+        val bytes = Base64.getUrlDecoder().decode(overlay)
         val version = bytes[0].toInt() and 0xFF
         require(version == 3) { "Unsupported overlay version $version" }
 

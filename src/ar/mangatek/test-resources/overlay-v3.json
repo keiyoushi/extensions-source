@@ -1,0 +1,9 @@
+{
+  "chapterId": 42,
+  "token": "fixture-token",
+  "ks": "fixture-key-salt",
+  "plaintext": "{\"pages\":[{\"page_number\":1,\"overlays\":[{\"text\":\"اختبار الترجمة\",\"x\":10,\"y\":20,\"w\":100,\"h\":50}]}]}",
+  "overlay": "A5gxi3wDtnwJx0HQOWymetAmW4Ii0jjTxCIjJ3iUvO3TcmYWza4eZMu3hbvBN1nRJhh1bsNV7EsXFl5iMf19VBrM2i0OMmMwQgUSuBhkn96Dycw5CqDvt5l0OGcS_w_HNt4bccTVEOs_lLAcgjC5aNJhoGNi4X3eMtskGrweNvvPq17zrZYOR4EsF2x1Ncc",
+  "legacy": "0102030405060708090a0b0c:2432eb9c87b8d69af72b6bd46aea59e713d42cf555b82437404b56ae737a3d9f011062528d48e095565601c914a598b8b304b2f83339f518ff07e0c6b45ffc8f0cd8167e07b032e7b859bd449d8d4d432b594f866d6935aa3872125b562ffb79db86469caeea3322f3e6e9158c19:2fd494e07856762bb0a796dfbd3e4665",
+  "proof": "6427658282ee689740341aed8b4dd3625b065138c28401d9f8fa40a47013da98"
+}

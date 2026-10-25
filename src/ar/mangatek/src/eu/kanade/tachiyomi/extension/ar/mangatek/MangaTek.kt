@@ -14,7 +14,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -155,35 +154,15 @@ abstract class MangaTek : KeiSource() {
         val document = client.get("$baseUrl${chapter.url}").asJsoup()
         val props: ChapterProps = document.extractAstroProp("imageUrls")
 
-        val overlayData = props.overlayBlob?.let { OverlayCrypto.decryptHexBlob(it).parseAs<OverlayData>() }
-            ?: unlockOverlay(props)
-
-        val offset = props.overlayPageOffset ?: 0
-        val overlaysByPageNumber: Map<Int, OverlayPage> = overlayData?.pages
-            ?.associateBy { it.pageNumber } ?: emptyMap()
-
-        return props.imageUrls.mapIndexed { index, imageUrl ->
-            val overlayPage = if (overlaysByPageNumber.isNotEmpty()) {
-                overlaysByPageNumber[index - offset + 1]
-                    ?: overlaysByPageNumber[index - offset]
-                    ?: overlaysByPageNumber[index]
-            } else {
-                null
-            }
-
-            if (overlayPage == null || overlayPage.overlays.isEmpty()) {
-                Page(index, imageUrl = imageUrl)
-            } else {
-                val url = imageUrl.toHttpUrl().newBuilder()
-                    .fragment(overlayPage.overlays.toJsonString())
-                    .build().toString()
-
-                Page(index, imageUrl = url)
-            }
+        val (overlayData, apiOffset) = props.overlayBlob?.let {
+            OverlayCrypto.decryptHexBlob(it).parseAs<OverlayData>() to null
         }
+            ?: unlockOverlay(props)
+            ?: (null to null)
+        return props.toPageList(overlayData, apiOffset)
     }
 
-    private suspend fun unlockOverlay(props: ChapterProps): OverlayData? {
+    private suspend fun unlockOverlay(props: ChapterProps): Pair<OverlayData, Int?>? {
         if (props.textMode != "overlay") return null
         val chapterId = props.chapterId ?: return null
         val token = props.unlockToken ?: return null
@@ -198,9 +177,10 @@ abstract class MangaTek : KeiSource() {
             response = client.post(UNLOCK_API_URL, body = retry.toJsonRequestBody()).parseAs<UnlockResponse>()
         }
 
-        val overlay = response.overlay ?: return null
-        return OverlayCrypto.decryptOverlay(overlay, response.ks, response.key, token, chapterId)
-            ?.parseAs<OverlayData>()
+        val overlay = checkNotNull(response.overlay) { "Failed to load the chapter translation. Open the chapter in WebView and try again." }
+        val data = OverlayCrypto.decryptOverlay(overlay, response.ks, response.key, token, chapterId)
+            .parseAs<OverlayData>()
+        return data to response.overlayPageOffset
     }
 
     private fun Element.imgAttr(): String = when {
