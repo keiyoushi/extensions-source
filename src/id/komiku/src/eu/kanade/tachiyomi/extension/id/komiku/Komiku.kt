@@ -106,7 +106,7 @@ abstract class Komiku : KeiSource() {
 
     private fun parseDetails(document: Document, manga: SManga): SManga = manga.apply {
         description = buildString {
-            append(document.select("#Sinopsis > p, p.desc[itemprop=description]").text())
+            document.selectFirst("#Sinopsis > p, p.desc[itemprop=description]")?.text()?.let { append(it) }
 
             document.selectFirst("table.inftable tr:contains(Judul Indonesia) td + td, table.inftable tr:contains(Judul Alternatif) td + td")?.text()?.let {
                 if (it.isNotEmpty()) {
