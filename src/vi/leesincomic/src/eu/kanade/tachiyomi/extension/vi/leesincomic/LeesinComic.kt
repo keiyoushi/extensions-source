@@ -19,6 +19,11 @@ import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.tryParseDateTime
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
@@ -28,6 +33,9 @@ import okhttp3.OkHttpClient
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.TimeUnit
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 @Source
@@ -35,27 +43,59 @@ abstract class LeesinComic : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
+        // get_comics is ~6 MB and the server can take over a minute to deliver it
+        // the default read timeout kills the request before the body arrives.
+        readTimeout(2, TimeUnit.MINUTES)
     }
 
-    // The tachserver CDN rejects image requests that carry an Origin header.
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = this
+        .set("X-API-KEY", "Leesin_Secret_MySQL_Key_2026")
+        .set("x-api-key", "Leesin_Secret_MySQL_Key_2026")
+        .removeAll("Origin")
 
     // CDN. tachserver.online drops connections; identical paths live on tachserver.site.
     private fun String.fixImageHost(): String = replace("://tachserver.online/", "://tachserver.site/")
 
     // ============================== Popular ===============================
 
-    private suspend fun fetchCatalog(): List<ComicDto> = client.get("$baseUrl/api.php?action=get_comics").parseAs<ComicsResponse>().comics
+    // get_comics serves the whole ~6 MB catalog per call
+    // memoize briefly and share the in-flight request so browse/search/filter don't refetch it.
+    private val catalogMutex = Mutex()
+    private var catalogCache: Pair<Long, List<CatalogComicDto>>? = null
+    private var catalogJob: Deferred<List<CatalogComicDto>>? = null
 
-    private fun List<ComicDto>.toMangasPage(page: Int): MangasPage {
-        val pageSize = 32
-        val from = (page - 1) * pageSize
-        if (from >= size) return MangasPage(emptyList(), false)
-        val slice = subList(from, minOf(from + pageSize, size))
-        return MangasPage(slice.map { it.toSManga() }, hasNextPage = from + pageSize < size)
+    private suspend fun fetchCatalog(): List<CatalogComicDto> {
+        catalogCache?.takeIf { Clock.System.now().toEpochMilliseconds() - it.first < catalogTtl }
+            ?.let { return it.second }
+
+        return coroutineScope {
+            catalogMutex.withLock {
+                catalogCache?.takeIf { Clock.System.now().toEpochMilliseconds() - it.first < catalogTtl }
+                    ?.let { return@coroutineScope it.second }
+
+                val job = catalogJob ?: async {
+                    client.get("$baseUrl/api.php?action=get_comics")
+                        .parseAs<ComicsResponse>().comics
+                }.also { catalogJob = it }
+
+                try {
+                    job.await().also { comics ->
+                        catalogCache = Clock.System.now().toEpochMilliseconds() to comics
+                        catalogJob = null
+                    }
+                } catch (e: Exception) {
+                    catalogJob = null
+                    throw e
+                }
+            }
+        }
     }
 
-    private fun ComicDto.toSManga(): SManga = SManga.create().apply {
+    private val catalogTtl = 5.minutes.inWholeMilliseconds
+
+    private fun List<CatalogComicDto>.toMangasPage(): MangasPage = MangasPage(map { it.toSManga() }, hasNextPage = false)
+
+    private fun CatalogComicDto.toSManga(): SManga = SManga.create().apply {
         setUrlWithoutDomain("/truyen/$slug")
         title = this@toSManga.title
         thumbnail_url = coverImage?.fixImageHost()
@@ -63,13 +103,13 @@ abstract class LeesinComic : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchCatalog()
         .sortedByDescending { it.views }
-        .toMangasPage(page)
+        .toMangasPage()
 
     // ============================== Latest ================================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = fetchCatalog()
         .sortedByDescending { it.updatedAt.parseApiDate() }
-        .toMangasPage(page)
+        .toMangasPage()
 
     // ============================== Search ================================
 
@@ -106,13 +146,21 @@ abstract class LeesinComic : KeiSource() {
             else -> comics.sortedByDescending { it.views }
         }
 
-        return comics.toMangasPage(page)
+        return comics.toMangasPage()
     }
 
-    private fun ComicDto.isOngoing(): Boolean = status.equals("Đang tiến hành", ignoreCase = true)
+    private fun CatalogComicDto.isOngoing(): Boolean = status.isOngoing()
 
-    private fun ComicDto.isCompleted(): Boolean = status.equals("Hoàn thành", ignoreCase = true) ||
-        status.equals("Đã hoàn thành", ignoreCase = true)
+    private fun CatalogComicDto.isCompleted(): Boolean = status.isCompleted()
+
+    private fun ComicDto.isOngoing(): Boolean = status.isOngoing()
+
+    private fun ComicDto.isCompleted(): Boolean = status.isCompleted()
+
+    private fun String?.isOngoing(): Boolean = equals("Đang tiến hành", ignoreCase = true)
+
+    private fun String?.isCompleted(): Boolean = equals("Hoàn thành", ignoreCase = true) ||
+        equals("Đã hoàn thành", ignoreCase = true)
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
