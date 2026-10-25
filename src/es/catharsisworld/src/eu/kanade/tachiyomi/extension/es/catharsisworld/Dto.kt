@@ -85,7 +85,7 @@ class ChapterDto(
 @Serializable
 class PagesDto(
     val paginas: List<PageDto>,
-    val chapterSessionToken: String? = null,
+    val chapterSessionToken: String,
 )
 
 @Serializable
@@ -112,8 +112,7 @@ class PageTicketResponse(
 @Serializable
 class ChapterTokenPayload(
     val cid: Int,
-    private val ip: String? = null,
-    private val exp: Long? = null,
+    val exp: Long,
 )
 
 @Serializable
