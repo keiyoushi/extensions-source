@@ -160,7 +160,7 @@ abstract class VoyceMe : KeiSource() {
         private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
 
         const val STATIC_URL = "https://dlkfxmdtxtzpb.cloudfront.net/"
-        private const val GRAPHQL_URL = "https://graphql.voyce.me/v1/graphql"
+        private const val GRAPHQL_URL = "https://hasura.voyce.me/v1/graphql"
 
         private const val POPULAR_PER_PAGE = 10
     }
