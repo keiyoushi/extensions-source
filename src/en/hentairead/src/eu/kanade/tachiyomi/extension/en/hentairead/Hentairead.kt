@@ -173,6 +173,8 @@ abstract class Hentairead : KeiSource() {
             return SMangaUpdate(details, chapters)
         }
 
+        allChapters.sortByDescending { it.chapter_number } // Fixes some chapters being out of place
+
         return SMangaUpdate(details, allChapters)
     }
 
