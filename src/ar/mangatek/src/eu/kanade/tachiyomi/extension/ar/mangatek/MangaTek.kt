@@ -158,24 +158,19 @@ abstract class MangaTek : KeiSource() {
         val overlayData = props.overlayBlob?.let { OverlayCrypto.decryptHexBlob(it).parseAs<OverlayData>() }
             ?: unlockOverlay(props)
 
-        val offset = props.overlayPageOffset ?: 0
-        val overlaysByPageNumber: Map<Int, OverlayPage> = overlayData?.pages
-            ?.associateBy { it.pageNumber } ?: emptyMap()
+        // page_number counts from 1 after the overlayPageOffset images
+        val firstOverlayImage = props.overlayPageOffset ?: 0
+        val overlaysByImage = overlayData?.pages.orEmpty()
+            .associate { firstOverlayImage + it.pageNumber - 1 to it.overlays }
 
         return props.imageUrls.mapIndexed { index, imageUrl ->
-            val overlayPage = if (overlaysByPageNumber.isNotEmpty()) {
-                overlaysByPageNumber[index - offset + 1]
-                    ?: overlaysByPageNumber[index - offset]
-                    ?: overlaysByPageNumber[index]
-            } else {
-                null
-            }
+            val overlays = overlaysByImage[index]
 
-            if (overlayPage == null || overlayPage.overlays.isEmpty()) {
+            if (overlays.isNullOrEmpty()) {
                 Page(index, imageUrl = imageUrl)
             } else {
                 val url = imageUrl.toHttpUrl().newBuilder()
-                    .fragment(overlayPage.overlays.toJsonString())
+                    .fragment(overlays.toJsonString())
                     .build().toString()
 
                 Page(index, imageUrl = url)
