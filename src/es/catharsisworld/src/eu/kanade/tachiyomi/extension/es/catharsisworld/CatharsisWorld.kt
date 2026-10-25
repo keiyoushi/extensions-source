@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Base64
 import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -22,8 +23,12 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -32,21 +37,26 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
-import java.util.concurrent.ConcurrentHashMap
+import java.io.IOException
 import kotlin.random.Random
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 @Source
 abstract class CatharsisWorld : KeiSource() {
 
     private val apiUrl get() = "$baseUrl/api"
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::pageInterceptor)
         .addInterceptor(::signatureInterceptor)
-        .addInterceptor(::pageInterceptor)
+        .rateLimit(50, 1.minutes, 1.seconds) { it.encodedPath.endsWith("/page-ticket") }
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("System", "catharsis")
         .add("X-FK-Sistema", "3")
@@ -124,91 +134,59 @@ abstract class CatharsisWorld : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = "$apiUrl/mangas/${chapter.url}"
-        val dto = try {
-            client.get(url).parseAs<PagesDto>()
-        } catch (e: HttpException) {
-            if (e.code == 401) {
-                throw Exception("This chapter requires login on the website")
-            }
-            throw e
-        }
-        val token = dto.chapterSessionToken
-            ?: throw IllegalStateException("Missing chapter session token")
-        val chapterId = token.split(".").firstOrNull()
-            ?.let { Base64.decode(it, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP) }
-            ?.decodeToString()
-            ?.let { it.parseAs<ChapterTokenPayload>().cid }
-            ?: throw IllegalStateException("Invalid chapter session token")
-        return dto.paginas.mapIndexed { i, pageDto ->
-            val ticket = client.post(
-                "$apiUrl/mangas/chapters/$chapterId/page-ticket",
-                headers = headers,
-                body = PageTicketRequest(pageDto.index, token).toJsonRequestBody(),
-            ).parseAs<PageTicketResponse>()
-            xorKeys[ticket.signedToken] = ticket.xorByte
-            ticket.scrambleKey?.let { scrambleKeys[ticket.signedToken] = it }
-            Page(i, imageUrl = "$apiUrl/mangas/pages/${ticket.signedToken}")
+        val dto = sessionMutex.withLock { openChapter(chapter.url) }
+        return dto.paginas.mapIndexed { i, page ->
+            val url = HttpUrl.Builder()
+                .scheme("http")
+                .host(PAGE_HOST)
+                .addPathSegments(chapter.url)
+                .addQueryParameter("page", page.index.toString())
+                .build()
+            Page(i, imageUrl = url.toString())
         }
     }
-
-    private val xorKeys = ConcurrentHashMap<String, Int>()
-    private val scrambleKeys = ConcurrentHashMap<String, String>()
 
     override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
         .addHeader("X-Catharsis-Reader", "1")
         .build()
 
-    // Page images are XOR-ed with a single-byte key unless they already start with an image signature
-    private fun signatureInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (!request.url.encodedPath.startsWith("/api/")) {
-            return chain.proceed(request)
-        }
-        val timestamp = System.currentTimeMillis().toString()
-        val nonce = generateNonce()
-        val signature = "$timestamp:$nonce:${request.method}".hmacSha256(HMAC_KEY.encodeToByteArray()).toHexString()
-        val newRequest = request.newBuilder()
-            .addHeader("x-catharsis-time", timestamp)
-            .addHeader("x-catharsis-nonce", nonce)
-            .addHeader("x-catharsis-sig", signature)
-            .build()
-        return chain.proceed(newRequest)
-    }
-
-    private fun generateNonce(): String {
-        val chars = ('a'..'z') + ('A'..'Z') + ('0'..'9')
-        return (1..16).map { chars[Random.nextInt(chars.size)] }.joinToString("")
-    }
-
+    // Page image: a ticket per load, then the signed image
     private fun pageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val path = request.url.encodedPath
-        if (!path.startsWith("/api/mangas/pages/")) return chain.proceed(request)
-        val response = chain.proceed(request)
+        if (request.url.host != PAGE_HOST) return chain.proceed(request)
+        val chapterUrl = request.url.encodedPath.removePrefix("/")
+        val pageIndex = request.url.queryParameter("page")!!.toInt()
+        val ticket = try {
+            val session = runBlocking { chapterSession(chapterUrl) }
+            mintPageTicket(chain, session, pageIndex)
+                ?: mintPageTicket(chain, runBlocking { chapterSession(chapterUrl, rejected = session) }, pageIndex)
+                ?: throw HttpException(401)
+        } catch (e: IOException) {
+            throw e
+        } catch (e: Exception) {
+            throw IOException(e.message, e)
+        }
+        val response = chain.proceed(request.newBuilder().url("$apiUrl/mangas/pages/${ticket.signedToken}").build())
         if (!response.isSuccessful) return response
-
-        val signedToken = request.url.pathSegments.lastOrNull() ?: return response
-        val xorByte = xorKeys[signedToken] ?: return response
 
         val body = response.body
         val source = body.source()
         if (!source.request(HEADER_SIZE.toLong())) return response
         if (source.buffer.size < HEADER_SIZE) return response
         val header = source.buffer.snapshot(HEADER_SIZE).toByteArray()
-        val decoded = header.xor(xorByte)
+        val decoded = header.xor(ticket.xorByte)
+        // XOR-ed with the ticket's byte unless it already starts with an image signature
         if (isImage(header) || !isImage(decoded)) return response
 
         val bytes = body.bytes()
-        val decodedBytes = bytes.xor(xorByte)
-        val scrambleKey = scrambleKeys[signedToken]
+        val decodedBytes = bytes.xor(ticket.xorByte)
         val bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
-        if (bitmap == null || scrambleKey == null || bitmap.width < 800 || bitmap.height < 800) {
+        if (bitmap == null || ticket.scrambleKey == null || bitmap.width < 800 || bitmap.height < 800) {
             return response.newBuilder()
                 .body(decodedBytes.toResponseBody(body.contentType()))
                 .build()
         }
-        val descrambled = descramble(bitmap, scrambleKey)
+        val descrambled = descramble(bitmap, ticket.scrambleKey)
         bitmap.recycle()
         val out = Buffer()
         descrambled.compress(Bitmap.CompressFormat.PNG, 100, out.outputStream())
@@ -336,9 +314,173 @@ abstract class CatharsisWorld : KeiSource() {
             (b[4] == 0x66 && b[5] == 0x74 && b[6] == 0x79 && b[7] == 0x70)
     }
 
+    private class ChapterSession(val chapterId: Int, val token: String, val expiresAt: Instant)
+
+    private class FailedOpen(val chapterUrl: String, val failedAt: Instant, val error: Exception)
+
+    private val sessionMutex = Mutex()
+    private val chapterSessions = HashMap<String, ChapterSession>()
+    private var failedOpen: FailedOpen? = null
+    private var currentReaderPass: ReaderPassDto? = null
+
+    // Session for pageInterceptor; a failed open replays for 10 s
+    private suspend fun chapterSession(chapterUrl: String, rejected: ChapterSession? = null): ChapterSession = sessionMutex.withLock {
+        val now = Clock.System.now()
+        chapterSessions[chapterUrl]
+            ?.takeIf { it !== rejected && it.expiresAt > now + 1.minutes }
+            ?.let { return@withLock it }
+        failedOpen
+            ?.takeIf { it.chapterUrl == chapterUrl && now - it.failedAt < 10.seconds }
+            ?.let { throw it.error }
+        try {
+            openChapter(chapterUrl)
+        } catch (e: Exception) {
+            failedOpen = FailedOpen(chapterUrl, now, e)
+            throw e
+        }
+        chapterSessions.getValue(chapterUrl)
+    }
+
+    // Caller holds sessionMutex
+    private suspend fun openChapter(chapterUrl: String): PagesDto {
+        val url = "$apiUrl/mangas/$chapterUrl"
+        val dto = fetchChapter(url, readerPass())
+            ?: run {
+                currentReaderPass = null
+                fetchChapter(url, readerPass())
+            }
+            ?: throw HttpException(403)
+        val token = dto.chapterSessionToken
+        val payload = Base64.decode(token.substringBefore("."), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+            .decodeToString()
+            .parseAs<ChapterTokenPayload>()
+        val now = Clock.System.now()
+        chapterSessions.values.removeAll { it.expiresAt < now }
+        chapterSessions[chapterUrl] = ChapterSession(payload.cid, token, Instant.fromEpochSeconds(payload.exp))
+        failedOpen = null
+        return dto
+    }
+
+    // Null when the site asks for a new reader pass
+    private suspend fun fetchChapter(url: String, pass: ReaderPassDto): PagesDto? {
+        val passHeaders = headersBuilder().set("X-Catharsis-Reader-Pass", pass.pass).build()
+        val response = client.get(url, passHeaders, ensureSuccess = false)
+        if (response.isSuccessful) return response.parseAs<PagesDto>()
+        if (response.code == 401) {
+            response.close()
+            throw Exception("This chapter requires login on the website")
+        }
+        val code = response.errorCode()
+        if (code == "READER_PASS_REQUIRED") return null
+        throw siteError(response.code, code)
+    }
+
+    // Null when the site rejects the session token: expired, or issued to another IP
+    private fun mintPageTicket(chain: Interceptor.Chain, session: ChapterSession, pageIndex: Int): PageTicketResponse? {
+        val request = POST(
+            "$apiUrl/mangas/chapters/${session.chapterId}/page-ticket",
+            headers,
+            PageTicketRequest(pageIndex, session.token).toJsonRequestBody(),
+        )
+        val response = chain.proceed(request)
+        if (response.code == 401) {
+            response.close()
+            return null
+        }
+        if (!response.isSuccessful) {
+            response.close()
+            throw HttpException(response.code)
+        }
+        return response.parseAs<PageTicketResponse>()
+    }
+
+    // Reader pass from the site's Cap proof-of-work; caller holds sessionMutex
+    private suspend fun readerPass(): ReaderPassDto {
+        currentReaderPass
+            ?.takeIf { Instant.fromEpochMilliseconds(it.expiresAt) > Clock.System.now() + 1.minutes }
+            ?.let { return it }
+        val system = client.get("$apiUrl/system").parseAs<SystemDto>()
+        val capUrl = system.capApiEndpoint.toHttpUrl()
+        val challenge = client.post(capUrl.resolve("challenge")!!, RequestBody.EMPTY).parseAs<CapChallengeResponse>()
+        val solutions = (1..challenge.challenge.count).map { i ->
+            solveCap(
+                salt = capPrng("${challenge.token}$i", challenge.challenge.saltSize),
+                target = capPrng("${challenge.token}${i}d", challenge.challenge.difficulty),
+            )
+        }
+        val redeemed = client.post(
+            capUrl.resolve("redeem")!!,
+            CapRedeemRequest(challenge.token, solutions).toJsonRequestBody(),
+        ).parseAs<CapRedeemResponse>()
+        val capToken = redeemed.token?.takeIf { redeemed.success }
+            ?: throw Exception("Reader verification failed")
+        val response = client.post(
+            "$apiUrl/mangas/reader-pass",
+            ReaderPassRequest(capToken, system.capSitekey).toJsonRequestBody(),
+            ensureSuccess = false,
+        )
+        if (!response.isSuccessful) throw siteError(response.code, response.errorCode())
+        return response.parseAs<ReaderPassDto>().also { currentReaderPass = it }
+    }
+
+    // FNV-1a seeded xorshift32, as hex
+    private fun capPrng(seed: String, length: Int): String {
+        var state = seed.fold(FNV_OFFSET_BASIS) { hash, char -> (hash xor char.code) * FNV_PRIME }
+        return buildString {
+            while (this.length < length) {
+                state = state xor (state shl 13)
+                state = state xor (state ushr 17)
+                state = state xor (state shl 5)
+                append(state.toUInt().toString(16).padStart(8, '0'))
+            }
+        }.take(length)
+    }
+
+    private fun solveCap(salt: String, target: String): Int = generateSequence(0) { it + 1 }
+        .first { "$salt$it".sha256().toHexString().startsWith(target) }
+
+    private fun Response.errorCode(): String? {
+        if (header("Content-Type")?.startsWith("application/json") != true) {
+            close()
+            return null
+        }
+        return parseAs<ApiErrorDto>().code
+    }
+
+    // Error codes the site's reader shows a message for
+    private fun siteError(status: Int, code: String?): Exception = when (code) {
+        "DATACENTER_BLOCKED" -> Exception("The site doesn't allow reading through a VPN or proxy")
+        "EARLY_ACCESS" -> Exception("This chapter is still in early access on the site")
+        else -> HttpException(status)
+    }
+
+    private fun signatureInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (!request.url.encodedPath.startsWith("/api/")) {
+            return chain.proceed(request)
+        }
+        val timestamp = Clock.System.now().toEpochMilliseconds().toString()
+        val nonce = generateNonce()
+        val signature = "$timestamp:$nonce:${request.method}".hmacSha256(HMAC_KEY.encodeToByteArray()).toHexString()
+        val newRequest = request.newBuilder()
+            .addHeader("x-catharsis-time", timestamp)
+            .addHeader("x-catharsis-nonce", nonce)
+            .addHeader("x-catharsis-sig", signature)
+            .build()
+        return chain.proceed(newRequest)
+    }
+
+    private fun generateNonce(): String {
+        val chars = ('a'..'z') + ('A'..'Z') + ('0'..'9')
+        return (1..16).map { chars[Random.nextInt(chars.size)] }.joinToString("")
+    }
+
     companion object {
         private const val PAGE_SIZE = 24
         private const val HMAC_KEY = "4$^£]C8j%La3"
         private const val HEADER_SIZE = 12
+        private const val PAGE_HOST = "catharsisworld.invalid"
+        private const val FNV_OFFSET_BASIS = -0x7ee3623b
+        private const val FNV_PRIME = 0x01000193
     }
 }
