@@ -142,8 +142,10 @@ private val WHITESPACE_REGEX = Regex("""\s+""")
 
 // the site capitalises each word of the alternative names it shows
 private fun String.capitalizeWords() = mapIndexed { i, char ->
-    if (char in 'a'..'z' && (i == 0 || !this[i - 1].isLetterOrDigit())) char.uppercaseChar() else char
+    if (char.isLowerCase() && (i == 0 || !this[i - 1].isWordPart())) char.titlecaseChar() else char
 }.joinToString("")
+
+private fun Char.isWordPart() = isLetterOrDigit() || this in "'’" || category == CharCategory.NON_SPACING_MARK
 
 private fun parseStatus(status: String?) = when (status) {
     "Ongoing" -> SManga.ONGOING
