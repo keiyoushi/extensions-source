@@ -43,8 +43,10 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import java.io.IOException
 import kotlin.random.Random
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 @Source
 abstract class CatharsisWorld : KeiSource() {
@@ -312,9 +314,9 @@ abstract class CatharsisWorld : KeiSource() {
             (b[4] == 0x66 && b[5] == 0x74 && b[6] == 0x79 && b[7] == 0x70)
     }
 
-    private class ChapterSession(val chapterId: Int, val token: String, val expiresAt: Long)
+    private class ChapterSession(val chapterId: Int, val token: String, val expiresAt: Instant)
 
-    private class FailedOpen(val chapterUrl: String, val failedAt: Long, val error: Exception)
+    private class FailedOpen(val chapterUrl: String, val failedAt: Instant, val error: Exception)
 
     private val sessionMutex = Mutex()
     private val chapterSessions = HashMap<String, ChapterSession>()
@@ -323,12 +325,12 @@ abstract class CatharsisWorld : KeiSource() {
 
     // Session for pageInterceptor; a failed open replays for 10 s
     private suspend fun chapterSession(chapterUrl: String, rejected: ChapterSession? = null): ChapterSession = sessionMutex.withLock {
-        val now = System.currentTimeMillis()
+        val now = Clock.System.now()
         chapterSessions[chapterUrl]
-            ?.takeIf { it !== rejected && it.expiresAt > now + 60_000 }
+            ?.takeIf { it !== rejected && it.expiresAt > now + 1.minutes }
             ?.let { return@withLock it }
         failedOpen
-            ?.takeIf { it.chapterUrl == chapterUrl && now - it.failedAt < 10_000 }
+            ?.takeIf { it.chapterUrl == chapterUrl && now - it.failedAt < 10.seconds }
             ?.let { throw it.error }
         try {
             openChapter(chapterUrl)
@@ -352,16 +354,16 @@ abstract class CatharsisWorld : KeiSource() {
         val payload = Base64.decode(token.substringBefore("."), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
             .decodeToString()
             .parseAs<ChapterTokenPayload>()
-        val now = System.currentTimeMillis()
+        val now = Clock.System.now()
         chapterSessions.values.removeAll { it.expiresAt < now }
-        chapterSessions[chapterUrl] = ChapterSession(payload.cid, token, payload.exp * 1000)
+        chapterSessions[chapterUrl] = ChapterSession(payload.cid, token, Instant.fromEpochSeconds(payload.exp))
         failedOpen = null
         return dto
     }
 
     // Null when the site asks for a new reader pass
     private suspend fun fetchChapter(url: String, pass: ReaderPassDto): PagesDto? {
-        val passHeaders = headers.newBuilder().set("X-Catharsis-Reader-Pass", pass.pass).build()
+        val passHeaders = headersBuilder().set("X-Catharsis-Reader-Pass", pass.pass).build()
         val response = client.get(url, passHeaders, ensureSuccess = false)
         if (response.isSuccessful) return response.parseAs<PagesDto>()
         if (response.code == 401) {
@@ -395,7 +397,7 @@ abstract class CatharsisWorld : KeiSource() {
     // Reader pass from the site's Cap proof-of-work; caller holds sessionMutex
     private suspend fun readerPass(): ReaderPassDto {
         currentReaderPass
-            ?.takeIf { it.expiresAt > System.currentTimeMillis() + 60_000 }
+            ?.takeIf { Instant.fromEpochMilliseconds(it.expiresAt) > Clock.System.now() + 1.minutes }
             ?.let { return it }
         val system = client.get("$apiUrl/system").parseAs<SystemDto>()
         val capUrl = system.capApiEndpoint.toHttpUrl()
@@ -457,7 +459,7 @@ abstract class CatharsisWorld : KeiSource() {
         if (!request.url.encodedPath.startsWith("/api/")) {
             return chain.proceed(request)
         }
-        val timestamp = System.currentTimeMillis().toString()
+        val timestamp = Clock.System.now().toEpochMilliseconds().toString()
         val nonce = generateNonce()
         val signature = "$timestamp:$nonce:${request.method}".hmacSha256(HMAC_KEY.encodeToByteArray()).toHexString()
         val newRequest = request.newBuilder()
