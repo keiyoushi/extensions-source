@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "MG Komik"
-    versionCode = 24
+    versionCode = 80
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "id"
-        baseUrl = "https://id.mgkomik.cc"
+        baseUrl = "https://web1.mgkomik.cc"
+        versionId = 2
     }
 }
