@@ -26,7 +26,7 @@ abstract class OriYami : KeiSource() {
 
     override val supportsRelatedMangas = true
 
-    private val apiHeaders get() = headers.newBuilder().set("Accept", "application/json").build()
+    private val apiHeaders get() = headersBuilder().set("Accept", "application/json").build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchPagedList("popular-list", page)
 

@@ -80,10 +80,13 @@ class MangaDetails(
                 name.replace(WHITESPACE_REGEX, " ").trim().capitalizeWords()
             }.filter { it.isNotEmpty() }
             if (altNames.isNotEmpty()) {
-                append("**Alternative names:** ", altNames.joinToString(" · "), "\n\n")
+                append("**Alternative names:**\n")
+                altNames.forEach { append("- ", it, "\n") }
+                append("\n")
             }
             if (sources.isNotEmpty()) {
-                append("**Links:** ", sources.joinToString(" · ") { "[${it.label}](${it.url})" })
+                append("**Links:**\n")
+                sources.forEach { append("- [", it.label, "](", it.url, ")\n") }
             }
         }.trim().ifEmpty { null }
         memo = buildJsonObject { put(MEMO_TYPE, type) }
