@@ -31,7 +31,7 @@ class MangaItem(
     val status: String? = null,
 ) {
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
-        url = "/manga/$slug"
+        url = slug
         title = this@MangaItem.title.trim()
         thumbnail_url = getCoverUrl(baseUrl, coverPath)
     }
@@ -61,7 +61,7 @@ class MangaDetail(
     val chapters: List<ChapterItem> = emptyList(),
 ) {
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
-        url = "/manga/$slug"
+        url = slug
         title = this@MangaDetail.title.trim()
         author = authors.joinToString { it.name.trim() }.ifBlank { null }
         artist = artists.joinToString { it.name.trim() }.ifBlank { null }

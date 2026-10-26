@@ -13,6 +13,6 @@ keiyoushi {
     source {
         lang = "fr"
         baseUrl = "https://x-manga.org"
-        id = 4153742697148883998L
+        versionId = 2
     }
 }

@@ -95,7 +95,7 @@ abstract class XManga : KeiSource() {
             else -> return null
         }
         return fetchMangaUpdate(
-            SManga.create().apply { this.url = "/manga/$slug" },
+            SManga.create().apply { this.url = slug },
             emptyList(),
             fetchDetails = true,
             fetchChapters = false,
