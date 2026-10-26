@@ -6,14 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Nemesis scans"
-    versionCode = 0
-    contentWarning = ContentWarning.SAFE
+    versionCode = 1
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "mangathemesia"
 
     source {
         name = "Nemesisscans"
         lang = "tr"
         baseUrl = "https://nemesisscans.com"
+    }
+
+    deeplink {
+        path("/series/..*")
     }
 }
