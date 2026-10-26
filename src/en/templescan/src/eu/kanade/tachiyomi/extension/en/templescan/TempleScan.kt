@@ -39,6 +39,7 @@ abstract class TempleScan :
     override fun Headers.Builder.configureHeaders() = apply {
         removeAll("Origin")
         set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        set("Accept-Encoding", "gzip, deflate, br, zstd")
     }
 
     private val pages = SitePages(baseUrl) { headers["User-Agent"]!! }
