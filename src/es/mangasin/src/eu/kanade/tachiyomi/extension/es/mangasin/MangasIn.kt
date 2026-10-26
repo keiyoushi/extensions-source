@@ -56,6 +56,11 @@ abstract class MangasIn : MMRCMS() {
             return super.searchMangaUrl(page, query, filters)
         }
 
+        // Site's minimum: 3 bytes of the trimmed query
+        if (query.trim().encodeToByteArray().size < 3) {
+            throw Exception("Search query must be at least 3 characters")
+        }
+
         return "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query)
         }.build().toString()
