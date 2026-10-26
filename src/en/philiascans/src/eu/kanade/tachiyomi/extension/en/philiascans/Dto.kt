@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
 @Serializable
@@ -24,7 +25,7 @@ class Item(
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = slug
         title = this@Item.title
-        thumbnail_url = coverImageUrl?.let { if (it.startsWith("http")) it else "$baseUrl/$it" }
+        thumbnail_url = coverImageUrl?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
     }
 }
 
@@ -56,7 +57,7 @@ class DetailsResponse(
             "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = coverImageUrl?.let { if (it.startsWith("http")) it else "$baseUrl/$it" }
+        thumbnail_url = coverImageUrl?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
     }
 }
 

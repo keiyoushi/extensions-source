@@ -199,7 +199,7 @@ abstract class PhiliaScans :
         }
 
         return result.chapter.pages.sortedBy { it.position }.mapIndexed { i, page ->
-            val imageUrl = if (page.url.startsWith("http")) page.url else "$baseUrl/${page.url}"
+            val imageUrl = baseUrl.toHttpUrl().resolve(page.url)!!
             Page(i, imageUrl = "$imageUrl#$isScrambled;${page.mime};${pageKeyResponse.chapterKeyB64};${pageKeyResponse.gridSize};$payloadA;$payloadB;$i")
         }
     }
