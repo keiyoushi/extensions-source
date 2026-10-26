@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.lycantoons
 
-import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,19 +7,18 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebView
-import keiyoushi.utils.toJsonString
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.OkHttpClient
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import java.io.IOException
 
 @Source
 abstract class LycanToons : KeiSource() {
@@ -28,6 +26,10 @@ abstract class LycanToons : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2)
     }
+
+    // The site refuses requests without Sec-Fetch-Site; its image CDN refuses any with Origin
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
+        .set("Sec-Fetch-Site", "same-origin")
 
     // =====================Popular=====================
 
@@ -58,7 +60,7 @@ abstract class LycanToons : KeiSource() {
             tags = tags.distinct(),
         )
 
-        return webFetch("$baseUrl/api/series", payload.toJsonString())
+        return client.post("$baseUrl/api/series", payload.toJsonRequestBody())
             .parseAs<SearchResponse>()
             .toMangasPage()
     }
@@ -77,7 +79,7 @@ abstract class LycanToons : KeiSource() {
 
         val details = async {
             if (fetchDetails) {
-                seriesPage("$baseUrl/series/$slug").extractNextJs<SeriesDto>()!!.toSManga()
+                client.get("$baseUrl/series/$slug").extractNextJs<SeriesDto>()!!.toSManga()
             } else {
                 manga
             }
@@ -85,7 +87,7 @@ abstract class LycanToons : KeiSource() {
 
         val chapterList = async {
             if (fetchChapters) {
-                seriesPage("$baseUrl/series/$slug/1").extractNextJs<ChapterResponse>()?.capitulos!!
+                client.get("$baseUrl/series/$slug/1").extractNextJs<ChapterResponse>()?.capitulos!!
                     .map { it.toSChapter(slug) }
                     .sortedByDescending { it.chapter_number }
             } else {
@@ -99,9 +101,9 @@ abstract class LycanToons : KeiSource() {
     // =====================Pages========================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = seriesPage("$baseUrl${chapter.url}").extractNextJs<ChapterIdDto>()!!.capituloId
+        val chapterId = client.get("$baseUrl${chapter.url.substringBefore("?")}").extractNextJs<ChapterIdDto>()!!.capituloId
 
-        return webFetch("$baseUrl/api/chapters/$chapterId/view-pages")
+        return client.get("$baseUrl/api/chapters/$chapterId/view-pages")
             .parseAs<PageList>()
             .pages
             .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
@@ -109,38 +111,9 @@ abstract class LycanToons : KeiSource() {
 
     // =====================Utils=====================
 
-    // Cloudflare challenges API requests that do not come from a browser, so fetch them from a same-origin page
-    private suspend fun webFetch(url: String, jsonBody: String? = null): String = runWebView {
-        userAgent = headers["User-Agent"]!!
-        jsBridge("lycanResult") { resolve(it) }
-        jsBridge("lycanError") { reject(IOException(it)) }
-        onPageFinished {
-            val init = jsonBody?.let { "{method:'POST',headers:{'Content-Type':'application/json'},body:${it.toJsonString()}}" } ?: "{}"
-            evaluateJs(
-                """
-                fetch(${url.toJsonString()}, $init)
-                    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-                    .then(t => lycanResult.post(t))
-                    .catch(e => lycanError.post(e.message));
-                """.trimIndent(),
-            )
-        }
-        loadData("$baseUrl/", " ")
-    }
-
-    private suspend fun metricsRequest(path: String, page: Int): String = webFetch("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page")
+    private suspend fun metricsRequest(path: String, page: Int) = client.get("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page")
 
     private fun SManga.slug(): String = url.substringBefore("?").substringAfterLast("/")
-
-    // Next.js RSC fetches get challenged too, so load the page itself as a document and skip its subresources
-    private suspend fun seriesPage(url: String): Document = runWebView<String> {
-        userAgent = headers["User-Agent"]!!
-        interceptRequest { if (it.isForMainFrame) null else WebResourceResponse(null, null, null) }
-        onPageFinished {
-            evaluateJs("document.documentElement.outerHTML") { resolve(it.parseAs()) }
-        }
-        loadUrl(url.substringBefore("?"))
-    }.let { Jsoup.parse(it, url) }
 
     companion object {
         private const val PAGE_LIMIT = 20
