@@ -80,6 +80,9 @@ abstract class AsuraScans :
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        addNetworkInterceptor { chain ->
+            chain.proceed(chain.request().newBuilder().removeHeader("Origin").build())
+        }
         addInterceptor(::scrambledImageInterceptor)
         rateLimit(2, 2.seconds) { !it.encodedPath.contains("/covers/") }
     }
