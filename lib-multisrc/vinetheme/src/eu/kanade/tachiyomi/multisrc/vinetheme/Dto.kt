@@ -100,10 +100,6 @@ class ChapterPagesDto(
 class PageDto(
     val imageUrl: String? = null,
     val kind: String = "CONTENT",
-    val isEncrypted: Boolean = false,
-    val isRedacted: Boolean = false,
-    val hasFragments: Boolean = false,
-    val hasStrips: Boolean = false,
 )
 
 @Serializable
