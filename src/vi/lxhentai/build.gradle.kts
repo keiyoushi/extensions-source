@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "LXManga"
-    versionCode = 42
+    versionCode = 43
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -14,7 +14,7 @@ keiyoushi {
         id = 6495630445796108150L
         lang = "vi"
         baseUrl {
-            custom("https://lxmanga.space")
+            custom("https://lxmanga.top")
         }
     }
 
