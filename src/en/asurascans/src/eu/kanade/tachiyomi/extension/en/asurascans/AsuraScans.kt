@@ -34,6 +34,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -80,11 +81,12 @@ abstract class AsuraScans :
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addNetworkInterceptor { chain ->
-            chain.proceed(chain.request().newBuilder().removeHeader("Origin").build())
-        }
         addInterceptor(::scrambledImageInterceptor)
         rateLimit(2, 2.seconds) { !it.encodedPath.contains("/covers/") }
+    }
+
+    override fun Headers.Builder.configureHeaders() = apply {
+        removeAll("Origin")
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(defaultSort = "popular")))
