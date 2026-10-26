@@ -18,6 +18,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
 @Source
@@ -31,15 +33,9 @@ abstract class LycanToons : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
         .set("Sec-Fetch-Site", "same-origin")
 
-    // =====================Popular=====================
-
     override suspend fun getPopularManga(page: Int): MangasPage = metricsRequest("popular", page).parseAs<PopularResponse>().toMangasPage()
 
-    // =====================Latest=====================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = metricsRequest("recently-updated", page).parseAs<PopularResponse>().toMangasPage()
-
-    // =====================Search=====================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         var search = query
@@ -65,9 +61,12 @@ abstract class LycanToons : KeiSource() {
             .toMangasPage()
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = LycanToonsFilters.get()
-
-    // =====================Details=====================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.getOrNull(0) != "series") return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
+        val manga = SManga.create().apply { this.url = "/series/$slug" }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -87,7 +86,7 @@ abstract class LycanToons : KeiSource() {
 
         val chapterList = async {
             if (fetchChapters) {
-                client.get("$baseUrl/series/$slug/1").extractNextJs<ChapterResponse>()?.capitulos!!
+                client.get("$baseUrl/series/$slug/1").extractNextJs<ChapterResponse>()!!.capitulos
                     .map { it.toSChapter(slug) }
                     .sortedByDescending { it.chapter_number }
             } else {
@@ -98,10 +97,8 @@ abstract class LycanToons : KeiSource() {
         SMangaUpdate(details.await(), chapterList.await())
     }
 
-    // =====================Pages========================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = client.get("$baseUrl${chapter.url.substringBefore("?")}").extractNextJs<ChapterIdDto>()!!.capituloId
+        val chapterId = client.get(getChapterUrl(chapter)).extractNextJs<ChapterIdDto>()!!.capituloId
 
         return client.get("$baseUrl/api/chapters/$chapterId/view-pages")
             .parseAs<PageList>()
@@ -109,7 +106,11 @@ abstract class LycanToons : KeiSource() {
             .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    // =====================Utils=====================
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        SeriesTypeFilter(),
+        StatusFilter(),
+        TagsFilter(),
+    )
 
     private suspend fun metricsRequest(path: String, page: Int) = client.get("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page")
 

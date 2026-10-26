@@ -14,4 +14,8 @@ keiyoushi {
         lang = "pt-BR"
         baseUrl = "https://lycantoons.com"
     }
+
+    deeplink {
+        path("/series/..*")
+    }
 }
