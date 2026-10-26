@@ -11,21 +11,27 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.io.IOException
 import java.util.Base64
 import java.util.Calendar
 
 @Source
 abstract class Holotoon : KeiSource() {
+
+    // Client hint Chrome sends with its User-Agent, required on /read/
+    override fun Headers.Builder.configureHeaders() = apply {
+        CHROME_VERSION_REGEX.find(get("User-Agent").orEmpty())?.let {
+            val version = it.groupValues[1]
+            set("Sec-CH-UA", "\"Chromium\";v=\"$version\", \"Google Chrome\";v=\"$version\", \"Not.A/Brand\";v=\"99\"")
+        }
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getBrowsePage(page = page, sort = "popular")
 
@@ -217,24 +223,7 @@ abstract class Holotoon : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = getChapterUrl(chapter)
-        // Cloudflare challenges /read/ for the app's HTTP client but lets WebView through
-        val html = try {
-            runWebView<String> {
-                blockImages = true
-                poll {
-                    evaluateJs(READER_HTML_SCRIPT) { result ->
-                        if (result != "null") resolve(result.parseAs<String>())
-                    }
-                }
-                loadUrl(chapterUrl)
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            throw IOException(e.message, e)
-        }
-        val document = html.asJsoup(chapterUrl)
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val readerImages = document.select("#reader-pages img")
         val images = if (readerImages.isNotEmpty()) {
             readerImages
@@ -332,8 +321,7 @@ abstract class Holotoon : KeiSource() {
         private val ARTIST_REGEX = Regex("Artist:\\s*(.*?)\\s+(?:Year:|Views:|Uploaded by:)", RegexOption.IGNORE_CASE)
         private val CHAPTER_NUMBER_REGEX = Regex("\\d+(?:\\.\\d+)?")
         private val NUMBER_REGEX = Regex("\\d+")
+        private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
         private val STATUS_VALUES = setOf("ongoing", "completed", "hiatus", "dropped")
-        private const val READER_HTML_SCRIPT =
-            "location.protocol.startsWith('http') && document.readyState !== 'loading' && !window._cf_chl_opt ? document.documentElement.outerHTML : null"
     }
 }
