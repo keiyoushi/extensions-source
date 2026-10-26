@@ -40,6 +40,7 @@ abstract class TempleScan :
         removeAll("Origin")
         set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         set("Accept-Encoding", "gzip, deflate, br, zstd")
+        set("Accept-Language", "en-US,en;q=0.9")
     }
 
     private val pages = SitePages(baseUrl) { headers["User-Agent"]!! }
