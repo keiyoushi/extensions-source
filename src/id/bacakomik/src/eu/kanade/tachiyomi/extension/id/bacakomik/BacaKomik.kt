@@ -89,7 +89,7 @@ abstract class BacaKomik : KeiSource() {
                     }
                     is GenreListFilter -> {
                         filter.state
-                            .filter { it.state != Filter.TriState.STATE_IGNORE }
+                            .filter { it.state }
                             .forEach { addQueryParameter("genre[]", it.id) }
                     }
                     else -> {}
