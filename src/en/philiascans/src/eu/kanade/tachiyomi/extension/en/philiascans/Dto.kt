@@ -62,6 +62,14 @@ class DetailsResponse(
 }
 
 @Serializable
+class Genre(
+    private val slug: String,
+    private val name: String,
+) {
+    fun toPair() = name to slug
+}
+
+@Serializable
 class Info(
     val name: String,
 )
@@ -89,7 +97,7 @@ class ChapterItem(
         val validTitle = title?.takeIf { it.isNotBlank() && it != "null" && it != number }
         name = lock + if (validTitle != null) "Chapter $number - $validTitle" else "Chapter $number"
         date_upload = Instant.tryParse(publishedAt)
-        chapter_number = number.toFloat()
+        number.toFloatOrNull()?.let { chapter_number = it }
     }
 }
 
