@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.westmanga
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,12 +11,17 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLocalStorage
-import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 @Source
 abstract class WestManga : KeiSource() {
@@ -36,7 +42,7 @@ abstract class WestManga : KeiSource() {
             }
         }.build()
 
-        val data = client.get(url, apiHeaders(url)).parseAs<PaginatedData<BrowseManga>>()
+        val data = apiGet<PaginatedData<BrowseManga>>(url)
         val entries = data.data.map { it.toSManga(baseUrl) }
         return MangasPage(entries, data.paginator.hasNextPage())
     }
@@ -45,7 +51,7 @@ abstract class WestManga : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement {
         val url = "$baseUrl/api/contents/genres".toHttpUrl()
-        return client.get(url, apiHeaders(url, includeToken = false)).parseAs()
+        return apiGet<JsonElement>(url, includeToken = false)
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
@@ -70,7 +76,7 @@ abstract class WestManga : KeiSource() {
         } ?: return null
         val api = "$baseUrl/api/comic/$slug".toHttpUrl()
 
-        return client.get(api, apiHeaders(api)).parseAs<Data<Manga>>().data
+        return apiGet<Data<Manga>>(api).data
             .toSManga(baseUrl)
     }
 
@@ -85,7 +91,7 @@ abstract class WestManga : KeiSource() {
         val slug = path[1]
         val api = "$baseUrl/api/comic/$slug".toHttpUrl()
 
-        val data = client.get(api, apiHeaders(api)).parseAs<Data<Manga>>().data
+        val data = apiGet<Data<Manga>>(api).data
         return SMangaUpdate(
             data.toSManga(baseUrl),
             data.chapters.map { it.toSChapter() },
@@ -103,7 +109,7 @@ abstract class WestManga : KeiSource() {
         val slug = path.first()
 
         val url = "$baseUrl/api/v/$slug".toHttpUrl()
-        val data = client.get(url, apiHeaders(url)).parseAs<Data<ImageList>>().data
+        val data = apiGet<Data<ImageList>>(url).data
         return data.images.mapIndexed { idx, img ->
             val imgUrl = if (img.startsWith("http")) img else "$baseUrl$img"
             Page(idx, imageUrl = imgUrl)
@@ -129,22 +135,49 @@ abstract class WestManga : KeiSource() {
         return tokenCache
     }
 
-    private suspend fun apiHeaders(url: HttpUrl, includeToken: Boolean = true): Headers {
-        val timestamp = (System.currentTimeMillis() / 1000).toString()
-        val message = "wm-api-request"
-        val key = timestamp + "GET" + url.encodedPath + ACCESS_KEY + SECRET_KEY
-        val signature = message.hmacSha256(key.encodeToByteArray()).toHexString()
+    private val visitTokenMutex = Mutex()
+    private var visitToken: String? = null
+    private var visitTokenExpiresAt = Instant.DISTANT_PAST
 
-        return headersBuilder().apply {
-            if (includeToken) {
-                bearerToken()?.let { set("Authorization", "Bearer $it") }
-            }
-            set("x-wm-request-time", timestamp)
-            set("x-wm-accses-key", ACCESS_KEY)
-            set("x-wm-request-signature", signature)
-        }.build()
+    private suspend fun getVisitToken(forceRefresh: Boolean = false): String? = visitTokenMutex.withLock {
+        val now = Clock.System.now()
+        if (!forceRefresh && visitToken != null && now < visitTokenExpiresAt - 5.minutes) {
+            return@withLock visitToken
+        }
+
+        val url = "$baseUrl/api/visit-token".toHttpUrl()
+        val response = runCatching {
+            client.get(url).parseAs<VisitTokenResponse>()
+        }.getOrNull()
+
+        if (response?.status == true && !response.token.isNullOrBlank()) {
+            visitToken = response.token
+            visitTokenExpiresAt = response.expiresAt?.let(Instant::fromEpochSeconds) ?: (now + 1.hours)
+            return@withLock visitToken
+        }
+
+        if (forceRefresh) {
+            visitToken = null
+            visitTokenExpiresAt = Instant.DISTANT_PAST
+        }
+        return@withLock visitToken
+    }
+
+    private suspend fun apiHeaders(includeToken: Boolean = true): Headers = headersBuilder().apply {
+        getVisitToken()?.let { set("X-WM-Visit", it) }
+        if (includeToken) {
+            bearerToken()?.let { set("Authorization", "Bearer $it") }
+        }
+    }.build()
+
+    private suspend inline fun <reified T> apiGet(url: HttpUrl, includeToken: Boolean = true): T = try {
+        client.get(url, apiHeaders(includeToken)).parseAs<T>()
+    } catch (e: Exception) {
+        if (e is HttpException && (e.code == 403 || e.code == 404)) {
+            getVisitToken(forceRefresh = true)
+            client.get(url, apiHeaders(includeToken)).parseAs<T>()
+        } else {
+            throw e
+        }
     }
 }
-
-private const val ACCESS_KEY = "WM_WEB_FRONT_END"
-private const val SECRET_KEY = "xxxoidj"

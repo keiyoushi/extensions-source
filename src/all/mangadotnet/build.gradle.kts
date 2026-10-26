@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MangaDot"
-    versionCode = 26
+    versionCode = 27
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     pkgName = "en.mangadotnet"

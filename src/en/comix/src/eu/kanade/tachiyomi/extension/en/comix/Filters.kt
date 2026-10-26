@@ -192,18 +192,26 @@ class Filters(
 
     private open class UriTriSelectOption(name: String, val value: String) : Filter.TriState(name)
 
-    // The API ignores demographic exclusions, so this must remain include/off.
+    // Demographics are genre terms on the site
     private class DemographicFilter(
         demographics: Array<Pair<String, String>>,
         selectedValues: Set<String>,
-    ) : UriMultiSelectFilter(
+    ) : Filter.Group<UriTriSelectOption>(
         "Demographic",
-        "demographics[]",
-        demographics,
-        selectedValues,
-        true,
+        demographics.map { (name, value) ->
+            UriTriSelectOption(name, value).apply {
+                if (value !in selectedValues) state = TriState.STATE_EXCLUDE
+            }
+        },
     ),
-        PreferenceFilter
+        PreferenceFilter {
+        override fun addToUri(builder: HttpUrl.Builder) {
+            state.filter { it.state == TriState.STATE_INCLUDE }
+                .forEach { builder.addQueryParameter("demographics[]", it.value) }
+            state.filter { it.state == TriState.STATE_EXCLUDE }
+                .forEach { builder.addQueryParameter("genres_ex[]", it.value) }
+        }
+    }
 
     private class TypeFilter(selectedValues: Set<String>) :
         UriMultiSelectFilter(
@@ -306,14 +314,11 @@ class Filters(
             defaultValue,
         ),
         PreferenceFilter {
+        // The site reads one comma-separated content_rating
         override fun addToUri(builder: HttpUrl.Builder) {
-            Filters.getContentRatingsUpTo(CONTENT_RATING_OPTIONS[state].second)
-                .takeIf { it.isNotEmpty() }
-                ?.let { ratings ->
-                    ratings.map {
-                        builder.addQueryParameter("content_rating[]", it)
-                    }
-                }
+            val ratings = getContentRatingsUpTo(CONTENT_RATING_OPTIONS[state].second)
+                .ifEmpty { getContentRatingsUpTo("pornographic") }
+            builder.addQueryParameter("content_rating", ratings.joinToString(","))
         }
     }
 

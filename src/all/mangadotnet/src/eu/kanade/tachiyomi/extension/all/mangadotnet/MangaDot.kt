@@ -110,7 +110,8 @@ abstract class MangaDot :
     private val officialPriorityPatterns = listOf(
         "manga plus", "mangaplus", "viz media", "viz manga", "webtoon",
         "tapas", "mangadex", "k manga", "kmanga", "mangaup", "manga up",
-        "comikey", "shonen jump", "shounen jump", "shonenjump", "official",
+        "seven seas entertainment", "emaqi", "inkr", "kodansha usa", "lezhin",
+        "kodansha comics", "kadokawa", "mangaplaza", "comikey", "official",
     ).map { Regex("\\b${Regex.escape(it)}\\b") }
 
     private val demographicNames = setOf("Josei", "Seinen", "Shoujo", "Shounen")
@@ -194,6 +195,7 @@ abstract class MangaDot :
         }
 
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
+            queryLang?.let { addQueryParameter("lang", it) }
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
@@ -539,7 +541,8 @@ abstract class MangaDot :
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
                                 name = "Volume ${(volume.volume ?: 0f).toString().removeSuffix(".0")}"
                                 chapter_number = 0f
-                                scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
+                                scanlator = volume.groups.map { it.name }.takeIf { it.isNotEmpty() }?.joinToString(" • ")
+                                    ?: (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
                                 date_upload = Instant.tryParse(volume.date?.replace(" ", "T"))
                             }
                         }
@@ -628,7 +631,8 @@ abstract class MangaDot :
                             append(name.trim())
                         }
                         chapter_number = chapter.number ?: 0f
-                        scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
+                        scanlator = chapter.groups.map { it.name }.takeIf { it.isNotEmpty() }?.joinToString(" • ")
+                            ?: (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
                         date_upload = Instant.tryParse(chapter.date?.replace(" ", "T"))
                     }
                 }
@@ -857,8 +861,8 @@ abstract class MangaDot :
         val priorityPref = EditTextPreference(screen.context).apply {
             key = PREFERRED_SCANLATORS
             title = "Scanlator Priority"
-            summary = "Comma-separated, in order of preference. First match wins. Supports unofficial only if scanlator name matches website.\nDefaults to official scrapers: Manga Plus, VIZ Media, Webtoon, Tapas, MangaDex, K Manga, Manga UP, Comikey, Shonen Jump"
-            setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, Webtoon, Tapas, MangaDex, K Manga, Manga UP, Comikey, Shonen Jump")
+            summary = "Comma-separated, in order of preference. First match wins. Supports unofficial only if scanlator name matches website.\nDefaults to official sources: Manga Plus, VIZ Media, WebToon, Tapas, MangaDex, K Manga, Lezhin, Manga UP, Seven Seas Entertainment, Emaqi, INKR, Kodansha, Kadokawa, MangaPlaza, Comikey"
+            setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, WebToon, Tapas, Lezhin, MangaDex, K Manga, Manga UP, Seven Seas Entertainment, Emaqi, INKR, Kodansha USA, Kodansha Comics, Kadokawa, MangaPlaza, Comikey")
             setEnabled(preferences.getBoolean(DEDUPLICATE_CHAPTERS, false))
         }
         screen.addPreference(priorityPref)
