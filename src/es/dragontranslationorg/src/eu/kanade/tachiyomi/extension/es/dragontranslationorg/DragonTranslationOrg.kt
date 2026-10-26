@@ -1,10 +1,14 @@
 package eu.kanade.tachiyomi.extension.es.dragontranslationorg
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -17,6 +21,15 @@ abstract class DragonTranslationOrg : Madara() {
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("es"))
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$baseUrl/$mangaSubString/".toHttpUrl().newBuilder().apply {
+            if (page > 1) addPathSegments("page/$page/")
+            addQueryParameter("m_orderby", "latest")
+        }.build()
+        val document = client.get(url).asJsoup()
+        return MangasPage(parseArchive(document), document.selectFirst("a.nextpostslink") != null)
+    }
 
     override val filterGenresSelector = ".filters"
     override fun archiveSelector() = "a:has(img.ac-cover)"
