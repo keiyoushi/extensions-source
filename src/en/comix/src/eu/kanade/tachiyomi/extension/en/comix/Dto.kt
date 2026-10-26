@@ -33,7 +33,7 @@ class TagSearchResponse(
 )
 
 @Serializable
-class TagSearchHit(val id: Int)
+class TagSearchHit(val id: Int, val label: String)
 
 @Serializable
 class Manga(

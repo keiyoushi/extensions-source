@@ -67,6 +67,11 @@
         }
         return href.split(/[?#]/)[0];
     };
+    // Recommended titles, chapters and other links off this page
+    const leavesPage = (el) => {
+        const path = pathOf(el.getAttribute("href") || "");
+        return path !== "" && path !== location.pathname;
+    };
     const parseMangaPath = (path) => {
         const match = MANGA_PATH.exec(path || "");
         return match ? { hid: match[1] } : null;
@@ -76,6 +81,8 @@
         return match ? { hid: match[1], id: Number(match[2]), number: parseFloat(match[3]) } : null;
     };
     const textOf = (el) => (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
+    // The signed-in hero "Resume Ch. N" link also points at a chapter
+    const isChapterRow = (anchor) => !!anchor.closest("li");
 
     const OPTIONS = Object.assign(
         { timeoutMs: 45000, settleMs: 5000, pollMs: 100, maxRounds: 40, stopAtIds: [] },
@@ -125,7 +132,7 @@
         let lastAnchorIdx = -1;
         for (const el of inOrder) {
             const href = el.getAttribute("href");
-            if (href && parseChapterPath(pathOf(href))) lastAnchorIdx = orderOf.get(el);
+            if (href && parseChapterPath(pathOf(href)) && isChapterRow(el)) lastAnchorIdx = orderOf.get(el);
         }
         const currents = inOrder.filter((el) => (orderOf.get(el) ?? -1) > lastAnchorIdx &&
             (el.getAttribute("aria-current") === "page" || /\bis-active\b/.test(String(el.className || ""))) &&
@@ -140,7 +147,7 @@
             let nextBtn = null;
             let numbered = null;
             for (const el of boxEls) {
-                if (el.disabled || el.getAttribute("aria-disabled") === "true") continue;
+                if (el.disabled || el.getAttribute("aria-disabled") === "true" || leavesPage(el)) continue;
                 const label = (textOf(el) || el.getAttribute("aria-label") || "").trim();
                 if (/next/i.test(label)) nextBtn = el;
                 else if (/^\d{1,4}$/.test(label) && parseInt(label, 10) === curNum + 1) numbered = el;
@@ -153,8 +160,7 @@
             if (el.disabled) continue;
             if (el.getAttribute("aria-current") === "page") continue;
             if (el.getAttribute("aria-disabled") === "true") continue;
-            const href = el.getAttribute("href");
-            if (href && parseChapterPath(pathOf(href))) continue;
+            if (leavesPage(el)) continue;
             if (/desc/i.test(String(el.className || ""))) continue;
             const label = (textOf(el) || el.getAttribute("aria-label") || "").trim();
             if (!label) continue;
@@ -193,7 +199,7 @@
             for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
                 const path = pathOf(anchor.getAttribute("href") || "");
                 const chapter = parseChapterPath(path);
-                if (!chapter) continue;
+                if (!chapter || !isChapterRow(anchor)) continue;
                 if (hid && chapter.hid !== hid) continue;
                 if (byId.has(chapter.id)) continue;
                 const row = rowRoot(anchor);
@@ -219,13 +225,13 @@
             const first = Array.from(document.querySelectorAll("a[href]"))
                 .find((a) => {
                     const c = parseChapterPath(pathOf(a.getAttribute("href") || ""));
-                    return c && (!hid || c.hid === hid);
+                    return c && (!hid || c.hid === hid) && isChapterRow(a);
                 });
             if (!first) return document.body;
             const rendered = Array.from(document.querySelectorAll("a[href]"))
                 .filter((a) => {
                     const c = parseChapterPath(pathOf(a.getAttribute("href") || ""));
-                    return c && (!hid || c.hid === hid);
+                    return c && (!hid || c.hid === hid) && isChapterRow(a);
                 }).length;
             let root = first;
             for (let depth = 0; depth < 12 && root.parentElement; depth++) {
@@ -233,7 +239,7 @@
                 const inside = Array.from(parent.querySelectorAll("a[href]"))
                     .filter((a) => {
                         const c = parseChapterPath(pathOf(a.getAttribute("href") || ""));
-                        return c && (!hid || c.hid === hid);
+                        return c && (!hid || c.hid === hid) && isChapterRow(a);
                     }).length;
                 if (inside >= rendered) root = parent;
                 else break;
@@ -309,6 +315,8 @@
             entry.after = byId.size;
             entry.url = location.href;
             diag.push(entry);
+            const now = parseMangaPath(location.pathname);
+            if (hid && (!now || now.hid !== hid)) throw new Error("Left the title page for " + location.pathname);
             if (reachedKnown()) {
                 stoppedAtKnown = true;
                 break;
@@ -319,7 +327,8 @@
             }
         }
 
-        const total = reportedTotal();
+        // Item count seen before a failed page cleared the list
+        const total = reportedTotal() ?? diag.map((e) => e.total).filter((t) => t != null).pop() ?? null;
         if (total != null && byId.size < total && !stoppedAtKnown) complete = false;
         const chapters = Array.from(byId.values())
             .sort((a, b) => (b.number - a.number) || (b.id - a.id));
