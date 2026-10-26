@@ -19,6 +19,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -40,6 +42,8 @@ abstract class DeviantArt :
     private fun backendBuilder() = backendBaseUrl.toHttpUrl().newBuilder()
 
     private val dateFormat by lazy { DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH) }
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(OriginalImageInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
@@ -177,6 +181,10 @@ abstract class DeviantArt :
         val document = client.get(url).asJsoup()
         return document.parsePages(url.pathSegments.last().substringAfterLast('-'))
     }
+
+    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+        .tag(Page::class.java, page)
+        .build()
 
     private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
 

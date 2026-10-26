@@ -16,7 +16,7 @@ internal fun HttpUrl.toGalleryPath(baseUrl: String): String? {
 }
 
 internal fun Document.parsePages(deviationId: String): List<Page> = buildList {
-    add(Page(0, imageUrl = selectFirst("img[fetchpriority=high]")?.absUrl("src")))
+    add(createImagePage(0, selectFirst("img[fetchpriority=high]")?.absUrl("src")))
     if (selectFirst("[draggable=false]") == null) return@buildList
 
     val state = selectFirst("script:containsData(window.__INITIAL_STATE__)")!!.data()
@@ -27,6 +27,6 @@ internal fun Document.parsePages(deviationId: String): List<Page> = buildList {
         .parseAs<InitialState>()
 
     state.entities.deviationExtended.getValue(deviationId).additionalMedia.forEachIndexed { i, media ->
-        add(Page(i + 1, imageUrl = media.media.imageUrl()))
+        add(createImagePage(i + 1, media.media.imageUrl()))
     }
 }
