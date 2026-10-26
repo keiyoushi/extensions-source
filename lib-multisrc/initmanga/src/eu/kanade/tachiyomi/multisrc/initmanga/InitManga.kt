@@ -482,8 +482,12 @@ abstract class InitManga :
 
         return if (trimmed.startsWith("<")) {
             val doc = Jsoup.parseBodyFragment(trimmed, baseUrl)
-            doc.select("img").mapIndexedNotNull { i, img ->
-                val finalSrc = img.imgAttr() ?: return@mapIndexedNotNull null
+            doc.select("img, canvas[data-enc]").mapIndexedNotNull { i, element ->
+                val finalSrc = when (element.tagName()) {
+                    // Site's initMangaResolveImgSrc
+                    "canvas" -> Base64.decode(element.attr("data-enc"), Base64.DEFAULT).reversedArray().decodeToString()
+                    else -> element.imgAttr()
+                } ?: return@mapIndexedNotNull null
                 Page(i, imageUrl = finalSrc)
             }
         } else {
