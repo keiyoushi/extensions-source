@@ -1,12 +1,10 @@
-package eu.kanade.tachiyomi.extension.es.emperorscan
+package eu.kanade.tachiyomi.multisrc.imperiomanhwa
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import kotlin.time.Instant
 
 @Serializable
 class InertiaPage<T>(
@@ -41,7 +39,12 @@ class SeriesProps(
     val series: SeriesDto,
     val chapters: List<ChapterDto>,
     @SerialName("chapters_pagination") val chaptersPagination: ChaptersPaginationDto,
+    val paths: PathsDto,
+    @SerialName("tags_label") val tagsLabel: String?,
 )
+
+@Serializable
+class PathsDto(val chapters: String)
 
 @Serializable
 class SeriesDto(
@@ -53,10 +56,11 @@ class SeriesDto(
     @SerialName("alt_titles") private val altTitles: List<String>,
     private val synopsis: String?,
     private val genres: List<NamedDto>,
+    private val tags: List<NamedDto>,
     private val authors: List<NamedDto>,
     private val artists: List<NamedDto>,
 ) {
-    fun applyTo(manga: SManga) = manga.apply {
+    fun applyTo(manga: SManga, altNamesLabel: String, withTags: Boolean) = manga.apply {
         title = this@SeriesDto.title
         thumbnail_url = cover
         author = authors.joinToString { it.name }.ifEmpty { null }
@@ -65,10 +69,11 @@ class SeriesDto(
             synopsis?.let(::append)
             if (altTitles.isNotEmpty()) {
                 if (isNotEmpty()) append("\n\n")
-                append("Nombres alternativos: ", altTitles.joinToString())
+                append(altNamesLabel, ": ", altTitles.joinToString())
             }
         }.ifEmpty { null }
-        genre = (listOfNotNull(type?.replaceFirstChar(Char::uppercase)) + genres.map { it.name }).joinToString().ifEmpty { null }
+        genre = (listOfNotNull(type?.replaceFirstChar(Char::uppercase)) + genres.map { it.name } + tags.takeIf { withTags }.orEmpty().map { it.name })
+            .distinctBy(String::lowercase).joinToString().ifEmpty { null }
         status = when (this@SeriesDto.status) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
@@ -92,13 +97,14 @@ class ChapterListDto(val items: List<ChapterDto>)
 class ChapterDto(
     val slug: String,
     private val label: String,
-    @SerialName("published_at") private val publishedAt: String? = null,
+    @SerialName("published_at") val publishedAt: String? = null,
+    @SerialName("published_label") val publishedLabel: String? = null,
     val locked: Boolean,
 ) {
-    fun toSChapter(seriesUrl: String) = SChapter.create().apply {
+    fun toSChapter(seriesUrl: String, date: Long) = SChapter.create().apply {
         url = "$seriesUrl$slug/"
-        name = label
-        date_upload = Instant.tryParse(publishedAt)
+        name = if (locked) "🔒 $label" else label
+        date_upload = date
     }
 }
 
@@ -142,4 +148,19 @@ class ReaderResult(
 )
 
 @Serializable
-class HomeProps(val genres: List<NamedDto>)
+class HomeProps(
+    val genres: List<NamedDto>,
+    val content: ContentDto,
+)
+
+@Serializable
+class ContentDto(val sections: List<SectionDto> = emptyList())
+
+@Serializable
+class SectionDto(val code: String, val label: String)
+
+@Serializable
+class FilterData(
+    val genres: List<NamedDto>,
+    val sections: List<SectionDto>,
+)

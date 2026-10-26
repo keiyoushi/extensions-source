@@ -492,7 +492,7 @@ abstract class MadaraBase : KeiSource() {
         legacyId?.let { put("id", it) }
     }
 
-    protected fun Document.mangaId(): String? = selectFirst("[id^=manga-chapters-holder]")?.attr("data-id")?.takeIf(String::isNotBlank)
+    protected open fun Document.mangaId(): String? = selectFirst("[id^=manga-chapters-holder]")?.attr("data-id")?.takeIf(String::isNotBlank)
         ?: selectFirst("input.rating-post-id")?.attr("value")?.takeIf(String::isNotBlank)
         ?: selectFirst("a[data-post]")?.attr("data-post")?.takeIf(String::isNotBlank)
         ?: selectFirst("link[rel=shortlink]")?.attr("href")?.takeIf { it.contains("?p=") }
