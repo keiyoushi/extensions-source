@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
@@ -48,6 +49,7 @@ abstract class Viz :
     private var loggedIn: Boolean? = null
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(2) { it.encodedPath == "/manga/get_manga_url" }
         addInterceptor(ImageInterceptor())
         addInterceptor {
             val request = it.request()
