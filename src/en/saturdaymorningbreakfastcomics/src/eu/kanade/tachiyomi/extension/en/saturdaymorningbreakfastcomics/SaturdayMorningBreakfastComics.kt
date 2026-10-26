@@ -98,7 +98,14 @@ abstract class SaturdayMorningBreakfastComics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        // the chapter pages respond with HTTP 500 despite serving the full page
+        val response = client.get(getChapterUrl(chapter), ensureSuccess = false)
+        if (!response.isSuccessful && response.code != 500) {
+            response.close()
+            throw Exception("HTTP ${response.code}")
+        }
+
+        val document = response.asJsoup()
         val pages = mutableListOf<Page>()
         val image = document.select("img#cc-comic")
         pages.add(Page(0, "", image.attr("abs:src")))
