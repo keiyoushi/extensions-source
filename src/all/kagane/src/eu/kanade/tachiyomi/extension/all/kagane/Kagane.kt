@@ -29,6 +29,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -100,7 +102,7 @@ abstract class Kagane :
         "",
         FilterList(
             SortFilter(Filter.Sort.Selection(1, false)),
-            ContentRatingFilter(contentRating.toSet()),
+            ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
             FormatFilter(excludedFormats),
             GenresFilter(emptyList(), excludedGenreIds),
 
@@ -114,7 +116,7 @@ abstract class Kagane :
         "",
         FilterList(
             SortFilter(Filter.Sort.Selection(6, false)),
-            ContentRatingFilter(contentRating.toSet()),
+            ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
             FormatFilter(excludedFormats),
             GenresFilter(emptyList(), excludedGenreIds),
         ),
@@ -148,12 +150,15 @@ abstract class Kagane :
                     is MatchAllGenresFilter -> {
                         genresMatchAll = if (filter.state) true else null
                     }
+
                     is MatchAllTagsFilter -> {
                         tagsMatchAll = if (filter.state) true else null
                     }
+
                     is SortFilter -> {
                         sortParam = filter.toUriPart()
                     }
+
                     else -> {}
                 }
             }
@@ -257,7 +262,7 @@ abstract class Kagane :
         val sourceName = details.sourceId?.let { sourceId ->
             sources[sourceId]
         }
-        return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, cleanTitle)
+        return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, showDetails, cleanTitle)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
@@ -273,10 +278,11 @@ abstract class Kagane :
         val updatedManga = if (fetchDetails) {
             val dto = getMangaById(seriesId)
             parseMangaDetails(dto).apply {
-                if (!dto.trackerId.isNullOrEmpty()) {
-                    memo = buildJsonObject {
+                memo = buildJsonObject {
+                    if (!dto.trackerId.isNullOrEmpty()) {
                         put("trackerId", dto.trackerId)
                     }
+                    put("format", dto.format ?: "")
                 }
             }
         } else {
@@ -285,13 +291,16 @@ abstract class Kagane :
         val updatedChapters = if (fetchChapters) {
             val index = client.get("$apiUrl/series/$seriesId/books/index?fields=List")
                 .parseAs<BookIndexDto>()
-            parseChapterList(index.toBooks(), updatedManga.genre?.substringBefore(", "), seriesId)
+            parseChapterList(index.toBooks(), chapterFormat(updatedManga), seriesId)
         } else {
             chapters
         }
 
         return SMangaUpdate(updatedManga, updatedChapters)
     }
+
+    private fun chapterFormat(manga: SManga): String? = manga.memo["format"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        ?: manga.genre?.substringBefore(", ")
 
     private fun parseChapterList(books: List<ChapterDto.Book>, format: String?, seriesId: String): List<SChapter> {
         val useSourceChapterNumber = format in setOf(
@@ -389,10 +398,27 @@ abstract class Kagane :
 
     private val contentRating: List<String>
         get() {
-            val maxRating = prefs.getString(CONTENT_RATING, CONTENT_RATING_DEFAULT)
+            val stored = prefs.getString(CONTENT_RATING, null).removeLegacyRating()
+            val maxRating = stored ?: CONTENT_RATING_DEFAULT
             val index = CONTENT_RATINGS.indexOfFirst { it == maxRating }
             return CONTENT_RATINGS.slice(0..index.coerceAtLeast(0))
         }
+
+    private val showPornographic: Boolean
+        get() = contentRating.last() == "eighteenplus" && prefs.getBoolean(PORN_PREF, false)
+
+    private val showDisturbing: Boolean
+        get() = contentRating.last() == "eighteenplus" && prefs.getBoolean(DISTURBING_PREF, false)
+
+    // Legacy value mapping from before the site-model settings change; kept so existing
+    // installs keep their content rating. Should be removed in a later version update
+    // (versionCode = 37+).
+    private fun String?.removeLegacyRating(): String? = when (this) {
+        "safe", "fifteenplus", "eighteenplus" -> this
+        "suggestive" -> "fifteenplus"
+        "erotica", "pornographic" -> "eighteenplus"
+        else -> null
+    }
 
     private val excludedGenreIds: Set<String>
         get() = prefs.getStringSet(GENRES_ID_PREF, emptySet()) ?: emptySet()
@@ -412,6 +438,9 @@ abstract class Kagane :
     private val showSource: Boolean
         get() = !cleanTitle && prefs.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
 
+    private val showDetails: Boolean
+        get() = prefs.getBoolean(SHOW_DETAILS, SHOW_DETAILS_DEFAULT)
+
     private val dataSaver
         get() = prefs.getBoolean(DATA_SAVER, false)
 
@@ -419,18 +448,44 @@ abstract class Kagane :
         get() = prefs.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
+        val contentRatingPref = ListPreference(screen.context).apply {
             key = CONTENT_RATING
             title = "Content Rating"
             entries =
-                CONTENT_RATINGS.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
+                CONTENT_RATINGS.map { CONTENT_RATING_LABELS.getValue(it) }.toTypedArray()
             entryValues = CONTENT_RATINGS
             summary = "%s"
             setDefaultValue(CONTENT_RATING_DEFAULT)
-        }.let(screen::addPreference)
+        }
+
+        val pornSwitch = SwitchPreferenceCompat(screen.context).apply {
+            key = PORN_PREF
+            title = "Show pornographic"
+            summary = "Sexually explicit content"
+            setDefaultValue(true)
+            setVisible(contentRating.last() == "eighteenplus")
+        }
+
+        val disturbingSwitch = SwitchPreferenceCompat(screen.context).apply {
+            key = DISTURBING_PREF
+            title = "Show disturbing"
+            summary = "Series marked disturbing, such as graphic violence or abuse"
+            setDefaultValue(true)
+            setVisible(contentRating.last() == "eighteenplus")
+        }
+
+        contentRatingPref.setOnPreferenceChangeListener { _, newValue ->
+            val enabled = newValue.toString() == "eighteenplus"
+            pornSwitch.setVisible(enabled)
+            disturbingSwitch.setVisible(enabled)
+            true
+        }
+
+        listOf(contentRatingPref, pornSwitch, disturbingSwitch).forEach(screen::addPreference)
 
         val genreFilter = getFilterList().firstInstanceOrNull<GenresFilter>()
-        val genreMap = genreFilter?.state?.associate { it.id to it.name.replaceFirstChar { c -> c.uppercase() } } ?: emptyMap()
+        val genreMap =
+            genreFilter?.state?.associate { it.id to it.name.replaceFirstChar { c -> c.uppercase() } } ?: emptyMap()
 
         MultiSelectListPreference(screen.context).apply {
             key = GENRES_ID_PREF
@@ -503,6 +558,13 @@ abstract class Kagane :
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_DETAILS
+            title = "Show details in description"
+            summary = "Rating, content rating, format, languages, year, volumes, views and links"
+            setDefaultValue(SHOW_DETAILS_DEFAULT)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = DATA_SAVER
             title = "Data saver"
             setDefaultValue(false)
@@ -523,13 +585,22 @@ abstract class Kagane :
     companion object {
         private const val MAX_SOURCE_FILTER = 50
         private const val CONTENT_RATING = "pref_content_rating"
-        private const val CONTENT_RATING_DEFAULT = "pornographic"
+
+        // Legacy values (safe/suggestive/erotica/pornographic) are mapped on read.
+        private const val CONTENT_RATING_DEFAULT = "safe"
         internal val CONTENT_RATINGS = arrayOf(
             "safe",
-            "suggestive",
-            "erotica",
-            "pornographic",
+            "fifteenplus",
+            "eighteenplus",
         )
+        internal val CONTENT_RATING_LABELS = mapOf(
+            "safe" to "Safe",
+            "fifteenplus" to "Fifteen Plus",
+            "eighteenplus" to "Eighteen Plus",
+        )
+
+        private const val PORN_PREF = "pref_show_pornographic"
+        private const val DISTURBING_PREF = "pref_show_disturbing"
 
         private const val GENRES_ID_PREF = "pref_genre_id_exclude"
         private const val FORMATS_PREF = "pref_format_exclude"
@@ -545,6 +616,9 @@ abstract class Kagane :
 
         private const val SHOW_EDITION = "pref_show_edition"
         private const val SHOW_EDITION_DEFAULT = false
+
+        private const val SHOW_DETAILS = "pref_show_details"
+        private const val SHOW_DETAILS_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
 
@@ -607,7 +681,7 @@ abstract class Kagane :
 
         val filters = mutableListOf(
             SortFilter(),
-            ContentRatingFilter(contentRating.toSet()),
+            ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
             FormatFilter(excludedFormats),
             PublicationStatusFilter(),
             Filter.Separator(),
