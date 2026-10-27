@@ -64,16 +64,19 @@ class BrowserHeadersTest {
 
     @Test
     fun withoutKindGoesOutAsBuilt() {
-        val sent = intercept(builder("https://a.test/series/1", referer = "https://a.test/").build())
-        assertNull(sent.header("Sec-CH-UA-Mobile"))
-        assertNull(sent.header("Accept-Language"))
-        assertNull(sent.header("Sec-Fetch-Site"))
-        assertNull(sent.header("Accept"))
-        assertNull(sent.header("Priority"))
-        assertNull(sent.header("Origin"))
-        val post = intercept(builder("https://a.test/api/search", referer = "https://a.test/").post(json()).build())
-        assertEquals("https://a.test", post.header("Origin"))
-        assertNull(post.header("Sec-Fetch-Mode"))
+        val get = builder("https://api.b.test/list", referer = "https://a.test/").header("X-Site", "1").build()
+        assertEquals(get.headers, intercept(get, wireOrder = true).headers)
+        // A source that drops the default Origin keeps it dropped
+        val post = builder("https://a.test/api/search", referer = "https://a.test/").removeHeader("Origin").post(json()).build()
+        assertEquals(post.headers, intercept(post, wireOrder = true).headers)
+    }
+
+    @Test
+    fun rawGoesOutAsBuilt() {
+        val image = builder("https://cdn.a.test/1.jpg", referer = "https://a.test/").raw().build()
+        assertEquals(image.headers, intercept(image, wireOrder = true).headers)
+        val cover = builder("https://cdn.a.test/c.jpg").cacheControl(CacheControl.Builder().noStore().build()).raw().build()
+        assertEquals(cover.headers, intercept(cover).headers)
     }
 
     @Test
@@ -216,11 +219,27 @@ class BrowserHeadersTest {
     }
 
     @Test
-    fun rawGetsOnlyOriginOnPost() {
-        val get = builder("https://a.test/api/list", referer = "https://a.test/").header("X-Site", "1").build()
-        assertEquals(get.headers, intercept(get, wireOrder = true).headers)
-        val post = builder("https://a.test/api/search", referer = "https://a.test/").post(json()).build()
-        assertEquals(post.headers.newBuilder().add("Origin", "https://a.test").build(), intercept(post, wireOrder = true).headers)
+    fun imageHeadersCanBeTurnedOff() {
+        val cover = builder("https://cdn.a.test/c.jpg").cacheControl(CacheControl.Builder().noStore().build()).build()
+        assertEquals(cover.headers, intercept(cover, images = false).headers)
+    }
+
+    @Test
+    fun ipv6Origin() {
+        val sent = intercept(builder("http://[::1]:8080/api", referer = "http://[::1]:8080/").forXhr().post(json()).build())
+        assertEquals("http://[::1]:8080", sent.header("Origin"))
+    }
+
+    @Test
+    fun sameHostOtherPortIsSameSite() {
+        val sent = intercept(builder("https://localhost:2/1.jpg", referer = "https://localhost:1/").forImage().build())
+        assertEquals("same-site", sent.header("Sec-Fetch-Site"))
+    }
+
+    @Test
+    fun documentOrderOverHttp() {
+        val sent = intercept(builder("http://a.test/series/1", referer = "http://a.test/").forDocument().build(), wireOrder = true)
+        assertEquals(listOf("Upgrade-Insecure-Requests", "User-Agent", "Accept"), sent.headers.map { it.first }.take(3))
     }
 
     @Test
@@ -234,16 +253,17 @@ class BrowserHeadersTest {
 
     private fun json() = "{}".toRequestBody("application/json".toMediaType())
 
-    // A source's request: the given Referer
+    // A source's request: KeiSource's default Origin, the given Referer
     private fun builder(url: String, referer: String? = null, ua: String = chromeUa) = Request.Builder().url(url)
         .header("User-Agent", ua)
+        .header("Origin", "https://a.test")
         .apply { referer?.let { header("Referer", it) } }
 
     // The request as sent: with the wire order pass it's HTTP/1.1, as a unit test has no connection
-    private fun intercept(request: Request, wireOrder: Boolean = false): Request {
+    private fun intercept(request: Request, wireOrder: Boolean = false, images: Boolean = true): Request {
         var sent: Request? = null
         val client = OkHttpClient.Builder()
-            .addInterceptor(BrowserHeadersInterceptor { "https://a.test" })
+            .addInterceptor(BrowserHeadersInterceptor({ "https://a.test" }, { images }))
             .apply { if (wireOrder) addInterceptor(BrowserHeaderOrderInterceptor) }
             .addInterceptor { chain ->
                 sent = chain.request()

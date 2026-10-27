@@ -621,6 +621,7 @@ Use `keiyoushi.utils.parseAs` to deserialize JSON. It works on `String`, `Respon
 
 ```kotlin
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 // From a Response (uses streaming and consumes the body):
 val dto = response.parseAs<MyDto>()
@@ -777,7 +778,8 @@ Always make requests with the `keiyoushi.network` suspend extensions on `OkHttpC
 inside your `KeiSource` suspend functions (`getPopularManga`, `getSearchMangaList`, `fetchMangaUpdate`, `getPageList`,
 etc.) instead of building a `Request` and calling `client.newCall(request).execute()`/`.await()` by hand.
 
-Pick the one named after the filter the site's own request shows under in the browser's DevTools Network tab:
+Pick the one named after the filter the site's own request shows under in the browser's DevTools Network tab. They
+all return the `Response`:
 
 | DevTools filter | Use | For |
 |---|---|---|
@@ -792,13 +794,21 @@ Pick the one named after the filter the site's own request shows under in the br
 import keiyoushi.network.getDocument
 import keiyoushi.network.getXhr
 import keiyoushi.network.postXhr
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 // Inside a source, headers can be omitted - your own `headers` are used automatically:
 val document = client.getDocument("$baseUrl/series/$slug").asJsoup()
-val results = client.getXhr("$baseUrl/api/search?q=$query").parseAs<SearchDto>()
 
-// With an explicit Headers object, and a request body:
-val response = client.postXhr("$baseUrl/api/search", headers, body)
+val url = "$baseUrl/api/search".toHttpUrl().newBuilder()
+    .addQueryParameter("q", query)
+    .build()
+val results = client.getXhr(url).parseAs<SearchDto>()
+
+// With other headers, and a request body:
+val apiHeaders = headersBuilder().set("X-Requested-With", "XMLHttpRequest").build()
+val response = client.postXhr("$baseUrl/api/search", apiHeaders, body)
 ```
 
 - `url` may be a `String` or an `HttpUrl`.
@@ -807,10 +817,10 @@ val response = client.postXhr("$baseUrl/api/search", headers, body)
 - The GET ones also take a `cacheControl` (defaults to a 10-minute max-age).
 - Always wrap the returned `Response` in `response.use { ... }` or consume it with `parseAs`/`asJsoup`, which close it
   for you.
-- They send the headers a browser sends for that kind of request (see Browser headers). With a `User-Agent` that isn't
-  a browser's (an app's API, a self-hosted server) they add nothing, so use them there too.
+- They send the headers a browser sends for that kind of request (see [Browser headers](#browser-headers)). With a
+  `User-Agent` that isn't a browser's (an app's own API client) they add no browser headers, so use them there too.
 - `get` and `post` are deprecated. `getRaw`/`postRaw` send the request as built, without browser headers; only use
-  them when the site must not see browser headers on that request. `put` and `head` are unchanged.
+  them when the site rejects browser headers on that request. `put` and `head` send the request as built too.
 
 ##### Rate limiting - `rateLimit`
 
@@ -1347,7 +1357,8 @@ Optional overrides (each has a working default; override only when your source n
 |----------------------------------------------------------------------|----------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `fun getHomeUrl(): String`                                            | Returns `baseUrl`.                                              | The browse screen's "Open in WebView" action should land somewhere other than `baseUrl` (e.g. the source's real site differs from the API host used as `baseUrl`).                                      |
 | `suspend fun getImageUrl(page: Page): String`                         | Not called unless a `Page.imageUrl` is empty.                   | A page's image URL can't be determined upfront in `getPageList` and must be resolved lazily once the chapter is opened - see [Chapter Pages](#chapter-pages). Make your request with `client` and return the URL directly. |
-| `fun getImageRequest(page: Page): Request`                            | A GET of `page.imageUrl` with `headers`.                        | The image needs other headers or a different URL. A request not marked `forDocument()`/`forXhr()` is sent as an image. |
+| `fun getImageRequest(page: Page): Request`                            | A GET of `page.imageUrl` with `headers`.                        | The image needs other headers or a different URL. A GET without a kind is sent as an image; see Browser headers. |
+| `val browserImageHeaders: Boolean`                                    | `true`.                                                         | The image host rejects browser image headers on page images or covers. |
 | `fun getMangaUrl(manga: SManga): String`                              | Returns `baseUrl + manga.url`.                                  | That doesn't land on the manga's real page. Since `SManga.url` is recommended to hold just an ID/slug rather than a full relative path (see [Misc notes](#misc-notes)), the default concatenation often isn't a valid path by itself - override to build the real URL from the ID/slug (e.g. `"$baseUrl/manga/${manga.url}"`).      |
 | `fun getChapterUrl(chapter: SChapter): String`                        | Returns `baseUrl + chapter.url`.                                | Same reasoning as `getMangaUrl`, for chapters.                                                                                                                                                            |
 | `suspend fun getMangaByUrl(url: HttpUrl): SManga?`                    | Throws (unimplemented).                                         | Almost always: this backs URL search (pasting/opening a manga link for this source). Return `null` if the URL isn't recognized - leaving this unimplemented means URL search crashes for this source.  |
@@ -1359,7 +1370,7 @@ Optional overrides (each has a working default; override only when your source n
 | `suspend fun fetchFilterData(): JsonElement`                          | Returns `JsonNull`.                                              | Paired with `supportsFilterFetching = true`.                                                                                                                                                              |
 | `fun getFilterList(data: JsonElement?): FilterList`                   | Returns an empty `FilterList`.                                   | The source has any filters at all, fetched or static.                                                                                                                                                    |
 | `fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder`    | No changes.                                                      | Timeouts, extra interceptors, cookie/cache/DNS config - `client` itself is `final` on `KeiSource`.                                                                                                       |
-| `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                     |
+| `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer`/`Origin` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                     |
 
 **`fetchMangaUpdate`:** if manga details and the chapter list come from the same page or the same
 API response, fetch and parse it once and return both the updated `SManga` and the full chapter
@@ -1377,14 +1388,17 @@ Behavior `KeiSource` gives you for free:
 - **Automatic URL search:** `getSearchManga` inspects the query; if it parses as an `HttpUrl`, it
   calls `getMangasByUrl`/`getMangaByUrl` instead of `getSearchMangaList`. You do not need to handle
   this manually.
-- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash); override
-  `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
-- **Browser headers:** a request made with one of the [HTTP request helpers](#http-requests---getdocument--getxhr--getimage)
-  gets the headers the browser in its `User-Agent` sends for that kind of request: client hints, `Accept-Language`,
-  fetch metadata, `Accept`, `Priority`, and `Origin` where browsers send one. On a `Request.Builder` the kinds are
-  `forDocument()`, `forXhr()` and so on. Page images and the covers the app loads are already images. A request
-  without a kind (`getRaw`/`postRaw`, or a `Request.Builder` without one) goes out as built, with `Origin` only on a
-  POST. The page a request comes from is its `Referer`, and headers a request already has are kept.
+- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash) and `Origin` to
+  `baseUrl`; override `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
+- <a id="browser-headers"></a>**Browser headers:** a request made with one of the
+  [HTTP request helpers](#http-requests---getdocument--getxhr--getimage) gets the headers the browser in its
+  `User-Agent` sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept` and
+  `Priority`, and the default `Origin` only where browsers send one. On a `Request.Builder` the kinds are
+  `forDocument()`, `forXhr()` and so on. Page images (GETs from `getImageRequest`) and the covers the app loads are
+  sent as images; set `browserImageHeaders = false` if the image host rejects those headers. The app's covers are
+  recognised by their `Cache-Control: no-store`, so don't put that on your own requests. A request without a kind,
+  or marked `raw()`, goes out as built. The page a request comes from is its `Referer`, and headers a request already
+  has are kept.
 - **Filter fetching:** if a source needs to fetch its filter options from the network, set
   `supportsFilterFetching = true`, implement `fetchFilterData()` (returns the raw filter data as a
   `JsonElement`, called on a background coroutine, attempted up to 3 times total on failure, and
@@ -1882,7 +1896,9 @@ abstract class MySource : ExampleTheme() { // Replace 'ExampleTheme' with your t
 }
 ```
 
-The final extension version code is automatically calculated during the build as `theme.baseVersionCode + versionCode`.
+The final extension version code is automatically calculated during the build as `theme.baseVersionCode + versionCode`,
+plus `CORE_VERSION_CODE`, which is bumped when a core change needs every extension rebuilt; the published version name
+shows that sum.
 
 Because themes are provided as libraries, your extension's main class inherits directly from the theme's base class.
 

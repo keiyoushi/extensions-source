@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.DEFAULT_CACHE_CONTROL
-import keiyoushi.network.getXhr
+import keiyoushi.network.getRaw
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -301,7 +301,7 @@ suspend fun OkHttpClient.graphQLGet(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
     json: Json = jsonInstance,
-): Response = getXhr(
+): Response = getRaw(
     url.toHttpUrl().newBuilder().appendGraphQLParams(query, operationName, variables, extensions, json).build(),
     headers,
     cacheControl,

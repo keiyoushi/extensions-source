@@ -40,8 +40,15 @@ fun Request.Builder.forAudio(): Request.Builder = tag(RequestKind::class.java, R
 /** Marks the request as a `<video>` load. Shows under Media in DevTools' Network tab. */
 fun Request.Builder.forVideo(): Request.Builder = tag(RequestKind::class.java, RequestKind.VIDEO)
 
-/** A request without a kind goes out as the source builds it, see [getRaw]. */
+/** A request that goes out as built, see [getRaw]. */
+internal object RawRequest
+
+/** Marks the request to go out as built, without the headers a browser adds. See [getRaw]. */
+fun Request.Builder.raw(): Request.Builder = tag(RawRequest::class.java, RawRequest)
+
 internal val Request.kind: RequestKind? get() = tag(RequestKind::class.java)
+
+internal val Request.isRaw: Boolean get() = tag(RawRequest::class.java) != null
 
 /** GETs a page the way a browser opens it. Shows under Doc in DevTools' Network tab. */
 suspend fun OkHttpClient.getDocument(
@@ -267,15 +274,14 @@ suspend fun OkHttpClient.getVideo(
     ensureSuccess: Boolean = true,
 ): Response = getVideo(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess)
 
-/** GETs as the source builds it: no client hints, fetch metadata or browser header order, and
- * `Origin` only on a POST. Only for a source that sends a browser `User-Agent` but must not look like one on this
- * request; the other helpers already add nothing for a `User-Agent` that isn't a browser's. */
+/** GETs as built, with the source's headers (KeiSource's default `Origin` included) and nothing a
+ * browser adds. For a request the site rejects with browser headers. */
 suspend fun OkHttpClient.getRaw(
     url: HttpUrl,
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl), ensureSuccess)
+): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).raw(), ensureSuccess)
 
 /** GETs without the headers a browser adds (client hints, fetch metadata, `Origin`, browser header order). */
 suspend fun OkHttpClient.getRaw(
@@ -365,15 +371,14 @@ suspend fun OkHttpClient.postXhr(
     ensureSuccess: Boolean = true,
 ): Response = postXhr(url.toHttpUrl(), source.headers, body, ensureSuccess)
 
-/** POSTs as the source builds it: no client hints, fetch metadata or browser header order, and
- * `Origin` only on a POST. Only for a source that sends a browser `User-Agent` but must not look like one on this
- * request; the other helpers already add nothing for a `User-Agent` that isn't a browser's. */
+/** POSTs as built, with the source's headers (KeiSource's default `Origin` included) and nothing a
+ * browser adds. For a request the site rejects with browser headers. */
 suspend fun OkHttpClient.postRaw(
     url: HttpUrl,
     headers: Headers,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).post(body), ensureSuccess)
+): Response = send(Request.Builder().url(url).headers(headers).post(body).raw(), ensureSuccess)
 
 /** POSTs without the headers a browser adds (client hints, fetch metadata, `Origin`, browser header order). */
 suspend fun OkHttpClient.postRaw(

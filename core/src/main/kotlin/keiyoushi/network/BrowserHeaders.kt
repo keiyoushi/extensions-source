@@ -7,26 +7,37 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import java.util.Locale
 
 /**
- * Adds the headers the browser in a request's `User-Agent` sends: client hints and `Accept-Language` for
- * a request with a [RequestKind] (covers the apps load are images), fetch metadata, `Accept` and `Priority` per kind,
- * and `Origin` where browsers send one. A request without a kind gets only `Origin` on a POST.
+ * Adds the headers the browser in a request's `User-Agent` sends for its [RequestKind]: client hints,
+ * `Accept-Language`, fetch metadata, `Accept` and `Priority`, and keeps KeiSource's default `Origin` only where
+ * browsers send one. Covers the apps load count as images. A request without a kind goes out as built.
  *
  * Headers a request already has are kept. The page a request comes from is its `Referer`.
  */
-internal class BrowserHeadersInterceptor(private val siteUrl: () -> String) : Interceptor {
+internal class BrowserHeadersInterceptor(
+    private val siteUrl: () -> String,
+    private val browserImageHeaders: () -> Boolean = { true },
+) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        if (request.isRaw) return chain.proceed(request)
         // The apps' cover requests carry no kind, only the no-store that keeps covers out of the OkHttp cache
-        val kind = request.kind ?: RequestKind.IMAGE.takeIf { request.method == "GET" && request.header("Cache-Control") == "no-store" }
-        val referer = request.header("Referer")?.toHttpUrlOrNull()
-        val initiator = referer ?: siteUrl().toHttpUrl()
+        val kind = request.kind
+            ?: RequestKind.IMAGE.takeIf { request.method == "GET" && request.header("Cache-Control") == "no-store" && browserImageHeaders() }
+            ?: return chain.proceed(request)
+        val site = siteUrl().toHttpUrl()
+        val initiator = request.header("Referer")?.toHttpUrlOrNull() ?: site
         val userAgent = request.header("User-Agent").orEmpty()
         val browser = Browser.of(userAgent)
-        val builder = request.newBuilder().apply { if (kind != null) tag(RequestKind::class.java, kind) }
+        // KeiSource's default Origin is ours to keep or drop; one the source set or removed itself stays
+        val ownOrigin = request.header("Origin").let { it == null || it == siteUrl() || it == site.origin() }
+        val builder = request.newBuilder()
+            .tag(RequestKind::class.java, kind)
+            .tag(Initiator::class.java, Initiator(initiator, request.header("Sec-Fetch-Site") == null, ownOrigin))
         fun fill(name: String, value: String?) {
             if (value != null && request.header(name) == null) builder.header(name, value)
         }
@@ -35,9 +46,9 @@ internal class BrowserHeadersInterceptor(private val siteUrl: () -> String) : In
         val presentsAsBrowser = userAgent.startsWith("Mozilla/")
         // Browsers send fetch metadata and client hints to secure origins only
         val secure = request.url.isHttps || request.url.host in LOCAL_HOSTS
-        if (kind != null && presentsAsBrowser) {
+        if (presentsAsBrowser) {
             if (secure) browser?.clientHints(userAgent)?.forEach { (name, value) -> fill(name, value) }
-            fill("Accept-Language", acceptLanguage(deviceLocales()))
+            fill("Accept-Language", acceptLanguage(deviceLocales()).ifEmpty { null })
             fill("Accept", browser?.accept(kind))
             if (secure) {
                 fill("Sec-Fetch-Site", relation(initiator, request.url))
@@ -71,42 +82,57 @@ internal class BrowserHeadersInterceptor(private val siteUrl: () -> String) : In
             }
             fill("Priority", browser?.priority(kind))
         }
-        // Browsers send Origin on methods other than GET and HEAD and on cross-origin XHRs
-        val crossOrigin = initiator.origin() != request.url.origin()
-        if ((request.method != "GET" && request.method != "HEAD") || (kind == RequestKind.XHR && crossOrigin)) {
-            fill("Origin", initiator.origin())
+        if (ownOrigin) {
+            if (sendsOrigin(request.method, kind, initiator, request.url)) {
+                builder.header("Origin", initiator.origin())
+            } else {
+                builder.removeHeader("Origin")
+            }
         }
 
         return chain.proceed(builder.build())
     }
 }
 
+/** The page a request comes from, and whether its `Sec-Fetch-Site` and `Origin` are ours to update on a redirect. */
+internal class Initiator(val url: HttpUrl, val ownSite: Boolean, val ownOrigin: Boolean) {
+    // The least related site a redirect chain has passed through, as browsers report it
+    var site: String? = null
+}
+
 private fun relation(initiator: HttpUrl, url: HttpUrl): String = when {
     initiator.origin() == url.origin() -> "same-origin"
-    initiator.registrableDomain() != null && initiator.registrableDomain() == url.registrableDomain() -> "same-site"
+    (initiator.registrableDomain() ?: initiator.host) == (url.registrableDomain() ?: url.host) -> "same-site"
     else -> "cross-site"
 }
 
+private val SITES = listOf("same-origin", "same-site", "cross-site")
+
+// Browsers send Origin on methods other than GET and HEAD and on cross-origin XHRs
+private fun sendsOrigin(method: String, kind: RequestKind, initiator: HttpUrl, url: HttpUrl) = (method != "GET" && method != "HEAD") || (kind == RequestKind.XHR && initiator.origin() != url.origin())
+
 /**
- * Puts the headers in the order the browser in the `User-Agent` sends them, and drops what it doesn't send
- * on the wire: `Priority` over HTTP/1.1 (Chrome) and the OkHttp cache's own `Cache-Control` directives,
- * which the cache has read by then; adds Chrome's `Cache-Control` on a form submit. Runs on the network level, so it sees `Cookie` and the body headers
- * OkHttp adds.
+ * Puts the headers in the order the browser in the `User-Agent` sends them. On the wire it also drops what that
+ * browser doesn't send (`Priority` over HTTP/1.1 in Chrome, the OkHttp cache's own `Cache-Control` directives) and
+ * adds Chrome's `Cache-Control` on a form submit. Runs per hop on the network level, so it sees `Cookie`, the body
+ * headers OkHttp adds and each redirect.
  */
 internal object BrowserHeaderOrderInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (request.kind == null) return chain.proceed(request)
+        if (request.isRaw) return chain.proceed(request)
+        val kind = request.kind ?: return chain.proceed(request)
         val browser = Browser.of(request.header("User-Agent").orEmpty()) ?: return chain.proceed(request)
         val http2 = chain.connection()?.protocol() == Protocol.HTTP_2
-        val navigation = request.header("Sec-Fetch-Mode") == "navigate"
-        val order = when {
-            navigation -> browser.documentOrder
-            request.header("Sec-Fetch-Dest") in MEDIA_DESTINATIONS -> browser.mediaOrder
+        val navigation = kind == RequestKind.DOCUMENT
+        val order = when (kind) {
+            RequestKind.DOCUMENT -> browser.documentOrder
+            RequestKind.AUDIO, RequestKind.VIDEO -> browser.mediaOrder
             else -> browser.subresourceOrder
         }
+        val hop = request.redirectHop()
         val rank = { name: String -> order.indexOfFirst { it.equals(name, ignoreCase = true) }.takeIf { it >= 0 } ?: order.indexOf(SITE) }
-        val headers = request.headers
+        val headers = hop.headers
             .filterNot { (name, value) -> name.equals("Cache-Control", ignoreCase = true) && value.isAppCacheDirective() }
             .filter { (name) -> http2 || browser.priorityOnHttp1 || !name.equals("Priority", ignoreCase = true) }
             .map { (name, value) ->
@@ -117,13 +143,27 @@ internal object BrowserHeaderOrderInterceptor : Interceptor {
             .plus(if (http2 && browser.sendsTeTrailers) listOf("te" to "trailers") else emptyList())
             .let { list ->
                 val formSubmit = browser.formSubmitCacheControl?.takeIf { navigation && request.method == "POST" }
-                if (formSubmit != null && list.none { (name) -> name.equals("Cache-Control", ignoreCase = true) }) list + ("Cache-Control" to formSubmit) else list
+                val hasCacheControl = list.any { (name) -> name.equals("Cache-Control", ignoreCase = true) }
+                if (formSubmit != null && !hasCacheControl) list + ("Cache-Control" to formSubmit) else list
             }
             // Stable: a site's own headers keep the order they were added in
             .sortedBy { (name) -> rank(name) }
         val wire = Headers.Builder().apply { headers.forEach { (name, value) -> add(name, value) } }.build()
         // The cache keeps the request as it was before the reordering
         return chain.proceed(request.newBuilder().headers(wire).build()).newBuilder().request(request).build()
+    }
+
+    // A redirect hop's Sec-Fetch-Site and Origin as the browser would send them there
+    private fun Request.redirectHop(): Request {
+        val initiator = tag(Initiator::class.java) ?: return this
+        val builder = newBuilder()
+        if (initiator.ownSite && header("Sec-Fetch-Site") != null) {
+            val site = listOfNotNull(initiator.site, relation(initiator.url, url)).maxBy(SITES::indexOf)
+            initiator.site = site
+            builder.header("Sec-Fetch-Site", site)
+        }
+        if (initiator.ownOrigin && !sendsOrigin(method, kind!!, initiator.url, url)) builder.removeHeader("Origin")
+        return builder.build()
     }
 }
 
@@ -286,8 +326,8 @@ private fun languageTags(locales: List<Locale>): List<String> {
 private fun deviceLocales(): List<Locale> = try {
     LocaleList.getDefault().let { list -> List(list.size()) { list[it] } }
 } catch (_: Throwable) {
-    listOf(Locale.getDefault())
-}
+    emptyList()
+}.ifEmpty { listOf(Locale.getDefault()) }.filter { it.language.isNotEmpty() }
 
 // The OkHttp cache's own directives: core's default max-age, the apps' no-store for covers
 private fun String.isAppCacheDirective() = split(",").map { it.trim().lowercase() }.all {
@@ -302,13 +342,12 @@ private fun HttpUrl.registrableDomain(): String? = try {
 }
 
 private fun HttpUrl.origin(): String {
-    val defaultPort = HttpUrl.defaultPort(scheme)
-    return if (port == defaultPort) "$scheme://$host" else "$scheme://$host:$port"
+    val host = if (':' in host) "[$host]" else host
+    return if (port == HttpUrl.defaultPort(scheme)) "$scheme://$host" else "$scheme://$host:$port"
 }
 
 private val CHROME_VERSION_REGEX = Regex("""(?:Chrome|Chromium)/(\d+)""")
 private val LOCAL_HOSTS = setOf("localhost", "127.0.0.1", "::1")
-private val MEDIA_DESTINATIONS = setOf("audio", "video")
 private val JSON_CHARSET = Regex("""(?<=^application/json); ?charset=utf-8$""", RegexOption.IGNORE_CASE)
 
 // Where a page's own headers go in an order

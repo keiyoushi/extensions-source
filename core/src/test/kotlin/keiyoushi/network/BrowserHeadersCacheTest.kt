@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer
 import okhttp3.Cache
 import okhttp3.CacheControl
 import okhttp3.CompressionInterceptor
+import okhttp3.FormBody
 import okhttp3.Gzip
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -26,11 +27,13 @@ class BrowserHeadersCacheTest {
     private val ua = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36"
     private val hits = ConcurrentHashMap<String, AtomicInteger>()
     private val conditional = ConcurrentHashMap<String, String>()
+    private val seen = ConcurrentHashMap<String, com.sun.net.httpserver.Headers>()
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         createContext("/") { exchange ->
             val path = exchange.requestURI.path
             hits.getOrPut(path) { AtomicInteger() }.incrementAndGet()
             exchange.requestHeaders.getFirst("If-None-Match")?.let { conditional[path] = it }
+            seen[path] = exchange.requestHeaders
             val out = exchange.responseHeaders
             val status = when (path) {
                 "/api" -> 200.also {
@@ -46,6 +49,10 @@ class BrowserHeadersCacheTest {
                     out.add("Vary", "Accept")
                 }
                 "/plain" -> 200.also { out.add("Cache-Control", "public") }
+                // To the same server under another host name: another site
+                "/to-other-site" -> 302.also { out.add("Location", "http://127.0.0.1:${address.port}/landed") }
+                "/form" -> 303.also { out.add("Location", "/landed") }
+                "/landed" -> 200
                 "/etag" -> if (exchange.requestHeaders.getFirst("If-None-Match") == "\"1\"") {
                     304
                 } else {
@@ -73,7 +80,7 @@ class BrowserHeadersCacheTest {
     // KeiSource's client, minus what needs the app
     private val client = OkHttpClient.Builder()
         .cache(Cache(cacheDir, 1024 * 1024))
-        .addInterceptor(BrowserHeadersInterceptor { base })
+        .addInterceptor(BrowserHeadersInterceptor({ base }))
         .addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
         .addNetworkInterceptor(CacheControlInterceptor())
         .addNetworkInterceptor(BrowserHeaderOrderInterceptor)
@@ -120,6 +127,16 @@ class BrowserHeadersCacheTest {
         val cached = call(request("/img").forImage().cacheControl(CacheControl.FORCE_CACHE).build())
         assertEquals(200, cached.code)
         assertEquals(1, hits["/img"]!!.get())
+    }
+
+    @Test
+    fun redirectsUpdateSiteAndOrigin() {
+        call(request("/to-other-site").forImage().build())
+        assertEquals("cross-site", seen["/landed"]!!.getFirst("Sec-Fetch-Site"))
+        val form = FormBody.Builder().add("q", "1").build()
+        call(request("/form").forDocument().post(form).build())
+        assertNull(seen["/landed"]!!.getFirst("Origin"))
+        assertNotNull(seen["/form"]!!.getFirst("Origin"))
     }
 
     @Test
