@@ -99,8 +99,37 @@ class TrackerDto(
 }
 
 @Serializable
+class StaffSearchDto(
+    val content: List<Staff> = emptyList(),
+) {
+    @Serializable
+    class Staff(
+        @SerialName("staff_id")
+        val staffId: String,
+        val name: String,
+        @SerialName("native_name")
+        val nativeName: String? = null,
+        @SerialName("alternate_names")
+        val alternateNames: List<String> = emptyList(),
+    )
+}
+
+@Serializable
+class GroupSearchDto(
+    val items: List<Group> = emptyList(),
+) {
+    @Serializable
+    class Group(
+        @SerialName("group_id")
+        val groupId: String,
+        val title: String,
+    )
+}
+
+@Serializable
 class DetailsDto(
     val title: String,
+    val slug: String? = null,
     val description: String?,
     @SerialName("upload_status")
     val publicationStatus: String,
@@ -213,8 +242,9 @@ class DetailsDto(
                     }
                     format?.takeIf { it.isNotBlank() }?.let { add("**Format**: $it") }
                     ageRating?.let { add("**Content Rating**: ${it.toContentRating(isPornographic, isDisturbing)}") }
-                    originalLanguage?.let { code -> LANGUAGE_NAMES[code]?.let { add("**Original Language**: $it") } }
-                    translatedLanguage?.let { code -> LANGUAGE_NAMES[code]?.let { add("**Translated Language**: $it") } }
+                    val originalName = originalLanguage?.let { LANGUAGE_NAMES[it] }
+                    originalName?.let { add("**Original Language**: $it") }
+                    translatedLanguage?.let { LANGUAGE_NAMES[it] }?.takeIf { it != originalName }?.let { add("**Translated Language**: $it") }
                     currentVolumes?.takeIf { it > 0 }?.let { add("**Volumes**: $it") }
                     startYear?.takeIf { it > 0 }?.let { start ->
                         endYear?.takeIf { end -> end > start }
@@ -394,8 +424,17 @@ class ChapterDto(
         val volumeNo: String?,
         val groups: List<Group> = emptyList(),
     ) {
-        fun toSChapter(actualSeriesId: String, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "optional"): SChapter = SChapter.create().apply {
-            url = "/series/$actualSeriesId/reader/$id"
+        fun toSChapter(seriesSegment: String, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "optional"): SChapter = SChapter.create().apply {
+            val readerSegment = buildString {
+                volumeNo?.takeIf { it.isNotBlank() }?.let { append("vol-$it-") }
+                val chapterSegment = chapterNo?.takeIf { it.isNotBlank() }
+                    ?: number.takeIf { it > 0f }?.let { c ->
+                        if (c == c.toLong().toFloat() && c >= 1f) c.toLong().toString() else c.toString()
+                    }
+                chapterSegment?.let { append("chapter-$it-") }
+                append(id)
+            }
+            url = "/series/$seriesSegment/reader/$readerSegment"
             name = buildChapterName(chapterTitleMode)
             date_upload = Instant.tryParse(createdAt)
             if (useSourceChapterNumber) {

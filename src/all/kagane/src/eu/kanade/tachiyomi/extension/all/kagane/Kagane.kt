@@ -214,6 +214,48 @@ abstract class Kagane :
                         filter.addToJsonObject(this)
                     }
 
+                    is StaffSearchFilter -> {
+                        val (include, exclude) = resolveMemberEntries(filter.state) { searchStaff(it) }
+                        if (include.isNotEmpty() || exclude.isNotEmpty()) {
+                            putJsonObject("staff") {
+                                putJsonArray("values") { include.distinct().forEach { add(it) } }
+                                if (exclude.isNotEmpty()) {
+                                    putJsonArray("exclude") { exclude.distinct().forEach { add(it) } }
+                                }
+                            }
+                        }
+                    }
+
+                    is GroupsSearchFilter -> {
+                        val (include, exclude) = resolveMemberEntries(filter.state) { searchGroups(it) }
+                        if (include.isNotEmpty() || exclude.isNotEmpty()) {
+                            putJsonObject("groups") {
+                                putJsonArray("values") { include.distinct().forEach { add(it) } }
+                                if (exclude.isNotEmpty()) {
+                                    putJsonArray("exclude") { exclude.distinct().forEach { add(it) } }
+                                }
+                            }
+                        }
+                    }
+
+                    is YearFilter -> {
+                        filter.parseRange()?.let { range ->
+                            putJsonObject("start_year") {
+                                range.first?.let { put("min", it) }
+                                range.second?.let { put("max", it) }
+                            }
+                        }
+                    }
+
+                    is ChapterCountFilter -> {
+                        filter.parseRange()?.let { range ->
+                            putJsonObject("current_books") {
+                                range.first?.let { put("min", it) }
+                                range.second?.let { put("max", it) }
+                            }
+                        }
+                    }
+
                     is JsonFilter -> {
                         filter.addToJsonObject(this)
                     }
@@ -240,6 +282,48 @@ abstract class Kagane :
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
+    private suspend fun resolveMemberEntries(
+        input: String,
+        search: suspend (String) -> List<String>,
+    ): Pair<List<String>, List<String>> {
+        val include = mutableListOf<String>()
+        val exclude = mutableListOf<String>()
+        input.split(",").forEach { entry ->
+            val trimmed = entry.trim()
+            if (trimmed.isEmpty()) return@forEach
+            val isExclude = trimmed.startsWith("-")
+            val name = if (isExclude) trimmed.removePrefix("-").trim() else trimmed
+            if (name.isEmpty()) return@forEach
+            search(name).forEach { if (isExclude) exclude.add(it) else include.add(it) }
+        }
+        return include to exclude
+    }
+
+    private suspend fun searchStaff(name: String): List<String> {
+        val body = buildJsonObject { put("name", name) }.toJsonRequestBody()
+        return client.post("$apiUrl/search/staff", body)
+            .parseAs<StaffSearchDto>()
+            .content
+            .filter { staff ->
+                staff.name.equals(name, ignoreCase = true) ||
+                    staff.nativeName?.equals(name, ignoreCase = true) == true ||
+                    staff.alternateNames.any { it.equals(name, ignoreCase = true) }
+            }
+            .map { it.staffId }
+    }
+
+    private suspend fun searchGroups(name: String): List<String> {
+        val url = "$apiUrl/groups/search".toHttpUrl().newBuilder()
+            .addQueryParameter("q", name)
+            .addQueryParameter("limit", "8")
+            .build()
+        return client.get(url)
+            .parseAs<GroupSearchDto>()
+            .items
+            .filter { it.title.equals(name, ignoreCase = true) }
+            .map { it.groupId }
+    }
+
     // ====================== Manga Details + Chapters ======================
 
     private suspend fun getMangaById(seriesId: String): DetailsDto {
@@ -251,7 +335,7 @@ abstract class Kagane :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments
         if (segments.size < 2) return null
-        val seriesId = segments[1]
+        val seriesId = segments[1].takeLast(36)
         return parseMangaDetails(getMangaById(seriesId)).apply {
             this.url = seriesId
             initialized = true
@@ -265,7 +349,11 @@ abstract class Kagane :
         return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, showDetails, cleanTitle)
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = manga.memoString("slug")
+        val seriesSegment = if (slug != null) "$slug-${manga.url}" else manga.url
+        return "$baseUrl/series/$seriesSegment"
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -283,6 +371,9 @@ abstract class Kagane :
                         put("trackerId", dto.trackerId)
                     }
                     put("format", dto.format ?: "")
+                    if (!dto.slug.isNullOrBlank()) {
+                        put("slug", dto.slug)
+                    }
                 }
             }
         } else {
@@ -291,7 +382,8 @@ abstract class Kagane :
         val updatedChapters = if (fetchChapters) {
             val index = client.get("$apiUrl/series/$seriesId/books/index?fields=List")
                 .parseAs<BookIndexDto>()
-            parseChapterList(index.toBooks(), chapterFormat(updatedManga), seriesId)
+            val slug = updatedManga.memoString("slug")
+            parseChapterList(index.toBooks(), chapterFormat(updatedManga), seriesId, slug)
         } else {
             chapters
         }
@@ -299,10 +391,12 @@ abstract class Kagane :
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private fun chapterFormat(manga: SManga): String? = manga.memo["format"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+    private fun SManga.memoString(key: String): String? = memo[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+
+    private fun chapterFormat(manga: SManga): String? = manga.memoString("format")
         ?: manga.genre?.substringBefore(", ")
 
-    private fun parseChapterList(books: List<ChapterDto.Book>, format: String?, seriesId: String): List<SChapter> {
+    private fun parseChapterList(books: List<ChapterDto.Book>, format: String?, seriesId: String, slug: String?): List<SChapter> {
         val useSourceChapterNumber = format in setOf(
             "Dark Horse Comics",
             "Flame Comics",
@@ -310,8 +404,10 @@ abstract class Kagane :
             "Square Enix Manga",
         )
 
+        val seriesSegment = if (slug.isNullOrBlank()) seriesId else "$slug-$seriesId"
+
         return books.sortedByDescending { it.number }.map { book ->
-            book.toSChapter(seriesId, useSourceChapterNumber, chapterTitleMode)
+            book.toSChapter(seriesSegment, useSourceChapterNumber, chapterTitleMode)
         }
     }
 
@@ -337,7 +433,7 @@ abstract class Kagane :
             error("Outdated chapter URL. Please refresh the chapter list")
         }
 
-        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last()
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last().takeLast(36)
         val challengeResp = getChallengeResponse(chapterId)
 
         accessToken = challengeResp.accessToken
@@ -704,17 +800,27 @@ abstract class Kagane :
 
             filters.addAll(
                 listOf(
-                    MatchAllGenresFilter(),
                     GenresFilter(
                         meta.getGenresList(),
                         excludedGenreIds,
                     ),
-                    MatchAllTagsFilter(),
+                    MatchAllGenresFilter(),
                     TagsSearchFilter(meta.tags),
+                    MatchAllTagsFilter(),
                     SourcesFilter(sourceFilters),
+                    Filter.Separator(),
                 ),
             )
         }
+
+        filters.addAll(
+            listOf(
+                YearFilter(),
+                ChapterCountFilter(),
+                StaffSearchFilter(),
+                GroupsSearchFilter(),
+            ),
+        )
 
         return FilterList(filters)
     }

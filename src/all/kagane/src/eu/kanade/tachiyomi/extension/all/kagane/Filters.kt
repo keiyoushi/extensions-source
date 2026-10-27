@@ -107,7 +107,31 @@ internal class GenresFilter(
 
 internal class TagsSearchFilter(
     val tagData: Map<String, String>,
-) : Filter.Text(" Tags (e.g. Medieval, -Politics)")
+) : Filter.Text("Tags (e.g. Medieval, -Politics)")
+
+internal class StaffSearchFilter : Filter.Text("Person (e.g. ONE, -Kokou no Hashiguchi)")
+
+internal class GroupsSearchFilter : Filter.Text("Group (e.g. Asura Scans, -The Hours Between)")
+
+internal open class RangeTextFilter(
+    name: String,
+) : Filter.Text(name) {
+    // Accepts "a", "a-b", or "a+" (open-ended).
+    fun parseRange(): Pair<Int?, Int?>? {
+        val input = state.trim()
+        val (minText, maxText) = when {
+            input.endsWith("+") -> input.removeSuffix("+") to null
+            else -> input.split("-", limit = 2).let { it[0] to it.getOrNull(1) }
+        }
+        val min = minText.trim().toIntOrNull()
+        val max = maxText?.trim()?.toIntOrNull()
+        return if (min == null && max == null) null else min to max
+    }
+}
+
+internal class YearFilter : RangeTextFilter("Year (e.g. 2024, 2024-2026, or 2024+)")
+
+internal class ChapterCountFilter : RangeTextFilter("Chapters (e.g. 1-20, 21-100, 101+)")
 
 internal class SourcesFilter(
     sources: List<FilterData>,
