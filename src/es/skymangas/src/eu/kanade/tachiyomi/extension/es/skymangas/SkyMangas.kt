@@ -16,10 +16,16 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
+import okhttp3.CacheControl
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import java.io.IOException
 import kotlin.time.Duration.Companion.minutes
 
 @Source
@@ -30,9 +36,10 @@ abstract class SkyMangas : KeiSource() {
     override val supportsRelatedMangas = true
 
     // API allows 100 requests per minute
-    override fun OkHttpClient.Builder.configureClient() = rateLimit(permits = 90, period = 1.minutes) {
-        it.host == API_ROOT.host && it.encodedPath.startsWith("/api/v1/") && !it.encodedPath.startsWith("/api/v1/images/")
-    }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::reissuePageToken)
+        .rateLimit(permits = 90, period = 1.minutes) {
+            it.host == API_ROOT.host && it.encodedPath.startsWith("/api/v1/") && !it.encodedPath.startsWith("/api/v1/images/")
+        }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(), AvailabilityFilter()))
 
@@ -147,11 +154,60 @@ abstract class SkyMangas : KeiSource() {
         return client.get(url).parseAs()
     }
 
+    // The apps keep cached page urls, so a refused token is reissued from its release
+    private fun reissuePageToken(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        val url = request.url
+        if (response.code != 403 || url.host != API_ROOT.host || url.encodedPath != PAGE_IMAGE_PATH) return response
+        val release = url.queryParameter("release") ?: return response
+        val page = url.queryParameter("page")?.toIntOrNull() ?: return response
+        response.close()
+
+        val pages = releasePages(chain, release)
+        val fresh = pages.firstOrNull { it.pageNumber == page } ?: throw IOException("Page $page not in release $release")
+        val retry = chain.proceed(request.newBuilder().url(imageUrl(fresh.imageUrl)).build())
+        if (retry.code == 403) synchronized(reissueLock) { if (lastReissue?.pages === pages) lastReissue = null }
+        return retry
+    }
+
+    private fun releasePages(chain: Interceptor.Chain, release: String): List<PageImage> = synchronized(reissueLock) {
+        lastReissue?.takeIf { it.release == release && System.currentTimeMillis() - it.time < REISSUE_REUSE.inWholeMilliseconds }?.let {
+            return it.pages
+        }
+        val request = Request.Builder()
+            .url(apiUrl("releases", release, "pages").build())
+            .headers(headers)
+            .cacheControl(CacheControl.FORCE_NETWORK)
+            .build()
+        val response = chain.proceed(request)
+        if (!response.isSuccessful) {
+            response.close()
+            throw IOException("HTTP ${response.code}")
+        }
+        val pages = try {
+            response.parseAs<ApiResponse<List<PageImage>>>().data
+        } catch (e: SerializationException) {
+            throw IOException("Unexpected page list", e)
+        }
+        lastReissue = Reissue(release, pages, System.currentTimeMillis())
+        pages
+    }
+
+    private class Reissue(val release: String, val pages: List<PageImage>, val time: Long)
+
+    private val reissueLock = Any()
+
+    // One chapter's fresh page urls, so its other refused pages skip the refetch
+    private var lastReissue: Reissue? = null
+
     private fun apiUrl(vararg segments: String): HttpUrl.Builder = API_ROOT.newBuilder().addPathSegments("api/v1").apply {
         segments.forEach { addPathSegment(it) }
     }
 
     companion object {
         private val MANGA_PATHS = setOf("manhua", "leer")
+        private const val PAGE_IMAGE_PATH = "/api/v1/images/release-page"
+        private val REISSUE_REUSE = 10.minutes
     }
 }

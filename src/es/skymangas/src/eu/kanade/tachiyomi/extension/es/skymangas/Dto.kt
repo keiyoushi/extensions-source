@@ -123,7 +123,10 @@ class ChapterItem(
 class ChapterPages(val pages: List<PageImage>)
 
 @Serializable
-class PageImage(val imageUrl: String)
+class PageImage(
+    val pageNumber: Int,
+    val imageUrl: String,
+)
 
 @Serializable
 class FilterData(
