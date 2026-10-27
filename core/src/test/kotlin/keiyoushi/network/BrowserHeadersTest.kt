@@ -1,5 +1,6 @@
 package keiyoushi.network
 
+import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -220,6 +221,15 @@ class BrowserHeadersTest {
         assertEquals(get.headers, intercept(get, wireOrder = true).headers)
         val post = builder("https://a.test/api/search", referer = "https://a.test/").post(json()).build()
         assertEquals(post.headers.newBuilder().add("Origin", "https://a.test").build(), intercept(post, wireOrder = true).headers)
+    }
+
+    @Test
+    fun coversAreImages() {
+        // As the apps' cover loader builds it
+        val cover = builder("https://cdn.a.test/cover.jpg", referer = "https://a.test/").cacheControl(CacheControl.Builder().noStore().build()).build()
+        val sent = intercept(cover)
+        assertEquals("image", sent.header("Sec-Fetch-Dest"))
+        assertEquals("no-cors", sent.header("Sec-Fetch-Mode"))
     }
 
     private fun json() = "{}".toRequestBody("application/json".toMediaType())

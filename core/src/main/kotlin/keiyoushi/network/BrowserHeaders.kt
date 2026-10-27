@@ -12,7 +12,7 @@ import java.util.Locale
 
 /**
  * Adds the headers the browser in a request's `User-Agent` sends: client hints and `Accept-Language` for
- * a request with a [RequestKind], fetch metadata, `Accept` and `Priority` per kind,
+ * a request with a [RequestKind] (covers the apps load are images), fetch metadata, `Accept` and `Priority` per kind,
  * and `Origin` where browsers send one. A request without a kind gets only `Origin` on a POST.
  *
  * Headers a request already has are kept. The page a request comes from is its `Referer`.
@@ -20,12 +20,13 @@ import java.util.Locale
 internal class BrowserHeadersInterceptor(private val siteUrl: () -> String) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val kind = request.kind
+        // The apps' cover requests carry no kind, only the no-store that keeps covers out of the OkHttp cache
+        val kind = request.kind ?: RequestKind.IMAGE.takeIf { request.method == "GET" && request.header("Cache-Control") == "no-store" }
         val referer = request.header("Referer")?.toHttpUrlOrNull()
         val initiator = referer ?: siteUrl().toHttpUrl()
         val userAgent = request.header("User-Agent").orEmpty()
         val browser = Browser.of(userAgent)
-        val builder = request.newBuilder()
+        val builder = request.newBuilder().apply { if (kind != null) tag(RequestKind::class.java, kind) }
         fun fill(name: String, value: String?) {
             if (value != null && request.header(name) == null) builder.header(name, value)
         }

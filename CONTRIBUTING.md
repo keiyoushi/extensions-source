@@ -1373,7 +1373,7 @@ Behavior `KeiSource` gives you for free:
   under in the browser's DevTools Network tab: `client.getDocument(url)` for Doc (`postDocument` for a form submit),
   `client.getXhr(url)`/`client.postXhr(url, body)` for Fetch/XHR (JSON APIs, ajax), `client.getImage(url)` for Img,
   `getScript` for JS, `getStyle` for CSS and `getAudio`/`getVideo` for Media; on a `Request.Builder` they are
-  `forDocument()`, `forXhr()` and so on. Page images are already images. With a
+  `forDocument()`, `forXhr()` and so on. Page images and the covers the app loads are already images. With a
   `User-Agent` that isn't a browser's (an app's API, a self-hosted server) the helpers add nothing, so use them
   there too. A request without a kind (`getRaw`/`postRaw`, or a `Request.Builder` without `forX()`) goes out as
   built, with `Origin` only on a POST; that's only for a browser `User-Agent` whose request must go out bare. The page a request comes from is its `Referer`, and headers a request already has are kept.
