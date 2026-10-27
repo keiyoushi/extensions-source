@@ -31,7 +31,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -176,10 +178,8 @@ abstract class IkigaiMangas :
     }
 
     private suspend fun fetchQuerySeriesList(): List<QwikSeriesDto> {
-        val qfunc = getQfuncFromWebView(baseUrl, headers)
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("qfunc", qfunc)
-            .build()
+        val url = getQfuncUrlFromWebView(baseUrl, headers)
+        val qfunc = url.queryParameter("qfunc")!!
         val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
         val body = payload.toRequestBody()
         val headers = headersBuilder()
@@ -319,10 +319,10 @@ abstract class IkigaiMangas :
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
-    private suspend fun getQfuncFromWebView(
+    private suspend fun getQfuncUrlFromWebView(
         url: String,
         headers: Headers,
-    ): String = runWebView(timeout = 20.seconds) {
+    ): HttpUrl = runWebView(timeout = 20.seconds) {
         val pool = ('a'..'z') + ('A'..'Z')
         val interfaceName = (1..(10..20).random())
             .map { pool.random() }
@@ -333,8 +333,12 @@ abstract class IkigaiMangas :
         blockImages = true
         userAgent = headers["User-Agent"].orEmpty()
 
-        webMessageBridge(interfaceName) { qfunc, replyProxy ->
-            if (replyProxy.isMainFrame != false) resolve(qfunc)
+        webMessageBridge(interfaceName) { message, replyProxy ->
+            val qfuncUrl = message.toHttpUrlOrNull() ?: return@webMessageBridge
+            val originHost = replyProxy.sourceOrigin?.toHttpUrlOrNull()?.host
+            if (replyProxy.isMainFrame != false && (originHost == null || originHost == qfuncUrl.host)) {
+                resolve(qfuncUrl)
+            }
         }
 
         injectAtDocumentStart(
@@ -343,9 +347,8 @@ abstract class IkigaiMangas :
                     const originalFetch = window.fetch;
                     window.fetch = function (resource, options) {
                         const url = typeof resource === "string" ? resource : resource?.url ?? "";
-                        const qfunc = url.match(/[?&]qfunc=([^&]+)/)?.[1];
-                        if (qfunc) {
-                            window.$interfaceName.postMessage(decodeURIComponent(qfunc));
+                        if (/[?&]qfunc=/.test(url)) {
+                            window.$interfaceName.postMessage(new URL(url, location.href).href);
                             return new Promise(() => {});
                         }
                         return originalFetch.apply(this, arguments);
