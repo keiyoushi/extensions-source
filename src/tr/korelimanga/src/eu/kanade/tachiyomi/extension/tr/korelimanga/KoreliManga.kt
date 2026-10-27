@@ -7,7 +7,8 @@ import keiyoushi.annotation.Source
 abstract class KoreliManga : InitManga() {
 
     override val mangaUrlDirectory = "manga"
+
     override val popularUrlSlug = "manga-ranking"
+
     override val latestUrlSlug = "recently-updated"
-    override val chapterPagePathSegment = "chapter"
 }
