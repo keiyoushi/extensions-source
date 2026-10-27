@@ -6,13 +6,16 @@ plugins {
 
 keiyoushi {
     name = "NexComic"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "mangathemesia"
 
     source {
         lang = "en"
         baseUrl = "https://nexcomic.com"
+    }
+
+    deeplink {
+        path("/series/..*")
     }
 }
