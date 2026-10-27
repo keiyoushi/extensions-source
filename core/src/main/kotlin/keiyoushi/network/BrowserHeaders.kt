@@ -1,6 +1,8 @@
 package keiyoushi.network
 
 import android.os.LocaleList
+import okhttp3.CompressionInterceptor
+import okhttp3.Gzip
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -9,6 +11,8 @@ import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.brotli.Brotli
+import okhttp3.zstd.Zstd
 import java.util.Locale
 
 /**
@@ -90,9 +94,18 @@ internal class BrowserHeadersInterceptor(
             }
         }
 
-        return chain.proceed(builder.build())
+        val sent = builder.build()
+        // The browser's Accept-Encoding, decoded here; the source client's own stays on requests without a kind
+        if (!presentsAsBrowser || sent.header("Accept-Encoding") != null) return chain.proceed(sent)
+        return BROWSER_COMPRESSION.intercept(
+            object : Interceptor.Chain by chain {
+                override fun request() = sent
+            },
+        )
     }
 }
+
+private val BROWSER_COMPRESSION = CompressionInterceptor(Gzip, Deflate, Brotli, Zstd)
 
 /** The page a request comes from, and whether its `Sec-Fetch-Site` and `Origin` are ours to update on a redirect. */
 internal class Initiator(val url: HttpUrl, val ownSite: Boolean, val ownOrigin: Boolean) {

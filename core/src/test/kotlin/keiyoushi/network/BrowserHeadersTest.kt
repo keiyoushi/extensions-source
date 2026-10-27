@@ -157,7 +157,7 @@ class BrowserHeadersTest {
         )
         val firefox = intercept(builder("https://a.test/api/x", referer = "https://a.test/", ua = firefoxUa).forXhr().header("X-Site", "1").build(), wireOrder = true)
         assertEquals(
-            listOf("User-Agent", "Accept", "Accept-Language", "Referer", "X-Site", "Sec-Fetch-Dest", "Sec-Fetch-Mode", "Sec-Fetch-Site", "Priority"),
+            listOf("User-Agent", "Accept", "Accept-Language", "Accept-Encoding", "Referer", "X-Site", "Sec-Fetch-Dest", "Sec-Fetch-Mode", "Sec-Fetch-Site", "Priority"),
             firefox.headers.map { it.first },
         )
     }
