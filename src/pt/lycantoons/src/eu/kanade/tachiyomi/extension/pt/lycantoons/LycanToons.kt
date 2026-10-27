@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.lycantoons
 
-import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,19 +7,20 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebView
-import keiyoushi.utils.toJsonString
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import java.io.IOException
 
 @Source
 abstract class LycanToons : KeiSource() {
@@ -29,15 +29,13 @@ abstract class LycanToons : KeiSource() {
         rateLimit(2)
     }
 
-    // =====================Popular=====================
+    // The site refuses requests without Sec-Fetch-Site; its image CDN refuses any with Origin
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
+        .set("Sec-Fetch-Site", "same-origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage = metricsRequest("popular", page).parseAs<PopularResponse>().toMangasPage()
 
-    // =====================Latest=====================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = metricsRequest("recently-updated", page).parseAs<PopularResponse>().toMangasPage()
-
-    // =====================Search=====================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         var search = query
@@ -58,14 +56,17 @@ abstract class LycanToons : KeiSource() {
             tags = tags.distinct(),
         )
 
-        return webFetch("$baseUrl/api/series", payload.toJsonString())
+        return client.post("$baseUrl/api/series", payload.toJsonRequestBody())
             .parseAs<SearchResponse>()
             .toMangasPage()
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = LycanToonsFilters.get()
-
-    // =====================Details=====================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.getOrNull(0) != "series") return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
+        val manga = SManga.create().apply { this.url = "/series/$slug" }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -77,7 +78,7 @@ abstract class LycanToons : KeiSource() {
 
         val details = async {
             if (fetchDetails) {
-                seriesPage("$baseUrl/series/$slug").extractNextJs<SeriesDto>()!!.toSManga()
+                client.get("$baseUrl/series/$slug").extractNextJs<SeriesDto>()!!.toSManga()
             } else {
                 manga
             }
@@ -85,7 +86,7 @@ abstract class LycanToons : KeiSource() {
 
         val chapterList = async {
             if (fetchChapters) {
-                seriesPage("$baseUrl/series/$slug/1").extractNextJs<ChapterResponse>()?.capitulos!!
+                client.get("$baseUrl/series/$slug/1").extractNextJs<ChapterResponse>()!!.capitulos
                     .map { it.toSChapter(slug) }
                     .sortedByDescending { it.chapter_number }
             } else {
@@ -96,51 +97,24 @@ abstract class LycanToons : KeiSource() {
         SMangaUpdate(details.await(), chapterList.await())
     }
 
-    // =====================Pages========================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = seriesPage("$baseUrl${chapter.url}").extractNextJs<ChapterIdDto>()!!.capituloId
+        val chapterId = client.get(getChapterUrl(chapter)).extractNextJs<ChapterIdDto>()!!.capituloId
 
-        return webFetch("$baseUrl/api/chapters/$chapterId/view-pages")
+        return client.get("$baseUrl/api/chapters/$chapterId/view-pages")
             .parseAs<PageList>()
             .pages
             .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    // =====================Utils=====================
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        SeriesTypeFilter(),
+        StatusFilter(),
+        TagsFilter(),
+    )
 
-    // Cloudflare challenges API requests that do not come from a browser, so fetch them from a same-origin page
-    private suspend fun webFetch(url: String, jsonBody: String? = null): String = runWebView {
-        userAgent = headers["User-Agent"]!!
-        jsBridge("lycanResult") { resolve(it) }
-        jsBridge("lycanError") { reject(IOException(it)) }
-        onPageFinished {
-            val init = jsonBody?.let { "{method:'POST',headers:{'Content-Type':'application/json'},body:${it.toJsonString()}}" } ?: "{}"
-            evaluateJs(
-                """
-                fetch(${url.toJsonString()}, $init)
-                    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-                    .then(t => lycanResult.post(t))
-                    .catch(e => lycanError.post(e.message));
-                """.trimIndent(),
-            )
-        }
-        loadData("$baseUrl/", " ")
-    }
-
-    private suspend fun metricsRequest(path: String, page: Int): String = webFetch("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page")
+    private suspend fun metricsRequest(path: String, page: Int) = client.get("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page")
 
     private fun SManga.slug(): String = url.substringBefore("?").substringAfterLast("/")
-
-    // Next.js RSC fetches get challenged too, so load the page itself as a document and skip its subresources
-    private suspend fun seriesPage(url: String): Document = runWebView<String> {
-        userAgent = headers["User-Agent"]!!
-        interceptRequest { if (it.isForMainFrame) null else WebResourceResponse(null, null, null) }
-        onPageFinished {
-            evaluateJs("document.documentElement.outerHTML") { resolve(it.parseAs()) }
-        }
-        loadUrl(url.substringBefore("?"))
-    }.let { Jsoup.parse(it, url) }
 
     companion object {
         private const val PAGE_LIMIT = 20

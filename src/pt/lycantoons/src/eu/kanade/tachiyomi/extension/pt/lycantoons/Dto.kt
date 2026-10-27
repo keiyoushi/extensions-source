@@ -61,9 +61,15 @@ class SearchRequestBody(
 @Serializable
 class SearchResponse(
     private val series: List<SeriesDto>,
+    private val pagination: SearchPaginationDto,
 ) {
-    fun toMangasPage() = MangasPage(series.map { it.toSManga() }, false)
+    fun toMangasPage() = MangasPage(series.map { it.toSManga() }, pagination.hasNextPage)
 }
+
+@Serializable
+class SearchPaginationDto(
+    val hasNextPage: Boolean,
+)
 
 @Serializable
 class ChapterResponse(

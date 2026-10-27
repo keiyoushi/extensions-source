@@ -74,11 +74,3 @@ fun FilterList.selectedTags(): List<String> = firstInstanceOrNull<TagsFilter>()?
     ?.filter { it.state }
     ?.map { it.value }
     .orEmpty()
-
-object LycanToonsFilters {
-    fun get(): FilterList = FilterList(
-        SeriesTypeFilter(),
-        StatusFilter(),
-        TagsFilter(),
-    )
-}
