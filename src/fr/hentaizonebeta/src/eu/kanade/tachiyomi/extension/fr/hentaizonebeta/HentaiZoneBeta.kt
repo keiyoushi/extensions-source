@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.hentaizonebeta
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,7 +12,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import org.jsoup.Jsoup
 
 @Source
@@ -114,9 +112,7 @@ abstract class HentaiZoneBeta : KeiSource() {
     }
 
     private fun MangaDto.toSManga(): SManga = SManga.create().apply {
-        val slug = permalink?.removeSuffix("/")?.substringAfterLast("/")
-            ?: id.toString()
-        url = "/manga/$slug"
+        url = permalink?.removeSuffix("/")?.substringAfterLast("/") ?: id.toString()
         title = this@toSManga.title
         thumbnail_url = thumbnail
         status = when (this@toSManga.status?.lowercase()) {
@@ -134,7 +130,7 @@ abstract class HentaiZoneBeta : KeiSource() {
             else -> return null
         }
         return fetchMangaUpdate(
-            SManga.create().apply { this.url = "/manga/$slug" },
+            SManga.create().apply { this.url = slug },
             emptyList(),
             fetchDetails = true,
             fetchChapters = false,
@@ -157,18 +153,17 @@ abstract class HentaiZoneBeta : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val slug = manga.url.removePrefix("/manga/").removePrefix("/").removeSuffix("/")
-        val apiUrl = "$baseUrl/api/v1/manga/single/$slug"
+        val apiUrl = "$baseUrl/api/v1/manga/single/${manga.url}"
         val mangaDetail = client.get(apiUrl).parseAs<MangaDetailDto>()
 
         val updatedManga = mangaDetail.toSManga()
-        val chapterList = mangaDetail.chapters.map { it.toSChapter(slug) }
+        val chapterList = mangaDetail.chapters.map { it.toSChapter(manga.url) }
 
         return SMangaUpdate(updatedManga, chapterList)
     }
 
     private fun MangaDetailDto.toSManga(): SManga = SManga.create().apply {
-        url = "/manga/$slug"
+        url = slug
         title = this@toSManga.title
         thumbnail_url = coverImage ?: bannerImage
         description = content?.takeIf(String::isNotBlank)?.let {
@@ -186,7 +181,7 @@ abstract class HentaiZoneBeta : KeiSource() {
     }
 
     private fun ChapterDto.toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
-        url = "/manga/$mangaSlug/$chapterSlug"
+        url = "$mangaSlug/$chapterSlug"
         name = this@toSChapter.name
         date_upload = (uploadTime ?: date ?: 0L) * 1000L
         chapter_number = chapterNumber?.content?.toFloatOrNull()
@@ -195,22 +190,14 @@ abstract class HentaiZoneBeta : KeiSource() {
             ?: -1f
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.removePrefix("/manga/").removePrefix("/").removeSuffix("/")
-        return "$baseUrl/manga/$slug"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val path = chapter.url.removePrefix("/")
-        return "$baseUrl/$path"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/${chapter.url}"
 
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val parts = chapter.url.trim('/').split('/')
-        val mangaSlug = parts.getOrNull(1) ?: throw Exception("URL de chapitre invalide (${chapter.url})")
-        val chapterSlug = parts.getOrNull(2) ?: throw Exception("URL de chapitre invalide (${chapter.url})")
+        val (mangaSlug, chapterSlug) = chapter.url.split('/')
         val apiUrl = "$baseUrl/api/v1/chapters/$mangaSlug/$chapterSlug"
         val response = client.get(apiUrl).parseAs<ChapterImagesDto>()
 
@@ -218,6 +205,4 @@ abstract class HentaiZoneBeta : KeiSource() {
             Page(index, imageUrl = img.url)
         }
     }
-
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
 }
