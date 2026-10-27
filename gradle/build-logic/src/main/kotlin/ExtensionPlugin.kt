@@ -122,7 +122,7 @@ class ExtensionPlugin : Plugin<Project> {
                 "Multisrc libVersion ($themeLib) and extension libVersion ($extLib) must match."
             }
             themeKeiyoushi.baseVersionCode.zip(keiyoushi.versionCode) { base, ext -> base + ext }
-        }.orElse(keiyoushi.versionCode)
+        }.orElse(keiyoushi.versionCode).map { it + CORE_VERSION_CODE }
 
         val versionNameProvider = keiyoushi.libVersion.flatMap { libVersion ->
             check(libVersion in VALID_LIB_VERSIONS) {
@@ -350,3 +350,6 @@ private fun Project.android(block: ApplicationExtension.() -> Unit) {
 private fun Project.androidComponents(block: ApplicationAndroidComponentsExtension.() -> Unit) {
     extensions.configure(block)
 }
+
+// Bumped when a core change needs every extension rebuilt
+private const val CORE_VERSION_CODE = 1
