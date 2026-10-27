@@ -26,7 +26,11 @@ abstract class Bakamh : Madara() {
     }
 
     override val mangaDetailsSelectorStatus = ".post-content_item:contains(状态) .summary-content"
-    override fun chapterListSelector() = ".chapter-loveYou"
+
+    // Site keeps renaming the chapter <li> class, so match the list structure instead
+    override fun chapterListSelector() = "ul.version-chap > li"
+
+    override val chapterDateSelector = "span.chapter-release-date i"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
