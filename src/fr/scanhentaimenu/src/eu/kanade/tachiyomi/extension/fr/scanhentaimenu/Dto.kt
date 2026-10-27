@@ -96,7 +96,7 @@ class ChapterItem(
     val publishedAt: String? = null,
 ) {
     fun toSChapter(): SChapter = SChapter.create().apply {
-        url = "/read/$id"
+        url = id
         val numberStr = chapterNumber?.let {
             if (it % 1.0 == 0.0) it.toInt().toString() else it.toString()
         }

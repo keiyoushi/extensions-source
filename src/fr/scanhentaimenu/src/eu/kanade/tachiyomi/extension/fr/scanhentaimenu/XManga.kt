@@ -121,10 +121,9 @@ abstract class XManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val slug = manga.url.removePrefix("/manga/").removePrefix("/").removeSuffix("/")
-        val apiUrl = "$baseUrl/api/mangas/$slug"
+        val apiUrl = "$baseUrl/api/mangas/${manga.url}"
         val response = client.get(apiUrl).parseAs<MangaDetailResponse>()
-        val mangaDetail = response.manga ?: throw Exception("Manga introuvable ($slug)")
+        val mangaDetail = response.manga ?: throw Exception("Manga introuvable (${manga.url})")
 
         val updatedManga = mangaDetail.toSManga(baseUrl)
         val chapterList = mangaDetail.chapters.map { it.toSChapter() }
@@ -132,23 +131,16 @@ abstract class XManga : KeiSource() {
         return SMangaUpdate(updatedManga, chapterList)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.removePrefix("/manga/").removePrefix("/").removeSuffix("/")
-        return "$baseUrl/manga/$slug"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val chapterId = chapter.url.removePrefix("/read/").removePrefix("/").removeSuffix("/")
-        return "$baseUrl/read/$chapterId"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
 
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = chapter.url.removePrefix("/read/").removePrefix("/").removeSuffix("/")
-        val apiUrl = "$baseUrl/api/mangas/read/$chapterId"
+        val apiUrl = "$baseUrl/api/mangas/read/${chapter.url}"
         val response = client.get(apiUrl).parseAs<ChapterResponse>()
-        val chapterDetail = response.chapter ?: throw Exception("Chapitre introuvable ($chapterId)")
+        val chapterDetail = response.chapter ?: throw Exception("Chapitre introuvable (${chapter.url})")
 
         return chapterDetail.pages.mapIndexed { index, pageItem ->
             Page(index, imageUrl = getPageUrl(pageItem.filePath))
