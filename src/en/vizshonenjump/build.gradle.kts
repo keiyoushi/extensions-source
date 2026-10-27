@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "VIZ"
-    versionCode = 29
+    versionCode = 30
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
