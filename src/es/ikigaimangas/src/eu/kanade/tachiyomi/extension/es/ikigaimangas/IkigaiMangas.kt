@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.es.ikigaimangas
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -51,32 +50,6 @@ abstract class IkigaiMangas :
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addCookie("is-adult-enabled" to "true")
         .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
 
-    private val domainMutex = Mutex()
-    private var domainFetched = false
-
-    private suspend fun fetchDomainUrl() {
-        if (domainFetched || !preferences.fetchDomainPref()) return
-        domainMutex.withLock {
-            if (domainFetched || !preferences.fetchDomainPref()) return
-
-            try {
-                val initClient = network.client
-                val headers = super.headersBuilder().build()
-                val document = initClient.get("https://ikigaimangas.com", headers).asJsoup()
-                val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
-                    ?: return
-                initClient.get("https://ikigaimangas.com/build/$scriptUrl", headers).use { response ->
-                    val script = response.body.string()
-                    val domain = script.substringAfter("i(\"").substringBefore("\"")
-                    val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
-                    val newDomain = "https://$host"
-                    preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
-                    domainFetched = true
-                }
-            } catch (_: Exception) {}
-        }
-    }
-
     private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
 
     private val preferences = getPreferences()
@@ -98,8 +71,7 @@ abstract class IkigaiMangas :
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
                 title = element.selectFirst(".card-body .card-title")!!.text()
-                val seriesUrl = element.selectFirst(".card-actions > a.btn[href]")!!.attr("href")
-                url = seriesUrl.substringAfterLast("/series/").substringBefore("/")
+                url = element.selectFirst(".card-actions > a.btn[href]")!!.seriesSlug()
             }
         }
         return MangasPage(mangaList, false)
@@ -108,13 +80,16 @@ abstract class IkigaiMangas :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         fetchDomainUrl()
 
-        val document = client.get("$baseUrl/?pagina=$page").asJsoup()
+        val latestUrl = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .build()
+        val document = client.get(latestUrl).asJsoup()
 
         val mangaList = document.select("section[aria-labelledby=new-chapters-heading] > ul.grid:last-of-type a.card").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
                 title = element.selectFirst(".card-body .card-title")!!.text()
-                url = element.attr("href").substringAfterLast("/series/").substringBefore("/")
+                url = element.seriesSlug()
             }
         }
         val hasNextPage = document.selectFirst("nav[aria-label=pagination] > a:last-child:not([class*=btn-disabled])") != null
@@ -163,7 +138,7 @@ abstract class IkigaiMangas :
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
                 title = element.selectFirst("h3")!!.text()
-                url = element.attr("href").substringAfterLast("/series/").substringBefore("/")
+                url = element.seriesSlug()
             }
         }
         val hasNextPage = document.selectFirst("nav[aria-label=pagination] > a:last-child:not([class*=btn-disabled])") != null
@@ -209,7 +184,6 @@ abstract class IkigaiMangas :
         .lowercase()
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}/"
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -219,14 +193,14 @@ abstract class IkigaiMangas :
     ): SMangaUpdate {
         fetchDomainUrl()
 
-        val document = client.get("$baseUrl/series/${manga.url}/").asJsoup()
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         val mainContent = document.selectFirst("main")!!
         val updatedManga = SManga.create().apply {
             title = mainContent.selectFirst(".card-body .card-title")!!.text()
             thumbnail_url = mainContent.selectFirst("article.card figure > img")?.attr("abs:src")
             description = mainContent.selectFirst(".card-body > p")?.text()
             status = parseStatus(mainContent.selectFirst("figure > ul a[href*=?estados]")?.text())
-            genre = mainContent.select(".card-body > ul > li > a[href*=?generos]").joinToString { it.text().trim() }
+            genre = mainContent.select(".card-body > ul > li > a[href*=?generos]").joinToString { it.text() }
         }
 
         if (!fetchChapters) {
@@ -248,7 +222,7 @@ abstract class IkigaiMangas :
         val remainingChapters = coroutineScope {
             (2..lastPage).map { page ->
                 async {
-                    val url = "$baseUrl/series/${manga.url}/"
+                    val url = getMangaUrl(manga)
                         .toHttpUrl()
                         .newBuilder()
                         .addQueryParameter("pagina", page.toString())
@@ -277,6 +251,8 @@ abstract class IkigaiMangas :
         else -> SManga.UNKNOWN
     }
 
+    private fun Element.seriesSlug() = absUrl("href").toHttpUrl().pathSegments[1]
+
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("abs:href"))
         name = element.selectFirst(".card-body .card-title")!!.text()
@@ -287,7 +263,7 @@ abstract class IkigaiMangas :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         fetchDomainUrl()
 
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select("section div > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
@@ -375,6 +351,29 @@ abstract class IkigaiMangas :
         )
 
         loadUrl(url)
+    }
+
+    private val domainMutex = Mutex()
+    private var domainFetched = false
+
+    private suspend fun fetchDomainUrl() {
+        if (domainFetched || !preferences.fetchDomainPref()) return
+        domainMutex.withLock {
+            if (domainFetched || !preferences.fetchDomainPref()) return
+
+            try {
+                val initClient = network.client
+                val headers = super.headersBuilder().build()
+                val document = initClient.get("https://ikigaimangas.com", headers).asJsoup()
+                val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
+                    ?: return
+                val script = initClient.get("https://ikigaimangas.com/build/$scriptUrl", headers).body.string()
+                val domain = script.substringAfter("i(\"").substringBefore("\"")
+                val host = initClient.get(domain, headers, ensureSuccess = false).use { it.request.url.host }
+                preferences.edit().putString(BASE_URL_PREF, "https://$host").apply()
+                domainFetched = true
+            } catch (_: Exception) {}
+        }
     }
 
     companion object {
