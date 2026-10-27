@@ -5,7 +5,6 @@ import okhttp3.CompressionInterceptor
 import okhttp3.Gzip
 import okhttp3.Headers
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Protocol
@@ -16,11 +15,13 @@ import okhttp3.zstd.Zstd
 import java.util.Locale
 
 /**
- * Adds the headers the browser in a request's `User-Agent` sends for its [RequestKind]: client hints,
- * `Accept-Language`, fetch metadata, `Accept` and `Priority`, and keeps KeiSource's default `Origin` only where
- * browsers send one. Covers the apps load count as images. A request without a kind goes out as built.
+ * Adds the headers Chrome or Firefox, as named in a request's `User-Agent`, sends for its [RequestKind]: client
+ * hints, `Accept-Language`, fetch metadata, `Accept` and `Priority`, and keeps KeiSource's default `Origin` only where
+ * browsers send one. Covers the apps load count as images. Any other request goes out as built, apart from the
+ * `Referer` of [from].
  *
- * Headers a request already has are kept. The page a request comes from is its `Referer`.
+ * Headers a request already has are kept. The page a request comes from is the one given with [from], which replaces
+ * its `Referer` the way browsers send it, else its `Referer`.
  */
 internal class BrowserHeadersInterceptor(
     private val siteUrl: () -> String,
@@ -29,63 +30,73 @@ internal class BrowserHeadersInterceptor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (request.isRaw) return chain.proceed(request)
+        val site = siteUrl().toHttpUrlOrNull()
+        val from = request.tag(FromPage::class.java)
+        val page = from?.let { it.page.toHttpUrlOrNull() ?: site?.resolve(it.page) }
+        val builder = request.newBuilder()
+        if (from != null && page != null) {
+            // This call's own copy: a request or builder can be sent more than once
+            val state = FromPage(from.page).apply {
+                sent = referrer(page, request.url)
+                resolved = true
+            }
+            builder.tag(FromPage::class.java, state).referer(state.sent)
+        }
+        if (site == null) return chain.proceed(builder.build())
+        val userAgent = request.header("User-Agent").orEmpty()
+        val browser = Browser.of(userAgent)
         // The apps' cover requests carry no kind, only the no-store that keeps covers out of the OkHttp cache
         val kind = request.kind
             ?: RequestKind.IMAGE.takeIf { request.method == "GET" && request.header("Cache-Control") == "no-store" && browserImageHeaders() }
-            ?: return chain.proceed(request)
-        val site = siteUrl().toHttpUrl()
-        val initiator = request.header("Referer")?.toHttpUrlOrNull() ?: site
-        val userAgent = request.header("User-Agent").orEmpty()
-        val browser = Browser.of(userAgent)
+        if (kind == null || browser == null) return chain.proceed(builder.build())
+        val initiator = page ?: request.header("Referer")?.toHttpUrlOrNull() ?: site
         // KeiSource's default Origin is ours to keep or drop; one the source set or removed itself stays
-        val ownOrigin = request.header("Origin").let { it == null || it == siteUrl() || it == site.origin() }
-        val builder = request.newBuilder()
+        val ownOrigin = request.header("Origin").let { it == siteUrl() || it == site.origin() }
+        // Fetch metadata the source set itself is left whole
+        val ownFetchMetadata = request.headers.names().none { it.startsWith("Sec-Fetch-", ignoreCase = true) }
+        builder
             .tag(RequestKind::class.java, kind)
-            .tag(Initiator::class.java, Initiator(initiator, request.header("Sec-Fetch-Site") == null, ownOrigin))
+            .tag(Initiator::class.java, Initiator(initiator, ownFetchMetadata, ownOrigin))
         fun fill(name: String, value: String?) {
             if (value != null && request.header(name) == null) builder.header(name, value)
         }
 
-        // A client that doesn't present itself as a browser (an API's own user agent) gets no browser headers
-        val presentsAsBrowser = userAgent.startsWith("Mozilla/")
         // Browsers send fetch metadata and client hints to secure origins only
-        val secure = request.url.isHttps || request.url.host in LOCAL_HOSTS
-        if (presentsAsBrowser) {
-            if (secure) browser?.clientHints(userAgent)?.forEach { (name, value) -> fill(name, value) }
-            fill("Accept-Language", acceptLanguage(deviceLocales()).ifEmpty { null })
-            fill("Accept", browser?.accept(kind))
-            if (secure) {
-                fill("Sec-Fetch-Site", relation(initiator, request.url))
-                fill(
-                    "Sec-Fetch-Mode",
-                    when (kind) {
-                        RequestKind.DOCUMENT -> "navigate"
-                        RequestKind.XHR -> "cors"
-                        else -> "no-cors"
-                    },
-                )
-                if (kind == RequestKind.DOCUMENT) fill("Sec-Fetch-User", "?1")
-                fill(
-                    "Sec-Fetch-Dest",
-                    when (kind) {
-                        RequestKind.DOCUMENT -> "document"
-                        RequestKind.XHR -> "empty"
-                        RequestKind.IMAGE -> "image"
-                        RequestKind.SCRIPT -> "script"
-                        RequestKind.STYLE -> "style"
-                        RequestKind.AUDIO -> "audio"
-                        RequestKind.VIDEO -> "video"
-                    },
-                )
-            }
-            if (kind == RequestKind.DOCUMENT) fill("Upgrade-Insecure-Requests", "1")
-            // Media loads ask for the bytes as stored, from the start
-            if (kind == RequestKind.AUDIO || kind == RequestKind.VIDEO) {
-                fill("Accept-Encoding", "identity")
-                fill("Range", "bytes=0-")
-            }
-            fill("Priority", browser?.priority(kind))
+        val secure = request.url.isSecure()
+        if (secure) browser.clientHints(userAgent).forEach { (name, value) -> fill(name, value) }
+        fill("Accept-Language", acceptLanguage(deviceLocales()).ifEmpty { null })
+        fill("Accept", browser.accept(kind, userAgent))
+        if (secure && ownFetchMetadata) {
+            fill("Sec-Fetch-Site", relation(initiator, request.url))
+            fill(
+                "Sec-Fetch-Mode",
+                when (kind) {
+                    RequestKind.DOCUMENT -> "navigate"
+                    RequestKind.XHR -> "cors"
+                    else -> "no-cors"
+                },
+            )
+            if (kind == RequestKind.DOCUMENT) fill("Sec-Fetch-User", "?1")
+            fill(
+                "Sec-Fetch-Dest",
+                when (kind) {
+                    RequestKind.DOCUMENT -> "document"
+                    RequestKind.XHR -> "empty"
+                    RequestKind.IMAGE -> "image"
+                    RequestKind.SCRIPT -> "script"
+                    RequestKind.STYLE -> "style"
+                    RequestKind.AUDIO -> "audio"
+                    RequestKind.VIDEO -> "video"
+                },
+            )
         }
+        if (kind == RequestKind.DOCUMENT) fill("Upgrade-Insecure-Requests", "1")
+        // Media loads ask for the bytes as stored, from the start
+        if (kind == RequestKind.AUDIO || kind == RequestKind.VIDEO) {
+            fill("Accept-Encoding", "identity")
+            fill("Range", "bytes=0-")
+        }
+        fill("Priority", browser.priority(kind))
         if (ownOrigin) {
             if (sendsOrigin(request.method, kind, initiator, request.url)) {
                 builder.header("Origin", initiator.origin())
@@ -96,7 +107,7 @@ internal class BrowserHeadersInterceptor(
 
         val sent = builder.build()
         // The browser's Accept-Encoding, decoded here; the source client's own stays on requests without a kind
-        if (!presentsAsBrowser || sent.header("Accept-Encoding") != null) return chain.proceed(sent)
+        if (sent.header("Accept-Encoding") != null) return chain.proceed(sent)
         return BROWSER_COMPRESSION.intercept(
             object : Interceptor.Chain by chain {
                 override fun request() = sent
@@ -107,10 +118,14 @@ internal class BrowserHeadersInterceptor(
 
 private val BROWSER_COMPRESSION = CompressionInterceptor(Gzip, Deflate, Brotli, Zstd)
 
-/** The page a request comes from, and whether its `Sec-Fetch-Site` and `Origin` are ours to update on a redirect. */
-internal class Initiator(val url: HttpUrl, val ownSite: Boolean, val ownOrigin: Boolean) {
+/** The page a request comes from, and whether its fetch metadata and `Origin` are ours to update on a redirect. */
+internal class Initiator(val url: HttpUrl, val ownFetchMetadata: Boolean, val ownOrigin: Boolean) {
     // The least related site a redirect chain has passed through, as browsers report it
     var site: String? = null
+
+    // The origin of the previous hop, and whether the chain left it for another (Origin goes out as "null" then)
+    var hopOrigin: String? = null
+    var tainted = false
 }
 
 private fun relation(initiator: HttpUrl, url: HttpUrl): String = when {
@@ -120,6 +135,22 @@ private fun relation(initiator: HttpUrl, url: HttpUrl): String = when {
 }
 
 private val SITES = listOf("same-origin", "same-site", "cross-site")
+
+// The page as browsers send it as Referer by default (strict-origin-when-cross-origin); null when they send none
+private fun referrer(page: HttpUrl, url: HttpUrl): HttpUrl? {
+    val sent = page.newBuilder().username("").password("").fragment(null)
+    return when {
+        page.isHttps && !url.isHttps -> null
+        page.origin() == url.origin() -> sent.build()
+        else -> sent.encodedPath("/").query(null).build()
+    }
+}
+
+private fun Request.Builder.referer(sent: HttpUrl?) {
+    if (sent == null) removeHeader("Referer") else header("Referer", sent.toString())
+}
+
+private fun HttpUrl.isSecure() = isHttps || host in LOCAL_HOSTS
 
 // Browsers send Origin on methods other than GET and HEAD and on cross-origin XHRs
 private fun sendsOrigin(method: String, kind: RequestKind, initiator: HttpUrl, url: HttpUrl) = (method != "GET" && method != "HEAD") || (kind == RequestKind.XHR && initiator.origin() != url.origin())
@@ -132,8 +163,20 @@ private fun sendsOrigin(method: String, kind: RequestKind, initiator: HttpUrl, u
  */
 internal object BrowserHeaderOrderInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (request.isRaw) return chain.proceed(request)
+        val original = chain.request()
+        if (original.isRaw) return chain.proceed(original)
+        val request = original.fromPageHop()
+        val response = send(chain, request)
+        // Every hop of a redirect chain goes over the network, where its headers are worked out
+        val updatesHops = request.tag(Initiator::class.java) != null || request.tag(FromPage::class.java)?.resolved == true
+        return response.newBuilder()
+            // The cache keeps the request as it was before the reordering
+            .request(original)
+            .apply { if (response.isRedirect && updatesHops) header("Cache-Control", "no-store") }
+            .build()
+    }
+
+    private fun send(chain: Interceptor.Chain, request: Request): Response {
         val kind = request.kind ?: return chain.proceed(request)
         val browser = Browser.of(request.header("User-Agent").orEmpty()) ?: return chain.proceed(request)
         val http2 = chain.connection()?.protocol() == Protocol.HTTP_2
@@ -162,27 +205,46 @@ internal object BrowserHeaderOrderInterceptor : Interceptor {
             // Stable: a site's own headers keep the order they were added in
             .sortedBy { (name) -> rank(name) }
         val wire = Headers.Builder().apply { headers.forEach { (name, value) -> add(name, value) } }.build()
-        // The cache keeps the request as it was before the reordering
-        return chain.proceed(request.newBuilder().headers(wire).build()).newBuilder().request(request).build()
+        return chain.proceed(request.newBuilder().headers(wire).build())
     }
 
-    // A redirect hop's Sec-Fetch-Site and Origin as the browser would send them there
+    // The from page's Referer on a redirect hop, trimmed from the one sent before it
+    private fun Request.fromPageHop(): Request {
+        val from = tag(FromPage::class.java)?.takeIf { it.resolved } ?: return this
+        from.sent = from.sent?.let { referrer(it, url) }
+        return newBuilder().apply { referer(from.sent) }.build()
+    }
+
+    // A redirect hop's fetch metadata and Origin as the browser would send them there
     private fun Request.redirectHop(): Request {
         val initiator = tag(Initiator::class.java) ?: return this
         val builder = newBuilder()
-        if (initiator.ownSite && header("Sec-Fetch-Site") != null) {
+        val origin = url.origin()
+        initiator.hopOrigin?.let { previous -> if (previous != initiator.url.origin() && origin != previous) initiator.tainted = true }
+        initiator.hopOrigin = origin
+        if (initiator.ownFetchMetadata && !url.isSecure()) {
+            // Browsers send fetch metadata and client hints to secure origins only
+            headers.names().filter { it.startsWith("Sec-Fetch-", ignoreCase = true) || it.startsWith("Sec-CH-UA", ignoreCase = true) }
+                .forEach { builder.removeHeader(it) }
+        } else if (initiator.ownFetchMetadata && header("Sec-Fetch-Site") != null) {
             val site = listOfNotNull(initiator.site, relation(initiator.url, url)).maxBy(SITES::indexOf)
             initiator.site = site
             builder.header("Sec-Fetch-Site", site)
         }
-        if (initiator.ownOrigin && !sendsOrigin(method, kind!!, initiator.url, url)) builder.removeHeader("Origin")
+        if (initiator.ownOrigin) {
+            if (sendsOrigin(method, kind!!, initiator.url, url)) {
+                builder.header("Origin", if (initiator.tainted) "null" else initiator.url.origin())
+            } else {
+                builder.removeHeader("Origin")
+            }
+        }
         return builder.build()
     }
 }
 
 /** A browser's values per request kind and its header order. */
 internal sealed class Browser {
-    abstract fun accept(kind: RequestKind): String
+    abstract fun accept(kind: RequestKind, userAgent: String): String
     abstract fun priority(kind: RequestKind): String
     open fun clientHints(userAgent: String): Map<String, String> = emptyMap()
 
@@ -197,13 +259,17 @@ internal sealed class Browser {
 
     // Chrome 155
     data object Chrome : Browser() {
-        override fun accept(kind: RequestKind) = when (kind) {
-            RequestKind.DOCUMENT ->
-                "text/html,application/xhtml+xml,application/xml;q=0.9,image/jxl,image/avif,image/webp,image/apng,*/*;q=0.8," +
-                    "application/signed-exchange;v=b3;q=0.7"
-            RequestKind.IMAGE -> "image/jxl,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
-            RequestKind.STYLE -> "text/css,*/*;q=0.1"
-            RequestKind.XHR, RequestKind.SCRIPT, RequestKind.AUDIO, RequestKind.VIDEO -> "*/*"
+        // image/jxl from Chrome 155
+        override fun accept(kind: RequestKind, userAgent: String): String {
+            val jxl = if (chromeVersion(userAgent)!! >= 155) "image/jxl," else ""
+            return when (kind) {
+                RequestKind.DOCUMENT ->
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,${jxl}image/avif,image/webp,image/apng,*/*;q=0.8," +
+                        "application/signed-exchange;v=b3;q=0.7"
+                RequestKind.IMAGE -> "${jxl}image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+                RequestKind.STYLE -> "text/css,*/*;q=0.1"
+                RequestKind.XHR, RequestKind.SCRIPT, RequestKind.AUDIO, RequestKind.VIDEO -> "*/*"
+            }
         }
 
         // Scripts and stylesheets as loaded from the page's head
@@ -249,7 +315,7 @@ internal sealed class Browser {
 
     // Firefox 158
     data object Firefox : Browser() {
-        override fun accept(kind: RequestKind) = when (kind) {
+        override fun accept(kind: RequestKind, userAgent: String) = when (kind) {
             RequestKind.DOCUMENT -> "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
             RequestKind.IMAGE -> "image/avif,image/jxl,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"
             RequestKind.STYLE -> "text/css,*/*;q=0.1"
@@ -343,9 +409,7 @@ private fun deviceLocales(): List<Locale> = try {
 }.ifEmpty { listOf(Locale.getDefault()) }.filter { it.language.isNotEmpty() }
 
 // The OkHttp cache's own directives: core's default max-age, the apps' no-store for covers
-private fun String.isAppCacheDirective() = split(",").map { it.trim().lowercase() }.all {
-    it.startsWith("max-age=") || it.startsWith("max-stale") || it == "no-store"
-}
+private fun String.isAppCacheDirective() = this == DEFAULT_CACHE_CONTROL.toString() || this == "no-store"
 
 // Without OkHttp's public suffix list (Suwayomi, the JVM) the last two labels stand in for it
 private fun HttpUrl.registrableDomain(): String? = try {
@@ -365,6 +429,7 @@ private val JSON_CHARSET = Regex("""(?<=^application/json); ?charset=utf-8$""", 
 
 // Where a page's own headers go in an order
 private const val SITE = "*"
+
 private val CHROMIUM_FORKS = listOf("OPR/", "SamsungBrowser/", "YaBrowser/")
 private val EDGE_VERSION_REGEX = Regex("""EdgA?/(\d+)""")
 private val FIREFOX_VERSION_REGEX = Regex("""Firefox/\d+""")

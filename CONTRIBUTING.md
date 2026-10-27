@@ -621,7 +621,6 @@ Use `keiyoushi.utils.parseAs` to deserialize JSON. It works on `String`, `Respon
 
 ```kotlin
 import keiyoushi.utils.parseAs
-import okhttp3.HttpUrl.Companion.toHttpUrl
 
 // From a Response (uses streaming and consumes the body):
 val dto = response.parseAs<MyDto>()
@@ -784,7 +783,7 @@ all return the `Response`:
 | DevTools filter | Use | For |
 |---|---|---|
 | Doc | `getDocument`, `postDocument` | opening a page; submitting a form |
-| Fetch/XHR | `getXhr`, `postXhr` | JSON APIs, ajax, GraphQL |
+| Fetch/XHR | `getXhr`, `postXhr` | JSON APIs, ajax, GraphQL POSTs (`graphQLGet` sends as built) |
 | Img | `getImage` | images (page images and covers are already sent as images) |
 | JS | `getScript` | reading a script, e.g. for an API key |
 | CSS | `getStyle` | reading a stylesheet |
@@ -815,10 +814,13 @@ val response = client.postXhr("$baseUrl/api/search", apiHeaders, body)
 - `ensureSuccess` (default `true`) throws if the response isn't 2xx; pass `ensureSuccess = false` to inspect non-2xx
   responses yourself.
 - The GET ones also take a `cacheControl` (defaults to a 10-minute max-age).
+- `from` is the page the request comes from, e.g. `client.getXhr(url, from = getChapterUrl(chapter))` for the chapter
+  reader's calls; a path is resolved against `baseUrl`. It goes out as `Referer` the way browsers send it.
 - Always wrap the returned `Response` in `response.use { ... }` or consume it with `parseAs`/`asJsoup`, which close it
   for you.
 - They send the headers a browser sends for that kind of request (see [Browser headers](#browser-headers)). With a
-  `User-Agent` that isn't a browser's (an app's own API client) they add no browser headers, so use them there too.
+  `User-Agent` that names neither Chrome nor Firefox (an app's own API client) they add no browser headers, so use them
+  there too.
 - `get` and `post` are deprecated. `getRaw`/`postRaw` send the request as built, without browser headers; only use
   them when the site rejects browser headers on that request. `put` and `head` send the request as built too.
 
@@ -1391,14 +1393,18 @@ Behavior `KeiSource` gives you for free:
 - **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash) and `Origin` to
   `baseUrl`; override `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
 - <a id="browser-headers"></a>**Browser headers:** a request made with one of the
-  [HTTP request helpers](#http-requests---getdocument--getxhr--getimage) gets the headers the browser in its
-  `User-Agent` sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept` and
-  `Priority`, and the default `Origin` only where browsers send one. On a `Request.Builder` the kinds are
-  `forDocument()`, `forXhr()` and so on. Page images (GETs from `getImageRequest`) and the covers the app loads are
-  sent as images; set `browserImageHeaders = false` if the image host rejects those headers. The app's covers are
-  recognised by their `Cache-Control: no-store`, so don't put that on your own requests. A request without a kind,
-  or marked `raw()`, goes out as built. The page a request comes from is its `Referer`, and headers a request already
-  has are kept.
+  [HTTP request helpers](#http-requests---getdocument--getxhr--getimage), with a `User-Agent` naming Chrome or Firefox, gets
+  the headers that browser sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept`,
+  `Priority`, and the default `Origin` only where browsers send one. Any other request goes out as built, apart from the
+  `Referer` of `from`.
+  - On a `Request.Builder` the kinds are `forDocument()`, `forXhr()` and so on, and `from(page)` sets the page. In an
+    interceptor, change a request with `request.newBuilder()`; a new `Request.Builder()` drops its kind and `from`.
+  - Page images (GETs from `getImageRequest`) and the covers the app loads are sent as images; set
+    `browserImageHeaders = false` if the image host rejects those headers. The app's covers are recognised by their
+    `Cache-Control: no-store`, so don't put that on your own requests.
+  - Headers a request already has are kept: fetch metadata the source sets itself is left whole, and a request without
+    `Origin` gets none. `from` replaces the `Referer`, also on each redirect.
+  - `raw()` (or `getRaw`/`postRaw`) sends a request as built.
 - **Filter fetching:** if a source needs to fetch its filter options from the network, set
   `supportsFilterFetching = true`, implement `fetchFilterData()` (returns the raw filter data as a
   `JsonElement`, called on a background coroutine, attempted up to 3 times total on failure, and
@@ -1608,7 +1614,7 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 - **Media Types:** `application/json` is intrinsically UTF-8. Avoid using `application/json; charset=utf-8`. Prefer helper functions like `toJsonRequestBody()` instead of manually specifying media types (e.g., `"application/json".toMediaType()`).
 - **`setUrlWithoutDomain()` already URL-encodes spaces:** It replaces literal spaces with `%20` internally before parsing the URL, so you do not need to encode them yourself. Other invalid URI characters, however, make it silently fall back to the full original URL (domain included) instead of stripping it - double-check unusual scraped URLs so a malformed one doesn't silently defeat future domain migrations.
 - **Manga/chapter URLs:** Prefer storing just the ID or slug in `SManga.url` and `SChapter.url`. Storing the relative URL with `setUrlWithoutDomain()` is also acceptable. Avoid absolute URLs to make future domain migrations easier.
-- **Separate custom headers:** When adding custom headers to a request (e.g., for AJAX endpoints), avoid building them inline within a `client.get`/`client.post` call. Instead, assign the modified headers to a separate variable or define them as a class-level property. This improves readability and allows for reuse across multiple requests.
+- **Separate custom headers:** When adding custom headers to a request (e.g., for AJAX endpoints), avoid building them inline within a `client.getXhr`/`client.postXhr` call. Instead, assign the modified headers to a separate variable or define them as a class-level property. This improves readability and allows for reuse across multiple requests.
 - **Configurable sources:** By implementing `ConfigurableSource`, you can add settings backed by `SharedPreferences`.
 - **Code organization:** For readability, group related methods together in your extension class (e.g., all popular manga methods, then all latest manga methods, then search methods, and so on). A logical ordering like Popular → Latest → Search → Details → Chapters → Pages → Filters → Utilities makes the class easier to navigate and maintain without needing explicit section header comments.
 - **DTO extensions:** Move mapping extensions for DTOs (like `fun MyDto.toSManga()`) into the DTO file itself to keep the main source class clean.

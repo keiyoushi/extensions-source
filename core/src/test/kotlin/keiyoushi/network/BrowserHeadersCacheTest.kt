@@ -28,6 +28,17 @@ class BrowserHeadersCacheTest {
     private val hits = ConcurrentHashMap<String, AtomicInteger>()
     private val conditional = ConcurrentHashMap<String, String>()
     private val seen = ConcurrentHashMap<String, com.sun.net.httpserver.Headers>()
+
+    // Another origin: the same host on another port
+    private val thirdSeen = ConcurrentHashMap<String, com.sun.net.httpserver.Headers>()
+    private val third = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+        createContext("/") { exchange ->
+            thirdSeen[exchange.requestURI.path] = exchange.requestHeaders
+            exchange.sendResponseHeaders(200, -1)
+            exchange.close()
+        }
+        start()
+    }
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         createContext("/") { exchange ->
             val path = exchange.requestURI.path
@@ -53,6 +64,14 @@ class BrowserHeadersCacheTest {
                 "/to-other-site" -> 302.also { out.add("Location", "http://127.0.0.1:${address.port}/landed") }
                 "/form" -> 303.also { out.add("Location", "/landed") }
                 "/landed" -> 200
+                "/to-other-then-back" -> 302.also { out.add("Location", "http://127.0.0.1:${address.port}/back") }
+                "/back" -> 302.also { out.add("Location", "http://localhost:${address.port}/landed") }
+                "/cached-hop" -> 301.also {
+                    out.add("Cache-Control", "max-age=600")
+                    out.add("Location", "http://localhost:${address.port}/landed")
+                }
+                "/to-cached-hop" -> 302.also { out.add("Location", "http://127.0.0.1:${address.port}/cached-hop") }
+                "/to-third" -> 302.also { out.add("Location", "http://127.0.0.1:${third.address.port}/landed") }
                 "/etag" -> if (exchange.requestHeaders.getFirst("If-None-Match") == "\"1\"") {
                     304
                 } else {
@@ -89,12 +108,14 @@ class BrowserHeadersCacheTest {
     @After
     fun tearDown() {
         server.stop(0)
+        third.stop(0)
         cacheDir.deleteRecursively()
     }
 
     private fun request(path: String) = Request.Builder().url("$base$path")
         .header("User-Agent", ua)
         .header("Referer", "$base/")
+        .header("Origin", base)
 
     private fun call(request: Request): Response = client.newCall(request).execute().also { it.body.string() }
 
@@ -137,6 +158,9 @@ class BrowserHeadersCacheTest {
         call(request("/form").forDocument().post(form).build())
         assertNull(seen["/landed"]!!.getFirst("Origin"))
         assertNotNull(seen["/form"]!!.getFirst("Origin"))
+        // A cross-origin hop of a page's fetch carries Origin, though the first request didn't
+        call(request("/to-other-site").forXhr().build())
+        assertEquals(base, seen["/landed"]!!.getFirst("Origin"))
     }
 
     @Test
@@ -145,6 +169,42 @@ class BrowserHeadersCacheTest {
         assertEquals("br,gzip,zstd", seen["/landed"]!!.getFirst("Accept-Encoding").replace(" ", ""))
         call(request("/landed").forXhr().build())
         assertEquals("gzip,deflate,br,zstd", seen["/landed"]!!.getFirst("Accept-Encoding").replace(" ", ""))
+    }
+
+    @Test
+    fun fromPageAcrossRedirects() {
+        // localhost -> 127.0.0.1 -> back to localhost: trimmed to the origin once, it stays trimmed
+        call(request("/to-other-then-back").forXhr().from("$base/series/1?x=1").build())
+        assertEquals("$base/", seen["/back"]!!.getFirst("Referer"))
+        assertEquals("$base/", seen["/landed"]!!.getFirst("Referer"))
+        // Without a kind too
+        call(request("/to-other-site").from("$base/series/1?x=1").build())
+        assertEquals("$base/", seen["/landed"]!!.getFirst("Referer"))
+    }
+
+    @Test
+    fun fromPageStatePerCall() {
+        // One builder sent twice: each call trims its own Referer
+        val builder = request("/to-other-then-back").forXhr().from("$base/series/1?x=1")
+        call(builder.build())
+        call(builder.url("$base/landed").build())
+        assertEquals("$base/series/1?x=1", seen["/landed"]!!.getFirst("Referer"))
+        call(builder.url("$base/to-other-then-back").build())
+        assertEquals("$base/", seen["/landed"]!!.getFirst("Referer"))
+    }
+
+    @Test
+    fun redirectHopsGoOverTheNetwork() {
+        // The cacheable 301 in the middle is fetched again, so the last hop's Referer stays trimmed
+        repeat(2) { call(request("/to-cached-hop").forXhr().from("$base/series/1?x=1").build()) }
+        assertEquals(2, hits["/cached-hop"]!!.get())
+        assertEquals("$base/", seen["/landed"]!!.getFirst("Referer"))
+    }
+
+    @Test
+    fun originNullAfterTwoCrossOriginHops() {
+        call(Request.Builder().url("http://127.0.0.1:${server.address.port}/to-third").header("User-Agent", ua).header("Referer", "$base/").header("Origin", base).forXhr().build())
+        assertEquals("null", thirdSeen["/landed"]!!.getFirst("Origin"))
     }
 
     @Test

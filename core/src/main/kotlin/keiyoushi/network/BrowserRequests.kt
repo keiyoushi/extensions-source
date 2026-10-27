@@ -46,6 +46,23 @@ internal object RawRequest
 /** Marks the request to go out as built, without the headers a browser adds. See [getRaw]. */
 fun Request.Builder.raw(): Request.Builder = tag(RawRequest::class.java, RawRequest)
 
+/** The page a request comes from, see [from], and the `Referer` last sent for it on a redirect chain. */
+internal class FromPage(val page: String) {
+    @Volatile var resolved = false
+
+    @Volatile var sent: HttpUrl? = null
+}
+
+/**
+ * Marks the request as coming from [page], e.g. the chapter page for the reader's calls; a path is resolved against
+ * `baseUrl`. It goes out as `Referer` the way browsers send it: in full to the same origin, as the origin
+ * elsewhere, and not at all from https to http.
+ */
+fun Request.Builder.from(page: String): Request.Builder = tag(FromPage::class.java, FromPage(page))
+
+/** Marks the request as coming from [page], see [from]. */
+fun Request.Builder.from(page: HttpUrl): Request.Builder = from(page.toString())
+
 internal val Request.kind: RequestKind? get() = tag(RequestKind::class.java)
 
 internal val Request.isRaw: Boolean get() = tag(RawRequest::class.java) != null
@@ -56,7 +73,8 @@ suspend fun OkHttpClient.getDocument(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forDocument(), ensureSuccess)
+    from: String? = null,
+): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forDocument(), ensureSuccess, from)
 
 /** GETs a page the way a browser opens it. Shows under Doc in DevTools' Network tab. */
 suspend fun OkHttpClient.getDocument(
@@ -64,7 +82,8 @@ suspend fun OkHttpClient.getDocument(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getDocument(url.toHttpUrl(), headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getDocument(url.toHttpUrl(), headers, cacheControl, ensureSuccess, from)
 
 /** GETs a page the way a browser opens it. Shows under Doc in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -72,7 +91,8 @@ suspend fun OkHttpClient.getDocument(
     url: HttpUrl,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getDocument(url, source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getDocument(url, source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs a page the way a browser opens it. Shows under Doc in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -80,7 +100,8 @@ suspend fun OkHttpClient.getDocument(
     url: String,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getDocument(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getDocument(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs the way the page's own `fetch()`/XHR does: JSON APIs, ajax. Shows under Fetch/XHR in DevTools' Network tab. */
 suspend fun OkHttpClient.getXhr(
@@ -88,7 +109,8 @@ suspend fun OkHttpClient.getXhr(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forXhr(), ensureSuccess)
+    from: String? = null,
+): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forXhr(), ensureSuccess, from)
 
 /** GETs the way the page's own `fetch()`/XHR does: JSON APIs, ajax. Shows under Fetch/XHR in DevTools' Network tab. */
 suspend fun OkHttpClient.getXhr(
@@ -96,7 +118,8 @@ suspend fun OkHttpClient.getXhr(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getXhr(url.toHttpUrl(), headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getXhr(url.toHttpUrl(), headers, cacheControl, ensureSuccess, from)
 
 /** GETs the way the page's own `fetch()`/XHR does: JSON APIs, ajax. Shows under Fetch/XHR in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -104,7 +127,8 @@ suspend fun OkHttpClient.getXhr(
     url: HttpUrl,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getXhr(url, source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getXhr(url, source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs the way the page's own `fetch()`/XHR does: JSON APIs, ajax. Shows under Fetch/XHR in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -112,7 +136,8 @@ suspend fun OkHttpClient.getXhr(
     url: String,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getXhr(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getXhr(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs an image the way a browser's `<img>` does. Shows under Img in DevTools' Network tab. */
 suspend fun OkHttpClient.getImage(
@@ -120,7 +145,8 @@ suspend fun OkHttpClient.getImage(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forImage(), ensureSuccess)
+    from: String? = null,
+): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forImage(), ensureSuccess, from)
 
 /** GETs an image the way a browser's `<img>` does. Shows under Img in DevTools' Network tab. */
 suspend fun OkHttpClient.getImage(
@@ -128,7 +154,8 @@ suspend fun OkHttpClient.getImage(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getImage(url.toHttpUrl(), headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getImage(url.toHttpUrl(), headers, cacheControl, ensureSuccess, from)
 
 /** GETs an image the way a browser's `<img>` does. Shows under Img in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -136,7 +163,8 @@ suspend fun OkHttpClient.getImage(
     url: HttpUrl,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getImage(url, source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getImage(url, source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs an image the way a browser's `<img>` does. Shows under Img in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -144,7 +172,8 @@ suspend fun OkHttpClient.getImage(
     url: String,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getImage(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getImage(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs a script the way a browser's `<script>` does. Shows under JS in DevTools' Network tab. */
 suspend fun OkHttpClient.getScript(
@@ -152,7 +181,8 @@ suspend fun OkHttpClient.getScript(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forScript(), ensureSuccess)
+    from: String? = null,
+): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forScript(), ensureSuccess, from)
 
 /** GETs a script the way a browser's `<script>` does. Shows under JS in DevTools' Network tab. */
 suspend fun OkHttpClient.getScript(
@@ -160,7 +190,8 @@ suspend fun OkHttpClient.getScript(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getScript(url.toHttpUrl(), headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getScript(url.toHttpUrl(), headers, cacheControl, ensureSuccess, from)
 
 /** GETs a script the way a browser's `<script>` does. Shows under JS in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -168,7 +199,8 @@ suspend fun OkHttpClient.getScript(
     url: HttpUrl,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getScript(url, source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getScript(url, source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs a script the way a browser's `<script>` does. Shows under JS in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -176,7 +208,8 @@ suspend fun OkHttpClient.getScript(
     url: String,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getScript(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getScript(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs a stylesheet the way a browser's `<link rel=stylesheet>` does. Shows under CSS in DevTools' Network tab. */
 suspend fun OkHttpClient.getStyle(
@@ -184,7 +217,8 @@ suspend fun OkHttpClient.getStyle(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forStyle(), ensureSuccess)
+    from: String? = null,
+): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forStyle(), ensureSuccess, from)
 
 /** GETs a stylesheet the way a browser's `<link rel=stylesheet>` does. Shows under CSS in DevTools' Network tab. */
 suspend fun OkHttpClient.getStyle(
@@ -192,7 +226,8 @@ suspend fun OkHttpClient.getStyle(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getStyle(url.toHttpUrl(), headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getStyle(url.toHttpUrl(), headers, cacheControl, ensureSuccess, from)
 
 /** GETs a stylesheet the way a browser's `<link rel=stylesheet>` does. Shows under CSS in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -200,7 +235,8 @@ suspend fun OkHttpClient.getStyle(
     url: HttpUrl,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getStyle(url, source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getStyle(url, source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs a stylesheet the way a browser's `<link rel=stylesheet>` does. Shows under CSS in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -208,7 +244,8 @@ suspend fun OkHttpClient.getStyle(
     url: String,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getStyle(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getStyle(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs audio the way a browser's `<audio>` does. Shows under Media in DevTools' Network tab. */
 suspend fun OkHttpClient.getAudio(
@@ -216,7 +253,8 @@ suspend fun OkHttpClient.getAudio(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forAudio(), ensureSuccess)
+    from: String? = null,
+): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forAudio(), ensureSuccess, from)
 
 /** GETs audio the way a browser's `<audio>` does. Shows under Media in DevTools' Network tab. */
 suspend fun OkHttpClient.getAudio(
@@ -224,7 +262,8 @@ suspend fun OkHttpClient.getAudio(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getAudio(url.toHttpUrl(), headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getAudio(url.toHttpUrl(), headers, cacheControl, ensureSuccess, from)
 
 /** GETs audio the way a browser's `<audio>` does. Shows under Media in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -232,7 +271,8 @@ suspend fun OkHttpClient.getAudio(
     url: HttpUrl,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getAudio(url, source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getAudio(url, source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs audio the way a browser's `<audio>` does. Shows under Media in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -240,7 +280,8 @@ suspend fun OkHttpClient.getAudio(
     url: String,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getAudio(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getAudio(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs video the way a browser's `<video>` does. Shows under Media in DevTools' Network tab. */
 suspend fun OkHttpClient.getVideo(
@@ -248,7 +289,8 @@ suspend fun OkHttpClient.getVideo(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forVideo(), ensureSuccess)
+    from: String? = null,
+): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).forVideo(), ensureSuccess, from)
 
 /** GETs video the way a browser's `<video>` does. Shows under Media in DevTools' Network tab. */
 suspend fun OkHttpClient.getVideo(
@@ -256,7 +298,8 @@ suspend fun OkHttpClient.getVideo(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getVideo(url.toHttpUrl(), headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getVideo(url.toHttpUrl(), headers, cacheControl, ensureSuccess, from)
 
 /** GETs video the way a browser's `<video>` does. Shows under Media in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -264,7 +307,8 @@ suspend fun OkHttpClient.getVideo(
     url: HttpUrl,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getVideo(url, source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getVideo(url, source.headers, cacheControl, ensureSuccess, from)
 
 /** GETs video the way a browser's `<video>` does. Shows under Media in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -272,18 +316,18 @@ suspend fun OkHttpClient.getVideo(
     url: String,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = getVideo(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess)
+    from: String? = null,
+): Response = getVideo(url.toHttpUrl(), source.headers, cacheControl, ensureSuccess, from)
 
-/** GETs as built, with the source's headers (KeiSource's default `Origin` included) and nothing a
- * browser adds. For a request the site rejects with browser headers. */
+/** GETs as built, with nothing a browser adds; KeiSource's default `Origin` stays. For a request the site rejects with browser headers. */
 suspend fun OkHttpClient.getRaw(
     url: HttpUrl,
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).raw(), ensureSuccess)
+): Response = send(Request.Builder().url(url).headers(headers).cacheControl(cacheControl).raw(), ensureSuccess, null)
 
-/** GETs without the headers a browser adds (client hints, fetch metadata, `Origin`, browser header order). */
+/** GETs as built, with nothing a browser adds; KeiSource's default `Origin` stays. */
 suspend fun OkHttpClient.getRaw(
     url: String,
     headers: Headers,
@@ -291,7 +335,7 @@ suspend fun OkHttpClient.getRaw(
     ensureSuccess: Boolean = true,
 ): Response = getRaw(url.toHttpUrl(), headers, cacheControl, ensureSuccess)
 
-/** GETs without the headers a browser adds (client hints, fetch metadata, `Origin`, browser header order). With the source's headers. */
+/** GETs as built, with nothing a browser adds; KeiSource's default `Origin` stays. With the source's headers. */
 context(source: HttpSource)
 suspend fun OkHttpClient.getRaw(
     url: HttpUrl,
@@ -299,7 +343,7 @@ suspend fun OkHttpClient.getRaw(
     ensureSuccess: Boolean = true,
 ): Response = getRaw(url, source.headers, cacheControl, ensureSuccess)
 
-/** GETs without the headers a browser adds (client hints, fetch metadata, `Origin`, browser header order). With the source's headers. */
+/** GETs as built, with nothing a browser adds; KeiSource's default `Origin` stays. With the source's headers. */
 context(source: HttpSource)
 suspend fun OkHttpClient.getRaw(
     url: String,
@@ -313,7 +357,8 @@ suspend fun OkHttpClient.postDocument(
     headers: Headers,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).post(body).forDocument(), ensureSuccess)
+    from: String? = null,
+): Response = send(Request.Builder().url(url).headers(headers).post(body).forDocument(), ensureSuccess, from)
 
 /** POSTs the way a browser submits a form. Shows under Doc in DevTools' Network tab. */
 suspend fun OkHttpClient.postDocument(
@@ -321,7 +366,8 @@ suspend fun OkHttpClient.postDocument(
     headers: Headers,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = postDocument(url.toHttpUrl(), headers, body, ensureSuccess)
+    from: String? = null,
+): Response = postDocument(url.toHttpUrl(), headers, body, ensureSuccess, from)
 
 /** POSTs the way a browser submits a form. Shows under Doc in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -329,7 +375,8 @@ suspend fun OkHttpClient.postDocument(
     url: HttpUrl,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = postDocument(url, source.headers, body, ensureSuccess)
+    from: String? = null,
+): Response = postDocument(url, source.headers, body, ensureSuccess, from)
 
 /** POSTs the way a browser submits a form. Shows under Doc in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -337,7 +384,8 @@ suspend fun OkHttpClient.postDocument(
     url: String,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = postDocument(url.toHttpUrl(), source.headers, body, ensureSuccess)
+    from: String? = null,
+): Response = postDocument(url.toHttpUrl(), source.headers, body, ensureSuccess, from)
 
 /** POSTs the way the page's own `fetch()`/XHR does: JSON APIs, ajax. Shows under Fetch/XHR in DevTools' Network tab. */
 suspend fun OkHttpClient.postXhr(
@@ -345,7 +393,8 @@ suspend fun OkHttpClient.postXhr(
     headers: Headers,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).post(body).forXhr(), ensureSuccess)
+    from: String? = null,
+): Response = send(Request.Builder().url(url).headers(headers).post(body).forXhr(), ensureSuccess, from)
 
 /** POSTs the way the page's own `fetch()`/XHR does: JSON APIs, ajax. Shows under Fetch/XHR in DevTools' Network tab. */
 suspend fun OkHttpClient.postXhr(
@@ -353,7 +402,8 @@ suspend fun OkHttpClient.postXhr(
     headers: Headers,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = postXhr(url.toHttpUrl(), headers, body, ensureSuccess)
+    from: String? = null,
+): Response = postXhr(url.toHttpUrl(), headers, body, ensureSuccess, from)
 
 /** POSTs the way the page's own `fetch()`/XHR does: JSON APIs, ajax. Shows under Fetch/XHR in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -361,7 +411,8 @@ suspend fun OkHttpClient.postXhr(
     url: HttpUrl,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = postXhr(url, source.headers, body, ensureSuccess)
+    from: String? = null,
+): Response = postXhr(url, source.headers, body, ensureSuccess, from)
 
 /** POSTs the way the page's own `fetch()`/XHR does: JSON APIs, ajax. Shows under Fetch/XHR in DevTools' Network tab. With the source's headers. */
 context(source: HttpSource)
@@ -369,18 +420,18 @@ suspend fun OkHttpClient.postXhr(
     url: String,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = postXhr(url.toHttpUrl(), source.headers, body, ensureSuccess)
+    from: String? = null,
+): Response = postXhr(url.toHttpUrl(), source.headers, body, ensureSuccess, from)
 
-/** POSTs as built, with the source's headers (KeiSource's default `Origin` included) and nothing a
- * browser adds. For a request the site rejects with browser headers. */
+/** POSTs as built, with nothing a browser adds; KeiSource's default `Origin` stays. For a request the site rejects with browser headers. */
 suspend fun OkHttpClient.postRaw(
     url: HttpUrl,
     headers: Headers,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response = send(Request.Builder().url(url).headers(headers).post(body).raw(), ensureSuccess)
+): Response = send(Request.Builder().url(url).headers(headers).post(body).raw(), ensureSuccess, null)
 
-/** POSTs without the headers a browser adds (client hints, fetch metadata, `Origin`, browser header order). */
+/** POSTs as built, with nothing a browser adds; KeiSource's default `Origin` stays. */
 suspend fun OkHttpClient.postRaw(
     url: String,
     headers: Headers,
@@ -388,7 +439,7 @@ suspend fun OkHttpClient.postRaw(
     ensureSuccess: Boolean = true,
 ): Response = postRaw(url.toHttpUrl(), headers, body, ensureSuccess)
 
-/** POSTs without the headers a browser adds (client hints, fetch metadata, `Origin`, browser header order). With the source's headers. */
+/** POSTs as built, with nothing a browser adds; KeiSource's default `Origin` stays. With the source's headers. */
 context(source: HttpSource)
 suspend fun OkHttpClient.postRaw(
     url: HttpUrl,
@@ -396,7 +447,7 @@ suspend fun OkHttpClient.postRaw(
     ensureSuccess: Boolean = true,
 ): Response = postRaw(url, source.headers, body, ensureSuccess)
 
-/** POSTs without the headers a browser adds (client hints, fetch metadata, `Origin`, browser header order). With the source's headers. */
+/** POSTs as built, with nothing a browser adds; KeiSource's default `Origin` stays. With the source's headers. */
 context(source: HttpSource)
 suspend fun OkHttpClient.postRaw(
     url: String,
@@ -404,7 +455,8 @@ suspend fun OkHttpClient.postRaw(
     ensureSuccess: Boolean = true,
 ): Response = postRaw(url.toHttpUrl(), source.headers, body, ensureSuccess)
 
-private suspend fun OkHttpClient.send(request: Request.Builder, ensureSuccess: Boolean): Response {
+private suspend fun OkHttpClient.send(request: Request.Builder, ensureSuccess: Boolean, from: String?): Response {
+    if (from != null) request.from(from)
     val call = newCall(request.build())
     return if (ensureSuccess) call.awaitSuccess() else call.await()
 }

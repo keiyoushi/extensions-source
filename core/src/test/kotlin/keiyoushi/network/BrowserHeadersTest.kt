@@ -123,17 +123,16 @@ class BrowserHeadersTest {
     }
 
     @Test
-    fun otherBrowsersGetTheCommonHeaders() {
+    fun otherClientsGoOutAsBuilt() {
         val safari = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-        val sent = intercept(builder("https://a.test/series/1", ua = safari).forDocument().build())
-        assertNull(sent.header("Accept"))
-        assertNull(sent.header("Priority"))
-        assertEquals("navigate", sent.header("Sec-Fetch-Mode"))
+        val request = builder("https://a.test/series/1", ua = safari).forDocument().build()
+        assertEquals(request.headers, intercept(request).headers)
     }
 
     @Test
     fun nonBrowserClientsGetNoBrowserHeaders() {
         val sent = intercept(builder("https://api.a.test/list", ua = "Tachiyomi Dalvik/2.1.0").forXhr().build())
+        assertEquals("https://a.test", sent.header("Origin"))
         assertNull(sent.header("Accept-Language"))
         assertNull(sent.header("Sec-Fetch-Mode"))
         assertNull(sent.header("Accept"))
@@ -219,6 +218,65 @@ class BrowserHeadersTest {
     }
 
     @Test
+    fun removedOriginStaysRemoved() {
+        val sent = intercept(builder("https://a.test/api/search", referer = "https://a.test/").removeHeader("Origin").forXhr().post(json()).build())
+        assertNull(sent.header("Origin"))
+    }
+
+    @Test
+    fun fromPageIsSentAsBrowsersDo() {
+        val sameOrigin = intercept(builder("https://a.test/api/pages").forXhr().from("https://a.test/series/1/2#p3").build())
+        assertEquals("https://a.test/series/1/2", sameOrigin.header("Referer"))
+        assertEquals("same-origin", sameOrigin.header("Sec-Fetch-Site"))
+        val crossSite = intercept(builder("https://cdn.b.test/1.jpg").forImage().from("https://a.test/series/1/2").build())
+        assertEquals("https://a.test/", crossSite.header("Referer"))
+        assertEquals("cross-site", crossSite.header("Sec-Fetch-Site"))
+        assertNull(intercept(builder("http://cdn.b.test/1.jpg").forImage().from("https://a.test/series/1/2").build()).header("Referer"))
+        // Paths are taken from the site, and non-ASCII pages are encoded
+        assertEquals("https://a.test/series/1/2", intercept(builder("https://a.test/api").forXhr().from("/series/1/2").build()).header("Referer"))
+        assertEquals("https://a.test/", intercept(builder("https://cdn.b.test/1.jpg").forImage().from("/series/1/2").build()).header("Referer"))
+        assertEquals("https://a.test/%E6%BC%AB%E7%94%BB/1", intercept(builder("https://a.test/api").forXhr().from("https://a.test/漫画/1").build()).header("Referer"))
+        // Without a kind too
+        assertEquals("https://a.test/", intercept(builder("https://cdn.b.test/1.jpg").from("https://a.test/series/1/2").build()).header("Referer"))
+        // A Referer the source set itself is kept
+        val own = intercept(builder("https://cdn.b.test/1.jpg", referer = "https://a.test/series/1/2").forImage().build())
+        assertEquals("https://a.test/series/1/2", own.header("Referer"))
+    }
+
+    @Test
+    fun sourceCacheControlIsKept() {
+        val sent = intercept(builder("https://a.test/", referer = "https://a.test/").forDocument().cacheControl(CacheControl.FORCE_NETWORK).build(), wireOrder = true)
+        assertEquals("no-cache", sent.header("Cache-Control"))
+    }
+
+    @Test
+    fun sourceMaxAgeIsKept() {
+        val sent = intercept(builder("https://a.test/", referer = "https://a.test/").forDocument().cacheControl(CacheControl.Builder().maxAge(0, java.util.concurrent.TimeUnit.SECONDS).build()).build(), wireOrder = true)
+        assertEquals("max-age=0", sent.header("Cache-Control"))
+    }
+
+    @Test
+    fun absoluteFromWithoutSite() {
+        val sent = intercept(builder("https://cdn.b.test/1.jpg").forImage().from("https://a.test/series/1/2").build(), site = "")
+        assertEquals("https://a.test/", sent.header("Referer"))
+    }
+
+    @Test
+    fun sourceFetchMetadataIsLeftWhole() {
+        val sent = intercept(builder("https://cdn.b.test/1.jpg", referer = "https://a.test/").header("Sec-Fetch-Dest", "empty").forImage().build())
+        assertEquals("empty", sent.header("Sec-Fetch-Dest"))
+        assertNull(sent.header("Sec-Fetch-Mode"))
+        assertNull(sent.header("Sec-Fetch-Site"))
+    }
+
+    @Test
+    fun jxlOnlyFromChrome155() {
+        val chrome149 = chromeUa.replace("Chrome/155", "Chrome/149")
+        val sent = intercept(builder("https://a.test/1.jpg", ua = chrome149).forImage().build())
+        assertEquals("image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8", sent.header("Accept"))
+    }
+
+    @Test
     fun imageHeadersCanBeTurnedOff() {
         val cover = builder("https://cdn.a.test/c.jpg").cacheControl(CacheControl.Builder().noStore().build()).build()
         assertEquals(cover.headers, intercept(cover, images = false).headers)
@@ -260,10 +318,10 @@ class BrowserHeadersTest {
         .apply { referer?.let { header("Referer", it) } }
 
     // The request as sent: with the wire order pass it's HTTP/1.1, as a unit test has no connection
-    private fun intercept(request: Request, wireOrder: Boolean = false, images: Boolean = true): Request {
+    private fun intercept(request: Request, wireOrder: Boolean = false, images: Boolean = true, site: String = "https://a.test"): Request {
         var sent: Request? = null
         val client = OkHttpClient.Builder()
-            .addInterceptor(BrowserHeadersInterceptor({ "https://a.test" }, { images }))
+            .addInterceptor(BrowserHeadersInterceptor({ site }, { images }))
             .apply { if (wireOrder) addInterceptor(BrowserHeaderOrderInterceptor) }
             .addInterceptor { chain ->
                 sent = chain.request()
