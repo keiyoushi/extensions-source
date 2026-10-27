@@ -15,7 +15,6 @@ keiyoushi {
             lang = it
             baseUrl {
                 mirrors(
-                    "https://kagane.si",
                     "https://kagane.cx",
                     "https://kagane.moe",
                     "https://kagane.net",
