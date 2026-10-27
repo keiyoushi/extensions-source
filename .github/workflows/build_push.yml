@@ -210,7 +210,7 @@ jobs:
           GH_TOKEN: ${{ secrets.BOT_PAT }}
         run: |
           cd repo
-          pip install protobuf
+          python -m pip install --user --upgrade protobuf
           python -u ../main/.github/scripts/publish-repo.py "$DELETE" "$GITHUB_SHA" "$FULL_REBUILD"
           git config --global user.email "156378334+keiyoushi-bot@users.noreply.github.com"
           git config --global user.name "keiyoushi-bot"
