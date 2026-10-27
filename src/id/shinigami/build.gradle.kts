@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Shinigami"
-    versionCode = 83
+    versionCode = 84
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
