@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.vinetheme
 
-import android.os.Handler
-import android.os.Looper
-import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -14,19 +11,19 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import kotlin.collections.isNotEmpty
 
 abstract class VineTheme :
     KeiSource(),
@@ -36,50 +33,9 @@ abstract class VineTheme :
 
     private val rscHeaders: Headers get() = headersBuilder().set("rsc", "1").build()
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = HIDE_LOCKED_PREF
-            title = "Hide locked chapters"
-            summary = "Hide chapters that require coins to read"
-            setDefaultValue(true)
-        }.also(screen::addPreference)
-    }
-
-    companion object {
-        private const val HIDE_LOCKED_PREF = "pref_hide_locked_chapters"
-    }
-
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    private fun runOnMain(block: () -> Unit) {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            block()
-        } else {
-            mainHandler.post(block)
-        }
-    }
-
-    private fun showToast(message: String) = runOnMain {
-        Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
-    }
-
-    // ------------------------- Browse (Popular) -------------------------
-
     override suspend fun getPopularManga(page: Int): MangasPage = getApiMangasPage(page, "popular")
 
-    // ------------------------- Latest -------------------------
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = getApiMangasPage(page, "updated")
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) error("Unsupported url")
-        val slug = url.pathSegments.getOrNull(2) ?: return null
-        if (url.pathSegments.getOrNull(3) == "chapter") return null
-        val detail = client.get("$baseUrl/series/comic/$slug", headers = rscHeaders)
-            .extractNextJs<DetailDto>(DetailDto::nextJsFilter)
-            ?: return null
-        return detail.series.toSManga(baseUrl, fallbackSlug = slug)
-    }
 
     private suspend fun getApiMangasPage(page: Int, sort: String): MangasPage {
         val url = "$baseUrl/api/series".toHttpUrl().newBuilder()
@@ -91,8 +47,6 @@ abstract class VineTheme :
         val data = client.get(url).parseAs<ApiSeriesResponse>()
         return MangasPage(data.data.map { it.toSManga(baseUrl) }, data.meta?.hasMore == true)
     }
-
-    // ------------------------- Search -------------------------
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/api/series".toHttpUrl().newBuilder()
@@ -110,7 +64,83 @@ abstract class VineTheme :
         return MangasPage(data.data.map { it.toSManga(baseUrl) }, data.meta?.hasMore == true)
     }
 
-    // ------------------------- Filter -------------------------
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments
+        if (segments.getOrNull(0) != "series" || segments.getOrNull(1) != "comic") return null
+        val slug = segments.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return null
+        if (segments.getOrNull(3) == "chapter") return null
+        val detail = client.get("$baseUrl/series/comic/$slug", headers = rscHeaders)
+            .extractNextJs<DetailDto>(DetailDto::nextJsFilter)
+            ?: return null
+        return detail.series.toSManga(baseUrl, fallbackSlug = slug)
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = client.get(getDetailsUrl(manga), rscHeaders).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
+
+        val updatedManga = details?.series?.toSManga(baseUrl, manga) ?: manga
+        val updatedChapters = if (fetchChapters) fetchAllChapters(manga, details, chapters) else chapters
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
+
+    override val supportsRelatedMangas: Boolean get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getDetailsUrl(manga), rscHeaders)
+        .extractNextJs<RelatedDto>(RelatedDto::nextJsFilter)
+        ?.similarSeries
+        .orEmpty()
+        .map { it.toSManga(baseUrl) }
+
+    private fun getDetailsUrl(manga: SManga): HttpUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
+        .addQueryParameter("sort", "desc")
+        .build()
+
+    private suspend fun fetchAllChapters(manga: SManga, details: DetailDto?, existing: List<SChapter>): List<SChapter> {
+        if (details == null) return emptyList()
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF, true)
+        val allChapters = if (existing.isEmpty() && details.totalPages > 1) {
+            details.chapters + coroutineScope {
+                (2..details.totalPages).map { page ->
+                    async {
+                        client.get(
+                            getDetailsUrl(manga).newBuilder()
+                                .addQueryParameter("page", page.toString())
+                                .build(),
+                            headers = rscHeaders,
+                        ).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
+                            ?.chapters.orEmpty()
+                    }
+                }.awaitAll().flatten()
+            }
+        } else {
+            details.chapters
+        }
+        val fetched = allChapters
+            .filter { !(it.isLocked && hideLocked) }
+            .map { it.toSChapter(manga) }
+        val retained = existing.filter {
+            !(hideLocked && it.memo["isLocked"]?.booleanOrNull == true)
+        }
+        return (fetched + retained)
+            .distinctBy { it.url }
+            .sortedByDescending { it.chapter_number }
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (chapter.memo["isLocked"]?.booleanOrNull == true) return emptyList()
+        val response = client.get(getChapterUrl(chapter), rscHeaders)
+        val dto = response.extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
+        return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
+            pageDto.imageUrl?.toAbsoluteUrl(baseUrl)?.let { Page(index, imageUrl = it) }
+        }
+    }
 
     override val supportsFilterFetching: Boolean get() = true
 
@@ -139,94 +169,14 @@ abstract class VineTheme :
         )
     }
 
-    // ------------------------- Details + Chapters -------------------------
-
-    override suspend fun fetchMangaUpdate(
-        manga: SManga,
-        chapters: List<SChapter>,
-        fetchDetails: Boolean,
-        fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val detailsUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "desc")
-            .build()
-        val details = client.get(detailsUrl, rscHeaders).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
-
-        val updatedManga = details?.series?.toSManga(baseUrl, manga) ?: manga
-        val updatedChapters = if (fetchChapters) fetchAllChapters(manga, details, chapters) else chapters
-
-        return SMangaUpdate(updatedManga, updatedChapters)
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF
+            title = "Hide locked chapters"
+            summary = "Hide chapters that require coins to read"
+            setDefaultValue(true)
+        }.also(screen::addPreference)
     }
-
-    override val supportsRelatedMangas: Boolean get() = true
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val detailsUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "desc")
-            .build()
-        val series = client.get(detailsUrl, headers = rscHeaders)
-            .extractNextJs<JsonObject> { it is JsonObject && "similarSeries" in it }
-        return series?.get("similarSeries")
-            ?.parseAs<List<MangaDto>>()
-            .orEmpty()
-            .map { it.toSManga(baseUrl) }
-    }
-
-    private suspend fun fetchAllChapters(manga: SManga, details: DetailDto?, existing: List<SChapter>): List<SChapter> {
-        if (details == null) return emptyList()
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF, true)
-        val allChapters = if (existing.isEmpty() && details.totalPages > 1) {
-            details.chapters + (2..details.totalPages).flatMap { page ->
-                client.get(
-                    getMangaUrl(manga).toHttpUrl().newBuilder()
-                        .addQueryParameter("sort", "desc")
-                        .addQueryParameter("page", page.toString())
-                        .build(),
-                    headers = rscHeaders,
-                ).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
-                    ?.chapters.orEmpty()
-            }
-        } else {
-            details.chapters
-        }
-        val fetched = allChapters
-            .filter { !(it.isLocked && hideLocked) }
-            .map { it.toSChapter(manga) }
-        val retained = existing.filter {
-            !(hideLocked && it.memo["isLocked"]?.booleanOrNull == true)
-        }
-        return (fetched + retained)
-            .distinctBy { it.url }
-            .sortedByDescending { it.chapter_number }
-    }
-
-    // ------------------------- Pages -------------------------
-
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (chapter.memo["isLocked"]?.booleanOrNull == true) {
-            throw Exception("This chapter is locked and requires coins to read")
-        }
-        val response = client.get(getChapterUrl(chapter), rscHeaders)
-        val dto = response.extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
-        val pages = dto?.chapter?.pages.orEmpty()
-        if (pages.any { it.isEncrypted }) {
-            showToast("Some pages are encrypted and may not be displayed properly or skipped.")
-        }
-        if (pages.any { it.isRedacted }) {
-            showToast("Some pages are redacted and may not be displayed properly or skipped.")
-        }
-        if (pages.any { it.hasFragments }) {
-            showToast("Some pages have fragments and may not be displayed properly or skipped.")
-        }
-        if (pages.any { it.hasStrips }) {
-            showToast("Some pages have strips and may not be displayed properly or skipped.")
-        }
-        return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
-            pageDto.imageUrl?.let { Page(index, imageUrl = it.toAbsoluteUrl(baseUrl)) }
-        }
-    }
-
-    // ------------------------- URL helpers -------------------------
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.memo["slug"]?.string.orEmpty()
@@ -237,5 +187,9 @@ abstract class VineTheme :
         val slug = chapter.memo["slug"]!!.string
         val number = chapter.memo["number"]!!.string
         return "$baseUrl/series/comic/$slug/chapter/$number"
+    }
+
+    companion object {
+        private const val HIDE_LOCKED_PREF = "pref_hide_locked_chapters"
     }
 }

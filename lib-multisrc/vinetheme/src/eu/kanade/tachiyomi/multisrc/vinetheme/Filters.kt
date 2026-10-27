@@ -34,11 +34,7 @@ open class MultiSelectFilter(name: String, val id: String, state: Map<String, St
     Filter.Group<CheckBoxFilter>(name, state.map { CheckBoxFilter(it.key, it.value) }),
     UriQueryFilter {
     override fun addToQuery(builder: HttpUrl.Builder) {
-        val selected = state
-            .filter { it.state }
-            .takeIf { it.isNotEmpty() }
-
-        selected?.joinToString(",") { it.id }.let {
+        state.filter { it.state }.takeIf { it.isNotEmpty() }?.joinToString(",") { it.id }?.let {
             builder.addQueryParameter(id, it)
         }
     }
