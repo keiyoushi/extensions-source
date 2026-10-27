@@ -99,7 +99,7 @@ abstract class Jinmantiantang :
         if (children.isNotEmpty() && children[0].tagName() == "a") children.removeAt(0)
         if (children.size >= 4) {
             title = children[1].text()
-            children[0].selectFirst("a")?.attr("href")?.let { setUrlWithoutDomain(it) }
+            children[0].selectFirst("a")?.let { url = albumUrl(it.absUrl("href"))!! }
             val img = children[0].selectFirst("img")
             if (img != null) {
                 thumbnail_url = img.extractThumbnailUrl().substringBeforeLast('?')
@@ -115,12 +115,10 @@ abstract class Jinmantiantang :
         }
 
         // JM号搜索: JM123 / 123 直接打开对应作品
-        if (query.startsWith(PREFIX_ID_SEARCH_NO_COLON, ignoreCase = true) || query.toIntOrNull() != null) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH_NO_COLON).removePrefix(":").trim()
-            val manga = mangaDetailsParse(mangaDetailsResolve(client.get("$baseUrl/album/$id"))).apply {
-                url = "/album/$id/"
-            }
-            return MangasPage(listOf(manga), hasNextPage = false)
+        val hasIdPrefix = query.startsWith(PREFIX_ID_SEARCH_NO_COLON, ignoreCase = true)
+        if (hasIdPrefix || query.toIntOrNull() != null) {
+            val id = (if (hasIdPrefix) query.substring(PREFIX_ID_SEARCH_NO_COLON.length) else query).removePrefix(":").trim()
+            return MangasPage(listOfNotNull(fetchAlbum("$baseUrl/album/$id")), hasNextPage = false)
         }
 
         return mangaListParse(client.get(searchUrl(page, query, filters)))
@@ -167,10 +165,15 @@ abstract class Jinmantiantang :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val id = url.pathSegments.getOrNull(1) ?: return null
-        return mangaDetailsParse(mangaDetailsResolve(client.get(url))).apply {
-            this.url = "/album/$id/"
-        }
+        if (url.pathSegments.firstOrNull() != "album") return null
+        return fetchAlbum(url.toString())
+    }
+
+    // /album/<chapter id> redirects to its album; the canonical link names it
+    private suspend fun fetchAlbum(url: String): SManga? {
+        val document = mangaDetailsResolve(client.get(url))
+        val albumUrl = albumUrl((document.selectFirst("link[rel=canonical]") ?: blockInvalidData(document)).absUrl("href")) ?: return null
+        return mangaDetailsParse(document).apply { this.url = albumUrl }
     }
 
     // 详情与章节来自同一个页面，只请求一次
@@ -242,7 +245,7 @@ abstract class Jinmantiantang :
     private fun favoriteMangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("a[href*='/album/']")
         if (link != null) {
-            setUrlWithoutDomain(link.attr("href").substringBefore("?"))
+            url = albumUrl(link.absUrl("href"))!!
             title = element.selectFirst(".video-title")?.text() ?: "Unknown"
             val img = element.selectFirst(".thumb-overlay img")
             thumbnail_url = img?.extractThumbnailUrl()?.substringBeforeLast('?').orEmpty()
@@ -309,6 +312,11 @@ abstract class Jinmantiantang :
         // it will definitely return a String type of 0, 1 or 2. This warning can be ignored
         status = selectDetailsStatusAndGenre(document, 1).trim().toIntOrNull() ?: 0
         description = document.selectFirst("#intro-block .p-t-5.p-b-5")?.text()?.substringAfter("敘述：")?.trim() ?: ""
+    }
+
+    private fun albumUrl(url: String): String? {
+        val segments = url.toHttpUrl().pathSegments
+        return if (segments[0] == "album") "/album/${segments[1]}/" else null
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
