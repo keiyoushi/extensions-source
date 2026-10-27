@@ -1,0 +1,8 @@
+-keep public class keiyoushi.lib.cronetruntime.CronetRuntime { public static *; }
+-keep class org.chromium.net.impl.HttpEngineNativeProvider { <init>(...); }
+-keep class com.google.android.gms.net.*Provider { <init>(...); }
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn kotlin.**
+-dontwarn androidx.**
+-dontobfuscate
