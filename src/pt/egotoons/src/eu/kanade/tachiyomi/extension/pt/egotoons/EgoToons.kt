@@ -146,7 +146,7 @@ abstract class EgoToons : KeiSource() {
         return pages
     }
 
-    override fun imageRequest(page: Page): Request = Request.Builder()
+    override fun getImageRequest(page: Page): Request = Request.Builder()
         .url(page.imageUrl!!)
         .headers(
             headersBuilder()

@@ -82,7 +82,7 @@ abstract class Nikkangecchan : KeiSource() {
         Page(0, url = chapter.url, imageUrl = "$baseUrl${chapter.url}/image"),
     )
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", baseUrl + page.url.substringBeforeLast("/"))
         .build()
 

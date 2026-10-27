@@ -387,7 +387,7 @@ abstract class Manhuaren :
         return myGet(url).parseAs<ManhuarenResponse<PageListDto>>().response.toPageList()
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Referer", "http://www.dm5.com/dm5api/")
             .build()

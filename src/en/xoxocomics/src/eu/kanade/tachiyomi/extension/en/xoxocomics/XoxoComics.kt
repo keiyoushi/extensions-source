@@ -136,7 +136,7 @@ abstract class XoxoComics : WPComics() {
         },
     )
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .url(page.imageUrl!! + "#imagereq")
         .build()
 }

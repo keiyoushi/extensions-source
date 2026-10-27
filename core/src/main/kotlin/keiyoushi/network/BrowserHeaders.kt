@@ -12,8 +12,8 @@ import java.util.Locale
 
 /**
  * Adds the headers the browser in a request's `User-Agent` sends: client hints and `Accept-Language` for
- * every request, and fetch metadata, `Accept` and `Priority` for a page load, an XHR or an image
- * ([forDocument], [forXhr], [forImage]). KeiSource's default `Origin` stays only where browsers send one.
+ * a request with a [RequestKind], fetch metadata, `Accept` and `Priority` per kind,
+ * and `Origin` where browsers send one. A request without a kind gets only `Origin` on a POST.
  *
  * Headers a request already has are kept. The page a request comes from is its `Referer`.
  */
@@ -34,9 +34,9 @@ internal class BrowserHeadersInterceptor(private val siteUrl: () -> String) : In
         val presentsAsBrowser = userAgent.startsWith("Mozilla/")
         // Browsers send fetch metadata and client hints to secure origins only
         val secure = request.url.isHttps || request.url.host in LOCAL_HOSTS
-        if (secure) browser?.clientHints(userAgent)?.forEach { (name, value) -> fill(name, value) }
-        if (presentsAsBrowser) fill("Accept-Language", acceptLanguage(deviceLocales()))
         if (kind != null && presentsAsBrowser) {
+            if (secure) browser?.clientHints(userAgent)?.forEach { (name, value) -> fill(name, value) }
+            fill("Accept-Language", acceptLanguage(deviceLocales()))
             fill("Accept", browser?.accept(kind))
             if (secure) {
                 fill("Sec-Fetch-Site", relation(initiator, request.url))
@@ -44,8 +44,8 @@ internal class BrowserHeadersInterceptor(private val siteUrl: () -> String) : In
                     "Sec-Fetch-Mode",
                     when (kind) {
                         RequestKind.DOCUMENT -> "navigate"
-                        RequestKind.IMAGE -> "no-cors"
                         RequestKind.XHR -> "cors"
+                        else -> "no-cors"
                     },
                 )
                 if (kind == RequestKind.DOCUMENT) fill("Sec-Fetch-User", "?1")
@@ -53,20 +53,27 @@ internal class BrowserHeadersInterceptor(private val siteUrl: () -> String) : In
                     "Sec-Fetch-Dest",
                     when (kind) {
                         RequestKind.DOCUMENT -> "document"
-                        RequestKind.IMAGE -> "image"
                         RequestKind.XHR -> "empty"
+                        RequestKind.IMAGE -> "image"
+                        RequestKind.SCRIPT -> "script"
+                        RequestKind.STYLE -> "style"
+                        RequestKind.AUDIO -> "audio"
+                        RequestKind.VIDEO -> "video"
                     },
                 )
             }
             if (kind == RequestKind.DOCUMENT) fill("Upgrade-Insecure-Requests", "1")
+            // Media loads ask for the bytes as stored, from the start
+            if (kind == RequestKind.AUDIO || kind == RequestKind.VIDEO) {
+                fill("Accept-Encoding", "identity")
+                fill("Range", "bytes=0-")
+            }
             fill("Priority", browser?.priority(kind))
         }
-        // Browsers send Origin on methods other than GET and HEAD and on cross-origin XHRs; an Origin the
-        // source set or removed itself is left alone
-        if (request.header("Origin") == siteUrl().toHttpUrl().origin()) {
-            val crossOrigin = initiator.origin() != request.url.origin()
-            val sendsOrigin = (request.method != "GET" && request.method != "HEAD") || (kind == RequestKind.XHR && crossOrigin)
-            if (sendsOrigin) builder.header("Origin", initiator.origin()) else builder.removeHeader("Origin")
+        // Browsers send Origin on methods other than GET and HEAD and on cross-origin XHRs
+        val crossOrigin = initiator.origin() != request.url.origin()
+        if ((request.method != "GET" && request.method != "HEAD") || (kind == RequestKind.XHR && crossOrigin)) {
+            fill("Origin", initiator.origin())
         }
 
         return chain.proceed(builder.build())
@@ -82,15 +89,21 @@ private fun relation(initiator: HttpUrl, url: HttpUrl): String = when {
 /**
  * Puts the headers in the order the browser in the `User-Agent` sends them, and drops what it doesn't send
  * on the wire: `Priority` over HTTP/1.1 (Chrome) and the OkHttp cache's own `Cache-Control` directives,
- * which the cache has read by then. Runs on the network level, so it sees `Cookie` and the body headers
+ * which the cache has read by then; adds Chrome's `Cache-Control` on a form submit. Runs on the network level, so it sees `Cookie` and the body headers
  * OkHttp adds.
  */
 internal object BrowserHeaderOrderInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        if (request.kind == null) return chain.proceed(request)
         val browser = Browser.of(request.header("User-Agent").orEmpty()) ?: return chain.proceed(request)
         val http2 = chain.connection()?.protocol() == Protocol.HTTP_2
-        val order = if (request.header("Sec-Fetch-Mode") == "navigate") browser.documentOrder else browser.subresourceOrder
+        val navigation = request.header("Sec-Fetch-Mode") == "navigate"
+        val order = when {
+            navigation -> browser.documentOrder
+            request.header("Sec-Fetch-Dest") in MEDIA_DESTINATIONS -> browser.mediaOrder
+            else -> browser.subresourceOrder
+        }
         val rank = { name: String -> order.indexOfFirst { it.equals(name, ignoreCase = true) }.takeIf { it >= 0 } ?: order.indexOf(SITE) }
         val headers = request.headers
             .filterNot { (name, value) -> name.equals("Cache-Control", ignoreCase = true) && value.isAppCacheDirective() }
@@ -101,10 +114,15 @@ internal object BrowserHeaderOrderInterceptor : Interceptor {
                 name to if (json) value.replace(JSON_CHARSET, "") else value
             }
             .plus(if (http2 && browser.sendsTeTrailers) listOf("te" to "trailers") else emptyList())
+            .let { list ->
+                val formSubmit = browser.formSubmitCacheControl?.takeIf { navigation && request.method == "POST" }
+                if (formSubmit != null && list.none { (name) -> name.equals("Cache-Control", ignoreCase = true) }) list + ("Cache-Control" to formSubmit) else list
+            }
             // Stable: a site's own headers keep the order they were added in
             .sortedBy { (name) -> rank(name) }
         val wire = Headers.Builder().apply { headers.forEach { (name, value) -> add(name, value) } }.build()
-        return chain.proceed(request.newBuilder().headers(wire).build())
+        // The cache keeps the request as it was before the reordering
+        return chain.proceed(request.newBuilder().headers(wire).build()).newBuilder().request(request).build()
     }
 }
 
@@ -118,8 +136,10 @@ internal sealed class Browser {
     // move Connection and Cookie and change name case; matching that too would take a lot more rules for little gain
     abstract val documentOrder: List<String>
     abstract val subresourceOrder: List<String>
+    open val mediaOrder get() = subresourceOrder
     open val priorityOnHttp1 = false
     open val sendsTeTrailers = false
+    open val formSubmitCacheControl: String? = null
 
     // Chrome 155
     data object Chrome : Browser() {
@@ -128,34 +148,49 @@ internal sealed class Browser {
                 "text/html,application/xhtml+xml,application/xml;q=0.9,image/jxl,image/avif,image/webp,image/apng,*/*;q=0.8," +
                     "application/signed-exchange;v=b3;q=0.7"
             RequestKind.IMAGE -> "image/jxl,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
-            RequestKind.XHR -> "*/*"
+            RequestKind.STYLE -> "text/css,*/*;q=0.1"
+            RequestKind.XHR, RequestKind.SCRIPT, RequestKind.AUDIO, RequestKind.VIDEO -> "*/*"
         }
 
+        // Scripts and stylesheets as loaded from the page's head
         override fun priority(kind: RequestKind) = when (kind) {
             RequestKind.DOCUMENT -> "u=0, i"
-            RequestKind.IMAGE -> "i"
+            RequestKind.IMAGE, RequestKind.AUDIO, RequestKind.VIDEO -> "i"
             RequestKind.XHR -> "u=1, i"
+            RequestKind.SCRIPT -> "u=1"
+            RequestKind.STYLE -> "u=0"
         }
 
         override fun clientHints(userAgent: String): Map<String, String> {
             val version = chromeVersion(userAgent) ?: return emptyMap()
-            return mapOf(
-                "Sec-CH-UA" to chromeBrands(version),
-                "Sec-CH-UA-Mobile" to if ("Mobile" in userAgent) "?1" else "?0",
-                "Sec-CH-UA-Platform" to "\"${platform(userAgent)}\"",
-            )
+            return buildMap {
+                brand(userAgent, version)?.let { (name, brandVersion) -> put("Sec-CH-UA", chromeBrands(version, name, brandVersion)) }
+                put("Sec-CH-UA-Mobile", if ("Mobile" in userAgent) "?1" else "?0")
+                put("Sec-CH-UA-Platform", "\"${platform(userAgent)}\"")
+            }
+        }
+
+        // Other Chromium browsers put their own brand in Sec-CH-UA; the ones not listed are left without one
+        private fun brand(userAgent: String, version: Int): Pair<String, Int>? = when {
+            "; wv)" in userAgent -> "Android WebView" to version
+            EDGE_VERSION_REGEX.containsMatchIn(userAgent) -> "Microsoft Edge" to EDGE_VERSION_REGEX.find(userAgent)!!.groupValues[1].toInt()
+            CHROMIUM_FORKS.any { it in userAgent } -> null
+            else -> "Google Chrome" to version
         }
 
         override val documentOrder = listOf(
-            "Host", "Connection", "Content-Length", "Sec-CH-UA", "Sec-CH-UA-Mobile", "Sec-CH-UA-Platform",
-            "Upgrade-Insecure-Requests", "User-Agent", SITE, "Accept", "Sec-Fetch-Site", "Sec-Fetch-Mode", "Sec-Fetch-User",
-            "Sec-Fetch-Dest", "Referer", "Accept-Encoding", "Accept-Language", "Priority", "Cookie",
+            "Host", "Connection", "Content-Length", "Cache-Control", "Sec-CH-UA", "Sec-CH-UA-Mobile", "Sec-CH-UA-Platform",
+            "Upgrade-Insecure-Requests", "Content-Type", "User-Agent", "Origin", SITE, "Accept", "Sec-Fetch-Site",
+            "Sec-Fetch-Mode", "Sec-Fetch-User", "Sec-Fetch-Dest", "Referer", "Accept-Encoding", "Accept-Language", "Priority",
+            "Cookie",
         )
         override val subresourceOrder = listOf(
             "Host", "Connection", "Content-Length", "Sec-CH-UA-Platform", "User-Agent", "Sec-CH-UA", "Content-Type",
             "Sec-CH-UA-Mobile", SITE, "Accept", "Origin", "Sec-Fetch-Site", "Sec-Fetch-Mode", "Sec-Fetch-Dest", "Referer",
-            "Accept-Encoding", "Accept-Language", "Priority", "Cookie",
+            "Accept-Encoding", "Accept-Language", "Range", "Priority", "Cookie",
         )
+
+        override val formSubmitCacheControl = "max-age=0"
     }
 
     // Firefox 158
@@ -163,14 +198,18 @@ internal sealed class Browser {
         override fun accept(kind: RequestKind) = when (kind) {
             RequestKind.DOCUMENT -> "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
             RequestKind.IMAGE -> "image/avif,image/jxl,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"
-            RequestKind.XHR -> "*/*"
+            RequestKind.STYLE -> "text/css,*/*;q=0.1"
+            RequestKind.AUDIO -> "audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5"
+            RequestKind.VIDEO -> "video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5"
+            RequestKind.XHR, RequestKind.SCRIPT -> "*/*"
         }
 
-        // fetch()'s; Firefox's XMLHttpRequest sends none
+        // XHR as fetch() sends it (Firefox's XMLHttpRequest sends none); scripts and stylesheets from the page's head
         override fun priority(kind: RequestKind) = when (kind) {
             RequestKind.DOCUMENT -> "u=0, i"
             RequestKind.IMAGE -> "u=5, i"
-            RequestKind.XHR -> "u=4"
+            RequestKind.XHR, RequestKind.AUDIO, RequestKind.VIDEO -> "u=4"
+            RequestKind.SCRIPT, RequestKind.STYLE -> "u=2"
         }
 
         override val documentOrder = listOf(
@@ -183,6 +222,10 @@ internal sealed class Browser {
             "Content-Type", "Content-Length", "Origin", "Sec-Fetch-Dest", "Sec-Fetch-Mode", "Sec-Fetch-Site", "Priority",
             "TE", "Cookie",
         )
+        override val mediaOrder = listOf(
+            "Host", "User-Agent", "Accept", "Accept-Language", "Range", "Connection", "Referer", SITE, "Sec-Fetch-Dest",
+            "Sec-Fetch-Mode", "Sec-Fetch-Site", "Accept-Encoding", "Priority", "TE", "Cookie",
+        )
 
         override val priorityOnHttp1 = true
         override val sendsTeTrailers = true
@@ -190,8 +233,6 @@ internal sealed class Browser {
 
     companion object {
         fun of(userAgent: String): Browser? = when {
-            // Other Chromium browsers name themselves in their client hints
-            CHROMIUM_FORKS.any { it in userAgent } -> null
             chromeVersion(userAgent) != null -> Chrome
             FIREFOX_VERSION_REGEX.containsMatchIn(userAgent) -> Firefox
             else -> null
@@ -200,13 +241,13 @@ internal sealed class Browser {
 }
 
 /** Chromium's `Sec-CH-UA` brand list for [version], its placeholder brand included. */
-internal fun chromeBrands(version: Int): String {
+internal fun chromeBrands(version: Int, brand: String = "Google Chrome", brandVersion: Int = version): String {
     val brands = arrayOfNulls<String>(3)
     val order = BRAND_ORDERS[version % BRAND_ORDERS.size]
     val greaseChar = { offset: Int -> GREASE_CHARS[(version + offset) % GREASE_CHARS.size] }
     brands[order[0]] = "\"Not${greaseChar(0)}A${greaseChar(1)}Brand\";v=\"${GREASE_VERSIONS[version % GREASE_VERSIONS.size]}\""
     brands[order[1]] = "\"Chromium\";v=\"$version\""
-    brands[order[2]] = "\"Google Chrome\";v=\"$version\""
+    brands[order[2]] = "\"$brand\";v=\"$brandVersion\""
     return brands.joinToString()
 }
 
@@ -266,11 +307,13 @@ private fun HttpUrl.origin(): String {
 
 private val CHROME_VERSION_REGEX = Regex("""(?:Chrome|Chromium)/(\d+)""")
 private val LOCAL_HOSTS = setOf("localhost", "127.0.0.1", "::1")
+private val MEDIA_DESTINATIONS = setOf("audio", "video")
 private val JSON_CHARSET = Regex("""(?<=^application/json); ?charset=utf-8$""", RegexOption.IGNORE_CASE)
 
 // Where a page's own headers go in an order
 private const val SITE = "*"
-private val CHROMIUM_FORKS = listOf("Edg/", "EdgA/", "OPR/", "SamsungBrowser/", "YaBrowser/", "; wv)")
+private val CHROMIUM_FORKS = listOf("OPR/", "SamsungBrowser/", "YaBrowser/")
+private val EDGE_VERSION_REGEX = Regex("""EdgA?/(\d+)""")
 private val FIREFOX_VERSION_REGEX = Regex("""Firefox/\d+""")
 
 private val GREASE_CHARS = listOf(" ", "(", ":", "-", ".", "/", ")", ";", "=", "?", "_")

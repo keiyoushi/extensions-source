@@ -178,7 +178,7 @@ abstract class Komiku : KeiSource() {
             }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val headers = headersBuilder()
             .set("Referer", page.url)
             .build()

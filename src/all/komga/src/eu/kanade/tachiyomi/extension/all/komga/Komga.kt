@@ -311,7 +311,7 @@ class Komga(
         }
     }
 
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder()
         .header("Accept", "image/*,*/*;q=0.8").build()
 
     override fun getFilterList(data: JsonElement?): FilterList {

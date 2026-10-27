@@ -61,7 +61,7 @@ abstract class KunMangaOnline : MadaraNoAjax() {
         .map { element.absUrl(it) }
         .firstOrNull { it.startsWith("http") && !it.contains("${baseUrl.toHttpUrl().host}/thumb/") }
 
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder().header("Referer", "$baseUrl/").build()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().header("Referer", "$baseUrl/").build()
 
     companion object {
         private const val POSTS_PER_PAGE = 20

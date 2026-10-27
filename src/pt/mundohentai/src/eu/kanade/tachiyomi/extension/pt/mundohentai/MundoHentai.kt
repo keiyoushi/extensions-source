@@ -134,7 +134,7 @@ abstract class MundoHentai : KeiSource() {
             .mapIndexed { i, el -> Page(i, url = document.location(), imageUrl = el.attr("src")) }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", page.url)
         .build()
 

@@ -139,7 +139,7 @@ abstract class StashApp :
         return images.mapIndexedNotNull { index, image -> image.toPage(index, baseUrl) }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Accept", "image/*")
         .build()
 

@@ -1,5 +1,6 @@
 package keiyoushi.network
 
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -8,7 +9,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.util.Locale
@@ -62,10 +62,10 @@ class BrowserHeadersTest {
     }
 
     @Test
-    fun untaggedGetsOnlyWhatEveryRequestHas() {
+    fun withoutKindGoesOutAsBuilt() {
         val sent = intercept(builder("https://a.test/series/1", referer = "https://a.test/").build())
-        assertEquals("?1", sent.header("Sec-CH-UA-Mobile"))
-        assertNotNull(sent.header("Accept-Language"))
+        assertNull(sent.header("Sec-CH-UA-Mobile"))
+        assertNull(sent.header("Accept-Language"))
         assertNull(sent.header("Sec-Fetch-Site"))
         assertNull(sent.header("Accept"))
         assertNull(sent.header("Priority"))
@@ -88,12 +88,6 @@ class BrowserHeadersTest {
     }
 
     @Test
-    fun originTheSourceRemovedStaysRemoved() {
-        val sent = intercept(builder("https://a.test/api/search", referer = "https://a.test/").removeHeader("Origin").post(json()).build())
-        assertNull(sent.header("Origin"))
-    }
-
-    @Test
     fun defaultOriginWithoutReferer() {
         val sent = intercept(builder("https://a.test/api/search").forXhr().post(json()).build())
         assertEquals("https://a.test", sent.header("Origin"))
@@ -101,11 +95,18 @@ class BrowserHeadersTest {
     }
 
     @Test
-    fun chromiumForksGetNoChromeHints() {
-        val edge = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36 EdgA/155.0.0.0"
+    fun chromiumForksGetChromeHeaders() {
+        val edge = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36 EdgA/154.0.0.0"
         val sent = intercept(builder("https://a.test/series/1", ua = edge).forDocument().build())
-        assertNull(sent.header("Sec-CH-UA"))
-        assertEquals("navigate", sent.header("Sec-Fetch-Mode"))
+        assertEquals("\"Microsoft Edge\";v=\"154\", \"Chromium\";v=\"155\", \"Not(A:Brand\";v=\"24\"", sent.header("Sec-CH-UA"))
+        assertEquals("u=0, i", sent.header("Priority"))
+        val webView = "Mozilla/5.0 (Linux; Android 10; K; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/155.0.0.0 Mobile Safari/537.36"
+        assertEquals(chromeBrands(155, "Android WebView"), intercept(builder("https://a.test/1", ua = webView).forDocument().build()).header("Sec-CH-UA"))
+        val samsung = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/29.0 Chrome/155.0.0.0 Mobile Safari/537.36"
+        val unlisted = intercept(builder("https://a.test/series/1", ua = samsung).forDocument().build())
+        assertNull(unlisted.header("Sec-CH-UA"))
+        assertEquals("?1", unlisted.header("Sec-CH-UA-Mobile"))
+        assertEquals("navigate", unlisted.header("Sec-Fetch-Mode"))
     }
 
     @Test
@@ -174,12 +175,58 @@ class BrowserHeadersTest {
         assertEquals("ja", chrome(Locale.JAPANESE))
     }
 
+    @Test
+    fun scriptsAndStyles() {
+        val script = intercept(builder("https://a.test/app.js", referer = "https://a.test/").forScript().build())
+        assertEquals("script", script.header("Sec-Fetch-Dest"))
+        assertEquals("no-cors", script.header("Sec-Fetch-Mode"))
+        assertEquals("*/*", script.header("Accept"))
+        assertEquals("u=1", script.header("Priority"))
+        val style = intercept(builder("https://a.test/app.css", referer = "https://a.test/").forStyle().build())
+        assertEquals("style", style.header("Sec-Fetch-Dest"))
+        assertEquals("text/css,*/*;q=0.1", style.header("Accept"))
+        assertNull(style.header("Origin"))
+    }
+
+    @Test
+    fun media() {
+        val audio = intercept(builder("https://cdn.b.test/bgm.mp3", referer = "https://a.test/").forAudio().build())
+        assertEquals("audio", audio.header("Sec-Fetch-Dest"))
+        assertEquals("no-cors", audio.header("Sec-Fetch-Mode"))
+        assertEquals("identity", audio.header("Accept-Encoding"))
+        assertEquals("bytes=0-", audio.header("Range"))
+        assertNull(audio.header("Origin"))
+        val video = intercept(builder("https://a.test/v.mp4", referer = "https://a.test/", ua = firefoxUa).forVideo().build(), wireOrder = true)
+        assertEquals("video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5", video.header("Accept"))
+        assertEquals(
+            listOf("User-Agent", "Accept", "Accept-Language", "Range", "Referer", "Sec-Fetch-Dest", "Sec-Fetch-Mode", "Sec-Fetch-Site", "Accept-Encoding", "Priority"),
+            video.headers.map { it.first },
+        )
+    }
+
+    @Test
+    fun formSubmit() {
+        val form = FormBody.Builder().add("q", "1").build()
+        val sent = intercept(builder("https://a.test/search", referer = "https://a.test/").forDocument().post(form).build(), wireOrder = true)
+        assertEquals("navigate", sent.header("Sec-Fetch-Mode"))
+        assertEquals("https://a.test", sent.header("Origin"))
+        assertEquals("max-age=0", sent.header("Cache-Control"))
+        assertEquals(listOf("Cache-Control", "Sec-CH-UA"), sent.headers.map { it.first }.take(2))
+    }
+
+    @Test
+    fun rawGetsOnlyOriginOnPost() {
+        val get = builder("https://a.test/api/list", referer = "https://a.test/").header("X-Site", "1").build()
+        assertEquals(get.headers, intercept(get, wireOrder = true).headers)
+        val post = builder("https://a.test/api/search", referer = "https://a.test/").post(json()).build()
+        assertEquals(post.headers.newBuilder().add("Origin", "https://a.test").build(), intercept(post, wireOrder = true).headers)
+    }
+
     private fun json() = "{}".toRequestBody("application/json".toMediaType())
 
-    // A source's request: KeiSource's default Origin, the given Referer
+    // A source's request: the given Referer
     private fun builder(url: String, referer: String? = null, ua: String = chromeUa) = Request.Builder().url(url)
         .header("User-Agent", ua)
-        .header("Origin", "https://a.test")
         .apply { referer?.let { header("Referer", it) } }
 
     // The request as sent: with the wire order pass it's HTTP/1.1, as a unit test has no connection

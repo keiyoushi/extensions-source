@@ -698,7 +698,7 @@ abstract class MangaDot :
         })
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val referer = page.url.substringBeforeLast("#")
         return GET(page.imageUrl!!, headers.newBuilder().set("Referer", referer).build())
     }

@@ -27,6 +27,7 @@ val DEFAULT_CACHE_CONTROL: CacheControl = CacheControl.Builder().maxAge(10.minut
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @return The HTTP [Response].
  */
+@Deprecated("Use getDocument for pages, getXhr for API and ajax calls, getImage for images (or getScript, getStyle, getAudio, getVideo). getRaw only if the request has to go out without browser headers.")
 suspend fun OkHttpClient.get(
     url: HttpUrl,
     headers: Headers,
@@ -56,6 +57,8 @@ suspend fun OkHttpClient.get(
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @return The HTTP [Response].
  */
+@Deprecated("Use getDocument for pages, getXhr for API and ajax calls, getImage for images (or getScript, getStyle, getAudio, getVideo). getRaw only if the request has to go out without browser headers.")
+@Suppress("DEPRECATION")
 suspend fun OkHttpClient.get(
     url: String,
     headers: Headers,
@@ -72,6 +75,8 @@ suspend fun OkHttpClient.get(
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @return The HTTP [Response].
  */
+@Deprecated("Use getDocument for pages, getXhr for API and ajax calls, getImage for images (or getScript, getStyle, getAudio, getVideo). getRaw only if the request has to go out without browser headers.")
+@Suppress("DEPRECATION")
 context(source: HttpSource)
 suspend fun OkHttpClient.get(
     url: HttpUrl,
@@ -88,6 +93,8 @@ suspend fun OkHttpClient.get(
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @return The HTTP [Response].
  */
+@Deprecated("Use getDocument for pages, getXhr for API and ajax calls, getImage for images (or getScript, getStyle, getAudio, getVideo). getRaw only if the request has to go out without browser headers.")
+@Suppress("DEPRECATION")
 context(source: HttpSource)
 suspend fun OkHttpClient.get(
     url: String,
@@ -104,6 +111,7 @@ suspend fun OkHttpClient.get(
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @return The HTTP [Response].
  */
+@Deprecated("Use postXhr for API and ajax calls, postDocument for form submits. postRaw only if the request has to go out without browser headers.")
 suspend fun OkHttpClient.post(
     url: HttpUrl,
     headers: Headers,
@@ -133,6 +141,8 @@ suspend fun OkHttpClient.post(
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @return The HTTP [Response].
  */
+@Deprecated("Use postXhr for API and ajax calls, postDocument for form submits. postRaw only if the request has to go out without browser headers.")
+@Suppress("DEPRECATION")
 suspend fun OkHttpClient.post(
     url: String,
     headers: Headers,
@@ -149,6 +159,8 @@ suspend fun OkHttpClient.post(
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @return The HTTP [Response].
  */
+@Deprecated("Use postXhr for API and ajax calls, postDocument for form submits. postRaw only if the request has to go out without browser headers.")
+@Suppress("DEPRECATION")
 context(source: HttpSource)
 suspend fun OkHttpClient.post(
     url: HttpUrl,
@@ -165,6 +177,8 @@ suspend fun OkHttpClient.post(
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @return The HTTP [Response].
  */
+@Deprecated("Use postXhr for API and ajax calls, postDocument for form submits. postRaw only if the request has to go out without browser headers.")
+@Suppress("DEPRECATION")
 context(source: HttpSource)
 suspend fun OkHttpClient.post(
     url: String,

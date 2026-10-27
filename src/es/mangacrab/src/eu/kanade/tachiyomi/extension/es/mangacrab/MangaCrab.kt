@@ -255,7 +255,7 @@ abstract class MangaCrab : KeiSource() {
             .orEmpty()
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val pageUrl = page.imageUrl.orEmpty()
         val imageUrl = pageUrl.substringBefore("#nodeHeader=")
         val securityHeader = pageUrl.substringAfter("#nodeHeader=", "")

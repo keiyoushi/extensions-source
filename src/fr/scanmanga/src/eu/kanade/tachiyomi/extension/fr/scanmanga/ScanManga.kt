@@ -365,7 +365,7 @@ abstract class ScanManga :
         return lelResponse.generateImageUrls().map { Page(it.first, imageUrl = it.second) }
     }
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, readerHeaders)
+    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!, readerHeaders)
 
     private suspend fun getFingerprint(): String {
         var currentValue = preferences.getString("gpu_renderer", null)

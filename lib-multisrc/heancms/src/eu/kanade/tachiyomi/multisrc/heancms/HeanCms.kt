@@ -326,7 +326,7 @@ abstract class HeanCms :
 
     protected open fun String.toAbsoluteUrl(): String = if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
             .add("Accept", ACCEPT_IMAGE)
             .build()

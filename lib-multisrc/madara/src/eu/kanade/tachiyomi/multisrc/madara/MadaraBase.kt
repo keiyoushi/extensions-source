@@ -437,7 +437,7 @@ abstract class MadaraBase : KeiSource() {
         return cipher.doFinal(Base64.decode(data.ciphertext, Base64.DEFAULT)).toString(Charsets.UTF_8)
     }
 
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder().header("Referer", page.url).build()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().header("Referer", page.url).build()
 
     protected open fun imageFromElement(element: Element): String? = when {
         element.hasAttr("data-src") -> element.attr("abs:data-src")

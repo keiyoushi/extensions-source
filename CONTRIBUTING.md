@@ -796,8 +796,10 @@ val response = client.post(url, headers, body)
 - `ensureSuccess` (default `true`) throws if the response isn't 2xx; pass `ensureSuccess = false` to inspect non-2xx responses yourself.
 - `get`/`head` also take a `cacheControl` (defaults to a 10-minute max-age).
 - Always wrap the returned `Response` in `response.use { ... }` or consume it with `parseAs`/`asJsoup`, which close it for you.
-- `getDocument`, `getXhr`/`postXhr` and `getImage` take the same arguments and also send the headers a browser sends
-  for that kind of request (see Browser headers).
+- `getDocument`/`postDocument`, `getXhr`/`postXhr`, `getImage`, `getScript`, `getStyle`, `getAudio` and `getVideo`
+  take the same arguments and also send the headers a browser sends for that kind of request (see Browser headers).
+  `get` and `post` are deprecated in their favour; `getRaw`/`postRaw` send the request as built, without browser
+  headers.
 
 ##### Rate limiting - `rateLimit`
 
@@ -1334,6 +1336,7 @@ Optional overrides (each has a working default; override only when your source n
 |----------------------------------------------------------------------|----------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `fun getHomeUrl(): String`                                            | Returns `baseUrl`.                                              | The browse screen's "Open in WebView" action should land somewhere other than `baseUrl` (e.g. the source's real site differs from the API host used as `baseUrl`).                                      |
 | `suspend fun getImageUrl(page: Page): String`                         | Not called unless a `Page.imageUrl` is empty.                   | A page's image URL can't be determined upfront in `getPageList` and must be resolved lazily once the chapter is opened - see [Chapter Pages](#chapter-pages). Make your request with `client` and return the URL directly. |
+| `fun getImageRequest(page: Page): Request`                            | A GET of `page.imageUrl` with `headers`.                        | The image needs other headers or a different URL. A request not marked `forDocument()`/`forXhr()` is sent as an image. |
 | `fun getMangaUrl(manga: SManga): String`                              | Returns `baseUrl + manga.url`.                                  | That doesn't land on the manga's real page. Since `SManga.url` is recommended to hold just an ID/slug rather than a full relative path (see [Misc notes](#misc-notes)), the default concatenation often isn't a valid path by itself - override to build the real URL from the ID/slug (e.g. `"$baseUrl/manga/${manga.url}"`).      |
 | `fun getChapterUrl(chapter: SChapter): String`                        | Returns `baseUrl + chapter.url`.                                | Same reasoning as `getMangaUrl`, for chapters.                                                                                                                                                            |
 | `suspend fun getMangaByUrl(url: HttpUrl): SManga?`                    | Throws (unimplemented).                                         | Almost always: this backs URL search (pasting/opening a manga link for this source). Return `null` if the URL isn't recognized - leaving this unimplemented means URL search crashes for this source.  |
@@ -1345,7 +1348,7 @@ Optional overrides (each has a working default; override only when your source n
 | `suspend fun fetchFilterData(): JsonElement`                          | Returns `JsonNull`.                                              | Paired with `supportsFilterFetching = true`.                                                                                                                                                              |
 | `fun getFilterList(data: JsonElement?): FilterList`                   | Returns an empty `FilterList`.                                   | The source has any filters at all, fetched or static.                                                                                                                                                    |
 | `fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder`    | No changes.                                                      | Timeouts, extra interceptors, cookie/cache/DNS config - `client` itself is `final` on `KeiSource`.                                                                                                       |
-| `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer`/`Origin` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                     |
+| `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                     |
 
 **`fetchMangaUpdate`:** if manga details and the chapter list come from the same page or the same
 API response, fetch and parse it once and return both the updated `SManga` and the full chapter
@@ -1363,16 +1366,17 @@ Behavior `KeiSource` gives you for free:
 - **Automatic URL search:** `getSearchManga` inspects the query; if it parses as an `HttpUrl`, it
   calls `getMangasByUrl`/`getMangaByUrl` instead of `getSearchMangaList`. You do not need to handle
   this manually.
-- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash) and `Origin` to the
-  base URL's origin, which requests keep only where browsers send one (see Browser headers); override
+- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash); override
   `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
 - **Browser headers:** requests get the headers the browser in their `User-Agent` sends: client hints and
-  `Accept-Language`, and the default `Origin` only where browsers send one (an `Origin` you set or remove stays as is). For the fetch metadata, `Accept` and `Priority` of a
-  kind of request, use `client.getDocument(url)` to open a page, `client.getXhr(url)`/`client.postXhr(url, body)` for
-  the page's own background requests (JSON APIs, ajax) and `client.getImage(url)` for images, or
-  `forDocument()`/`forXhr()`/`forImage()` on a `Request.Builder`. They match the Doc, Fetch/XHR and Img filters of
-  the browser's DevTools; `imageRequest()` is an image. The page a request comes from is its `Referer`, and headers a
-  request already has are kept.
+  `Accept-Language`, and `Origin` where browsers send one. Pick the helper after the filter the site's request shows
+  under in the browser's DevTools Network tab: `client.getDocument(url)` for Doc (`postDocument` for a form submit),
+  `client.getXhr(url)`/`client.postXhr(url, body)` for Fetch/XHR (JSON APIs, ajax), `client.getImage(url)` for Img,
+  `getScript` for JS, `getStyle` for CSS and `getAudio`/`getVideo` for Media; on a `Request.Builder` they are
+  `forDocument()`, `forXhr()` and so on. Page images are already images. With a
+  `User-Agent` that isn't a browser's (an app's API, a self-hosted server) the helpers add nothing, so use them
+  there too. A request without a kind (`getRaw`/`postRaw`, or a `Request.Builder` without `forX()`) goes out as
+  built, with `Origin` only on a POST; that's only for a browser `User-Agent` whose request must go out bare. The page a request comes from is its `Referer`, and headers a request already has are kept.
 - **Filter fetching:** if a source needs to fetch its filter options from the network, set
   `supportsFilterFetching = true`, implement `fetchFilterData()` (returns the raw filter data as a
   `JsonElement`, called on a background coroutine, attempted up to 3 times total on failure, and

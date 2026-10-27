@@ -180,7 +180,7 @@ abstract class ManhwaZone : KeiSource() {
         .mapIndexed { i, element -> Page(i, imageUrl = element.attr("abs:data-src")) }
 
     // The image CDN answers 403 when the Referer is the site
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .removeHeader("Referer")
         .build()
 

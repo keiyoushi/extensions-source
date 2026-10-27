@@ -693,7 +693,7 @@ abstract class OniSaga :
         throw Exception("Failed to fetch image after 3 retries.")
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val referer = page.url.substringBeforeLast("#")
         return GET(page.imageUrl!!, headersBuilder().set("Referer", referer).build())
     }

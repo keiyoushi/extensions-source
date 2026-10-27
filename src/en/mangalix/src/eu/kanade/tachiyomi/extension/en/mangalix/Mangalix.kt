@@ -157,7 +157,7 @@ abstract class Mangalix : KeiSource() {
             }
     }
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeaders)
+    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeaders)
 
     private suspend fun loadCatalog(): List<MangaDto> {
         val document = client.get(baseUrl).asJsoup()

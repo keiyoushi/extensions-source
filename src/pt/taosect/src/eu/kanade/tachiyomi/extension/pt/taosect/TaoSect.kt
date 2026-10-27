@@ -277,7 +277,7 @@ abstract class TaoSect : KeiSource() {
         return pages
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Accept", ACCEPT_IMAGE)
         .header("Referer", page.url)
         .build()

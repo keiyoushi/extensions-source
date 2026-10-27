@@ -240,7 +240,7 @@ abstract class Baozi :
         url.contains("recommend")
 
     // baozicdn.com geo-redirects to regional nodes that are sometimes unreachable, baozimh.com serves directly
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!.replace(".baozicdn.com", ".baozimh.com"), headers).newBuilder()
+    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!.replace(".baozicdn.com", ".baozimh.com"), headers).newBuilder()
         .tag(BaoziBannerInterceptor.ReaderPageImageTag::class.java, BaoziBannerInterceptor.ReaderPageImageTag)
         .build()
 

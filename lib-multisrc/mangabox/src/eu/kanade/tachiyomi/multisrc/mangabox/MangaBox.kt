@@ -557,7 +557,7 @@ abstract class MangaBox :
         }
     }
 
-    override fun imageRequest(page: Page): Request = GET(
+    override fun getImageRequest(page: Page): Request = GET(
         page.imageUrl!!,
         headers, // Headers are sometimes not added for image requests for some reason
     )

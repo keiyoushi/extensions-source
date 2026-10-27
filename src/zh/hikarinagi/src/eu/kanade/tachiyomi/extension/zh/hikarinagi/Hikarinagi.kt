@@ -118,7 +118,7 @@ abstract class Hikarinagi : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val token = ImageInterceptor.newToken()
         return POST("${page.imageUrl!!}|$token", headers, buildJsonObject { put("p", token) }.toJsonRequestBody<JsonObject>())
     }

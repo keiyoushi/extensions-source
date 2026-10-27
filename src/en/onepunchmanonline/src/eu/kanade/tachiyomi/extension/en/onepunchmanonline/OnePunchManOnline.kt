@@ -79,7 +79,7 @@ abstract class OnePunchManOnline : KeiSource() {
     }
 
     // Image host (mangafreak) returns 403 when a Referer from this site is sent
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .removeHeader("Referer")
         .removeHeader("Origin")
         .build()

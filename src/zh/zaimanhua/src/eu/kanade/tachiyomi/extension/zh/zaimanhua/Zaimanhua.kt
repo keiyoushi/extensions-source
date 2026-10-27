@@ -245,9 +245,9 @@ abstract class Zaimanhua :
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val isComments = page.url == COMMENTS_FLAG
-        return super.imageRequest(page).newBuilder().apply {
+        return super.getImageRequest(page).newBuilder().apply {
             if (isComments) headers(apiHeaders)
             tag(String::class, if (isComments) COMMENTS_FLAG else IMAGE_RETRY_FLAG)
         }.build()

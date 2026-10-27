@@ -214,7 +214,7 @@ abstract class XAsiatAlbums : KeiSource() {
         else -> baseUrl + url
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .removeHeader("X-Requested-With")
         .build()
 

@@ -182,7 +182,7 @@ abstract class DeviantArt :
         return document.parsePages(url.pathSegments.last().substringAfterLast('-'))
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .tag(Page::class.java, page)
         .build()
 

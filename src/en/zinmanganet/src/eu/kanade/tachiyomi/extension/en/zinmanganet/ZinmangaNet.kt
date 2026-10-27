@@ -47,7 +47,7 @@ abstract class ZinmangaNet : MadaraNoAjax() {
         return (first.chapters + rest.flatten()).map { it.toSChapter(mangaPath) }.distinctBy(SChapter::url)
     }
 
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder()
         .header("Referer", "$baseUrl/")
         .build()
 }

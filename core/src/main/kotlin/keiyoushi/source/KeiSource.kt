@@ -17,6 +17,7 @@ import keiyoushi.network.CacheControlInterceptor
 import keiyoushi.network.Deflate
 import keiyoushi.network.RateLimitInterceptor
 import keiyoushi.network.forImage
+import keiyoushi.network.kind
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
@@ -32,7 +33,6 @@ import okhttp3.CompressionInterceptor
 import okhttp3.Gzip
 import okhttp3.Headers
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -144,14 +144,13 @@ abstract class KeiSource : HttpSource() {
      * Customizes the base Headers builder. Subclasses can override this to append source-specific
      * headers.
      *
-     * Note: `User-Agent`, `Referer` and `Origin` are set here. The other browser headers are added per request,
-     * and this `Origin` is kept only where browsers send one; headers set here or on a request are kept.
+     * Note: `User-Agent` and `Referer` are set here. The other browser headers, `Origin` included, are added
+     * per request; headers set here or on a request are kept.
      */
     protected open fun Headers.Builder.configureHeaders(): Headers.Builder = this
 
     final override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl.toHttpUrl().run { if (port == HttpUrl.defaultPort(scheme)) "$scheme://$host" else "$scheme://$host:$port" })
         .configureHeaders()
 
     /**
@@ -450,10 +449,20 @@ abstract class KeiSource : HttpSource() {
      */
     abstract override suspend fun getPageList(chapter: SChapter): List<Page>
 
-    override fun imageRequest(page: Page): Request = Request.Builder()
+    /**
+     * Builds the request for a page's image. A request that isn't marked with `forDocument()` or `forXhr()` is sent
+     * as an image.
+     *
+     * @param page the page.
+     * @return the request for its image.
+     */
+    protected open fun getImageRequest(page: Page): Request = Request.Builder()
         .url(page.imageUrl!!)
         .headers(headers)
-        .forImage()
-        .get()
         .build()
+
+    final override fun imageRequest(page: Page): Request {
+        val request = getImageRequest(page)
+        return if (request.kind == null) request.newBuilder().forImage().build() else request
+    }
 }

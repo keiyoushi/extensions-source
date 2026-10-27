@@ -258,7 +258,7 @@ abstract class MangaPlus :
             }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headersBuilder()
             .set("Plus-Vw-Token", page.url)
             .build()

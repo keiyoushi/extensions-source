@@ -111,7 +111,7 @@ abstract class MangaOmega : KeiSource() {
             .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .removeHeader("Referer")
         .removeHeader("Origin")
         .build()
