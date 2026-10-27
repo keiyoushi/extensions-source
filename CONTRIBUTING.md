@@ -796,6 +796,8 @@ val response = client.post(url, headers, body)
 - `ensureSuccess` (default `true`) throws if the response isn't 2xx; pass `ensureSuccess = false` to inspect non-2xx responses yourself.
 - `get`/`head` also take a `cacheControl` (defaults to a 10-minute max-age).
 - Always wrap the returned `Response` in `response.use { ... }` or consume it with `parseAs`/`asJsoup`, which close it for you.
+- `getDocument`, `getXhr`/`postXhr` and `getImage` take the same arguments and also send the headers a browser sends
+  for that kind of request (see Browser headers).
 
 ##### Rate limiting - `rateLimit`
 
@@ -1361,8 +1363,16 @@ Behavior `KeiSource` gives you for free:
 - **Automatic URL search:** `getSearchManga` inspects the query; if it parses as an `HttpUrl`, it
   calls `getMangasByUrl`/`getMangaByUrl` instead of `getSearchMangaList`. You do not need to handle
   this manually.
-- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash) and `Origin` to `baseUrl` (without trailing slash); override
+- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash) and `Origin` to the
+  base URL's origin, which requests keep only where browsers send one (see Browser headers); override
   `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
+- **Browser headers:** requests get the headers the browser in their `User-Agent` sends: client hints and
+  `Accept-Language`, and the default `Origin` only where browsers send one (an `Origin` you set or remove stays as is). For the fetch metadata, `Accept` and `Priority` of a
+  kind of request, use `client.getDocument(url)` to open a page, `client.getXhr(url)`/`client.postXhr(url, body)` for
+  the page's own background requests (JSON APIs, ajax) and `client.getImage(url)` for images, or
+  `forDocument()`/`forXhr()`/`forImage()` on a `Request.Builder`. They match the Doc, Fetch/XHR and Img filters of
+  the browser's DevTools; `imageRequest()` is an image. The page a request comes from is its `Referer`, and headers a
+  request already has are kept.
 - **Filter fetching:** if a source needs to fetch its filter options from the network, set
   `supportsFilterFetching = true`, implement `fetchFilterData()` (returns the raw filter data as a
   `JsonElement`, called on a background coroutine, attempted up to 3 times total on failure, and

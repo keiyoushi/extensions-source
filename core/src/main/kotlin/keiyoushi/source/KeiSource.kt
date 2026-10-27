@@ -11,8 +11,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.BrowserHeaderOrderInterceptor
+import keiyoushi.network.BrowserHeadersInterceptor
 import keiyoushi.network.CacheControlInterceptor
+import keiyoushi.network.Deflate
 import keiyoushi.network.RateLimitInterceptor
+import keiyoushi.network.forImage
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
@@ -28,6 +32,7 @@ import okhttp3.CompressionInterceptor
 import okhttp3.Gzip
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -113,11 +118,16 @@ abstract class KeiSource : HttpSource() {
                 }
             }
 
-            // last application interceptor
-            addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
+            // the browser headers for each request
+            addInterceptor(BrowserHeadersInterceptor { baseUrl })
+
+            // last application interceptor; browsers' Accept-Encoding order
+            addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
 
             // allow caching when server doesn't explicitly say anything
             addNetworkInterceptor(CacheControlInterceptor())
+
+            addNetworkInterceptor(BrowserHeaderOrderInterceptor)
 
             // keep the source's rate limiter as the last network interceptor
             networkInterceptors().apply {
@@ -134,13 +144,14 @@ abstract class KeiSource : HttpSource() {
      * Customizes the base Headers builder. Subclasses can override this to append source-specific
      * headers.
      *
-     * Note: "User-Agent", "Referer", and "Origin" are already added by default.
+     * Note: `User-Agent`, `Referer` and `Origin` are set here. The other browser headers are added per request,
+     * and this `Origin` is kept only where browsers send one; headers set here or on a request are kept.
      */
     protected open fun Headers.Builder.configureHeaders(): Headers.Builder = this
 
     final override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
+        .set("Origin", baseUrl.toHttpUrl().run { if (port == HttpUrl.defaultPort(scheme)) "$scheme://$host" else "$scheme://$host:$port" })
         .configureHeaders()
 
     /**
@@ -442,6 +453,7 @@ abstract class KeiSource : HttpSource() {
     override fun imageRequest(page: Page): Request = Request.Builder()
         .url(page.imageUrl!!)
         .headers(headers)
+        .forImage()
         .get()
         .build()
 }
