@@ -6,13 +6,16 @@ plugins {
 
 keiyoushi {
     name = "ManhuaTop"
-    versionCode = 1
+    versionCode = 57
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "en"
         baseUrl = "https://manhuatop.org"
+    }
+
+    deeplink {
+        path("/manhua/..*")
     }
 }
