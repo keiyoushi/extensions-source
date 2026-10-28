@@ -62,7 +62,6 @@ internal class GenreOption(
 private val TYPE_OPTIONS = arrayOf(
     "All Types" to "",
     "Comic" to "comic",
-    "Novel" to "novel",
     "Oneshot" to "oneshot",
 )
 
