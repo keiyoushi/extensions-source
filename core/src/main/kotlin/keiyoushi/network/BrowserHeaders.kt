@@ -17,7 +17,8 @@ import java.util.Locale
 /**
  * Adds the headers Chrome or Firefox, as named in a request's `User-Agent`, sends for its [RequestKind]: client
  * hints, `Accept-Language`, fetch metadata, `Accept` and `Priority`, and keeps KeiSource's default `Origin` only where
- * browsers send one. Covers the apps load count as images. Any other request goes out as built, apart from the
+ * browsers send one. Covers the apps load count as images when the source turns that on. Any other request goes out as
+ * built, apart from the
  * `Referer` of [from].
  *
  * Headers a request already has are kept. The page a request comes from is the one given with [from], which replaces
@@ -25,7 +26,7 @@ import java.util.Locale
  */
 internal class BrowserHeadersInterceptor(
     private val siteUrl: () -> String,
-    private val browserImageHeaders: () -> Boolean = { true },
+    private val browserImageHeaders: () -> Boolean = { false },
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()

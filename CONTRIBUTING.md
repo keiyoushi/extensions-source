@@ -784,7 +784,7 @@ all return the `Response`:
 |---|---|---|
 | Doc | `getDocument`, `postDocument` | opening a page; submitting a form |
 | Fetch/XHR | `getXhr`, `postXhr` | JSON APIs, ajax, GraphQL POSTs (`graphQLGet` sends as built) |
-| Img | `getImage` | images (page images and covers are already sent as images) |
+| Img | `getImage` | images (page images and covers too, with `browserImageHeaders = true`) |
 | JS | `getScript` | reading a script, e.g. for an API key |
 | CSS | `getStyle` | reading a stylesheet |
 | Media | `getAudio`, `getVideo` | audio and video |
@@ -1360,7 +1360,7 @@ Optional overrides (each has a working default; override only when your source n
 | `fun getHomeUrl(): String`                                            | Returns `baseUrl`.                                              | The browse screen's "Open in WebView" action should land somewhere other than `baseUrl` (e.g. the source's real site differs from the API host used as `baseUrl`).                                      |
 | `suspend fun getImageUrl(page: Page): String`                         | Not called unless a `Page.imageUrl` is empty.                   | A page's image URL can't be determined upfront in `getPageList` and must be resolved lazily once the chapter is opened - see [Chapter Pages](#chapter-pages). Make your request with `client` and return the URL directly. |
 | `fun getImageRequest(page: Page): Request`                            | A GET of `page.imageUrl` with `headers`.                        | The image needs other headers or a different URL. A GET without a kind is sent as an image; see Browser headers. |
-| `val browserImageHeaders: Boolean`                                    | `true`.                                                         | The image host rejects browser image headers on page images or covers. |
+| `val browserImageHeaders: Boolean`                                    | `false`.                                                        | The source uses the request helpers: page images and covers then go out with browser image headers. |
 | `fun getMangaUrl(manga: SManga): String`                              | Returns `baseUrl + manga.url`.                                  | That doesn't land on the manga's real page. Since `SManga.url` is recommended to hold just an ID/slug rather than a full relative path (see [Misc notes](#misc-notes)), the default concatenation often isn't a valid path by itself - override to build the real URL from the ID/slug (e.g. `"$baseUrl/manga/${manga.url}"`).      |
 | `fun getChapterUrl(chapter: SChapter): String`                        | Returns `baseUrl + chapter.url`.                                | Same reasoning as `getMangaUrl`, for chapters.                                                                                                                                                            |
 | `suspend fun getMangaByUrl(url: HttpUrl): SManga?`                    | Throws (unimplemented).                                         | Almost always: this backs URL search (pasting/opening a manga link for this source). Return `null` if the URL isn't recognized - leaving this unimplemented means URL search crashes for this source.  |
@@ -1399,8 +1399,8 @@ Behavior `KeiSource` gives you for free:
   `Referer` of `from`.
   - On a `Request.Builder` the kinds are `forDocument()`, `forXhr()` and so on, and `from(page)` sets the page. In an
     interceptor, change a request with `request.newBuilder()`; a new `Request.Builder()` drops its kind and `from`.
-  - Page images (GETs from `getImageRequest`) and the covers the app loads are sent as images; set
-    `browserImageHeaders = false` if the image host rejects those headers. The app's covers are recognised by their
+  - With `browserImageHeaders = true`, page images (GETs from `getImageRequest`) and the covers the app loads are sent
+    as images too; turn it on with the move to the helpers. The app's covers are recognised by their
     `Cache-Control: no-store`, so don't put that on your own requests.
   - Headers a request already has are kept: fetch metadata the source sets itself is left whole, and a request without
     `Origin` gets none. `from` replaces the `Referer`, also on each redirect.
@@ -1902,9 +1902,7 @@ abstract class MySource : ExampleTheme() { // Replace 'ExampleTheme' with your t
 }
 ```
 
-The final extension version code is automatically calculated during the build as `theme.baseVersionCode + versionCode`,
-plus `CORE_VERSION_CODE`, which is bumped when a core change needs every extension rebuilt; the published version name
-shows that sum.
+The final extension version code is automatically calculated during the build as `theme.baseVersionCode + versionCode`.
 
 Because themes are provided as libraries, your extension's main class inherits directly from the theme's base class.
 

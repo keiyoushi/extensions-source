@@ -450,14 +450,14 @@ abstract class KeiSource : HttpSource() {
     abstract override suspend fun getPageList(chapter: SChapter): List<Page>
 
     /**
-     * Whether page images and covers go out with the headers a browser sends for an image. Turn it off for an image
-     * host that rejects them.
+     * Whether page images and covers go out with the headers a browser sends for an image. Off by default; turn it on
+     * with the move to the request helpers.
      */
-    protected open val browserImageHeaders: Boolean get() = true
+    protected open val browserImageHeaders: Boolean get() = false
 
     /**
-     * Builds the request for a page's image. A GET without a kind is sent as an image; mark it `raw()` to send it as
-     * built.
+     * Builds the request for a page's image. With [browserImageHeaders] on, a GET without a kind is sent as an image;
+     * mark it `raw()` to send it as built.
      *
      * @param page the page.
      * @return the request for its image.

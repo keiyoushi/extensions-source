@@ -277,7 +277,7 @@ class BrowserHeadersTest {
     }
 
     @Test
-    fun imageHeadersCanBeTurnedOff() {
+    fun coversNeedTheSwitch() {
         val cover = builder("https://cdn.a.test/c.jpg").cacheControl(CacheControl.Builder().noStore().build()).build()
         assertEquals(cover.headers, intercept(cover, images = false).headers)
     }
