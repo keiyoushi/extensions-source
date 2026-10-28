@@ -35,7 +35,28 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class TruyenQQVN : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient() = rateLimit(2, 1.seconds)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        val host = baseUrl.toHttpUrl().host
+
+        // The origin now and then answers a page with a 5xx that loads fine moments later, and Mihon
+        // doesn't retry page lists, so one hiccup fails a whole chapter download. The page rate
+        // limit below already spaces the retries out.
+        addInterceptor { chain ->
+            val request = chain.request()
+            var response = chain.proceed(request)
+            var retries = 0
+            while (response.code >= 500 && request.url.host == host && retries++ < 2) {
+                response.close()
+                response = chain.proceed(request)
+            }
+            response
+        }
+
+        // Cloudflare answers more than ~12 page requests a minute per IP, bursts included, with a 429
+        // challenge that Mihon < 0.21 doesn't solve. Covers under /media/ and the image CDN don't count.
+        rateLimit(1, 6.seconds) { it.host == host && it.pathSegments.first() != "media" }
+        rateLimit(2, 1.seconds)
+    }
 
     // ============================== Popular ===============================
 
