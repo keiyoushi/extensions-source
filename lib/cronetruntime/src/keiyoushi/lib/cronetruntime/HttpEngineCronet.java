@@ -32,9 +32,9 @@ final class HttpEngineCronet extends CronetEngine {
             .build();
   }
 
-  /** On Android 14, and on 11 to 13 once their Tethering module ships it */
+  /** On Android 14, and on 12 and 13 once their Tethering module ships it */
   static boolean isAvailable() {
-    return Build.VERSION.SDK_INT >= 30
+    return Build.VERSION.SDK_INT >= 31
         && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7;
   }
 

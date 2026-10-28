@@ -19,6 +19,8 @@ android {
             manifest.srcFile("AndroidManifest.xml")
             java.directories.clear()
             java.directories.add("src")
+            resources.directories.clear()
+            resources.directories.add("resources")
         }
     }
 

@@ -53,23 +53,28 @@ public final class CronetRuntime {
       }
     }
     readyBy = SystemClock.elapsedRealtime() + WAIT_MILLIS;
-    new Thread(
-            () -> {
-              try {
-                use(
-                    PlayServicesCronet.createBuilder(context)
-                        .enableHttp2(true)
-                        .enableQuic(false)
-                        .enableBrotli(true)
-                        .build(),
-                    "Play services");
-              } catch (Throwable t) {
-                Log.i(TAG, "Play services Cronet unavailable, staying on OkHttp", t);
-              }
-              ready.countDown();
-            },
-            "KeiCronet")
-        .start();
+    try {
+      new Thread(
+              () -> {
+                try {
+                  use(
+                      PlayServicesCronet.createBuilder(context)
+                          .enableHttp2(true)
+                          .enableQuic(false)
+                          .enableBrotli(true)
+                          .build(),
+                      "Play services");
+                } catch (Throwable t) {
+                  Log.i(TAG, "Play services Cronet unavailable, staying on OkHttp", t);
+                }
+                ready.countDown();
+              },
+              "KeiCronet")
+          .start();
+    } catch (Throwable t) {
+      Log.e(TAG, "Play services Cronet failed, staying on OkHttp", t);
+      ready.countDown();
+    }
   }
 
   private static void use(CronetEngine engine, String name) {

@@ -163,7 +163,11 @@ final class CronetServer implements Interceptor {
       throw new IOException(e);
     }
     boolean listened = cancelWith(chain.call(), urlRequest);
-    urlRequest.start();
+    try {
+      urlRequest.start();
+    } catch (RuntimeException e) {
+      throw new IOException(e);
+    }
 
     long headTimeout =
         chain.readTimeoutMillis() > 0

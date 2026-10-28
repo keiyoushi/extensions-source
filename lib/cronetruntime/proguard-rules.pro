@@ -3,6 +3,6 @@
 -keep class org.chromium.net.** { *; }
 -dontwarn okhttp3.**
 -dontwarn okio.**
--dontwarn kotlin.**
--dontwarn androidx.**
 -dontobfuscate
+# Play services reads the wrapped value reflectively
+-keepclassmembers class keiyoushi.lib.cronetruntime.PlayServicesCronet$Wrapper { <fields>; }

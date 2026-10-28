@@ -89,10 +89,11 @@ final class PlayServicesCronet {
       int version = cursor.getInt(0);
       String loaderPath = cursor.getString(2);
       int code = flag(cursor, "loaderVersion", 2) ? V2_LOAD_MODULE_NO_CRASH_UTILS : V2_LOAD_MODULE;
+      // The loaders play-services-basement uses
       ClassLoader loader =
-          Build.VERSION.SDK_INT >= 27
+          Build.VERSION.SDK_INT >= 29
               ? new DelegateLastClassLoader(loaderPath, ClassLoader.getSystemClassLoader())
-              : new PathClassLoader(loaderPath, ClassLoader.getSystemClassLoader());
+              : new ModuleClassLoader(loaderPath, ClassLoader.getSystemClassLoader());
       IBinder binder = (IBinder) loader.loadClass(V2_LOADER).getConstructor().newInstance();
       Parcel data = Parcel.obtain();
       data.writeInterfaceToken(V2_DESCRIPTOR);
@@ -174,6 +175,25 @@ final class PlayServicesCronet {
       hex.append(String.format(Locale.ROOT, "%02x", b));
     }
     return hex.toString();
+  }
+
+  /** Child-first, except for the platform's classes */
+  private static final class ModuleClassLoader extends PathClassLoader {
+    ModuleClassLoader(String path, ClassLoader parent) {
+      super(path, parent);
+    }
+
+    @Override
+    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+      if (!name.startsWith("java.") && !name.startsWith("android.")) {
+        try {
+          return findClass(name);
+        } catch (ClassNotFoundException ignored) {
+          // Not in the module
+        }
+      }
+      return super.loadClass(name, resolve);
+    }
   }
 
   /**
