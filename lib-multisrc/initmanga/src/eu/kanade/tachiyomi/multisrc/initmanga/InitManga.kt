@@ -63,6 +63,8 @@ abstract class InitManga :
 
     protected open val allGenresLabel = "Tümü"
 
+    protected open val siteZone: ZoneId = ZoneId.of("Europe/Istanbul")
+
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(baseUrl.toHttpUrl().newBuilder().addPathSegment(popularUrlSlug), page)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(baseUrl.toHttpUrl().newBuilder().addPathSegment(latestUrlSlug), page)
@@ -183,7 +185,7 @@ abstract class InitManga :
                         if (title.isNotEmpty()) append(" - $title")
                     }
                 }
-                date_upload = chapterDateFormat.tryParseDateTime(chapter.createdAt, istanbulZone)
+                date_upload = chapterDateFormat.tryParseDateTime(chapter.createdAt, siteZone)
             }
         }
     }
@@ -284,6 +286,5 @@ abstract class InitManga :
         private const val SEARCH_PAGE_SIZE = 10
         private val POST_ID_REGEX = Regex("""postid-(\d+)""")
         private val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
-        private val istanbulZone = ZoneId.of("Europe/Istanbul")
     }
 }
