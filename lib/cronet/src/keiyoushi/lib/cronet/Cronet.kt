@@ -22,7 +22,11 @@ import java.util.concurrent.ConcurrentHashMap
  * without Cronet, and for clients with their own TLS, proxy or authenticator.
  */
 fun OkHttpClient.Builder.cronet(): OkHttpClient.Builder = apply {
-    if (System.getProperty("java.vm.name") == "Dalvik") addInterceptor(CronetInterceptor)
+    if (System.getProperty("java.vm.name") == "Dalvik") {
+        addInterceptor(CronetInterceptor)
+    } else {
+        logOnce("Not on Android, staying on OkHttp")
+    }
 }
 
 /** Runs the rest of OkHttp's chain itself, with Cronet in place of OkHttp's network call */
