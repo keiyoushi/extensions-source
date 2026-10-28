@@ -38,6 +38,10 @@ final class PlayServicesCronet {
   private static final int V2_LOAD_MODULE = 2;
   private static final int V2_LOAD_MODULE_NO_CRASH_UTILS = 3;
 
+  // The oldest module verified with the trimmed API; 67's native code aborts the process on the
+  // API classes it leaves out
+  private static final int MIN_CRONET_MAJOR = 83;
+
   private PlayServicesCronet() {}
 
   /** Throws when Play services or its Cronet module isn't there */
@@ -45,10 +49,19 @@ final class PlayServicesCronet {
     verifyGms(context);
     Context module = loadModule(context);
     if (module == null) throw new IllegalStateException("No Cronet module context");
+    ClassLoader loader = module.getClassLoader();
+    String version =
+        (String)
+            loader
+                .loadClass("org.chromium.net.impl.ImplVersion")
+                .getMethod("getCronetVersion")
+                .invoke(null);
+    if (Integer.parseInt(version.split("\\.")[0]) < MIN_CRONET_MAJOR) {
+      throw new IllegalStateException("Play services Cronet " + version + " is too old");
+    }
     ICronetEngineBuilder impl =
         (ICronetEngineBuilder)
-            module
-                .getClassLoader()
+            loader
                 .loadClass("org.chromium.net.impl.NativeCronetEngineBuilderImpl")
                 .getConstructor(Context.class)
                 .newInstance(context);
