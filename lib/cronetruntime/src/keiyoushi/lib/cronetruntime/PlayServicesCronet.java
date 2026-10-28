@@ -38,9 +38,9 @@ final class PlayServicesCronet {
   private static final int V2_LOAD_MODULE = 2;
   private static final int V2_LOAD_MODULE_NO_CRASH_UTILS = 3;
 
-  // The oldest module verified with the trimmed API; 67's native code aborts the process on the
-  // API classes it leaves out
-  private static final int MIN_CRONET_MAJOR = 83;
+  // The oldest module verified with the trimmed API; a module's native code aborts the process if
+  // a class it registers can't load
+  private static final int MIN_CRONET_MAJOR = 67;
 
   private PlayServicesCronet() {}
 
