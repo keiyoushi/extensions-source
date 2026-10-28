@@ -45,6 +45,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.seconds
 
@@ -311,7 +312,7 @@ abstract class Jinmantiantang :
         else -> ""
     }
 
-    private val dateFormat = DateTimeFormatter.ISO_LOCAL_DATE
+    private val dateFormat = DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneId.of("Asia/Taipei"))
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.attr("href")
