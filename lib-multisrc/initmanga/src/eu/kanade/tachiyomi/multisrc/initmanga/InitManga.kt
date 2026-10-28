@@ -135,7 +135,7 @@ abstract class InitManga :
             author = document.infoValue(authorLabel)
             artist = document.infoValue(artistLabel)
             genre = document.select("div#genre-tags a:not(.uk-disabled)").joinToString { it.text() }.ifEmpty { null }
-            status = parseStatus(document.selectFirst("div.story-cover-wrap span.manga-status-ribbon"))
+            status = parseStatus(document)
             thumbnail_url = document.selectFirst("a.story-cover img")?.imgAttr()
         }
 
@@ -149,12 +149,18 @@ abstract class InitManga :
         ?.nextElementSibling()
         ?.textOrNull()
 
-    private fun parseStatus(ribbon: Element?): Int = when (ribbon?.classNames()?.firstOrNull { it.startsWith("ribbon-") }) {
-        "ribbon-ongoing", "ribbon-caught_up" -> SManga.ONGOING
-        "ribbon-completed" -> SManga.COMPLETED
-        "ribbon-season_end", "ribbon-source_hiatus" -> SManga.ON_HIATUS
-        "ribbon-dropped" -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
+    // Ribbon class key, or the label on sites without a ribbon
+    private fun parseStatus(document: Document): Int {
+        val key = document.selectFirst("div.story-cover-wrap span.manga-status-ribbon")
+            ?.classNames()?.firstOrNull { it.startsWith("ribbon-") }?.removePrefix("ribbon-")
+            ?: document.selectFirst("#manga-status")?.text()?.lowercase()?.replace(' ', '_')
+        return when (key) {
+            "ongoing", "caught_up" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "season_end", "source_hiatus" -> SManga.ON_HIATUS
+            "dropped" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
     }
 
     private suspend fun getChapterList(document: Document, mangaUrl: String): List<SChapter> {
