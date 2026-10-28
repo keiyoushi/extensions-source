@@ -9,8 +9,10 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -62,7 +64,7 @@ abstract class DespairManga : KeiSource() {
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.slug}"
 
     // entries saved by the old WordPress source still use /manga/{slug}/ as url
-    private val SManga.slug get() = url.trimEnd('/').substringAfterLast('/')
+    private val SManga.slug get() = baseUrl.toHttpUrl().resolve(url)!!.pathSegments.last { it.isNotEmpty() }
 
     private suspend fun getWork(slug: String): WorkDto? {
         val url = "$apiUrl/manga_works".toHttpUrl().newBuilder()
@@ -78,13 +80,15 @@ abstract class DespairManga : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): SMangaUpdate = coroutineScope {
         val slug = manga.slug
-        val work = getWork(slug) ?: throw Exception("Series not found")
-        return SMangaUpdate(
-            manga = work.toSManga(),
-            chapters = if (fetchChapters) getChapters(work.id, slug) else chapters,
-        )
+        val cachedId = manga.memo[WORK_ID]?.stringOrNull
+        val work = async {
+            if (fetchDetails || cachedId == null) getWork(slug) ?: throw Exception("Series not found") else null
+        }
+        val workId = cachedId ?: work.await()!!.id
+        val chapterList = async { if (fetchChapters) getChapters(workId, slug) else chapters }
+        SMangaUpdate(work.await()?.toSManga() ?: manga, chapterList.await())
     }
 
     private suspend fun getChapters(workId: String, slug: String): List<SChapter> {
@@ -104,9 +108,11 @@ abstract class DespairManga : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        // chapters saved by the old WordPress source have no chapter id
+        val chapterId = chapter.memo[CHAPTER_ID]?.stringOrNull ?: throw Exception("Refresh chapter list")
         val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
             .addQueryParameter("select", "pages")
-            .addQueryParameter("id", "eq.${chapter.memo.getString("id")}")
+            .addQueryParameter("id", "eq.$chapterId")
             .build()
         return client.get(url, apiHeaders).parseAs<List<PagesDto>>()
             .firstOrNull()?.pages.orEmpty()
@@ -114,6 +120,8 @@ abstract class DespairManga : KeiSource() {
     }
 
     companion object {
+        const val WORK_ID = "workId"
+        const val CHAPTER_ID = "id"
         private const val ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwMzczMDE4LCJleHAiOjE5NDgwNTMwMTh9.xYgAlC_9SuUCdzdff6wBYGWzYFmAI9apP_mk4DCPaVI"
         private const val WORK_COLUMNS = "id,slug,title_ar,title_en,cover_url,genres,synopsis,status,author_or_studio"
         private const val PAGE_SIZE = 24

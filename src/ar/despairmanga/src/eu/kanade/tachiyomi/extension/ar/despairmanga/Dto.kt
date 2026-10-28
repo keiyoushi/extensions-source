@@ -40,6 +40,7 @@ class WorkDto(
             "مكتمل" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
+        memo = buildJsonObject { put(DespairManga.WORK_ID, id) }
     }
 }
 
@@ -58,7 +59,7 @@ class ChapterDto(
         name = if (isFree == false) "🔒 $chapterName" else chapterName
         chapter_number = chapterNumber.toFloat()
         date_upload = Instant.tryParse(createdAt)
-        memo = buildJsonObject { put("id", id) }
+        memo = buildJsonObject { put(DespairManga.CHAPTER_ID, id) }
     }
 }
 
