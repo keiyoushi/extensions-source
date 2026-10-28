@@ -16,7 +16,7 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Sends the client's requests through the device's Cronet (HttpEngine on Android 14+, else Play services),
+ * Sends the client's requests through the device's Cronet (the platform's HttpEngine, else Play services'),
  * for Chrome's TLS and HTTP/2. Cronet resolves hosts itself, so the client's DNS (DoH included) isn't used;
  * the first requests after app start wait up to 5 s for Play services' Cronet. Requests stay on OkHttp
  * without Cronet, and for clients with their own TLS, proxy or authenticator.

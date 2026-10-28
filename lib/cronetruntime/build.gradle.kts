@@ -31,21 +31,7 @@ android {
     }
 }
 
-// Provided by the app
-configurations.matching { it.name.endsWith("RuntimeClasspath") }.configureEach {
-    exclude(group = "org.jetbrains.kotlin")
-    exclude(group = "org.jetbrains.kotlinx")
-    listOf(
-        "activity", "annotation", "arch.core", "collection", "core", "customview", "fragment", "lifecycle",
-        "loader", "savedstate", "versionedparcelable", "viewpager",
-    ).forEach { exclude(group = "androidx.$it") }
-}
-
 dependencies {
-    //noinspection UseTomlInstead
-    implementation("org.chromium.net:cronet:500.1.0")
-    //noinspection UseTomlInstead
-    implementation("com.google.android.gms:play-services-cronet:18.1.1")
     compileOnly(libs.okhttp.core)
 }
 

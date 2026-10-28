@@ -4,14 +4,10 @@ import android.content.Context;
 import android.content.ContextWrapper;
 import android.os.SystemClock;
 import android.util.Log;
-import com.google.android.gms.common.GooglePlayServicesUtilLight;
-import com.google.android.gms.net.CronetProviderInstaller;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import okhttp3.Interceptor;
 import org.chromium.net.CronetEngine;
-import org.chromium.net.CronetProvider;
 
 /** Entry point for lib:cronet */
 public final class CronetRuntime {
@@ -48,57 +44,40 @@ public final class CronetRuntime {
   private static synchronized void start(Context context) {
     if (started) return;
     started = true;
-    if (use(context, "HttpEngine-Native-Provider")) return;
-    readyBy = SystemClock.elapsedRealtime() + WAIT_MILLIS;
-    try {
-      // The app's manifest has no Play services version tag
-      GooglePlayServicesUtilLight.enableUsingApkIndependentContext();
-      Executor executor = r -> new Thread(r, "KeiCronet").start();
-      CronetProviderInstaller.installProvider(context)
-          .addOnSuccessListener(
-              executor,
-              unused -> {
-                if (!use(context, "Google-Play-Services-Cronet-Provider")) {
-                  Log.i(TAG, "No Cronet, staying on OkHttp");
-                }
-                ready.countDown();
-              })
-          .addOnFailureListener(
-              executor,
-              e -> {
-                Log.i(TAG, "Play services Cronet unavailable, staying on OkHttp", e);
-                ready.countDown();
-              });
-    } catch (Throwable t) {
-      Log.e(TAG, "Play services Cronet", t);
-      ready.countDown();
-    }
-  }
-
-  /** Never throws */
-  private static boolean use(Context context, String name) {
-    try {
-      for (CronetProvider provider : CronetProvider.getAllProviders(context)) {
-        if (provider.getName().equals(name) && provider.isEnabled()) {
-          CronetEngine engine =
-              provider
-                  .createBuilder()
-                  .enableHttp2(true)
-                  .enableQuic(false)
-                  .enableBrotli(true)
-                  .build();
-          server = new CronetServer(engine);
-          Log.i(TAG, "Using " + name + " " + engine.getVersionString());
-          return true;
-        }
+    if (HttpEngineCronet.isAvailable()) {
+      try {
+        use(new HttpEngineCronet(context), "HttpEngine");
+        return;
+      } catch (Throwable t) {
+        Log.e(TAG, "HttpEngine failed", t);
       }
-    } catch (Throwable t) {
-      Log.e(TAG, name + " failed, staying on OkHttp", t);
     }
-    return false;
+    readyBy = SystemClock.elapsedRealtime() + WAIT_MILLIS;
+    new Thread(
+            () -> {
+              try {
+                use(
+                    PlayServicesCronet.createBuilder(context)
+                        .enableHttp2(true)
+                        .enableQuic(false)
+                        .enableBrotli(true)
+                        .build(),
+                    "Play services");
+              } catch (Throwable t) {
+                Log.i(TAG, "Play services Cronet unavailable, staying on OkHttp", t);
+              }
+              ready.countDown();
+            },
+            "KeiCronet")
+        .start();
   }
 
-  /** Cronet finds its providers through the context's class loader */
+  private static void use(CronetEngine engine, String name) {
+    server = new CronetServer(engine);
+    Log.i(TAG, "Using " + name + " " + engine.getVersionString());
+  }
+
+  /** Play services' Cronet module finds the Cronet API through the context's class loader */
   private static final class LoaderContext extends ContextWrapper {
     LoaderContext(Context base) {
       super(base);

@@ -37,7 +37,8 @@ import okio.Source;
 import okio.Timeout;
 import org.chromium.net.CronetEngine;
 import org.chromium.net.CronetException;
-import org.chromium.net.UploadDataProviders;
+import org.chromium.net.UploadDataProvider;
+import org.chromium.net.UploadDataSink;
 import org.chromium.net.UrlRequest;
 import org.chromium.net.UrlResponseInfo;
 
@@ -155,7 +156,7 @@ final class CronetServer implements Interceptor {
           MediaType type = requestBody.contentType();
           builder.addHeader("Content-Type", (type != null ? type : OCTET_STREAM).toString());
         }
-        builder.setUploadDataProvider(UploadDataProviders.create(buffer.readByteArray()), EXECUTOR);
+        builder.setUploadDataProvider(new BytesUpload(buffer.readByteArray()), EXECUTOR);
       }
       urlRequest = builder.build();
     } catch (RuntimeException e) {
@@ -435,6 +436,34 @@ final class CronetServer implements Interceptor {
         finished = true;
         urlRequest.cancel();
       }
+    }
+  }
+
+  private static final class BytesUpload extends UploadDataProvider {
+    private final byte[] bytes;
+    private int position;
+
+    BytesUpload(byte[] bytes) {
+      this.bytes = bytes;
+    }
+
+    @Override
+    public long getLength() {
+      return bytes.length;
+    }
+
+    @Override
+    public void read(UploadDataSink sink, ByteBuffer buffer) {
+      int count = Math.min(buffer.remaining(), bytes.length - position);
+      buffer.put(bytes, position, count);
+      position += count;
+      sink.onReadSucceeded(false);
+    }
+
+    @Override
+    public void rewind(UploadDataSink sink) {
+      position = 0;
+      sink.onRewindSucceeded();
     }
   }
 }
