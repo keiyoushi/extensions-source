@@ -203,16 +203,13 @@ abstract class InitManga :
         if (document.selectFirst("div.lock-card") != null) return emptyList()
 
         val scripts = document.scriptContents()
-        val payload = scripts.firstNotNullOfOrNull { ENCRYPTED_CHAPTER_REGEX.find(it) }
-            ?.groupValues?.get(1)?.parseAs<EncryptedPayloadDto>()
+        val payload = scripts.firstOrNull { "\"ciphertext\"" in it }?.objectLiteral()?.parseAs<EncryptedPayloadDto>()
             ?: return document.select("div#chapter-content > img").toPages()
-        val initMangaData = scripts.firstNotNullOf { INIT_MANGA_DATA_REGEX.find(it) }
-            .groupValues[1].parseAs<InitMangaDataDto>()
-
         val key = if (payload.salt != null) {
-            passphraseKey(initMangaData.decryptionKey!!, payload.salt)
+            val initMangaData = scripts.first { "\"decryption_key\"" in it }.objectLiteral().parseAs<InitMangaDataDto>()
+            passphraseKey(initMangaData.decryptionKey, payload.salt)
         } else {
-            fetchChapterKey(payload, initMangaData, chapterUrl)
+            fetchChapterKey(payload, chapterUrl)
         }
         val content = Base64.decode(payload.ciphertext, Base64.DEFAULT)
             .aesDecrypt(aesCbc(key, payload.iv.decodeHex()))
@@ -228,28 +225,19 @@ abstract class InitManga :
             ?: script.data()
     }
 
+    private fun String.objectLiteral(): String = substring(indexOf('{'), lastIndexOf('}') + 1)
+
     private fun passphraseKey(decryptionKey: String, salt: String): ByteArray {
         val passphrase = Base64.decode(decryptionKey, Base64.DEFAULT).decodeToString()
         val spec = PBEKeySpec(passphrase.toCharArray(), salt.decodeHex(), 999, 256)
         return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512").generateSecret(spec).encoded
     }
 
-    private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, initMangaData: InitMangaDataDto, chapterUrl: String): ByteArray {
+    private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, chapterUrl: String): ByteArray {
+        val keyHeaders = headers.newBuilder().set("Referer", chapterUrl).build()
         val body = ChapterKeyRequestDto(payload.cid!!, payload.e!!, payload.g!!).toJsonRequestBody()
-        val keyUrl = "${initMangaData.restUrl}/chapter-key"
-        fun keyHeaders(nonce: String?) = headers.newBuilder()
-            .set("Referer", chapterUrl)
-            .apply { if (nonce != null) set("X-WP-Nonce", nonce) }
-            .build()
-
-        // The endpoint also answers without a nonce
-        val nonce = initMangaData.nonce?.takeIf { it.isNotEmpty() }
-        if (nonce != null) {
-            client.post(keyUrl, keyHeaders(nonce), body, ensureSuccess = false).use { response ->
-                if (response.isSuccessful) return response.parseAs<ChapterKeyResponseDto>().key.decodeHex()
-            }
-        }
-        return client.post(keyUrl, keyHeaders(null), body).parseAs<ChapterKeyResponseDto>().key.decodeHex()
+        return client.post("$baseUrl/wp-json/initmanga/v1/chapter-key", keyHeaders, body)
+            .parseAs<ChapterKeyResponseDto>().key.decodeHex()
     }
 
     private fun Elements.toPages(): List<Page> = mapNotNull { element ->
@@ -294,8 +282,6 @@ abstract class InitManga :
         private const val PREF_HIDE_LOCKED_KEY = "pref_hide_locked_chapters"
         private const val PREF_HIDE_LOCKED_DEFAULT = false
         private const val SEARCH_PAGE_SIZE = 10
-        private val ENCRYPTED_CHAPTER_REGEX = Regex("""InitMangaEncryptedChapter\s*=\s*(\{.*?\})\s*(?:;|$)""", RegexOption.DOT_MATCHES_ALL)
-        private val INIT_MANGA_DATA_REGEX = Regex("""InitMangaData\s*=\s*(\{.*?\})\s*(?:;|$)""", RegexOption.DOT_MATCHES_ALL)
         private val POST_ID_REGEX = Regex("""postid-(\d+)""")
         private val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
         private val istanbulZone = ZoneId.of("Europe/Istanbul")
