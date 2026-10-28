@@ -12,7 +12,7 @@ keiyoushi {
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://hentaiteca.online"
+        baseUrl = "https://hentaiteca.net"
         lang = "pt-BR"
     }
 }
