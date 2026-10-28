@@ -46,6 +46,7 @@ abstract class Baozi :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(bannerInterceptor)
+        addInterceptor(GatekeeperInterceptor)
         addNetworkInterceptor(MissingImageInterceptor)
         rateLimit(2)
     }
