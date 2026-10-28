@@ -6,15 +6,22 @@ plugins {
 
 keiyoushi {
     name = "Celestial Moon"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "mangathemesia"
 
     source {
         lang = "es"
-        baseUrl = "https://celestialmoonscan.es"
+        baseUrl = "https://lecturacelestialmoon.site"
         // ZeistManga -> MangaThemesia
         versionId = 2
+    }
+
+    deeplink {
+        host("lecturacelestialmoon.site")
+        host("palegoldenrod-mallard-636284.hostingersite.com")
+        host("mediumaquamarine-cheetah-476183.hostingersite.com")
+        path("/obra/..*")
+        path("/leer/..*")
     }
 }
