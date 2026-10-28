@@ -130,7 +130,9 @@ abstract class InitManga :
         manga.apply {
             title = document.selectFirst("h1")!!.text()
             description = buildString {
-                document.selectFirst("div#manga-description")?.text()?.let(::append)
+                document.selectFirst("div#manga-description")?.let { element ->
+                    element.select("p, h1, h2, h3, h4, h5, h6, li").ifEmpty { listOf(element) }.mapNotNull { it.textOrNull() }.joinTo(this, "\n\n")
+                }
                 document.selectFirst("span#comic-othername")?.textOrNull()?.let { append("\n\nAlternatif Başlık: $it") }
             }.trim().ifEmpty { null }
             author = document.infoValue(authorLabel)
