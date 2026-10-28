@@ -35,6 +35,6 @@ internal object RuntimeLoader {
                 tmp.delete()
             }
         }
-        return DexClassLoader(file.path, null, null, applicationContext.classLoader)
+        return DexClassLoader(file.path, dir.path, null, applicationContext.classLoader)
     }
 }

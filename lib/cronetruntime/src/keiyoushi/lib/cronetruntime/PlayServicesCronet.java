@@ -218,6 +218,8 @@ final class PlayServicesCronet {
 
     Wrapper(Object value) {
       this.value = value;
+      // Android 8's queryLocalInterface dereferences the descriptor
+      attachInterface(null, "com.google.android.gms.dynamic.IObjectWrapper");
     }
 
     static Object unwrap(IBinder binder) throws IllegalAccessException {
