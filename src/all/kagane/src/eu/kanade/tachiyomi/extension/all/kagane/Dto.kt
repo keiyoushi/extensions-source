@@ -7,6 +7,8 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
 import java.util.Locale
 import kotlin.time.Instant
@@ -424,17 +426,11 @@ class ChapterDto(
         val volumeNo: String?,
         val groups: List<Group> = emptyList(),
     ) {
-        fun toSChapter(seriesSegment: String, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "optional"): SChapter = SChapter.create().apply {
-            val readerSegment = buildString {
-                volumeNo?.takeIf { it.isNotBlank() }?.let { append("vol-$it-") }
-                val chapterSegment = chapterNo?.takeIf { it.isNotBlank() }
-                    ?: number.takeIf { it > 0f }?.let { c ->
-                        if (c == c.toLong().toFloat() && c >= 1f) c.toLong().toString() else c.toString()
-                    }
-                chapterSegment?.let { append("chapter-$it-") }
-                append(id)
+        fun toSChapter(seriesId: String, slug: String?, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "optional"): SChapter = SChapter.create().apply {
+            url = "/series/$seriesId/reader/$id"
+            memo = buildJsonObject {
+                slug?.takeIf { it.isNotBlank() }?.let { put("seriesSlug", it) }
             }
-            url = "/series/$seriesSegment/reader/$readerSegment"
             name = buildChapterName(chapterTitleMode)
             date_upload = Instant.tryParse(createdAt)
             if (useSourceChapterNumber) {

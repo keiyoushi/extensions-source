@@ -21,6 +21,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
@@ -404,14 +405,17 @@ abstract class Kagane :
             "Square Enix Manga",
         )
 
-        val seriesSegment = if (slug.isNullOrBlank()) seriesId else "$slug-$seriesId"
-
         return books.sortedByDescending { it.number }.map { book ->
-            book.toSChapter(seriesSegment, useSourceChapterNumber, chapterTitleMode)
+            book.toSChapter(seriesId, slug, useSourceChapterNumber, chapterTitleMode)
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = chapter.memo["seriesSlug"]?.stringOrNull?.takeIf { it.isNotBlank() }
+        val parts = chapter.url.split("/")
+        if (slug == null || parts.size != 5) return "$baseUrl${chapter.url}"
+        return "$baseUrl/series/$slug-${parts[2].takeLast(36)}/reader/${parts[4]}"
+    }
 
     // =========================== Related Manga ============================
     override val supportsRelatedMangas = true
