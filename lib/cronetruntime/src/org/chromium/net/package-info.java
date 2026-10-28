@@ -4,7 +4,7 @@
 
 /**
  * Cronet's API from org.chromium.net:cronet-api 141.7340.3, trimmed to what the runtime and Play
- * services' Cronet module use. The module links against these classes, so what's kept must keep its
- * exact signatures.
+ * services' Cronet module use, including the supertypes of the classes the module's native code
+ * registers. The module links against these classes, so what's kept must keep its exact signatures.
  */
 package org.chromium.net;

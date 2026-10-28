@@ -36,6 +36,10 @@ public abstract class UrlRequest {
     public void onCanceled(UrlRequest request, UrlResponseInfo info) {}
   }
 
+  public abstract static class StatusListener {
+    public abstract void onStatus(int status);
+  }
+
   public abstract void start();
 
   public abstract void followRedirect();
