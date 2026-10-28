@@ -149,6 +149,18 @@ abstract class InitManga :
         return SMangaUpdate(manga, chapterList)
     }
 
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+        .select("div.manga-item-slider")
+        .map { card ->
+            SManga.create().apply {
+                setUrlWithoutDomain(card.selectFirst("a[href]")!!.absUrl("href"))
+                title = card.selectFirst("h3")!!.text()
+                thumbnail_url = card.selectFirst("img")?.imgAttr()
+            }
+        }
+
     private fun Document.infoValue(label: String): String? = selectFirst("div.manga-info-details")
         ?.textNodes()
         ?.firstOrNull { it.text().trim() == "$label:" }
