@@ -17,6 +17,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.aesCbc
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -136,7 +137,8 @@ abstract class InitManga :
             artist = document.infoValue(artistLabel)
             genre = document.select("div#genre-tags a:not(.uk-disabled)").joinToString { it.text() }.ifEmpty { null }
             status = parseStatus(document)
-            thumbnail_url = document.selectFirst("a.story-cover img")?.imgAttr()
+            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attrOrNull("content")
+                ?: document.selectFirst("a.story-cover img")?.imgAttr()
         }
 
         val chapterList = if (fetchChapters) getChapterList(document, mangaUrl) else chapters
