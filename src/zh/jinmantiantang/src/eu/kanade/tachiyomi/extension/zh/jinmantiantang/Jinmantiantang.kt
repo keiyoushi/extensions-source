@@ -23,10 +23,13 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.selectLast
 import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -126,43 +129,24 @@ abstract class Jinmantiantang :
         return mangaListParse(client.get(searchUrl(page, query, filters)))
     }
 
-    // 禁漫天堂特有搜索方式: A +B --> A and B, A B --> A or B
+    // The site's search: "A +B" is A and B, "A B" is A or B, "-A" leaves out A
     private fun searchUrl(page: Int, query: String, filters: FilterList): HttpUrl {
-        val params = filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
+        val keywords = listOfNotNull(query.takeIf { it.isNotBlank() }) +
+            filters.filterIsInstance<TagFilter>().map { it.value }.filter { it.isNotEmpty() }
 
-        if (query.isNotEmpty() && !query.contains("-")) {
-            var keyword = query
-            var rest = params.substringAfter("?")
-            if (rest.contains("search_query")) {
-                // 分类本身就是一个搜索词, 两个关键词之间用 + 连接表示 AND
-                keyword = "$keyword+" + rest.substringBefore("&").substringAfter("=")
-                rest = rest.substringAfter("&")
+        return baseUrl.toHttpUrl().newBuilder().apply {
+            if (keywords.isNotEmpty()) {
+                addPathSegments("search/photos")
+                addQueryParameter("search_query", keywords.joinToString(" +"))
+                addQueryParameter("main_tag", filters.firstInstance<TypeFilter>().value)
+            } else {
+                addPathSegment("albums")
+                filters.firstInstance<CategoryFilter>().value.takeIf { it.isNotEmpty() }?.let(::addPathSegments)
             }
-            return buildUrl("/search/photos?$rest", mapOf("search_query" to keyword, "page" to "$page"))
-        }
-
-        val path = if (params.isEmpty()) "/albums?" else params
-        return if (query.isEmpty()) {
-            buildUrl(path, mapOf("page" to "$page"))
-        } else {
-            // 在搜索栏的关键词前添加-号来实现对筛选结果的过滤, 像 "-YAOI -扶他 -毛絨絨 -獵奇", 注意此时搜索功能不可用.
-            val removedGenres = query.split(" ").filter { it.startsWith("-") }.joinToString("+") { it.removePrefix("-") }
-            buildUrl(path, mapOf("page" to "$page", "screen" to removedGenres))
-        }
-    }
-
-    private fun buildUrl(pathAndQuery: String, extra: Map<String, String>): HttpUrl {
-        val path = pathAndQuery.substringBefore("?")
-
-        return "$baseUrl$path".toHttpUrl().newBuilder()
-            .apply {
-                pathAndQuery.substringAfter("?", "")
-                    .split("&")
-                    .filter { "=" in it }
-                    .forEach { addQueryParameter(it.substringBefore("="), it.substringAfter("=")) }
-                extra.forEach { (key, value) -> addQueryParameter(key, value) }
-            }
-            .build()
+            addQueryParameter("o", filters.firstInstance<SortFilter>().value)
+            addQueryParameter("t", filters.firstInstance<TimeFilter>().value)
+            addQueryParameter("page", page.toString())
+        }.build()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -352,14 +336,33 @@ abstract class Jinmantiantang :
         return elements.map { chapterFromElement(it) }.reversed()
     }
 
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        FavoritesFilter(),
-        Filter.Separator(),
-        CategoryGroup(),
-        SortFilter(),
-        TimeFilter(),
-        TypeFilter(),
-    )
+    override val supportsFilterFetching get() = true
+
+    // Tag groups from the site's tag page, without its trending searches
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/theme/").asJsoup()
+        .select("div.row:has(> h4)")
+        .map { row ->
+            row.selectFirst("h4")!!.text() to row.select("a[href*=search_query]")
+                .map { it.absUrl("href").toHttpUrl().queryParameter("search_query")!! }
+                .distinct()
+        }
+        .filter { (name, tags) -> name != TRENDING_TAGS && tags.isNotEmpty() }
+        .ifEmpty { throw Exception("No tags on the tag page") }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val tagGroups = data?.parseAs<List<Pair<String, List<String>>>>().orEmpty()
+        return FilterList(
+            FavoritesFilter(),
+            Filter.Separator(),
+            Filter.Header("搜索或选择标签时不按类型筛选"),
+            CategoryFilter(),
+            *tagGroups.map { (name, tags) -> TagFilter(name, tags) }.toTypedArray(),
+            SortFilter(),
+            TimeFilter(),
+            TypeFilter(),
+        )
+    }
 
     private class AlreadyCheckedInException : Exception()
 
@@ -535,6 +538,7 @@ abstract class Jinmantiantang :
 
     companion object {
         private const val PREFIX_ID_SEARCH_NO_COLON = "JM"
+        private const val TRENDING_TAGS = "熱門成人主題"
 
         private const val FAVORITE_MANGA_SELECTOR = "div[id^='favorites_album_']"
         private const val CHECKIN_PREF = "auto_checkin"
