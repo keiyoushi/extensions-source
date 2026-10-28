@@ -64,6 +64,8 @@ abstract class InitManga :
 
     protected open val allGenresLabel = "Tümü"
 
+    protected open val altTitleLabel = "Alternatif Başlık"
+
     protected open val siteZone: ZoneId = ZoneId.of("Europe/Istanbul")
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(baseUrl.toHttpUrl().newBuilder().addPathSegment(popularUrlSlug), page)
@@ -133,7 +135,7 @@ abstract class InitManga :
                 document.selectFirst("div#manga-description")?.let { element ->
                     element.select("p, h1, h2, h3, h4, h5, h6, li").ifEmpty { listOf(element) }.mapNotNull { it.textOrNull() }.joinTo(this, "\n\n")
                 }
-                document.selectFirst("span#comic-othername")?.textOrNull()?.let { append("\n\nAlternatif Başlık: $it") }
+                document.selectFirst("span#comic-othername")?.textOrNull()?.let { append("\n\n$altTitleLabel: $it") }
             }.trim().ifEmpty { null }
             author = document.infoValue(authorLabel)
             artist = document.infoValue(artistLabel)

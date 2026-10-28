@@ -24,5 +24,7 @@ abstract class MangaDrama : InitManga() {
 
     override val allGenresLabel = "All"
 
+    override val altTitleLabel = "Alternative title"
+
     override val siteZone: ZoneId = ZoneOffset.ofHours(8)
 }
