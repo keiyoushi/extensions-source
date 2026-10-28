@@ -13,10 +13,13 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -62,7 +65,10 @@ abstract class MangaMukai : KeiSource() {
         ).manga
     }
 
-    override fun getMangaUrl(manga: SManga): String = if (manga.url.startsWith("/")) baseUrl + manga.url else "$baseUrl/manga/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        val id = manga.memo[MANGA_ID]?.stringOrNull ?: manga.url.takeUnless { it.startsWith("/") } ?: return baseUrl + manga.url
+        return "$baseUrl/manga/$id"
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -70,7 +76,7 @@ abstract class MangaMukai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val id = resolveMangaId(manga.url)
+        val id = mangaId(manga)
         val details = async {
             if (fetchDetails) client.get("$apiUrl/manga/$id").parseAs<DetailsDto>().toSManga(manga.url) else manga
         }
@@ -78,14 +84,15 @@ abstract class MangaMukai : KeiSource() {
             if (fetchChapters) client.get("$apiUrl/series/$id/chapters").parseAs<ChaptersDto>().chapters.asReversed().map { it.toSChapter() } else chapters
         }
 
-        SMangaUpdate(details.await(), chapterList.await())
+        SMangaUpdate(details.await().apply { memo = buildJsonObject { put(MANGA_ID, id) } }, chapterList.await())
     }
 
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("/")) baseUrl + chapter.url else "$baseUrl/read/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val id = resolveChapterId(chapter.url)
-        return client.get("$apiUrl/chapters/content?id=$id", ensureSuccess = false).use { response ->
+        // Chapters saved by the MangaThemesia version store the post slug
+        if (chapter.url.startsWith("/")) throw Exception("Refresh chapter list")
+        return client.get("$apiUrl/chapters/content?id=${chapter.url}", ensureSuccess = false).use { response ->
             // Paid chapters answer 401 until they're bought with the site's coins
             if (response.code == 401) return emptyList()
             if (!response.isSuccessful) throw HttpException(response.code)
@@ -95,7 +102,7 @@ abstract class MangaMukai : KeiSource() {
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get("$apiUrl/related/${resolveMangaId(manga.url)}?limit=10")
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get("$apiUrl/related/${mangaId(manga)}?limit=10")
         .parseAs<CatalogDto>().mangas.map { it.toSManga() }
 
     override val supportsFilterFetching = true
@@ -124,6 +131,8 @@ abstract class MangaMukai : KeiSource() {
 
     private suspend fun fetchCatalog(): List<MangaDto> = client.get("$apiUrl/catalog").parseAs<CatalogDto>().mangas
 
+    private suspend fun mangaId(manga: SManga): String = manga.memo[MANGA_ID]?.stringOrNull ?: resolveMangaId(manga.url)
+
     // Entries saved by the MangaThemesia version store "/manga/<slug>/", and the slug matches the series' chapter category
     private suspend fun resolveMangaId(url: String): String {
         if (url.all(Char::isDigit)) return url
@@ -132,14 +141,8 @@ abstract class MangaMukai : KeiSource() {
         return client.get("$wpUrl/posts?categories=${category.id}&per_page=1&_fields=ero_seri").parseAs<List<SeriesRefDto>>().first().eroSeri
     }
 
-    // Chapters saved by the MangaThemesia version store "/<post-slug>/"
-    private suspend fun resolveChapterId(url: String): String {
-        if (url.all(Char::isDigit)) return url
-        val slug = url.trim('/')
-        return client.get("$wpUrl/posts?slug=$slug&_fields=id").parseAs<List<IdDto>>().first().id.toString()
-    }
-
     companion object {
+        private const val MANGA_ID = "id"
         private val WHITESPACE = Regex("""\s+""")
     }
 }
