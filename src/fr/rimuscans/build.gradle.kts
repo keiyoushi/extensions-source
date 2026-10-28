@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Rimu Scans"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

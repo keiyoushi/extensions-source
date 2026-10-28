@@ -1,20 +1,19 @@
-// 填写账号密码后，缺少会话 cookie(jmc_id) 时自动登录；
-// 登录 cookie 存入应用共享 CookieJar（与内置浏览器同一存储），已有登录态不受影响；
-// 登录失败只记日志，请求照常继续。
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.content.SharedPreferences
-import android.util.Log
 import eu.kanade.tachiyomi.network.POST
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
 
+// The site keeps the login in its AVS session cookie, one session per account.
 internal class LoginInterceptor(
     private val preferences: SharedPreferences,
     private val baseClient: OkHttpClient,
@@ -24,56 +23,86 @@ internal class LoginInterceptor(
 
     private val loginLock = Any()
 
+    // Unset until the site answers a login, so a network error retries on the next request.
+    private var loginCredentials: Pair<String, String>? = null
+
+    @Volatile private var loggedIn = false
+
+    private var loginCount = 0
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (hasCredentials()) {
-            val baseUrl = baseUrlProvider()
-            if (request.url.host == baseUrl.toHttpUrl().host && !isLoggedIn(request.url)) {
-                synchronized(loginLock) {
-                    if (!isLoggedIn(request.url)) login(baseUrl)
-                }
-            }
+        val credentials = credentials() ?: return chain.proceed(request)
+        val baseUrl = baseUrlProvider()
+        if (request.url.host != baseUrl.toHttpUrl().host) return chain.proceed(request)
+
+        val count = synchronized(loginLock) {
+            if (loginCredentials != credentials) login(baseUrl, credentials)
+            loginCount
+        }
+        val response = chain.proceed(request)
+        if (!loggedIn || !response.isLoggedOut()) return response
+
+        response.close()
+        synchronized(loginLock) {
+            if (loginCount == count) login(baseUrl, credentials)
         }
         return chain.proceed(request)
     }
 
-    // jmc_id is the site's persistent login cookie, only present while logged in.
-    private fun isLoggedIn(url: HttpUrl): Boolean = baseClient.cookieJar.loadForRequest(url).any { it.name == "jmc_id" }
+    private fun credentials(): Pair<String, String>? {
+        val username = preferences.getString(USERNAME_PREF, null)?.trim()
+        val password = preferences.getString(PASSWORD_PREF, null)
+        if (username.isNullOrEmpty() || password.isNullOrEmpty()) return null
+        return username to password
+    }
 
-    private fun hasCredentials(): Boolean = !preferences.getString(USERNAME_PREF, null).isNullOrEmpty() &&
-        !preferences.getString(PASSWORD_PREF, null).isNullOrEmpty()
+    // An ended session answers first with an empty Refresh, then with guest pages.
+    private fun Response.isLoggedOut(): Boolean = header("Refresh") != null ||
+        (header("Content-Type")?.startsWith("text/html") == true && GUEST_MARKER in peekBody(PEEK_BYTES).string())
 
-    private fun login(baseUrl: String) {
-        val username = preferences.getString(USERNAME_PREF, null)!!.trim()
-        val password = preferences.getString(PASSWORD_PREF, null)!!
+    private fun login(baseUrl: String, credentials: Pair<String, String>) {
+        loginCount++
+        loginCredentials = null
+        loggedIn = false
 
         val form = FormBody.Builder()
-            .add("username", username)
-            .add("password", password)
+            .add("username", credentials.first)
+            .add("password", credentials.second)
             .add("id_remember", "on")
             .add("login_remember", "on")
             .add("submit_login", "")
             .build()
 
         val loginHeaders = headersProvider().newBuilder()
-            .set("Origin", baseUrl)
             .set("Referer", "$baseUrl/login")
             .build()
 
-        try {
-            baseClient.newCall(POST("$baseUrl/login", loginHeaders, form)).execute().use { response ->
-                if (isLoggedIn(baseUrl.toHttpUrl())) {
-                    Log.i(TAG, "Login succeeded")
-                } else {
-                    Log.w(TAG, "Login failed: code=${response.code}")
-                }
-            }
-        } catch (e: IOException) {
-            Log.w(TAG, "Login failed", e)
+        val loginRequest = POST("$baseUrl/login", loginHeaders, form)
+
+        var response = baseClient.newCall(loginRequest).execute()
+        if (response.header("Refresh") != null) {
+            response.close()
+            response = baseClient.newCall(loginRequest).execute()
+        }
+        loginCredentials = credentials
+        if (response.header("Content-Type")?.startsWith("application/json") != true) {
+            response.close()
+            return
+        }
+        loggedIn = try {
+            response.parseAs<LoginResponse>().status == 1
+        } catch (e: SerializationException) {
+            throw IOException(e)
         }
     }
 
+    @Serializable
+    private class LoginResponse(val status: Int)
+
     private companion object {
-        const val TAG = "Jinmantiantang"
+        // Google Analytics user type in every page's head, "Member" when logged in.
+        const val GUEST_MARKER = """var dimension1 = "Guest""""
+        const val PEEK_BYTES = 16L * 1024
     }
 }

@@ -23,9 +23,14 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.selectLast
+import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -34,14 +39,14 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
-import java.text.SimpleDateFormat
 import java.time.LocalDate
-import java.util.Locale
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -49,10 +54,8 @@ abstract class Jinmantiantang :
     KeiSource(),
     ConfigurableSource {
 
-    // 首次加载时迁移旧版镜像列表
     private val preferences = getPreferences { preferenceMigration() }
 
-    // baseUrl 跟随"使用镜像网址"设置
     override val baseUrl: String
         get() = "https://" + preferences.mirrorBaseUrl
 
@@ -62,20 +65,23 @@ abstract class Jinmantiantang :
         // 拦截器放最前：主站请求失败时自动拉取新镜像列表
         interceptors().add(0, updateUrlInterceptor)
         addInterceptor(ScrambledImageInterceptor)
-        // 设置了账号密码时自动登录（cookie 与应用内置浏览器共享）
         addInterceptor(LoginInterceptor(preferences, network.client, { baseUrl }, { headers }))
         // Add rate limit to fix manga thumbnail load failure
         rateLimit(3, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
     }
 
-    // 点击量排序(人气)
     override suspend fun getPopularManga(page: Int): MangasPage {
         maybeAutoCheckIn()
-        return mangaListParse(client.get("$baseUrl/albums?o=mv&page=$page"))
+        return mangaListParse(client.get(albumsUrl("mv", page)))
     }
 
-    // 最新排序
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/albums?o=mr&page=$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get(albumsUrl("mr", page)))
+
+    private fun albumsUrl(order: String, page: Int): HttpUrl = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegment("albums")
+        .addQueryParameter("o", order)
+        .addQueryParameter("page", page.toString())
+        .build()
 
     private fun mangaListParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -99,7 +105,7 @@ abstract class Jinmantiantang :
         if (children.isNotEmpty() && children[0].tagName() == "a") children.removeAt(0)
         if (children.size >= 4) {
             title = children[1].text()
-            children[0].selectFirst("a")?.attr("href")?.let { setUrlWithoutDomain(it) }
+            children[0].selectFirst("a")?.let { url = albumUrl(it.absUrl("href"))!! }
             val img = children[0].selectFirst("img")
             if (img != null) {
                 thumbnail_url = img.extractThumbnailUrl().substringBeforeLast('?')
@@ -115,62 +121,46 @@ abstract class Jinmantiantang :
         }
 
         // JM号搜索: JM123 / 123 直接打开对应作品
-        if (query.startsWith(PREFIX_ID_SEARCH_NO_COLON, ignoreCase = true) || query.toIntOrNull() != null) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH_NO_COLON).removePrefix(":").trim()
-            val manga = mangaDetailsParse(mangaDetailsResolve(client.get("$baseUrl/album/$id"))).apply {
-                url = "/album/$id/"
-            }
-            return MangasPage(listOf(manga), hasNextPage = false)
+        val hasIdPrefix = query.startsWith(PREFIX_ID_SEARCH_NO_COLON, ignoreCase = true)
+        if (hasIdPrefix || (query.isNotEmpty() && query.all(Char::isDigit))) {
+            val id = (if (hasIdPrefix) query.substring(PREFIX_ID_SEARCH_NO_COLON.length) else query).removePrefix(":").trim()
+            return MangasPage(listOfNotNull(fetchAlbum("$baseUrl/album/$id")), hasNextPage = false)
         }
 
         return mangaListParse(client.get(searchUrl(page, query, filters)))
     }
 
-    // 禁漫天堂特有搜索方式: A +B --> A and B, A B --> A or B
+    // The site's search: "A +B" is A and B, "A B" is A or B, "-A" leaves out A
     private fun searchUrl(page: Int, query: String, filters: FilterList): HttpUrl {
-        val params = filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
+        val keywords = listOfNotNull(query.takeIf { it.isNotBlank() }) +
+            filters.filterIsInstance<TagFilter>().map { it.value }.filter { it.isNotEmpty() }
 
-        if (query.isNotEmpty() && !query.contains("-")) {
-            var keyword = query
-            var rest = params.substringAfter("?")
-            if (rest.contains("search_query")) {
-                // 分类本身就是一个搜索词, 两个关键词之间用 + 连接表示 AND
-                keyword = "$keyword+" + rest.substringBefore("&").substringAfter("=")
-                rest = rest.substringAfter("&")
+        return baseUrl.toHttpUrl().newBuilder().apply {
+            if (keywords.isNotEmpty()) {
+                addPathSegments("search/photos")
+                addQueryParameter("search_query", keywords.joinToString(" +"))
+                addQueryParameter("main_tag", filters.firstInstance<TypeFilter>().value)
+            } else {
+                addPathSegment("albums")
+                filters.firstInstance<CategoryFilter>().value.takeIf { it.isNotEmpty() }?.let(::addPathSegments)
             }
-            return buildUrl("/search/photos?$rest", mapOf("search_query" to keyword, "page" to "$page"))
-        }
-
-        val path = if (params.isEmpty()) "/albums?" else params
-        return if (query.isEmpty()) {
-            buildUrl(path, mapOf("page" to "$page"))
-        } else {
-            // 在搜索栏的关键词前添加-号来实现对筛选结果的过滤, 像 "-YAOI -扶他 -毛絨絨 -獵奇", 注意此时搜索功能不可用.
-            val removedGenres = query.split(" ").filter { it.startsWith("-") }.joinToString("+") { it.removePrefix("-") }
-            buildUrl(path, mapOf("page" to "$page", "screen" to removedGenres))
-        }
-    }
-
-    private fun buildUrl(pathAndQuery: String, extra: Map<String, String>): HttpUrl {
-        val path = pathAndQuery.substringBefore("?")
-
-        return "$baseUrl$path".toHttpUrl().newBuilder()
-            .apply {
-                pathAndQuery.substringAfter("?", "")
-                    .split("&")
-                    .filter { "=" in it }
-                    .forEach { addQueryParameter(it.substringBefore("="), it.substringAfter("=")) }
-                extra.forEach { (key, value) -> addQueryParameter(key, value) }
-            }
-            .build()
+            addQueryParameter("o", filters.firstInstance<SortFilter>().value)
+            addQueryParameter("t", filters.firstInstance<TimeFilter>().value)
+            addQueryParameter("page", page.toString())
+        }.build()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val id = url.pathSegments.getOrNull(1) ?: return null
-        return mangaDetailsParse(mangaDetailsResolve(client.get(url))).apply {
-            this.url = "/album/$id/"
-        }
+        if (url.pathSegments.firstOrNull() != "album") return null
+        return fetchAlbum(url.toString())
+    }
+
+    // /album/<chapter id> redirects to its album; the canonical link names it
+    private suspend fun fetchAlbum(url: String): SManga? {
+        val document = mangaDetailsResolve(client.get(url))
+        val albumUrl = albumUrl((document.selectFirst("link[rel=canonical]") ?: blockInvalidData(document)).absUrl("href")) ?: return null
+        return mangaDetailsParse(document).apply { this.url = albumUrl }
     }
 
     // 详情与章节来自同一个页面，只请求一次
@@ -180,19 +170,16 @@ abstract class Jinmantiantang :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = mangaDetailsResolve(client.get("$baseUrl${manga.url}"))
+        val document = mangaDetailsResolve(client.get(getMangaUrl(manga)))
 
         val updatedManga = mangaDetailsParse(document).apply { url = manga.url }
-        if (updatedManga.title.isBlank()) {
-            blockInvalidData(document)
-        }
 
         return SMangaUpdate(updatedManga, chapterListParse(document))
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val pages = mutableListOf<Page>()
-        var document = client.get("$baseUrl${chapter.url}").asJsoup()
+        var document = client.get(getChapterUrl(chapter)).asJsoup()
 
         while (true) {
             document.select("div[class=center scramble-page spnotice_chk][id*=0]").forEach { element ->
@@ -214,7 +201,6 @@ abstract class Jinmantiantang :
         return pages
     }
 
-    // 收藏夹
     private suspend fun fetchFavorites(page: Int): MangasPage {
         val username = getUsername().ifBlank {
             detectUsername().also { detected ->
@@ -228,7 +214,13 @@ abstract class Jinmantiantang :
             throw Exception("未检测到登录状态：请在应用内置浏览器中打开网页并登录，或在插件设置中手动填写用户名")
         }
 
-        val document = client.get("$baseUrl/user/$username/favorite/albums?page=$page").asJsoup()
+        val favoritesUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("user")
+            .addPathSegment(username)
+            .addPathSegments("favorite/albums")
+            .addQueryParameter("page", page.toString())
+            .build()
+        val document = client.get(favoritesUrl).asJsoup()
         val mangas = document.select(FAVORITE_MANGA_SELECTOR).map { favoriteMangaFromElement(it) }
 
         if (mangas.isEmpty() && !document.isLoggedIn()) {
@@ -240,27 +232,23 @@ abstract class Jinmantiantang :
     }
 
     private fun favoriteMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a[href*='/album/']")
-        if (link != null) {
-            setUrlWithoutDomain(link.attr("href").substringBefore("?"))
-            title = element.selectFirst(".video-title")?.text() ?: "Unknown"
-            val img = element.selectFirst(".thumb-overlay img")
-            thumbnail_url = img?.extractThumbnailUrl()?.substringBeforeLast('?').orEmpty()
-        } else {
-            title = "Unknown"
-        }
+        url = albumUrl(element.selectFirst("a[href*='/album/']")!!.absUrl("href"))!!
+        title = element.selectFirst(".video-title")!!.text()
+        thumbnail_url = element.selectFirst(".thumb-overlay img")?.extractThumbnailUrl()?.substringBeforeLast('?')
     }
 
-    // 登录与守卫
     private fun getUsername(): String = preferences.getString(USERNAME_PREF, "")?.trim() ?: ""
 
     private fun Document.isLoggedIn(): Boolean = selectFirst("#Comic_Top_Nav")?.selectFirst("a[href*='favorite'], a[href*='logout']") != null
 
     private suspend fun detectUsername(): String {
         val nav = client.get(baseUrl).asJsoup().selectFirst("#Comic_Top_Nav") ?: return ""
-        return nav.select("a[href*='favorite']")
-            .map { it.attr("href").substringAfter("/user/", "").substringBefore("/") }
-            .firstOrNull { it.isNotBlank() }
+        return nav.select("a[href*='/user/']")
+            .firstNotNullOfOrNull { link ->
+                link.absUrl("href").toHttpUrlOrNull()?.pathSegments
+                    ?.takeIf { it.getOrNull(0) == "user" }
+                    ?.getOrNull(1)
+            }
             .orEmpty()
     }
 
@@ -272,7 +260,6 @@ abstract class Jinmantiantang :
         },
     )
 
-    // 漫画详情
     private fun mangaDetailsResolve(response: Response): Document {
         val document = response.asJsoup()
         val scripts =
@@ -298,22 +285,25 @@ abstract class Jinmantiantang :
     }
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1")?.text() ?: ""
+        title = document.selectFirst("h1")?.textOrNull() ?: blockInvalidData(document)
         // keep thumbnail_url same as the one in popularMangaFromElement()
         val img = document.selectFirst(".thumb-overlay > img")
         thumbnail_url = img?.extractThumbnailUrl()?.substringBeforeLast('.') + "_3x4.jpg"
-        author = selectAuthor(document)
-        genre = selectDetailsStatusAndGenre(document, 0).trim().split(" ").joinToString(", ")
-
-        // When the index passed by the "selectDetailsStatusAndGenre(document: Document, index: Int)" index is 1,
-        // it will definitely return a String type of 0, 1 or 2. This warning can be ignored
-        status = selectDetailsStatusAndGenre(document, 1).trim().toIntOrNull() ?: 0
-        description = document.selectFirst("#intro-block .p-t-5.p-b-5")?.text()?.substringAfter("敘述：")?.trim() ?: ""
+        author = document.select("div.panel-body div.tag-block").getOrNull(3)?.select(".btn-primary")?.joinToString { it.text() }?.ifEmpty { null }
+        val tags = document.selectFirst("span[itemprop=genre]")?.select("a")?.map { it.text() }.orEmpty()
+        genre = tags.filterNot { it == "連載中" || it == "完結" }.joinToString().ifEmpty { null }
+        status = when {
+            "連載中" in tags -> SManga.ONGOING
+            "完結" in tags -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        description = document.selectFirst("#intro-block .p-t-5.p-b-5")?.text()?.substringAfter("敘述：")?.trim()?.ifEmpty { null }
     }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
+    private fun albumUrl(url: String): String? {
+        val segments = url.toHttpUrl().pathSegments
+        return if (segments[0] == "album") "/album/${segments[1]}/" else null
+    }
 
     private fun Element.extractThumbnailUrl(): String = when {
         hasAttr("data-original") -> absUrl("data-original")
@@ -322,40 +312,12 @@ abstract class Jinmantiantang :
         else -> ""
     }
 
-    // 查询作者信息
-    private fun selectAuthor(document: Document): String {
-        val elements = document.select("div.panel-body div.tag-block")
-        if (elements.size > 3) {
-            return elements[3].select(".btn-primary").joinToString { it.text() }
-        }
-        return ""
-    }
-
-    // 查询漫画状态和类别信息
-    private fun selectDetailsStatusAndGenre(document: Document, index: Int): String {
-        var status = "0"
-        var genre = ""
-        val spanGenres = document.select("span[itemprop=genre] a")
-        if (spanGenres.isEmpty()) {
-            return if (index == 1) status else genre
-        }
-        val elements: Elements = document.selectFirst("span[itemprop=genre]")?.select("a") ?: return ""
-        for (value in elements) {
-            when (val vote: String = value.select("a").text()) {
-                "連載中" -> status = "1"
-                "完結" -> status = "2"
-                else -> genre = "$genre$vote "
-            }
-        }
-        return if (index == 1) status else genre
-    }
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+    private val dateFormat = DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneId.of("Asia/Taipei"))
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        url = element.selectFirst("a")?.attr("href") ?: ""
-        name = element.selectFirst("a li h3")?.ownText() ?: ""
-        date_upload = dateFormat.tryParse(element.selectFirst("a li span.hidden-xs")?.text())
+        url = element.attr("href")
+        name = element.selectFirst("li h3")!!.ownText()
+        date_upload = dateFormat.tryParseDate(element.selectFirst("li span.hidden-xs")?.text())
     }
 
     private fun chapterListParse(document: Document): List<SChapter> {
@@ -368,24 +330,41 @@ abstract class Jinmantiantang :
             val singleChapter = SChapter.create().apply {
                 name = "单章节"
                 url = singleUrl
-                date_upload = dateFormat.tryParse(document.select("[itemprop=datePublished]").last()?.attr("content"))
+                date_upload = dateFormat.tryParseDate(document.selectLast("[itemprop=datePublished]")?.attr("content"))
             }
             return listOf(singleChapter)
         }
         return elements.map { chapterFromElement(it) }.reversed()
     }
 
-    // Filters
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        FavoritesFilter(),
-        Filter.Separator(),
-        CategoryGroup(),
-        SortFilter(),
-        TimeFilter(),
-        TypeFilter(),
-    )
+    override val supportsFilterFetching get() = true
 
-    // 签到
+    // Tag groups from the site's tag page, without its trending searches
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/theme/").asJsoup()
+        .select("div.row:has(> h4)")
+        .map { row ->
+            row.selectFirst("h4")!!.text() to row.select("a[href*=search_query]")
+                .map { it.absUrl("href").toHttpUrl().queryParameter("search_query")!! }
+                .distinct()
+        }
+        .filter { (name, tags) -> name != TRENDING_TAGS && tags.isNotEmpty() }
+        .ifEmpty { throw Exception("No tags on the tag page") }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val tagGroups = data?.parseAs<List<Pair<String, List<String>>>>().orEmpty()
+        return FilterList(
+            FavoritesFilter(),
+            Filter.Separator(),
+            Filter.Header("搜索或选择标签时不按类型筛选"),
+            CategoryFilter(),
+            *tagGroups.map { (name, tags) -> TagFilter(name, tags) }.toTypedArray(),
+            SortFilter(),
+            TimeFilter(),
+            TypeFilter(),
+        )
+    }
+
     private class AlreadyCheckedInException : Exception()
 
     private fun maybeAutoCheckIn() {
@@ -414,7 +393,11 @@ abstract class Jinmantiantang :
         val dailyId = homepage.selectFirst("#bouns-popup")?.attr("data-dailyid")
             ?: throw Exception("未找到签到入口")
 
-        val eventJson = client.get("$baseUrl/ajax/user_daily_event?daily_id=$dailyId").body.string()
+        val eventUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("ajax/user_daily_event")
+            .addQueryParameter("daily_id", dailyId)
+            .build()
+        val eventJson = client.get(eventUrl).body.string()
         val oldStep = Regex("\"oldStep\":(\\d+)").find(eventJson)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
         val body = FormBody.Builder()
@@ -507,14 +490,8 @@ abstract class Jinmantiantang :
             summary = "填写用户名并设置密码后，插件会自动登录，无需再打开内置浏览器手动登录。\n" +
                 "只在网页登录的用户可不填密码：用户名留空时插件会自动识别登录状态用于收藏夹；识别失败请在此手动填写（顶栏账号即用户名）。"
             setDefaultValue("")
-            // 修改账号时清除会话 cookie，让新凭据立即生效
-            setOnPreferenceChangeListener { _, _ ->
-                clearSessionCookies(baseUrl)
-                true
-            }
         }.let(screen::addPreference)
 
-        // 密码设置项（与用户名一起构成自动登录凭据）
         EditTextPreference(context).apply {
             key = PASSWORD_PREF
             title = "密码"
@@ -526,7 +503,6 @@ abstract class Jinmantiantang :
             setOnPreferenceChangeListener { pref, newValue ->
                 (pref as EditTextPreference).summary =
                     if ((newValue as String).isEmpty()) "未设置，部分漫画需要登录才能观看" else "已设置"
-                clearSessionCookies(baseUrl)
                 true
             }
         }.let(screen::addPreference)
@@ -558,12 +534,12 @@ abstract class Jinmantiantang :
             }
         }.let(screen::addPreference)
 
-        // 含"使用镜像网址"设置项
         getPreferenceList(context, preferences, updateUrlInterceptor.isUpdated).forEach(screen::addPreference)
     }
 
     companion object {
         private const val PREFIX_ID_SEARCH_NO_COLON = "JM"
+        private const val TRENDING_TAGS = "熱門成人主題"
 
         private const val FAVORITE_MANGA_SELECTOR = "div[id^='favorites_album_']"
         private const val CHECKIN_PREF = "auto_checkin"

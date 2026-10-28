@@ -17,32 +17,22 @@ class QwikData(
     @SerialName("_objs") val objects: List<JsonElement>,
 ) {
     inline fun <reified T> parseAsList(): List<T> {
-        val arr = objects
         val results = mutableListOf<T>()
         var i = 0
 
-        while (i < arr.size) {
+        while (i < objects.size) {
             var mapIndex = i
-            while (mapIndex < arr.size && arr[mapIndex] !is JsonObject) {
+            while (mapIndex < objects.size && objects[mapIndex] !is JsonObject) {
                 mapIndex++
             }
-            if (mapIndex >= arr.size) break
+            if (mapIndex >= objects.size) break
 
-            val map = arr[mapIndex].jsonObject
+            val map = objects[mapIndex].jsonObject
 
             val objContent = buildMap {
                 for ((key, jsonIndex) in map) {
-                    val ref = jsonIndex.jsonPrimitive.content
-
-                    val index = try {
-                        ref.toInt(radix = 36)
-                    } catch (_: Exception) {
-                        throw Exception("Invalid base36 index: $ref")
-                    }
-
-                    val rawValue = arr.getOrNull(index)
-
-                    put(key, unwrapJson(rawValue))
+                    val index = jsonIndex.jsonPrimitive.content.toInt(radix = 36)
+                    put(key, unwrapJson(objects.getOrNull(index)))
                 }
             }
 

@@ -11,15 +11,12 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.jsoup.nodes.Document
 
 @Source
 abstract class MangaMori : KeiSource() {
@@ -101,7 +98,7 @@ abstract class MangaMori : KeiSource() {
             }
             ?.text()
             ?.lowercase()
-        val chapterPayload = document.nextFlightData().extractNextJsRsc<ChapterPayload> { element ->
+        val chapterPayload = document.extractNextJs<ChapterPayload> { element ->
             element is JsonObject && "chapters" in element && "rawChapters" in element
         }
 
@@ -124,28 +121,11 @@ abstract class MangaMori : KeiSource() {
 
     private val detailStatuses = setOf("đang tiến hành", "hoàn thành")
 
-    private fun Document.nextFlightData(): String = select("script:not([src])")
-        .mapNotNull { script ->
-            runCatching {
-                val data = script.data()
-                if ("self.__next_f.push" !in data) return@runCatching null
-
-                val payload = data
-                    .substringAfter("self.__next_f.push(")
-                    .substringBeforeLast(')')
-                    .parseAs<JsonArray>()
-                if (payload.firstOrNull()?.jsonPrimitive?.content != "1") return@runCatching null
-
-                payload.getOrNull(1)?.jsonPrimitive?.content
-            }.getOrNull()
-        }
-        .joinToString("")
-
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
-        val payload = document.nextFlightData().extractNextJsRsc<ReaderPayload> { element ->
+        val payload = document.extractNextJs<ReaderPayload> { element ->
             element is JsonObject &&
                 "chapter" in element &&
                 "encryptedMap" in element &&

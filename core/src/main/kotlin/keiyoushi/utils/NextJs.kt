@@ -8,11 +8,14 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.serializer
 import okhttp3.Response
+import okio.Buffer
+import okio.ByteString.Companion.decodeBase64
 import org.jsoup.nodes.Document
 import kotlin.reflect.typeOf
 
@@ -185,23 +188,31 @@ private fun resolveSetRef(
     return resolveNextJsRefs(values, chunkCache, modelCache, resolving + id)
 }
 
+/**
+ * Each push is a slice of one flight stream, cut anywhere (often mid-row), so join them before parsing.
+ * `[1]` carries text, `[3]` base64 bytes; `[0]` and `[2]` aren't stream data.
+ */
 private fun Document.extractAppRouterPayloads(
     chunkCache: MutableMap<String, String>,
     modelCache: MutableMap<String, JsonElement>,
-): List<JsonElement> = select("script:not([src])")
-    .map { it.data() }
-    .filter { "self.__next_f.push" in it }
-    .flatMap { script ->
+): List<JsonElement> {
+    val stream = Buffer()
+    for (script in select("script:not([src])")) {
+        val data = script.data().takeIf { "self.__next_f.push" in it } ?: continue
         try {
-            val raw = NEXT_F_REGEX.find(script)?.groupValues?.get(1) ?: return@flatMap emptyList()
-            val arr = jsonInstance.parseToJsonElement(raw).jsonArray
-            val content = arr.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: return@flatMap emptyList()
-
-            extractRscPayloads(content, chunkCache, modelCache)
+            val raw = NEXT_F_REGEX.find(data)?.groupValues?.get(1) ?: continue
+            val push = jsonInstance.parseToJsonElement(raw).jsonArray
+            val content = push.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: continue
+            when (push[0].jsonPrimitive.intOrNull) {
+                1 -> stream.writeUtf8(content)
+                3 -> stream.write(content.decodeBase64() ?: continue)
+            }
         } catch (_: Exception) {
-            emptyList()
         }
     }
+
+    return extractRscPayloads(stream.readUtf8(), chunkCache, modelCache)
+}
 
 private fun Document.extractPagesRouterPayloads(): List<JsonElement> {
     val data = selectFirst("script#__NEXT_DATA__")?.data() ?: return emptyList()

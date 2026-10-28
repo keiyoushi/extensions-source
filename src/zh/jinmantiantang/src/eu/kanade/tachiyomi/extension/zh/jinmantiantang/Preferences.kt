@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.webkit.CookieManager
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
@@ -57,17 +56,6 @@ internal const val USERNAME_PREF = "username"
 
 // 登录密码
 internal const val PASSWORD_PREF = "password"
-
-// 仅清除登录会话 cookie（改账号/密码后强制重新登录生效）；AVS 年龄验证 cookie 有意保留
-private val SESSION_COOKIE_NAMES = arrayOf("PHPSESSID", "jmc_id", "jmc_password")
-
-internal fun clearSessionCookies(baseUrl: String) {
-    val manager = CookieManager.getInstance()
-    for (name in SESSION_COOKIE_NAMES) {
-        manager.setCookie(baseUrl, "$name=; Max-Age=-1; Path=/")
-    }
-    manager.flush()
-}
 
 internal val SharedPreferences.blockList: List<String>
     get() = getString(BLOCK_PREF, "")!!.substringBefore("//").trim().lowercase().split(' ')
