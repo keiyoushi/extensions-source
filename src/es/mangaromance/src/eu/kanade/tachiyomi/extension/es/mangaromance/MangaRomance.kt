@@ -19,6 +19,8 @@ abstract class MangaRomance : Madara() {
     override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMMM, yyyy", Locale("es"))
     override val chapterMode = ChapterMode.MangaAjax
 
+    override fun processThumbnail(url: String?, fromSearch: Boolean) = url?.replace(THUMBNAIL_SIZE_REGEX, "$1")
+
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::jsChallengeInterceptor)
 
     // Hostinger CDN browser check
@@ -54,6 +56,7 @@ abstract class MangaRomance : Madara() {
     private fun challengeCookie(url: HttpUrl) = client.cookieJar.loadForRequest(url).firstOrNull { it.name == "hcdn" }?.value
 
     companion object {
+        private val THUMBNAIL_SIZE_REGEX = """-\d+x\d+(\.\w+)$""".toRegex()
         private val TOKEN_REGEX = """const cjs = '([^']+)'""".toRegex()
     }
 }
