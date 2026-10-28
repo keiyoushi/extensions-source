@@ -166,6 +166,20 @@ class AppImageDto(
 @Serializable
 class DeferredMediaDto(
     val token: String,
+    val splitIndex: Int? = null,
+    val requireTurnstile: Boolean = false,
+    val turnstileMode: String? = null,
+)
+
+@Serializable
+class PublicSettingsDto(
+    val loginTurnstile: LoginTurnstileDto? = null,
+)
+
+@Serializable
+class LoginTurnstileDto(
+    val enabled: Boolean,
+    val siteKey: String,
 )
 
 @Serializable
@@ -177,6 +191,7 @@ class DeferredPageDto(
 class DeferredDataDto(
     val images: List<String>,
     val maps: List<MapEntryDto>,
+    val pass: String? = null,
 )
 
 @Serializable
@@ -228,8 +243,19 @@ class SignedImageDto(
 )
 
 @Serializable
+class ErrorDto(
+    val error: String? = null,
+)
+
+@Serializable
+class PassDto(
+    val pass: String,
+)
+
+@Serializable
 class MapRequestDto(
     val chapterId: Int,
+    val pass: String?,
     val plan: MapPlanBodyDto,
 )
 
