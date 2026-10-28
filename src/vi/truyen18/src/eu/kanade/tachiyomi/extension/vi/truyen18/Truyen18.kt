@@ -236,7 +236,11 @@ abstract class Truyen18 : KeiSource() {
         val chapterSlug = getChapterUrl(chapter).toHttpUrl().pathSegments.lastOrNull()
             ?: return emptyList()
         val chapterData = client.get(getChapterUrl(chapter)).asJsoup()
-            .extractReaderChapter(chapterSlug)
+            .extractNextJs<ReaderChapter> { element ->
+                element is JsonObject &&
+                    element.getStringOrNull("slug") == chapterSlug &&
+                    !element.getStringOrNull("content").isNullOrBlank()
+            }
             ?: return emptyList()
 
         return Jsoup.parseBodyFragment(chapterData.content, baseUrl)
@@ -245,12 +249,6 @@ abstract class Truyen18 : KeiSource() {
             .mapIndexed { index, image ->
                 Page(index, imageUrl = image.absUrl("src"))
             }
-    }
-
-    private fun Document.extractReaderChapter(chapterSlug: String): ReaderChapter? = extractNextJs<ReaderChapter> { element ->
-        element is JsonObject &&
-            element.getStringOrNull("slug") == chapterSlug &&
-            !element.getStringOrNull("content").isNullOrBlank()
     }
 
     // ============================== Filters ===============================
