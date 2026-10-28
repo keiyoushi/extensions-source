@@ -11,14 +11,12 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
@@ -238,7 +236,11 @@ abstract class Truyen18 : KeiSource() {
         val chapterSlug = getChapterUrl(chapter).toHttpUrl().pathSegments.lastOrNull()
             ?: return emptyList()
         val chapterData = client.get(getChapterUrl(chapter)).asJsoup()
-            .extractReaderChapter(chapterSlug)
+            .extractNextJs<ReaderChapter> { element ->
+                element is JsonObject &&
+                    element.getStringOrNull("slug") == chapterSlug &&
+                    !element.getStringOrNull("content").isNullOrBlank()
+            }
             ?: return emptyList()
 
         return Jsoup.parseBodyFragment(chapterData.content, baseUrl)
@@ -247,28 +249,6 @@ abstract class Truyen18 : KeiSource() {
             .mapIndexed { index, image ->
                 Page(index, imageUrl = image.absUrl("src"))
             }
-    }
-
-    private fun Document.extractReaderChapter(chapterSlug: String): ReaderChapter? {
-        val rscBody = select("script:not([src])")
-            .mapNotNull { script ->
-                val data = script.data()
-                if (!data.startsWith(nextFlightPrefix)) return@mapNotNull null
-
-                runCatching {
-                    data.substring(nextFlightPrefix.length, data.lastIndexOf(')'))
-                        .parseAs<JsonArray>()
-                        .getOrNull(1)
-                        ?.stringOrNull
-                }.getOrNull()
-            }
-            .joinToString("")
-
-        return rscBody.extractNextJsRsc<ReaderChapter> { element ->
-            element is JsonObject &&
-                element.getStringOrNull("slug") == chapterSlug &&
-                !element.getStringOrNull("content").isNullOrBlank()
-        }
     }
 
     // ============================== Filters ===============================
@@ -316,5 +296,4 @@ abstract class Truyen18 : KeiSource() {
     private val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     private val vietnamZone = ZoneId.of("Asia/Ho_Chi_Minh")
     private val dateNumberRegex = Regex("\\d+")
-    private val nextFlightPrefix = "self.__next_f.push("
 }
