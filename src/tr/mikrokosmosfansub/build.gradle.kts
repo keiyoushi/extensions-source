@@ -13,5 +13,6 @@ keiyoushi {
     source {
         lang = "tr"
         baseUrl = "https://mikrokosmos.fans"
+        versionId = 2
     }
 }
