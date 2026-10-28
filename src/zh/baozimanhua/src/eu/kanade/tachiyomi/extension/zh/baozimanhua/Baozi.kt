@@ -15,6 +15,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
@@ -27,9 +28,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Baozi :
@@ -54,6 +58,7 @@ abstract class Baozi :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(bannerInterceptor)
         addInterceptor(GatekeeperInterceptor)
+        addInterceptor(ImageFallbackInterceptor)
         addNetworkInterceptor(MissingImageInterceptor)
         rateLimit(2)
     }
@@ -107,13 +112,14 @@ abstract class Baozi :
         return SManga.create().apply {
             url = normalizeRelativeUrl(href)
             this.title = title
-            val img = element.selectFirst("amp-img, img")
-            thumbnail_url = img?.absUrl("data-src")?.ifEmpty { img.absUrl("src") }
+            thumbnail_url = element.selectFirst("amp-img, img")?.let { img ->
+                listOf("data-src", "src").firstOrNull { img.attrOrNull(it) != null }?.let(img::absUrl)
+            }?.let(::coverUrl)
         }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host !in MIRRORS) return null
+        if (DOMAINS.none { url.host == it || url.host.endsWith(".$it") }) return null
 
         val comicIndex = url.pathSegments.indexOf("comic")
         if (comicIndex == -1) return null
@@ -145,7 +151,7 @@ abstract class Baozi :
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1.comics-detail__title")!!.text()
-        thumbnail_url = document.selectFirst("meta[name=og:image]")?.attr("content")
+        thumbnail_url = document.selectFirst("meta[name=og:image]")?.attrOrNull("content")?.let(::coverUrl)
         author = document.selectFirst("h2.comics-detail__author")?.textOrNull()?.split(',')?.joinToString()
         description = document.selectFirst("p.comics-detail__desc")?.textOrNull()
         // Status first, then region and genres
@@ -175,12 +181,9 @@ abstract class Baozi :
                 }
             }
 
-            val date = document.selectFirst("em")?.text()
-            if (date != null && date.contains('年')) {
-                firstOrNull()?.date_upload = DATE_FORMAT.tryParseDate(
-                    date.removePrefix("(").removeSuffix(" 更新)"),
-                    ZoneOffset.UTC,
-                )
+            val date = document.selectFirst(".comics-detail em")?.text()?.removePrefix("(")?.removeSuffix(" 更新)")
+            if (date != null) {
+                firstOrNull()?.date_upload = parseUpdateDate(date)
             }
         }
     }
@@ -208,6 +211,8 @@ abstract class Baozi :
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(appChapterUrl(chapter.url)).asJsoup()
         .select(".comic-contain img[data-src]")
         .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("data-src")) }
+
+    override fun getChapterUrl(chapter: SChapter): String = appChapterUrl(chapter.url)
 
     private fun appChapterUrl(chapterUrl: String): String {
         val url = baseUrl.toHttpUrl().resolve(chapterUrl)!!
@@ -239,16 +244,32 @@ abstract class Baozi :
 
     override suspend fun fetchFilterData(): JsonElement = client.get(appBaseUrl.toHttpUrl().newBuilder().addPathSegments("baozimhapp/classify").build()).asJsoup()
         .select(".classify-nav")
-        .map { nav ->
-            val options = nav.select("[onclick]").map { FILTER_ONCLICK_REGEX.find(it.attr("onclick"))!! to it.text() }
+        .mapNotNull { nav ->
+            val options = nav.select("[onclick]").mapNotNull { item ->
+                FILTER_ONCLICK_REGEX.find(item.attr("onclick"))?.let { it to item.text() }
+            }
             FilterGroup(
-                param = options.first().first.groupValues[1],
+                param = options.firstOrNull()?.first?.groupValues?.get(1) ?: return@mapNotNull null,
                 options = options.map { (match, name) -> FilterOption(name, match.groupValues[2]) },
             )
         }
         .toJsonElement()
 
     override fun getFilterList(data: JsonElement?) = getFilters(data?.parseAs<List<FilterGroup>>())
+
+    private fun parseUpdateDate(date: String): Long {
+        val relative = RELATIVE_DATE_REGEX.matchEntire(date) ?: return DATE_FORMAT.tryParseDate(date, SITE_ZONE)
+        val amount = relative.groupValues[1].toLong()
+        val duration = when (relative.groupValues[2]) {
+            "分钟", "分鐘" -> amount.minutes
+            "小时", "小時" -> amount.hours
+            else -> amount.days
+        }
+        return System.currentTimeMillis() - duration.inWholeMilliseconds
+    }
+
+    // Covers from other sites come wrapped in the site's resizer, which answers 500 for them
+    private fun coverUrl(url: String): String = NESTED_COVER_REGEX.find(url)?.groupValues?.get(1) ?: url
 
     private fun normalizeRelativeUrl(url: String): String {
         val resolvedUrl = baseUrl.toHttpUrl().resolve(url) ?: return url
@@ -286,30 +307,14 @@ abstract class Baozi :
     }
 
     companion object {
-        private val MIRRORS = setOf(
-            "cn.baozimh.com",
-            "tw.baozimh.com",
-            "www.baozimh.com",
-            "appcn.baozimh.com",
-            "appgb.baozimh.com",
-            "cn.webmota.com",
-            "tw.webmota.com",
-            "www.webmota.com",
-            "cn.kukuc.co",
-            "tw.kukuc.co",
-            "www.kukuc.co",
-            "cn.twmanga.com",
-            "tw.twmanga.com",
-            "www.twmanga.com",
-            "cn.dinnerku.com",
-            "tw.dinnerku.com",
-            "www.dinnerku.com",
-        )
+        // Same as the deeplink hosts
+        private val DOMAINS = setOf("baozimh.com", "webmota.com", "kukuc.co", "twmanga.com", "dinnerku.com")
 
         private const val APP_BASE_URL = "https://appcn.baozimh.com"
 
         private val COMIC_ONCLICK_REGEX = Regex("""\['comic',\s*'([^']+)'""")
         private val CHAPTER_ONCLICK_REGEX = Regex("""send_app_msg\('call_page',\s*\['chapter',\s*'([^']+)',\s*(\d+),\s*(\d+)\]\)""")
+        private val NESTED_COVER_REGEX = Regex("""/cover/(https?://[^?]+)""")
         private val FILTER_ONCLICK_REGEX = Regex("""handle_change_filters\(this, '(\w+)', '([^']*)'\)""")
 
         private const val DEFAULT_LEVEL = BaoziBannerInterceptor.NORMAL.toString()
@@ -319,6 +324,8 @@ abstract class Baozi :
         private const val CHAPTER_ORDER_ENABLED = "1"
         private const val CHAPTER_ORDER_AGGRESSIVE = "2"
 
+        private val RELATIVE_DATE_REGEX = Regex("""(\d+)(分钟|分鐘|小时|小時|天)前""")
+        private val SITE_ZONE = ZoneId.of("Asia/Shanghai")
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy年MM月dd日", Locale.ROOT)
     }
 }
