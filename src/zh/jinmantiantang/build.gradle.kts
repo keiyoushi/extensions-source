@@ -6,21 +6,25 @@ plugins {
 
 keiyoushi {
     name = "Jinman Tiantang"
-    versionCode = 61
+    versionCode = 62
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
         name = "禁漫天堂"
         lang = "zh"
-        baseUrl = "https://18comic.vip"
+        baseUrl {
+            mirrors(
+                "主站1" to "https://18comic.vip",
+                "主站2" to "https://18comic.ink",
+                "东南亚线路1" to "https://jmcomic-zzz.one",
+                "东南亚线路2" to "https://jmcomic-zzz.org",
+            )
+        }
     }
 
     deeplink {
-        host("18comic.vip")
-        host("18comic.ink")
-        host("jmcomic-zzz.one")
-        host("jmcomic-zzz.org")
         path("/album/..*")
+        path("/photo/..*")
     }
 }
