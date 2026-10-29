@@ -106,14 +106,12 @@ abstract class MangaTek : KeiSource() {
     // ========================= Details & Chapters  =========================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        check(url.pathSegments.size >= 2) { "Unsupported URL" }
-        val slug = url.pathSegments[1]
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.first() !in setOf("manga", "reader")) return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
         val manga = SManga.create().apply {
             this.url = "/manga/$slug"
         }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga.apply {
-            initialized = true
-        }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
