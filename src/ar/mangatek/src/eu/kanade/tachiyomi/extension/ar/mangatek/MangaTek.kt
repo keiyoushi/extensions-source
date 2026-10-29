@@ -120,7 +120,7 @@ abstract class MangaTek : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val url = "$baseUrl${manga.url}".toHttpUrl()
+        val url = getMangaUrl(manga).toHttpUrl()
         val data: MangaDto = client.get(url).asJsoup().extractAstroProp("manga")
         val slug = url.pathSegments[1]
 
