@@ -127,8 +127,24 @@ abstract class KeiSource : HttpSource() {
                     add(rateLimiter)
                 }
             }
-        }.build()
+        }.build().also {
+            fetchedUrlPreferences?.refresh(::fetchBaseUrls)
+        }
     }
+
+    /**
+     * Base urls of a `baseUrl { fetched(...) }` source.
+     * Do not override by hand.
+     */
+    protected open val fetchedUrlPreferences: FetchedUrlPreferences? get() = null
+
+    /**
+     * Fetches the site's current base urls, in the site's order: one url, or every mirror it lists.
+     *
+     * Required with `baseUrl { fetched(...) }`. Called on a background coroutine once per app launch; the last
+     * fetched urls, or the fallback urls, are used until it succeeds.
+     */
+    protected open suspend fun fetchBaseUrls(): List<String> = throw UnsupportedOperationException("fetchBaseUrls not implemented")
 
     /**
      * Customizes the base Headers builder. Subclasses can override this to append source-specific

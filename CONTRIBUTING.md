@@ -418,11 +418,11 @@ keiyoushi {
 | `id`          | Explicit source ID. Optional; auto-computed from `name + lang + versionId` if omitted. Set this explicitly in the `source {}` block (never in the source class) when renaming a source to preserve users' libraries.                                                                                                    |
 | `versionId`   | Integer used as a seed for auto-computing `id`. Defaults to `1`. Only bump this if the source's URL structure fundamentally changes and old entries can no longer be redirected.                                                                                                                                                                         |
 
-A source class may compute `name` and/or `baseUrl` itself by declaring `override val name` / `override val baseUrl`; codegen detects the override and skips generating that property (the DSL value is then used only for metadata such as the repo index and deeplink hosts). **This is discouraged** — prefer letting the DSL own `name` and `baseUrl`, and only override them in the source class when you have a very specific reason. `baseUrl` may only be overridden when the DSL declares a plain static `baseUrl` — the `mirrors`/`custom` modes generate preference infrastructure and cannot be hand-overridden. `id`, `lang`, and `versionId` are strictly owned by the DSL/codegen; overriding them in the source class throws a fatal KSP compiler error.
+A source class may compute `name` and/or `baseUrl` itself by declaring `override val name` / `override val baseUrl`; codegen detects the override and skips generating that property (the DSL value is then used only for metadata such as the repo index and deeplink hosts). **This is discouraged** — prefer letting the DSL own `name` and `baseUrl`, and only override them in the source class when you have a very specific reason. `baseUrl` may only be overridden when the DSL declares a plain static `baseUrl` — the `mirrors`/`custom`/`fetched` modes generate preference infrastructure and cannot be hand-overridden. `id`, `lang`, and `versionId` are strictly owned by the DSL/codegen; overriding them in the source class throws a fatal KSP compiler error.
 
 #### baseUrl modes
 
-The `baseUrl` field inside `source {}` supports three modes:
+The `baseUrl` field inside `source {}` supports four modes:
 
 **Static** (single URL, no preferences UI):
 
@@ -474,8 +474,33 @@ source {
 
 Like `mirrors`, the extension automatically implements `ConfigurableSource` and adds a validated "Custom base URL" `EditTextPreference`. The default URL is restored automatically if the hardcoded default changes in a future update.
 
+**Fetched** (the source looks up the site's current URL, or its list of mirrors, at runtime):
+
+```kotlin
+source {
+    lang = "en"
+    baseUrl {
+        fetched(
+            "https://example.com",
+            "https://example.net",
+        )
+    }
+}
+```
+
+For sites that move domains and publish where they are, e.g. on a page listing their domains or through a redirect. Override `fetchBaseUrls` to return the current URL, or every mirror in the site's order:
+
+```kotlin
+override suspend fun fetchBaseUrls(): List<String> =
+    client.get("https://hub.example.org/").asJsoup()
+        .select("a.mirror")
+        .map { it.absUrl("href") }
+```
+
+The lookup runs in the background once per app launch, so restarting the app picks up new domains. Until it succeeds, the last looked-up URLs are used (the ones from `fetched(...)` before the first lookup); a failed lookup keeps them. The extension implements `ConfigurableSource`, and when there is more than one URL it adds a "Preferred mirror" `ListPreference` with "Automatic" (the first URL) and each URL; a picked URL that drops off the list falls back to Automatic. Use `mirrors(...)` instead when the URLs serve different content or languages.
+
 > [!IMPORTANT]
-> When using `mirrors(...)` or `custom(...)`, **do not** implement mirror/URL selection manually in your class using `SharedPreferences` or a `ListPreference` - the generated code handles it. Doing both will create duplicate preferences.
+> When using `mirrors(...)`, `custom(...)` or `fetched(...)`, **do not** implement mirror/URL selection manually in your class using `SharedPreferences` or a `ListPreference` - the generated code handles it. Doing both will create duplicate preferences.
 
 #### Multiple sources from one class
 
@@ -1342,6 +1367,7 @@ Optional overrides (each has a working default; override only when your source n
 | `val supportsFilterFetching: Boolean`                                 | `false`.                                                         | The source needs to fetch its filter options from the network - see filter fetching below.                                                                                                              |
 | `suspend fun fetchFilterData(): JsonElement`                          | Returns `JsonNull`.                                              | Paired with `supportsFilterFetching = true`.                                                                                                                                                              |
 | `fun getFilterList(data: JsonElement?): FilterList`                   | Returns an empty `FilterList`.                                   | The source has any filters at all, fetched or static.                                                                                                                                                    |
+| `suspend fun fetchBaseUrls(): List<String>`                           | Throws (unimplemented).                                          | Required with `baseUrl { fetched(...) }` - see [baseUrl modes](#baseurl-modes).                                                                                                                  |
 | `fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder`    | No changes.                                                      | Timeouts, extra interceptors, cookie/cache/DNS config - `client` itself is `final` on `KeiSource`.                                                                                                       |
 | `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer`/`Origin` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                     |
 
@@ -1597,7 +1623,7 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 
 #### Configurable Sources and Preferences
 
-- **Base URL and Mirrors:** Custom base URLs and mirror selectors are generated automatically by the `baseUrl { mirrors(...) }` and `baseUrl { custom(...) }` DSL blocks in `build.gradle.kts`. **Do not** implement these manually using `SharedPreferences` or `ListPreference`, as the KSP codegen handles preference migration, index coercion, and property overriding automatically.
+- **Base URL and Mirrors:** Custom base URLs and mirror selectors are generated automatically by the `baseUrl { mirrors(...) }`, `baseUrl { custom(...) }` and `baseUrl { fetched(...) }` DSL blocks in `build.gradle.kts`. **Do not** implement these manually using `SharedPreferences` or `ListPreference`, as the KSP codegen handles preference migration, index coercion, and property overriding automatically.
 - **Other preferences:** For other custom settings (like image quality or language), implement the `ConfigurableSource` interface and use the `getPreferences()` or `getPreferencesLazy()` helpers to manage your settings.
 
 #### URL intent filter
