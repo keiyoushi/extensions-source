@@ -18,7 +18,7 @@ import java.util.Locale
 @Source
 abstract class DragonTranslationOrg : Madara() {
     override val supportsPostId = false
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("es"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.forLanguageTag("es"))
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
@@ -32,14 +32,16 @@ abstract class DragonTranslationOrg : Madara() {
     }
 
     override val filterGenresSelector = ".filters"
-    override fun archiveSelector() = "a:has(img.ac-cover)"
+    override fun archiveSelector() = "a:has(> div.ac-img)"
     override val archiveUrlSelector = "a"
 
-    override val mangaDetailsSelectorTitle = "div.hero h1"
-    override val mangaDetailsSelectorStatus = "div.htags > span.htag"
-    override val mangaDetailsSelectorDescription = "div.syn > p"
-    override val mangaDetailsSelectorThumbnail = "div.hposter img"
-    override val mangaDetailsSelectorGenre = "div.hchips a.chip"
+    override val mangaDetailsSelectorTitle = "div.hero__in h1"
+    override val mangaDetailsSelectorStatus = "div.sir:has(span.l:contains(Estado)) span.v"
+    override val mangaDetailsSelectorDescription = "div.hero__in div.clamp"
+    override val mangaDetailsSelectorThumbnail = "div.hero__in img.wp-post-image"
+    override val mangaDetailsSelectorGenre = "div.hero__in a[href*=/manga-genre/]"
+    override val seriesTypeSelector = "div.hero__in h1 span.manga-title-badges"
+    override val altNameSelector = "div.sir:has(span.l:contains(Alternativo)) span.v"
 
     override val pageListParseSelector = "div.reading-content img.wp-manga-chapter-img"
 
@@ -53,7 +55,7 @@ abstract class DragonTranslationOrg : Madara() {
         mangaPath: String,
         id: String,
         mangaPage: Document?,
-    ) = mangaPage!!.selectFirst("#mkChapters script[type=application/json]")!!.data()
+    ) = mangaPage!!.selectFirst("div.mk-chapters script[type=application/json]")!!.data()
         .parseAs<ChapterListDto>().items.map { chapterDto ->
             SChapter.create().apply {
                 setUrlWithoutDomain(chapterDto.url)
