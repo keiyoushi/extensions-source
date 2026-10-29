@@ -21,6 +21,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
@@ -29,6 +30,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -100,7 +103,7 @@ abstract class Kagane :
         "",
         FilterList(
             SortFilter(Filter.Sort.Selection(1, false)),
-            ContentRatingFilter(contentRating.toSet()),
+            ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
             FormatFilter(excludedFormats),
             GenresFilter(emptyList(), excludedGenreIds),
 
@@ -114,7 +117,7 @@ abstract class Kagane :
         "",
         FilterList(
             SortFilter(Filter.Sort.Selection(6, false)),
-            ContentRatingFilter(contentRating.toSet()),
+            ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
             FormatFilter(excludedFormats),
             GenresFilter(emptyList(), excludedGenreIds),
         ),
@@ -148,12 +151,15 @@ abstract class Kagane :
                     is MatchAllGenresFilter -> {
                         genresMatchAll = if (filter.state) true else null
                     }
+
                     is MatchAllTagsFilter -> {
                         tagsMatchAll = if (filter.state) true else null
                     }
+
                     is SortFilter -> {
                         sortParam = filter.toUriPart()
                     }
+
                     else -> {}
                 }
             }
@@ -209,6 +215,48 @@ abstract class Kagane :
                         filter.addToJsonObject(this)
                     }
 
+                    is StaffSearchFilter -> {
+                        val (include, exclude) = resolveMemberEntries(filter.state) { searchStaff(it) }
+                        if (include.isNotEmpty() || exclude.isNotEmpty()) {
+                            putJsonObject("staff") {
+                                putJsonArray("values") { include.distinct().forEach { add(it) } }
+                                if (exclude.isNotEmpty()) {
+                                    putJsonArray("exclude") { exclude.distinct().forEach { add(it) } }
+                                }
+                            }
+                        }
+                    }
+
+                    is GroupsSearchFilter -> {
+                        val (include, exclude) = resolveMemberEntries(filter.state) { searchGroups(it) }
+                        if (include.isNotEmpty() || exclude.isNotEmpty()) {
+                            putJsonObject("groups") {
+                                putJsonArray("values") { include.distinct().forEach { add(it) } }
+                                if (exclude.isNotEmpty()) {
+                                    putJsonArray("exclude") { exclude.distinct().forEach { add(it) } }
+                                }
+                            }
+                        }
+                    }
+
+                    is YearFilter -> {
+                        filter.parseRange()?.let { range ->
+                            putJsonObject("start_year") {
+                                range.first?.let { put("min", it) }
+                                range.second?.let { put("max", it) }
+                            }
+                        }
+                    }
+
+                    is ChapterCountFilter -> {
+                        filter.parseRange()?.let { range ->
+                            putJsonObject("current_books") {
+                                range.first?.let { put("min", it) }
+                                range.second?.let { put("max", it) }
+                            }
+                        }
+                    }
+
                     is JsonFilter -> {
                         filter.addToJsonObject(this)
                     }
@@ -235,6 +283,48 @@ abstract class Kagane :
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
+    private suspend fun resolveMemberEntries(
+        input: String,
+        search: suspend (String) -> List<String>,
+    ): Pair<List<String>, List<String>> {
+        val include = mutableListOf<String>()
+        val exclude = mutableListOf<String>()
+        input.split(",").forEach { entry ->
+            val trimmed = entry.trim()
+            if (trimmed.isEmpty()) return@forEach
+            val isExclude = trimmed.startsWith("-")
+            val name = if (isExclude) trimmed.removePrefix("-").trim() else trimmed
+            if (name.isEmpty()) return@forEach
+            search(name).forEach { if (isExclude) exclude.add(it) else include.add(it) }
+        }
+        return include to exclude
+    }
+
+    private suspend fun searchStaff(name: String): List<String> {
+        val body = buildJsonObject { put("name", name) }.toJsonRequestBody()
+        return client.post("$apiUrl/search/staff", body)
+            .parseAs<StaffSearchDto>()
+            .content
+            .filter { staff ->
+                staff.name.equals(name, ignoreCase = true) ||
+                    staff.nativeName?.equals(name, ignoreCase = true) == true ||
+                    staff.alternateNames.any { it.equals(name, ignoreCase = true) }
+            }
+            .map { it.staffId }
+    }
+
+    private suspend fun searchGroups(name: String): List<String> {
+        val url = "$apiUrl/groups/search".toHttpUrl().newBuilder()
+            .addQueryParameter("q", name)
+            .addQueryParameter("limit", "8")
+            .build()
+        return client.get(url)
+            .parseAs<GroupSearchDto>()
+            .items
+            .filter { it.title.equals(name, ignoreCase = true) }
+            .map { it.groupId }
+    }
+
     // ====================== Manga Details + Chapters ======================
 
     private suspend fun getMangaById(seriesId: String): DetailsDto {
@@ -246,7 +336,7 @@ abstract class Kagane :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments
         if (segments.size < 2) return null
-        val seriesId = segments[1]
+        val seriesId = segments[1].takeLast(36)
         return parseMangaDetails(getMangaById(seriesId)).apply {
             this.url = seriesId
             initialized = true
@@ -257,10 +347,14 @@ abstract class Kagane :
         val sourceName = details.sourceId?.let { sourceId ->
             sources[sourceId]
         }
-        return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, cleanTitle)
+        return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, showDetails, cleanTitle)
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = manga.memoString("slug")
+        val seriesSegment = if (slug != null) "$slug-${manga.url}" else manga.url
+        return "$baseUrl/series/$seriesSegment"
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -273,9 +367,13 @@ abstract class Kagane :
         val updatedManga = if (fetchDetails) {
             val dto = getMangaById(seriesId)
             parseMangaDetails(dto).apply {
-                if (!dto.trackerId.isNullOrEmpty()) {
-                    memo = buildJsonObject {
+                memo = buildJsonObject {
+                    if (!dto.trackerId.isNullOrEmpty()) {
                         put("trackerId", dto.trackerId)
+                    }
+                    put("format", dto.format ?: "")
+                    if (!dto.slug.isNullOrBlank()) {
+                        put("slug", dto.slug)
                     }
                 }
             }
@@ -285,7 +383,8 @@ abstract class Kagane :
         val updatedChapters = if (fetchChapters) {
             val index = client.get("$apiUrl/series/$seriesId/books/index?fields=List")
                 .parseAs<BookIndexDto>()
-            parseChapterList(index.toBooks(), updatedManga.genre?.substringBefore(", "), seriesId)
+            val slug = updatedManga.memoString("slug")
+            parseChapterList(index.toBooks(), chapterFormat(updatedManga), seriesId, slug)
         } else {
             chapters
         }
@@ -293,7 +392,12 @@ abstract class Kagane :
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private fun parseChapterList(books: List<ChapterDto.Book>, format: String?, seriesId: String): List<SChapter> {
+    private fun SManga.memoString(key: String): String? = memo[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+
+    private fun chapterFormat(manga: SManga): String? = manga.memoString("format")
+        ?: manga.genre?.substringBefore(", ")
+
+    private fun parseChapterList(books: List<ChapterDto.Book>, format: String?, seriesId: String, slug: String?): List<SChapter> {
         val useSourceChapterNumber = format in setOf(
             "Dark Horse Comics",
             "Flame Comics",
@@ -302,11 +406,16 @@ abstract class Kagane :
         )
 
         return books.sortedByDescending { it.number }.map { book ->
-            book.toSChapter(seriesId, useSourceChapterNumber, chapterTitleMode)
+            book.toSChapter(seriesId, slug, useSourceChapterNumber, chapterTitleMode)
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = chapter.memo["seriesSlug"]?.stringOrNull?.takeIf { it.isNotBlank() }
+        val parts = chapter.url.split("/")
+        if (slug == null || parts.size != 5) return "$baseUrl${chapter.url}"
+        return "$baseUrl/series/$slug-${parts[2].takeLast(36)}/reader/${parts[4]}"
+    }
 
     // =========================== Related Manga ============================
     override val supportsRelatedMangas = true
@@ -328,7 +437,7 @@ abstract class Kagane :
             error("Outdated chapter URL. Please refresh the chapter list")
         }
 
-        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last()
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last().takeLast(36)
         val challengeResp = getChallengeResponse(chapterId)
 
         accessToken = challengeResp.accessToken
@@ -389,10 +498,27 @@ abstract class Kagane :
 
     private val contentRating: List<String>
         get() {
-            val maxRating = prefs.getString(CONTENT_RATING, CONTENT_RATING_DEFAULT)
+            val stored = prefs.getString(CONTENT_RATING, null).removeLegacyRating()
+            val maxRating = stored ?: CONTENT_RATING_DEFAULT
             val index = CONTENT_RATINGS.indexOfFirst { it == maxRating }
             return CONTENT_RATINGS.slice(0..index.coerceAtLeast(0))
         }
+
+    private val showPornographic: Boolean
+        get() = contentRating.last() == "eighteenplus" && prefs.getBoolean(PORN_PREF, false)
+
+    private val showDisturbing: Boolean
+        get() = contentRating.last() == "eighteenplus" && prefs.getBoolean(DISTURBING_PREF, false)
+
+    // Legacy value mapping from before the site-model settings change; kept so existing
+    // installs keep their content rating. Should be removed in a later version update
+    // (versionCode = 37+).
+    private fun String?.removeLegacyRating(): String? = when (this) {
+        "safe", "fifteenplus", "eighteenplus" -> this
+        "suggestive" -> "fifteenplus"
+        "erotica", "pornographic" -> "eighteenplus"
+        else -> null
+    }
 
     private val excludedGenreIds: Set<String>
         get() = prefs.getStringSet(GENRES_ID_PREF, emptySet()) ?: emptySet()
@@ -412,6 +538,9 @@ abstract class Kagane :
     private val showSource: Boolean
         get() = !cleanTitle && prefs.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
 
+    private val showDetails: Boolean
+        get() = prefs.getBoolean(SHOW_DETAILS, SHOW_DETAILS_DEFAULT)
+
     private val dataSaver
         get() = prefs.getBoolean(DATA_SAVER, false)
 
@@ -419,18 +548,44 @@ abstract class Kagane :
         get() = prefs.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
+        val contentRatingPref = ListPreference(screen.context).apply {
             key = CONTENT_RATING
             title = "Content Rating"
             entries =
-                CONTENT_RATINGS.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
+                CONTENT_RATINGS.map { CONTENT_RATING_LABELS.getValue(it) }.toTypedArray()
             entryValues = CONTENT_RATINGS
             summary = "%s"
             setDefaultValue(CONTENT_RATING_DEFAULT)
-        }.let(screen::addPreference)
+        }
+
+        val pornSwitch = SwitchPreferenceCompat(screen.context).apply {
+            key = PORN_PREF
+            title = "Show pornographic"
+            summary = "Sexually explicit content"
+            setDefaultValue(true)
+            setVisible(contentRating.last() == "eighteenplus")
+        }
+
+        val disturbingSwitch = SwitchPreferenceCompat(screen.context).apply {
+            key = DISTURBING_PREF
+            title = "Show disturbing"
+            summary = "Series marked disturbing, such as graphic violence or abuse"
+            setDefaultValue(true)
+            setVisible(contentRating.last() == "eighteenplus")
+        }
+
+        contentRatingPref.setOnPreferenceChangeListener { _, newValue ->
+            val enabled = newValue.toString() == "eighteenplus"
+            pornSwitch.setVisible(enabled)
+            disturbingSwitch.setVisible(enabled)
+            true
+        }
+
+        listOf(contentRatingPref, pornSwitch, disturbingSwitch).forEach(screen::addPreference)
 
         val genreFilter = getFilterList().firstInstanceOrNull<GenresFilter>()
-        val genreMap = genreFilter?.state?.associate { it.id to it.name.replaceFirstChar { c -> c.uppercase() } } ?: emptyMap()
+        val genreMap =
+            genreFilter?.state?.associate { it.id to it.name.replaceFirstChar { c -> c.uppercase() } } ?: emptyMap()
 
         MultiSelectListPreference(screen.context).apply {
             key = GENRES_ID_PREF
@@ -503,6 +658,13 @@ abstract class Kagane :
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_DETAILS
+            title = "Show details in description"
+            summary = "Rating, content rating, format, languages, year, volumes, views and links"
+            setDefaultValue(SHOW_DETAILS_DEFAULT)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = DATA_SAVER
             title = "Data saver"
             setDefaultValue(false)
@@ -523,13 +685,22 @@ abstract class Kagane :
     companion object {
         private const val MAX_SOURCE_FILTER = 50
         private const val CONTENT_RATING = "pref_content_rating"
-        private const val CONTENT_RATING_DEFAULT = "pornographic"
+
+        // Legacy values (safe/suggestive/erotica/pornographic) are mapped on read.
+        private const val CONTENT_RATING_DEFAULT = "safe"
         internal val CONTENT_RATINGS = arrayOf(
             "safe",
-            "suggestive",
-            "erotica",
-            "pornographic",
+            "fifteenplus",
+            "eighteenplus",
         )
+        internal val CONTENT_RATING_LABELS = mapOf(
+            "safe" to "Safe",
+            "fifteenplus" to "Fifteen Plus",
+            "eighteenplus" to "Eighteen Plus",
+        )
+
+        private const val PORN_PREF = "pref_show_pornographic"
+        private const val DISTURBING_PREF = "pref_show_disturbing"
 
         private const val GENRES_ID_PREF = "pref_genre_id_exclude"
         private const val FORMATS_PREF = "pref_format_exclude"
@@ -545,6 +716,9 @@ abstract class Kagane :
 
         private const val SHOW_EDITION = "pref_show_edition"
         private const val SHOW_EDITION_DEFAULT = false
+
+        private const val SHOW_DETAILS = "pref_show_details"
+        private const val SHOW_DETAILS_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
 
@@ -607,7 +781,7 @@ abstract class Kagane :
 
         val filters = mutableListOf(
             SortFilter(),
-            ContentRatingFilter(contentRating.toSet()),
+            ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
             FormatFilter(excludedFormats),
             PublicationStatusFilter(),
             Filter.Separator(),
@@ -630,17 +804,27 @@ abstract class Kagane :
 
             filters.addAll(
                 listOf(
-                    MatchAllGenresFilter(),
                     GenresFilter(
                         meta.getGenresList(),
                         excludedGenreIds,
                     ),
-                    MatchAllTagsFilter(),
+                    MatchAllGenresFilter(),
                     TagsSearchFilter(meta.tags),
+                    MatchAllTagsFilter(),
                     SourcesFilter(sourceFilters),
+                    Filter.Separator(),
                 ),
             )
         }
+
+        filters.addAll(
+            listOf(
+                YearFilter(),
+                ChapterCountFilter(),
+                StaffSearchFilter(),
+                GroupsSearchFilter(),
+            ),
+        )
 
         return FilterList(filters)
     }
