@@ -32,9 +32,7 @@ class EncryptedPayloadDto(
 
 @Serializable
 class InitMangaDataDto(
-    val restUrl: String,
-    val nonce: String? = null,
-    @SerialName("decryption_key") val decryptionKey: String? = null,
+    @SerialName("decryption_key") val decryptionKey: String,
 )
 
 @Serializable

@@ -17,6 +17,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.stringOrNull
@@ -167,7 +168,8 @@ abstract class ImperioManhwa :
             props.pages
         } else {
             val entry = document.selectFirst("script[type=module][src*=/build/assets/]")!!.absUrl("src")
-            val sealed = openReader(ReaderInput(entry, props.reader, props.chapter.id, props.series.slug)).associateBy { it.n }
+            val input = ReaderInput(entry, props.reader, props.chapter.id, props.series.slug)
+            val sealed = openReader(input, getChapterUrl(chapter)).associateBy { it.n }
             val inline = props.pages.size
             props.pages + (inline + 1..inline + props.dims.size).map { sealed[it] ?: throw IOException("Page $it missing") }
         }
@@ -182,11 +184,23 @@ abstract class ImperioManhwa :
     // One reader WebView at a time
     private val readerMutex = Mutex()
 
-    private suspend fun openReader(input: ReaderInput): List<PageDto> = readerMutex.withLock {
+    // A manifest can answer 428 with a Turnstile sitekey. Cloudflare's script is blocked in the reader, so
+    // reader.js shims window.turnstile to hand the sitekey back, then the solved token on a second run
+    private suspend fun openReader(input: ReaderInput, chapterUrl: String): List<PageDto> {
+        val first = runReader(input)
+        val result = first.sitekey?.let { sitekey ->
+            input.token = getTurnstileToken(chapterUrl, sitekey)
+            runReader(input)
+        } ?: first
+        result.error?.let { throw IOException(it) }
+        return result.pages!!
+    }
+
+    private suspend fun runReader(input: ReaderInput): ReaderResult = readerMutex.withLock {
         val bridge = "r" + Random.nextLong().toULong().toString(36)
         val script = "(${asset("reader.js")})(${input.toJsonString()})" +
-            ".then((pages) => $bridge.postMessage(JSON.stringify({ pages })), (e) => $bridge.postMessage(JSON.stringify({ error: String(e) })))"
-        val result = try {
+            ".then((pages) => $bridge.postMessage(JSON.stringify({ pages })), (e) => $bridge.postMessage(JSON.stringify({ error: String(e), sitekey: e?.sitekey })))"
+        try {
             runWebView<ReaderResult> {
                 blockImages = true
                 interceptRequest { request ->
@@ -202,8 +216,6 @@ abstract class ImperioManhwa :
         } catch (e: Throwable) {
             throw IOException(e.message, e)
         }
-        result.error?.let { throw IOException(it) }
-        result.pages!!
     }
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()

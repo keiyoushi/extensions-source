@@ -17,6 +17,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.aesCbc
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -62,6 +63,10 @@ abstract class InitManga :
     protected open val genreFilterName = "Kategoriler"
 
     protected open val allGenresLabel = "Tümü"
+
+    protected open val altTitleLabel = "Alternatif Başlık"
+
+    protected open val siteZone: ZoneId = ZoneId.of("Europe/Istanbul")
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(baseUrl.toHttpUrl().newBuilder().addPathSegment(popularUrlSlug), page)
 
@@ -127,19 +132,34 @@ abstract class InitManga :
         manga.apply {
             title = document.selectFirst("h1")!!.text()
             description = buildString {
-                document.selectFirst("div#manga-description")?.text()?.let(::append)
-                document.selectFirst("span#comic-othername")?.textOrNull()?.let { append("\n\nAlternatif Başlık: $it") }
+                document.selectFirst("div#manga-description")?.let { element ->
+                    element.select("p, h1, h2, h3, h4, h5, h6, li").ifEmpty { listOf(element) }.mapNotNull { it.textOrNull() }.joinTo(this, "\n\n")
+                }
+                document.selectFirst("span#comic-othername")?.textOrNull()?.let { append("\n\n$altTitleLabel: $it") }
             }.trim().ifEmpty { null }
             author = document.infoValue(authorLabel)
             artist = document.infoValue(artistLabel)
             genre = document.select("div#genre-tags a:not(.uk-disabled)").joinToString { it.text() }.ifEmpty { null }
-            status = parseStatus(document.selectFirst("div.story-cover-wrap span.manga-status-ribbon"))
-            thumbnail_url = document.selectFirst("a.story-cover img")?.imgAttr()
+            status = parseStatus(document)
+            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attrOrNull("content")
+                ?: document.selectFirst("a.story-cover img")?.imgAttr()
         }
 
         val chapterList = if (fetchChapters) getChapterList(document, mangaUrl) else chapters
         return SMangaUpdate(manga, chapterList)
     }
+
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+        .select("div.manga-item-slider")
+        .map { card ->
+            SManga.create().apply {
+                setUrlWithoutDomain(card.selectFirst("a[href]")!!.absUrl("href"))
+                title = card.selectFirst("h3")!!.text()
+                thumbnail_url = card.selectFirst("img")?.imgAttr()
+            }
+        }
 
     private fun Document.infoValue(label: String): String? = selectFirst("div.manga-info-details")
         ?.textNodes()
@@ -147,12 +167,18 @@ abstract class InitManga :
         ?.nextElementSibling()
         ?.textOrNull()
 
-    private fun parseStatus(ribbon: Element?): Int = when (ribbon?.classNames()?.firstOrNull { it.startsWith("ribbon-") }) {
-        "ribbon-ongoing", "ribbon-caught_up" -> SManga.ONGOING
-        "ribbon-completed" -> SManga.COMPLETED
-        "ribbon-season_end", "ribbon-source_hiatus" -> SManga.ON_HIATUS
-        "ribbon-dropped" -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
+    // Ribbon class key, or the label on sites without a ribbon
+    private fun parseStatus(document: Document): Int {
+        val key = document.selectFirst("div.story-cover-wrap span.manga-status-ribbon")
+            ?.classNames()?.firstOrNull { it.startsWith("ribbon-") }?.removePrefix("ribbon-")
+            ?: document.selectFirst("#manga-status")?.text()?.lowercase()?.replace(' ', '_')
+        return when (key) {
+            "ongoing", "caught_up" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "season_end", "source_hiatus" -> SManga.ON_HIATUS
+            "dropped" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
     }
 
     private suspend fun getChapterList(document: Document, mangaUrl: String): List<SChapter> {
@@ -183,7 +209,7 @@ abstract class InitManga :
                         if (title.isNotEmpty()) append(" - $title")
                     }
                 }
-                date_upload = chapterDateFormat.tryParseDateTime(chapter.createdAt, istanbulZone)
+                date_upload = chapterDateFormat.tryParseDateTime(chapter.createdAt, siteZone)
             }
         }
     }
@@ -203,16 +229,13 @@ abstract class InitManga :
         if (document.selectFirst("div.lock-card") != null) return emptyList()
 
         val scripts = document.scriptContents()
-        val payload = scripts.firstNotNullOfOrNull { ENCRYPTED_CHAPTER_REGEX.find(it) }
-            ?.groupValues?.get(1)?.parseAs<EncryptedPayloadDto>()
+        val payload = scripts.firstOrNull { "\"ciphertext\"" in it }?.objectLiteral()?.parseAs<EncryptedPayloadDto>()
             ?: return document.select("div#chapter-content > img").toPages()
-        val initMangaData = scripts.firstNotNullOf { INIT_MANGA_DATA_REGEX.find(it) }
-            .groupValues[1].parseAs<InitMangaDataDto>()
-
         val key = if (payload.salt != null) {
-            passphraseKey(initMangaData.decryptionKey!!, payload.salt)
+            val initMangaData = scripts.first { "\"decryption_key\"" in it }.objectLiteral().parseAs<InitMangaDataDto>()
+            passphraseKey(initMangaData.decryptionKey, payload.salt)
         } else {
-            fetchChapterKey(payload, initMangaData, chapterUrl)
+            fetchChapterKey(payload, chapterUrl)
         }
         val content = Base64.decode(payload.ciphertext, Base64.DEFAULT)
             .aesDecrypt(aesCbc(key, payload.iv.decodeHex()))
@@ -228,28 +251,19 @@ abstract class InitManga :
             ?: script.data()
     }
 
+    private fun String.objectLiteral(): String = substring(indexOf('{'), lastIndexOf('}') + 1)
+
     private fun passphraseKey(decryptionKey: String, salt: String): ByteArray {
         val passphrase = Base64.decode(decryptionKey, Base64.DEFAULT).decodeToString()
         val spec = PBEKeySpec(passphrase.toCharArray(), salt.decodeHex(), 999, 256)
         return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512").generateSecret(spec).encoded
     }
 
-    private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, initMangaData: InitMangaDataDto, chapterUrl: String): ByteArray {
+    private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, chapterUrl: String): ByteArray {
+        val keyHeaders = headers.newBuilder().set("Referer", chapterUrl).build()
         val body = ChapterKeyRequestDto(payload.cid!!, payload.e!!, payload.g!!).toJsonRequestBody()
-        val keyUrl = "${initMangaData.restUrl}/chapter-key"
-        fun keyHeaders(nonce: String?) = headers.newBuilder()
-            .set("Referer", chapterUrl)
-            .apply { if (nonce != null) set("X-WP-Nonce", nonce) }
-            .build()
-
-        // The endpoint also answers without a nonce
-        val nonce = initMangaData.nonce?.takeIf { it.isNotEmpty() }
-        if (nonce != null) {
-            client.post(keyUrl, keyHeaders(nonce), body, ensureSuccess = false).use { response ->
-                if (response.isSuccessful) return response.parseAs<ChapterKeyResponseDto>().key.decodeHex()
-            }
-        }
-        return client.post(keyUrl, keyHeaders(null), body).parseAs<ChapterKeyResponseDto>().key.decodeHex()
+        return client.post("$baseUrl/wp-json/initmanga/v1/chapter-key", keyHeaders, body)
+            .parseAs<ChapterKeyResponseDto>().key.decodeHex()
     }
 
     private fun Elements.toPages(): List<Page> = mapNotNull { element ->
@@ -294,10 +308,7 @@ abstract class InitManga :
         private const val PREF_HIDE_LOCKED_KEY = "pref_hide_locked_chapters"
         private const val PREF_HIDE_LOCKED_DEFAULT = false
         private const val SEARCH_PAGE_SIZE = 10
-        private val ENCRYPTED_CHAPTER_REGEX = Regex("""InitMangaEncryptedChapter\s*=\s*(\{.*?\})\s*(?:;|$)""", RegexOption.DOT_MATCHES_ALL)
-        private val INIT_MANGA_DATA_REGEX = Regex("""InitMangaData\s*=\s*(\{.*?\})\s*(?:;|$)""", RegexOption.DOT_MATCHES_ALL)
         private val POST_ID_REGEX = Regex("""postid-(\d+)""")
         private val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
-        private val istanbulZone = ZoneId.of("Europe/Istanbul")
     }
 }
