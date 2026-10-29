@@ -17,6 +17,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -50,8 +51,7 @@ abstract class Kagane :
     private val kaganeLangs: List<String>
         get() = listOf(lang)
 
-    private val domain get() = baseUrl.removePrefix("https://")
-    private val apiUrl get() = "https://$domain/api/v2"
+    private val apiUrl get() = "$baseUrl/api/v2"
 
     private val prefs = getPreferences()
 
@@ -59,6 +59,10 @@ abstract class Kagane :
         addInterceptor(::refreshTokenInterceptor)
         rateLimit(3)
     }
+
+    override suspend fun fetchBaseUrls(): List<String> = client.get(HUB_URL).asJsoup()
+        .select("li:has(p[aria-live]) a[href^=https://]")
+        .map { it.absUrl("href") }
 
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -683,6 +687,8 @@ abstract class Kagane :
     // ============================= Utilities ==============================
 
     companion object {
+        private const val HUB_URL = "https://kagane.org/"
+
         private const val MAX_SOURCE_FILTER = 50
         private const val CONTENT_RATING = "pref_content_rating"
 
