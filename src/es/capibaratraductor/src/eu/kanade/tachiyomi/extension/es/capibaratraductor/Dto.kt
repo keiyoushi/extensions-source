@@ -14,6 +14,7 @@ class Data<T>(
     @SerialName("data") private val _data: T? = null,
     private val status: Boolean = true,
     private val message: String? = null,
+    val rv: String? = null,
 ) {
     val data get() = if (status) _data!! else throw Exception(message ?: "Error desconocido")
 }
@@ -106,7 +107,7 @@ class SeriesChapterDto(
 
 @Serializable
 class PageDto(
-    val imageUrl: String,
+    val pg: String,
 )
 
 @Serializable
