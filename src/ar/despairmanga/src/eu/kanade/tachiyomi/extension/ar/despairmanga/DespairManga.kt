@@ -13,6 +13,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -21,12 +22,11 @@ abstract class DespairManga : KeiSource() {
 
     private val apiUrl get() = "$baseUrl/supabase-api/rest/v1"
 
-    private val apiHeaders by lazy {
-        headers.newBuilder()
+    private val apiHeaders: Headers
+        get() = headers.newBuilder()
             .add("apikey", ANON_KEY)
             .add("Authorization", "Bearer $ANON_KEY")
             .build()
-    }
 
     override suspend fun getPopularManga(page: Int) = getWorks(page, "views_count.desc")
 
@@ -92,19 +92,12 @@ abstract class DespairManga : KeiSource() {
     }
 
     private suspend fun getChapters(workId: String, slug: String): List<SChapter> {
-        val result = mutableListOf<ChapterDto>()
-        do {
-            val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
-                .addQueryParameter("select", "id,chapter_number,title,is_free,created_at")
-                .addQueryParameter("work_id", "eq.$workId")
-                .addQueryParameter("order", "chapter_number.desc,id.desc")
-                .addQueryParameter("limit", CHAPTER_CHUNK.toString())
-                .addQueryParameter("offset", result.size.toString())
-                .build()
-            val chunk = client.get(url, apiHeaders).parseAs<List<ChapterDto>>()
-            result += chunk
-        } while (chunk.size == CHAPTER_CHUNK)
-        return result.map { it.toSChapter(slug) }
+        val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "id,chapter_number,title,is_free,created_at")
+            .addQueryParameter("work_id", "eq.$workId")
+            .addQueryParameter("order", "chapter_number.desc,id.desc")
+            .build()
+        return client.get(url, apiHeaders).parseAs<List<ChapterDto>>().map { it.toSChapter(slug) }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -125,8 +118,5 @@ abstract class DespairManga : KeiSource() {
         private const val ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwMzczMDE4LCJleHAiOjE5NDgwNTMwMTh9.xYgAlC_9SuUCdzdff6wBYGWzYFmAI9apP_mk4DCPaVI"
         private const val WORK_COLUMNS = "id,slug,title_ar,title_en,cover_url,genres,synopsis,status,author_or_studio"
         private const val PAGE_SIZE = 24
-
-        // supabase caps a single response at 1000 rows by default
-        private const val CHAPTER_CHUNK = 1000
     }
 }
