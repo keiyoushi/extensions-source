@@ -12,6 +12,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -132,16 +133,17 @@ abstract class CapibaraTraductor : KeiSource() {
         val (seriesSlug, organizationSlug) = manga.url.split("/", limit = 2)
         val result = fetchSeries(manga)
 
-        val now = Clock.System.now().toEpochMilliseconds()
-        val chapterList = result.chapters
-            ?.filter { !it.isUnreleased }
-            ?.map { it.toSChapter(seriesSlug, organizationSlug, result.chapterLabelMode) }
-            ?.filter { it.date_upload < now }
-            ?: emptyList()
-
         val details = result.toSMangaDetails(organizationSlug).apply {
             memo = JsonObject(manga.memo + memo)
         }
+        val jointSlug = details.memo["jointSlug"]?.stringOrNull
+
+        val now = Clock.System.now().toEpochMilliseconds()
+        val chapterList = result.chapters
+            ?.filter { !it.isUnreleased }
+            ?.map { it.toSChapter(seriesSlug, organizationSlug, result.chapterLabelMode, jointSlug) }
+            ?.filter { it.date_upload < now }
+            ?: emptyList()
 
         return SMangaUpdate(details, chapterList)
     }
@@ -155,9 +157,13 @@ abstract class CapibaraTraductor : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (chapterSlug, seriesSlug, organizationSlug) = chapter.url.split("/", limit = 3)
 
-        val seriesPath = if (chapter.memo["jointId"] != null) "joint" else "manga-custom"
+        val seriesPath = if (chapter.memo["jointId"] != null) {
+            "joint/${chapter.memo["jointSlug"]?.stringOrNull ?: seriesSlug}"
+        } else {
+            "manga-custom/$seriesSlug"
+        }
 
-        val result = client.get("$baseUrl/api/$seriesPath/$seriesSlug/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
+        val result = client.get("$baseUrl/api/$seriesPath/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
             .parseAs<Data<List<PageDto>>>()
         return result.data.mapIndexed { i, page ->
             Page(i, imageUrl = decodePageUrl(page.pg, result.rv!!, i))
@@ -268,9 +274,9 @@ abstract class CapibaraTraductor : KeiSource() {
 
     private suspend fun fetchSeries(manga: SManga): SeriesDto {
         val (seriesSlug, organizationSlug) = manga.url.split("/", limit = 2)
-        val seriesPath = if (manga.memo["jointSlug"] != null) "joint" else "manga-custom"
+        val seriesPath = manga.memo["jointSlug"]?.stringOrNull?.let { "joint/$it" } ?: "manga-custom/$seriesSlug"
 
-        return client.get("$baseUrl/api/$seriesPath/$seriesSlug", getScanHeaders(organizationSlug))
+        return client.get("$baseUrl/api/$seriesPath", getScanHeaders(organizationSlug))
             .parseAs<Data<SeriesDto>>()
             .data
     }

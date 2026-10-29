@@ -146,7 +146,7 @@ class SeriesChapterDto(
     val isUnreleased: Boolean = false,
     private val jointId: Int? = null,
 ) {
-    fun toSChapter(seriesSlug: String, organizationSlug: String, labelMode: String?) = SChapter.create().apply {
+    fun toSChapter(seriesSlug: String, organizationSlug: String, labelMode: String?, jointSlug: String?) = SChapter.create().apply {
         val shownNumber = displayNumber ?: number
         val chapterLabel = "Capítulo ${shownNumber.toString().removeSuffix(".0")}"
         val label = when {
@@ -161,7 +161,10 @@ class SeriesChapterDto(
         date_upload = Instant.tryParse(releasedAt)
         url = "$number/$seriesSlug/$organizationSlug"
         memo = buildJsonObject {
-            jointId?.let { put("jointId", it) }
+            jointId?.let {
+                put("jointId", it)
+                jointSlug?.let { put("jointSlug", it) }
+            }
         }
     }
 }
