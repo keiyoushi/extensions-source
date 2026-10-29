@@ -42,6 +42,8 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okio.IOException
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 @Source
 abstract class Kagane :
@@ -465,18 +467,16 @@ abstract class Kagane :
 
     private var accessToken: String = ""
     private var integrityToken: String = ""
-    private var integrityExp = System.currentTimeMillis()
+    private var integrityExp = Instant.DISTANT_PAST
 
     private suspend fun getIntegrityToken(): String {
-        if (integrityExp < System.currentTimeMillis()) {
-            client.get("$baseUrl/").close()
-
+        if (integrityExp < Clock.System.now()) {
             val res = client.post(
                 "$baseUrl/api/integrity",
                 "".toJsonRequestBody(),
             ).parseAs<IntegrityDto>()
             integrityToken = res.token
-            integrityExp = res.exp * 1000
+            integrityExp = Instant.fromEpochSeconds(res.exp)
         }
 
         return integrityToken
