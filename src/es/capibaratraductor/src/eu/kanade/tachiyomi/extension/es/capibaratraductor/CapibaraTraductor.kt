@@ -14,6 +14,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.Headers
@@ -205,7 +206,11 @@ abstract class CapibaraTraductor : KeiSource() {
             ?.filter { it.date_upload < now }
             ?: emptyList()
 
-        return SMangaUpdate(result.toSMangaDetails(organizationSlug), chapterList)
+        val details = result.toSMangaDetails(organizationSlug).apply {
+            memo = JsonObject(manga.memo + memo)
+        }
+
+        return SMangaUpdate(details, chapterList)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

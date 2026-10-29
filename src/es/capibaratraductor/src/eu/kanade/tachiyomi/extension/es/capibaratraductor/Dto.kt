@@ -36,7 +36,8 @@ class SeriesDto(
     private val genres: List<NameDto>? = null,
     val chapters: List<SeriesChapterDto>? = emptyList(),
     val organization: OrganizationDto? = null,
-    @SerialName("_jointSlug") private val jointSlug: String? = null,
+    @SerialName("_jointSlug") private val listJointSlug: String? = null,
+    private val jointSlug: String? = null,
     @SerialName("_jointMembers") private val jointMembers: List<OrganizationDto>? = emptyList(),
     val members: List<MemberDto>? = emptyList(),
 ) {
@@ -45,9 +46,9 @@ class SeriesDto(
         title = this@SeriesDto.title
         thumbnail_url = imageUrl
         url = "${manga.slug}/$organizationSlug"
-        artist = if (jointSlug == null) organization?.name else jointMembers?.joinToString { it.name }
+        artist = if (listJointSlug == null) organization?.name else jointMembers?.joinToString { it.name }
         memo = buildJsonObject {
-            jointSlug?.let { put("jointSlug", it) }
+            (listJointSlug ?: jointSlug)?.let { put("jointSlug", it) }
         }
     }
 
