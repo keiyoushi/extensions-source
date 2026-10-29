@@ -34,6 +34,12 @@ class SeriesDto(
     private val description: String? = null,
     private val alternativeTitle: String? = null,
     private val genres: List<NameDto>? = null,
+    private val mal: MalDto? = null,
+    private val malAnimeUrl: String? = null,
+    private val hasAnime: Boolean = false,
+    private val isOneShot: Boolean = false,
+    val chapterLabelMode: String? = null,
+    val usersAlsoReadMangaCustomIds: String? = null,
     val chapters: List<SeriesChapterDto>? = emptyList(),
     val organization: OrganizationDto? = null,
     @SerialName("_jointSlug") private val listJointSlug: String? = null,
@@ -55,13 +61,29 @@ class SeriesDto(
     fun toSMangaDetails(orgSlug: String) = toSManga(orgSlug).apply {
         status = parseStatus(this@SeriesDto.status)
         description = buildString {
-            this@SeriesDto.description?.let(::append)
-            alternativeTitle?.let { append("\n\nTítulo alternativo: ", it) }
+            listOfNotNull(
+                mal?.score?.let { "★ $it (MAL)" },
+                "Oneshot".takeIf { isOneShot },
+                "Anime".takeIf { hasAnime },
+            ).also { if (it.isNotEmpty()) append(it.joinToString(" · "), "\n\n") }
+
+            this@SeriesDto.description?.let { append(it.trim(), "\n\n") }
+
+            alternativeTitle?.takeIf { it.isNotBlank() }?.let {
+                append("**Título alternativo:**\n- ", it.trim(), "\n\n")
+            }
+
+            listOfNotNull(
+                manga.anilistId?.let { "[AniList](https://anilist.co/manga/$it)" },
+                manga.malMangaId?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
+                malAnimeUrl?.let { "[MyAnimeList (anime)]($it)" },
+            ).also { links ->
+                if (links.isNotEmpty()) append("**Enlaces:**\n", links.joinToString("\n") { "- $it" })
+            }
         }.trim().ifEmpty { null }
         genre = (listOfNotNull(manga.bookType, manga.demography) + genres.orEmpty())
             .joinToString { it.name }
             .ifEmpty { null }
-        title = this@SeriesDto.title
         author = manga.authors?.joinToString { it.name }
         artist = if (!members.isNullOrEmpty()) members.joinToString { it.organization.name } else organization!!.name
     }
@@ -72,6 +94,7 @@ class SeriesDto(
         "ongoing" -> SManga.ONGOING
         "hiatus" -> SManga.ON_HIATUS
         "finished", "completed" -> SManga.COMPLETED
+        "cancelled" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 }
@@ -92,8 +115,15 @@ class MemberDto(
 class MangaInfoDto(
     val slug: String,
     val authors: List<SeriesAuthorDto>? = emptyList(),
+    val anilistId: Int? = null,
+    val malMangaId: Int? = null,
     val bookType: NameDto? = null,
     val demography: NameDto? = null,
+)
+
+@Serializable
+class MalDto(
+    val score: Float? = null,
 )
 
 @Serializable
@@ -110,15 +140,24 @@ class SeriesAuthorDto(
 class SeriesChapterDto(
     private val title: String,
     private val number: Float,
+    private val displayNumber: Float? = null,
+    private val volumeNumber: Float? = null,
     private val releasedAt: String? = null,
     val isUnreleased: Boolean = false,
     private val jointId: Int? = null,
 ) {
-    fun toSChapter(seriesSlug: String, organizationSlug: String) = SChapter.create().apply {
-        val chapterName = "Capítulo ${number.toString().removeSuffix(".0")}"
-        val title = title.trim()
-        val titleNumber = CHAPTER_TITLE_REGEX.matchEntire(title)?.groupValues?.get(1)?.toFloatOrNull()
-        name = if (title.isEmpty() || titleNumber == number) chapterName else "$chapterName - $title"
+    fun toSChapter(seriesSlug: String, organizationSlug: String, labelMode: String?) = SChapter.create().apply {
+        val shownNumber = displayNumber ?: number
+        val chapterLabel = "Capítulo ${shownNumber.toString().removeSuffix(".0")}"
+        val label = when {
+            labelMode == "volume" -> "Tomo ${(volumeNumber ?: shownNumber).toString().removeSuffix(".0")}"
+            labelMode == "both" && volumeNumber != null -> "Tomo ${volumeNumber.toString().removeSuffix(".0")} · $chapterLabel"
+            else -> chapterLabel
+        }
+        val trimmedTitle = title.trim()
+        val titleNumber = CHAPTER_TITLE_REGEX.matchEntire(trimmedTitle)?.groupValues?.get(1)?.toFloatOrNull()
+        name = if (trimmedTitle.isEmpty() || titleNumber == shownNumber || trimmedTitle.equals(label, ignoreCase = true)) label else "$label - $trimmedTitle"
+        chapter_number = shownNumber
         date_upload = Instant.tryParse(releasedAt)
         url = "$number/$seriesSlug/$organizationSlug"
         memo = buildJsonObject {
@@ -130,6 +169,19 @@ class SeriesChapterDto(
 @Serializable
 class PageDto(
     val pg: String,
+)
+
+@Serializable
+class FilterOptionDto(
+    val name: String,
+    val slug: String,
+)
+
+@Serializable
+class FilterData(
+    val scans: List<Pair<String, String>>,
+    val genres: List<Pair<String, String>>,
+    val demographies: List<Pair<String, String>>,
 )
 
 @Serializable
