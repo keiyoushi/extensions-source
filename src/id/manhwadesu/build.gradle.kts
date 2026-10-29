@@ -13,6 +13,8 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl = "https://manhwadesu.run"
+        baseUrl {
+            custom("https://manhwadesu.run")
+        }
     }
 }

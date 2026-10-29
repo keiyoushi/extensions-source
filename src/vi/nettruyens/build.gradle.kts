@@ -12,6 +12,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl = "https://nettruyen15s.com"
+        baseUrl {
+            custom("https://nettruyen15s.com")
+        }
     }
 }

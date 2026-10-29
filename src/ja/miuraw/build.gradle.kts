@@ -13,7 +13,9 @@ keiyoushi {
 
     source {
         lang = "ja"
-        baseUrl = "https://miuraw.net"
+        baseUrl {
+            custom("https://miuraw.net")
+        }
         id = 7950551186567193810L
     }
 }
