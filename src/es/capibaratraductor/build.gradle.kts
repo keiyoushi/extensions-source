@@ -14,4 +14,8 @@ keiyoushi {
         lang = "es"
         baseUrl = "https://capibaratraductor.com"
     }
+
+    deeplink {
+        path("/.*/manga/..*")
+    }
 }

@@ -14,12 +14,15 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import kotlin.time.Clock
 
 @Source
 abstract class CapibaraTraductor : KeiSource() {
@@ -50,21 +53,18 @@ abstract class CapibaraTraductor : KeiSource() {
         .add("x-organization", organizationSlug)
         .build()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular".toHttpUrl(), page, headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(mangaListUrl(page).addQueryParameter("order", "popular").build(), page, headers)
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=latest".toHttpUrl(), page, headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(mangaListUrl(page).addQueryParameter("order", "latest").build(), page, headers)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$baseUrl/api/manga-custom".toHttpUrl().newBuilder()
-
-        url.setQueryParameter("page", page.toString())
-        url.setQueryParameter("limit", PAGE_LIMIT.toString())
-
+        val url = mangaListUrl(page)
         val headers = headers.newBuilder()
 
         filters.forEach { filter ->
             when (filter) {
                 is SortByFilter -> url.setQueryParameter("order", filter.toUriPart())
+                is TypeFilter -> url.setQueryParameter("type", filter.toUriPart())
                 is ScanlatorFilter -> if (filter.state != 0) headers["x-organization"] = filter.toUriPart()
                 else -> {}
             }
@@ -74,6 +74,11 @@ abstract class CapibaraTraductor : KeiSource() {
 
         return parseMangaList(url.build(), page, headers.build())
     }
+
+    private fun mangaListUrl(page: Int) = "$baseUrl/api/manga-custom".toHttpUrl().newBuilder()
+        .addQueryParameter("page", page.toString())
+        .addQueryParameter("limit", PAGE_LIMIT.toString())
+        .addQueryParameter("type", COMIC_TYPES)
 
     private suspend fun parseMangaList(url: HttpUrl, page: Int, headers: Headers): MangasPage {
         val result = client.get(url, headers).parseAs<Data<SeriesListDataDto>>()
@@ -107,15 +112,23 @@ abstract class CapibaraTraductor : KeiSource() {
             filters.add(ScanlatorFilter("Scanlator", it.toTypedArray()))
         }
 
+        filters.add(TypeFilter("Tipo", getTypeList()))
         filters.add(SortByFilter("Ordenar por", getSortList()))
 
         return FilterList(filters)
     }
 
     private fun getSortList() = arrayOf(
-        Pair("Recientes", "latest"),
-        Pair("Popularidad", "popular"),
-        Pair("A-Z", "alphabetical"),
+        "Popularidad" to "popular",
+        "Recientes" to "latest",
+        "A-Z" to "alphabetical",
+    )
+
+    private fun getTypeList() = arrayOf(
+        "Todos" to COMIC_TYPES,
+        "Manga" to "manga",
+        "Manhwa" to "manhwa",
+        "Manhua" to "manhua",
     )
 
     private suspend fun fetchAllScans(includeNsfw: Boolean): List<Pair<String, String>> {
@@ -150,6 +163,24 @@ abstract class CapibaraTraductor : KeiSource() {
         return scans
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrlHost) return null
+        val segments = url.pathSegments.let { if (it.firstOrNull() == "red") it.drop(1) else it }
+        if (segments.size < 3 || segments[1] != "manga" || segments[2].isEmpty()) return null
+        val seriesSlug = segments[2]
+        val manga = SManga.create().apply {
+            if (segments[0] == "joint") {
+                val organizationSlug = client.get("$baseUrl/api/joint/$seriesSlug")
+                    .parseAs<Data<SeriesDto>>().data.leaderSlug()
+                this.url = "$seriesSlug/$organizationSlug"
+                memo = buildJsonObject { put("jointSlug", seriesSlug) }
+            } else {
+                this.url = "$seriesSlug/${segments[0]}"
+            }
+        }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     override fun getMangaUrl(manga: SManga): String {
         val (seriesSlug, organizationSlug) = manga.url.split("/", limit = 2)
         return "$baseUrl/$organizationSlug/manga/$seriesSlug"
@@ -167,10 +198,11 @@ abstract class CapibaraTraductor : KeiSource() {
             .parseAs<Data<SeriesDto>>()
             .data
 
+        val now = Clock.System.now().toEpochMilliseconds()
         val chapterList = result.chapters
-            ?.filter { it.isUnreleased.not() }
+            ?.filter { !it.isUnreleased }
             ?.map { it.toSChapter(seriesSlug, organizationSlug) }
-            ?.filter { it.date_upload < System.currentTimeMillis() }
+            ?.filter { it.date_upload < now }
             ?: emptyList()
 
         return SMangaUpdate(result.toSMangaDetails(organizationSlug), chapterList)
@@ -196,5 +228,6 @@ abstract class CapibaraTraductor : KeiSource() {
 
     companion object {
         private const val PAGE_LIMIT = 36
+        private const val COMIC_TYPES = "manga,manhwa,manhua"
     }
 }

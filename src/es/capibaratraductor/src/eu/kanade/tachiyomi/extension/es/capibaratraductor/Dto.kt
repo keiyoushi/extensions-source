@@ -16,7 +16,7 @@ class Data<T>(
     private val message: String? = null,
     val rv: String? = null,
 ) {
-    val data get() = if (status) _data!! else throw Exception(message ?: "Error desconocido")
+    val data get() = if (status) _data!! else throw Exception(message ?: "Unknown error")
 }
 
 @Serializable
@@ -32,6 +32,8 @@ class SeriesDto(
     private val title: String,
     private val status: String? = null,
     private val description: String? = null,
+    private val alternativeTitle: String? = null,
+    private val genres: List<NameDto>? = null,
     val chapters: List<SeriesChapterDto>? = emptyList(),
     val organization: OrganizationDto? = null,
     @SerialName("_jointSlug") private val jointSlug: String? = null,
@@ -51,11 +53,19 @@ class SeriesDto(
 
     fun toSMangaDetails(orgSlug: String) = toSManga(orgSlug).apply {
         status = parseStatus(this@SeriesDto.status)
-        description = this@SeriesDto.description
+        description = buildString {
+            this@SeriesDto.description?.let(::append)
+            alternativeTitle?.let { append("\n\nTítulo alternativo: ", it) }
+        }.trim().ifEmpty { null }
+        genre = (listOfNotNull(manga.bookType, manga.demography) + genres.orEmpty())
+            .joinToString { it.name }
+            .ifEmpty { null }
         title = this@SeriesDto.title
         author = manga.authors?.joinToString { it.name }
         artist = if (!members.isNullOrEmpty()) members.joinToString { it.organization.name } else organization!!.name
     }
+
+    fun leaderSlug() = members!!.first { it.role == "LEADER" }.organization.slug
 
     private fun parseStatus(status: String?) = when (status) {
         "ongoing" -> SManga.ONGOING
@@ -73,6 +83,7 @@ class OrganizationDto(
 
 @Serializable
 class MemberDto(
+    val role: String,
     val organization: OrganizationDto,
 )
 
@@ -80,6 +91,13 @@ class MemberDto(
 class MangaInfoDto(
     val slug: String,
     val authors: List<SeriesAuthorDto>? = emptyList(),
+    val bookType: NameDto? = null,
+    val demography: NameDto? = null,
+)
+
+@Serializable
+class NameDto(
+    val name: String,
 )
 
 @Serializable
@@ -96,7 +114,10 @@ class SeriesChapterDto(
     private val jointId: Int? = null,
 ) {
     fun toSChapter(seriesSlug: String, organizationSlug: String) = SChapter.create().apply {
-        name = "Capítulo ${number.toString().removeSuffix(".0")} - $title"
+        val chapterName = "Capítulo ${number.toString().removeSuffix(".0")}"
+        val title = title.trim()
+        val titleNumber = CHAPTER_TITLE_REGEX.matchEntire(title)?.groupValues?.get(1)?.toFloatOrNull()
+        name = if (title.isEmpty() || titleNumber == number) chapterName else "$chapterName - $title"
         date_upload = Instant.tryParse(releasedAt)
         url = "$number/$seriesSlug/$organizationSlug"
         memo = buildJsonObject {
@@ -124,3 +145,5 @@ class ScanDto(
     val id: String,
     val name: String,
 )
+
+private val CHAPTER_TITLE_REGEX = Regex("""cap[ií]tulo\s+([\d.]+)""", RegexOption.IGNORE_CASE)
