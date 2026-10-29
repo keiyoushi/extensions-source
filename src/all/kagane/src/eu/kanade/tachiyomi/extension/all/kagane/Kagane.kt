@@ -4,6 +4,7 @@ import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,6 +18,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -35,12 +37,18 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.Headers.Companion.headersOf
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 @Source
 abstract class Kagane :
@@ -50,14 +58,83 @@ abstract class Kagane :
     private val kaganeLangs: List<String>
         get() = listOf(lang)
 
-    private val domain get() = baseUrl.removePrefix("https://")
-    private val apiUrl get() = "https://$domain/api/v2"
+    // Mirror list is read from kagane.org at runtime, so the DSL mirrors mode can't be used
+    override val baseUrl get() = "https://$mirror"
 
-    private val prefs = getPreferences()
+    private val apiUrl get() = "$baseUrl/api/v2"
+
+    private val prefs = getPreferences {
+        if (contains(LEGACY_MIRROR_PREF)) {
+            edit().remove(LEGACY_MIRROR_PREF).apply()
+        }
+    }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(::mirrorInterceptor)
         addInterceptor(::refreshTokenInterceptor)
         rateLimit(3)
+    }
+
+    private fun mirrorInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val host = request.url.host
+        if (host !in kaganeHosts) return chain.proceed(request)
+
+        synchronized(this) {
+            if (!mirrorsLoaded) {
+                mirrorsLoaded = true
+                loadMirrors(chain)
+            }
+        }
+
+        val tried = mirror
+        val response = try {
+            chain.proceed(request.onMirror(tried))
+        } catch (e: IOException) {
+            if (chain.call().isCanceled()) throw e
+            null
+        }
+        if (response != null && !response.isDeadMirror(request)) return response
+
+        // Retried once on the next listed mirror
+        response?.close()
+        deadMirrors += tried
+        val next = mirror
+        val retry = chain.proceed(request.onMirror(next))
+        if (!retry.isDeadMirror(request)) return retry
+        retry.close()
+        deadMirrors += next
+        throw IOException("No Kagane mirror is reachable, try again later")
+    }
+
+    // Moves requests built before the list loaded, and covers saved on former mirrors
+    private fun Request.onMirror(mirror: String): Request {
+        if (url.host == mirror) return this
+        return newBuilder()
+            .url(url.newBuilder().host(mirror).build())
+            .header("Referer", "https://$mirror/")
+            .header("Origin", "https://$mirror")
+            .build()
+    }
+
+    // A parked domain answers the api with its own HTML page
+    private fun Response.isDeadMirror(sent: Request) = code >= 500 ||
+        (sent.url.encodedPath.startsWith("/api/") && header("Content-Type")?.startsWith("text/html") == true)
+
+    private fun loadMirrors(chain: Interceptor.Chain) {
+        val hubRequest = GET(HUB_URL, headersOf("User-Agent", chain.request().header("User-Agent")!!))
+        val hosts = try {
+            // The mirror cards come first; the rest of the 1 MB page is the hub's RSC payload
+            chain.proceed(hubRequest).use { it.peekBody(HUB_HEAD_BYTES).string() }
+                .asJsoup(HUB_URL)
+                .select("li:has(p[aria-live]) a[href^=https://]")
+                .mapNotNull { it.absUrl("href").toHttpUrlOrNull()?.host }
+        } catch (_: IOException) {
+            return
+        }
+        if (hosts.isNotEmpty()) {
+            prefs.edit().putString(MIRRORS_PREF, hosts.joinToString(",")).apply()
+        }
     }
 
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
@@ -333,7 +410,7 @@ abstract class Kagane :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host !in kaganeHosts) return null
         val segments = url.pathSegments
         if (segments.size < 2) return null
         val seriesId = segments[1].takeLast(36)
@@ -461,18 +538,16 @@ abstract class Kagane :
 
     private var accessToken: String = ""
     private var integrityToken: String = ""
-    private var integrityExp = System.currentTimeMillis()
+    private var integrityExp = Instant.DISTANT_PAST
 
     private suspend fun getIntegrityToken(): String {
-        if (integrityExp < System.currentTimeMillis()) {
-            client.get("$baseUrl/").close()
-
+        if (integrityExp < Clock.System.now()) {
             val res = client.post(
                 "$baseUrl/api/integrity",
                 "".toJsonRequestBody(),
             ).parseAs<IntegrityDto>()
             integrityToken = res.token
-            integrityExp = res.exp * 1000
+            integrityExp = Instant.fromEpochSeconds(res.exp)
         }
 
         return integrityToken
@@ -495,6 +570,26 @@ abstract class Kagane :
     }
 
     // ============================ Preferences =============================
+
+    private val mirrors: List<String>
+        get() = prefs.getString(MIRRORS_PREF, null)?.split(",").orEmpty()
+
+    @Volatile
+    private var mirrorsLoaded = false
+
+    private val deadMirrors: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    private val kaganeHosts: Set<String>
+        get() = setOf(HUB_HOST) + FORMER_MIRRORS + mirrors
+
+    private val mirror: String
+        get() {
+            val mirrors = mirrors
+            val live = (mirrors - deadMirrors).ifEmpty { mirrors }
+            return prefs.getString(MIRROR_PREF, null)?.takeIf { it in live }
+                ?: live.firstOrNull()
+                ?: HUB_HOST
+        }
 
     private val contentRating: List<String>
         get() {
@@ -548,6 +643,16 @@ abstract class Kagane :
         get() = prefs.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val mirrors = mirrors
+        ListPreference(screen.context).apply {
+            key = MIRROR_PREF
+            title = "Preferred Mirror"
+            entries = arrayOf("Automatic") + mirrors
+            entryValues = arrayOf("") + mirrors
+            summary = "%s"
+            setDefaultValue("")
+        }.let(screen::addPreference)
+
         val contentRatingPref = ListPreference(screen.context).apply {
             key = CONTENT_RATING
             title = "Content Rating"
@@ -683,6 +788,19 @@ abstract class Kagane :
     // ============================= Utilities ==============================
 
     companion object {
+        private const val HUB_HOST = "kagane.org"
+        private const val HUB_URL = "https://$HUB_HOST/"
+        private const val HUB_HEAD_BYTES = 128 * 1024L
+
+        private const val MIRROR_PREF = "pref_mirror"
+        private const val MIRRORS_PREF = "pref_mirror_list"
+
+        // Former DSL mirror picker, reset so everyone starts on Automatic
+        private const val LEGACY_MIRROR_PREF = "preferred_mirror"
+
+        // Hosts of the former DSL mirror list, which stored covers still point to
+        private val FORMER_MIRRORS = listOf("kagane.si", "kagane.cx", "kagane.moe", "kagane.net")
+
         private const val MAX_SOURCE_FILTER = 50
         private const val CONTENT_RATING = "pref_content_rating"
 
