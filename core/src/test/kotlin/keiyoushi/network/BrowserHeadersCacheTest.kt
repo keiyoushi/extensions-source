@@ -99,10 +99,10 @@ class BrowserHeadersCacheTest {
     // KeiSource's client, minus what needs the app
     private val client = OkHttpClient.Builder()
         .cache(Cache(cacheDir, 1024 * 1024))
-        .addInterceptor(BrowserHeadersInterceptor({ base }))
-        .addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
+        .addInterceptor(BrowserCallInterceptor { base })
+        .addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
         .addNetworkInterceptor(CacheControlInterceptor())
-        .addNetworkInterceptor(BrowserHeaderOrderInterceptor)
+        .addNetworkInterceptor(BrowserHeadersInterceptor)
         .build()
 
     @After
@@ -130,13 +130,13 @@ class BrowserHeadersCacheTest {
     }
 
     @Test
-    fun xhrVaryOriginAndEncoding() = assertCached("/api") { it.forXhr() }
+    fun xhrVaryOriginAndEncoding() = assertCached("/api") { it.fetch(Fetch.XHR) }
 
     @Test
-    fun documentVaryOnBrowserHeaders() = assertCached("/doc") { it.forDocument() }
+    fun documentVaryOnBrowserHeaders() = assertCached("/doc") { it.fetch(Fetch.DOCUMENT) }
 
     @Test
-    fun imageVaryAccept() = assertCached("/img") { it.forImage() }
+    fun imageVaryAccept() = assertCached("/img") { it.fetch(Fetch.IMAGE) }
 
     // The request's max-age widened by CacheControlInterceptor, before the wire order pass drops it
     @Test
@@ -144,48 +144,48 @@ class BrowserHeadersCacheTest {
 
     @Test
     fun forceCacheAfterNetwork() {
-        call(request("/img").forImage().build())
-        val cached = call(request("/img").forImage().cacheControl(CacheControl.FORCE_CACHE).build())
+        call(request("/img").fetch(Fetch.IMAGE).build())
+        val cached = call(request("/img").fetch(Fetch.IMAGE).cacheControl(CacheControl.FORCE_CACHE).build())
         assertEquals(200, cached.code)
         assertEquals(1, hits["/img"]!!.get())
     }
 
     @Test
     fun redirectsUpdateSiteAndOrigin() {
-        call(request("/to-other-site").forImage().build())
+        call(request("/to-other-site").fetch(Fetch.IMAGE).build())
         assertEquals("cross-site", seen["/landed"]!!.getFirst("Sec-Fetch-Site"))
         val form = FormBody.Builder().add("q", "1").build()
-        call(request("/form").forDocument().post(form).build())
+        call(request("/form").fetch(Fetch.DOCUMENT).post(form).build())
         assertNull(seen["/landed"]!!.getFirst("Origin"))
         assertNotNull(seen["/form"]!!.getFirst("Origin"))
         // A cross-origin hop of a page's fetch carries Origin, though the first request didn't
-        call(request("/to-other-site").forXhr().build())
+        call(request("/to-other-site").fetch(Fetch.XHR).build())
         assertEquals(base, seen["/landed"]!!.getFirst("Origin"))
     }
 
     @Test
-    fun acceptEncodingOnlyChangesWithAKind() {
+    fun browserAcceptEncodingOnEveryRequest() {
         call(request("/landed").build())
-        assertEquals("br,gzip,zstd", seen["/landed"]!!.getFirst("Accept-Encoding").replace(" ", ""))
-        call(request("/landed").forXhr().build())
+        assertEquals("gzip,deflate,br,zstd", seen["/landed"]!!.getFirst("Accept-Encoding").replace(" ", ""))
+        call(request("/landed").fetch(Fetch.XHR).build())
         assertEquals("gzip,deflate,br,zstd", seen["/landed"]!!.getFirst("Accept-Encoding").replace(" ", ""))
     }
 
     @Test
     fun fromPageAcrossRedirects() {
         // localhost -> 127.0.0.1 -> back to localhost: trimmed to the origin once, it stays trimmed
-        call(request("/to-other-then-back").forXhr().from("$base/series/1?x=1").build())
+        call(request("/to-other-then-back").fetch(Fetch.XHR.from("$base/series/1?x=1")).build())
         assertEquals("$base/", seen["/back"]!!.getFirst("Referer"))
         assertEquals("$base/", seen["/landed"]!!.getFirst("Referer"))
-        // Without a kind too
-        call(request("/to-other-site").from("$base/series/1?x=1").build())
+        // With NONE too
+        call(request("/to-other-site").fetch(Fetch.NONE.from("$base/series/1?x=1")).build())
         assertEquals("$base/", seen["/landed"]!!.getFirst("Referer"))
     }
 
     @Test
     fun fromPageStatePerCall() {
         // One builder sent twice: each call trims its own Referer
-        val builder = request("/to-other-then-back").forXhr().from("$base/series/1?x=1")
+        val builder = request("/to-other-then-back").fetch(Fetch.XHR.from("$base/series/1?x=1"))
         call(builder.build())
         call(builder.url("$base/landed").build())
         assertEquals("$base/series/1?x=1", seen["/landed"]!!.getFirst("Referer"))
@@ -196,21 +196,21 @@ class BrowserHeadersCacheTest {
     @Test
     fun redirectHopsGoOverTheNetwork() {
         // The cacheable 301 in the middle is fetched again, so the last hop's Referer stays trimmed
-        repeat(2) { call(request("/to-cached-hop").forXhr().from("$base/series/1?x=1").build()) }
+        repeat(2) { call(request("/to-cached-hop").fetch(Fetch.XHR.from("$base/series/1?x=1")).build()) }
         assertEquals(2, hits["/cached-hop"]!!.get())
         assertEquals("$base/", seen["/landed"]!!.getFirst("Referer"))
     }
 
     @Test
     fun originNullAfterTwoCrossOriginHops() {
-        call(Request.Builder().url("http://127.0.0.1:${server.address.port}/to-third").header("User-Agent", ua).header("Referer", "$base/").header("Origin", base).forXhr().build())
+        call(Request.Builder().url("http://127.0.0.1:${server.address.port}/to-third").header("User-Agent", ua).header("Referer", "$base/").header("Origin", base).fetch(Fetch.XHR).build())
         assertEquals("null", thirdSeen["/landed"]!!.getFirst("Origin"))
     }
 
     @Test
     fun revalidatesWithEtag() {
-        call(request("/etag").forXhr().build())
-        val second = call(request("/etag").forXhr().build())
+        call(request("/etag").fetch(Fetch.XHR).build())
+        val second = call(request("/etag").fetch(Fetch.XHR).build())
         assertEquals(2, hits["/etag"]!!.get())
         assertEquals("\"1\"", conditional["/etag"])
         assertEquals(200, second.code)

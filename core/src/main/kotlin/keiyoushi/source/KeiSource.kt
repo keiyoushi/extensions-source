@@ -11,12 +11,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.network.BrowserHeaderOrderInterceptor
+import keiyoushi.network.BrowserCallInterceptor
 import keiyoushi.network.BrowserHeadersInterceptor
 import keiyoushi.network.CacheControlInterceptor
+import keiyoushi.network.Deflate
+import keiyoushi.network.Fetch
 import keiyoushi.network.RateLimitInterceptor
-import keiyoushi.network.forImage
-import keiyoushi.network.isRaw
 import keiyoushi.network.kind
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
@@ -119,14 +119,14 @@ abstract class KeiSource : HttpSource() {
             }
 
             // the browser headers for each request
-            addInterceptor(BrowserHeadersInterceptor({ baseUrl }, { browserImageHeaders }))
-            // last application interceptor
-            addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
+            addInterceptor(BrowserCallInterceptor { baseUrl })
+            // last application interceptor; the encodings and order browsers send
+            addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
 
             // allow caching when server doesn't explicitly say anything
             addNetworkInterceptor(CacheControlInterceptor())
 
-            addNetworkInterceptor(BrowserHeaderOrderInterceptor)
+            addNetworkInterceptor(BrowserHeadersInterceptor)
 
             // keep the source's rate limiter as the last network interceptor
             networkInterceptors().apply {
@@ -450,14 +450,8 @@ abstract class KeiSource : HttpSource() {
     abstract override suspend fun getPageList(chapter: SChapter): List<Page>
 
     /**
-     * Whether page images and covers go out with the headers a browser sends for an image. Off by default; turn it on
-     * with the move to the request helpers.
-     */
-    protected open val browserImageHeaders: Boolean get() = false
-
-    /**
-     * Builds the request for a page's image. With [browserImageHeaders] on, a GET without a kind is sent as an image;
-     * mark it `raw()` to send it as built.
+     * Builds the request for a page's image. A GET without a [Fetch] is sent as [Fetch.IMAGE]; set [Fetch.NONE] on it
+     * to send it as built.
      *
      * @param page the page.
      * @return the request for its image.
@@ -469,7 +463,7 @@ abstract class KeiSource : HttpSource() {
 
     final override fun imageRequest(page: Page): Request {
         val request = getImageRequest(page)
-        val image = browserImageHeaders && request.kind == null && !request.isRaw && request.method == "GET"
-        return if (image) request.newBuilder().forImage().build() else request
+        val image = request.kind == null && request.method == "GET"
+        return if (image) request.newBuilder().kind(Fetch.Kind.IMAGE).build() else request
     }
 }

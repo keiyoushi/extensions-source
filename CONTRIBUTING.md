@@ -39,7 +39,7 @@ or fix them directly by submitting a Pull Request.
         - [JSON models (DTOs) and serialization](#json-models-dtos-and-serialization)
         - [Protobuf parsing and serialization - `parseAsProto` / `toRequestBodyProto`](#protobuf-parsing-and-serialization---parseasproto--torequestbodyproto)
         - [Date parsing - `tryParse` helpers](#date-parsing---tryparse-helpers)
-        - [HTTP requests - `getDocument` / `getXhr` / `getImage`](#http-requests---getdocument--getxhr--getimage)
+        - [HTTP requests - `OkHttpClient.get` / `post` / `put` / `head`](#http-requests---okhttpclientget--post--put--head)
         - [Rate limiting - `rateLimit`](#rate-limiting---ratelimit)
         - [Custom cookies - `addCookie`](#custom-cookies---addcookie)
         - [WebView execution - `runWebView` / `getLocalStorage`](#webview-execution---runwebview--getlocalstorage)
@@ -771,58 +771,56 @@ must not be quoted; for example, use `XXX`, not a literal `'Z'`, when calling
 Do not use `SimpleDateFormat` for new code. Its `keiyoushi.utils.tryParse` overload is deprecated in
 favor of these `kotlin.time` and `java.time` helpers.
 
-##### HTTP requests - `getDocument` / `getXhr` / `getImage`
+##### HTTP requests - `OkHttpClient.get` / `post` / `put` / `head`
 
-Always make requests with the `keiyoushi.network` suspend extensions on `OkHttpClient`. Use them for every request
-inside your `KeiSource` suspend functions (`getPopularManga`, `getSearchMangaList`, `fetchMangaUpdate`, `getPageList`,
-etc.) instead of building a `Request` and calling `client.newCall(request).execute()`/`.await()` by hand.
+Always make requests with the `keiyoushi.network` suspend extensions on `OkHttpClient` - `get`,
+`post`, `put`, and `head`. Use them for every request inside your `KeiSource` suspend functions
+(`getPopularManga`, `getSearchMangaList`, `fetchMangaUpdate`, `getPageList`, etc.) instead of
+building a `Request` and calling `client.newCall(request).execute()`/`.await()` by hand.
 
-Pick the one named after the filter the site's own request shows under in the browser's DevTools Network tab. They
-all return the `Response`:
+`get` and `post` take a `Fetch`, which sends the headers a browser sends for that kind of request (see
+[Browser headers](#browser-headers)). Pick the one named after the filter the site's own request shows under in the
+browser's DevTools Network tab:
 
-| DevTools filter | Use | For |
-|---|---|---|
-| Doc | `getDocument`, `postDocument` | opening a page; submitting a form |
-| Fetch/XHR | `getXhr`, `postXhr` | JSON APIs, ajax, GraphQL POSTs (`graphQLGet` sends as built) |
-| Img | `getImage` | images (page images and covers too, with `browserImageHeaders = true`) |
-| JS | `getScript` | reading a script, e.g. for an API key |
-| CSS | `getStyle` | reading a stylesheet |
-| Media | `getAudio`, `getVideo` | audio and video |
+| DevTools filter | `Fetch`          | For                                                            |
+|-----------------|------------------|----------------------------------------------------------------|
+| Doc             | `Fetch.DOCUMENT` | opening a page; submitting a form                              |
+| Fetch/XHR       | `Fetch.XHR`      | JSON APIs, ajax, GraphQL                                       |
+| JS              | `Fetch.SCRIPT`   | reading a script, e.g. for an API key                          |
+| Img             | `Fetch.IMAGE`    | images; page images and the app's covers already go as images  |
+| -               | `Fetch.NONE`     | only when the request has to go out as built                   |
 
 ```kotlin
-import keiyoushi.network.getDocument
-import keiyoushi.network.getXhr
-import keiyoushi.network.postXhr
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.parseAs
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.network.post
 
 // Inside a source, headers can be omitted - your own `headers` are used automatically:
-val document = client.getDocument("$baseUrl/series/$slug").asJsoup()
+val document = client.get("$baseUrl/series/$slug", Fetch.DOCUMENT).asJsoup()
+val results = client.get("$baseUrl/api/search?q=$query", Fetch.XHR).parseAs<SearchDto>()
 
-val url = "$baseUrl/api/search".toHttpUrl().newBuilder()
-    .addQueryParameter("q", query)
-    .build()
-val results = client.getXhr(url).parseAs<SearchDto>()
+// The page the request comes from, e.g. the chapter page for the reader's calls:
+val pages = client.get("$apiUrl/chapter/$id", Fetch.XHR.from(getChapterUrl(chapter))).parseAs<PagesDto>()
 
 // With other headers, and a request body:
-val apiHeaders = headersBuilder().set("X-Requested-With", "XMLHttpRequest").build()
-val response = client.postXhr("$baseUrl/api/search", apiHeaders, body)
+val response = client.post("$baseUrl/api/search", apiHeaders, Fetch.XHR, body)
 ```
 
 - `url` may be a `String` or an `HttpUrl`.
 - `ensureSuccess` (default `true`) throws if the response isn't 2xx; pass `ensureSuccess = false` to inspect non-2xx
   responses yourself.
-- The GET ones also take a `cacheControl` (defaults to a 10-minute max-age).
-- `from` is the page the request comes from, e.g. `client.getXhr(url, from = getChapterUrl(chapter))` for the chapter
-  reader's calls; a path is resolved against `baseUrl`. It goes out as `Referer` the way browsers send it.
+- `get`/`head` also take a `cacheControl` (defaults to a 10-minute max-age).
+- `from` is the page the request comes from; a path is resolved against `baseUrl`. It goes out as `Referer` the way
+  browsers send it: in full to the same origin, as the origin elsewhere, and not at all from https to http.
 - Always wrap the returned `Response` in `response.use { ... }` or consume it with `parseAs`/`asJsoup`, which close it
   for you.
-- They send the headers a browser sends for that kind of request (see [Browser headers](#browser-headers)). With a
-  `User-Agent` that names neither Chrome nor Firefox (an app's own API client) they add no browser headers, so use them
-  there too.
-- `get` and `post` are deprecated. `getRaw`/`postRaw` send the request as built, without browser headers; only use
-  them when the site rejects browser headers on that request. `put` and `head` send the request as built too.
+- With a `User-Agent` that names neither Chrome nor Firefox (an app's own API client) no browser headers are added,
+  so a `Fetch` is fine there too.
+- `get` and `post` without a `Fetch` are deprecated; they send the request as built, like `Fetch.NONE`. `put` and
+  `head` send it as built too.
+- For a request the helpers don't cover (another method, or one built from another request), build the `Request`
+  yourself and send it with `client.call(request)`, which takes `ensureSuccess` too. It goes out as built unless you
+  set a `Fetch` on the builder with `.fetch(Fetch.XHR)` and so on.
 
 ##### Rate limiting - `rateLimit`
 
@@ -1010,18 +1008,19 @@ val body = graphQLBody(
     operationName = "SearchManga",
     variables = variables, // supports @Serializable types or JsonElement
 )
-val response = client.postXhr("$baseUrl/graphql", headers, body)
+val response = client.post("$baseUrl/graphql", headers, Fetch.XHR, body)
 
 // Parsing the response (automatically extracts the "data" object):
 val data = response.parseGraphQLAs<MyResponseDto>()
 ```
 
 Inside a `KeiSource`, build the payload with `graphQLBody` and send it with
-[`client.postXhr`](#http-requests---getdocument--getxhr--getimage):
+[`client.post`](#http-requests---okhttpclientget--post--put--head):
 
 ```kotlin
-val data = client.postXhr(
+val data = client.post(
     url = "$baseUrl/graphql",
+    fetch = Fetch.XHR,
     body = graphQLBody(
         operationName = "SearchManga",
         query = SEARCH_QUERY,
@@ -1053,7 +1052,7 @@ val request = graphQLGet(
 
 Inside a `KeiSource`, use the suspend `OkHttpClient` overload instead: it sends the request and
 returns the `Response`, taking the source's own `headers` when none are passed. `ensureSuccess`
-behaves as in [HTTP requests](#http-requests---getdocument--getxhr--getimage), and it
+behaves as in [HTTP requests](#http-requests---okhttpclientget--post--put--head), and it
 additionally takes a `cacheControl`, defaulting to a 10-minute max-age.
 
 ```kotlin
@@ -1076,7 +1075,7 @@ val body = graphQLBody(
     variables = variables,
     extensions = persistedQueryExtension("abc123sha256...")
 )
-val response = client.postXhr("$baseUrl/graphql", headers, body)
+val response = client.post("$baseUrl/graphql", headers, Fetch.XHR, body)
 ```
 
 Add `GraphQLErrorInterceptor` to the `OkHttpClient` to also convert a non-2xx response carrying a GraphQL error payload into a `GraphQLException` instead of a generic HTTP error. It only inspects non-2xx responses - a 200 OK response whose body contains a GraphQL `errors` array is not covered by the interceptor, so you still need `parseGraphQLAs`/`response.parseGraphQLAs<T>()` to catch that common case:
@@ -1347,7 +1346,7 @@ Methods you must implement (no default - the class will not compile without them
 
 | Method                                                                                                                               | Notes                                                                                                                                      |
 |--------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| `suspend fun getPopularManga(page: Int): MangasPage`                                                                                 | Make your HTTP calls with `client` (see [HTTP requests](#http-requests---getdocument--getxhr--getimage)) directly inside this function. |
+| `suspend fun getPopularManga(page: Int): MangasPage`                                                                                 | Make your HTTP calls with `client` (see [HTTP requests](#http-requests---okhttpclientget--post--put--head)) directly inside this function. |
 | `suspend fun getLatestUpdates(page: Int): MangasPage`                                                                                | Only called when `supportsLatest` is `true` (defaults to `true` on `KeiSource`).                                                           |
 | `suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage`                                          | Plain-text/filter search only; URL search queries are already routed to `getMangaByUrl`/`getMangasByUrl` instead.                          |
 | `suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate` | See below - whether to honor the flags depends on whether details and chapters come from the same request.                                 |
@@ -1359,8 +1358,7 @@ Optional overrides (each has a working default; override only when your source n
 |----------------------------------------------------------------------|----------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `fun getHomeUrl(): String`                                            | Returns `baseUrl`.                                              | The browse screen's "Open in WebView" action should land somewhere other than `baseUrl` (e.g. the source's real site differs from the API host used as `baseUrl`).                                      |
 | `suspend fun getImageUrl(page: Page): String`                         | Not called unless a `Page.imageUrl` is empty.                   | A page's image URL can't be determined upfront in `getPageList` and must be resolved lazily once the chapter is opened - see [Chapter Pages](#chapter-pages). Make your request with `client` and return the URL directly. |
-| `fun getImageRequest(page: Page): Request`                            | A GET of `page.imageUrl` with `headers`.                        | The image needs other headers or a different URL. A GET without a kind is sent as an image; see Browser headers. |
-| `val browserImageHeaders: Boolean`                                    | `false`.                                                        | The source uses the request helpers: page images and covers then go out with browser image headers. |
+| `fun getImageRequest(page: Page): Request`                            | A GET of `page.imageUrl` with `headers`.                        | The image needs other headers or a different URL. A GET without a `Fetch` is sent as `Fetch.IMAGE`; `.fetch(Fetch.NONE)` sends it as built. See [Browser headers](#browser-headers). |
 | `fun getMangaUrl(manga: SManga): String`                              | Returns `baseUrl + manga.url`.                                  | That doesn't land on the manga's real page. Since `SManga.url` is recommended to hold just an ID/slug rather than a full relative path (see [Misc notes](#misc-notes)), the default concatenation often isn't a valid path by itself - override to build the real URL from the ID/slug (e.g. `"$baseUrl/manga/${manga.url}"`).      |
 | `fun getChapterUrl(chapter: SChapter): String`                        | Returns `baseUrl + chapter.url`.                                | Same reasoning as `getMangaUrl`, for chapters.                                                                                                                                                            |
 | `suspend fun getMangaByUrl(url: HttpUrl): SManga?`                    | Throws (unimplemented).                                         | Almost always: this backs URL search (pasting/opening a manga link for this source). Return `null` if the URL isn't recognized - leaving this unimplemented means URL search crashes for this source.  |
@@ -1392,19 +1390,18 @@ Behavior `KeiSource` gives you for free:
   this manually.
 - **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash) and `Origin` to
   `baseUrl`; override `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
-- <a id="browser-headers"></a>**Browser headers:** a request made with one of the
-  [HTTP request helpers](#http-requests---getdocument--getxhr--getimage), with a `User-Agent` naming Chrome or Firefox, gets
-  the headers that browser sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept`,
-  `Priority`, and the default `Origin` only where browsers send one. Any other request goes out as built, apart from the
-  `Referer` of `from`.
-  - On a `Request.Builder` the kinds are `forDocument()`, `forXhr()` and so on, and `from(page)` sets the page. In an
-    interceptor, change a request with `request.newBuilder()`; a new `Request.Builder()` drops its kind and `from`.
-  - With `browserImageHeaders = true`, page images (GETs from `getImageRequest`) and the covers the app loads are sent
-    as images too; turn it on with the move to the helpers. The app's covers are recognised by their
-    `Cache-Control: no-store`, so don't put that on your own requests.
+- <a id="browser-headers"></a>**Browser headers:** a request with a `Fetch` other than `Fetch.NONE` (see
+  [HTTP requests](#http-requests---okhttpclientget--post--put--head)), with a `User-Agent` naming Chrome or Firefox, gets the headers
+  that browser sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept`, `Priority`,
+  and the default `Origin` only where browsers send one. Any other request goes out as built, apart from the `Referer`
+  of `Fetch.from`.
+  - On a `Request.Builder`, set it with `.fetch(Fetch.XHR)` and so on. In an interceptor, change a request with
+    `request.newBuilder()`; a new `Request.Builder()` drops its `Fetch`.
+  - Page images (GETs from `getImageRequest` without a `Fetch`) and the covers the app loads are sent as
+    `Fetch.IMAGE`. The app's covers are recognised as GETs with `Cache-Control: no-store` and no `Fetch`, so don't
+    put that on your own requests without one.
   - Headers a request already has are kept: fetch metadata the source sets itself is left whole, and a request without
     `Origin` gets none. `from` replaces the `Referer`, also on each redirect.
-  - `raw()` (or `getRaw`/`postRaw`) sends a request as built.
 - **Filter fetching:** if a source needs to fetch its filter options from the network, set
   `supportsFilterFetching = true`, implement `fetchFilterData()` (returns the raw filter data as a
   `JsonElement`, called on a background coroutine, attempted up to 3 times total on failure, and
@@ -1573,7 +1570,7 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 - If a page's `imageUrl` isn't known upfront, leave `Page.imageUrl` empty; while the chapter is open
   in the reader or being downloaded, `getImageUrl(page)` is then called lazily to resolve it. This is
   a plain `suspend fun String` - make your request with `client` (see
-  [HTTP requests](#http-requests---getdocument--getxhr--getimage)) and return the URL directly; there's no
+  [HTTP requests](#http-requests---okhttpclientget--post--put--head)) and return the URL directly; there's no
   separate request/parse split to override, and you don't need to override `getImageUrl` at all if
   every `Page.imageUrl` is already filled by `getPageList`.
 - If the source provides all `Page.imageUrl` values directly, you can fill them and leave `Page.url`
@@ -1614,7 +1611,7 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 - **Media Types:** `application/json` is intrinsically UTF-8. Avoid using `application/json; charset=utf-8`. Prefer helper functions like `toJsonRequestBody()` instead of manually specifying media types (e.g., `"application/json".toMediaType()`).
 - **`setUrlWithoutDomain()` already URL-encodes spaces:** It replaces literal spaces with `%20` internally before parsing the URL, so you do not need to encode them yourself. Other invalid URI characters, however, make it silently fall back to the full original URL (domain included) instead of stripping it - double-check unusual scraped URLs so a malformed one doesn't silently defeat future domain migrations.
 - **Manga/chapter URLs:** Prefer storing just the ID or slug in `SManga.url` and `SChapter.url`. Storing the relative URL with `setUrlWithoutDomain()` is also acceptable. Avoid absolute URLs to make future domain migrations easier.
-- **Separate custom headers:** When adding custom headers to a request (e.g., for AJAX endpoints), avoid building them inline within a `client.getXhr`/`client.postXhr` call. Instead, assign the modified headers to a separate variable or define them as a class-level property. This improves readability and allows for reuse across multiple requests.
+- **Separate custom headers:** When adding custom headers to a request (e.g., for AJAX endpoints), avoid building them inline within a `client.get`/`client.post` call. Instead, assign the modified headers to a separate variable or define them as a class-level property. This improves readability and allows for reuse across multiple requests.
 - **Configurable sources:** By implementing `ConfigurableSource`, you can add settings backed by `SharedPreferences`.
 - **Code organization:** For readability, group related methods together in your extension class (e.g., all popular manga methods, then all latest manga methods, then search methods, and so on). A logical ordering like Popular → Latest → Search → Details → Chapters → Pages → Filters → Utilities makes the class easier to navigate and maintain without needing explicit section header comments.
 - **DTO extensions:** Move mapping extensions for DTOs (like `fun MyDto.toSManga()`) into the DTO file itself to keep the main source class clean.
