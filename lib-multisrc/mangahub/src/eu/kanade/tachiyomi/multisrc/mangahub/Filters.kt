@@ -8,6 +8,10 @@ open class SelectFilter(name: String, private val options: List<Pair<String, Str
 
 class GenreFilter(val genres: List<ApiGenre>) : SelectFilter("Genre", listOf("All" to "all") + genres.map { it.title to it.slug })
 
+class HideNsfwFilter : Filter.CheckBox("Hide NSFW")
+
+class HideYaoiFilter : Filter.CheckBox("Hide Yaoi")
+
 class OrderFilter :
     SelectFilter(
         "Order",

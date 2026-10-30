@@ -155,12 +155,21 @@ abstract class MangaHub : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val order = filters.firstInstanceOrNull<OrderFilter>()?.selected ?: "POPULAR"
         val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected ?: "all"
+        val hideNsfw = filters.firstInstanceOrNull<HideNsfwFilter>()?.state ?: false
+        val hideYaoi = filters.firstInstanceOrNull<HideYaoiFilter>()?.state ?: false
 
-        return getMangaList(page, order, query, genre)
+        return getMangaList(page, order, query, genre, hideNsfw, hideYaoi)
     }
 
-    private suspend fun getMangaList(page: Int, order: String, query: String = "", genre: String = "all"): MangasPage {
-        val rows = fetchGraphQL<ApiSearchObject>(searchQuery(mangaSource, query, genre, order, page))
+    private suspend fun getMangaList(
+        page: Int,
+        order: String,
+        query: String = "",
+        genre: String = "all",
+        hideNsfw: Boolean = false,
+        hideYaoi: Boolean = false,
+    ): MangasPage {
+        val rows = fetchGraphQL<ApiSearchObject>(searchQuery(mangaSource, query, genre, order, hideNsfw, hideYaoi, page))
             .search!!.rows
 
         val mangas = rows.map {
@@ -383,6 +392,8 @@ abstract class MangaHub : KeiSource() {
                     add(GenreFilter(genres))
                 }
                 add(OrderFilter())
+                add(HideNsfwFilter())
+                add(HideYaoiFilter())
             },
         )
     }
