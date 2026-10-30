@@ -279,7 +279,7 @@ inline fun <reified V : Any> graphQLGet(
 
 /**
  * Executes a GraphQL GET request asynchronously, with the GraphQL parameters encoded as URL query
- * parameters, and returns the response.
+ * parameters, and returns the response. It is sent as [Fetch.XHR].
  *
  * @param url The endpoint URL.
  * @param headers The HTTP request headers.
@@ -305,7 +305,7 @@ suspend fun OkHttpClient.graphQLGet(
 ): Response = get(
     url.toHttpUrl().newBuilder().appendGraphQLParams(query, operationName, variables, extensions, json).build(),
     headers,
-    Fetch.NONE,
+    Fetch.XHR,
     cacheControl,
     ensureSuccess,
 )
@@ -314,7 +314,7 @@ suspend fun OkHttpClient.graphQLGet(
  * Typed-variables overload of [graphQLGet].
  *
  * Executes a GraphQL GET request asynchronously, with the GraphQL parameters encoded as URL query
- * parameters, and returns the response.
+ * parameters, and returns the response. It is sent as [Fetch.XHR].
  *
  * @param url The endpoint URL.
  * @param headers The HTTP request headers.

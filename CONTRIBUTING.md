@@ -1053,7 +1053,7 @@ val request = graphQLGet(
 Inside a `KeiSource`, use the suspend `OkHttpClient` overload instead: it sends the request and
 returns the `Response`, taking the source's own `headers` when none are passed. `ensureSuccess`
 behaves as in [HTTP requests](#http-requests---okhttpclientget--post--put--head), and it
-additionally takes a `cacheControl`, defaulting to a 10-minute max-age.
+additionally takes a `cacheControl`, defaulting to a 10-minute max-age. It is sent as `Fetch.XHR`.
 
 ```kotlin
 val data = client.graphQLGet(
