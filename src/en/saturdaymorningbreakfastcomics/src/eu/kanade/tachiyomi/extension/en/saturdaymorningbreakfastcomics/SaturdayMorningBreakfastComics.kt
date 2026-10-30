@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.saturdaymorningbreakfastcomics
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -79,7 +80,7 @@ abstract class SaturdayMorningBreakfastComics : KeiSource() {
         val response = client.get(getMangaUrl(manga), ensureSuccess = false)
         if (!response.isSuccessful && response.code != 500) {
             response.close()
-            throw Exception("HTTP ${response.code}")
+            throw HttpException(response.code)
         }
 
         val chapterList = response.asJsoup().select("option[value*=\"comic/\"]")
@@ -102,7 +103,7 @@ abstract class SaturdayMorningBreakfastComics : KeiSource() {
         val response = client.get(getChapterUrl(chapter), ensureSuccess = false)
         if (!response.isSuccessful && response.code != 500) {
             response.close()
-            throw Exception("HTTP ${response.code}")
+            throw HttpException(response.code)
         }
 
         val document = response.asJsoup()
