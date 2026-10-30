@@ -254,8 +254,7 @@ abstract class Webnex :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter).toHttpUrl()
-        val pagesUrl = chapterUrl.newBuilder().addPathSegment("pages").build()
-        val reader = readerFetch(pagesUrl).parseAs<ReaderDto>()
+        val reader = readerFetch(chapterUrl).parseAs<ReaderDto>()
 
         // Relative /api/image/ paths or absolute CDN urls
         return reader.pages.mapIndexed { index, url ->
@@ -265,8 +264,8 @@ abstract class Webnex :
 
     private val readerMutex = Mutex()
 
-    // The route refuses non-browser clients, and WebView navigations (X-Requested-With): fetch from a blank page
-    private suspend fun readerFetch(url: HttpUrl): String = readerMutex.withLock {
+    // The page list refuses non-browser clients, and WebView navigations (X-Requested-With): fetch from a blank page
+    private suspend fun readerFetch(chapterUrl: HttpUrl): String = readerMutex.withLock {
         val script = javaClass.getResource("/assets/reader_fetch.js")!!.readText()
         val bridge = "wnx" + Random.nextLong().toULong().toString(36)
         val result = try {
@@ -274,7 +273,7 @@ abstract class Webnex :
                 blockImages = true
                 userAgent = headers["User-Agent"]!!
                 webMessageBridge(bridge, setOf(baseUrl)) { resolve(it) }
-                loadData("$baseUrl/", "<script>($script)(${url.encodedPath.toJsonString()}, ${bridge.toJsonString()})</script>")
+                loadData("$baseUrl/", "<script>($script)(${chapterUrl.encodedPath.toJsonString()}, ${bridge.toJsonString()})</script>")
             }.parseAs<WebFetchDto>()
         } catch (e: CancellationException) {
             throw e
