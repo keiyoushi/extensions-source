@@ -368,7 +368,8 @@ abstract class KeiSource : HttpSource() {
     ): SMangaUpdate {
         check(fetchDetails || fetchChapters) { "getMangaUpdate called with nothing to fetch (fetchDetails=false, fetchChapters=false)" }
 
-        check(updatesInFlight.putIfAbsent(manga.url, true) == null) { "getMangaUpdate must not be called concurrently for same manga" }
+        val key = manga.url
+        check(updatesInFlight.putIfAbsent(key, true) == null) { "getMangaUpdate must not be called concurrently for same manga" }
 
         try {
             val update = fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
@@ -378,7 +379,7 @@ abstract class KeiSource : HttpSource() {
                 chapters = update.chapters,
             )
         } finally {
-            updatesInFlight.remove(manga.url)
+            updatesInFlight.remove(key)
         }
     }
 
