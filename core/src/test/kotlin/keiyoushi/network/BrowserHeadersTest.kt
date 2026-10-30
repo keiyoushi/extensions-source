@@ -4,6 +4,7 @@ import okhttp3.CacheControl
 import okhttp3.CompressionInterceptor
 import okhttp3.FormBody
 import okhttp3.Gzip
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -283,6 +284,13 @@ class BrowserHeadersTest {
     }
 
     @Test
+    fun retryFromResponseRequestStartsOver() {
+        val stale = builder("https://a.test/api").tag(BrowserCall::class.java, BrowserCall(null, "https://a.test".toHttpUrl(), "https://a.test"))
+        val none = stale.fetch(Fetch.NONE).build()
+        assertEquals(none.headers, intercept(none, wireOrder = true).headers)
+    }
+
+    @Test
     fun coversAreImages() {
         // As the apps' cover loader builds it
         val cover = builder("https://cdn.a.test/cover.jpg", referer = "https://a.test/").cacheControl(CacheControl.Builder().noStore().build()).build()
@@ -312,7 +320,7 @@ class BrowserHeadersTest {
         var sent: Request? = null
         val client = OkHttpClient.Builder()
             .addInterceptor(BrowserCallInterceptor({ site }, { imageFetch }))
-            .apply { if (compression) addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd)) }
+            .apply { if (compression) addInterceptor(BrowserCompressionInterceptor).addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd)) }
             .addInterceptor(if (wireOrder) BrowserHeadersInterceptor else Interceptor { it.proceed(it.request().headersAsAdded()) })
             .addInterceptor { chain ->
                 sent = chain.request()

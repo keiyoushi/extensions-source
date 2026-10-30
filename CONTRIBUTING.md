@@ -787,7 +787,7 @@ browser's DevTools Network tab:
 | Doc             | `Fetch.DOCUMENT` | opening a page; submitting a form                              |
 | Fetch/XHR       | `Fetch.XHR`      | JSON APIs, ajax, GraphQL                                       |
 | JS              | `Fetch.SCRIPT`   | reading a script, e.g. for an API key                          |
-| Img             | `Fetch.IMAGE`    | images; page images and the app's covers already go as images  |
+| Img             | `Fetch.IMAGE`    | images                                                         |
 | -               | `Fetch.NONE`     | only when the request has to go out as built                   |
 
 ```kotlin
@@ -1053,7 +1053,7 @@ val request = graphQLGet(
 Inside a `KeiSource`, use the suspend `OkHttpClient` overload instead: it sends the request and
 returns the `Response`, taking the source's own `headers` when none are passed. `ensureSuccess`
 behaves as in [HTTP requests](#http-requests---okhttpclientget--post--put--head), and it
-additionally takes a `cacheControl`, defaulting to a 10-minute max-age. It is sent as `Fetch.XHR`.
+additionally takes a `cacheControl`, defaulting to a 10-minute max-age, and a `fetch`, defaulting to `Fetch.NONE`.
 
 ```kotlin
 val data = client.graphQLGet(
@@ -1061,6 +1061,7 @@ val data = client.graphQLGet(
     operationName = "SearchManga",
     query = SEARCH_QUERY,
     variables = variables,
+    fetch = Fetch.XHR,
 ).parseGraphQLAs<MyResponseDto>()
 ```
 
@@ -1359,7 +1360,7 @@ Optional overrides (each has a working default; override only when your source n
 | `fun getHomeUrl(): String`                                            | Returns `baseUrl`.                                              | The browse screen's "Open in WebView" action should land somewhere other than `baseUrl` (e.g. the source's real site differs from the API host used as `baseUrl`).                                      |
 | `suspend fun getImageUrl(page: Page): String`                         | Not called unless a `Page.imageUrl` is empty.                   | A page's image URL can't be determined upfront in `getPageList` and must be resolved lazily once the chapter is opened - see [Chapter Pages](#chapter-pages). Make your request with `client` and return the URL directly. |
 | `fun getImageRequest(page: Page): Request`                            | A GET of `page.imageUrl` with `headers`.                        | The image needs other headers or a different URL. A GET without a `Fetch` is sent with `imageFetch`. See [Browser headers](#browser-headers). |
-| `val imageFetch: Fetch`                                               | `Fetch.IMAGE`.                                                  | The site's page images or covers break with browser image headers: `Fetch.NONE` sends them as built.                                                                                    |
+| `val imageFetch: Fetch`                                               | `Fetch.NONE`.                                                   | The site's page images or covers need browser image headers: `Fetch.IMAGE` sends them.                                                                                                  |
 | `fun getMangaUrl(manga: SManga): String`                              | Returns `baseUrl + manga.url`.                                  | That doesn't land on the manga's real page. Since `SManga.url` is recommended to hold just an ID/slug rather than a full relative path (see [Misc notes](#misc-notes)), the default concatenation often isn't a valid path by itself - override to build the real URL from the ID/slug (e.g. `"$baseUrl/manga/${manga.url}"`).      |
 | `fun getChapterUrl(chapter: SChapter): String`                        | Returns `baseUrl + chapter.url`.                                | Same reasoning as `getMangaUrl`, for chapters.                                                                                                                                                            |
 | `suspend fun getMangaByUrl(url: HttpUrl): SManga?`                    | Throws (unimplemented).                                         | Almost always: this backs URL search (pasting/opening a manga link for this source). Return `null` if the URL isn't recognized - leaving this unimplemented means URL search crashes for this source.  |
@@ -1394,12 +1395,12 @@ Behavior `KeiSource` gives you for free:
 - <a id="browser-headers"></a>**Browser headers:** a request with a `Fetch` other than `Fetch.NONE` (see
   [HTTP requests](#http-requests---okhttpclientget--post--put--head)), with a `User-Agent` naming Chrome or Firefox, gets the headers
   that browser sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept`, `Priority`,
-  and the default `Origin` only where browsers send one. Any other request goes out as built, apart from the `Referer`
-  of `Fetch.from`.
+  `Accept-Encoding`, and the default `Origin` only where browsers send one. Any other request goes out as built, apart
+  from the `Referer` of `Fetch.from`.
   - On a `Request.Builder`, set it with `.fetch(Fetch.XHR)` and so on. In an interceptor, change a request with
     `request.newBuilder()`; a new `Request.Builder()` drops its `Fetch`.
   - Page images (GETs from `getImageRequest` without a `Fetch`) and the covers the app loads are sent with
-    `imageFetch`, `Fetch.IMAGE` by default; override it with `Fetch.NONE` if they break. The app's covers are
+    `imageFetch`, `Fetch.NONE` by default; override it with `Fetch.IMAGE` to send browser headers. The app's covers are
     recognised as GETs with `Cache-Control: no-store` and no `Fetch`, so don't put that on your own requests without
     one.
   - Headers a request already has are kept, fetch metadata the source sets itself included, and a request without

@@ -12,9 +12,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.BrowserCallInterceptor
+import keiyoushi.network.BrowserCompressionInterceptor
 import keiyoushi.network.BrowserHeadersInterceptor
 import keiyoushi.network.CacheControlInterceptor
-import keiyoushi.network.Deflate
 import keiyoushi.network.Fetch
 import keiyoushi.network.RateLimitInterceptor
 import keiyoushi.network.fetch
@@ -119,10 +119,11 @@ abstract class KeiSource : HttpSource() {
                 }
             }
 
-            // the browser headers for each request
+            // the browser headers for requests with a Fetch
             addInterceptor(BrowserCallInterceptor({ baseUrl }, { imageFetch }))
-            // last application interceptor; the encodings and order browsers send
-            addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
+            addInterceptor(BrowserCompressionInterceptor)
+            // last application interceptor
+            addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
 
             // allow caching when server doesn't explicitly say anything
             addNetworkInterceptor(CacheControlInterceptor())
@@ -451,10 +452,10 @@ abstract class KeiSource : HttpSource() {
     abstract override suspend fun getPageList(chapter: SChapter): List<Page>
 
     /**
-     * How page images and the covers the app loads go out. Set [Fetch.NONE] if the site's images break with the
-     * headers a browser sends for them.
+     * How page images and the covers the app loads go out. Set [Fetch.IMAGE] to send the headers a browser sends for
+     * them; [Fetch.NONE] sends them as built.
      */
-    protected open val imageFetch: Fetch get() = Fetch.IMAGE
+    protected open val imageFetch: Fetch get() = Fetch.NONE
 
     /**
      * Builds the request for a page's image. A GET without a [Fetch] is sent with [imageFetch].

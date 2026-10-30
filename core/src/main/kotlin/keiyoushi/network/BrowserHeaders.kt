@@ -1,6 +1,8 @@
 package keiyoushi.network
 
 import android.os.LocaleList
+import okhttp3.CompressionInterceptor
+import okhttp3.Gzip
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -8,6 +10,8 @@ import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.brotli.Brotli
+import okhttp3.zstd.Zstd
 import java.util.Locale
 
 /**
@@ -17,23 +21,39 @@ import java.util.Locale
  */
 internal class BrowserCallInterceptor(
     private val siteUrl: () -> String,
-    private val imageFetch: () -> Fetch = { Fetch.IMAGE },
+    private val imageFetch: () -> Fetch,
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         // The apps' cover requests carry no Fetch, only the no-store that keeps covers out of the OkHttp cache
         val request = chain.request().let {
             val cover = it.kind == null && it.method == "GET" && it.header("Cache-Control") == "no-store"
             if (cover) it.newBuilder().fetch(imageFetch()).build() else it
+        }.let {
+            // A retry built from a response's request brings the last call's tag
+            if (it.tag(BrowserCall::class.java) != null) it.newBuilder().tag(BrowserCall::class.java, null).build() else it
         }
+        val kind = request.kind
+        val from = request.tag(FromPage::class.java)
+        // Nothing to do, and baseUrl stays unread
+        if (from == null && (kind == null || kind == Fetch.Kind.NONE)) return chain.proceed(request)
         val siteUrl = siteUrl()
         val site = siteUrl.toHttpUrlOrNull()
-        val page = request.tag(FromPage::class.java)?.let { it.page.toHttpUrlOrNull() ?: site?.resolve(it.page) }
-        val kind = request.kind
+        val page = from?.let { it.page.toHttpUrlOrNull() ?: site?.resolve(it.page) }
         val browserHeaders = kind != null && kind != Fetch.Kind.NONE && site != null && Browser.of(request.header("User-Agent").orEmpty()) != null
         if (page == null && !browserHeaders) return chain.proceed(request)
         // A fresh one per call: a request or builder can be sent more than once
         val call = BrowserCall(page, site.takeIf { browserHeaders }, siteUrl)
         return chain.proceed(request.newBuilder().tag(BrowserCall::class.java, call).build())
+    }
+}
+
+/** The browser's `Accept-Encoding` for a call with browser headers; KeiSource's own stays on any other. */
+internal object BrowserCompressionInterceptor : Interceptor {
+    private val compression = CompressionInterceptor(Gzip, Deflate, Brotli, Zstd)
+
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val browserHeaders = chain.request().tag(BrowserCall::class.java)?.site != null
+        return if (browserHeaders) compression.intercept(chain) else chain.proceed(chain.request())
     }
 }
 
