@@ -153,6 +153,10 @@ abstract class MangaTek : KeiSource() {
         val document = client.get("$baseUrl${chapter.url}").asJsoup()
         val props: ChapterProps = document.extractAstroProp("imageUrls")
 
+        val embedded = props.imageUrls.toReaderImages()
+        val images = if (embedded.any { it.pending }) fetchReaderImages(document, props) else embedded
+        val imageUrls = images.filterNot { it.isTrap }.map { it.url }
+
         val overlayData = props.overlayBlob?.let { OverlayCrypto.decryptHexBlob(it).parseAs<OverlayData>() }
             ?: unlockOverlay(document, props)
 
@@ -161,7 +165,7 @@ abstract class MangaTek : KeiSource() {
         val overlaysByImage = overlayData?.pages.orEmpty()
             .associate { firstOverlayImage + it.pageNumber - 1 to it.overlays }
 
-        return props.imageUrls.mapIndexed { index, imageUrl ->
+        return imageUrls.mapIndexed { index, imageUrl ->
             val overlays = overlaysByImage[index]
 
             if (overlays.isNullOrEmpty()) {
@@ -174,6 +178,16 @@ abstract class MangaTek : KeiSource() {
                 Page(index, imageUrl = url)
             }
         }
+    }
+
+    // Pending pages leave the embedded list incomplete, the pages call returns the whole chapter
+    private suspend fun fetchReaderImages(document: Document, props: ChapterProps): List<ReaderImage> {
+        val chapterId = props.chapterId!!
+        val token = props.unlockToken!!
+        val proof = OverlayCrypto.proof(readerSeeds(document).proofSalt, token, chapterId)
+        val request = PagesRequest(chapterId, props.mangaSlug!!, props.chapterRef!!, token, proof)
+        return client.post(PAGES_API_URL, body = request.toJsonRequestBody())
+            .parseAs<PagesResponse>().data.toReaderImages()
     }
 
     private suspend fun unlockOverlay(document: Document, props: ChapterProps): OverlayData? {
@@ -226,6 +240,7 @@ abstract class MangaTek : KeiSource() {
     companion object {
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?[^#]*)?#\[.*?]""", RegexOption.IGNORE_CASE)
         private const val API_BASE = "https://api.mangatek.com"
+        private const val PAGES_API_URL = "$API_BASE/api/reader/pages"
         private const val UNLOCK_API_URL = "$API_BASE/api/reader/unlock"
     }
 }
