@@ -39,7 +39,7 @@ abstract class MangaTek : KeiSource() {
 
         val mangas = document.select(".flex-grow .grid a").map { element ->
             SManga.create().apply {
-                title = element.select("h3").attr("title")
+                title = element.selectFirst("h3")!!.attr("title")
                 setUrlWithoutDomain(element.attr("abs:href"))
                 thumbnail_url = element.selectFirst("img")?.imgAttr()
             }
@@ -150,7 +150,7 @@ abstract class MangaTek : KeiSource() {
     //  ============================== Page ==============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         val props: ChapterProps = document.extractAstroProp("imageUrls")
 
         val embedded = props.imageUrls.toReaderImages()

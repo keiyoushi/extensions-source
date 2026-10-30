@@ -33,7 +33,7 @@ class MangaData(
         this.url = url
         title = this@MangaData.title
         description = this@MangaData.description
-        genre = tags.map { it.name }.joinToString()
+        genre = tags.joinToString { it.name }
         thumbnail_url = cover
         status = when (this@MangaData.status) {
             "ongoing" -> SManga.ONGOING
