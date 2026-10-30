@@ -11,10 +11,12 @@ abstract class Mangalek : Madara() {
 
     override val filterNonMangaItems get() = false
 
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("ar"))
+    override val chapterMode = ChapterMode.AdminAjax
+
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.forLanguageTag("ar"))
     private val formatTwo = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
 
-    override fun parseChapterDate(date: String?) = chapterDateFormat.tryParseDate(date).takeIf {
+    override fun parseChapterDate(date: String?) = super.parseChapterDate(date).takeIf {
         it != 0L
     } ?: formatTwo.tryParseDate(date)
 }
