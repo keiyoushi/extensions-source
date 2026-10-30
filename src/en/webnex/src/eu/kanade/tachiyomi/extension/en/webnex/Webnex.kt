@@ -41,6 +41,7 @@ import org.jsoup.nodes.TextNode
 import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.random.Random
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -204,7 +205,7 @@ abstract class Webnex :
                     scanlator = element.selectFirst(".ch-source, .ch-source-name")?.textOrNull()
                     date_upload = Instant.tryParse(element.selectFirst("time.ch-time")?.attr("datetime"))
                 },
-                likes = element.selectFirst(".ch-likes")?.text()?.filter(Char::isDigit)?.toIntOrNull() ?: 0,
+                likes = element.selectFirst(".ch-likes")?.text()?.filter { it in '0'..'9' }?.toIntOrNull() ?: 0,
                 warning = false,
             )
             val others = element.select(".ch-sources-menu a.ch-sources-item").map { item ->
@@ -241,13 +242,13 @@ abstract class Webnex :
 
     // Inverts the site's timeAgo(): "4w ago" means 4 weeks up to the 30 days where "1mo" takes over, so take the middle.
     private fun String?.parseTimeAgo(): Long {
-        if (this == "just now") return System.currentTimeMillis()
+        if (this == "just now") return Clock.System.now().toEpochMilliseconds()
         val match = TIME_AGO_REGEX.matchEntire(this ?: return 0L) ?: return 0L
         val index = TIME_AGO_UNITS.indexOfFirst { it.first == match.groupValues[2] }
         val unit = TIME_AGO_UNITS[index].second
         val count = match.groupValues[1].toInt()
         val upper = minOf(unit * (count + 1), TIME_AGO_UNITS.getOrNull(index - 1)?.second ?: Duration.INFINITE)
-        return System.currentTimeMillis() - ((unit * count + upper) / 2).inWholeMilliseconds
+        return (Clock.System.now() - (unit * count + upper) / 2).toEpochMilliseconds()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
