@@ -3,11 +3,6 @@ package eu.kanade.tachiyomi.multisrc.mangahub
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-@Serializable
-class PublicIPResponse(
-    val ip: String,
-)
-
 // Chapter metadata (pages)
 @Serializable
 class ApiChapterData(
@@ -19,12 +14,6 @@ class ApiChapter(
     val pages: String,
     val mangaID: Int,
     @SerialName("number") val chapterNumber: Float,
-)
-
-@Serializable
-class ApiChapterPages(
-    @SerialName("p") val page: String,
-    @SerialName("i") val images: List<String>,
 )
 
 @Serializable
