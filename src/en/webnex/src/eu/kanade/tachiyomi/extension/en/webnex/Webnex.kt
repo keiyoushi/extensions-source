@@ -63,7 +63,10 @@ abstract class Webnex :
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("coverage"), RatingFilter(preferences.rating)))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("updated"), RatingFilter(preferences.rating)))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getCards(
+        baseUrl.toHttpUrl().newBuilder().addQueryParameter("latest", page.toString()).build(),
+        "section.latest-section",
+    )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/browse".toHttpUrl().newBuilder().apply {
@@ -75,9 +78,9 @@ abstract class Webnex :
         return getCards(url)
     }
 
-    private suspend fun getCards(url: HttpUrl): MangasPage {
+    private suspend fun getCards(url: HttpUrl, section: String = ""): MangasPage {
         val document = client.get(url).asDocument()
-        val mangas = document.select("li.card-item a.card-link").map { element ->
+        val mangas = document.select("$section li.card-item a.card-link").map { element ->
             SManga.create().apply {
                 this.url = element.absUrl("href").toHttpUrl().pathSegments[1]
                 title = element.selectFirst(".card-title")!!.text()
@@ -85,7 +88,7 @@ abstract class Webnex :
                 genre = element.selectFirst(".card-kind")?.textOrNull()
             }
         }
-        val hasNextPage = document.selectFirst("a[rel=next]") != null
+        val hasNextPage = document.selectFirst("a[aria-label=Next page]") != null
 
         return MangasPage(mangas, hasNextPage)
     }
@@ -161,9 +164,9 @@ abstract class Webnex :
                 (listOfNotNull(rating) + facts).joinToString(" · ").ifEmpty { null },
                 document.select(".series-desc p").joinToString("\n\n") { it.toMarkdown().trim() }.ifEmpty { null },
                 listOfNotNull(
-                    altTitles.joinToString(" · ").ifEmpty { null }?.let { "**Alt titles:** $it" },
-                    links.joinToString(" · ").ifEmpty { null }?.let { "**Links:** $it" },
-                ).joinToString("\n").ifEmpty { null },
+                    altTitles.ifEmpty { null }?.joinToString("\n", "**Alt titles:**\n") { "- $it" },
+                    links.ifEmpty { null }?.joinToString("\n", "**Links:**\n") { "- $it" },
+                ).joinToString("\n\n").ifEmpty { null },
             ).joinToString("\n\n").ifEmpty { null }
         }
         if (!fetchChapters) return SMangaUpdate(details, chapters)
@@ -313,7 +316,7 @@ abstract class Webnex :
         ListPreference(screen.context).apply {
             key = PREF_RATING
             title = "Content rating"
-            summary = "Used for popular, latest and search. The Content rating filter overrides it.\nCurrent: %s"
+            summary = "Used for popular and search. The Content rating filter overrides it.\nCurrent: %s"
             entries = RATING_OPTIONS.map { it.first }.toTypedArray()
             entryValues = RATING_OPTIONS.map { it.second }.toTypedArray()
             setDefaultValue("")
