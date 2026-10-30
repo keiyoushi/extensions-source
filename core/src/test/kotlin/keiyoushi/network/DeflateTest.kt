@@ -18,4 +18,7 @@ class DeflateTest {
             assertEquals(text, Deflate.decompress(compressed).buffer().readUtf8())
         }
     }
+
+    @Test
+    fun emptyBody() = assertEquals("", Deflate.decompress(Buffer()).buffer().readUtf8())
 }

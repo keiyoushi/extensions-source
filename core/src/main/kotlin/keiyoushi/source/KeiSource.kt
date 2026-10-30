@@ -12,9 +12,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.BrowserCallInterceptor
-import keiyoushi.network.BrowserCompressionInterceptor
 import keiyoushi.network.BrowserHeadersInterceptor
 import keiyoushi.network.CacheControlInterceptor
+import keiyoushi.network.Deflate
 import keiyoushi.network.Fetch
 import keiyoushi.network.RateLimitInterceptor
 import keiyoushi.network.fetch
@@ -121,9 +121,8 @@ abstract class KeiSource : HttpSource() {
 
             // the browser headers for requests with a Fetch
             addInterceptor(BrowserCallInterceptor({ baseUrl }, { imageFetch }))
-            addInterceptor(BrowserCompressionInterceptor)
-            // last application interceptor
-            addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
+            // last application interceptor; the encodings and order browsers send
+            addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
 
             // allow caching when server doesn't explicitly say anything
             addNetworkInterceptor(CacheControlInterceptor())

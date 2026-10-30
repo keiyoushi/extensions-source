@@ -1,8 +1,6 @@
 package keiyoushi.network
 
 import android.os.LocaleList
-import okhttp3.CompressionInterceptor
-import okhttp3.Gzip
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -10,8 +8,6 @@ import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.brotli.Brotli
-import okhttp3.zstd.Zstd
 import java.util.Locale
 
 /**
@@ -44,16 +40,6 @@ internal class BrowserCallInterceptor(
         // A fresh one per call: a request or builder can be sent more than once
         val call = BrowserCall(page, site.takeIf { browserHeaders }, siteUrl)
         return chain.proceed(request.newBuilder().tag(BrowserCall::class.java, call).build())
-    }
-}
-
-/** The browser's `Accept-Encoding` for a call with browser headers; KeiSource's own stays on any other. */
-internal object BrowserCompressionInterceptor : Interceptor {
-    private val compression = CompressionInterceptor(Gzip, Deflate, Brotli, Zstd)
-
-    override fun intercept(chain: Interceptor.Chain): Response {
-        val browserHeaders = chain.request().tag(BrowserCall::class.java)?.site != null
-        return if (browserHeaders) compression.intercept(chain) else chain.proceed(chain.request())
     }
 }
 

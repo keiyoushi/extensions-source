@@ -320,7 +320,7 @@ class BrowserHeadersTest {
         var sent: Request? = null
         val client = OkHttpClient.Builder()
             .addInterceptor(BrowserCallInterceptor({ site }, { imageFetch }))
-            .apply { if (compression) addInterceptor(BrowserCompressionInterceptor).addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd)) }
+            .apply { if (compression) addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd)) }
             .addInterceptor(if (wireOrder) BrowserHeadersInterceptor else Interceptor { it.proceed(it.request().headersAsAdded()) })
             .addInterceptor { chain ->
                 sent = chain.request()

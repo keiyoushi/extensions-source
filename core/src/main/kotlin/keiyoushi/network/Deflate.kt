@@ -13,7 +13,12 @@ import java.util.zip.Inflater
 internal object Deflate : CompressionInterceptor.DecompressionAlgorithm {
     override val encoding = "deflate"
 
-    override fun decompress(compressedSource: BufferedSource): Source = InflaterSource(compressedSource, Inflater(!compressedSource.startsWithZlibHeader()))
+    // An empty body stays empty, this decoder sits on every request
+    override fun decompress(compressedSource: BufferedSource): Source = if (compressedSource.exhausted()) {
+        compressedSource
+    } else {
+        InflaterSource(compressedSource, Inflater(!compressedSource.startsWithZlibHeader()))
+    }
 
     // RFC 1950: deflate method in the low CMF bits, and CMF/FLG a multiple of 31
     private fun BufferedSource.startsWithZlibHeader(): Boolean {

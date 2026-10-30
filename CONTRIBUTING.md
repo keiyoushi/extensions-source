@@ -1395,8 +1395,8 @@ Behavior `KeiSource` gives you for free:
 - <a id="browser-headers"></a>**Browser headers:** a request with a `Fetch` other than `Fetch.NONE` (see
   [HTTP requests](#http-requests---okhttpclientget--post--put--head)), with a `User-Agent` naming Chrome or Firefox, gets the headers
   that browser sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept`, `Priority`,
-  `Accept-Encoding`, and the default `Origin` only where browsers send one. Any other request goes out as built, apart
-  from the `Referer` of `Fetch.from`.
+  and the default `Origin` only where browsers send one. Any other request goes out as built, apart from the `Referer`
+  of `Fetch.from`.
   - On a `Request.Builder`, set it with `.fetch(Fetch.XHR)` and so on. In an interceptor, change a request with
     `request.newBuilder()`; a new `Request.Builder()` drops its `Fetch`.
   - Page images (GETs from `getImageRequest` without a `Fetch`) and the covers the app loads are sent with

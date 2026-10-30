@@ -100,8 +100,7 @@ class BrowserHeadersCacheTest {
     private val client = OkHttpClient.Builder()
         .cache(Cache(cacheDir, 1024 * 1024))
         .addInterceptor(BrowserCallInterceptor({ base }, { Fetch.NONE }))
-        .addInterceptor(BrowserCompressionInterceptor)
-        .addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
+        .addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
         .addNetworkInterceptor(CacheControlInterceptor())
         .addNetworkInterceptor(BrowserHeadersInterceptor)
         .build()
@@ -165,11 +164,9 @@ class BrowserHeadersCacheTest {
     }
 
     @Test
-    fun browserAcceptEncodingOnlyWithBrowserHeaders() {
+    fun browserAcceptEncodingOnEveryRequest() {
         call(request("/landed").build())
-        assertEquals("br,gzip,zstd", seen["/landed"]!!.getFirst("Accept-Encoding").replace(" ", ""))
-        call(request("/landed").fetch(Fetch.NONE).build())
-        assertEquals("br,gzip,zstd", seen["/landed"]!!.getFirst("Accept-Encoding").replace(" ", ""))
+        assertEquals("gzip,deflate,br,zstd", seen["/landed"]!!.getFirst("Accept-Encoding").replace(" ", ""))
         call(request("/landed").fetch(Fetch.XHR).build())
         assertEquals("gzip,deflate,br,zstd", seen["/landed"]!!.getFirst("Accept-Encoding").replace(" ", ""))
     }
