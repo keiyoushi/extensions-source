@@ -82,7 +82,13 @@ class ApiMangaChapterList(
 
 // Filters
 @Serializable
-class GenreDto(
-    val name: String,
-    val key: String,
+class ApiGenresObject(
+    val genres: List<ApiGenre>,
+)
+
+@Serializable
+class ApiGenre(
+    val title: String,
+    val slug: String,
+    val group: String?,
 )

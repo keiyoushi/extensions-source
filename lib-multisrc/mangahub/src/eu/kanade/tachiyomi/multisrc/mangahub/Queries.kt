@@ -51,3 +51,14 @@ val pagesQuery = { mangaSource: String, slug: String, number: Float ->
         }
     """.trimIndent()
 }
+
+val genresQuery =
+    """
+        {
+            genres {
+                title,
+                slug,
+                group
+            }
+        }
+    """.trimIndent()
