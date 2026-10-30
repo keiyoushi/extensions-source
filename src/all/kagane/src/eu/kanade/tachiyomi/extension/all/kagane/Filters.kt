@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.kagane
 
 import eu.kanade.tachiyomi.extension.all.kagane.Kagane.Companion.CONTENT_RATINGS
+import eu.kanade.tachiyomi.extension.all.kagane.Kagane.Companion.CONTENT_RATING_LABELS
 import eu.kanade.tachiyomi.source.model.Filter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObjectBuilder
@@ -55,8 +56,10 @@ internal class SelectFilterOption(val name: String, val value: String)
 
 internal class ContentRatingFilter(
     defaultRatings: Set<String>,
+    private val pornographic: Boolean,
+    private val disturbing: Boolean,
     ratings: List<FilterData> = CONTENT_RATINGS.map {
-        FilterData(it, it.replaceFirstChar { c -> c.uppercase() })
+        FilterData(it, CONTENT_RATING_LABELS.getValue(it))
     },
 ) : Filter.Group<MultiSelectOption>(
     "Content Rating",
@@ -77,18 +80,19 @@ internal class ContentRatingFilter(
         builder.putJsonArray("age_rating") {
             selected.map { AGE_RATINGS.getValue(it) }.distinct().forEach { add(it) }
         }
-        if ("pornographic" !in selected) {
+        if (!pornographic) {
             builder.put("is_pornographic", false)
+        }
+        if (!disturbing) {
+            builder.put("is_disturbing", false)
         }
     }
 }
 
-// The site has no pornographic age rating; is_pornographic covers it.
 private val AGE_RATINGS = mapOf(
     "safe" to "Safe",
-    "suggestive" to "FifteenPlus",
-    "erotica" to "EighteenPlus",
-    "pornographic" to "EighteenPlus",
+    "fifteenplus" to "FifteenPlus",
+    "eighteenplus" to "EighteenPlus",
 )
 
 internal class GenresFilter(
@@ -103,7 +107,31 @@ internal class GenresFilter(
 
 internal class TagsSearchFilter(
     val tagData: Map<String, String>,
-) : Filter.Text(" Tags (e.g. Medieval, -Politics)")
+) : Filter.Text("Tags (e.g. Medieval, -Politics)")
+
+internal class StaffSearchFilter : Filter.Text("Person (e.g. ONE, -Kokou no Hashiguchi)")
+
+internal class GroupsSearchFilter : Filter.Text("Group (e.g. Asura Scans, -The Hours Between)")
+
+internal open class RangeTextFilter(
+    name: String,
+) : Filter.Text(name) {
+    // Accepts "a", "a-b", or "a+" (open-ended).
+    fun parseRange(): Pair<Int?, Int?>? {
+        val input = state.trim()
+        val (minText, maxText) = when {
+            input.endsWith("+") -> input.removeSuffix("+") to null
+            else -> input.split("-", limit = 2).let { it[0] to it.getOrNull(1) }
+        }
+        val min = minText.trim().toIntOrNull()
+        val max = maxText?.trim()?.toIntOrNull()
+        return if (min == null && max == null) null else min to max
+    }
+}
+
+internal class YearFilter : RangeTextFilter("Year (e.g. 2024, 2024-2026, or 2024+)")
+
+internal class ChapterCountFilter : RangeTextFilter("Chapters (e.g. 1-20, 21-100, 101+)")
 
 internal class SourcesFilter(
     sources: List<FilterData>,

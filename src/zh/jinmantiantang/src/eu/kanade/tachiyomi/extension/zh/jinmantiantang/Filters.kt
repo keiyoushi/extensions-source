@@ -1,23 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import eu.kanade.tachiyomi.source.model.Filter
-
-internal class CategoryFilter :
-    SelectFilter(
-        "按类型",
-        listOf(
-            "全部" to "",
-            "其他" to "another",
-            "同人" to "doujin",
-            "韩漫" to "hanman",
-            "美漫" to "meiman",
-            "短篇" to "short",
-            "单本" to "single",
-            "日语" to "doujin/sub/japanese",
-            "Cosplay" to "another/sub/cosplay",
-            "CG图集" to "doujin/sub/CG",
-        ),
-    )
+internal class CategoryFilter(categories: List<Pair<String, String>>) : SelectFilter("按类型", categories)
 
 internal class SortFilter :
     SelectFilter(
@@ -34,7 +18,7 @@ internal class TimeFilter :
     SelectFilter(
         "时间",
         listOf(
-            "全部" to "a",
+            "全部" to "",
             "今天" to "t",
             "这周" to "w",
             "本月" to "m",
@@ -45,11 +29,11 @@ internal class TypeFilter :
     SelectFilter(
         "搜索范围",
         listOf(
-            "站内搜索" to "0",
-            "作品" to "1",
-            "作者" to "2",
-            "标签" to "3",
-            "登场人物" to "4",
+            "站内搜索" to "site",
+            "作品" to "work",
+            "作者" to "author",
+            "标签" to "tag",
+            "登场人物" to "character",
         ),
     )
 
