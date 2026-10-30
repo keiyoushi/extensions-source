@@ -99,7 +99,7 @@ class BrowserHeadersCacheTest {
     // KeiSource's client, minus what needs the app
     private val client = OkHttpClient.Builder()
         .cache(Cache(cacheDir, 1024 * 1024))
-        .addInterceptor(BrowserCallInterceptor { base })
+        .addInterceptor(BrowserCallInterceptor({ base }))
         .addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
         .addNetworkInterceptor(CacheControlInterceptor())
         .addNetworkInterceptor(BrowserHeadersInterceptor)

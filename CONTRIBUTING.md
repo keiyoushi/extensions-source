@@ -1358,7 +1358,8 @@ Optional overrides (each has a working default; override only when your source n
 |----------------------------------------------------------------------|----------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `fun getHomeUrl(): String`                                            | Returns `baseUrl`.                                              | The browse screen's "Open in WebView" action should land somewhere other than `baseUrl` (e.g. the source's real site differs from the API host used as `baseUrl`).                                      |
 | `suspend fun getImageUrl(page: Page): String`                         | Not called unless a `Page.imageUrl` is empty.                   | A page's image URL can't be determined upfront in `getPageList` and must be resolved lazily once the chapter is opened - see [Chapter Pages](#chapter-pages). Make your request with `client` and return the URL directly. |
-| `fun getImageRequest(page: Page): Request`                            | A GET of `page.imageUrl` with `headers`.                        | The image needs other headers or a different URL. A GET without a `Fetch` is sent as `Fetch.IMAGE`; `.fetch(Fetch.NONE)` sends it as built. See [Browser headers](#browser-headers). |
+| `fun getImageRequest(page: Page): Request`                            | A GET of `page.imageUrl` with `headers`.                        | The image needs other headers or a different URL. A GET without a `Fetch` is sent with `imageFetch`. See [Browser headers](#browser-headers). |
+| `val imageFetch: Fetch`                                               | `Fetch.IMAGE`.                                                  | The site's page images or covers break with browser image headers: `Fetch.NONE` sends them as built.                                                                                    |
 | `fun getMangaUrl(manga: SManga): String`                              | Returns `baseUrl + manga.url`.                                  | That doesn't land on the manga's real page. Since `SManga.url` is recommended to hold just an ID/slug rather than a full relative path (see [Misc notes](#misc-notes)), the default concatenation often isn't a valid path by itself - override to build the real URL from the ID/slug (e.g. `"$baseUrl/manga/${manga.url}"`).      |
 | `fun getChapterUrl(chapter: SChapter): String`                        | Returns `baseUrl + chapter.url`.                                | Same reasoning as `getMangaUrl`, for chapters.                                                                                                                                                            |
 | `suspend fun getMangaByUrl(url: HttpUrl): SManga?`                    | Throws (unimplemented).                                         | Almost always: this backs URL search (pasting/opening a manga link for this source). Return `null` if the URL isn't recognized - leaving this unimplemented means URL search crashes for this source.  |
@@ -1397,10 +1398,11 @@ Behavior `KeiSource` gives you for free:
   of `Fetch.from`.
   - On a `Request.Builder`, set it with `.fetch(Fetch.XHR)` and so on. In an interceptor, change a request with
     `request.newBuilder()`; a new `Request.Builder()` drops its `Fetch`.
-  - Page images (GETs from `getImageRequest` without a `Fetch`) and the covers the app loads are sent as
-    `Fetch.IMAGE`. The app's covers are recognised as GETs with `Cache-Control: no-store` and no `Fetch`, so don't
-    put that on your own requests without one.
-  - Headers a request already has are kept: fetch metadata the source sets itself is left whole, and a request without
+  - Page images (GETs from `getImageRequest` without a `Fetch`) and the covers the app loads are sent with
+    `imageFetch`, `Fetch.IMAGE` by default; override it with `Fetch.NONE` if they break. The app's covers are
+    recognised as GETs with `Cache-Control: no-store` and no `Fetch`, so don't put that on your own requests without
+    one.
+  - Headers a request already has are kept, fetch metadata the source sets itself included, and a request without
     `Origin` gets none. `from` replaces the `Referer`, also on each redirect.
 - **Filter fetching:** if a source needs to fetch its filter options from the network, set
   `supportsFilterFetching = true`, implement `fetchFilterData()` (returns the raw filter data as a

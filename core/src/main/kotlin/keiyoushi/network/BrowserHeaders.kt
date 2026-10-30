@@ -13,22 +13,27 @@ import java.util.Locale
 /**
  * Starts a call's [BrowserCall], which [BrowserHeadersInterceptor] works from on each hop: for a request with a
  * [Fetch.from] page, or one of a [Fetch.Kind] with a `User-Agent` naming Chrome or Firefox. The covers the apps load
- * count as images.
+ * go out with [imageFetch].
  */
-internal class BrowserCallInterceptor(private val siteUrl: () -> String) : Interceptor {
+internal class BrowserCallInterceptor(
+    private val siteUrl: () -> String,
+    private val imageFetch: () -> Fetch = { Fetch.IMAGE },
+) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
+        // The apps' cover requests carry no Fetch, only the no-store that keeps covers out of the OkHttp cache
+        val request = chain.request().let {
+            val cover = it.kind == null && it.method == "GET" && it.header("Cache-Control") == "no-store"
+            if (cover) it.newBuilder().fetch(imageFetch()).build() else it
+        }
         val siteUrl = siteUrl()
         val site = siteUrl.toHttpUrlOrNull()
         val page = request.tag(FromPage::class.java)?.let { it.page.toHttpUrlOrNull() ?: site?.resolve(it.page) }
-        // The apps' cover requests carry no kind, only the no-store that keeps covers out of the OkHttp cache
         val kind = request.kind
-            ?: Fetch.Kind.IMAGE.takeIf { request.method == "GET" && request.header("Cache-Control") == "no-store" }
         val browserHeaders = kind != null && kind != Fetch.Kind.NONE && site != null && Browser.of(request.header("User-Agent").orEmpty()) != null
         if (page == null && !browserHeaders) return chain.proceed(request)
         // A fresh one per call: a request or builder can be sent more than once
         val call = BrowserCall(page, site.takeIf { browserHeaders }, siteUrl)
-        return chain.proceed(request.newBuilder().apply { if (kind != null) kind(kind) }.tag(BrowserCall::class.java, call).build())
+        return chain.proceed(request.newBuilder().tag(BrowserCall::class.java, call).build())
     }
 }
 

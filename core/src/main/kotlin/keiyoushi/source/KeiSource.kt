@@ -17,6 +17,7 @@ import keiyoushi.network.CacheControlInterceptor
 import keiyoushi.network.Deflate
 import keiyoushi.network.Fetch
 import keiyoushi.network.RateLimitInterceptor
+import keiyoushi.network.fetch
 import keiyoushi.network.kind
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
@@ -119,7 +120,7 @@ abstract class KeiSource : HttpSource() {
             }
 
             // the browser headers for each request
-            addInterceptor(BrowserCallInterceptor { baseUrl })
+            addInterceptor(BrowserCallInterceptor({ baseUrl }, { imageFetch }))
             // last application interceptor; the encodings and order browsers send
             addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
 
@@ -450,8 +451,13 @@ abstract class KeiSource : HttpSource() {
     abstract override suspend fun getPageList(chapter: SChapter): List<Page>
 
     /**
-     * Builds the request for a page's image. A GET without a [Fetch] is sent as [Fetch.IMAGE]; set [Fetch.NONE] on it
-     * to send it as built.
+     * How page images and the covers the app loads go out. Set [Fetch.NONE] if the site's images break with the
+     * headers a browser sends for them.
+     */
+    protected open val imageFetch: Fetch get() = Fetch.IMAGE
+
+    /**
+     * Builds the request for a page's image. A GET without a [Fetch] is sent with [imageFetch].
      *
      * @param page the page.
      * @return the request for its image.
@@ -464,6 +470,6 @@ abstract class KeiSource : HttpSource() {
     final override fun imageRequest(page: Page): Request {
         val request = getImageRequest(page)
         val image = request.kind == null && request.method == "GET"
-        return if (image) request.newBuilder().kind(Fetch.Kind.IMAGE).build() else request
+        return if (image) request.newBuilder().fetch(imageFetch).build() else request
     }
 }

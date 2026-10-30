@@ -289,6 +289,8 @@ class BrowserHeadersTest {
         val sent = intercept(cover)
         assertEquals("image", sent.header("Sec-Fetch-Dest"))
         assertEquals("no-cors", sent.header("Sec-Fetch-Mode"))
+        // As the source's imageFetch says
+        assertEquals(cover.headers, intercept(cover, imageFetch = Fetch.NONE).headers)
         // Only a GET
         val post = builder("https://a.test/api", referer = "https://a.test/").cacheControl(CacheControl.Builder().noStore().build()).post(json()).build()
         assertEquals(post.headers, intercept(post).headers)
@@ -306,10 +308,10 @@ class BrowserHeadersTest {
 
     // The request as sent: with the wire order pass it's HTTP/1.1, as a unit test has no connection; without, the
     // headers as added. With compression, KeiSource's Accept-Encoding
-    private fun intercept(request: Request, wireOrder: Boolean = false, compression: Boolean = false, site: String = "https://a.test"): Request {
+    private fun intercept(request: Request, wireOrder: Boolean = false, compression: Boolean = false, site: String = "https://a.test", imageFetch: Fetch = Fetch.IMAGE): Request {
         var sent: Request? = null
         val client = OkHttpClient.Builder()
-            .addInterceptor(BrowserCallInterceptor { site })
+            .addInterceptor(BrowserCallInterceptor({ site }, { imageFetch }))
             .apply { if (compression) addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd)) }
             .addInterceptor(if (wireOrder) BrowserHeadersInterceptor else Interceptor { it.proceed(it.request().headersAsAdded()) })
             .addInterceptor { chain ->
