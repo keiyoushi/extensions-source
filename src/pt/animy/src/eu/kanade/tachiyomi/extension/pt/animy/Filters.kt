@@ -30,6 +30,7 @@ class TypeFilter :
             "Mangá" to "manga",
             "Manhwa" to "manhwa",
             "Manhua" to "manhua",
+            "Webtoon" to "webtoon",
         ),
     )
 
@@ -42,29 +43,16 @@ class StatusFilter :
             "Em andamento" to "ongoing",
             "Completo" to "completed",
             "Em hiato" to "hiatus",
+            "Cancelado" to "cancelled",
         ),
     )
 
-class GenreFilter :
+class GenreFilter(genres: List<String>) :
     UriPartFilter(
         "Gênero",
         "genre",
-        arrayOf(
-            "Todos" to "",
-            "Ação" to "Ação",
-            "Aventura" to "Aventura",
-            "Comédia" to "Comédia",
-            "Drama" to "Drama",
-            "Fantasia" to "Fantasia",
-            "Romance" to "Romance",
-            "Isekai" to "Isekai",
-            "Terror" to "Terror",
-            "Mistério" to "Mistério",
-            "Psicológico" to "Psicológico",
-            "Slice of Life" to "Slice of Life",
-            "Sobrenatural" to "Sobrenatural",
-            "Esportes" to "Esportes",
-            "Mature" to "Mature",
-            "Ecchi" to "Ecchi",
-        ),
+        buildList {
+            add("Todos" to "")
+            genres.sorted().forEach { add(it to it) }
+        }.toTypedArray(),
     )

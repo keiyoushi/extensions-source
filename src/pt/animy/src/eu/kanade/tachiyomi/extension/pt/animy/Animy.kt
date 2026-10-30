@@ -10,6 +10,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -17,6 +19,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class Animy : KeiSource() {
 
     private val apiUrl = "$baseUrl/api/v1"
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/mangas/meta/genres").parseAs<GenresDto>().genres.toJsonElement()
 
     override suspend fun getPopularManga(page: Int): MangasPage = listMangas(page) {
         addQueryParameter("sort", "popular")
@@ -50,11 +56,14 @@ abstract class Animy : KeiSource() {
         }
     }
 
-    override fun getFilterList(data: kotlinx.serialization.json.JsonElement?) = FilterList(
-        TypeFilter(),
-        StatusFilter(),
-        GenreFilter(),
-    )
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<String>>().orEmpty()
+        return FilterList(
+            TypeFilter(),
+            StatusFilter(),
+            GenreFilter(genres),
+        )
+    }
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.title

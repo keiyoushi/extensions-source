@@ -16,6 +16,11 @@ class MangaListResponse(
 )
 
 @Serializable
+class GenresDto(
+    val genres: List<String> = emptyList(),
+)
+
+@Serializable
 class MangaRef(
     private val id: Long,
     private val t: String,
