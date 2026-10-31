@@ -25,27 +25,44 @@
     };
 
     const specs = new WeakMap();
+    const record = (obj, key, value) => {
+        if (!obj || (key !== "base" && key !== "count" && key !== "variants")) return;
+        let spec = specs.get(obj);
+        if (!spec) specs.set(obj, (spec = {}));
+        if (key === "base" && typeof value === "string" && value.startsWith("/p/")) spec.base = value;
+        else if (key === "count" && Number.isInteger(value) && value > 0) spec.count = value;
+        else if (key === "variants" && Array.isArray(value)) spec.variants = value;
+        if (!spec.scheduled) {
+            spec.scheduled = true;
+            queueMicrotask(() => {
+                spec.scheduled = false;
+                if (manifest || typeof spec.base !== "string" || !Number.isInteger(spec.count)) return;
+                manifest = { base: spec.base, count: spec.count, variants: spec.variants || [] };
+                publish();
+            });
+        }
+    };
+    // Older readers define the manifest's fields
     Object.defineProperty = new Proxy(defineProperty, {
         apply(target, thisArg, args) {
             const defined = Reflect.apply(target, thisArg, args);
             const [obj, key, desc] = args;
-            if (!obj || (key !== "base" && key !== "count" && key !== "variants")) return defined;
-            let spec = specs.get(obj);
-            if (!spec) specs.set(obj, (spec = {}));
-            const value = desc && desc.value;
-            if (key === "base" && typeof value === "string" && value.startsWith("/p/")) spec.base = value;
-            else if (key === "count" && Number.isInteger(value) && value > 0) spec.count = value;
-            else if (key === "variants" && Array.isArray(value)) spec.variants = value;
-            if (!spec.scheduled) {
-                spec.scheduled = true;
-                queueMicrotask(() => {
-                    spec.scheduled = false;
-                    if (manifest || typeof spec.base !== "string" || !Number.isInteger(spec.count)) return;
-                    manifest = { base: spec.base, count: spec.count, variants: spec.variants || [] };
-                    publish();
-                });
-            }
+            record(obj, key, desc && desc.value);
             return defined;
+        },
+    });
+    // Newer readers assign them to an Object.create(null), renamed from the manifest response's obfuscated keys
+    const watched = {
+        set(target, key, value, receiver) {
+            const set = Reflect.set(target, key, value, receiver);
+            record(target, key, value);
+            return set;
+        },
+    };
+    Object.create = new Proxy(Object.create, {
+        apply(target, thisArg, args) {
+            const created = Reflect.apply(target, thisArg, args);
+            return args[0] === null && args.length === 1 ? new Proxy(created, watched) : created;
         },
     });
 

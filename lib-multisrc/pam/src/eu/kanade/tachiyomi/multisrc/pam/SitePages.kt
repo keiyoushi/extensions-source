@@ -98,11 +98,12 @@ internal class SitePages(
                 interceptRequest { webRequest ->
                     val requestUrl = webRequest.url
                     val requestHost = requestUrl.host
-                    if (requestHost != null && requestHost != baseHttpUrl.host && requestHost != TURNSTILE_HOST) return@interceptRequest blockedResponse()
+                    val turnstile = requestHost == TURNSTILE_HOST || requestHost?.endsWith(".$TURNSTILE_HOST") == true
+                    if (requestHost != null && requestHost != baseHttpUrl.host && !turnstile) return@interceptRequest blockedResponse()
                     val path = requestUrl.path.orEmpty()
                     if (UNUSED_PATHS.any(path::startsWith)) return@interceptRequest blockedResponse()
-                    // Styles and fonts only for the reader's fingerprint
-                    if (!reader && STYLE_EXTENSIONS.any(path::endsWith)) return@interceptRequest emptyResponse()
+                    // Styles and fonts only for the reader's fingerprint and Turnstile's
+                    if (!reader && !turnstile && STYLE_EXTENSIONS.any(path::endsWith)) return@interceptRequest emptyResponse()
                     if (reader && requestUrl.getQueryParameter(bridge) != null) {
                         return@interceptRequest rewrittenWorker(webRequest, bridge)
                     }
