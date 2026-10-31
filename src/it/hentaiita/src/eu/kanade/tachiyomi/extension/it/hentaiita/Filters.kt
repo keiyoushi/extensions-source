@@ -11,8 +11,7 @@ enum class SortMode(val label: String, val apiOrderBy: String) {
     RELEVANCE("Pertinenza (con testo)", "relevance"),
 }
 
-class SortFilter(selection: Filter.Sort.Selection = Filter.Sort.Selection(0, false)) :
-    Filter.Sort("Ordina per", SortMode.entries.map { it.label }.toTypedArray(), selection) {
+class SortFilter(selection: Filter.Sort.Selection = Filter.Sort.Selection(0, false)) : Filter.Sort("Ordina per", SortMode.entries.map { it.label }.toTypedArray(), selection) {
     val mode: SortMode get() = SortMode.entries[state?.index ?: 0]
     val ascending: Boolean get() = state?.ascending ?: false
 }

@@ -41,8 +41,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class HentaiIta : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder =
-        rateLimit(permits = 2, period = 1.seconds)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
 
     override fun getHomeUrl(): String = "$baseUrl/it/"
 
@@ -327,8 +326,7 @@ abstract class HentaiIta : KeiSource() {
         return cleaned.substring(0, end).replace(SPACES, " ").trim().takeIf { it.length >= MIN_DESCRIPTION }
     }
 
-    private fun isAllowed(classes: Collection<String>, title: String): Boolean =
-        classes.none { it in BLOCKED_CLASSES } && !BLOCKED_TEXT.containsMatchIn(title)
+    private fun isAllowed(classes: Collection<String>, title: String): Boolean = classes.none { it in BLOCKED_CLASSES } && !BLOCKED_TEXT.containsMatchIn(title)
 
     private data class Query(
         val text: String = "",

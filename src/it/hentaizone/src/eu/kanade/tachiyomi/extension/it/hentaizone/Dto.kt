@@ -77,4 +77,3 @@ class FilterDataDto(
 
 @Serializable
 class GalleryImageDto(val src: String)
-

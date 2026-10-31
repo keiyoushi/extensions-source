@@ -45,8 +45,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class HentaiZone : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder =
-        rateLimit(permits = 2, period = 1.seconds)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
 
     override fun getHomeUrl(): String = "$baseUrl/hentai-manga/"
 
@@ -292,11 +291,10 @@ abstract class HentaiZone : KeiSource() {
         return SMangaUpdate(manga, chapters)
     }
 
-    private fun galleryImages(doc: Document): List<String> =
-        doc.select("div.gff-gallery[data-images]")
-            .flatMap { it.attr("data-images").parseAs<List<GalleryImageDto>>() }
-            .map { it.src.toHttpUrl().toString() }
-            .distinct()
+    private fun galleryImages(doc: Document): List<String> = doc.select("div.gff-gallery[data-images]")
+        .flatMap { it.attr("data-images").parseAs<List<GalleryImageDto>>() }
+        .map { it.src.toHttpUrl().toString() }
+        .distinct()
 
     // Each chapter of a series is its own post; the post page lists them all.
     private fun seriesChapters(page: Document, post: PostDto): List<SChapter> {
@@ -355,15 +353,14 @@ abstract class HentaiZone : KeiSource() {
         return FilterDataDto(categories, tags).toJsonElement()
     }
 
-    private fun termsUrl(taxonomy: String, page: Int): HttpUrl =
-        "$baseUrl/wp-json/wp/v2/$taxonomy".toHttpUrl().newBuilder()
-            .addQueryParameter("per_page", TERMS_PAGE_SIZE.toString())
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("orderby", "count")
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("hide_empty", "true")
-            .addQueryParameter("_fields", "id,slug,name,count")
-            .build()
+    private fun termsUrl(taxonomy: String, page: Int): HttpUrl = "$baseUrl/wp-json/wp/v2/$taxonomy".toHttpUrl().newBuilder()
+        .addQueryParameter("per_page", TERMS_PAGE_SIZE.toString())
+        .addQueryParameter("page", page.toString())
+        .addQueryParameter("orderby", "count")
+        .addQueryParameter("order", "desc")
+        .addQueryParameter("hide_empty", "true")
+        .addQueryParameter("_fields", "id,slug,name,count")
+        .build()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val terms = data?.let { runCatching { it.parseAs<FilterDataDto>() }.getOrNull() }
@@ -389,8 +386,7 @@ abstract class HentaiZone : KeiSource() {
         .sortedBy { it.plainName.lowercase(Locale.ITALIAN) }
         .map { TermOption(it.plainName, it.id, it.slug) }
 
-    private fun isAllowed(classes: Collection<String>, title: String): Boolean =
-        classes.none { it in BLOCKED_CLASSES } && !BLOCKED_TEXT.containsMatchIn(title)
+    private fun isAllowed(classes: Collection<String>, title: String): Boolean = classes.none { it in BLOCKED_CLASSES } && !BLOCKED_TEXT.containsMatchIn(title)
 
     private class Query(
         val text: String = "",
