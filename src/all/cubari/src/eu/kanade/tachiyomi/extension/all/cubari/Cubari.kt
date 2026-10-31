@@ -24,6 +24,9 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Cubari : KeiSource() {
 
+    // Gists point at any image host, Google Drive among them, which answers 403 to browser image requests
+    override val imageFetch = Fetch.NONE
+
     override fun Headers.Builder.configureHeaders() = set(
         "User-Agent",
         "(Android ${Build.VERSION.RELEASE}; " +
