@@ -192,7 +192,7 @@ abstract class BlackoutComics : KeiSource() {
         return emptyList()
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .removeHeader("Referer")
         .removeHeader("Upgrade-Insecure-Requests")
         .removeHeader("Sec-Fetch-Dest")

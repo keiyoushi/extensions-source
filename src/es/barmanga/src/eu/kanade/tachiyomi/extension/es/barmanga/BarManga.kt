@@ -32,10 +32,10 @@ abstract class BarManga : Madara() {
             }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val dto = runCatching {
             page.imageUrl!!.parseAs<PageDto>()
-        }.getOrElse { return super.imageRequest(page) }
+        }.getOrElse { return super.getImageRequest(page) }
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("action", dto.action)

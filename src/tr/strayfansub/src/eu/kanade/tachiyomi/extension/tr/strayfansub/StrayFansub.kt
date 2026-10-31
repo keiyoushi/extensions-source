@@ -1,35 +1,20 @@
 package eu.kanade.tachiyomi.extension.tr.strayfansub
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
-import keiyoushi.network.rateLimit
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Source
-abstract class StrayFansub : Madara() {
-    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr"))
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
-
-    override fun pageListParse(document: Document): List<Page> {
-        val pageList = super.pageListParse(document)
-
+abstract class StrayFansub : MangaThemesia() {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val pageList = super.getPageList(chapter)
         if (
-            pageList.isEmpty() &&
-            document.select(".content-blocked, .login-required").isNotEmpty()
+            pageList.size == 1 &&
+            pageList[0].imageUrl == "$baseUrl/wp-content/uploads/2026/04/WhatsApp-Image-2026-04-16-at-2.10.41-AM-2-266x150.jpeg"
         ) {
             throw Exception("Okumak için WebView üzerinden giriş yapın")
         }
         return pageList
     }
-
-    override val client = super.client.newBuilder()
-        .rateLimit(3) { it.host == baseUrlHost }
-        .build()
 }

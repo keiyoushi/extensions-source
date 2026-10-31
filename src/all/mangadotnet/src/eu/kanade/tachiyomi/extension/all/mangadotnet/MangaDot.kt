@@ -37,6 +37,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
@@ -109,7 +110,8 @@ abstract class MangaDot :
     private val officialPriorityPatterns = listOf(
         "manga plus", "mangaplus", "viz media", "viz manga", "webtoon",
         "tapas", "mangadex", "k manga", "kmanga", "mangaup", "manga up",
-        "comikey", "shonen jump", "shounen jump", "shonenjump", "official",
+        "seven seas entertainment", "emaqi", "inkr", "kodansha usa", "lezhin",
+        "kodansha comics", "kadokawa", "mangaplaza", "comikey", "official",
     ).map { Regex("\\b${Regex.escape(it)}\\b") }
 
     private val demographicNames = setOf("Josei", "Seinen", "Shoujo", "Shounen")
@@ -193,6 +195,7 @@ abstract class MangaDot :
         }
 
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
+            queryLang?.let { addQueryParameter("lang", it) }
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
@@ -505,7 +508,7 @@ abstract class MangaDot :
 
         buildList {
             data.relationsData?.relations?.values?.forEach(::addAll)
-            addAll(data.suggestions)
+            data.suggestions?.let(::addAll)
             addAll(followingReadsItems)
             addAll(forYouItems)
         }.map {
@@ -538,7 +541,8 @@ abstract class MangaDot :
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
                                 name = "Volume ${(volume.volume ?: 0f).toString().removeSuffix(".0")}"
                                 chapter_number = 0f
-                                scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
+                                scanlator = volume.groups.map { it.name }.takeIf { it.isNotEmpty() }?.joinToString(" • ")
+                                    ?: (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
                                 date_upload = Instant.tryParse(volume.date?.replace(" ", "T"))
                             }
                         }
@@ -627,7 +631,8 @@ abstract class MangaDot :
                             append(name.trim())
                         }
                         chapter_number = chapter.number ?: 0f
-                        scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
+                        scanlator = chapter.groups.map { it.name }.takeIf { it.isNotEmpty() }?.joinToString(" • ")
+                            ?: (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
                         date_upload = Instant.tryParse(chapter.date?.replace(" ", "T"))
                     }
                 }
@@ -693,7 +698,7 @@ abstract class MangaDot :
         })
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val referer = page.url.substringBeforeLast("#")
         return GET(page.imageUrl!!, headers.newBuilder().set("Referer", referer).build())
     }
@@ -736,8 +741,7 @@ abstract class MangaDot :
 
     // ============================= Bookmarks =============================
     private fun parseBookmarksResponse(response: Response): MangasPage = try {
-        val flat = response.parseAs<JsonArray>()
-        val decoded = decodeRsc(flat)
+        val decoded = response.decodeRsc()
             ?: throw Exception("Login through WebView to view bookmarks")
         val routeContent = decoded.jsonObject["pages/BookmarksPage"]
             ?: throw Exception("Login through WebView to view bookmarks")
@@ -857,8 +861,8 @@ abstract class MangaDot :
         val priorityPref = EditTextPreference(screen.context).apply {
             key = PREFERRED_SCANLATORS
             title = "Scanlator Priority"
-            summary = "Comma-separated, in order of preference. First match wins. Supports unofficial only if scanlator name matches website.\nDefaults to official scrapers: Manga Plus, VIZ Media, Webtoon, Tapas, MangaDex, K Manga, Manga UP, Comikey, Shonen Jump"
-            setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, Webtoon, Tapas, MangaDex, K Manga, Manga UP, Comikey, Shonen Jump")
+            summary = "Comma-separated, in order of preference. First match wins. Supports unofficial only if scanlator name matches website.\nDefaults to official sources: Manga Plus, VIZ Media, WebToon, Tapas, MangaDex, K Manga, Lezhin, Manga UP, Seven Seas Entertainment, Emaqi, INKR, Kodansha, Kadokawa, MangaPlaza, Comikey"
+            setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, WebToon, Tapas, Lezhin, MangaDex, K Manga, Manga UP, Seven Seas Entertainment, Emaqi, INKR, Kodansha USA, Kodansha Comics, Kadokawa, MangaPlaza, Comikey")
             setEnabled(preferences.getBoolean(DEDUPLICATE_CHAPTERS, false))
         }
         screen.addPreference(priorityPref)
@@ -921,8 +925,7 @@ abstract class MangaDot :
 
     // ============================ RSC Decoder ============================
     private inline fun <reified T> Response.decodeRscAs(): T {
-        val flat = parseAs<JsonArray>()
-        val decoded = decodeRsc(flat)
+        val decoded = decodeRsc()
             ?: throw IllegalStateException("Failed to decode RSC response")
         val routes = request.url.queryParameter("_routes")
         return if (routes != null) {
@@ -934,7 +937,25 @@ abstract class MangaDot :
         }
     }
 
-    private fun decodeRsc(flat: JsonArray): JsonElement? {
+    private fun Response.decodeRsc(): JsonElement? {
+        val lines = body.string().lines()
+        val flat = lines.first().parseAs<JsonArray>().toMutableList()
+
+        // Values the server sent after the first line, by placeholder slot
+        val promises = mutableMapOf<Int, Int>()
+        for (line in lines.drop(1).filter { it.isNotEmpty() }) {
+            val (head, payload) = line.split(':', limit = 2)
+            val value = payload.parseAs<JsonElement>()
+            val valueIndex = if (value is JsonArray) {
+                val start = flat.size
+                flat.addAll(value)
+                start
+            } else {
+                value.jsonPrimitive.int
+            }
+            if (head[0] == 'P') promises[head.drop(1).toInt()] = valueIndex
+        }
+
         val cache = arrayOfNulls<Any>(flat.size)
         val nil = Any()
         fun resolve(i: Int): JsonElement? {
@@ -943,11 +964,16 @@ abstract class MangaDot :
             val result = when (val el = flat[i]) {
                 is JsonNull -> null
                 is JsonPrimitive -> if (el.isString) JsonPrimitive(el.content) else el
-                is JsonArray -> JsonArray(
-                    el.map {
-                        resolve((it as JsonPrimitive).int) ?: JsonNull
-                    },
-                )
+                // Placeholder for a late value, or a pointer to a value sent earlier
+                is JsonArray -> when (el.firstOrNull()) {
+                    JsonPrimitive("P") -> promises[el[1].jsonPrimitive.int]?.let(::resolve)
+                    JsonPrimitive("Z") -> resolve(el[1].jsonPrimitive.int)
+                    else -> JsonArray(
+                        el.map {
+                            resolve((it as JsonPrimitive).int) ?: JsonNull
+                        },
+                    )
+                }
                 is JsonObject -> JsonObject(
                     el.entries.associate { (k, v) ->
                         (flat[k.removePrefix("_").toInt()] as JsonPrimitive).content to

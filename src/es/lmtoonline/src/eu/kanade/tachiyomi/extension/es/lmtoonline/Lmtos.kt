@@ -13,8 +13,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -25,100 +23,28 @@ abstract class Lmtos : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/destacados").asJsoup()
-        val mangas = document.select("section > a.group").map { element ->
-            SManga.create().apply {
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-                title = element.selectFirst("div > h3")!!.ownText()
-                url = element.attr("href").removeSuffix("/").substringAfterLast("/")
-            }
-        }
-        return MangasPage(mangas, false)
-    }
+    override suspend fun getPopularManga(page: Int) = fetchSeries(page, "", FilterList(), "rating")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(OrderFilter(listOf("" to "recents"))))
+    override suspend fun getLatestUpdates(page: Int) = fetchSeries(page, "", FilterList(), "recent")
 
-    private val cacheMutex = Mutex()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = fetchSeries(page, query, filters, "title")
 
-    private var mangaCache = emptyList<Manga>()
+    private suspend fun fetchSeries(page: Int, query: String, filters: FilterList, defaultSort: String): MangasPage {
+        val url = "$baseUrl/series".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            addQueryParameter("sort", filters.firstInstanceOrNull<OrderFilter>()?.selected ?: defaultSort)
+            if (query.isNotBlank()) addQueryParameter("q", query)
+            filters.firstInstanceOrNull<GenreFilter>()?.state
+                ?.filter { it.state }
+                ?.forEach { addQueryParameter("genre", it.name) }
+            filters.firstInstanceOrNull<StatusFilter>()?.selected?.takeIf { it != "all" }?.let { addQueryParameter("status", it) }
+            filters.firstInstanceOrNull<DemographicFilter>()?.selected?.takeIf { it != "all" }?.let { addQueryParameter("demographic", it) }
+            filters.firstInstanceOrNull<TypeFilter>()?.selected?.takeIf { it != "all" }?.let { addQueryParameter("type", it) }
+            filters.firstInstanceOrNull<NsfwFilter>()?.selected?.takeIf { it != "all" }?.let { addQueryParameter("adult", it) }
+        }.build()
 
-    private var cacheTimestamp = 0L
-
-    private val cacheDuration = 10 * 60 * 1000L
-
-    private suspend fun fetchMangas(): List<Manga> = cacheMutex.withLock {
-        val now = System.currentTimeMillis()
-
-        if (mangaCache.isNotEmpty() && now - cacheTimestamp < cacheDuration) return@withLock mangaCache
-
-        val series = client.get("$baseUrl/series").asJsoup().extractNextJs<MangaList>()
-        mangaCache = series!!.mangas
-        cacheTimestamp = now
-        mangaCache
-    }
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val mangas = fetchMangas()
-
-        val genres = filters.firstInstanceOrNull<GenreFilter>()?.state
-            ?.filter { it.state }
-            ?.map { it.name }
-            ?: emptyList()
-
-        val status = filters.firstInstanceOrNull<StatusFilter>()?.selected ?: ""
-        val demographic = filters.firstInstanceOrNull<DemographicFilter>()?.selected ?: ""
-        val type = filters.firstInstanceOrNull<TypeFilter>()?.selected ?: ""
-        val nsfw = filters.firstInstanceOrNull<NsfwFilter>()?.selected ?: ""
-        val order = filters.firstInstanceOrNull<OrderFilter>()?.selected ?: "a-z"
-
-        val filteredMangas = mangas
-            .asSequence()
-            .filter { manga ->
-                query.isBlank() ||
-                    manga.title.contains(query, ignoreCase = true) ||
-                    manga.alternativeTitles?.any {
-                        it.contains(query, ignoreCase = true)
-                    } == true
-            }
-            .filter { manga ->
-                when (nsfw) {
-                    "only" -> manga.isAdult
-                    "hide" -> !manga.isAdult
-                    else -> true
-                }
-            }
-            .filter { manga ->
-                type.isBlank() || manga.type == type
-            }
-            .filter { manga ->
-                status.isBlank() || manga.status == status
-            }
-            .filter { manga ->
-                demographic.isBlank() || manga.demographic == demographic
-            }
-            .filter { manga ->
-                genres.isEmpty() || genres.all { genre ->
-                    manga.genres?.contains(genre) == true
-                }
-            }
-            .let { sequence ->
-                when (order) {
-                    "a-z" -> sequence.sortedBy { it.title }
-                    "recents" -> sequence.sortedByDescending {
-                        it.latestChapterCreatedAt
-                    }
-                    "views" -> sequence.sortedByDescending {
-                        it.totalViews
-                    }
-                    else -> sequence
-                }
-            }
-            .toList()
-
-        val pageCount = (filteredMangas.size + PER_PAGE - 1) / PER_PAGE
-        val pagedMangas = filteredMangas.drop((page - 1) * PER_PAGE).take(PER_PAGE)
-        return MangasPage(pagedMangas.map { it.toSManga() }, page < pageCount)
+        val result = client.get(url).asJsoup().extractNextJs<MangaList>() ?: return MangasPage(emptyList(), false)
+        return MangasPage(result.mangas.map { it.toSManga() }, page * result.pageSize < result.total)
     }
 
     override fun getFilterList(data: JsonElement?) = getFilters()
@@ -150,9 +76,5 @@ abstract class Lmtos : KeiSource() {
         return result.chapter.pages.orEmpty().mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }
-    }
-
-    companion object {
-        const val PER_PAGE = 20
     }
 }

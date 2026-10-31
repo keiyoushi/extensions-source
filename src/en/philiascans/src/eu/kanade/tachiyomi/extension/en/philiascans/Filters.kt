@@ -63,39 +63,4 @@ class StatusFilter :
         ),
     )
 
-class GenreFilter :
-    CheckBoxGroup(
-        "Genre",
-        arrayOf(
-            "Action" to "action",
-            "Adventure" to "adventure",
-            "Comedy" to "comedy",
-            "Drama" to "drama",
-            "Ecchi" to "ecchi",
-            "Fantasy" to "fantasy",
-            "Gourmet" to "gourmet",
-            "Harem" to "harem",
-            "Historical" to "historical",
-            "Isekai" to "isekai",
-            "Josei" to "josei",
-            "Magic" to "magic",
-            "Martial Arts" to "martial-arts",
-            "Monsters" to "monsters",
-            "Music" to "music",
-            "Mystery" to "mystery",
-            "Psychological" to "psychological",
-            "Regression" to "regression",
-            "Romance" to "romance",
-            "School Life" to "school-life",
-            "Sci-Fi" to "sci-fi",
-            "Seinen" to "seinen",
-            "Shoujo" to "shoujo",
-            "Shounen" to "shounen",
-            "Slice of Life" to "slice-of-life",
-            "Supernatural" to "supernatural",
-            "Survival" to "survival",
-            "Tragedy" to "tragedy",
-            "Villainess" to "villainess",
-            "War" to "war",
-        ),
-    )
+class GenreFilter(options: List<Pair<String, String>>) : CheckBoxGroup("Genre", options.toTypedArray())

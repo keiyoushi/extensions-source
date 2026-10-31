@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
@@ -18,8 +19,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.util.Locale
 
 @Source
@@ -130,7 +129,7 @@ abstract class ManGeek : KeiSource() {
     private fun signedUrl(route: String, input: String? = null): HttpUrl {
         val nonce = System.currentTimeMillis().toString(16).uppercase(Locale.ROOT)
         val signatureInput = input ?: nonce
-        val key = md5("M<$signatureInput#MANG33K>D")
+        val key = "M<$signatureInput#MANG33K>D".md5().toHexString()
 
         return apiUrl.newBuilder()
             .addPathSegment(route)
@@ -139,8 +138,4 @@ abstract class ManGeek : KeiSource() {
             .addPathSegment(key)
             .build()
     }
-
-    private fun md5(value: String): String = MessageDigest.getInstance("MD5")
-        .digest(value.toByteArray(StandardCharsets.UTF_8))
-        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 }

@@ -107,6 +107,8 @@ abstract class Shinigami : KeiSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
+
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != "shinigami.asia" && !url.host.endsWith(".shinigami.asia")) return null
         val firstSegment = url.pathSegments.firstOrNull()
@@ -154,9 +156,7 @@ abstract class Shinigami : KeiSource() {
 
         return manga.apply {
             mangaDetails.title?.takeIf { it.isNotBlank() }?.let { title = it }
-            (mangaDetails.coverPortraitUrl ?: mangaDetails.coverImageUrl)?.takeIf { it.isNotBlank() }?.let {
-                thumbnail_url = it
-            }
+            mangaDetails.thumbnail?.let { thumbnail_url = it }
             author = mangaDetails.taxonomy["Author"]?.joinToString { it.name }.orEmpty()
             artist = mangaDetails.taxonomy["Artist"]?.joinToString { it.name }.orEmpty()
             status = mangaDetails.status.toStatus()
@@ -209,7 +209,7 @@ abstract class Shinigami : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headersBuilder()
             .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .add("DNT", "1")

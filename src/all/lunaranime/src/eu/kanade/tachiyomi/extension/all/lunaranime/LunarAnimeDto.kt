@@ -316,6 +316,13 @@ class LunarPageListData(
 @Serializable
 class LunarPageListDecrypted(
     val data: LunarPageListData,
+    @SerialName("cache_status") val cacheStatus: String? = null,
+    @SerialName("cache_ttl") val cacheTtl: Long? = null,
+)
+
+@Serializable
+class LunarCaptchaConfig(
+    @SerialName("reader_primary_sitekey") val readerPrimarySitekey: String? = null,
 )
 
 @Serializable

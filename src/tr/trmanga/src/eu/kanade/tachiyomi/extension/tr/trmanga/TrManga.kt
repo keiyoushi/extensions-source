@@ -13,54 +13,49 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.format.DateTimeFormatter
 import java.util.Calendar
-import java.util.Locale
 
 @Source
 abstract class TrManga : KeiSource() {
-
-    private val dateFormat = DateTimeFormatter.ofPattern("dd MMMM, yy", Locale.ENGLISH)
 
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/webtoon-listesi?sort=views&short_type=DESC&page=$page").asJsoup()
-        val mangas = document.select(".wl-grid > a.wl-card, .tur-grid > a.tur-card").map { popularMangaFromElement(it) }
-        val hasNextPage = document.selectFirst("a[aria-label=Sonraki], a[rel=next], a.page-link:contains(Sonraki)") != null
+        return mangaListFromDocument(document)
+    }
+
+    private fun mangaListFromDocument(document: Document): MangasPage {
+        val mangas = document.select("[data-more-list=wl] > a").map { popularMangaFromElement(it) }
+        val hasNextPage = document.selectFirst("a[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
     }
 
     private fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
-        title = element.selectFirst(".wl-name, .tur-name")?.text() ?: element.attr("title")
-        thumbnail_url = element.selectFirst("img")?.let {
-            it.absUrl("src").ifEmpty { it.absUrl("data-src") }
-        }
+        title = element.selectFirst("span.line-clamp-2")?.text() ?: element.attr("title")
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val document = client.get("$baseUrl/son-eklenenler?page=$page").asJsoup()
-        val mangas = document.select(".dsc-card").map { latestUpdatesFromElement(it) }
-        val hasNextPage = document.selectFirst("a[aria-label=Sonraki], a[rel=next], a.page-link:contains(Sonraki)") != null
+        val mangas = document.select("article:has(h3 a)").map { latestUpdatesFromElement(it) }
+        val hasNextPage = document.selectFirst("a[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
     }
 
     private fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a.dsc-card-title, a.dsc-card-cover")!!
+        val link = element.selectFirst("h3 a")!!
         setUrlWithoutDomain(link.absUrl("href"))
-        title = element.selectFirst(".dsc-card-title")?.text() ?: link.text()
-        thumbnail_url = element.selectFirst("img")?.let {
-            it.absUrl("src").ifEmpty { it.absUrl("data-src") }
-        }
+        title = link.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     // =============================== Search ===============================
@@ -97,9 +92,7 @@ abstract class TrManga : KeiSource() {
         }.build()
 
         val document = client.get(url).asJsoup()
-        val mangas = document.select(".wl-grid > a.wl-card, .tur-grid > a.tur-card").map { popularMangaFromElement(it) }
-        val hasNextPage = document.selectFirst("a[aria-label=Sonraki], a[rel=next], a.page-link:contains(Sonraki)") != null
-        return MangasPage(mangas, hasNextPage)
+        return mangaListFromDocument(document)
     }
 
     // ============================== Deeplink ==============================
@@ -129,18 +122,14 @@ abstract class TrManga : KeiSource() {
         return SMangaUpdate(details, chapterList)
     }
 
-    private fun mangaDetailsFromDocument(document: Document): SManga {
-        val authorArtistLabel = "Yazar & Çizer İsim(ler) : "
-        val statusLabel = "Durum :"
-        return SManga.create().apply {
-            title = document.selectFirst(".movie__title")!!.text()
-            author = document.selectFirst("p:contains($authorArtistLabel)")?.text()?.substringAfter(authorArtistLabel)?.trim()
-            artist = author
-            genre = document.select("li.movie__year a[href*=/tur/]").joinToString { it.text() }.takeIf { it.isNotEmpty() }
-            status = document.selectFirst("p:contains($statusLabel) > span")?.text()?.parseStatus() ?: SManga.UNKNOWN
-            description = document.selectFirst(".movie__plot")?.text()?.trim()
-            thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("abs:content")
-        }
+    private fun mangaDetailsFromDocument(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1#wt-title")!!.text()
+        author = document.selectFirst("dt:containsOwn(Yazar) + dd")?.text()
+        artist = author
+        genre = document.select("a.badge[href^=/tur/]").joinToString { it.text() }.takeIf { it.isNotEmpty() }
+        status = document.selectFirst("dt:containsOwn(Durum) + dd")?.text()?.parseStatus() ?: SManga.UNKNOWN
+        description = document.selectFirst("#wtiDesc")?.text()
+        thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("abs:content")
     }
 
     private val statusOngoing = listOf("ongoing", "devam ediyor", "güncel")
@@ -154,31 +143,19 @@ abstract class TrManga : KeiSource() {
 
     // ============================== Chapters ==============================
 
-    private val chapterNumberRegex = Regex("""\d+(\.\d+)?""")
-
-    private fun chapterListFromDocument(document: Document): List<SChapter> = document.select("tbody > tr").map { chapterFromElement(it) }
+    private fun chapterListFromDocument(document: Document): List<SChapter> = document.select("#chapters > li.wt-ch").map { chapterFromElement(it) }
 
     private fun chapterFromElement(element: Element) = SChapter.create().apply {
-        element.selectFirst("a")!!.let {
-            setUrlWithoutDomain(it.absUrl("href"))
-            name = it.text().trim()
-            date_upload = parseChapterDate(element.selectFirst("td:last-child span:first-child")?.text())
-            chapter_number = chapterNumberRegex.find(it.text())?.value?.toFloatOrNull() ?: -1f
-            scanlator = element.selectFirst("td:nth-child(2) a:first-child")?.text()?.trim()
+        val number = element.attr("data-chapter")
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        name = buildString {
+            append("Bölüm ", number)
+            element.selectFirst(".wt-ch-n")?.text()?.takeIf { it.isNotEmpty() }?.let { append(" - ", it) }
         }
-    }
-
-    // Date logic lifted from Madara
-    private fun parseChapterDate(date: String?): Long {
-        date ?: return 0
-
-        return when {
-            " önce" in date -> {
-                parseRelativeDate(date)
-            }
-
-            else -> dateFormat.tryParseDate(date)
-        }
+        chapter_number = number.toFloatOrNull() ?: -1f
+        val meta = element.selectFirst(".wt-ch-m")
+        scanlator = meta?.select("a.fs-chip")?.joinToString { it.text() }?.takeIf { it.isNotEmpty() }
+        date_upload = meta?.ownText()?.substringBefore("·")?.let { parseRelativeDate(it) } ?: 0L
     }
 
     private fun parseRelativeDate(date: String): Long {
@@ -192,7 +169,7 @@ abstract class TrManga : KeiSource() {
             date.contains("gün") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
             date.contains("saat") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
             date.contains("dakika") -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-            date.contains("ikinci") -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
+            date.contains("saniye") -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
             else -> 0
         }
     }
@@ -201,14 +178,12 @@ abstract class TrManga : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
-        if (document.selectFirst(".rd-lock, *:containsOwn(Üyelere Özel)") != null) {
+        if (document.selectFirst("*:containsOwn(Üyelere Özel)") != null) {
             throw Exception("Bu bölüm üyelere özeldir. Okumak için WebView üzerinden giriş yapın")
         }
-        return document.select(".reader-img, img[data-src]")
-            .distinctBy { it.absUrl("data-src").ifEmpty { it.absUrl("src") } }
-            .mapIndexed { i, img ->
-                Page(i, imageUrl = img.absUrl("data-src").ifEmpty { img.absUrl("src") })
-            }
+        return document.select("#images img.reader-img").mapIndexed { i, img ->
+            Page(i, imageUrl = img.absUrl("data-src").ifEmpty { img.absUrl("src") })
+        }
     }
 
     // ============================== Filters ===============================

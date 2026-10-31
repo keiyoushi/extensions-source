@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Nude-Moon"
-    versionCode = 31
+    versionCode = 32
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

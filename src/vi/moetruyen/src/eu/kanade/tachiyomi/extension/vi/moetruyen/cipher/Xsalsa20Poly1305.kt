@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyen.cipher
 
+import keiyoushi.utils.sha256
 import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.security.MessageDigest
 
 /**
  * NaCl XSalsa20-Poly1305 secretbox for IMGX v4 profile p04.
@@ -193,7 +193,7 @@ internal object Xsalsa20Poly1305 {
         require(body.size > 48) { "IMGX p04 payload too short" }
         val nonce = body.copyOfRange(0, 24)
         val m = secretboxOpenEasy(body.copyOfRange(24, body.size), nonce, key)
-        val expectedHash = MessageDigest.getInstance("SHA-256").digest(aad)
+        val expectedHash = aad.sha256()
         require(m.size >= 32) { "IMGX p04 plaintext too short" }
         for (i in 0 until 32) {
             require(m[i] == expectedHash[i]) { "IMGX v4 context authentication failed" }

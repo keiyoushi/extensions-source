@@ -47,7 +47,7 @@ abstract class Hiveworks : KeiSource() {
 
         val mangas = document.select(POPULAR_MANGA_SELECTOR).filterNot {
             val url = it.select("a.comiclink").first()!!.attr("abs:href")
-            url.contains("sparklermonthly.com") || url.contains("explosm.net") // Filter Unsupported Comics
+            url.contains("sparklermonthly.com") || url.contains("explosm.net") || url.contains("johnnywander.com") || url.contains("dumbingofage.com") // Filter Unsupported Comics
         }.map { element ->
             mangaFromElement(element)
         }

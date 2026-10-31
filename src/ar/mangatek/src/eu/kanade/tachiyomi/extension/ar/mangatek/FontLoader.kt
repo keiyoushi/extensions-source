@@ -2,11 +2,11 @@ package eu.kanade.tachiyomi.extension.ar.mangatek
 
 import android.graphics.Typeface
 import keiyoushi.utils.applicationContext
+import keiyoushi.utils.sha256
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import java.io.File
-import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 class FontLoader(private val baseUrl: () -> String, private val id: Long) {
@@ -40,7 +40,7 @@ class FontLoader(private val baseUrl: () -> String, private val id: Long) {
 
     private fun download(chain: Interceptor.Chain, path: String, target: File): File? {
         return try {
-            val request = Request.Builder().url("${baseUrl()}$path".toHttpUrl()).build()
+            val request = Request.Builder().url("${baseUrl()}$path".toHttpUrl()).headers(chain.request().headers).build()
             chain.proceed(request).use { response ->
                 if (!response.isSuccessful) return null
 
@@ -63,10 +63,7 @@ class FontLoader(private val baseUrl: () -> String, private val id: Long) {
     }
 
     private fun String.toCacheName(): String {
-        val hash = MessageDigest.getInstance("SHA-256")
-            .digest(toByteArray())
-            .joinToString("") { "%02x".format(it) }
-            .take(16)
+        val hash = sha256().toHexString().take(16)
         val ext = substringBefore("?").substringAfterLast(".")
         return "$hash.$ext"
     }

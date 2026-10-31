@@ -5,7 +5,10 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 
@@ -21,6 +24,10 @@ abstract class MangaTV : MangaThemesia() {
         val unpackedScript = document.selectFirst("script:containsData(eval)")!!.data()
             .let(Unpacker::unpack)
 
+        READER_BLOB_REGEX.find(unpackedScript)?.destructured?.toList()?.get(0)
+            ?.parseAs<ReaderBlob>()
+            ?.let { return decryptReaderBlob(it).mapIndexed { i, url -> Page(i, imageUrl = url) } }
+
         val imageListJson = JSON_IMAGE_LIST_REGEX.find(unpackedScript)?.destructured?.toList()?.get(0).orEmpty()
         val imageList = runCatching {
             imageListJson.replace(TRAILING_COMMA_REGEX, "]").parseAs<List<String>>()
@@ -31,6 +38,12 @@ abstract class MangaTV : MangaThemesia() {
         }
     }
 
+    private fun decryptReaderBlob(blob: ReaderBlob): List<String> {
+        val cipher = aesGcm(Base64.decode(blob.k, Base64.DEFAULT), Base64.decode(blob.iv, Base64.DEFAULT))
+        val plaintext = Base64.decode(blob.c, Base64.DEFAULT).aesDecrypt(cipher).decodeToString()
+        return plaintext.parseAs<ReaderImages>().p
+    }
+
     override fun searchMangaUrl(page: Int, query: String) = baseUrl.toHttpUrl().newBuilder()
         .addPathSegment(mangaUrlDirectory.substring(1))
         .addQueryParameter("s", query)
@@ -38,5 +51,18 @@ abstract class MangaTV : MangaThemesia() {
 
     companion object {
         val TRAILING_COMMA_REGEX = """,\s+]""".toRegex()
+        val READER_BLOB_REGEX = """ReaderBlob\.start\((\{.+?\})\)""".toRegex()
     }
+}
+
+@Serializable
+class ReaderBlob {
+    val k: String = ""
+    val iv: String = ""
+    val c: String = ""
+}
+
+@Serializable
+class ReaderImages {
+    val p: List<String> = emptyList()
 }

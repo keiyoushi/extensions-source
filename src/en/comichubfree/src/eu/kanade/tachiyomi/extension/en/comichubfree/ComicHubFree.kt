@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -66,15 +67,17 @@ abstract class ComicHubFree : KeiSource() {
         val seriesInfoElement = infoElement.selectFirst("div.series-info")
         val seriesDescriptionElement = infoElement.selectFirst("div#film-content")
 
-        val authorElement = seriesInfoElement?.select("dt:contains(Authors:) + dd")
-        val statusElement = seriesInfoElement?.select("dt:contains(Status:) + dd")
+        val authorElement = seriesInfoElement?.selectFirst("dt:contains(Author:) + dd")
+        val statusElement = seriesInfoElement?.selectFirst("dt:contains(Status:) + dd")
+        val genreElements = seriesInfoElement?.select("dt:contains(Genres:) + dd a")
 
         val image = seriesInfoElement?.selectFirst("img")
 
         return SManga.create().apply {
             description = seriesDescriptionElement?.text()
             thumbnail_url = image?.imageAttr()
-            author = authorElement?.text()
+            author = authorElement?.textOrNull()
+            genre = genreElements?.takeIf { it.isNotEmpty() }?.joinToString { it.text() }
             status = parseStatus(statusElement?.text().orEmpty())
         }
     }

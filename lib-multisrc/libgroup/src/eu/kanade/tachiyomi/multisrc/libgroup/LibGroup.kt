@@ -305,7 +305,7 @@ abstract class LibGroup :
         return "$server${page.url}"
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .headers(imageHeader())
         .build()
 

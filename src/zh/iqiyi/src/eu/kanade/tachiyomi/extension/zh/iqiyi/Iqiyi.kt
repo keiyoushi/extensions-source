@@ -9,10 +9,10 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.Response
-import java.security.MessageDigest
 
 @Source
 abstract class Iqiyi : KeiSource() {
@@ -87,9 +87,7 @@ abstract class Iqiyi : KeiSource() {
             .addQueryParameter("agentType", "115")
             .build()
         // Same request signature as the H5 site: md5(path + query + key)
-        val sign = MessageDigest.getInstance("MD5")
-            .digest((url.encodedPath + url.encodedQuery + API_KEY).toByteArray())
-            .joinToString("") { "%02x".format(it) }
+        val sign = (url.encodedPath + url.encodedQuery + API_KEY).md5().toHexString()
         return client.get(url, headersBuilder().set("md5", sign).build())
     }
 

@@ -15,6 +15,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
@@ -27,7 +28,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLDecoder
-import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.LocalDate
 import java.time.ZoneId
@@ -358,9 +358,7 @@ abstract class TuiTruyen : KeiSource() {
             issuedAt.toString(),
             nonce.lowercase(Locale.ROOT),
         ).joinToString("\n")
-        val proof = MessageDigest.getInstance("SHA-256")
-            .digest(proofInput.toByteArray(Charsets.UTF_8))
-            .base64UrlNoPadding()
+        val proof = proofInput.sha256().base64UrlNoPadding()
 
         return PageAccessProof(version, token, issuedAt, nonce, proof)
     }

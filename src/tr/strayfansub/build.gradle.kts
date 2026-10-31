@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Stray Fansub"
-    versionCode = 4
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
-    theme = "madaralegacy"
+    theme = "mangathemesia"
+    versionCode = 0
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
 
     source {
+        baseUrl = "https://strayfansub.buzz"
         lang = "tr"
-        baseUrl = "https://strayfansub.net"
     }
 }

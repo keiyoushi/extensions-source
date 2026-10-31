@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Softkomik"
-    versionCode = 0
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://softkomik.co"
+        baseUrl = "https://softkomik.app"
     }
 }

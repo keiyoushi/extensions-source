@@ -69,31 +69,25 @@ abstract class KomikIndoID : KeiSource() {
                     is SortFilter -> {
                         addQueryParameter("order", filter.toUriPart())
                     }
+                    is StatusFilter -> {
+                        filter.toUriPart().takeIf { it.isNotEmpty() }?.let {
+                            addQueryParameter("status", it)
+                        }
+                    }
                     is OriginalLanguageFilter -> {
-                        filter.state.forEach { lang ->
-                            if (lang.state) {
-                                addQueryParameter("type[]", lang.id)
-                            }
+                        filter.toUriPart().takeIf { it.isNotEmpty() }?.let {
+                            addQueryParameter("type", it)
                         }
                     }
                     is FormatFilter -> {
-                        filter.state.forEach { format ->
-                            if (format.state) {
-                                addQueryParameter("format[]", format.id)
-                            }
+                        filter.toUriPart().takeIf { it.isNotEmpty() }?.let {
+                            addQueryParameter("format", it)
                         }
                     }
                     is DemographicFilter -> {
                         filter.state.forEach { demographic ->
                             if (demographic.state) {
                                 addQueryParameter("demografis[]", demographic.id)
-                            }
-                        }
-                    }
-                    is StatusFilter -> {
-                        filter.state.forEach { status ->
-                            if (status.state) {
-                                addQueryParameter("status[]", status.id)
                             }
                         }
                     }
@@ -252,14 +246,13 @@ abstract class KomikIndoID : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         SortFilter(),
-        Filter.Header("NOTE: Ignored if using text search!"),
+        StatusFilter(),
+        OriginalLanguageFilter(),
+        FormatFilter(),
         AuthorFilter(),
         YearFilter(),
         Filter.Separator(),
-        OriginalLanguageFilter(getOriginalLanguage()),
-        FormatFilter(getFormat()),
         DemographicFilter(getDemographic()),
-        StatusFilter(getStatus()),
         ContentRatingFilter(getContentRating()),
         ThemeFilter(getTheme()),
         GenreFilter(getGenre()),

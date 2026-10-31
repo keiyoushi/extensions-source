@@ -12,6 +12,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
+import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebViewBlocking
@@ -113,9 +114,15 @@ abstract class Softkomik : KeiSource() {
         return getMangaDetails(slug)
     }
 
+    // Detail and chapter pages carry their data CryptoJS-encrypted in `pageProps._stk`.
+    private suspend inline fun <reified T> getPageProps(url: String): T {
+        val stk = client.get(url).extractNextJs<EncryptedPropsDto>()?.stk
+            ?: throw Exception("Could not find page data")
+        return stk.cryptoJsDecrypt(pagePropsKey).parseAs()
+    }
+
     private suspend fun getMangaDetails(slug: String): SManga {
-        val manga = client.get("$baseUrl/$slug", rscHeaders).extractNextJs<MangaDetailsDto>()
-            ?: throw Exception("Could not find manga details")
+        val manga = getPageProps<MangaPropsDto>("$baseUrl/$slug").data
 
         return SManga.create().apply {
             url = slug
@@ -193,11 +200,10 @@ abstract class Softkomik : KeiSource() {
         val slug = segments[0]
         val chapterNum = segments[2]
 
-        val data = client.get("$baseUrl${chapter.url}", rscHeaders)
-            .extractNextJs<ChapterPageDataDto>()
-            ?: throw Exception("Could not find chapter data")
+        val props = getPageProps<ChapterPropsDto>("$baseUrl${chapter.url}")
+        val data = props.data.data
 
-        val imageSrc = data.imageSrc.ifEmpty {
+        val imageSrc = props.imgList.ifEmpty {
             val urlApi = "$apiUrl/komik/$slug/chapter/$chapterNum/imgs/${data.id}"
 
             val token = getBearerTokenFromCookie()
@@ -231,7 +237,7 @@ abstract class Softkomik : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .build()
@@ -515,6 +521,9 @@ abstract class Softkomik : KeiSource() {
     private val sessionKeyChapterList = "chapter-list"
     private val sessionKeyChapterImage = "chapter-image"
     private val apiUrl = "https://api.softkomik.org"
+
+    // NEXT_PUBLIC_ENCRYPTION_KEY from the site's JS bundle.
+    private val pagePropsKey = "nYTInq9MwR4pWa8yeXtu/2iO3t9nGP65WHpWEvqpEdU="
 
     // Inlined in the site's chapter chunk as `String("...").trim()` and appended to every image URL.
     private val imageIdParam = "T4Kmwztku"

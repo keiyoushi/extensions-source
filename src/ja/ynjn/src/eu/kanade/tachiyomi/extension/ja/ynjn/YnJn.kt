@@ -16,9 +16,11 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.time.LocalDate
@@ -78,7 +80,7 @@ abstract class YnJn :
                 addQueryParameter("id", category.value)
             }
             addQueryParameter("page", page.toString())
-            addQueryParameter("sort", "POPULARITY")
+            addQueryParameter("sort", "TITLE_SORT_POPULARITY")
         }.build()
 
         val result = client.get(url).parseAs<DataResponse>().data
@@ -89,16 +91,23 @@ abstract class YnJn :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/title/${manga.url}"
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != domain || url.pathSegments.firstOrNull() !in setOf("title", "viewer")) return null
+        val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
+        return client.get("$apiUrl/book/$id", ensureSuccess = false).parseAs<TitleDetails>()
+            .data.book?.toSManga()?.apply { initialized = true }
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, true)
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/book/${manga.url}").parseAs<TitleDetails>().data.book.toSManga()
+            client.get("$apiUrl/book/${manga.url}").parseAs<TitleDetails>().data.book!!.toSManga()
         }
 
         val chapterList = async {
@@ -127,25 +136,24 @@ abstract class YnJn :
             .addQueryParameter("episodeId", chapter.url)
             .build()
 
-        val pages = client.get(url).parseAs<ViewerDetails>().data.pages
-        if (pages.isEmpty()) {
-            throw Exception("Log in via WebView and purchase this chapter to read.")
-        }
-
-        return pages.mapNotNull { it.mangaPage }.map {
+        return client.get(url).parseAs<ViewerDetails>().data.pages.mapNotNull { it.mangaPage }.map {
             Page(it.pageNumber, imageUrl = "${it.pageImageUrl}#scramble")
         }
     }
 
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/labels").parseAs<LabelsResponse>().data.labels.toJsonElement()
+
     override fun getFilterList(data: JsonElement?) = FilterList(
-        CategoryFilter(),
+        CategoryFilter(data?.parseAs<List<Label>>().orEmpty()),
     )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_LOCKED_PREF_KEY
             title = "Hide Locked Chapters"
-            setDefaultValue(false)
+            setDefaultValue(true)
         }.also(screen::addPreference)
     }
 

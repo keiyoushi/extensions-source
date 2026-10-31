@@ -25,6 +25,7 @@ class MangaDto(
     @SerialName("nombre_alt_2") private val nombreAlt2: String? = null,
     @SerialName("fk_generos") private val generos: List<MangaGenreDto> = emptyList(),
     val capitulos: List<ChapterDto> = emptyList(),
+    @SerialName("requires_login") val requiresLogin: Boolean = false,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = id.toString()
@@ -82,4 +83,82 @@ class ChapterDto(
 }
 
 @Serializable
-class PagesDto(val paginas: List<String>)
+class PagesDto(
+    val paginas: List<PageDto>,
+    val chapterSessionToken: String,
+)
+
+@Serializable
+class PageDto(
+    val pageId: String,
+    val id: String,
+    val index: Int,
+)
+
+@Serializable
+class PageTicketRequest(
+    private val pageIndex: Int,
+    private val sessionToken: String,
+)
+
+@Serializable
+class PageTicketResponse(
+    val signedToken: String,
+    private val pageId: String,
+    val scrambleKey: String? = null,
+    val xorByte: Int,
+)
+
+@Serializable
+class ChapterTokenPayload(
+    val cid: Int,
+    val exp: Long,
+)
+
+@Serializable
+class SystemDto(
+    @SerialName("cap_sitekey") val capSitekey: String,
+    @SerialName("cap_api_endpoint") val capApiEndpoint: String,
+)
+
+@Serializable
+class CapChallengeResponse(
+    val challenge: CapChallenge,
+    val token: String,
+)
+
+@Serializable
+class CapChallenge(
+    @SerialName("c") val count: Int,
+    @SerialName("s") val saltSize: Int,
+    @SerialName("d") val difficulty: Int,
+)
+
+@Serializable
+class CapRedeemRequest(
+    private val token: String,
+    private val solutions: List<Int>,
+)
+
+@Serializable
+class CapRedeemResponse(
+    val success: Boolean,
+    val token: String? = null,
+)
+
+@Serializable
+class ApiErrorDto(
+    val code: String? = null,
+)
+
+@Serializable
+class ReaderPassRequest(
+    private val token: String,
+    private val sitekey: String,
+)
+
+@Serializable
+class ReaderPassDto(
+    val pass: String,
+    val expiresAt: Long,
+)

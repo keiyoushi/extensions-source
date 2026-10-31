@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.toDate
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.post
@@ -171,6 +172,12 @@ abstract class HentaiFox : GalleryAdults() {
         } else {
             return super.parseSearchManga(response)
         }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        if (!chapter.url.startsWith("http")) return super.getChapterUrl(chapter)
+        val id = chapter.url.substringBefore('#').trimEnd('/').substringAfterLast('/')
+        return "$baseUrl/$idPrefixUri/$id/"
     }
 
     override fun getSortOrderURIs(): List<Pair<String, String>> = super.getSortOrderURIs() + sidebarCategoriesFilterStateMap.toList()

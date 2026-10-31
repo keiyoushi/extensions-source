@@ -211,7 +211,7 @@ abstract class InfinityScans : KeiSource() {
         } ?: emptyList()
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val pageHeaders = headers.newBuilder().apply {
             add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)

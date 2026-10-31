@@ -78,7 +78,7 @@ abstract class Tranh18 : KeiSource() {
 
     private fun parseMangaPage(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".box-body ul li, .manga-list ul li").map { element ->
+        val mangas = document.select(".mh-list li").map { element ->
             SManga.create().apply {
                 val sel = element.selectFirst(".mh-item, .manga-list-2-cover")!!
                 val a = sel.selectFirst("a")!!

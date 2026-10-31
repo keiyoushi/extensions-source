@@ -13,6 +13,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -23,6 +24,14 @@ import java.util.Calendar
 
 @Source
 abstract class Holotoon : KeiSource() {
+
+    // Client hint Chrome sends with its User-Agent, required on /read/
+    override fun Headers.Builder.configureHeaders() = apply {
+        CHROME_VERSION_REGEX.find(get("User-Agent").orEmpty())?.let {
+            val version = it.groupValues[1]
+            set("Sec-CH-UA", "\"Chromium\";v=\"$version\", \"Google Chrome\";v=\"$version\", \"Not.A/Brand\";v=\"99\"")
+        }
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getBrowsePage(page = page, sort = "popular")
 
@@ -88,7 +97,9 @@ abstract class Holotoon : KeiSource() {
             SManga.create().apply {
                 this.title = title
                 setUrlWithoutDomain(path)
-                thumbnail_url = card.selectFirst("img")?.absUrl("src")?.takeIf(String::isNotBlank)
+                thumbnail_url = card.selectFirst("img")
+                    ?.let { it.absUrl("data-src").ifBlank { it.absUrl("src") } }
+                    ?.takeIf(String::isNotBlank)
             }
         }
 
@@ -310,6 +321,7 @@ abstract class Holotoon : KeiSource() {
         private val ARTIST_REGEX = Regex("Artist:\\s*(.*?)\\s+(?:Year:|Views:|Uploaded by:)", RegexOption.IGNORE_CASE)
         private val CHAPTER_NUMBER_REGEX = Regex("\\d+(?:\\.\\d+)?")
         private val NUMBER_REGEX = Regex("\\d+")
+        private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
         private val STATUS_VALUES = setOf("ongoing", "completed", "hiatus", "dropped")
     }
 }

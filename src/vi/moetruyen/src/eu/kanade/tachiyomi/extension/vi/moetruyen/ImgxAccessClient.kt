@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyen
 
 import keiyoushi.network.post
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.Headers
@@ -76,7 +77,7 @@ internal class ImgxAccessClient(
                 publicKeyHash = ImgxCrypto.publicKeyHash(keyPair.publicKey),
             )
             val signature = ImgxCrypto.base64UrlEncode(
-                ImgxCrypto.hmacSha256(ImgxCrypto.base64UrlDecode(capability.secret), material),
+                material.hmacSha256(ImgxCrypto.base64UrlDecode(capability.secret)),
             )
             val response = client.post(
                 "$baseUrl${config.requestPath}",

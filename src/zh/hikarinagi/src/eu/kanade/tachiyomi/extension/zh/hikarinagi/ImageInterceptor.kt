@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.hikarinagi
 
 import android.util.Base64
+import keiyoushi.utils.aesGcm
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -11,8 +12,6 @@ import okio.cipherSource
 import java.io.IOException
 import java.security.SecureRandom
 import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 /**
  * Serves a manga page. The site no longer hands out image URLs: it wants a POST whose body carries
@@ -52,9 +51,8 @@ class ImageInterceptor : Interceptor {
     private fun newCipher(token: ByteArray, iv: ByteArray, associatedData: String): Cipher {
         // The key is the token's two halves XORed together.
         val key = ByteArray(TOKEN_SIZE / 2) { (token[it].toInt() xor token[it + TOKEN_SIZE / 2].toInt()).toByte() }
-        return Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, iv))
-            updateAAD(associatedData.toByteArray(Charsets.UTF_8))
+        return aesGcm(key, iv, TAG_BITS).apply {
+            updateAAD(associatedData.encodeToByteArray())
         }
     }
 

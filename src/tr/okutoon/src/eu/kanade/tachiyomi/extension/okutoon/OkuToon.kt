@@ -85,20 +85,21 @@ abstract class OkuToon : KeiSource() {
         author = document.selectFirst(".series-detail-author")?.text()?.takeIf { it != "Bilinmiyor" }
         description = document.selectFirst("[data-series-description-content]")?.text()
         genre = document.select(".series-detail-genres .tag").joinToString { it.text() }
-        status = parseStatus(document.selectFirst(".series-detail-meta .badge-completed, .series-detail-meta .badge-ongoing")?.text())
+        status = parseStatus(document.selectFirst(".series-detail-kicker .series-status")?.className())
         thumbnail_url = document.selectFirst(".series-detail-cover img")?.attr("abs:src")
     }
 
-    private fun parseStatus(status: String?) = when (status?.trim()) {
-        "Devam Ediyor" -> SManga.ONGOING
-        "Tamamlandı" -> SManga.COMPLETED
+    private fun parseStatus(className: String?) = when {
+        className?.contains("series-status--ongoing") == true -> SManga.ONGOING
+        className?.contains("series-status--completed") == true -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
-    private fun chapterListParse(document: Document): List<SChapter> = document.select("a.chapter-item").map { element ->
+    // Site moved the chapter <a> inside a wrapper div; the link element no longer has the "chapter-item" class
+    private fun chapterListParse(document: Document): List<SChapter> = document.select(".chapter-item").map { element ->
         SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            name = element.selectFirst(".chapter-title")?.text() ?: element.text()
+            setUrlWithoutDomain(element.selectFirst("a.chapter-item-link")!!.attr("abs:href"))
+            name = element.selectFirst(".chapter-title")!!.text()
             date_upload = dateFormat.tryParseDate(element.selectFirst(".chapter-date")?.text())
         }
     }

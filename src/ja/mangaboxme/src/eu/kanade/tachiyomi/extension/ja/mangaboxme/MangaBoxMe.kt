@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -37,7 +38,7 @@ abstract class MangaBoxMe :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(GraphQLErrorInterceptor())
-        addInterceptor(ImageInterceptor())
+        addInterceptor(XorInterceptor { it.url.fragment?.let { f -> byteArrayOf(f.toByte()) } })
         addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)

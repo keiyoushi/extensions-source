@@ -261,7 +261,7 @@ abstract class Liliana : KeiSource() {
         return !path.endsWith(".svg") && !lowerUrl.contains("loading_comments")
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Accept", "image/avif,image/webp,*/*")
         .header("Host", page.imageUrl!!.toHttpUrl().host)
         .removeHeader("Referer")

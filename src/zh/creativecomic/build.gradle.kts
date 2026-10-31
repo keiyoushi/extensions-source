@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Creative Comic Collection"
-    versionCode = 0
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -15,9 +15,4 @@ keiyoushi {
         lang = "zh-Hant"
         baseUrl = "https://www.creative-comic.tw"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cryptoaes"))
 }

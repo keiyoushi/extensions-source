@@ -6,18 +6,19 @@ plugins {
 
 keiyoushi {
     name = "KomikNesia"
-    versionCode = 3
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://v1.komiknesiaku.com"
+        baseUrl = "https://v2.komiknesiaku.com"
     }
 
     deeplink {
         host("komiknesiaku.com")
         host("v1.komiknesiaku.com")
+        host("v2.komiknesiaku.com")
         path("/komik/..*")
     }
 }

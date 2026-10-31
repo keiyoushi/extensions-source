@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "KuroMangas"
-    versionCode = 12
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"
         baseUrl = "https://kuromangas.com"
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

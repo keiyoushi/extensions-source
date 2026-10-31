@@ -11,8 +11,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.BrowserCallInterceptor
+import keiyoushi.network.BrowserHeadersInterceptor
 import keiyoushi.network.CacheControlInterceptor
+import keiyoushi.network.Deflate
+import keiyoushi.network.Fetch
 import keiyoushi.network.RateLimitInterceptor
+import keiyoushi.network.fetch
+import keiyoushi.network.kind
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
@@ -113,11 +119,15 @@ abstract class KeiSource : HttpSource() {
                 }
             }
 
-            // last application interceptor
-            addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
+            // the browser headers for requests with a Fetch
+            addInterceptor(BrowserCallInterceptor({ baseUrl }, { imageFetch }))
+            // last application interceptor; the encodings and order browsers send
+            addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
 
             // allow caching when server doesn't explicitly say anything
             addNetworkInterceptor(CacheControlInterceptor())
+
+            addNetworkInterceptor(BrowserHeadersInterceptor)
 
             // keep the source's rate limiter as the last network interceptor
             networkInterceptors().apply {
@@ -134,7 +144,8 @@ abstract class KeiSource : HttpSource() {
      * Customizes the base Headers builder. Subclasses can override this to append source-specific
      * headers.
      *
-     * Note: "User-Agent", "Referer", and "Origin" are already added by default.
+     * Note: `User-Agent`, `Referer` and `Origin` are set here. The other browser headers are added per request
+     * kind, which also drops this `Origin` where browsers send none; headers set here or on a request are kept.
      */
     protected open fun Headers.Builder.configureHeaders(): Headers.Builder = this
 
@@ -368,7 +379,8 @@ abstract class KeiSource : HttpSource() {
     ): SMangaUpdate {
         check(fetchDetails || fetchChapters) { "getMangaUpdate called with nothing to fetch (fetchDetails=false, fetchChapters=false)" }
 
-        check(updatesInFlight.putIfAbsent(manga.url, true) == null) { "getMangaUpdate must not be called concurrently for same manga" }
+        val key = manga.url
+        check(updatesInFlight.putIfAbsent(key, true) == null) { "getMangaUpdate must not be called concurrently for same manga" }
 
         try {
             val update = fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
@@ -378,7 +390,7 @@ abstract class KeiSource : HttpSource() {
                 chapters = update.chapters,
             )
         } finally {
-            updatesInFlight.remove(manga.url)
+            updatesInFlight.remove(key)
         }
     }
 
@@ -439,9 +451,26 @@ abstract class KeiSource : HttpSource() {
      */
     abstract override suspend fun getPageList(chapter: SChapter): List<Page>
 
-    override fun imageRequest(page: Page): Request = Request.Builder()
+    /**
+     * How page images and the covers the app loads go out. Set [Fetch.IMAGE] to send the headers a browser sends for
+     * them; [Fetch.NONE] sends them as built.
+     */
+    protected open val imageFetch: Fetch get() = Fetch.NONE
+
+    /**
+     * Builds the request for a page's image. A GET without a [Fetch] is sent with [imageFetch].
+     *
+     * @param page the page.
+     * @return the request for its image.
+     */
+    protected open fun getImageRequest(page: Page): Request = Request.Builder()
         .url(page.imageUrl!!)
         .headers(headers)
-        .get()
         .build()
+
+    final override fun imageRequest(page: Page): Request {
+        val request = getImageRequest(page)
+        val image = request.kind == null && request.method == "GET"
+        return if (image) request.newBuilder().fetch(imageFetch).build() else request
+    }
 }

@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
 import android.util.LruCache
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
@@ -23,9 +24,12 @@ import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.md5
+import keiyoushi.utils.newAesCipher
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
@@ -47,13 +51,10 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.InputStream
-import java.security.MessageDigest
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class Mangago :
@@ -202,25 +203,29 @@ abstract class Mangago :
         }
     }
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select(":is(table#raws_table, table#chapter_table) > tbody > tr, table.uk-table > tbody > tr")
-        .mapNotNull { element ->
-            val link = element.selectFirst("a.chico") ?: return@mapNotNull null
-            if (link.attr("href").contains("/raw/") && removeRaws) return@mapNotNull null
-            val name = link.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            val date = DATE_FORMAT.tryParseDate(element.select("td:last-child").text(), ZoneOffset.UTC)
-            val scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")
-                ?.text()
-                ?.takeIf { it.isNotEmpty() }
-            val chapterUrl = link.absUrl("href")
+    private fun parseChapterList(document: Document): List<SChapter> {
+        val blacklist = scanlatorBlacklist
+        return document.select(":is(table#raws_table, table#chapter_table) > tbody > tr, table.uk-table > tbody > tr")
+            .mapNotNull { element ->
+                val link = element.selectFirst("a.chico") ?: return@mapNotNull null
+                if (link.attr("href").contains("/raw/") && removeRaws) return@mapNotNull null
+                val name = link.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val date = DATE_FORMAT.tryParseDate(element.select("td:last-child").text(), ZoneOffset.UTC)
+                val scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")
+                    ?.text()
+                    ?.takeIf { it.isNotEmpty() }
+                if (scanlator != null && scanlator.lowercase() in blacklist) return@mapNotNull null
+                val chapterUrl = link.absUrl("href")
 
-            SChapter.create().apply {
-                url = stableChapterId(date, name, scanlator)
-                this.name = name
-                date_upload = date
-                this.scanlator = scanlator ?: "Unknown"
-                memo = buildJsonObject { put("chapterUrl", chapterUrl) }
+                SChapter.create().apply {
+                    url = stableChapterId(date, name, scanlator)
+                    this.name = name
+                    date_upload = date
+                    this.scanlator = scanlator ?: "Unknown"
+                    memo = buildJsonObject { put("chapterUrl", chapterUrl) }
+                }
             }
-        }
+    }
 
     override val supportsRelatedMangas = true
 
@@ -308,7 +313,7 @@ abstract class Mangago :
 
     private fun SChapter.readerUrl(): String = memo["chapterUrl"]?.string ?: error("Refresh chapter list")
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val url = page.imageUrl!!.toHttpUrl()
         val imageUrl = if (url.host.contains("_")) {
             url.newBuilder().scheme("http").build()
@@ -370,15 +375,7 @@ abstract class Mangago :
         }
         val key = findHexEncodedVariable(chapterJs, "key").decodeHex()
         val iv = findHexEncodedVariable(chapterJs, "iv").decodeHex()
-        val cipher = Cipher.getInstance("AES/CBC/ZEROBYTEPADDING").apply {
-            init(
-                Cipher.DECRYPT_MODE,
-                SecretKeySpec(key, "AES"),
-                IvParameterSpec(iv),
-            )
-        }
-
-        var imageList = cipher.doFinal(encryptedImages).toString(Charsets.UTF_8)
+        var imageList = encryptedImages.aesDecrypt(newAesCipher("AES/CBC/ZEROBYTEPADDING", key, IvParameterSpec(iv))).decodeToString()
         imageList = unscrambleImageList(imageList, chapterJs)
         val cols = COLS_REGEX.find(chapterJs)?.groupValues?.get(1).orEmpty()
         val imageKeyScript = chapterJs
@@ -505,13 +502,16 @@ abstract class Mangago :
         }
     }
 
-    private fun stableChapterId(date: Long, name: String, scanlator: String?): String = MessageDigest.getInstance("MD5")
-        .digest("$date:$name:${scanlator.orEmpty()}".toByteArray())
-        .joinToString("") { "%02x".format(it) }
-        .takeLast(10)
+    private fun stableChapterId(date: Long, name: String, scanlator: String?): String = "$date:$name:${scanlator.orEmpty()}".md5().toHexString().takeLast(10)
 
     private val removeRaws get() = preferences.getBoolean(REMOVE_RAW_PREF, true)
     private val removeTitleVersion get() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
+    private val scanlatorBlacklist: Set<String>
+        get() = preferences.getString(PREF_SCANLATOR_BLACKLIST, "")
+            ?.split(",", "\n")
+            ?.map { it.trim().lowercase() }
+            ?.filter { it.isNotEmpty() }
+            ?.toSet() ?: emptySet()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -528,11 +528,20 @@ abstract class Mangago :
                 "To update existing entries, enable 'update library manga title' in advanced settings of app"
             setDefaultValue(false)
         }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = PREF_SCANLATOR_BLACKLIST
+            title = "Scanlator Blacklist"
+            summary = "Filter out chapters from specific scanlators. Comma-separated list of group names."
+            dialogTitle = "Exclude scanlators"
+            setDefaultValue("")
+        }.let(screen::addPreference)
     }
 }
 
 private const val REMOVE_RAW_PREF = "pref_remove_raw"
 private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
+private const val PREF_SCANLATOR_BLACKLIST = "pref_scanlator_blacklist"
 private const val ALT_NAME_PREFIX = "Alternative Names:"
 
 private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)

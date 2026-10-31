@@ -42,7 +42,7 @@ abstract class EroMuse : KeiSource() {
     // might need to override for new sources
     private val nextPageSelector = ".pagination span.current + span a"
     protected open val albumSelector = "a.c-tile:has(img):not(:has(.members-only))"
-    protected open val topLevelPathSegment = "comics/album"
+    protected open val topLevelPathSegment = "porn/album"
     private val pageQueryRegex = Regex("""page=\d+""")
 
     private fun Document.nextPageOrNull(): String? {
@@ -176,11 +176,11 @@ abstract class EroMuse : KeiSource() {
         return parseManga(client.get(stackUrl()).asJsoup())
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = fetchManga("$baseUrl/comics/album/Various-Authors", page, "")
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchManga("$baseUrl/porn/album/Various-Authors", page, "")
 
     // Latest
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchManga("$baseUrl/comics/album/Various-Authors?sort=date", page, "date")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchManga("$baseUrl/porn/album/Various-Authors?sort=date", page, "date")
 
     // Search
 
@@ -198,7 +198,7 @@ abstract class EroMuse : KeiSource() {
                 pageStack.addLast(StackItem(url.toString(), SEARCH_RESULTS_OR_BASE))
             } else {
                 val albumFilter = filters.firstInstance<AlbumFilter>().selection()
-                val url = "$baseUrl/comics/${albumFilter.pathSegments}".toHttpUrl().newBuilder().apply {
+                val url = "$baseUrl/porn/${albumFilter.pathSegments}".toHttpUrl().newBuilder().apply {
                     if (currentSortingMode.isNotEmpty()) addQueryParameter("sort", currentSortingMode)
                     if (albumFilter.pageType != AUTHOR) addQueryParameter("page", "1")
                 }
@@ -255,8 +255,8 @@ abstract class EroMuse : KeiSource() {
 
     // Chapters
 
-    protected open val linkedChapterSelector = "a.c-tile:has(img)[href*=/comics/album/]"
-    protected open val pageThumbnailSelector = "a.c-tile:has(img)[href*=/comics/picture/] img"
+    protected open val linkedChapterSelector = "a.c-tile:has(img)[href*=/porn/album/]"
+    protected open val pageThumbnailSelector = "a.c-tile:has(img)[href*=/porn/picture/] img"
 
     private suspend fun parseChapters(firstPage: Document): List<SChapter> {
         suspend fun parseChapters(document: Document, isFirstPage: Boolean, chapters: ArrayDeque<SChapter>): List<SChapter> {

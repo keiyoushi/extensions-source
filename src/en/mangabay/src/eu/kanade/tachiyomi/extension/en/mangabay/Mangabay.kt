@@ -14,6 +14,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
@@ -24,7 +25,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.security.MessageDigest
+import kotlin.math.roundToInt
 
 @Source
 abstract class Mangabay : KeiSource() {
@@ -182,10 +183,19 @@ abstract class Mangabay : KeiSource() {
             ?.filter { it.isNotEmpty() }
             .orEmpty()
         val pageText = document.selectFirst("div.page__desc-text")?.text()
+        val score = document.selectFirst(".page__score-display .page__score-val")?.text()
+        val votes = document.selectFirst(".page__score-display [data-vote-num-id]")?.text()?.toIntOrNull()
         description = buildString {
-            if (pageText != null) append(pageText)
+            val stars = score?.toFloatOrNull()?.roundToInt()?.coerceIn(0, 5)
+            if (stars != null && votes != null && votes > 0) {
+                append("${"★".repeat(stars)}${"☆".repeat(5 - stars)} $score · $votes ratings")
+            }
+            if (pageText != null) {
+                if (isNotEmpty()) append("\n\n")
+                append(pageText)
+            }
             if (altTitles.isNotEmpty()) {
-                if (pageText != null) append("\n\n")
+                if (isNotEmpty()) append("\n\n")
                 append("Alternative titles:")
                 altTitles.forEach { append("\n- ").append(it) }
             }
@@ -232,8 +242,9 @@ abstract class Mangabay : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
+        if (document.selectFirst(".gate") != null) throw Exception("This chapter is stuck on the site's age screen, try again later")
         val data = extractData(document)?.parseAs<PageListDto>() ?: return emptyList()
-        return data.images.mapIndexed { idx, img ->
+        return data.images.take(data.pages).mapIndexed { idx, img ->
             val imageUrl = if (img.startsWith("http")) img.trim() else baseUrl + img.trim()
             Page(idx, imageUrl = imageUrl)
         }
@@ -244,7 +255,7 @@ abstract class Mangabay : KeiSource() {
             ?: return null
         return script
             .substringAfter("window.__DATA__ = ")
-            .substringBefore(";window.")
+            .substringBefore(";if(")
             .trim()
             .removeSuffix(";")
             .trim()
@@ -277,8 +288,7 @@ abstract class Mangabay : KeiSource() {
 
     private fun hdPosterUrl(mangaUrl: String): String? {
         val slug = MANGA_PATH_REGEX.matchEntire(mangaUrl)?.groupValues?.get(1) ?: return null
-        val firstByte = MessageDigest.getInstance("MD5").digest(slug.toByteArray())[0].toInt() and 0xff
-        val prefix = "%02x".format(firstByte)
+        val prefix = slug.md5().toHexString().take(2)
         return "$baseUrl/uploads/posts/poster/$prefix/$slug.jpg"
     }
 

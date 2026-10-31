@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangacloud
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,18 +14,16 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebViewBlocking
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Response
-import kotlin.time.Duration.Companion.seconds
 
 const val DOMAIN = "mangacloud.org"
 const val API_URL = "https://api.$DOMAIN"
@@ -33,36 +32,37 @@ const val CDN_URL = "https://pika.$DOMAIN"
 @Source
 abstract class MangaCloud : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::handshakeInterceptor).rateLimit(1)
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1)
+
+    private val handshakeMutex = Mutex()
 
     @Volatile
     private var lastHandshake = 0L
 
     // every api call returns 409 until a Turnstile token is posted to /auth/handshake, which the site does on load
-    private fun handshakeInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-        if (response.code != 409 || request.url.host != API_URL.toHttpUrl().host) return response
-        response.close()
+    private suspend fun handshake(attemptedAt: Long) = handshakeMutex.withLock {
+        // another request may have already refreshed the session while we waited for the lock
+        if (lastHandshake > attemptedAt) return@withLock
 
-        val failedAt = System.currentTimeMillis()
-        synchronized(this) {
-            if (lastHandshake > failedAt) return@synchronized
-            val start = System.currentTimeMillis()
-            runWebViewBlocking<Unit>(chain.call(), 60.seconds) {
-                userAgent = headers["User-Agent"]!!
-                poll {
-                    evaluateJs("Number(localStorage.getItem('sd')) > $start") {
-                        if (it == "true") resolve(Unit)
-                    }
-                }
-                // the site skips the handshake while its last one is fresh
-                loadData(baseUrl, "<script>localStorage.removeItem('sd');location.replace('$baseUrl')</script>")
-            }
-            lastHandshake = System.currentTimeMillis()
+        val token = getTurnstileToken(
+            url = baseUrl,
+            siteKey = TURNSTILE_SITE_KEY,
+            action = "guard",
+        )
+        client.post("$API_URL/auth/handshake", body = HandshakePayload(token).toJsonRequestBody())
+        lastHandshake = System.currentTimeMillis()
+    }
+
+    private suspend fun <T> withHandshake(block: suspend () -> T): T {
+        if (lastHandshake == 0L) handshake(0L)
+
+        return try {
+            block()
+        } catch (e: HttpException) {
+            if (e.code != 409) throw e
+            handshake(System.currentTimeMillis())
+            block()
         }
-
-        return chain.proceed(request)
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -76,7 +76,9 @@ abstract class MangaCloud : KeiSource() {
             else -> "month"
         }
 
-        val data = client.get("$API_URL/comic-popular-view/$time").parseAs<Data<DataList<BrowseManga>>>()
+        val data = withHandshake {
+            client.get("$API_URL/comic-popular-view/$time").parseAs<Data<DataList<BrowseManga>>>()
+        }
 
         val mangas = data.data.list.map(BrowseManga::toSManga)
 
@@ -86,7 +88,9 @@ abstract class MangaCloud : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val payload = PagePayload(page).toJsonRequestBody()
 
-        val data = client.post("$API_URL/comic-updates", body = payload).parseAs<Data<DataList<BrowseManga>>>()
+        val data = withHandshake {
+            client.post("$API_URL/comic-updates", body = payload).parseAs<Data<DataList<BrowseManga>>>()
+        }
 
         val mangas = data.data.list.map(BrowseManga::toSManga)
         val hasNextPage = data.data.list.size == 60
@@ -96,7 +100,9 @@ abstract class MangaCloud : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/tag/list").parseAs<Data<List<Tag>>>().data.toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = withHandshake {
+        client.get("$API_URL/tag/list").parseAs<Data<List<Tag>>>().data.toJsonElement()
+    }
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>(
@@ -145,7 +151,9 @@ abstract class MangaCloud : KeiSource() {
             page = page,
         ).toJsonRequestBody()
 
-        val data = client.post("$API_URL/comic/library", body = payload).parseAs<Data<List<BrowseManga>>>()
+        val data = withHandshake {
+            client.post("$API_URL/comic/library", body = payload).parseAs<Data<List<BrowseManga>>>()
+        }
 
         val mangas = data.data.map(BrowseManga::toSManga)
         val hasNextPage = data.data.size == 10
@@ -160,7 +168,9 @@ abstract class MangaCloud : KeiSource() {
             return null
         }
 
-        return client.get("$API_URL/comic/${path[1]}").parseAs<Data<Manga>>().data.toSManga()
+        return withHandshake {
+            client.get("$API_URL/comic/${path[1]}").parseAs<Data<Manga>>().data.toSManga()
+        }
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.url}"
@@ -171,7 +181,9 @@ abstract class MangaCloud : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val data = client.get("$API_URL/comic/${manga.url}").parseAs<Data<Manga>>().data
+        val data = withHandshake {
+            client.get("$API_URL/comic/${manga.url}").parseAs<Data<Manga>>().data
+        }
 
         val updatedChapters = data.chapters.map { chapter ->
             SChapter.create().apply {
@@ -201,10 +213,14 @@ abstract class MangaCloud : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        val data = client.get("$API_URL/chapters/$chapterId").parseAs<Data<ChapterContent>>().data
+        val data = withHandshake {
+            client.get("$API_URL/chapters/$chapterId").parseAs<Data<ChapterContent>>().data
+        }
 
         return data.images.mapIndexed { idx, img ->
             Page(idx, imageUrl = "$CDN_URL/${data.comicId}/${data.id}/${img.id}.${img.format}")
         }
     }
 }
+
+private const val TURNSTILE_SITE_KEY = "0x4AAAAAADLVIGf7KBRQctG1"

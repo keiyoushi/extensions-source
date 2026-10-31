@@ -213,7 +213,7 @@ abstract class Dm5 :
         return pix + pvalue + query
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val url = page.imageUrl!!.toHttpUrl()
         val cid = url.queryParameter("cid") ?: ""
         val newHeaders = headers.newBuilder().set("Referer", "$baseUrl/m$cid").build()

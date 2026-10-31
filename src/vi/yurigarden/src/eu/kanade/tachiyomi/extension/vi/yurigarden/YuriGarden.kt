@@ -10,10 +10,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
@@ -424,11 +424,11 @@ abstract class YuriGarden :
     private suspend fun decryptChapterDetail(data: String): ChapterDetail {
         val token = getMangaToken(forceRefresh = false)
         return runCatching {
-            CryptoAES.decrypt(data, token).parseAs<ChapterDetail>()
+            data.cryptoJsDecrypt(token).parseAs<ChapterDetail>()
         }.getOrElse {
             cachedMangaToken = null
             val refreshedToken = getMangaToken(forceRefresh = true)
-            CryptoAES.decrypt(data, refreshedToken).parseAs<ChapterDetail>()
+            data.cryptoJsDecrypt(refreshedToken).parseAs<ChapterDetail>()
         }
     }
 

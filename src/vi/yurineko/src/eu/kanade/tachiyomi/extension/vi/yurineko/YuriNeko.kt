@@ -384,7 +384,7 @@ abstract class YuriNeko : KeiSource() {
             ?: normalizeChapterImageUrl(value)
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageUrl = page.imageUrl!!
         val xIk = ImageDecryptor.extractKey(imageUrl)
 

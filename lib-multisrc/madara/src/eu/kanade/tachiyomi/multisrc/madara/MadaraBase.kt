@@ -187,13 +187,18 @@ abstract class MadaraBase : KeiSource() {
         if (path != null) {
             val requestedUrl = baseUrl.toHttpUrl().resolve(path) ?: error("Invalid manga path")
             val response = client.get(requestedUrl, ensureSuccess = false)
-            if (response.isSuccessful && response.request.url == requestedUrl) return response
+            if (
+                response.isSuccessful &&
+                (response.request.url == requestedUrl || !supportsPostId)
+            ) {
+                return response
+            }
             val redirectedId = response.use { fallback ->
                 if (id == null) fallback.asJsoup().mangaId() else null
             }
             id = id ?: redirectedId
         }
-        return client.get("$baseUrl/?p=${id ?: error("Missing Madara post ID")}")
+        return client.get("$baseUrl/?p=${id ?: error("Missing Madara post ID from redirection")}")
     }
 
     protected open fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = SManga.create().apply {
@@ -432,7 +437,7 @@ abstract class MadaraBase : KeiSource() {
         return cipher.doFinal(Base64.decode(data.ciphertext, Base64.DEFAULT)).toString(Charsets.UTF_8)
     }
 
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder().header("Referer", page.url).build()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().header("Referer", page.url).build()
 
     protected open fun imageFromElement(element: Element): String? = when {
         element.hasAttr("data-src") -> element.attr("abs:data-src")
@@ -487,7 +492,7 @@ abstract class MadaraBase : KeiSource() {
         legacyId?.let { put("id", it) }
     }
 
-    protected fun Document.mangaId(): String? = selectFirst("[id^=manga-chapters-holder]")?.attr("data-id")?.takeIf(String::isNotBlank)
+    protected open fun Document.mangaId(): String? = selectFirst("[id^=manga-chapters-holder]")?.attr("data-id")?.takeIf(String::isNotBlank)
         ?: selectFirst("input.rating-post-id")?.attr("value")?.takeIf(String::isNotBlank)
         ?: selectFirst("a[data-post]")?.attr("data-post")?.takeIf(String::isNotBlank)
         ?: selectFirst("link[rel=shortlink]")?.attr("href")?.takeIf { it.contains("?p=") }
@@ -526,7 +531,14 @@ abstract class MadaraBase : KeiSource() {
     protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
     protected open fun parseChapterDate(date: String?): Long {
-        val value = date ?: return 0
+        var value = date ?: return 0
+
+        ARABIC_DUALS.forEach { (dual, replacement) ->
+            if (value.contains(dual)) {
+                value = value.replace(dual, replacement)
+            }
+        }
+
         val normalized = value.lowercase(Locale.ROOT)
         val today = LocalDate.now(ZoneOffset.UTC)
         if (arrayOf("today", "hoje", "hoy").any(normalized::startsWith)) {
@@ -572,6 +584,17 @@ abstract class MadaraBase : KeiSource() {
         private val HOUR_WORDS = wordRegex("hour", "hora", "heure", "jam", "saat", "giờ", "ore", "ساعة", "ساعات", "小时")
         private val MINUTE_WORDS = wordRegex("minute", "minuto", "min", "menit", "dakika", "phút", "دقيقة", "دقائق")
         private val SECOND_WORDS = wordRegex("second", "segundo", "sec", "detik", "giây", "ثانية", "ثوان")
+
+        private val ARABIC_DUALS = mapOf(
+            "ثانيتين" to "2 ثوان",
+            "دقيقتين" to "2 دقائق",
+            "ساعتين" to "2 ساعات",
+            "يومين" to "2 أيام",
+            "أسبوعين" to "2 أسابيع",
+            "شهرين" to "2 أشهر",
+            "سنتين" to "2 سنوات",
+        )
+
         private fun String.hexBytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
     }
 }

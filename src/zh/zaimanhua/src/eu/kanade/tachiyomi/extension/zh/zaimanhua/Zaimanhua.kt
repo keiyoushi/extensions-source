@@ -22,6 +22,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
@@ -38,7 +39,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
 import java.io.IOException
-import java.security.MessageDigest
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -144,8 +144,7 @@ abstract class Zaimanhua :
     private fun getToken(username: String, password: String): String {
         if (username.isBlank() || password.isBlank()) return ""
         val passwordEncoded =
-            MessageDigest.getInstance("MD5").digest(password.toByteArray(Charsets.UTF_8))
-                .joinToString("") { "%02x".format(it) }
+            password.md5().toHexString()
         val formBody: RequestBody = FormBody.Builder().addEncoded("username", username)
             .addEncoded("passwd", passwordEncoded).build()
         val response = client.newCall(
@@ -246,9 +245,9 @@ abstract class Zaimanhua :
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val isComments = page.url == COMMENTS_FLAG
-        return super.imageRequest(page).newBuilder().apply {
+        return super.getImageRequest(page).newBuilder().apply {
             if (isComments) headers(apiHeaders)
             tag(String::class, if (isComments) COMMENTS_FLAG else IMAGE_RETRY_FLAG)
         }.build()

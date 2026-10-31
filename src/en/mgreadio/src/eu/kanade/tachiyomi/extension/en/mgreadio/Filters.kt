@@ -25,7 +25,7 @@ internal open class UriSelectFilter(
 ) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray()),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
-        builder.addQueryParameter(queryName, vals[state].second)
+        vals[state].second.takeIf(String::isNotEmpty)?.let { builder.addQueryParameter(queryName, it) }
     }
 }
 
@@ -62,7 +62,6 @@ internal class GenreOption(
 private val TYPE_OPTIONS = arrayOf(
     "All Types" to "",
     "Comic" to "comic",
-    "Novel" to "novel",
     "Oneshot" to "oneshot",
 )
 

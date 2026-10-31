@@ -221,6 +221,11 @@ abstract class TuSachXinhXinh : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val html = client.get(getChapterUrl(chapter)).use { it.body.string() }
+
+        if (html.contains("đăng nhập</strong> để xem nội dung chương này")) {
+            throw Exception("Chương này cần đăng nhập vào tài khoản phù hợp bằng webview để xem")
+        }
+
         val imageUrls = ImageDecryptor.extractImageUrls(html, baseUrl)
 
         return imageUrls.mapIndexed { idx, url ->

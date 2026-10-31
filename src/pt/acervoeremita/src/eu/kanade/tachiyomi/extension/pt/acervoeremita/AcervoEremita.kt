@@ -109,7 +109,7 @@ abstract class AcervoEremita : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val headers = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .set("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
@@ -119,7 +119,7 @@ abstract class AcervoEremita : KeiSource() {
             .set("Referer", page.imageUrl!!)
             .removeAll("Origin")
             .build()
-        return super.imageRequest(page).newBuilder()
+        return super.getImageRequest(page).newBuilder()
             .headers(headers)
             .build()
     }

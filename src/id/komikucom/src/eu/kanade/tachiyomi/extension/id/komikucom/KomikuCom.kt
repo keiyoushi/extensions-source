@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.stringOrNull
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -119,9 +120,12 @@ abstract class KomikuCom : KeiSource() {
         val chapterDtos = chapterList?.await()?.parseAs<List<ChapterDto>>()
         SMangaUpdate(
             manga = comicDto?.toSManga() ?: manga,
-            chapters = chapterDtos?.map { it.toSChapter(comicId.toInt()) } ?: chapters,
+            chapters = chapterDtos?.map { it.toSChapter(comicId.toInt(), slug) } ?: chapters,
         )
     }
+
+    // Chapters fetched before the web path was stored fall back to the old (broken) URL until refreshed
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + (chapter.memo["path"]?.stringOrNull ?: chapter.url)
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null

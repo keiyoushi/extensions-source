@@ -207,7 +207,7 @@ abstract class NatsuId : KeiSource() {
     }
 
     // Pages
-    protected open val pageListSelector = "main .relative section > img"
+    protected open val pageListSelector = "section[data-image-data] img"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()

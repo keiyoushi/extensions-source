@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
 @Serializable
@@ -24,7 +25,7 @@ class Item(
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = slug
         title = this@Item.title
-        thumbnail_url = coverImageUrl?.let { if (it.startsWith("http")) it else "$baseUrl/$it" }
+        thumbnail_url = coverImageUrl?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
     }
 }
 
@@ -56,8 +57,16 @@ class DetailsResponse(
             "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = coverImageUrl?.let { if (it.startsWith("http")) it else "$baseUrl/$it" }
+        thumbnail_url = coverImageUrl?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
     }
+}
+
+@Serializable
+class Genre(
+    private val slug: String,
+    private val name: String,
+) {
+    fun toPair() = name to slug
 }
 
 @Serializable
@@ -88,7 +97,7 @@ class ChapterItem(
         val validTitle = title?.takeIf { it.isNotBlank() && it != "null" && it != number }
         name = lock + if (validTitle != null) "Chapter $number - $validTitle" else "Chapter $number"
         date_upload = Instant.tryParse(publishedAt)
-        chapter_number = number.toFloat()
+        number.toFloatOrNull()?.let { chapter_number = it }
     }
 }
 

@@ -1,59 +1,31 @@
 package eu.kanade.tachiyomi.extension.pt.yaoifanclub
 
-import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
-import eu.kanade.tachiyomi.multisrc.zeistmanga.Status
-import eu.kanade.tachiyomi.multisrc.zeistmanga.Type
-import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import eu.kanade.tachiyomi.multisrc.madara.GenreRoute
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
-import okhttp3.Headers
+import keiyoushi.network.get
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
-abstract class YaoiFanClub : ZeistManga() {
+abstract class YaoiFanClub : MadaraNoAjax() {
+    override val mangaSubString = "obra"
+    override val genreDirectory = "obra-genre"
 
-    override val popularMangaSelector = "#PopularPosts3 article"
-    override val popularMangaSelectorTitle = ".post-title a"
-    override val popularMangaSelectorUrl = popularMangaSelectorTitle
+    // Skip novel cards ("page-item-detail text")
+    override fun archiveSelector() = "div.page-item-detail.manga"
 
-    override val useNewChapterFeed = true
-    override val chapterCategory = "Chapter"
-
-    override val hasFilters = true
-    override val hasLanguageFilter = false
-    override val hasGenreFilter = true
-    override val hasStatusFilter = true
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Referer", "https://www.blogger.com/blogin.g?blogspotURL=$baseUrl/&type=blog&bpli=1")
+    // Full genre list is only on the advanced search form
+    override suspend fun fetchFilterData(): JsonElement {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("s", "")
+            .addQueryParameter("post_type", "wp-manga")
+            .build()
+        return client.get(url).asJsoup().select("div.checkbox-group input[name='genre[]']").map { input ->
+            val slug = input.attr("value")
+            GenreRoute(input.nextElementSibling()!!.text(), slug, "/$genreDirectory/$slug/")
+        }.toJsonElement()
     }
-
-    override fun getGenreList() = listOf(
-        "ABO", "Ação", "Anjo", "Apocalipse",
-        "Aventura", "Comédia", "Drama", "Demência",
-        "Demônio", "Espaço", "Esporte", "Fantasma",
-        "Fantasia", "Ficção", "Game", "Gore",
-        "Harem", "Histórico", "Horror", "Magia",
-        "Militar", "Mistério", "Música", "Omegaverso",
-        "Paródia", "Poderes", "Policial", "Psicológico",
-        "Robô", "Romance", "Samurai", "Sobrenatural",
-        "Suspense", "Terror", "Vampiro", "Viagem no tempo",
-        "Vida Cotidiana", "Zumbi",
-    ).map { Genre(it, it) }
-
-    override fun getTypeList(): List<Type> = listOf(
-        Type("Todos", ""),
-        Type("Comic", "Comic"),
-        Type("Doujinshi", "Doujinshi"),
-        Type("Manga", "Manga"),
-        Type("Manhua", "Manhua"),
-        Type("Manhwa", "Manhwa"),
-        Type("Oneshot", "Oneshot"),
-        Type("Anime", "Anime"),
-
-    )
-    override fun getStatusList(): List<Status> = listOf(
-        Status("Ativo", "Ativo"),
-        Status("Completo", "Completo"),
-        Status("Dropado", "Dropado"),
-        Status("Em Breve", "Em Breve"),
-    )
 }

@@ -624,7 +624,7 @@ class MangaDex(
         }
     }
 
-    override fun imageRequest(page: Page): Request = helper.getValidImageUrlForPage(page, headers, client)
+    override fun getImageRequest(page: Page): Request = helper.getValidImageUrlForPage(page, headers, client)
 
     @Suppress("UNCHECKED_CAST")
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

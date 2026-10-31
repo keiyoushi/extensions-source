@@ -5,12 +5,12 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
+import keiyoushi.utils.md5
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import java.security.MessageDigest
 
 class ScrambledImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -28,7 +28,7 @@ class ScrambledImageInterceptor : Interceptor {
         // Scrambled images are reversed by blocks. Remainder is included in the bottom (scrambled) block.
         val blocks = url.pathSegments.last().substringBeforeLast('.')
             .let { Base64.decode(it, Base64.DEFAULT) }
-            .let { MessageDigest.getInstance("MD5").digest(it) } // thread-safe
+            .md5()
             .let { it.last().toPositiveInt() % 10 + 5 }
         val blockHeight = height / blocks
         var iy = blockHeight * (blocks - 1)

@@ -199,7 +199,7 @@ abstract class Dilib : KeiSource() {
             .reversed()
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
             .set("Referer", page.url)
             .build()

@@ -6,18 +6,17 @@ plugins {
 
 keiyoushi {
     name = "InsanosScan"
-    versionCode = 31
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "es"
         baseUrl = "https://insanoslibrary.com"
-        versionId = 2
+        versionId = 3
     }
 
     deeplink {
-        host("insanoslibrary.com")
-        path("/manga/..*")
+        path("/serie/..*")
     }
 }

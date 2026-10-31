@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Sunset Manga"
-    versionCode = 0
+    versionCode = 56
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "tr"
-        baseUrl = "https://sunsetmanga.com"
+        baseUrl = "https://sunsetscans.com.tr"
+        versionId = 1
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

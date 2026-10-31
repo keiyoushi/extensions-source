@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.dilar
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
@@ -76,6 +77,30 @@ class RoleDto(val role: String? = null)
 class SearchRequestDto(
     val query: String,
     val page: Int,
+    val seriesType: IncludeExcludeDto<String>,
+    val categories: IncludeExcludeDto<Int>,
+    val oneshot: Boolean,
+    val storyStatus: IncludeExcludeDto<String>,
+    val translationStatus: IncludeExcludeDto<String>,
+    val over17: Boolean?,
+)
+
+@Serializable
+class IncludeExcludeDto<T>(
+    val include: List<T>,
+    val exclude: List<T>,
+)
+
+@Serializable
+class CategoryGroupDto(
+    val name: String,
+    val categories: List<CategoryDto>,
+)
+
+@Serializable
+class CategoryDto(
+    val id: String,
+    val name: String,
 )
 
 @Serializable
@@ -113,9 +138,8 @@ class ReleaseDto(
         val number = chapter.chapter.removeSuffix(".00")
         url = "$mangaUrl/$number#$id"
         name = "$number$title"
-        date_upload = createdAt?.let {
-            Instant.parseOrNull(it)?.toEpochMilliseconds()
-        } ?: 0L
+        chapter_number = chapter.chapter.toFloatOrNull() ?: -1F
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
@@ -124,6 +148,7 @@ class ReleaseDto(
 @Serializable
 class PageListDto(
     @SerialName("storage_key") val storageKey: String,
+    @SerialName("media_token") val mediaToken: String,
     val pages: List<PageDto>,
 )
 
@@ -131,21 +156,6 @@ class PageListDto(
 class PageDto(
     val url: String,
     val order: Int,
-)
-
-@Serializable
-class UnlockDto(
-    val token: String,
-)
-
-@Serializable
-class EncryptedResponseDto(
-    val v: Int,
-    val epk: String,
-    val e: Int,
-    val iv: String,
-    val ct: String,
-    val tag: String,
 )
 
 // common

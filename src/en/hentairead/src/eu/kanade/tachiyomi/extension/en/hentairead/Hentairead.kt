@@ -143,19 +143,39 @@ abstract class Hentairead : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = if (fetchDetails) {
-            mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup()).apply { url = manga.url }
-        } else {
-            manga
-        }
-        val chapter = SChapter.create().apply {
-            name = "Chapter"
-            url = manga.url
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val collectionsUrl = document.selectFirst("#mangaCollection a")?.absUrl("href")
+        val details = mangaDetailsParse(document).apply { url = manga.url }
+
+        fun createChapter(chapNum: Float = -1f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
+            val titleText = chapTitle.ifEmpty { document.selectFirst("div.manga-titles h1")!!.text() }
+            chapter_number = if (chapNum == -1f) 1f else chapNum
+            name = "${if (chapter_number % 1f == 0f) chapter_number.toInt() else chapter_number} - $titleText"
+            url = chapUrl.ifEmpty { manga.url }
             if (details.description?.contains("Scanlators") == true) {
                 scanlator = details.description?.substringAfter("Scanlators: ")?.substringBefore("\n")
             }
         }
-        return SMangaUpdate(details, listOf(chapter))
+
+        val allChapters = mutableListOf<SChapter>()
+
+        if (collectionsUrl.isNullOrBlank()) {
+            allChapters.add(createChapter())
+        } else if (fetchChapters) {
+            val collectionsPage = client.get(collectionsUrl).asJsoup()
+            for (element: Element in collectionsPage.select("div.manga-item__wrapper")) {
+                val chapNum = element.selectFirst("div.collection-badge")!!.text().toFloat()
+                val chapUrl = element.selectFirst("a.manga-item__link")!!.absUrl("href")
+                val chapTitle = element.selectFirst("a.manga-item__link")!!.text()
+                allChapters.add(createChapter(chapNum, chapUrl, chapTitle))
+            }
+        } else {
+            return SMangaUpdate(details, chapters)
+        }
+
+        allChapters.sortByDescending { it.chapter_number } // Fixes some chapters being out of place
+
+        return SMangaUpdate(details, allChapters)
     }
 
     private fun mangaDetailsParse(document: Document): SManga {

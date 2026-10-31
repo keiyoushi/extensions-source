@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.DEFAULT_CACHE_CONTROL
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -289,6 +290,7 @@ inline fun <reified V : Any> graphQLGet(
  * @param cacheControl The cache control settings for the request.
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @param json [Json] instance for serialization. Defaults to [jsonInstance].
+ * @param fetch How a browser would make the request, see [Fetch].
  * @see persistedQueryExtension
  */
 suspend fun OkHttpClient.graphQLGet(
@@ -301,9 +303,11 @@ suspend fun OkHttpClient.graphQLGet(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
     json: Json = jsonInstance,
+    fetch: Fetch = Fetch.NONE,
 ): Response = get(
     url.toHttpUrl().newBuilder().appendGraphQLParams(query, operationName, variables, extensions, json).build(),
     headers,
+    fetch,
     cacheControl,
     ensureSuccess,
 )
@@ -323,6 +327,7 @@ suspend fun OkHttpClient.graphQLGet(
  * @param cacheControl The cache control settings for the request.
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @param json [Json] instance for serialization. Defaults to [jsonInstance].
+ * @param fetch How a browser would make the request, see [Fetch].
  * @see persistedQueryExtension
  */
 suspend inline fun <reified V : Any> OkHttpClient.graphQLGet(
@@ -335,7 +340,8 @@ suspend inline fun <reified V : Any> OkHttpClient.graphQLGet(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
     json: Json = jsonInstance,
-): Response = graphQLGet(url, headers, query, operationName, variables.toJsonElement(json), extensions, cacheControl, ensureSuccess, json)
+    fetch: Fetch = Fetch.NONE,
+): Response = graphQLGet(url, headers, query, operationName, variables.toJsonElement(json), extensions, cacheControl, ensureSuccess, json, fetch)
 
 /**
  * Executes a GraphQL GET request asynchronously and returns the response, with the GraphQL
@@ -350,6 +356,7 @@ suspend inline fun <reified V : Any> OkHttpClient.graphQLGet(
  * @param cacheControl The cache control settings for the request.
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @param json [Json] instance for serialization. Defaults to [jsonInstance].
+ * @param fetch How a browser would make the request, see [Fetch].
  * @see persistedQueryExtension
  */
 context(source: HttpSource)
@@ -362,7 +369,8 @@ suspend fun OkHttpClient.graphQLGet(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
     json: Json = jsonInstance,
-): Response = graphQLGet(url, source.headers, query, operationName, variables, extensions, cacheControl, ensureSuccess, json)
+    fetch: Fetch = Fetch.NONE,
+): Response = graphQLGet(url, source.headers, query, operationName, variables, extensions, cacheControl, ensureSuccess, json, fetch)
 
 /**
  * Typed-variables overload of [graphQLGet].
@@ -379,6 +387,7 @@ suspend fun OkHttpClient.graphQLGet(
  * @param cacheControl The cache control settings for the request.
  * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
  * @param json [Json] instance for serialization. Defaults to [jsonInstance].
+ * @param fetch How a browser would make the request, see [Fetch].
  * @see persistedQueryExtension
  */
 context(source: HttpSource)
@@ -391,7 +400,8 @@ suspend inline fun <reified V : Any> OkHttpClient.graphQLGet(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
     json: Json = jsonInstance,
-): Response = graphQLGet(url, source.headers, query, operationName, variables.toJsonElement(json), extensions, cacheControl, ensureSuccess, json)
+    fetch: Fetch = Fetch.NONE,
+): Response = graphQLGet(url, source.headers, query, operationName, variables.toJsonElement(json), extensions, cacheControl, ensureSuccess, json, fetch)
 
 /**
  * Pass the result to the `extensions` parameter of [graphQLBody], [graphQLPost] or [graphQLGet].

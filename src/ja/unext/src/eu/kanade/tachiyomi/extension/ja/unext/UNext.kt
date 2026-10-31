@@ -15,13 +15,16 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.GraphQLException
+import keiyoushi.utils.aesCbc
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLGet
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.persistedQueryExtension
 import keiyoushi.utils.readIntLittleEndian
+import keiyoushi.utils.sha256
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
@@ -36,14 +39,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okio.buffer
 import java.security.KeyPairGenerator
-import java.security.MessageDigest
 import java.security.spec.MGF1ParameterSpec
 import javax.crypto.Cipher
-import javax.crypto.Mac
-import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.OAEPParameterSpec
 import javax.crypto.spec.PSource
-import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 
 @Source
@@ -229,23 +228,17 @@ abstract class UNext :
             profile = "ubook",
         ).toJsonString().toByteArray().toBase64()
 
-        val signature = Mac.getInstance("HmacSHA256").run {
-            init(SecretKeySpec(SIGNING_KEY, algorithm))
-            doFinal(challenge.toByteArray()).toHexString()
-        }
+        val signature = challenge.hmacSha256(SIGNING_KEY).toHexString()
 
         val url = playlist.licenseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("play_token", playlist.playToken)
             .build()
 
         val license = client.post(url, LicenseRequest(challenge, signature).toJsonRequestBody()).parseAs<LicenseResponse>().license
-        val licenseKey = MessageDigest.getInstance("SHA-256")
-            .digest((userId + bookFileCode).toByteArray())
-            .copyOf(AES_KEY_SIZE)
+        val licenseKey = (userId + bookFileCode).sha256().copyOf(AES_KEY_SIZE)
 
         val data = Base64.decode(license.data, Base64.DEFAULT)
-        val decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        decrypt.init(Cipher.DECRYPT_MODE, SecretKeySpec(licenseKey, "AES"), IvParameterSpec(Base64.decode(license.iv, Base64.DEFAULT)))
+        val decrypt = aesCbc(licenseKey, Base64.decode(license.iv, Base64.DEFAULT))
         val records = decrypt.doFinal(data, HEADER_SIZE, data.size - HEADER_SIZE - DIGEST_SIZE)
         val unwrap = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
         unwrap.init(Cipher.DECRYPT_MODE, keyPair.private, OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT))

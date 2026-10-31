@@ -59,7 +59,6 @@ abstract class GlobalComix :
             "ms" -> "my"
             "sv" -> "se"
             "uk" -> "ua"
-            "zh-Hant" -> "zh"
             else -> lang
         }
 

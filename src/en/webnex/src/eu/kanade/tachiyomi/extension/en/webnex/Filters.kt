@@ -37,6 +37,26 @@ open class CheckBoxGroup(
     }
 }
 
+class TextFilter(
+    name: String,
+    private val param: String,
+) : Filter.Text(name),
+    UrlFilter {
+    override fun addToUrl(url: HttpUrl.Builder) {
+        if (state.isNotBlank()) url.addQueryParameter(param, state.trim())
+    }
+}
+
+class NumberFilter(
+    name: String,
+    private val param: String,
+) : Filter.Text(name),
+    UrlFilter {
+    override fun addToUrl(url: HttpUrl.Builder) {
+        state.trim().toIntOrNull()?.let { url.addQueryParameter(param, it.toString()) }
+    }
+}
+
 class TriStateOption(name: String) : Filter.TriState(name)
 
 open class TriStateGroup(
@@ -117,18 +137,15 @@ class LanguageFilter :
         ),
     )
 
-class RatingFilter :
-    SelectFilter(
-        "Content rating",
-        "rating",
-        listOf(
-            "Default (Suggestive)" to "",
-            "Up to Safe" to "safe",
-            "Up to Suggestive" to "suggestive",
-            "Up to Erotica" to "erotica",
-            "Up to Pornographic (18+)" to "pornographic",
-        ),
-    )
+val RATING_OPTIONS = listOf(
+    "Default (Suggestive)" to "",
+    "Up to Safe" to "safe",
+    "Up to Suggestive" to "suggestive",
+    "Up to Erotica" to "erotica",
+    "Up to Pornographic (18+)" to "pornographic",
+)
+
+class RatingFilter(default: String) : SelectFilter("Content rating", "rating", RATING_OPTIONS, default)
 
 class ChaptersFilter :
     SelectFilter(
@@ -195,3 +212,13 @@ class ThemeFilter :
             "Video Games", "Villainess", "Virtual Reality", "Zombies",
         ),
     )
+
+class TagsFilter :
+    Filter.Text("Tags (comma-separated, -tag to exclude)"),
+    UrlFilter {
+    override fun addToUrl(url: HttpUrl.Builder) {
+        state.split(",").map(String::trim).filter(String::isNotEmpty).forEach {
+            if (it.startsWith("-")) url.addQueryParameter("xtag", it.drop(1).trim()) else url.addQueryParameter("tag", it)
+        }
+    }
+}

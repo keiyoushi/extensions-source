@@ -23,6 +23,7 @@ import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -145,6 +146,14 @@ abstract class NovelCool :
         return FilterList(filters)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments
+        if (segments.size != 2 || segments[0] != "novel" || !segments[1].endsWith(".html")) return null
+        val manga = SManga.create().apply { this.url = "/novel/${segments[1]}" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -157,10 +166,14 @@ abstract class NovelCool :
             url = manga.url
             title = document.selectFirst("h1.bookinfo-title")!!.text()
             description = document.selectFirst("div.bk-summary-txt")?.text()
-            genre = document.select(".bookinfo-category-list a").joinToString { it.text() }
+            genre = document.selectFirst(".bk-cates")?.select(".bk-cate-item a[title]")?.joinToString { it.text() }
             author = document.selectFirst(".bookinfo-author > a")?.attr("title")
             thumbnail_url = document.selectFirst(".bookinfo-pic-img")?.attr("abs:src")
-            status = document.select(".bookinfo-category-list a").first()?.text().parseStatus()
+            status = when (document.selectFirst(".bk-cate-type1 a")?.attr("abs:href")?.toHttpUrl()?.pathSegments?.last()) {
+                "updated.html" -> SManga.ONGOING
+                "completed.html" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
         }
 
         val chapterList = document.select(".chapter-item-list a").map { element ->
@@ -172,15 +185,6 @@ abstract class NovelCool :
         }
 
         return SMangaUpdate(details, chapterList)
-    }
-
-    private fun String?.parseStatus(): Int {
-        this ?: return SManga.UNKNOWN
-        return when {
-            this.lowercase() in completedStatusList -> SManga.COMPLETED
-            this.lowercase() in ongoingStatusList -> SManga.ONGOING
-            else -> SManga.UNKNOWN
-        }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -320,24 +324,5 @@ abstract class NovelCool :
         private val JS_REDIRECT_REGEX = Regex("""window\.location\.href\s*=\s*["']([^"']+)["']""")
 
         private const val PREF_API_SEARCH = "pref_use_search_api"
-
-        // copied from Madara
-        private val completedStatusList: Array<String> = arrayOf(
-            "completed",
-            "completo",
-            "completado",
-            "concluído",
-            "concluido",
-            "finalizado",
-            "terminé",
-            "hoàn thành",
-        )
-
-        private val ongoingStatusList: Array<String> = arrayOf(
-            "ongoing", "Продолжается", "updating", "em lançamento", "em lançamento", "em andamento",
-            "em andamento", "en cours", "ativo", "lançando", "Đang Tiến Hành", "devam ediyor",
-            "devam ediyor", "in corso", "in arrivo", "en curso", "en curso", "emision",
-            "curso", "en marcha", "Publicandose", "en emision",
-        )
     }
 }

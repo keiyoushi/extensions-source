@@ -89,7 +89,7 @@ abstract class BacaKomik : KeiSource() {
                     }
                     is GenreListFilter -> {
                         filter.state
-                            .filter { it.state != Filter.TriState.STATE_IGNORE }
+                            .filter { it.state }
                             .forEach { addQueryParameter("genre[]", it.id) }
                     }
                     else -> {}
@@ -203,7 +203,7 @@ abstract class BacaKomik : KeiSource() {
             }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
             .set("Referer", page.url.ifEmpty { "$baseUrl/" })

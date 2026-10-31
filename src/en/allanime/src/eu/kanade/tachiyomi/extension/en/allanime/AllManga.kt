@@ -416,11 +416,11 @@ abstract class AllManga :
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val quality = preferences.imageQuality
 
         if (quality == IMAGE_QUALITY_PREF_DEFAULT) {
-            return super.imageRequest(page)
+            return super.getImageRequest(page)
         }
 
         val oldUrl = imageQualityRegex.find(page.imageUrl!!)!!.groupValues[1]

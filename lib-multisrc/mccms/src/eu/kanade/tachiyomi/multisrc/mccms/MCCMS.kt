@@ -114,7 +114,7 @@ abstract class MCCMS : KeiSource() {
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     // Don't send referer
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder().headers(pcHeaders).build()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().headers(pcHeaders).build()
 
     private inline fun <reified T> Response.parseAs(): T = parseAsRaw<ResultDto<T>>().data
 

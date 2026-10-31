@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+LIB_VERSION = "1.6"
+
 
 def ascii_validator(value: str) -> str:
     value = value.strip()
@@ -41,7 +43,7 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
     args.path = path
 
     # Validate multisrc theme if provided
-    args.is_keisource = True
+    args.lib_version = LIB_VERSION
     if args.multisrc:
         multisrc_dir = path / "lib-multisrc"
         if not multisrc_dir.exists() or not multisrc_dir.is_dir():
@@ -54,11 +56,13 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
             )
         args.multisrc = multisrc_theme
 
-        if (
-            'libVersion = "1.4"'
-            in (multisrc_dir / multisrc_theme / "build.gradle.kts").read_text()
-        ):
-            args.is_keisource = False
+        # Extensions must use the same libVersion as their theme
+        theme_lib = re.search(
+            r'libVersion = "([^"]+)"',
+            (multisrc_dir / multisrc_theme / "build.gradle.kts").read_text(),
+        )
+        if theme_lib:
+            args.lib_version = theme_lib.group(1)
 
 
 def get_ext_classname(extname: str) -> str:
@@ -82,9 +86,7 @@ def write_gradle_file(args: argparse.Namespace, ext_dir: Path) -> None:
             f.write("\tversionCode = 1\n")
 
         f.write(f"\tcontentWarning = ContentWarning.{args.content_warning}\n")
-        f.write("\tlibVersion = ")
-        f.write('"1.6"' if args.is_keisource else '"1.4"')
-        f.write("\n\n")
+        f.write(f'\tlibVersion = "{args.lib_version}"\n\n')
 
         f.write("\tsource {\n")
         if args.source_name:
@@ -113,7 +115,6 @@ def write_multisrc_source(f, args: argparse.Namespace, classname: str) -> None:
 
 
 def write_keisource_source(f, classname: str) -> None:
-    """Extension stub targeting lib 1.6."""
     f.write("import eu.kanade.tachiyomi.source.model.FilterList\n")
     f.write("import eu.kanade.tachiyomi.source.model.MangasPage\n")
     f.write("import eu.kanade.tachiyomi.source.model.Page\n")

@@ -149,12 +149,9 @@ abstract class PoseidonScans :
             SHOW_PREMIUM_DEFAULT,
         )
         return mangaPageDto.manga.chapters.mapNotNull { ch ->
-            val isLocked = ch.isPremium == true && mangaPageDto.isPremiumUser != true
+            val isLocked = ch.isLocked && mangaPageDto.isPremiumUser != true
 
-            if (isLocked && !showPremium) {
-                val premiumUntilDate = ch.premiumUntil?.time ?: 0L
-                if (System.currentTimeMillis() <= premiumUntilDate) return@mapNotNull null
-            }
+            if (isLocked && !showPremium) return@mapNotNull null
             SChapter.create().apply {
                 val chapterNumberString = ch.number.toString().removeSuffix(".0")
                 val isVolume = ch.isVolume == true || (ch.number % 1 == 0f && ch.title?.contains("volume", ignoreCase = true) == true)
@@ -179,7 +176,7 @@ abstract class PoseidonScans :
 
                     if (isLocked) {
                         val dateParts = formatTimestamp(
-                            ch.premiumUntil?.time ?: 0L,
+                            ch.premiumUntil?.toEpochMilliseconds() ?: 0L,
                         ).split(" ")
                         // formatTimestamp gives: [dd, MMMM, HH:mm]
                         append(
@@ -190,7 +187,7 @@ abstract class PoseidonScans :
                 setUrlWithoutDomain(
                     "/serie/${mangaPageDto.manga.slug}/chapter/$chapterNumberString",
                 )
-                date_upload = ch.createdAt.time
+                date_upload = ch.createdAt.toEpochMilliseconds()
                 chapter_number = ch.number
             }
         }.sortedByDescending { it.chapter_number }
@@ -203,7 +200,7 @@ abstract class PoseidonScans :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val pageDataDto = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<PageData>() ?: throw Exception("Cant scape data from Next.js")
-        if (pageDataDto.currentChapter.isPremium) {
+        if (pageDataDto.currentChapter.isLocked) {
             if (pageDataDto.sessionStatus == "unauthenticated") {
                 throw Exception("This chapter is premium. Please connect via the WebView to view.")
             }
@@ -219,7 +216,7 @@ abstract class PoseidonScans :
         }.sortedBy { it.index }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         .build()
 

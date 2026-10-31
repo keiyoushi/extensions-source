@@ -34,7 +34,7 @@ abstract class TempleScanEsp : Madara() {
             ?.substringBefore(")")
     }
     override fun archiveSelector() = "div.group"
-    override val archiveUrlSelector = "div.manga > div a"
+    override val archiveUrlSelector = "a:has(h3)"
     override val archiveTitleSelector = "h3"
 
     override fun chapterListSelector() = "ul#list-chapters li > a"

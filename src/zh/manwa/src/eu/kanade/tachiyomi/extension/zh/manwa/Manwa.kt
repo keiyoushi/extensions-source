@@ -15,6 +15,8 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -26,14 +28,8 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.buffer
-import okio.cipherSource
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class Manwa :
@@ -57,14 +53,10 @@ abstract class Manwa :
         if (originalResponse.request.url.toString().endsWith("?v=20220724")) {
             // Decrypt images in mangas
             val key = "my2ecret782ecret".toByteArray()
-            val aesKey = SecretKeySpec(key, "AES")
-            val cipher = Cipher.getInstance("AES/CBC/NOPADDING")
-            cipher.init(Cipher.DECRYPT_MODE, aesKey, IvParameterSpec(key))
-            val result = originalResponse.body.source().cipherSource(cipher).buffer()
-            val newBody = result.asResponseBody("image/webp".toMediaTypeOrNull())
-            originalResponse.newBuilder()
-                .body(newBody)
-                .build()
+            originalResponse.aesDecrypt(
+                cipher = aesCbc(key, key, padding = false),
+                contentType = "image/webp".toMediaTypeOrNull(),
+            )
         } else {
             originalResponse
         }

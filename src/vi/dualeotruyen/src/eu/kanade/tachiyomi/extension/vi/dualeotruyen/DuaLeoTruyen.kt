@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.dualeotruyen
 
-import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,13 +14,13 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -132,15 +131,7 @@ abstract class DuaLeoTruyen : KeiSource() {
             }
         }
 
-    private fun parseDate(dateStr: String?): Long {
-        if (dateStr == null) return 0L
-        return runCatching {
-            LocalDate.parse(dateStr, dateFormat)
-                .atStartOfDay(dateZone)
-                .toInstant()
-                .toEpochMilli()
-        }.getOrDefault(0L)
-    }
+    private fun parseDate(dateStr: String?): Long = dateFormat.tryParseDate(dateStr, dateZone)
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen-tranh") return null
@@ -167,16 +158,21 @@ abstract class DuaLeoTruyen : KeiSource() {
 
     // ============================== Pages =================================
 
+    private val imageDecryptor = ImageDecryptor()
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        imageDecryptor.extractSecret(document)
 
-        return document.select(".content_view_chap img")
-            .mapNotNull { img ->
-                val dataImg = img.attr("data-img")
-                val src = img.absUrl("src")
+        return document.select(".content_view_chap img, .content_view_chap canvas")
+            .mapNotNull { element ->
+                val dataImg = element.absUrl("data-img")
+                    .ifEmpty { element.absUrl("data-canvas-img") }
+                    .ifEmpty { element.attr("data-img").ifEmpty { element.attr("data-canvas-img") } }
+                val src = element.absUrl("src")
 
                 when {
-                    dataImg.isNotBlank() -> decryptImageUrl(dataImg)
+                    dataImg.isNotBlank() -> imageDecryptor.decryptImageUrl(dataImg)
                     src.isNotBlank() && !src.startsWith("data:") -> src
                     else -> null
                 }
@@ -187,31 +183,6 @@ abstract class DuaLeoTruyen : KeiSource() {
             }
     }
 
-    private fun decryptImageUrl(url: String): String? {
-        val lastSlashIndex = url.lastIndexOf('/')
-        val dotIndex = url.lastIndexOf('.')
-        if (lastSlashIndex == -1 || dotIndex == -1 || dotIndex <= lastSlashIndex) return null
-
-        val basePath = url.substring(0, lastSlashIndex + 1)
-        val encodedName = url.substring(lastSlashIndex + 1, dotIndex)
-        val extension = url.substring(dotIndex)
-
-        val base64 = encodedName.replace('-', '+').replace('_', '/')
-        val decoded = try {
-            Base64.decode(base64, Base64.DEFAULT)
-        } catch (_: Exception) {
-            return url
-        }
-
-        val decrypted = ByteArray(decoded.size) { i ->
-            (decoded[i].toInt() xor decryptSalt[i % decryptSalt.length].code).toByte()
-        }
-
-        val decryptedName = String(decrypted, Charsets.UTF_8)
-        return "$basePath$decryptedName$extension"
-    }
-
-    private val decryptSalt = "dualeo_salt_2025"
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
 }

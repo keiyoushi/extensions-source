@@ -73,17 +73,18 @@ context(source: HttpSource)
 suspend fun OkHttpClient.fetchPages(viewerUrl: HttpUrl): List<Page> = fetchPages(viewerUrl, source.headers)
 
 private suspend fun OkHttpClient.fetchComicPages(cgi: HttpUrl, param: String, trial: String?, headers: Headers): List<Page> {
+    val viewerHeaders = headers.newBuilder().set("Referer", cgi.viewerReferer()).build()
     var viewMode = VIEW_MODE_HYBRID
-    var timeKey = fetchTimeKey(cgi, param, viewMode, headers)
+    var timeKey = fetchTimeKey(cgi, param, viewMode, viewerHeaders)
     // some webtoons only open in the vertical view mode
     if (timeKey.selectFirst("Code")?.text() == CODE_VIEW_MODE_ERROR) {
         viewMode = VIEW_MODE_VERTICAL
-        timeKey = fetchTimeKey(cgi, param, viewMode, headers)
+        timeKey = fetchTimeKey(cgi, param, viewMode, viewerHeaders)
     }
     if (timeKey.selectFirst("Code")?.text() != CODE_SUCCESS) throw Exception("Viewer error: ${timeKey.text()}")
     val key = timeKey.selectFirst("Content")!!.text()
 
-    val face = get(cgi.fileUrl(MODE_FACE_XML, "face.xml", viewMode, key), headers).asJsoup(Parser.xmlParser())
+    val face = get(cgi.fileUrl(MODE_FACE_XML, "face.xml", viewMode, key), viewerHeaders).asJsoup(Parser.xmlParser())
     val totalPages = face.selectFirst("TotalPage")!!.text().toInt()
     val gridWidth = face.selectFirst("Scramble > Width")!!.text()
     val gridHeight = face.selectFirst("Scramble > Height")!!.text()
@@ -164,6 +165,9 @@ private fun HttpUrl.fileUrl(mode: String, file: String, viewMode: String, key: S
     .addQueryParameter("file", file)
     .addQueryParameter("param", key)
     .build()
+
+// Some servers answer every request with view mode error unless the Referer is in the viewer's directory
+internal fun HttpUrl.viewerReferer(): String = resolve("./")!!.toString()
 
 private fun Headers.withBearer(token: String) = newBuilder().set("Authorization", "Bearer $token").build()
 

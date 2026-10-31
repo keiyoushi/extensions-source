@@ -7,10 +7,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
@@ -257,8 +257,7 @@ abstract class Nekopost : KeiSource() {
 
         // Not JSON: the body is base64 of a CryptoJS payload, so it has to be read as text and
         // decrypted before it can be parsed.
-        val decrypted = CryptoAES.decrypt(response.body.string(), CIPHER_PASSPHRASE)
-            .ifEmpty { throw Exception("Failed to decrypt chapter data") }
+        val decrypted = response.body.string().cryptoJsDecrypt(CIPHER_PASSPHRASE)
 
         val info = decrypted.parseAs<RawChapterInfo>()
         val base = "${fileHost(info.projectId.toInt())}/collectManga/${info.projectId}/${info.chapterId}"

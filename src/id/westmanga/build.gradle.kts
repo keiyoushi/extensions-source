@@ -6,13 +6,23 @@ plugins {
 
 keiyoushi {
     name = "West Manga"
-    versionCode = 1
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://v1.westmanga.my"
+        baseUrl {
+            mirrors(
+                "https://v1.westmanga.my",
+                "https://v1.westmanga.top",
+            )
+        }
         id = 8883916630998758688L
+    }
+
+    deeplink {
+        path("/comic/..*")
+        path("/manga/..*")
     }
 }

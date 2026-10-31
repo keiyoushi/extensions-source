@@ -223,7 +223,7 @@ abstract class NoyAcg :
         Page(it, imageUrl = "/${chapter.url}/${it + 1}.webp")
     }
 
-    override fun imageRequest(page: Page) = GET(imgBaseUrl + page.imageUrl, headers)
+    override fun getImageRequest(page: Page) = GET(imgBaseUrl + page.imageUrl, headers)
 
     companion object {
         const val WEB_BASE_URL = "https://noymanga.com"

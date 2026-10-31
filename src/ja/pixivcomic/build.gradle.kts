@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Pixiv Comic"
-    versionCode = 5
+    versionCode = 7
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
