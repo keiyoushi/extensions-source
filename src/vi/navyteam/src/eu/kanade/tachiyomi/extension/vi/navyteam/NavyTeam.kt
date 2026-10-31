@@ -147,7 +147,7 @@ abstract class NavyTeam : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client
-        .get(getChapterUrl(chapter))
+        .get(getChapterUrl(chapter), Fetch.DOCUMENT)
         .asJsoup()
         .select("img.manga-img")
         .mapIndexed { index, image -> Page(index, imageUrl = image.absUrl("src")) }

@@ -103,7 +103,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 .addQueryParameter("q", title)
                 .build()
         return client
-            .get(searchUrl)
+            .get(searchUrl, Fetch.XHR)
             .parseAs<List<SearchSuggestionDto>>()
             .firstNotNullOfOrNull { it.mangaUrl(title, type) }
             ?: throw Exception("No se encontró la ficha del manga")
@@ -319,7 +319,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         }.distinctBy { it.url }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client
-        .get(baseUrl + chapter.url)
+        .get(baseUrl + chapter.url, Fetch.DOCUMENT)
         .asJsoup()
         .select("#reader-wrap img.reader-image")
         .mapIndexedNotNull { index, image ->

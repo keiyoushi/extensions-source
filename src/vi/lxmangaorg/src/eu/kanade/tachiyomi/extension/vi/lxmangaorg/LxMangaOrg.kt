@@ -183,7 +183,7 @@ abstract class LxMangaOrg : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client
-        .get("$baseUrl${chapter.url}")
+        .get("$baseUrl${chapter.url}", Fetch.DOCUMENT)
         .asJsoup()
         .select("img[alt^=Trang truyện]")
         .mapIndexed { index, element ->
@@ -236,7 +236,7 @@ abstract class LxMangaOrg : KeiSource() {
         .distinctBy { it.path }
 
     private suspend fun fetchSitemapOptions(sitemapPath: String, optionPath: String): List<FilterOption> = client
-        .get("$baseUrl$sitemapPath")
+        .get("$baseUrl$sitemapPath", Fetch.DOCUMENT)
         .asJsoup()
         .select("loc")
         .mapNotNull { element ->

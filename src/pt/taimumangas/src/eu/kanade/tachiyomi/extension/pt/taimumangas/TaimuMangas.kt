@@ -42,7 +42,7 @@ abstract class TaimuMangas : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = client
-        .get(libraryUrl(page, query = query.takeIf(String::isNotBlank), filters = filters))
+        .get(libraryUrl(page, query = query.takeIf(String::isNotBlank), filters = filters), Fetch.XHR)
         .parseAs<LibraryResponse>()
         .toMangasPage()
 

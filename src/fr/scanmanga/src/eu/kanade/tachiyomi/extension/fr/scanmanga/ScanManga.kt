@@ -358,6 +358,7 @@ abstract class ScanManga :
             .post(
                 "https://bqj.$domain/lel/$chapterId.json",
                 requestHeaders,
+                Fetch.XHR,
                 LelRequestDto(sme, sml, getFingerprint()).toJsonRequestBody(),
             )
             .use { dataAPI(it.body.string(), chapterId.toInt()) }

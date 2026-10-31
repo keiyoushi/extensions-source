@@ -105,7 +105,7 @@ abstract class NicovideoSeiga : KeiSource() {
                     .followRedirects(false)
                     .followSslRedirects(false)
                     .build()
-                    .get("https://account.nicovideo.jp/api/public/v2/user.json", ensureSuccess = false)
+                    .get("https://account.nicovideo.jp/api/public/v2/user.json", Fetch.XHR, ensureSuccess = false)
                     .use { it.code }
                 when (loginCode) {
                     // User needs to purchase the chapter on the official mobile app

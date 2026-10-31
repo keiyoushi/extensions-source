@@ -817,8 +817,8 @@ val response = client.post("$baseUrl/api/search", apiHeaders, Fetch.XHR, body)
   for you.
 - With a `User-Agent` that names neither Chrome nor Firefox (an app's own API client) no browser headers are added,
   so a `Fetch` is fine there too.
-- `get` and `post` without a `Fetch` are deprecated; they send the request as built, like `Fetch.NONE`. `put` and
-  `head` send it as built too.
+- `get` and `post` always take a `Fetch`; pass `Fetch.NONE` for a request that has to go out as built. `put` and
+  `head` send it as built.
 - For a request the helpers don't cover (another method, or one built from another request), build the `Request`
   yourself and send it with `client.call(request)`, which takes `ensureSuccess` too. It goes out as built unless you
   set a `Fetch` on the builder with `.fetch(Fetch.XHR)` and so on.
