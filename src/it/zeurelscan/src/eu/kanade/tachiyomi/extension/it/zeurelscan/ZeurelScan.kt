@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -20,11 +21,13 @@ private val dateFormat = DateTimeFormatter.ofPattern("d/M/yyyy")
 @Source
 abstract class ZeurelScan : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     // Popular (not actually sorted as site has no such functionality)
 
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchSeries(), false)
 
-    private suspend fun fetchSeries(): List<SManga> = client.get("$baseUrl/series").asJsoup().select("a.series-card").map {
+    private suspend fun fetchSeries(): List<SManga> = client.get("$baseUrl/series", Fetch.DOCUMENT).asJsoup().select("a.series-card").map {
         SManga.create().apply {
             setUrlWithoutDomain(it.absUrl("href"))
             title = it.select("span.series-title").text()
@@ -35,7 +38,7 @@ abstract class ZeurelScan : KeiSource() {
     // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/ultimi").asJsoup()
+        val document = client.get("$baseUrl/ultimi", Fetch.DOCUMENT).asJsoup()
         // Cache titles for deduplication
         val titles = mutableListOf<String>()
 
@@ -66,7 +69,7 @@ abstract class ZeurelScan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document, manga.url), parseChapterList(document))
     }
 
@@ -130,7 +133,7 @@ abstract class ZeurelScan : KeiSource() {
     }
 
     // Continue parsing even if the server returns HTTP 400
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), ensureSuccess = false).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false).asJsoup()
         .select("div.reader img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }

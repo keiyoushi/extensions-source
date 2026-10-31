@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,15 +23,17 @@ import java.util.Locale
 @Source
 abstract class Mangatown : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd,yyyy", Locale.US)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/directory/0-0-0-0-0-0/$page.htm").asJsoup()
+        val document = client.get("$baseUrl/directory/0-0-0-0-0-0/$page.htm", Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/latest/$page.htm").asJsoup()
+        val document = client.get("$baseUrl/latest/$page.htm", Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -39,7 +42,7 @@ abstract class Mangatown : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("name", query)
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -65,7 +68,7 @@ abstract class Mangatown : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -111,7 +114,7 @@ abstract class Mangatown : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val elements = document.select("select#top_chapter_list ~ div.page_select option:not(:contains(featured))")
         return if (elements.isNotEmpty()) {
             elements.mapIndexed { i, e ->
@@ -125,7 +128,7 @@ abstract class Mangatown : KeiSource() {
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val document = client.get(page.url).asJsoup()
+        val document = client.get(page.url, Fetch.DOCUMENT).asJsoup()
         return document.selectFirst("div#viewer img")!!.absUrl("src")
     }
 }

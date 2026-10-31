@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,13 +22,15 @@ import java.util.Locale
 @Source
 abstract class MangaKawaii : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("sort", "views")
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseMangaCards(document), hasNextPage(document, page))
     }
 
@@ -38,7 +41,7 @@ abstract class MangaKawaii : KeiSource() {
             .addQueryParameter("dir", "desc")
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseMangaCards(document), hasNextPage(document, page))
     }
 
@@ -54,7 +57,7 @@ abstract class MangaKawaii : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .build()
         }
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseMangaCards(document), hasNextPage(document, page))
     }
 
@@ -92,7 +95,7 @@ abstract class MangaKawaii : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val updatedManga = parseDetails(document).apply {
             url = manga.url
             if (title.isEmpty()) {
@@ -157,7 +160,7 @@ abstract class MangaKawaii : KeiSource() {
             val pageUrl = chaptersBase.newBuilder()
                 .addQueryParameter("page", page.toString())
                 .build()
-            val rows = client.get(pageUrl).asJsoup().select("div.ch-row")
+            val rows = client.get(pageUrl, Fetch.DOCUMENT).asJsoup().select("div.ch-row")
             if (rows.isEmpty()) break
             parseChapterRows(rows, chapters)
             page++
@@ -200,7 +203,7 @@ abstract class MangaKawaii : KeiSource() {
 
     // ============================== Pages ==============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         var state = document.selectFirst("[x-data*=imgs]")?.attr("x-data").orEmpty()
         var previous: String
         do {

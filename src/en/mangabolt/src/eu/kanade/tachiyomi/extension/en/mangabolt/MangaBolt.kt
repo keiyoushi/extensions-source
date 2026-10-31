@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -17,6 +18,8 @@ import java.net.URLEncoder
 
 @Source
 abstract class MangaBolt : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, "")
@@ -33,7 +36,7 @@ abstract class MangaBolt : KeiSource() {
             .set("X-Requested-With", "XMLHttpRequest")
             .set("Accept", "application/json")
             .build()
-        val data = client.get(url, apiHeaders).parseAs<MangaListDto>()
+        val data = client.get(url, apiHeaders, Fetch.XHR).parseAs<MangaListDto>()
         val mangas = data.mangas.map {
             SManga.create().apply {
                 this.url = "/manga/${it.slug}/"
@@ -59,7 +62,7 @@ abstract class MangaBolt : KeiSource() {
 
     // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/latest").asJsoup()
+        val document = client.get("$baseUrl/latest", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.bg-bg-secondary:has(a[href*=/chapter/])").asSequence().mapNotNull { element ->
             val link = element.selectFirst("a[href*=/chapter/]")?.attr("href") ?: return@mapNotNull null
 
@@ -87,7 +90,7 @@ abstract class MangaBolt : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         manga.apply {
             title = document.selectFirst("#main-content h1")?.text()?.trim()?.takeIf { it.isNotEmpty() } ?: throw Exception("Missing title")
@@ -114,7 +117,7 @@ abstract class MangaBolt : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".js-pages-container img.js-page").asSequence()
             .filter { !it.parents().any { parent -> parent.tagName() == "noscript" } }
             .map { img ->

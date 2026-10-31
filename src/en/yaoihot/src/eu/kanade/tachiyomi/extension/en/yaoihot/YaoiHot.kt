@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -17,6 +18,8 @@ import java.util.Calendar
 
 @Source
 abstract class YaoiHot : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -29,7 +32,7 @@ abstract class YaoiHot : KeiSource() {
             addQueryParameter("orderby", "views")
         }.build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     // =============================== Latest ===============================
@@ -43,7 +46,7 @@ abstract class YaoiHot : KeiSource() {
             addQueryParameter("orderby", "modified")
         }.build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     // =============================== Search ===============================
@@ -67,7 +70,7 @@ abstract class YaoiHot : KeiSource() {
             }
         }.build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -110,7 +113,7 @@ abstract class YaoiHot : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val manga = SManga.create().apply {
             title = document.selectFirst(".manga-title")!!.text()
@@ -133,7 +136,7 @@ abstract class YaoiHot : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         return document.select(".reader-page img").mapIndexed { index, img ->
             val imgUrl = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }

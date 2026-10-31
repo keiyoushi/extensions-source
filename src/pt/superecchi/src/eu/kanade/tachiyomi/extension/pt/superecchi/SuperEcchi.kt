@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -29,6 +30,8 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class SuperEcchi : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
@@ -41,7 +44,7 @@ abstract class SuperEcchi : KeiSource() {
 
     // The site only publishes a "latest releases" listing, so it is served here.
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/index.php?pageId=$page").asJsoup()
+        val document = client.get("$baseUrl/index.php?pageId=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(LISTING_SELECTOR).map(::parseListingEntry)
         val hasNextPage = document.selectFirst(".pagination a[href*=pageId=${page + 1}]") != null
         return MangasPage(mangas, hasNextPage)
@@ -56,7 +59,7 @@ abstract class SuperEcchi : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
         if (page > 1 || query.isBlank()) return@coroutineScope MangasPage(emptyList(), false)
         val body = FormBody.Builder().add("id", query).build()
-        val suggestions = client.post("$baseUrl/ajax_pesquisar.php", headers, body).parseAs<List<String>>()
+        val suggestions = client.post("$baseUrl/ajax_pesquisar.php", headers, Fetch.XHR, body).parseAs<List<String>>()
         val mangas = suggestions.map { async { suggestionResults(it) } }
             .awaitAll()
             .flatten()
@@ -85,7 +88,7 @@ abstract class SuperEcchi : KeiSource() {
         }
     }
 
-    private suspend fun fetchListingEntries(url: String): List<SManga> = client.get(url).asJsoup().select(LISTING_SELECTOR).map(::parseListingEntry)
+    private suspend fun fetchListingEntries(url: String): List<SManga> = client.get(url, Fetch.DOCUMENT).asJsoup().select(LISTING_SELECTOR).map(::parseListingEntry)
 
     // ============================== Details ================================
 
@@ -95,7 +98,7 @@ abstract class SuperEcchi : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}").asJsoup()
+        val document = client.get("$baseUrl/${manga.url}", Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             val rawTitle = document.selectFirst("h1")?.text().orEmpty()
@@ -142,7 +145,7 @@ abstract class SuperEcchi : KeiSource() {
 
     // ============================== Pages ==================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}").asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT).asJsoup()
         .select("#gerar_pdf img[src^=mangas/]")
         .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:src")) }
 

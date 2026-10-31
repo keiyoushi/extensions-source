@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SManga.Companion.COMPLETED
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,6 +22,8 @@ import java.util.Locale
 
 @Source
 abstract class MomonGA : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     override val supportsLatest = false
 
     // Chapters
@@ -39,7 +42,7 @@ abstract class MomonGA : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(baseUrl + manga.url)
+        val response = client.get(baseUrl + manga.url, Fetch.DOCUMENT)
         val chapterUrl = response.request.url.encodedPath
         val document = response.asJsoup()
 
@@ -78,7 +81,7 @@ abstract class MomonGA : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         return document.select("#post-hentai > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.attr("src"))
@@ -101,7 +104,7 @@ abstract class MomonGA : KeiSource() {
         return MangasPage(mangas, document.selectFirst("div.wp-pagenavi > a.nextpostslink") != null)
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/popularity/"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/popularity/", Fetch.DOCUMENT))
 
     // Search
 
@@ -120,7 +123,7 @@ abstract class MomonGA : KeiSource() {
             urlBuilder.addPathSegments("page/$page")
         }
 
-        return parseMangaList(client.get(urlBuilder.build()))
+        return parseMangaList(client.get(urlBuilder.build(), Fetch.DOCUMENT))
     }
 
     // Filters
