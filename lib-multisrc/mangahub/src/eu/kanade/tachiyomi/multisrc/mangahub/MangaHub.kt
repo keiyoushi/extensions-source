@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -48,6 +49,8 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
 abstract class MangaHub : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     abstract val mangaSource: String
 
@@ -116,7 +119,7 @@ abstract class MangaHub : KeiSource() {
             .set("x-mhub-access", apiKey)
             .build()
 
-        return client.post("$baseApiUrl/graphql", requestHeaders, body)
+        return client.post("$baseApiUrl/graphql", requestHeaders, Fetch.XHR, body)
     }
 
     private val refreshMutex = Mutex()
@@ -352,7 +355,7 @@ abstract class MangaHub : KeiSource() {
     }
 
     private suspend fun decryptPages(pages: String): String {
-        val cryptoParams = client.get("$baseUrl/api/chapter-crypto", apiHeaders.build())
+        val cryptoParams = client.get("$baseUrl/api/chapter-crypto", apiHeaders.build(), Fetch.XHR)
             .parseAs<ChapterCryptoDto>()
 
         val parts = pages.split(":")

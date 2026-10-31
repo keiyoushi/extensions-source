@@ -10,7 +10,6 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.mangabox.imagesize.ImageSize
 import eu.kanade.tachiyomi.multisrc.mangabox.imagesize.WebpSizeGetter
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -19,6 +18,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
+import keiyoushi.network.call
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -53,6 +55,8 @@ import kotlin.time.Instant
 abstract class MangaBox :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(::mergeImagesInterceptor)
@@ -230,7 +234,7 @@ abstract class MangaBox :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parsePopularManga(client.get("$baseUrl/$popularUrlPath$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parsePopularManga(client.get("$baseUrl/$popularUrlPath$page", Fetch.DOCUMENT))
 
     open fun popularMangaFromElement(element: Element): SManga = mangaFromElement(element)
 
@@ -249,7 +253,7 @@ abstract class MangaBox :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseLatestUpdates(client.get("$baseUrl/$latestUrlPath$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseLatestUpdates(client.get("$baseUrl/$latestUrlPath$page", Fetch.DOCUMENT))
 
     open fun latestUpdatesFromElement(element: Element): SManga = mangaFromElement(element)
 
@@ -264,7 +268,7 @@ abstract class MangaBox :
                 .addQueryParameter("page", page.toString())
                 .build()
 
-            client.get(url)
+            client.get(url, Fetch.DOCUMENT)
         } else {
             val url = "$baseUrl/genre".toHttpUrl().newBuilder()
             var sort: String? = null
@@ -288,7 +292,7 @@ abstract class MangaBox :
             id?.let { url.addQueryParameter("filter", it) }
             url.addQueryParameter("page", page.toString())
 
-            client.get(url.build())
+            client.get(url.build(), Fetch.DOCUMENT)
         }
 
         val document = response.asJsoup()
@@ -332,7 +336,7 @@ abstract class MangaBox :
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${getMangaSlug(manga)}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = parseMangaDetails(
-        client.get(url).asJsoup(),
+        client.get(url, Fetch.DOCUMENT).asJsoup(),
     )
 
     private fun checkForRedirectMessage(document: Document) {
@@ -393,7 +397,7 @@ abstract class MangaBox :
 
     open suspend fun parseChapterList(manga: SManga): List<SChapter> {
         val slug = getMangaSlug(manga)
-        val response = client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1")
+        val response = client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1", Fetch.XHR.from(manga.url))
         val apiResult = runCatching {
             response.parseAs<ApiResponse>()
         }.getOrElse { return emptyList() }
@@ -433,7 +437,7 @@ abstract class MangaBox :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val document = response.asJsoup()
         val content = document.select("script:containsData(cdns =)").joinToString("\n") { it.data() }
         val cdns = extractArray(content, cdnsRegex) + extractArray(content, backupImageRegex)
@@ -468,12 +472,13 @@ abstract class MangaBox :
                                 delay((500 * (1 shl attempt)..<1000 * (1 shl attempt)).random().milliseconds)
                             }
                             try {
-                                val response = client.newCall(
+                                val response = client.call(
                                     GET(url, headers)
                                         .newBuilder()
                                         .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag())
+                                        .fetch(Fetch.IMAGE)
                                         .build(),
-                                ).awaitSuccess()
+                                )
                                 WebpSizeGetter(response.body.byteStream()).get()?.let {
                                     return@async it
                                 }

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -22,6 +23,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class BakkinReaderX :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -113,7 +116,7 @@ abstract class BakkinReaderX :
 
     private suspend fun fetchAllSeries(): List<Series> {
         if (seriesCache.isEmpty()) {
-            seriesCache = client.get(mainUrl)
+            seriesCache = client.get(mainUrl, Fetch.XHR)
                 .parseAs<Map<String, Series>>()
                 .values
                 .toList()

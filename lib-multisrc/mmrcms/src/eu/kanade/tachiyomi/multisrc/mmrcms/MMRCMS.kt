@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -39,6 +40,8 @@ import kotlin.math.min
  */
 abstract class MMRCMS : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     protected open val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.US)
 
     protected open val itemPath: String = "manga"
@@ -66,7 +69,7 @@ abstract class MMRCMS : KeiSource() {
 
     protected open fun popularMangaUrl(page: Int) = "$baseUrl/filterList?page=$page&sortBy=views&asc=false"
 
-    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(popularMangaUrl(page)).asJsoup())
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(popularMangaUrl(page), Fetch.DOCUMENT).asJsoup())
 
     protected open fun popularMangaParse(document: Document): MangasPage {
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
@@ -82,7 +85,7 @@ abstract class MMRCMS : KeiSource() {
 
     protected open fun latestUpdatesUrl(page: Int) = "$baseUrl/latest-release?page=$page"
 
-    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get(latestUpdatesUrl(page)))
+    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get(latestUpdatesUrl(page), Fetch.DOCUMENT))
 
     protected open fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -106,7 +109,7 @@ abstract class MMRCMS : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isEmpty() && supportsAdvancedSearch) {
-            val document = client.get("$baseUrl/advanced-search").asJsoup()
+            val document = client.get("$baseUrl/advanced-search", Fetch.DOCUMENT).asJsoup()
             val params = baseUrl.toHttpUrl().newBuilder().apply {
                 filters.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
             }.build().encodedQuery.orEmpty()
@@ -122,13 +125,13 @@ abstract class MMRCMS : KeiSource() {
                 }
             }.build()
 
-            val resDoc = client.post("$baseUrl/advSearchFilter", body = body).asJsoup()
+            val resDoc = client.post("$baseUrl/advSearchFilter", Fetch.DOCUMENT, body = body).asJsoup()
             val mangas = resDoc.select(searchMangaSelector()).map { searchMangaFromElement(it) }
             val hasNextPage = searchMangaNextPageSelector()?.let { resDoc.selectFirst(it) != null } ?: false
             return MangasPage(mangas, hasNextPage)
         }
 
-        return searchMangaParse(client.get(searchMangaUrl(page, query, filters)), page)
+        return searchMangaParse(client.get(searchMangaUrl(page, query, filters), Fetch.DOCUMENT), page)
     }
 
     protected open fun searchMangaUrl(page: Int, query: String, filters: FilterList): String = baseUrl.toHttpUrl().newBuilder().apply {
@@ -184,7 +187,7 @@ abstract class MMRCMS : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2 || url.pathSegments.first() != itemPath) return null
 
-        return mangaDetailsParse(client.get(url).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
     }
 
     // Details and chapters come from the same page
@@ -194,7 +197,7 @@ abstract class MMRCMS : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
@@ -272,7 +275,7 @@ abstract class MMRCMS : KeiSource() {
         }
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     protected open fun pageListParse(document: Document): List<Page> = document.select("#all > img.img-responsive").mapIndexed { i, it ->
         Page(i, imageUrl = it.imgAttr())
@@ -281,7 +284,7 @@ abstract class MMRCMS : KeiSource() {
     override val supportsFilterFetching get() = fetchFilterOptions
 
     override suspend fun fetchFilterData(): JsonElement = if (supportsAdvancedSearch) {
-        val document = client.get("$baseUrl/advanced-search").asJsoup()
+        val document = client.get("$baseUrl/advanced-search", Fetch.DOCUMENT).asJsoup()
 
         FilterData(
             categories = document.select("select[name='categories[]'] option").map {
@@ -296,7 +299,7 @@ abstract class MMRCMS : KeiSource() {
             sortOptions = emptyList(),
         )
     } else {
-        val document = client.get("$baseUrl/$itemPath-list").asJsoup()
+        val document = client.get("$baseUrl/$itemPath-list", Fetch.DOCUMENT).asJsoup()
 
         FilterData(
             categories = document.select("a.category").map {

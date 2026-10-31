@@ -15,6 +15,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -40,6 +42,8 @@ import kotlin.math.abs
 abstract class MangoTheme :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     protected abstract val encryptionKey: String
 
@@ -158,12 +162,12 @@ abstract class MangoTheme :
     protected fun Headers.Builder.addMangoThemeHeaders(): Headers.Builder = set("Accept-Language", "$lang, en-US;q=0.8, en;q=0.7")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$apiUrl/obras/top10/views?periodo=total")
+        val result = client.get("$apiUrl/obras/top10/views?periodo=total", Fetch.XHR)
             .parseAs<MangoThemeResponse<List<MangoThemeMangaDto>>>()
         return MangasPage(result.items.map { it.toSManga(cdnUrl) }, false)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$apiUrl/capitulos/recentes?pagina=$page&limite=$latestPageSize"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$apiUrl/capitulos/recentes?pagina=$page&limite=$latestPageSize", Fetch.XHR))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
@@ -175,7 +179,7 @@ abstract class MangoTheme :
         filters.filterIsInstance<MangoThemeUrlQueryFilter>()
             .forEach { it.addQueryParameter(url) }
 
-        return parseMangasPage(client.get(url.build()))
+        return parseMangasPage(client.get(url.build(), Fetch.XHR))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -208,7 +212,7 @@ abstract class MangoTheme :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val storedSlug = manga.url.extractStoredSlug().takeIf { it.isNotEmpty() }
-        val dto = client.get("$apiUrl/obras/${manga.url.extractMangaId()}")
+        val dto = client.get("$apiUrl/obras/${manga.url.extractMangaId()}", Fetch.XHR)
             .parseAs<MangoThemeResponse<MangoThemeMangaDto>>()
             .items
 
@@ -224,7 +228,7 @@ abstract class MangoTheme :
         val mangaId = chapter.url.extractChapterMangaId()
         val chapterNumber = chapter.url.extractChapterNumber()
 
-        val pages = client.get("$apiUrl/obras/$mangaId/capitulos/$chapterNumber")
+        val pages = client.get("$apiUrl/obras/$mangaId/capitulos/$chapterNumber", Fetch.XHR)
             .parseAs<MangoThemeResponse<MangoThemePageChapterDto>>()
             .items
             .pages
@@ -320,6 +324,9 @@ abstract class MangoTheme :
         ).toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
         val request = POST("$apiUrl/auth/login", headers, body)
+            .newBuilder()
+            .fetch(Fetch.XHR)
+            .build()
         network.client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 ""

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,11 +22,13 @@ import org.jsoup.nodes.Element
 
 abstract class OceanWP : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override val supportsLatest = false
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(if (page > 1) "$baseUrl/page/$page/" else baseUrl).asJsoup()
+        val document = client.get(if (page > 1) "$baseUrl/page/$page/" else baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article.blog-entry").map { element ->
             popularMangaFromElement(element)
         }
@@ -67,7 +70,7 @@ abstract class OceanWP : KeiSource() {
             }.build().toString()
         }
 
-        return searchMangaParse(client.get(url).asJsoup())
+        return searchMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun searchMangaParse(document: Document): MangasPage {
@@ -88,7 +91,7 @@ abstract class OceanWP : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.none { it.isNotEmpty() }) return null
 
-        return mangaDetailsParse(client.get(url).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
     }
 
     // Details
@@ -98,7 +101,7 @@ abstract class OceanWP : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = if (fetchDetails) mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup()) else manga
+        val details = if (fetchDetails) mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga
         val chapter = SChapter.create().apply {
             name = "Chapter 1"
             setUrlWithoutDomain(manga.url)
@@ -118,7 +121,7 @@ abstract class OceanWP : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.entry-content img").mapIndexed { i, img ->
             val url = img.absUrl("src")
             Page(i, document.location(), url)
@@ -131,7 +134,7 @@ abstract class OceanWP : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val categories = document.select("ul.sub-menu li[class*=menu-item-type-taxonomy] a").map {
             Pair(it.text(), it.absUrl("href"))
         }

@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -43,7 +44,7 @@ abstract class MgreadIo : InitManga() {
             .addPathSegment("")
             .apply { addFilters(filters) }
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.manga-item-details").map { card ->
             SManga.create().apply {
                 val link = card.selectFirst("h2 a")!!
@@ -58,7 +59,7 @@ abstract class MgreadIo : InitManga() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = super.fetchRelatedMangaList(manga).filterNot { it.isAnime() }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/advanced-filter/").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/advanced-filter/", Fetch.DOCUMENT).asJsoup()
         .select("input[name='genre[]'][data-genre-name][value]:not([value=anime])")
         .map { GenreOption(it.attr("data-genre-name"), it.attr("value")) }
         .toJsonElement()

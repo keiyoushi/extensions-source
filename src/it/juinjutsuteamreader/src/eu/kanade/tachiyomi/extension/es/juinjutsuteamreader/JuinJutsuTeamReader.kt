@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import org.jsoup.nodes.Document
@@ -46,7 +47,7 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document: Document? = if (fetchDetails || fetchChapters) {
-            client.get(baseUrl + manga.url, adultHeaders).asJsoup()
+            client.get(baseUrl + manga.url, adultHeaders, Fetch.DOCUMENT).asJsoup()
         } else {
             null
         }
@@ -69,7 +70,7 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url, adultHeaders).asJsoup()
+        val document = client.get(baseUrl + chapter.url, adultHeaders, Fetch.DOCUMENT).asJsoup()
         return pageListParse(document)
     }
 }
