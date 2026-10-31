@@ -14,17 +14,22 @@ import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.Calendar
+import kotlin.time.Instant
 
 @Source
 abstract class EternalMangas : KeiSource() {
 
     override val supportRelatedMangasBySearch = true
+
+    // Images sent with Origin miss the Cloudflare cache the site reader fills
+    override fun Headers.Builder.configureHeaders() = removeAll("Origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get(baseUrl).asJsoup()
@@ -76,8 +81,7 @@ abstract class EternalMangas : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        val knownDates = chapters.associate { it.url to it.date_upload }
-        return SMangaUpdate(document.toSManga(manga), document.toChapters(knownDates))
+        return SMangaUpdate(document.toSManga(manga), document.toChapters())
     }
 
     private fun Document.toSManga(manga: SManga) = SManga.create().apply {
@@ -104,16 +108,14 @@ abstract class EternalMangas : KeiSource() {
         }.ifEmpty { null }
     }
 
-    private fun Document.toChapters(knownDates: Map<String, Long>): List<SChapter> {
+    private fun Document.toChapters(): List<SChapter> {
         val groups = select("#tab-sinopsis a[href*=/teams/]").joinToString { it.text() }.ifEmpty { null }
-        val now = Calendar.getInstance()
-        return select("#chapter-list .em-chapter-row > a").map { element ->
+        val series = selectFirst("script#em-v2-payload")!!.data().parseAs<SeriesPayload>()
+        return series.content.chapters.map { chapter ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
-                name = element.selectFirst(".fw-semibold")!!.text()
-                // The site only shows relative dates, so keep the first one seen
-                date_upload = knownDates[url]?.takeIf { it != 0L }
-                    ?: parseRelativeDate(element.selectFirst("div.text-muted")?.text(), now)
+                setUrlWithoutDomain(chapter.url.url)
+                name = chapter.title
+                date_upload = Instant.tryParse(chapter.publishedAt)
                 scanlator = groups
             }
         }
@@ -146,25 +148,9 @@ abstract class EternalMangas : KeiSource() {
         )
     }
 
-    private fun parseRelativeDate(date: String?, now: Calendar): Long {
-        val number = date?.let { NUMBER_REGEX.find(it) }?.value?.toIntOrNull() ?: return 0L
-        val field = when {
-            "segundo" in date -> Calendar.SECOND
-            "minuto" in date -> Calendar.MINUTE
-            "hora" in date -> Calendar.HOUR
-            "día" in date || "dia" in date -> Calendar.DAY_OF_YEAR
-            "semana" in date -> Calendar.WEEK_OF_YEAR
-            "mes" in date -> Calendar.MONTH
-            "año" in date -> Calendar.YEAR
-            else -> return 0L
-        }
-        return (now.clone() as Calendar).apply { add(field, -number) }.timeInMillis
-    }
-
     companion object {
         private const val NOVEL_TYPE = "Novela"
         private const val NOVEL_TYPE_VALUE = "novel"
         private val FILTER_TITLES = mapOf("type" to "Tipo", "status" to "Estado", "genre" to "Género")
-        private val NUMBER_REGEX = Regex("""\d+""")
     }
 }
