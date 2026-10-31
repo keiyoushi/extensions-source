@@ -44,6 +44,7 @@ class PageDto(
 ) {
     fun toPage(index: Int) = Page(
         index = index,
-        imageUrl = src.ifEmpty { fallback.orEmpty() },
+        // The MangaDex node in src answers 404, fallback is the MangaDex origin
+        imageUrl = fallback?.ifEmpty { null } ?: src,
     )
 }

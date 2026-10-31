@@ -21,6 +21,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.time.ZoneOffset
@@ -230,6 +231,12 @@ abstract class OnfMangas : KeiSource() {
 
         return pagesData.mapIndexed { index, dto -> dto.toPage(index) }
     }
+
+    // uploads.mangadex.org serves a placeholder image with either header
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
+        .removeHeader("Referer")
+        .removeHeader("Origin")
+        .build()
 
     // ============================= Utilities ==============================
 
