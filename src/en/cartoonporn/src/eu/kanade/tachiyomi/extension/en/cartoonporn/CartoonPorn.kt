@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import kotlinx.serialization.json.buildJsonObject
@@ -35,7 +36,7 @@ abstract class CartoonPorn : Madara() {
             .addQueryParameter("m_orderby", orderBy)
             .apply { if (orderBy == "views") addQueryParameter("m_order", "desc") }
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(archiveSelector()).mapNotNull { archiveManga(it, "") }
         val hasNext = document.selectFirst("a[href*='/porncomic/page/${page + 1}/']") != null
         return MangasPage(mangas, hasNext)

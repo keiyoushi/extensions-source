@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.yaoifanclub
 import eu.kanade.tachiyomi.multisrc.madara.GenreRoute
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.toJsonElement
@@ -23,7 +24,7 @@ abstract class YaoiFanClub : MadaraNoAjax() {
             .addQueryParameter("s", "")
             .addQueryParameter("post_type", "wp-manga")
             .build()
-        return client.get(url).asJsoup().select("div.checkbox-group input[name='genre[]']").map { input ->
+        return client.get(url, Fetch.DOCUMENT).asJsoup().select("div.checkbox-group input[name='genre[]']").map { input ->
             val slug = input.attr("value")
             GenreRoute(input.nextElementSibling()!!.text(), slug, "/$genreDirectory/$slug/")
         }.toJsonElement()

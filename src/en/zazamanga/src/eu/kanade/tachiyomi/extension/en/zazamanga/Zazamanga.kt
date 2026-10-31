@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
@@ -96,7 +97,7 @@ abstract class Zazamanga : MadaraNoAjax() {
         else -> element.attr("src")
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(searchUrl()).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get(searchUrl(), Fetch.DOCUMENT).asJsoup()
         .select("form.search-advanced-form input[name=genre[]]")
         .map { GenreOption(it.nextElementSibling()!!.text(), it.attr("value")) }
         .distinctBy(GenreOption::slug)
@@ -127,7 +128,7 @@ abstract class Zazamanga : MadaraNoAjax() {
 
     // Past page 100 the site repeats page 100
     private suspend fun listPage(url: HttpUrl, page: Int): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseArchive(document), page < LAST_PAGE && document.selectFirst(nextPageSelector()) != null)
     }
 

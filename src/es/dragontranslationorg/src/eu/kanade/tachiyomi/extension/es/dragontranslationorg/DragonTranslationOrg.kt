@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
@@ -28,7 +29,7 @@ abstract class DragonTranslationOrg : Madara() {
             if (page > 1) addPathSegments("page/$page/")
             addQueryParameter("m_orderby", "latest")
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseArchive(document), document.selectFirst("a.nextpostslink") != null)
     }
 
