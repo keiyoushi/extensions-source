@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -25,6 +26,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class Sacachispa :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -49,7 +52,7 @@ abstract class Sacachispa :
             }
             .build()
 
-        val response = client.get(url).parseAs<MangaListResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<MangaListResponse>()
 
         return MangasPage(
             mangas = response.data.map { it.toSManga() },
@@ -82,7 +85,7 @@ abstract class Sacachispa :
         )
     }
 
-    private suspend fun fetchMangaDetails(manga: SManga): SManga = client.get("$API_URL/manga/${manga.url}")
+    private suspend fun fetchMangaDetails(manga: SManga): SManga = client.get("$API_URL/manga/${manga.url}", Fetch.XHR)
         .parseAs<MangaResponse>().data
         .toSManga(manga.url)
 
@@ -90,7 +93,7 @@ abstract class Sacachispa :
         // Entries from before the site rewrite store the slug, the releases endpoint takes the id.
         val mangaId = manga.url.takeIf { UUID_REGEX.matches(it) }
             ?: manga.memo.getStringOrNull("id")
-            ?: client.get("$API_URL/manga/${manga.url}").parseAs<MangaResponse>().data.id
+            ?: client.get("$API_URL/manga/${manga.url}", Fetch.XHR).parseAs<MangaResponse>().data.id
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_CHAPTERS, true)
         val chapters = mutableListOf<SChapter>()
@@ -102,7 +105,7 @@ abstract class Sacachispa :
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("limit", CHAPTER_PAGE_SIZE.toString())
                 .build()
-            val response = client.get(url).parseAs<ReleaseListResponse>()
+            val response = client.get(url, Fetch.XHR).parseAs<ReleaseListResponse>()
 
             chapters += response.data.mapNotNull { it.toSChapter(hideLocked) }
         } while (page++ < response.pagination.pages)
@@ -111,7 +114,7 @@ abstract class Sacachispa :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$API_URL/releases/${chapter.url}/pages", ensureSuccess = false)
+        val response = client.get("$API_URL/releases/${chapter.url}/pages", Fetch.XHR, ensureSuccess = false)
 
         // Patreon-exclusive chapters answer 403 with a message for the reader.
         if (response.code == 403 && response.header("Content-Type").orEmpty().startsWith("application/json")) {
