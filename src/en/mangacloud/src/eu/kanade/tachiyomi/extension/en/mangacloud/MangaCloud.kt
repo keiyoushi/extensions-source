@@ -33,7 +33,6 @@ const val CDN_URL = "https://pika.$DOMAIN"
 @Source
 abstract class MangaCloud : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(1)
 
     private val handshakeMutex = Mutex()

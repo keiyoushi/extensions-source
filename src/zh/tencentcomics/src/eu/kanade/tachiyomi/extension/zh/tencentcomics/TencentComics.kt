@@ -26,7 +26,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class TencentComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     // its easier to parse the mobile version of the website
 
     private val desktopUrl = "https://ac.qq.com"

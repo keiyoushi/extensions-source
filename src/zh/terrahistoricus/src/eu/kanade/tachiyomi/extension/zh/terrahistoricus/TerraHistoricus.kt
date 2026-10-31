@@ -23,8 +23,6 @@ import okhttp3.Response
 
 @Source
 abstract class TerraHistoricus : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val topicKeys = listOf("terra-historicus", "talos-ii-historicus")
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::refreshExpiredImage)

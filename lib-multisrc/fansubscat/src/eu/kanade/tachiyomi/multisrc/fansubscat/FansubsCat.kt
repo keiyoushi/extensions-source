@@ -23,8 +23,6 @@ import okhttp3.Response
 
 abstract class FansubsCat : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val apiBaseUrl: String
         get() = baseUrl.replace("https://manga.", "https://api.")
 

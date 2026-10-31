@@ -23,8 +23,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class LeituraManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.leituramanga.net"
 
     private val cdnUrl = "https://cdn.leituramanga.net"

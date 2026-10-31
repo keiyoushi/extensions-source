@@ -28,7 +28,6 @@ import java.net.URLEncoder
 @Source
 abstract class Mh160 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val mobileUrl: String get() = baseUrl.replace("www.", "m.")
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMobileList("$mobileUrl/kanmanhua/zaixian_hit.html")

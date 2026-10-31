@@ -26,7 +26,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class Shinigami : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://api.shngm.io"
 
     private val apiHeaders: Headers

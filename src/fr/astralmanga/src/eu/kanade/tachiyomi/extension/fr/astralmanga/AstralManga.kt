@@ -32,7 +32,6 @@ import kotlin.time.Instant
 @Source
 abstract class AstralManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     // ========================== Popular ==========================
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(POPULAR))

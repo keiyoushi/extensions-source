@@ -26,8 +26,6 @@ import kotlin.time.Instant
 @Source
 abstract class ViTruyen : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}/api/next"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(authInterceptor())

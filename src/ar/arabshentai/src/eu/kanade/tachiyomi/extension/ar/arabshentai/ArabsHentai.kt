@@ -28,8 +28,6 @@ import java.util.Locale
 
 @Source
 abstract class ArabsHentai : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)

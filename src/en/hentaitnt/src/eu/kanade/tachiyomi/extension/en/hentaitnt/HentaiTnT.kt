@@ -36,7 +36,6 @@ abstract class HentaiTnT :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override suspend fun getPopularManga(page: Int): MangasPage {

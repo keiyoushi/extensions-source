@@ -36,7 +36,6 @@ abstract class Atsumaru :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2)
     }

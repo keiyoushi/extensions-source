@@ -26,7 +26,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Tranh18 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
     }

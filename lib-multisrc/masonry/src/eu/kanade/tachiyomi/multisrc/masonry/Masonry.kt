@@ -22,8 +22,6 @@ import org.jsoup.nodes.Element
 
 abstract class Masonry : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open fun popularMangaUrl(page: Int): String = when (page) {
         1 -> baseUrl
         2 -> "$baseUrl/archive/"

@@ -21,8 +21,6 @@ import java.lang.IllegalStateException
 @Source
 abstract class Zazhimi : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://android2026.zazhimi.net/api"
 
     override val supportsLatest = false

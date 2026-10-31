@@ -45,8 +45,6 @@ import kotlin.time.Instant
 abstract class SoraRaw :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val showAdult get() = preferences.getBoolean(PREF_ADULT, false)

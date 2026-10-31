@@ -28,8 +28,6 @@ import org.jsoup.select.Evaluator
 @Source
 abstract class BoyLove : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(UnscramblerInterceptor())
         .rateLimit(2)
 

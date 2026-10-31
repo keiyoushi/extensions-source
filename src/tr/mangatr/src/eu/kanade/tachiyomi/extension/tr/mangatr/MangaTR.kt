@@ -47,8 +47,6 @@ import java.util.Locale
 @Source
 abstract class MangaTR : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun Headers.Builder.configureHeaders() = add("Accept-Language", "en-US,en;q=0.5")
 
     override fun OkHttpClient.Builder.configureClient() = apply {

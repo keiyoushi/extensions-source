@@ -30,8 +30,6 @@ abstract class SchaleScans :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override val supportsRelatedMangas = true

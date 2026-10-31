@@ -30,7 +30,6 @@ abstract class RimuScans :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     // =============================== Popular ==============================

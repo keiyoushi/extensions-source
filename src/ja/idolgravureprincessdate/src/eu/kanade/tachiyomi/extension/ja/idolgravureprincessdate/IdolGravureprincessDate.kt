@@ -24,8 +24,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class IdolGravureprincessDate : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.get(apiUrlBuilder(page).build(), Fetch.XHR).parseAs<BloggerDto>().toMangasPage()

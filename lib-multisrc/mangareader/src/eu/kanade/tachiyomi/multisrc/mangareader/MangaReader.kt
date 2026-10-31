@@ -31,8 +31,6 @@ class AjaxResponse(
 
 abstract class MangaReader : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     open fun addPage(page: Int, builder: HttpUrl.Builder) {
         builder.addQueryParameter("page", page.toString())
     }

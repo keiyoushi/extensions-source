@@ -35,8 +35,6 @@ import okhttp3.Response
 abstract class Cmoa :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {

@@ -20,8 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class ManhwaWeb : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.manhwaweb.com"
 
     override fun Headers.Builder.configureHeaders() = add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")

@@ -31,8 +31,6 @@ import kotlin.math.roundToInt
 @Source
 abstract class Mangabay : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(DleGuardResolver.interceptor(baseUrl))
         addInterceptor { chain ->

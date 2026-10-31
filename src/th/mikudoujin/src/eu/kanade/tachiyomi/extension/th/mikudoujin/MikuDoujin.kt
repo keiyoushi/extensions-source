@@ -26,7 +26,6 @@ import kotlin.time.Duration.Companion.minutes
 @Source
 abstract class MikuDoujin : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest get() = false
 
     override fun OkHttpClient.Builder.configureClient() = apply {

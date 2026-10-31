@@ -15,8 +15,6 @@ import keiyoushi.utils.asJsoup
 @Source
 abstract class GunnerkriggCourt : KeiSource() {
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val manga = SManga.create().apply {
             title = name

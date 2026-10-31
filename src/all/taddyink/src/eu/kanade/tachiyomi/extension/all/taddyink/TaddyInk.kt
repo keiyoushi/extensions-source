@@ -29,7 +29,6 @@ abstract class TaddyInk :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val taddyLang = ""
 
     override val supportsLatest = false

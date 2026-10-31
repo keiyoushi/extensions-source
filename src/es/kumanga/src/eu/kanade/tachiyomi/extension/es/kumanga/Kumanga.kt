@@ -27,8 +27,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Kumanga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())

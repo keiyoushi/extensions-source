@@ -33,7 +33,6 @@ abstract class Cartoon18 :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
     private val preferences by getPreferencesLazy()

@@ -24,8 +24,6 @@ import java.util.Locale
 @Source
 abstract class KomikNesia : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api-be.komiknesia.my.id/api"
 
     private inline fun <reified T> Response.parseAs(): T = parseAs(

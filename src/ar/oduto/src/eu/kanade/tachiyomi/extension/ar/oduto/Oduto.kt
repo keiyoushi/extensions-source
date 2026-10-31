@@ -16,7 +16,6 @@ import keiyoushi.utils.parseAs
 @Source
 abstract class Oduto : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest get() = false
 
     override suspend fun getPopularManga(page: Int): MangasPage {

@@ -19,8 +19,6 @@ import java.net.URI
 @Source
 abstract class ScanR : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     val cdnUrl = "https://cdn.teamscanr.fr"
     val imgProxyUrl = "https://img.teamscanr.fr"
     override val supportsLatest = false

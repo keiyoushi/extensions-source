@@ -26,8 +26,6 @@ import java.util.Locale
 
 @Source
 abstract class Ikuhentai : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatterBuilder()
         .parseCaseInsensitive()
         .appendPattern("MMMM d, yyyy")

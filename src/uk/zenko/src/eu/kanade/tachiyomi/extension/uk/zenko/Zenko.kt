@@ -30,7 +30,6 @@ import java.util.Calendar
 abstract class Zenko :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain"
     private val imgUrl get() = "https://storage.$domain"

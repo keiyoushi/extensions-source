@@ -28,8 +28,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class UniComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         connectTimeout(10.seconds)
         readTimeout(30.seconds)

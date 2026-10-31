@@ -22,8 +22,6 @@ import kotlin.time.Instant
 @Source
 abstract class TeamShadowi : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Reusable headers for fetching raw JSON React Server Component payloads
     private val rscHeaders get() = headers.newBuilder().add("Rsc", "1").build()
 

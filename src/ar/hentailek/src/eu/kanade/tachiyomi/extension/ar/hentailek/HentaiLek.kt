@@ -24,7 +24,6 @@ import java.time.ZoneId
 @Source
 abstract class HentaiLek : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchBrowse(page, "", FilterList(SortFilter("popular")))

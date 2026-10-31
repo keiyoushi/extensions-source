@@ -26,8 +26,6 @@ import java.util.Locale
 
 @Source
 abstract class Bacami : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("d MMMM, yyyy", Locale.ENGLISH)
     private val chapterRegex = Regex("""(?:Chapter|Ch\.)\s+([0-9]+(?:\.[0-9]+)?)""", RegexOption.IGNORE_CASE)
 

@@ -23,8 +23,6 @@ import okhttp3.Response
 
 @Source
 abstract class MangaUpJapan : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/rankings/1", Fetch.DOCUMENT))
 
     private fun parseMangaList(response: Response): MangasPage {

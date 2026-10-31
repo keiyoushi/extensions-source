@@ -21,8 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class ArknightsComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchComics().map { it.toSManga() }, false)

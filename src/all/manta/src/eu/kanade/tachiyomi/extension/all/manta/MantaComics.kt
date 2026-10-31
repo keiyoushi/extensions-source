@@ -27,8 +27,6 @@ import okhttp3.Response
 abstract class MantaComics :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://" + baseUrl.toHttpUrl().host
 
     private val preferences: SharedPreferences by getPreferencesLazy()

@@ -20,7 +20,6 @@ import okhttp3.Response
 
 @Source
 abstract class MangaSwat : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(1)
     }

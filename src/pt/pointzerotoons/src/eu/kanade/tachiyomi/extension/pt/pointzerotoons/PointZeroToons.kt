@@ -23,7 +23,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class PointZeroToons : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList())

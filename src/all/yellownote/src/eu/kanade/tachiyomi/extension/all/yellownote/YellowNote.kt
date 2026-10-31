@@ -34,7 +34,6 @@ abstract class YellowNote :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     // img.xchina.io blocks requests that do not look like browser image loads

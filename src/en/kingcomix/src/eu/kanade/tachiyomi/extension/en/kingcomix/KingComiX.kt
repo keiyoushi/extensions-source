@@ -23,7 +23,6 @@ import kotlin.time.Instant
 @Source
 abstract class KingComiX : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     // ============================== Popular ===============================

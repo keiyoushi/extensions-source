@@ -29,8 +29,6 @@ import okhttp3.Request
 @Source
 abstract class SunshineButterflyScans : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val cdnUrl = "$baseUrl/images/projcoverjpeg/"
 
     // Madara -> custom theme

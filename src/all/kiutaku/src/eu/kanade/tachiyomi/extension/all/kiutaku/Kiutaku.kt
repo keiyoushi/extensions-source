@@ -20,8 +20,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class Kiutaku : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Image host (mitaku.net) blocks hotlinking with a kiutaku.com Referer
     override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Referer")
 

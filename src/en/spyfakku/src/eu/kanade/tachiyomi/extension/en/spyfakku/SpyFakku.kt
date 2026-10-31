@@ -47,8 +47,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class SpyFakku :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseImageUrl = "$TMP_CDN_URL/image"
 
     private val baseApiUrl get() = "$baseUrl/api"

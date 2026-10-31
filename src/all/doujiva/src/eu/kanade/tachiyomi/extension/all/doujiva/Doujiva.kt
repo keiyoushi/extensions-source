@@ -25,7 +25,6 @@ private const val PAGE_LIMIT = 24
 @Source
 abstract class Doujiva : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl get() = "$baseUrl/api/v1"
 
     // Stay well under the observed 100 req/min API budget.

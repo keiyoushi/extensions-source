@@ -20,8 +20,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class HentaiArchive : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val cdnHeaders: Headers
         get() = headers.newBuilder()
             .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")

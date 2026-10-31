@@ -34,8 +34,6 @@ import java.net.URLDecoder
 abstract class KManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://api.$domain"
     private val pageLimit = 25

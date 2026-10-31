@@ -20,8 +20,6 @@ import okhttp3.Response
 
 @Source
 abstract class GanganOnline : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/rensai", Fetch.DOCUMENT).parseMangaList()

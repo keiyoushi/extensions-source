@@ -18,8 +18,6 @@ import java.time.format.DateTimeFormatter
 @Source
 abstract class Schlockmercenary : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     // Books

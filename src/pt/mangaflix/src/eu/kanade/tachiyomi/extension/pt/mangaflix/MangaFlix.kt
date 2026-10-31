@@ -24,8 +24,6 @@ import java.util.Locale
 @Source
 abstract class MangaFlix : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.mangaflix.net/v1"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)

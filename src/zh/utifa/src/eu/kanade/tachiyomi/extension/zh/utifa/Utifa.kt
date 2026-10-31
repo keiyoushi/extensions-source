@@ -26,8 +26,6 @@ import java.io.IOException
 
 @Source
 abstract class Utifa : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
 
     override val supportsFilterFetching = true

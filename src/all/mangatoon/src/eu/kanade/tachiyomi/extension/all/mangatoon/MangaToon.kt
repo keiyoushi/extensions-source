@@ -26,8 +26,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MangaToon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val urlLang: String get() = if (lang == "zh") {
         "cn"
     } else if (lang == "pt-BR") {

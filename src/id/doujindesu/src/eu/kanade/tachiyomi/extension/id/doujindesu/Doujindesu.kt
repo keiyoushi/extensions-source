@@ -24,8 +24,6 @@ import java.util.LinkedHashMap
 
 @Source
 abstract class Doujindesu : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
 
     private val decryptor = Decryptor { apiUrl }

@@ -31,8 +31,6 @@ abstract class GeassComics :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = baseUrl.replace("://", "://api.")
 
     private val preferences by getPreferencesLazy()

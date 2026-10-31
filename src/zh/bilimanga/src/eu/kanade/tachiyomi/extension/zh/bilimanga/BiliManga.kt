@@ -40,8 +40,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class BiliManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val pref by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

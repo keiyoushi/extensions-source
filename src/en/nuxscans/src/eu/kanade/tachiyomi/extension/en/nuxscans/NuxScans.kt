@@ -17,8 +17,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class NuxScans : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     companion object {
         private val JS_REDIRECT_REGEX = Regex("""window\.location\.replace\(['"]([^'"]+)['"]\)""")
     }

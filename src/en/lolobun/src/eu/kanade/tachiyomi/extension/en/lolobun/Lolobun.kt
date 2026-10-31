@@ -29,8 +29,6 @@ import java.util.Locale
 abstract class Lolobun :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     // The homepage section is the site's only comic listing

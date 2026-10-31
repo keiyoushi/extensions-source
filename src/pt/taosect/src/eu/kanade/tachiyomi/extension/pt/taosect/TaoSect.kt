@@ -33,7 +33,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class TaoSect : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds)
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", USER_AGENT)

@@ -31,8 +31,6 @@ import kotlin.time.Instant
 
 abstract class ZeistManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
     protected open val mangaCategory = "Series"

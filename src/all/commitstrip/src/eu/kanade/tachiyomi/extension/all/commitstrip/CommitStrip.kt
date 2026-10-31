@@ -19,7 +19,6 @@ import java.util.Locale
 @Source
 abstract class CommitStrip : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     private val siteLang: String get() = lang

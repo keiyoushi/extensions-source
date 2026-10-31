@@ -42,8 +42,6 @@ import kotlin.time.Instant
 @Source
 abstract class LeesinComic : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
         // get_comics is ~6 MB and the server can take over a minute to deliver it

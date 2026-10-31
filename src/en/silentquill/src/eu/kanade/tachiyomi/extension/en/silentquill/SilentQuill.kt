@@ -26,7 +26,6 @@ import okhttp3.Response
 
 @Source
 abstract class SilentQuill : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     private val rscHeaders get() = headersBuilder()
         .set("rsc", "1")
         .build()

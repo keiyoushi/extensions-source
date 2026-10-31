@@ -15,7 +15,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 abstract class MonochromeCMS : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     protected open val apiUrl: String

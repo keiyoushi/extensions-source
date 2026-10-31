@@ -34,7 +34,6 @@ abstract class MangaKatana :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val serverPreference = "SERVER_PREFERENCE"
 

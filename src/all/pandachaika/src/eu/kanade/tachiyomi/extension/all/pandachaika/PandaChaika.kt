@@ -31,8 +31,6 @@ import java.lang.String.CASE_INSENSITIVE_ORDER
 @Source
 abstract class PandaChaika : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val searchLang: String
         get() = when (lang) {
             "en" -> "english"

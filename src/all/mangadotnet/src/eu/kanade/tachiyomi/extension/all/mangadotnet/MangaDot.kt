@@ -58,8 +58,6 @@ abstract class MangaDot :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     // =============================== Setup ===============================
     private val preferences: SharedPreferences = getPreferences {
         val oldChapterKey = "pref_fetch_volume"

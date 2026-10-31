@@ -35,8 +35,6 @@ import okhttp3.Response
 @Source
 abstract class Webcomics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiSubDomain = "official-website-api"
     private val apiUrl = "https://$apiSubDomain.${baseUrl.substringAfterLast("/")}/api/web/v4/book"
 

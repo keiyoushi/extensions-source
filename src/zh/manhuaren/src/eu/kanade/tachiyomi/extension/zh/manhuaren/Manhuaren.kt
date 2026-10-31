@@ -48,8 +48,6 @@ import kotlin.time.Duration.Companion.minutes
 abstract class Manhuaren :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val pageSize = 20
     private val baseHttpUrl = baseUrl.toHttpUrl()
     private val preferences by getPreferencesLazy()

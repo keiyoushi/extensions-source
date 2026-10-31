@@ -29,8 +29,6 @@ const val LATEST_LIMIT = 20
 
 @Source
 abstract class Doujinio : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = apply {

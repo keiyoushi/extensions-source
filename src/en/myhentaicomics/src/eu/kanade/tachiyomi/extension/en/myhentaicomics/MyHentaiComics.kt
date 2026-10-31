@@ -20,7 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class MyHentaiComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     // =============================== Popular ================================
 
     // Popular = most viewed

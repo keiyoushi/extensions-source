@@ -16,8 +16,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class SabrinaOnline : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     fun manga(): SManga = SManga.create().apply {

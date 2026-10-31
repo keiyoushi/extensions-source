@@ -30,8 +30,6 @@ import java.time.ZoneId
 abstract class CorocoroOnline :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/csr"
     private val preferences by getPreferencesLazy()
     private val jst = ZoneId.of("Asia/Tokyo")

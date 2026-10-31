@@ -33,8 +33,6 @@ import okhttp3.Response
 
 @Source
 abstract class Hikarinagi : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun getHomeUrl() = "$baseUrl/mangas"
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())

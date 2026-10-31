@@ -47,8 +47,6 @@ import java.util.Locale
 
 abstract class MangaTaro : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int) = browseManga(page, "", SortFilter.popular)
 

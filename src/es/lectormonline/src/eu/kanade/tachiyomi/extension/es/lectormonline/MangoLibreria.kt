@@ -40,7 +40,6 @@ import kotlin.time.Instant
 @Source
 abstract class MangoLibreria : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .addInterceptor { chain ->

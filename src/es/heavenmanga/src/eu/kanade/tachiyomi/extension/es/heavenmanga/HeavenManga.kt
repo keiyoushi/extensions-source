@@ -24,8 +24,6 @@ import java.time.format.DateTimeFormatter
 @Source
 abstract class HeavenManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/top?orderby=views&pages=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaGrid(document)

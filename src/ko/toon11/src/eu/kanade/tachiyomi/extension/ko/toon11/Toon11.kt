@@ -28,8 +28,6 @@ import java.util.Locale
 @Source
 abstract class Toon11 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&is_over=0", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("li[data-id]").map { element ->

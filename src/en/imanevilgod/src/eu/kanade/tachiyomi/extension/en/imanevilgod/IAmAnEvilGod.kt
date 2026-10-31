@@ -18,8 +18,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class IAmAnEvilGod : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     // --- Catalogue (single entry) ---
 
     private fun createManga() = SManga.create().apply {

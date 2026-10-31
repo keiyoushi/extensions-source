@@ -43,8 +43,6 @@ abstract class Comikey :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val defaultLanguage: String get() = if (baseUrl == "https://br.comikey.com") "pt-BR" else "en"
 
     private val gundamUrl: String = "https://gundam.comikey.net"

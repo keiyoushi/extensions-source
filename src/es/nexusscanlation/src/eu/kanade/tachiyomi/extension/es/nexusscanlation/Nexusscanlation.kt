@@ -26,8 +26,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class Nexusscanlation : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiBaseUrl = "https://api.nexusscanlation.com/api/v1"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(ImageInterceptor())

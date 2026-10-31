@@ -27,8 +27,6 @@ import java.util.Locale
 @Source
 abstract class Kumaraw : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("d-M-yyyy", Locale.ROOT)
 
     private val json: Json by lazy {

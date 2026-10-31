@@ -25,7 +25,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class AnimeSama : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept-Language", "fr-FR")
 
     // ========================= Popular =========================

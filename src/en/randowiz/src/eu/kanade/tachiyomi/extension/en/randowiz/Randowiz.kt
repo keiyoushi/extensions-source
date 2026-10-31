@@ -18,8 +18,6 @@ import java.util.Locale
 @Source
 abstract class Randowiz : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(

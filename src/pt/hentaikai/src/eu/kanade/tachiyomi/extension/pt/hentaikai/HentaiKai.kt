@@ -21,8 +21,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class HentaiKai : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = if (page == 1) "$baseUrl/mangas-hentai/" else "$baseUrl/mangas-hentai/page/$page/"
         return typeList(url, page, "mangas-hentai")

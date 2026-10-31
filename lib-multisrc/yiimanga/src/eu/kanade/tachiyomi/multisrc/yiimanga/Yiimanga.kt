@@ -28,8 +28,6 @@ import java.util.Locale
 
 abstract class Yiimanga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected abstract val mangaPath: String
 
     protected open val searchParam = "s"

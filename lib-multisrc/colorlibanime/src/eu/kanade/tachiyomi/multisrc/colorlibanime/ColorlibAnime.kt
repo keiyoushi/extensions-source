@@ -21,8 +21,6 @@ import org.jsoup.nodes.Element
 
 abstract class ColorlibAnime : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     private val timeRegex = Regex("""Date\((\d+)\)""")

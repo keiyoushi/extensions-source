@@ -34,7 +34,6 @@ abstract class RokuHentai :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     // Customize

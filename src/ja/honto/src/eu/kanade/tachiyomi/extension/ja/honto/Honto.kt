@@ -45,8 +45,6 @@ import java.util.Locale
 abstract class Honto :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.ROOT).withZone(ZoneId.of("Asia/Tokyo"))
 

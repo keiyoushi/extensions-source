@@ -36,8 +36,6 @@ abstract class KuroMangas :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
 
     private val cdnUrl = "https://cdn.kuromangas.com"

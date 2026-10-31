@@ -25,8 +25,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class MangaLivreBlog : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2, 1.seconds)
 
     // ============================== Popular ================================

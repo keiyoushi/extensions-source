@@ -26,8 +26,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class ComixTopia : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://supa.${baseUrl.toHttpUrl().host}/rest/v1"
 
     private val apiHeaders: Headers get() = headersBuilder()

@@ -59,8 +59,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Jinmantiantang :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences = getPreferences { preferenceMigration() }
 
     override val supportsRelatedMangas get() = true

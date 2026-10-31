@@ -21,7 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class YomuMangas : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://api.yomumangas.com"
 
     // ============================== Popular ==============================

@@ -21,8 +21,6 @@ import java.util.Locale
 
 @Source
 abstract class NeverScans : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormatter = DateTimeFormatter.ofPattern("d/M/yyyy", Locale.ENGLISH)
 
     private fun Response.toMangasPage(): MangasPage {

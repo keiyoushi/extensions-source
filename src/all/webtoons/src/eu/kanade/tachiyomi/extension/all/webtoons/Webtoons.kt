@@ -39,8 +39,6 @@ import java.util.Calendar
 abstract class Webtoons :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     // Due to lang code getting more specific for zh-Hant
     private val langCode: String get() = if (lang == "zh-Hant") "zh-hant" else lang
     private val localeForCookie: String get() = if (lang == "zh-Hant") "zh_TW" else lang

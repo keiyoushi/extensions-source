@@ -38,7 +38,6 @@ import java.util.Locale
 @Source
 abstract class Panomic : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences by getPreferencesLazy()
 
     private var currentPasscodeToken: String

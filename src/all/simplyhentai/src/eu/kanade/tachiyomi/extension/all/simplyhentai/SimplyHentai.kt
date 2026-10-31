@@ -25,8 +25,6 @@ abstract class SimplyHentai :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val langName: String
         get() = when (lang) {
             "en" -> "english"

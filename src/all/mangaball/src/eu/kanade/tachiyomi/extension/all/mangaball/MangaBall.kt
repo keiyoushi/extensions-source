@@ -42,8 +42,6 @@ abstract class MangaBall :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val siteLang: List<String>
         get() = when (lang) {
             "ar" -> listOf("ar")

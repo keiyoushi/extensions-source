@@ -24,7 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class SaikaiScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val host get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$host"
     private val storageUrl get() = "https://s3-beta.$host"

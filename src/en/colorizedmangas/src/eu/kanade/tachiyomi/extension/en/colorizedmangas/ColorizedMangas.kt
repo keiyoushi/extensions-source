@@ -19,8 +19,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class ColorizedMangas : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage {

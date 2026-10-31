@@ -24,8 +24,6 @@ import java.util.Calendar
 
 @Source
 abstract class NineHentai : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // The API's image_server still points old galleries at the dead i.9hentai.com host
     private val imageBaseUrl: String
         get() = "https://i.${baseUrl.toHttpUrl().host}/images"

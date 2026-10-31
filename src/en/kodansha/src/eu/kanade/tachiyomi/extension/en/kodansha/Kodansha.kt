@@ -34,8 +34,6 @@ import java.io.IOException
 abstract class Kodansha :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::imageIntercept)

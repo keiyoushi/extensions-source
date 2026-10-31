@@ -24,7 +24,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class MangaRaw : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://api.mangarw.com/api/v1"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)

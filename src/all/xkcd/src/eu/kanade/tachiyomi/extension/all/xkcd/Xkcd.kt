@@ -38,7 +38,6 @@ abstract class Xkcd :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(TextInterceptor())

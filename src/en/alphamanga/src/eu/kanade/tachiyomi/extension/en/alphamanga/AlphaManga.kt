@@ -31,8 +31,6 @@ import okhttp3.OkHttpClient
 abstract class AlphaManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
     private val preferences by getPreferencesLazy()
 

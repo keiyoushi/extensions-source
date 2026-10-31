@@ -26,7 +26,6 @@ import okhttp3.Response
 
 @Source
 abstract class Yomonga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())

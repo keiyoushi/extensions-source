@@ -42,8 +42,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class FalcoScan : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { it.host == baseUrlHost }

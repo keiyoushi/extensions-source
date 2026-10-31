@@ -33,7 +33,6 @@ import okhttp3.Response
 abstract class Tongli :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://api.tongli.tw"
 
     private val preferences = getPreferences()

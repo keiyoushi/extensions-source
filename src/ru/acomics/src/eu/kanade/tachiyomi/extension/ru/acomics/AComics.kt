@@ -28,7 +28,6 @@ import kotlin.collections.List
 @Source
 abstract class AComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addCookie { listOf("ageRestrict" to "18") }
     }

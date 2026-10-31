@@ -21,7 +21,6 @@ import java.util.Calendar
 @Source
 abstract class OppaiStream : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val cdnUrl = "https://myspacecat.pictures"
 
     // popular

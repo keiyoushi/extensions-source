@@ -23,8 +23,6 @@ import java.time.format.DateTimeFormatter
 @Source
 abstract class Hennojin : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Popular is latest
     override val supportsLatest = false
 

@@ -30,8 +30,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 @Source
 abstract class MangaMillion : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/api"
     private val preferences by getPreferencesLazy()

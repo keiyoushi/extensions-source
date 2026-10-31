@@ -31,8 +31,6 @@ import java.time.ZoneId
 abstract class YnJn :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://webapi.$domain"
     private val preferences by getPreferencesLazy()

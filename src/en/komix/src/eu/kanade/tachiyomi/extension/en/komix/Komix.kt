@@ -21,7 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Komix : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsFilterFetching = true
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter()))

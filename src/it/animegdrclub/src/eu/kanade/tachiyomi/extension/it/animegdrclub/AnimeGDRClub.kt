@@ -18,8 +18,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class AnimeGDRClub : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = mangasParse(client.get("$baseUrl/serie.php", Fetch.DOCUMENT), popularMangaSelector(), 1)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = mangasParse(client.get("$baseUrl/", Fetch.DOCUMENT), latestUpdatesSelector(), 2)

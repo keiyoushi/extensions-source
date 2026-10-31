@@ -32,8 +32,6 @@ import kotlin.time.Duration.Companion.minutes
 @Source
 abstract class SkyMangas : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsFilterFetching = true
 
     override val supportsRelatedMangas = true

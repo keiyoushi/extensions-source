@@ -44,8 +44,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class MangaLivre :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     private val apiUrl: String get() = "$baseUrl/api"

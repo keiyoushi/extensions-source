@@ -23,8 +23,6 @@ import okhttp3.Response
 
 @Source
 abstract class VoraToon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseHost get() = baseUrl.toHttpUrl().host
 
     private val apiUrl get() = "https://$baseHost/api/proxy"

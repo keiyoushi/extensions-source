@@ -35,7 +35,6 @@ abstract class Mango :
     ConfigurableSource,
     UnmeteredSource {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     private val preferences: SharedPreferences by getPreferencesLazy()

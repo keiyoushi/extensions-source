@@ -26,8 +26,6 @@ import kotlin.time.Instant
 @Source
 abstract class ColorcitoScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage {

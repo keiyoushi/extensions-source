@@ -17,8 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class BRYaoi : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     // ====================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())

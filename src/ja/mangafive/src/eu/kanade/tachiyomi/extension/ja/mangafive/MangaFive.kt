@@ -34,8 +34,6 @@ import java.time.format.DateTimeFormatter
 abstract class MangaFive :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd").withZone(ZoneId.of("Asia/Tokyo"))
 

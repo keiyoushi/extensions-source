@@ -29,8 +29,6 @@ abstract class NineGrid :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences = getPreferences()
 
     private val apiKey: String

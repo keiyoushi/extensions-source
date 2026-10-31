@@ -23,8 +23,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class RocksManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = baseUrl.replace("://", "://api.")
 
     override val supportsFilterFetching = true

@@ -34,8 +34,6 @@ import java.time.ZonedDateTime
 abstract class CyComi :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://web.$domain/api"
     private val jst = ZoneId.of("Asia/Tokyo")

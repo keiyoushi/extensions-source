@@ -25,8 +25,6 @@ abstract class Mangauno :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val apiUrl: String

@@ -31,8 +31,6 @@ import java.util.Locale
 @Source
 abstract class OnfMangas : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::onfTokenInterceptor)
 
     private fun onfTokenInterceptor(chain: Interceptor.Chain): Response {

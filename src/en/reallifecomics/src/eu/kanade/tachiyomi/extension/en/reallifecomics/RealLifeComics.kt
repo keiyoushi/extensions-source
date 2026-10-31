@@ -22,8 +22,6 @@ import java.util.Locale
 @Source
 abstract class RealLifeComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val dateFormat = DateTimeFormatter.ofPattern("MMMM yyyy d", Locale.US)

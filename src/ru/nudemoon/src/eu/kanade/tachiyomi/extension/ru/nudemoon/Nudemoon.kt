@@ -32,8 +32,6 @@ import java.util.Locale
 
 @Source
 abstract class Nudemoon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val isUserAuthenticated: Boolean
         get() = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).any { it.name == "fusion_user" }

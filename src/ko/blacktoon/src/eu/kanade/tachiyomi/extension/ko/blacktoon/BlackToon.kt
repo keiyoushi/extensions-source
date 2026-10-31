@@ -27,8 +27,6 @@ import kotlin.random.Random
 
 @Source
 abstract class BlackToon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private var currentBaseUrlHost = ""
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->

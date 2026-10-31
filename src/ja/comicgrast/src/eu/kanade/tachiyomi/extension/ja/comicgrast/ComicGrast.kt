@@ -22,8 +22,6 @@ import java.util.Locale
 
 @Source
 abstract class ComicGrast : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.ROOT)

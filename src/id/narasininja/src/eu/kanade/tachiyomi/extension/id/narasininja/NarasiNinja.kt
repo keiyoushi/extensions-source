@@ -29,8 +29,6 @@ import java.util.Locale
 @Source
 abstract class NarasiNinja : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ======================== CSRF & Headers =================
     private var csrfToken: String? = null
 

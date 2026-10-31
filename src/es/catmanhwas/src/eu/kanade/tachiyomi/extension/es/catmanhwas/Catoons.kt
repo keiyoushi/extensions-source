@@ -34,8 +34,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Catoons : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 3, period = 1.seconds)
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchBrowsePage(page, "", FilterList(OrderFilter(listOf("" to "popular"))))

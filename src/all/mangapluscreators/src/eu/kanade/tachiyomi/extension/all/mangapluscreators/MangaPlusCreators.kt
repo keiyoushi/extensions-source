@@ -30,7 +30,6 @@ import java.util.Locale
 @Source
 abstract class MangaPlusCreators : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl get() = "$baseUrl/api"
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", USER_AGENT)

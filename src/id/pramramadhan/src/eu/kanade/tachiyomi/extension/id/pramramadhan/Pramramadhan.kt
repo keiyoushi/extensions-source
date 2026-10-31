@@ -23,8 +23,6 @@ import java.util.Locale
 
 @Source
 abstract class Pramramadhan : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)

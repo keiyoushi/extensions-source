@@ -26,8 +26,6 @@ import okhttp3.Response
 
 @Source
 abstract class GaugauMonsterPlus : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())

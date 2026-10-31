@@ -24,8 +24,6 @@ import java.util.Locale
 
 @Source
 abstract class Submanhwa : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.ENGLISH)
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept-Language", "es-PE,es;q=0.9,en-US;q=0.8,en;q=0.7")

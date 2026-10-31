@@ -22,8 +22,6 @@ import java.util.Locale
 @Source
 abstract class MangaKawaii : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/mangas".toHttpUrl().newBuilder()

@@ -41,8 +41,6 @@ abstract class Baozi :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val isAppMirror: Boolean

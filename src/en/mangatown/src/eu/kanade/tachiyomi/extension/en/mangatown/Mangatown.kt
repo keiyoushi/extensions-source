@@ -23,8 +23,6 @@ import java.util.Locale
 @Source
 abstract class Mangatown : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd,yyyy", Locale.US)
 
     override suspend fun getPopularManga(page: Int): MangasPage {

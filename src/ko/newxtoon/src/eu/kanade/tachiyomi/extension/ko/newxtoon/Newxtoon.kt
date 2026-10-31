@@ -24,8 +24,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Newxtoon : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = getComicList(page, "popular")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getComicList(page, "latest")

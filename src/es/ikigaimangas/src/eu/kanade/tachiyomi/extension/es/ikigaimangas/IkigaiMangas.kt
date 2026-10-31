@@ -47,8 +47,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class IkigaiMangas :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addCookie("is-adult-enabled" to "true")
         .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
 

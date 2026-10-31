@@ -29,8 +29,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class ManhuaTop : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2) { it.encodedPath.startsWith("/api/") }
 
     // The image hosts answer 404 for some files when an Origin is sent

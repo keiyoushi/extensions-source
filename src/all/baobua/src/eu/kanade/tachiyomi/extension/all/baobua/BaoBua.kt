@@ -25,8 +25,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class BaoBua : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)

@@ -22,8 +22,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Lmtos : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     override suspend fun getPopularManga(page: Int) = fetchSeries(page, "", FilterList(), "rating")

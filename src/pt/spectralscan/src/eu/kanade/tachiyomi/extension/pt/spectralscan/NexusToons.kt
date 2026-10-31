@@ -29,8 +29,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class NexusToons :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(NexusDecrypt.createInterceptor())
         rateLimit(3, 1.seconds)

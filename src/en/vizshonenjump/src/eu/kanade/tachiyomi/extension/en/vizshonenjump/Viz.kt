@@ -39,8 +39,6 @@ import java.util.Locale
 abstract class Viz :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
     private val servicePath get() = if (name.contains("Shonen Jump")) "shonenjump" else "vizmanga"
     private val searchPath get() = if (name.contains("Shonen Jump")) "SjChapterSeries" else "VmChapterSeries"

@@ -24,8 +24,6 @@ import java.util.Locale
 
 @Source
 abstract class MangaDemon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(6) { it.toString().contains("images/thumbnails") }
         rateLimit(2)

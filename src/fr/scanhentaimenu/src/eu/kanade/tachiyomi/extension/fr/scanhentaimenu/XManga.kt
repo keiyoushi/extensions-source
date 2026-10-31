@@ -17,8 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class XManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter("views")))

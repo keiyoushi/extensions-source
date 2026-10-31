@@ -29,8 +29,6 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class HattoriManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 
     // Latest

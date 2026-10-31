@@ -26,8 +26,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Klto9 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
             .addQueryParameter("listType", "pagination")

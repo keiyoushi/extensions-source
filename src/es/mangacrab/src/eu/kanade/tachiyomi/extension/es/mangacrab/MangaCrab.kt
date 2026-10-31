@@ -24,8 +24,6 @@ import kotlin.time.Instant
 @Source
 abstract class MangaCrab : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     private suspend fun getMangasPage(

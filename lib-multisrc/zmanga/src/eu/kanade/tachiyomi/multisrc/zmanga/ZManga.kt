@@ -28,8 +28,6 @@ import java.util.Locale
 
 abstract class ZManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
 
     // Some sites rename the advanced-search route (e.g. "advance-search").

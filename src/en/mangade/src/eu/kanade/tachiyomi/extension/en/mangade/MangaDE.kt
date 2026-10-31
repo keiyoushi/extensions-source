@@ -22,8 +22,6 @@ import java.util.Locale
 @Source
 abstract class MangaDE : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}/api"
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 

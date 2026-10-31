@@ -20,7 +20,6 @@ import okhttp3.Response
 
 @Source
 abstract class OTruyen : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     private val domainName = "otruyen"
 
     private val domainApi = "${domainName}api.com"

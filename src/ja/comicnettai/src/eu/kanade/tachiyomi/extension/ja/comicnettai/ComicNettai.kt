@@ -28,7 +28,6 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class ComicNettai : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy.MM.dd").withZone(ZoneId.of("Asia/Tokyo"))
 
     override val supportsLatest = false

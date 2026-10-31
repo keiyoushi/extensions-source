@@ -26,7 +26,6 @@ import okhttp3.Response
 @Source
 abstract class Pornhwa18 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override suspend fun getPopularManga(page: Int) = listing(baseUrl.toHttpUrl().newBuilder().addPathSegment("popular"), page)
 
     override suspend fun getLatestUpdates(page: Int) = listing(baseUrl.toHttpUrl().newBuilder(), page)

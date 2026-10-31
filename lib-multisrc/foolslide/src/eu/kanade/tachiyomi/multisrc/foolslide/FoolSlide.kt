@@ -37,8 +37,6 @@ abstract class FoolSlide :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val urlModifier = ""
 
     override suspend fun getPopularManga(page: Int): MangasPage {

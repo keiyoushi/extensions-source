@@ -452,10 +452,10 @@ abstract class KeiSource : HttpSource() {
     abstract override suspend fun getPageList(chapter: SChapter): List<Page>
 
     /**
-     * How page images and the covers the app loads go out. Set [Fetch.IMAGE] to send the headers a browser sends for
-     * them; [Fetch.NONE] sends them as built.
+     * How page images and the covers the app loads go out: [Fetch.IMAGE] sends the headers a browser sends for them;
+     * [Fetch.NONE] sends them as built.
      */
-    protected open val imageFetch: Fetch get() = Fetch.NONE
+    protected open val imageFetch: Fetch get() = Fetch.IMAGE
 
     /**
      * Builds the request for a page's image. A GET without a [Fetch] is sent with [imageFetch].

@@ -31,8 +31,6 @@ abstract class KivaraToons :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val showAdultContent get() = preferences.getBoolean(ADULT_CONTENT_PREF, false)

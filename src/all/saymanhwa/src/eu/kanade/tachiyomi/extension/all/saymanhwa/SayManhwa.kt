@@ -28,8 +28,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class SayManhwa : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val saymanhwaLang: String
         get() = when (lang) {
             "pt" -> "pt-br"

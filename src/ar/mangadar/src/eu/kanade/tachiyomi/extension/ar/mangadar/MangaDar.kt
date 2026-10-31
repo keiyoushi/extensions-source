@@ -27,7 +27,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class MangaDar : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = true
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)

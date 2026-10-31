@@ -16,8 +16,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Lelscan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // A stable reader page guaranteed to carry the navigation dropdowns and latest section.
     private val catalogPage get() = "$baseUrl/lecture-en-ligne-one-piece"
 

@@ -22,8 +22,6 @@ import org.jsoup.parser.Parser
 @Source
 abstract class EveriaClubCom : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val Element.imgSrc: String?
         get() = when {
             hasAttr("data-original") -> attr("data-original")

@@ -32,7 +32,6 @@ import kotlin.time.Instant
 @Source
 abstract class Tappytoon : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val res = chain.proceed(chain.request())
         val mime = res.headers["Content-Type"]

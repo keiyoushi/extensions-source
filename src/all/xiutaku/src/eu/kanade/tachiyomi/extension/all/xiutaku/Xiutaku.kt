@@ -28,8 +28,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Xiutaku : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(10, 1.seconds) { it.host == baseUrlHost }

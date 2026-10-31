@@ -22,8 +22,6 @@ import org.jsoup.nodes.TextNode
 @Source
 abstract class Vgperson : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val homeUrl = "$baseUrl/other/mangaviewer.php"

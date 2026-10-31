@@ -20,8 +20,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class ILikeComix : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"

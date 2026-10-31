@@ -27,8 +27,6 @@ import java.time.format.DateTimeFormatter
 @Source
 abstract class Omicaso : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val catalog = client.get("$baseUrl/api/manga.php?page=1&limit=1&mode=all", Fetch.XHR).parseAs<CatalogDto>()
         return MangasPage(catalog.sections.trending.all.map { it.toSManga() }, false)

@@ -43,8 +43,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Zebrack :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val subdomain = "zebrack-comic"
     private val apiUrl = "https://api2.$subdomain.com/api"
     private val magazineApiUrl = "https://api.$subdomain.com/api"

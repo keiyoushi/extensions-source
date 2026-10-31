@@ -22,7 +22,6 @@ import kotlin.time.Instant
 @Source
 abstract class Hentara : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
     private object Api {

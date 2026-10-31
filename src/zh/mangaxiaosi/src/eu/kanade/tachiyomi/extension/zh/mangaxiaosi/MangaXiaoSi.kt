@@ -26,8 +26,6 @@ import java.util.Locale
 @Source
 abstract class MangaXiaoSi : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Set a desktop User-Agent to prevent the site from serving the mobile layout
     override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
 

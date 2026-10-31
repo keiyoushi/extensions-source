@@ -36,8 +36,6 @@ abstract class Azuki :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://production.api.azuki.co"
     private val organizationKey = "199e5a19-a236-49f5-81f4-43d4a541748a"
     private val preferences: SharedPreferences by getPreferencesLazy()

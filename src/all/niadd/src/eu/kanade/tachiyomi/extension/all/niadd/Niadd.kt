@@ -26,8 +26,6 @@ import java.util.Locale
 @Source
 abstract class Niadd : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Causes pageList 302
     override fun Headers.Builder.configureHeaders() = removeAll("Referer")
 

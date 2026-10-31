@@ -38,8 +38,6 @@ import kotlin.time.Instant
 @Source
 abstract class GolgeBahcesi : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiBaseUrl get() = "https://api.golgebahcesi.com/api"
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortFilter.POPULAR)

@@ -34,7 +34,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class LectorXd : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(
         permits = 1,
         period = 2.seconds,

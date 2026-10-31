@@ -19,8 +19,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Animy : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/v1"
 
     override val supportsFilterFetching = true

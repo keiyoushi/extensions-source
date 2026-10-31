@@ -16,8 +16,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Mangalay : KeiSource() {
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/2013/04/daftar-baca-komik_20.html", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".post-body table").map { element: Element ->

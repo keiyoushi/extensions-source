@@ -30,8 +30,6 @@ abstract class VineTheme :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val rscHeaders: Headers get() = headersBuilder().set("rsc", "1").build()

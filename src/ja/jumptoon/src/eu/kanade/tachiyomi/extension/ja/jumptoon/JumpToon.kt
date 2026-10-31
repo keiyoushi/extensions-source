@@ -34,8 +34,6 @@ import kotlin.time.Duration.Companion.minutes
 abstract class JumpToon :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://api.g.${baseUrl.toHttpUrl().host}/query"
     private val preferences by getPreferencesLazy()
     private val tokenMutex = Mutex()

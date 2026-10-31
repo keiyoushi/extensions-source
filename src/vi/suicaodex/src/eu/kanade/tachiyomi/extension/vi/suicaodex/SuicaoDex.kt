@@ -31,8 +31,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class SuicaoDex : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://redive.${baseUrl.toHttpUrl().host}"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {

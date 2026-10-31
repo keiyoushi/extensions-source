@@ -45,8 +45,6 @@ abstract class ImperioManhwa :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     /** The site's search route, `paths.search` in its props */
     protected open val searchPath = "search"
 

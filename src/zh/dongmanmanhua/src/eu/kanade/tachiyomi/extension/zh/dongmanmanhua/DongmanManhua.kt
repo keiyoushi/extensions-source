@@ -22,8 +22,6 @@ import java.util.Locale
 @Source
 abstract class DongmanManhua : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/dailySchedule", Fetch.DOCUMENT).asJsoup()
 

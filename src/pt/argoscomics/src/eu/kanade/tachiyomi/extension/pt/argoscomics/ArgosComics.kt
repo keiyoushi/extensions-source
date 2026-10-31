@@ -34,8 +34,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class ArgosComics : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = readTimeout(2.minutes)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())

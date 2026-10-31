@@ -31,8 +31,6 @@ private class AjaxResponse(val data: String? = null)
 
 abstract class ScanReader : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ====================== Popular ======================
 
     override suspend fun getPopularManga(page: Int): MangasPage {

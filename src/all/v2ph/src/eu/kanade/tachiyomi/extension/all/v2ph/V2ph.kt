@@ -30,7 +30,6 @@ import java.time.format.DateTimeFormatter
 @Source
 abstract class V2ph : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun Headers.Builder.configureHeaders() = apply {
         add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
         add("Accept-Language", "en-US,en;q=0.9")

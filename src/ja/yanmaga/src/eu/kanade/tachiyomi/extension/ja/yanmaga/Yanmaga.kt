@@ -34,8 +34,6 @@ import java.time.format.DateTimeFormatter
 abstract class Yanmaga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
     private val isGravure get() = name.contains("グラビア")
     private val workPath get() = if (isGravure) "gravures/books" else "comics"

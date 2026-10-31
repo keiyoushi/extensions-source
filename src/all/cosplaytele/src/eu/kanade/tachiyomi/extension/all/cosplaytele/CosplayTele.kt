@@ -27,7 +27,6 @@ import java.util.Locale
 @Source
 abstract class CosplayTele : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val popularPageLimit = 20
 
     // ========================= Popular =========================

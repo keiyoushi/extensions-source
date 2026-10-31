@@ -24,8 +24,6 @@ import java.time.format.DateTimeFormatter
 @Source
 abstract class ZonatmoTo : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val baseHost get() = baseUrl.toHttpUrl().host
 
     private val cdnUrl get() = "https://cdn.$baseHost"

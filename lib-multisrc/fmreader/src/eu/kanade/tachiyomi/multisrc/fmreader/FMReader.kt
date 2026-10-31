@@ -30,8 +30,6 @@ import java.util.Locale
  */
 abstract class FMReader : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d/M/yyyy", Locale.ENGLISH)
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")

@@ -16,8 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class GWTB : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int) = SManga.create().apply {
         title = name
         url = "/index.php"

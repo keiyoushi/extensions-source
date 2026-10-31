@@ -35,8 +35,6 @@ import java.io.IOException
 abstract class MagazinePocket :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain"
     private val pageLimit = 25

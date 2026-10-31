@@ -22,7 +22,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Manga1000 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Upgrade-Insecure-Requests", "1")

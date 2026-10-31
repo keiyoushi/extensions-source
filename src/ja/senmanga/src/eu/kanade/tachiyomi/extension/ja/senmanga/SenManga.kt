@@ -20,8 +20,6 @@ import kotlin.time.Instant
 @Source
 abstract class SenManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.get("$apiUrl/directory?order=Popular&page=$page", Fetch.XHR).parseAs<DirectoryResponse>().toMangasPage()

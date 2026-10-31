@@ -22,8 +22,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Zerobyw : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val preferences = getPreferences()

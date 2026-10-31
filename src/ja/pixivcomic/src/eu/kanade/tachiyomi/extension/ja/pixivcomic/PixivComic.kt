@@ -36,8 +36,6 @@ import java.io.IOException
 abstract class PixivComic :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/app"
     private val viewerUrl get() = "https://comic-store-viewer.pixiv.net/api"
     private val preferences by getPreferencesLazy()

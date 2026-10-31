@@ -32,8 +32,6 @@ import kotlin.time.Clock
 @Source
 abstract class CapibaraTraductor : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = apply {

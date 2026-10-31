@@ -19,8 +19,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Nemesisscans : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {

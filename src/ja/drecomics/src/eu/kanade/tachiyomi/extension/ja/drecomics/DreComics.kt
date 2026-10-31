@@ -37,8 +37,6 @@ import java.io.IOException
 abstract class DreComics :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/api/v1/app"
     private val preferences by getPreferencesLazy()

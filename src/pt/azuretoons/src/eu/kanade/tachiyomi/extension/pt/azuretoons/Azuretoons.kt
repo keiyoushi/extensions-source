@@ -31,8 +31,6 @@ abstract class Azuretoons :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
 
     private var cachedToken: String? = null

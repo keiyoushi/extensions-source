@@ -25,7 +25,6 @@ import java.util.Locale
 @Source
 abstract class MangaYi : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)

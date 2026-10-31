@@ -25,8 +25,6 @@ import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Mangafreak : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val floatLetterPattern = Regex("""(\d+)(\.\d+|[a-i]+\b)?""")
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.ROOT)

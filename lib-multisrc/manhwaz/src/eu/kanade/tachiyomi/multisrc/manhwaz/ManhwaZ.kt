@@ -27,8 +27,6 @@ import java.time.temporal.ChronoUnit
 
 abstract class ManhwaZ : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val mangaDetailsAuthorHeading: String = "author(s)"
 
     protected open val mangaDetailsStatusHeading: String = "status"

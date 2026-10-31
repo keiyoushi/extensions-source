@@ -25,7 +25,6 @@ private val seoulZone = ZoneId.of("Asia/Seoul")
 @Source
 abstract class NaverComic : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val mType: String get() = when (name) {
         "Naver Webtoon Best Challenge" -> "bestChallenge"
         "Naver Webtoon Challenge" -> "challenge"

@@ -34,8 +34,6 @@ import java.util.Locale
  */
 @Source
 abstract class Ikanmh : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // ---- 热门 ----
 
     override suspend fun getPopularManga(page: Int): MangasPage = browseBooklist(

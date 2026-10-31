@@ -22,8 +22,6 @@ import java.util.Calendar
 
 @Source
 abstract class Dokiraw : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateRegex = Regex("""(\d+)""")
     private val chapterRegex = Regex("""(\d+(?:\.\d+)?)""")
 

@@ -16,8 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class PatchFriday : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     private fun createManga(): SManga = SManga.create().apply {
         initialized = true
         title = "Patch Friday"

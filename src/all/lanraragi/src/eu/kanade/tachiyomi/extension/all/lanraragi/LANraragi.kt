@@ -45,8 +45,6 @@ class LANraragi(
     UnmeteredSource {
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override val imageFetch = Fetch.IMAGE
-
     override val name by lazy {
         val label = getPrefCustomLabel().ifBlank { instanceNumber.toString() }
         "LANraragi ($label)"

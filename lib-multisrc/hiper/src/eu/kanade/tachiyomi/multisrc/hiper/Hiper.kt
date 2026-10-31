@@ -44,8 +44,6 @@ abstract class Hiper :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected val preferences by getPreferencesLazy()
 
     protected open val mangaPath: String = "manga"

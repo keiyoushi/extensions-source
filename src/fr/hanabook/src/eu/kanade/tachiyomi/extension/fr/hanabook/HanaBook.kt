@@ -35,8 +35,6 @@ abstract class HanaBook :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.hana-book.fr/api-ebook/v14"
     private val imgCoverUrl = "https://www.boys-loves.fr/yaoi/images/visuels/manga/mobile_600"
     private val blImgUrl = "https://www.boys-loves.fr/api-ebook/bl-img"

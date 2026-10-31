@@ -34,8 +34,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class HV2TComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(authInterceptor())
         addInterceptor(avifToWebpInterceptor())

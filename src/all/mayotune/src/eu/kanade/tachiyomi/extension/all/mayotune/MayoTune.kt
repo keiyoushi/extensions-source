@@ -19,7 +19,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class MayoTune : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val chapterEndpoint: String get() = if (lang == "ja") "raw" else ""
 
     private val names = mapOf(

@@ -28,8 +28,6 @@ import org.jsoup.nodes.Entities
 
 abstract class GoDa : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     open val enableGenres = true
 
     // Popular + latest

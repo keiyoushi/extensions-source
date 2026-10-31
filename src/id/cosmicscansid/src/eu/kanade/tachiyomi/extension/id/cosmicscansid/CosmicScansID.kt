@@ -24,7 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class CosmicScansID : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://cdncid.csmcscns.id/v1/manga"
 
     private val cursorCache = mutableMapOf<String, String>()

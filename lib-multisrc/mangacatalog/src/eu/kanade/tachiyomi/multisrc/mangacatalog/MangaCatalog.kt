@@ -18,8 +18,6 @@ import org.jsoup.nodes.Element
 
 abstract class MangaCatalog : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     open val sourceList = listOf(
         Pair(name, baseUrl),
     ).sortedBy { it.first }.distinctBy { it.second }

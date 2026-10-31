@@ -24,8 +24,6 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class YagamiProject : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage = searchMangaParse(client.get("$baseUrl/list-new/$page", Fetch.DOCUMENT).asJsoup())
 

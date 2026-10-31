@@ -31,8 +31,6 @@ import java.time.temporal.ChronoUnit
 @Source
 abstract class KaliScansOrg : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsFilterFetching = true
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2) { it.host == baseUrl.toHttpUrl().host }

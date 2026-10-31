@@ -26,8 +26,6 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class SinhSieuSao : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     override fun Headers.Builder.configureHeaders() = add("Accept", "application/json")

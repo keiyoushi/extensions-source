@@ -27,8 +27,6 @@ import java.util.Locale
 
 @Source
 abstract class CManhua : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Listing pages are only reachable through ASP.NET postbacks from the previous page
     private var lastListing: Triple<HttpUrl, Int, Document>? = null
 

@@ -22,7 +22,6 @@ import okhttp3.Response
 @Source
 abstract class StoneScape : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl get() = "$baseUrl/api"
 
     // ============================== Popular ==============================

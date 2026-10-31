@@ -26,7 +26,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class LycanToons : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2)
     }

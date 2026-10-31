@@ -17,8 +17,6 @@ import okhttp3.Request
 abstract class Nikkangecchan : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".contentInner > figure").mapNotNull { element ->

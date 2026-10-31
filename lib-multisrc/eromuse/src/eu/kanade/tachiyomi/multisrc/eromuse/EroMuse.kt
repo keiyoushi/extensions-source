@@ -20,8 +20,6 @@ import org.jsoup.nodes.Element
 
 abstract class EroMuse : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     /**
      * Browse, search, and latest all run through an ArrayDeque of requests that acts as a stack we push and pop to/from
      * For the fetch functions, we only need to worry about pushing the first page to the stack because subsequent pages

@@ -28,8 +28,6 @@ import java.io.IOException
 abstract class FodFuji :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/web/books"
     private val preferences by getPreferencesLazy()
 

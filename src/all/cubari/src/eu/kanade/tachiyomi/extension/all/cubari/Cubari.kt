@@ -24,8 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Cubari : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun Headers.Builder.configureHeaders() = set(
         "User-Agent",
         "(Android ${Build.VERSION.RELEASE}; " +

@@ -33,8 +33,6 @@ import okhttp3.RequestBody
 abstract class SchaleNetwork :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val searchLang: String

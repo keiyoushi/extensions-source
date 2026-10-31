@@ -41,8 +41,6 @@ import java.util.Locale
 abstract class ViHentai :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     // ============================ Password Gate ============================

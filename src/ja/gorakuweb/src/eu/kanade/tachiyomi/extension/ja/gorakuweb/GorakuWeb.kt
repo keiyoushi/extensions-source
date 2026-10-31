@@ -27,8 +27,6 @@ import org.jsoup.nodes.Element
 abstract class GorakuWeb :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
     private val rscHeaders get() = headersBuilder()
         .set("rsc", "1")

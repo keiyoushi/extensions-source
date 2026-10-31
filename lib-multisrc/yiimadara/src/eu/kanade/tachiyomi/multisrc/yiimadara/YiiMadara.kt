@@ -30,8 +30,6 @@ import java.util.Locale
 // Yii2 sites that copy Madara's markup
 abstract class YiiMadara : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val mangaPath = "manga"
 
     // Catalog route sorted with ?orderby=, null when the site has none

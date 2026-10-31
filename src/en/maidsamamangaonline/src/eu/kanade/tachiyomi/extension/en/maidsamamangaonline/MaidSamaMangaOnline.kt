@@ -19,8 +19,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class MaidSamaMangaOnline : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private fun singleManga(): SManga = SManga.create().apply {

@@ -52,7 +52,6 @@ abstract class BookWalker :
     ConfigurableSource,
     BookWalkerPreferences {
 
-    override val imageFetch = Fetch.IMAGE
 // ID from before the BookWalker migration.
 
     override fun OkHttpClient.Builder.configureClient() = apply {

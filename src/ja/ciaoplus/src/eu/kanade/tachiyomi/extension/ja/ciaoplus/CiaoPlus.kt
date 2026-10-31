@@ -28,8 +28,6 @@ import okhttp3.Response
 
 @Source
 abstract class CiaoPlus : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://api.ciao.shogakukan.co.jp"
     private val pageLimit = 25
 

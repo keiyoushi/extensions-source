@@ -31,8 +31,6 @@ import kotlin.time.Duration.Companion.minutes
  */
 @Source
 abstract class Hiveworks : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Client
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(1.minutes)

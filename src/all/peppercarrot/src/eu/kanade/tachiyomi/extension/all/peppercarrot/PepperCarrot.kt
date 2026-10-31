@@ -32,7 +32,6 @@ abstract class PepperCarrot :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     private val preferences by getPreferencesLazy()

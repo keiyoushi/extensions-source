@@ -25,8 +25,6 @@ import org.jsoup.select.Evaluator
 
 abstract class MCCMSWeb : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val config: MCCMSConfig = MCCMSConfig()
 
     init {

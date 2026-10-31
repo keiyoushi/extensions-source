@@ -22,8 +22,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class YomuComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(5) { it.host == API_URL.toHttpUrl().host }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, sort = "popular")

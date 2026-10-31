@@ -145,8 +145,6 @@ abstract class ProjectSuki :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val sharedPreferences by getPreferencesLazy()
     private val preferences by lazy { ProjectSukiPreferences(sharedPreferences) }
 

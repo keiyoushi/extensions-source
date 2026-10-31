@@ -34,8 +34,6 @@ import okhttp3.OkHttpClient
 abstract class Inkr :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val queryApiUrl = "https://icq-api.inkr.com/v1"

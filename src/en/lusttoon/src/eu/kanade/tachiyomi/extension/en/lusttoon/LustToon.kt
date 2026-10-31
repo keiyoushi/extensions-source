@@ -24,8 +24,6 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class LustToon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://back.lustoon.com"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {

@@ -16,8 +16,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class BRScans : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val mangas = client.get("$API_URL/manhwas/top/", Fetch.XHR).parseAs<List<ManhwaDto>>()
         return MangasPage(mangas.map { it.toSManga() }, false)

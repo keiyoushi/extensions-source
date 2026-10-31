@@ -25,8 +25,6 @@ import java.util.Locale
 @Source
 abstract class Hentairead : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = mangasPage("$baseUrl/hentai/${searchPage(page)}?sortby=views")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = mangasPage("$baseUrl/hentai/${searchPage(page)}?sortby=new")

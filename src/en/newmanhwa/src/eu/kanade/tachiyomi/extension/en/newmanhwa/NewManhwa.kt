@@ -21,8 +21,6 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class NewManhwa : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsFilterFetching = true
 
     // ========================= Popular =========================

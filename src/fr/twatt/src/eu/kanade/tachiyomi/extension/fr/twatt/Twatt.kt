@@ -19,8 +19,6 @@ import kotlin.time.Instant
 @Source
 abstract class Twatt : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(DataImageInterceptor())

@@ -28,7 +28,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TeamX : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(10, 1.seconds)
     }

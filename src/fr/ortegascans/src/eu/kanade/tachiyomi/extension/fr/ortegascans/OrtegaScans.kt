@@ -30,7 +30,6 @@ abstract class OrtegaScans :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences = getPreferences()
 
     private val rscHeaders get() = headersBuilder().add("rsc", "1").build()

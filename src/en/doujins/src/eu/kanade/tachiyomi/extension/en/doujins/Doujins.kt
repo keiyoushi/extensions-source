@@ -26,7 +26,6 @@ import java.util.Locale
 @Source
 abstract class Doujins : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,

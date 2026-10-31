@@ -36,8 +36,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class DamCoNuong : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(3)
         addInterceptor(ScrambleInterceptor())

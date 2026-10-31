@@ -43,8 +43,6 @@ abstract class LibGroup :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy {
         if (getString(SERVER_PREF, "main") == "fourth") {
             edit().putString(SERVER_PREF, "secondary").apply()

@@ -22,8 +22,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class HentaiFC : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)

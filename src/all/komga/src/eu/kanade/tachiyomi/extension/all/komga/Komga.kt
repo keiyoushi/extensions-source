@@ -54,7 +54,6 @@ class Komga(
     ConfigurableSource,
     UnmeteredSource {
 
-    override val imageFetch = Fetch.IMAGE
     internal val preferences: SharedPreferences by getPreferencesLazy()
 
     private val displayName by lazy { preferences.getString(PREF_DISPLAY_NAME, "")!! }

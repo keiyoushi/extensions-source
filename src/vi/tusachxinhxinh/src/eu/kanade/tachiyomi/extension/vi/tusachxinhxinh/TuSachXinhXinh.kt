@@ -30,7 +30,6 @@ import java.util.Locale
 
 @Source
 abstract class TuSachXinhXinh : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     private fun Element.lazyImgUrl(): String? {

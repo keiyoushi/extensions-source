@@ -30,8 +30,6 @@ import java.util.Locale
 abstract class MyComic :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy {
         when (getString(PREF_LANGUAGE, "")) {
             "zh-hant" -> edit().putString(PREF_LANGUAGE, "").apply()

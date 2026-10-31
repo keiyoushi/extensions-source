@@ -23,8 +23,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class MangaOnline : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds)
 
     private val popularFilter = SelectFilter("", arrayOf(Option("", "popular", "sort")))

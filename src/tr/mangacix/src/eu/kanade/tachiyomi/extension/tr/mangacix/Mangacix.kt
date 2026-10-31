@@ -28,8 +28,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Mangacix : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 3, period = 1.seconds)
         .addInterceptor(MangacixAuthInterceptor())
 

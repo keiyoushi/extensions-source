@@ -21,7 +21,6 @@ import kotlin.time.Instant
 @Source
 abstract class LOLUniverse : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val siteLang: String
         get() = baseUrl.substringAfter("leagueoflegends.com/").substringBefore("/comic/")
 

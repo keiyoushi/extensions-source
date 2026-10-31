@@ -32,8 +32,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class LectorJpg : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.visorjpg.lat"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) {

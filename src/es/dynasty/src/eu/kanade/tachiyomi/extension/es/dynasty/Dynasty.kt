@@ -25,8 +25,6 @@ import kotlin.time.Instant
 @Source
 abstract class Dynasty : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun Headers.Builder.configureHeaders() = add("Accept", "application/json, text/plain, */*")
 
     override suspend fun getPopularManga(page: Int): MangasPage = mangaPageParse("$baseUrl/api/mangas?page=$page&limit=20&sort=popular".toHttpUrl(), page)

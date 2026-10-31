@@ -17,8 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class Hyakuro : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/backend/api"
 
     // Popular/A-Z

@@ -28,8 +28,6 @@ import kotlin.time.Instant
 @Source
 abstract class PornhwadbReader : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsRelatedMangas = true
 
     override val supportsFilterFetching = true

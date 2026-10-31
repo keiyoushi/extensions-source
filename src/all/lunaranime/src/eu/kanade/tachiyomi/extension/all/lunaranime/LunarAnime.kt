@@ -27,8 +27,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class LunarAnime : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val internalLang: String = when (lang) {
         "pt-BR" -> "pt-br"
         else -> lang

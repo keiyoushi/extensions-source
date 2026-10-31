@@ -36,8 +36,6 @@ enum class UrlLayout(
 
 abstract class LoneSeal : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val apiUrl: String
         get() {
             val base = baseUrl.toHttpUrl()

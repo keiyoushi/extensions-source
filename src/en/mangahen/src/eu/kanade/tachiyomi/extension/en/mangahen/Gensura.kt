@@ -19,8 +19,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class Gensura : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val advSearchURL get() = "$baseUrl/advanced-search"
 
     private var tagsList: Map<String, String> = emptyMap()

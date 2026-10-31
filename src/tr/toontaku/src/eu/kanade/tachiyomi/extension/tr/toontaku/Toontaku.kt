@@ -24,8 +24,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class Toontaku : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
 
     override fun OkHttpClient.Builder.configureClient() = apply {

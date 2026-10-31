@@ -32,8 +32,6 @@ import org.jsoup.nodes.Element
  */
 @Source
 abstract class NNHanman : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // ---- 通用解析 ----
 
     /** 首页/分类/搜索结果共用的三列卡片 */

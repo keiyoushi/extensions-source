@@ -31,7 +31,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class LxMangaOrg : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(5)
     }

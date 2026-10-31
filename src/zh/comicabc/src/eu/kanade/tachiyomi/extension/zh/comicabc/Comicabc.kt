@@ -17,8 +17,6 @@ import okhttp3.Request
 
 @Source
 abstract class Comicabc : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val chaptersBaseUrl: String = "https://articles.onemoreplace.tw"
 
     // ============================== Popular ==============================

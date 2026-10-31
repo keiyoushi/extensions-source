@@ -25,7 +25,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Multporn : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun Headers.Builder.configureHeaders() = apply {
         set("User-Agent", HEADER_USER_AGENT)
         set("Content-Type", HEADER_CONTENT_TYPE)

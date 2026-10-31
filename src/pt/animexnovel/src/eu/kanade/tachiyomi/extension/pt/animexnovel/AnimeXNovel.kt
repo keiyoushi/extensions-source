@@ -30,8 +30,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class AnimeXNovel : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsFilterFetching: Boolean = true
 
     override fun OkHttpClient.Builder.configureClient() = readTimeout(1.minutes)

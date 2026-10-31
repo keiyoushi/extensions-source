@@ -19,8 +19,6 @@ private val dateFormat = DateTimeFormatter.ofPattern("d.M.yyyy")
 @Source
 abstract class ChaosTrad : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private fun normalizeSeriesTitle(rawTitle: String): String = rawTitle

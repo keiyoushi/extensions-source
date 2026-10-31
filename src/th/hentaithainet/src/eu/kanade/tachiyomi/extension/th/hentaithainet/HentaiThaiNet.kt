@@ -19,8 +19,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class HentaiThaiNet : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl/page-$page"
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()

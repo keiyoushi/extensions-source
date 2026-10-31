@@ -32,8 +32,6 @@ import java.text.Normalizer
 abstract class MangaBoxMe :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/honshi/graphql"
     private val preferences by getPreferencesLazy()
 

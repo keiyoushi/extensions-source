@@ -32,8 +32,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class HentaiVNx : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     // ============================== Popular ===============================

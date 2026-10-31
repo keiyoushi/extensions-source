@@ -31,8 +31,6 @@ import java.util.Calendar
 
 @Source
 abstract class MangaBahcesi : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::decryptInterceptor)
 
     // Manga Bahçesi encrypts their image URLs (both covers and pages).

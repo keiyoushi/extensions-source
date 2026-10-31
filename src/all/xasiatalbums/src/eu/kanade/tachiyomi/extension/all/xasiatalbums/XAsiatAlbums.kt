@@ -23,8 +23,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class XAsiatAlbums : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Mutable map seeded from initialCategories; new tags discovered while
     // browsing album detail pages are added here at runtime.
     private val categories = initialCategories.toMutableMap()

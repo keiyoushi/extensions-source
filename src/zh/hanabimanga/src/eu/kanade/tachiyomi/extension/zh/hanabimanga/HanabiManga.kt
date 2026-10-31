@@ -52,8 +52,6 @@ private const val PAGE_SIZE = 20
 abstract class HanabiManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override fun getHomeUrl() = "https://web.hanabimanga.com/zh-CN"
 
     override fun Headers.Builder.configureHeaders() = apply {

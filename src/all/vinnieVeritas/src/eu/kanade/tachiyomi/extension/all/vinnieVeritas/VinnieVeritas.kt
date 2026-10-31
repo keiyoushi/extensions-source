@@ -16,8 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class VinnieVeritas : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     companion object {
         private val ONCLICK_REGEX = Regex("""changeToComic\("(.+?)"\)""")
     }

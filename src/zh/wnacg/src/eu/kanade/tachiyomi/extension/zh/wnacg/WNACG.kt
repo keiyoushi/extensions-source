@@ -38,8 +38,6 @@ import java.time.format.DateTimeFormatter
 abstract class WNACG :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences = getPreferences { preferenceMigration() }
 
     override val baseUrl get() = preferences.baseUrl

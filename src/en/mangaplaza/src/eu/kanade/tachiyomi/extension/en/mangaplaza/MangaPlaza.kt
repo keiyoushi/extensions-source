@@ -39,8 +39,6 @@ import org.jsoup.Jsoup
 abstract class MangaPlaza :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
     private val preferences by getPreferencesLazy()
 

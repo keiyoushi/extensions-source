@@ -28,8 +28,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class KomikIndoID : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
     private val chapterRegex = Regex("""Chapter\s+([0-9]+(?:\.[0-9]+)?)""", RegexOption.IGNORE_CASE)
 

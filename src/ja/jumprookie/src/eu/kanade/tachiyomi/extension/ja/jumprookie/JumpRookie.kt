@@ -18,8 +18,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class JumpRookie : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private var nextPageKey: String? = null
 
     private val desktopHeaders get() = headersBuilder()

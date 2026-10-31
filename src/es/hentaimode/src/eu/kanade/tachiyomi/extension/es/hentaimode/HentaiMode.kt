@@ -21,8 +21,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class HentaiMode : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override val supportsLatest = false

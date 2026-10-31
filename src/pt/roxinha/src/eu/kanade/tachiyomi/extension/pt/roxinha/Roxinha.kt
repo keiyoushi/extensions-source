@@ -31,8 +31,6 @@ import java.io.IOException
 abstract class Roxinha :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "$baseUrl/api"
 
     private val preferences by getPreferencesLazy()

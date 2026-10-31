@@ -28,8 +28,6 @@ import keiyoushi.utils.parseAs as parseAsRaw
  */
 abstract class MCCMS : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val config: MCCMSConfig = MCCMSConfig()
 
     init {

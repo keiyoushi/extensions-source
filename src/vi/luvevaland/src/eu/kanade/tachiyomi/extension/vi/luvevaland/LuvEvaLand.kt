@@ -28,8 +28,6 @@ import java.util.Locale
 
 @Source
 abstract class LuvEvaLand : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     // ============================== Popular ===============================

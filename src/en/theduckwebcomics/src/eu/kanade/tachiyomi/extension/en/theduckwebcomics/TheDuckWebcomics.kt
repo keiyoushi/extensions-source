@@ -17,8 +17,6 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class TheDuckWebcomics : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/search/?page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)

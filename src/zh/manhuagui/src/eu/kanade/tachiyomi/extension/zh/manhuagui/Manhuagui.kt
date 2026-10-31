@@ -48,8 +48,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Manhuagui :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val imageServer = arrayOf("https://i.hamreus.com", "https://cf.hamreus.com")

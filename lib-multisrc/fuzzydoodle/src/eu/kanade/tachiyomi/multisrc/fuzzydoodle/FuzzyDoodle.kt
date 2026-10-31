@@ -25,8 +25,6 @@ import java.util.Calendar
  */
 abstract class FuzzyDoodle : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Popular
     override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/manga?page=$page", Fetch.DOCUMENT).asJsoup())
 

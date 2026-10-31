@@ -34,8 +34,6 @@ import java.util.Locale
 abstract class ClownCorps :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(TextInterceptor())

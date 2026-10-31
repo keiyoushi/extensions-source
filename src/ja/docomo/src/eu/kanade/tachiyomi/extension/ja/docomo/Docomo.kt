@@ -27,7 +27,6 @@ import java.io.IOException
 
 @Source
 abstract class Docomo : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl get() = "https://dxp-system.docomo.ne.jp"
     private val sessionUrl get() = "https://rs4x.mw-pf.jp"
 

@@ -43,8 +43,6 @@ import okio.buffer
 abstract class Toonkotsu :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy {
         if (contains(PREF_DEDUPLICATE_CHAPTERS)) {
             val editor = edit().remove(PREF_DEDUPLICATE_CHAPTERS)

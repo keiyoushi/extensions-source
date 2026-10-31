@@ -40,8 +40,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class MangaUp :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = "manga-up.com"
     private val apiUrl get() = "https://global-api.$domain/api"
     private val imgUrl get() = "https://global-img.$domain"

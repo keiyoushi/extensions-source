@@ -21,8 +21,6 @@ import java.net.URLEncoder
 
 @Source
 abstract class Ikiru : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // support sugesttion komikku
     override val supportRelatedMangasBySearch = true
 

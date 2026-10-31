@@ -20,8 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class DespairManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/supabase-api/rest/v1"
 
     private val apiHeaders: Headers

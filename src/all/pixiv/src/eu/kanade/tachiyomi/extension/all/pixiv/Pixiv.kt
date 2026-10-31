@@ -29,8 +29,6 @@ abstract class Pixiv :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun apiUrl(href: String): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder(href)!!

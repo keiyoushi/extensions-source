@@ -31,8 +31,6 @@ import java.util.Locale
  */
 abstract class Origines : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     /**
      * Path prefix the entries live under, `<baseUrl>/<mangaPath>/<slug>/`.
      */

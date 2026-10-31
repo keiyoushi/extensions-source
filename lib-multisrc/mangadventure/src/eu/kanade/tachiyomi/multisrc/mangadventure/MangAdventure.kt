@@ -23,8 +23,6 @@ import okhttp3.Response
 /** MangAdventure base source. */
 abstract class MangAdventure : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     /** The site's manga categories. */
     protected open val categories = DEFAULT_CATEGORIES
 

@@ -29,8 +29,6 @@ import java.time.temporal.WeekFields
 abstract class LineManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
     private val preferences by getPreferencesLazy()
 

@@ -18,8 +18,6 @@ import okhttp3.Response
 @Source
 abstract class Iqiyi : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val qiyiId = List(32) { HEX.random() }.joinToString("")

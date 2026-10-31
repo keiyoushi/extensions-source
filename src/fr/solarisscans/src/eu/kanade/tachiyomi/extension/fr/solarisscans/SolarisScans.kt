@@ -32,8 +32,6 @@ import org.jsoup.nodes.Element
 abstract class SolarisScans :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val hidePremium: Boolean

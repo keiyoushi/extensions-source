@@ -20,8 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class MangaTuk : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.mangatuk.com/api"
 
     override suspend fun getPopularManga(page: Int) = search(page, "", "popular", null)

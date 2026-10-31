@@ -26,8 +26,6 @@ import kotlin.time.Instant
 @Source
 abstract class Ososedki : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::imageFallbackInterceptor)
 
     // ========================= Popular =========================

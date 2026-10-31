@@ -19,8 +19,6 @@ import java.util.Locale
 @Source
 abstract class Explosm : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val archivePage get() = "$baseUrl/comics"

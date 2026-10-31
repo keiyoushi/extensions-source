@@ -26,8 +26,6 @@ import javax.net.ssl.X509TrustManager
 abstract class Megatokyo : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     private val dateParser = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US)
 
     override fun OkHttpClient.Builder.configureClient() = ignoreAllSSLErrors()

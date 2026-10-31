@@ -33,8 +33,6 @@ import java.io.IOException
 abstract class Dmm :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val shopName get() = if (name == "FANZA") "adult" else "general"
     private val apiUrl get() = "$baseUrl/ajax/bff"
     private val preferences by getPreferencesLazy()

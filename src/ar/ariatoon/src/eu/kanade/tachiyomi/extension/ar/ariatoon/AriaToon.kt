@@ -22,7 +22,6 @@ import okhttp3.Response
 @Source
 abstract class AriaToon : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://api.ariatoon.com/v1"
     private val cdnUrl = "https://api.ariatoon.com/uploads"
 

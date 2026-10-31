@@ -42,8 +42,6 @@ import java.util.Locale
 abstract class ComX :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences = getPreferences()
 
     override fun OkHttpClient.Builder.configureClient() = apply {

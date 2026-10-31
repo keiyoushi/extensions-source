@@ -20,7 +20,6 @@ import kotlin.time.Duration.Companion.minutes
 @Source
 abstract class BH3 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = connectTimeout(1.minutes)

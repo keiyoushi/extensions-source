@@ -22,8 +22,6 @@ import org.jsoup.nodes.Element
 
 abstract class OceanWP : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     // Popular

@@ -27,8 +27,6 @@ import java.io.IOException
 
 @Source
 abstract class LuraToon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addNetworkInterceptor(::pageHeadersInterceptor)
         addInterceptor(ZipInterceptor()::zipImageInterceptor)

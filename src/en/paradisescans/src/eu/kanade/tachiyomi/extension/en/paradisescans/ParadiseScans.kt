@@ -29,7 +29,6 @@ abstract class ParadiseScans :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences = getPreferences()
 
     private val showLockedChapters: Boolean

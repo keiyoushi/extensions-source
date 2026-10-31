@@ -19,8 +19,6 @@ import java.util.Locale
 
 @Source
 abstract class MangaPill : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Popular fetches the homepage where the "Trending Mangas" section is
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/", Fetch.DOCUMENT).asJsoup()

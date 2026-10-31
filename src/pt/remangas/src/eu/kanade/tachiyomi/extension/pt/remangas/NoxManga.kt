@@ -26,8 +26,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class NoxManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/v1"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {

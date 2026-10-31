@@ -31,7 +31,6 @@ import java.time.Instant
 @Source
 abstract class Kyokotsu : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences by getPreferencesLazy()
 
     private var cachedGenreMap: Map<String, String>? = null

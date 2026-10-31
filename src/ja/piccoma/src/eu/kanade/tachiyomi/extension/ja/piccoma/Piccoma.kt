@@ -30,8 +30,6 @@ import okhttp3.OkHttpClient
 abstract class Piccoma :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
     private val xHeaders get() = headersBuilder()
         .set("X-Requested-With", "XMLHttpRequest")

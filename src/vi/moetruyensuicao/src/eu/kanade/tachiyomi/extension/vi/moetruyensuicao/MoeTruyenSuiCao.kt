@@ -36,8 +36,6 @@ import java.util.LinkedHashMap
 
 @Source
 abstract class MoeTruyenSuiCao : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(imgxInterceptor())
         rateLimit(3)

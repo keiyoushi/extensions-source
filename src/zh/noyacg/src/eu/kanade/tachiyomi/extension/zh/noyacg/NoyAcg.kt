@@ -40,8 +40,6 @@ abstract class NoyAcg :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val pref by getPreferencesLazy()
     private val imgBaseUrl get() = baseUrl.replace("api", "img")
     private val loginLock = Any()

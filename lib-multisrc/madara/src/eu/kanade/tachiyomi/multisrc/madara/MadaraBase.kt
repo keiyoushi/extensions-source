@@ -46,8 +46,6 @@ import javax.crypto.spec.SecretKeySpec
 
 abstract class MadaraBase : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val supportsPostId = true
 
     enum class ChapterMode {

@@ -18,8 +18,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class HentaiThaiCom : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val itemsPerPage = 24
 
     override suspend fun getPopularManga(page: Int): MangasPage {

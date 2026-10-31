@@ -35,8 +35,6 @@ import java.time.ZonedDateTime
 @Source
 abstract class ManhwaIndo : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun Headers.Builder.configureHeaders() = apply {
         set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
     }

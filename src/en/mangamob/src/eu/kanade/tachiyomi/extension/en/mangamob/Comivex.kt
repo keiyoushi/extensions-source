@@ -26,8 +26,6 @@ import java.util.Calendar
 abstract class Comivex :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val hideStaleExploreEntries: Boolean

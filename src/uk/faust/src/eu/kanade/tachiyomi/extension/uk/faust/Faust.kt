@@ -38,8 +38,6 @@ abstract class Faust :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl()
     private val apiUrl get() = "https://${domain.host}/api"
 

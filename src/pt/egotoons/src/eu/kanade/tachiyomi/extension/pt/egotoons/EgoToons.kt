@@ -27,8 +27,6 @@ import okhttp3.Request
 @Source
 abstract class EgoToons : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.egotoons.com"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)

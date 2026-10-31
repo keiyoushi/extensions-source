@@ -27,7 +27,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Manhwalike : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
     // popular

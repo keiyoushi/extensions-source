@@ -20,8 +20,6 @@ import java.util.Locale
 
 @Source
 abstract class ReadHorimiyaOnline : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     // ========================= Popular =========================

@@ -17,8 +17,6 @@ import kotlin.math.min
 @Source
 abstract class TwoKinds : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     // the one and only manga entry

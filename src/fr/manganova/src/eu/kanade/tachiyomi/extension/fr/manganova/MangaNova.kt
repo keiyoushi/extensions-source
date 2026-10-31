@@ -21,7 +21,6 @@ import okhttp3.Response
 @Source
 abstract class MangaNova : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     val apiUrl = "https://api.manga-nova.com"
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->

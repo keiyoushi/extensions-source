@@ -25,7 +25,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Wurmz : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val rscHeaders: Headers
         get() = headersBuilder().add("Rsc", "1").build()
 

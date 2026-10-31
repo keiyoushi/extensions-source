@@ -28,7 +28,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class MangaMukai : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl get() = "$baseUrl/wp-json/mangamukai/v1"
 
     private val wpUrl get() = "$baseUrl/wp-json/wp/v2"

@@ -27,8 +27,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Mangahere : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addCookie("isAdult" to "1")
         rateLimit(1, 2.seconds) {

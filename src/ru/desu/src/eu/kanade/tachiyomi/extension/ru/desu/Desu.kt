@@ -33,7 +33,6 @@ abstract class Desu :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences by getPreferencesLazy()
 
     override fun Headers.Builder.configureHeaders() = apply {

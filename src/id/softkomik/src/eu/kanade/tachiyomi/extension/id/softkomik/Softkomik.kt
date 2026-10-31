@@ -35,8 +35,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Softkomik : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // session cache by URL/page route.
     private val sessionsByUrlKey = ConcurrentHashMap<String, SessionDto>()
     private var bearerToken: BearerTokenDto? = null

@@ -29,8 +29,6 @@ import java.util.Locale
 
 @Source
 abstract class FourKHD : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/index.php".toHttpUrl()
     private val pageSize = 20
 

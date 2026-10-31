@@ -45,8 +45,6 @@ import java.util.Locale
 abstract class FireCross :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val apiUrl get() = "$baseUrl/api"

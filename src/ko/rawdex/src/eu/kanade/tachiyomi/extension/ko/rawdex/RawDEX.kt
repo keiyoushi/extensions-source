@@ -20,8 +20,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class RawDEX : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = fetchBrowsePage("$baseUrl/manga/page/$page/?m_orderby=views")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = fetchBrowsePage("$baseUrl/manga/page/$page/?m_orderby=latest")

@@ -19,7 +19,6 @@ import org.jsoup.parser.Parser
 @Source
 abstract class AralosBD : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     companion object {
         val LINK_REGEX = "\\[([^]]+)\\]\\(([^)]+)\\)".toRegex()
         val BOLD_REGEX = "\\*+\\s*([^\\*]*)\\s*\\*+".toRegex()

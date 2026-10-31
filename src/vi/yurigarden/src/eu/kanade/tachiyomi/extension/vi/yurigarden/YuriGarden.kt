@@ -40,8 +40,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class YuriGarden :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiBaseUrl get() = baseUrl.replace("://", "://api.")
 
     private val apiUrl get() = "$apiBaseUrl/api"

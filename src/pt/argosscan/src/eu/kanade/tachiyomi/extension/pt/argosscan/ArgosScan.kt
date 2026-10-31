@@ -21,8 +21,6 @@ import java.io.IOException
 @Source
 abstract class ArgosScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.argoscomics.online"
 
     override val supportsLatest = false

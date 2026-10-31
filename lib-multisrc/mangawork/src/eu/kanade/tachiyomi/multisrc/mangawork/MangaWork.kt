@@ -25,8 +25,6 @@ import java.util.Locale
 
 abstract class MangaWork : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d/M/yyyy", Locale.ROOT)
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)

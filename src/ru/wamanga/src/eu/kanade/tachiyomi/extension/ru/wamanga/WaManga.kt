@@ -20,7 +20,6 @@ import okhttp3.Response
 @Source
 abstract class WaManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept", "*/*")
 
     // ─────────────────────────────────────────────────────────────────────────

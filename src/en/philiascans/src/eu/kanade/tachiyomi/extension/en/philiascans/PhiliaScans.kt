@@ -35,8 +35,6 @@ import okhttp3.Response
 abstract class PhiliaScans :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl: String
         get() = "$baseUrl/api"
 

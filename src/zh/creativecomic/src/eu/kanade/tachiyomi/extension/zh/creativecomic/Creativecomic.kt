@@ -30,8 +30,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 
 @Source
 abstract class Creativecomic : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.creative-comic.tw"
     private var pageKey: ByteArray? = null
     private var pageIv: ByteArray? = null

@@ -25,8 +25,6 @@ private val dateFormat = DateTimeFormatter.ofPattern("M/d/yyyy", Locale.ENGLISH)
 @Source
 abstract class OhJoySexToy : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Browse
 
     override suspend fun getPopularManga(page: Int): MangasPage {

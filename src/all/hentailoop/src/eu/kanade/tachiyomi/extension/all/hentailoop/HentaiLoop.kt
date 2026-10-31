@@ -35,8 +35,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class HentaiLoop : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val ajaxHeaders: Headers
         get() = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")

@@ -31,8 +31,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TruyenHentai18 : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     // ============================== Popular ===============================

@@ -19,8 +19,6 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class Twi4 : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     companion object {

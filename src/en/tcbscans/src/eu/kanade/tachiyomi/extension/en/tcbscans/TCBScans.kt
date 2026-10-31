@@ -23,8 +23,6 @@ import java.io.File
 @Source
 abstract class TCBScans : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor { chain ->

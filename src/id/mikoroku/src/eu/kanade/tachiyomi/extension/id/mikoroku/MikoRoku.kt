@@ -17,8 +17,6 @@ import org.jsoup.Jsoup
 
 @Source
 abstract class MikoRoku : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = fetchCatalog()
         .sortedByDescending { it.rating }
         .toMangasPage()

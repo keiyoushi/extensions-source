@@ -28,8 +28,6 @@ import org.jsoup.nodes.Document
 abstract class ComicFesta :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
     private val rscHeaders get() = headersBuilder()
         .add("rsc", "1")

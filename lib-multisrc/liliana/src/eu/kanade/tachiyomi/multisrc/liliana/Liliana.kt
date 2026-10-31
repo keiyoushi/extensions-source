@@ -25,8 +25,6 @@ import org.jsoup.nodes.Element
 
 abstract class Liliana : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val usesPostSearch: Boolean = false
 
     override val supportsLatest = true

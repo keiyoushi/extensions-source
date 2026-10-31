@@ -21,8 +21,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class SpicyScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiBaseUrl = "https://back.spicyseries.com"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)

@@ -39,8 +39,6 @@ abstract class InkStory :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     abstract val serviceName: String
 
     private val preferences by getPreferencesLazy {

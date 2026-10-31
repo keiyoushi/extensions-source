@@ -30,8 +30,6 @@ import java.io.IOException
 abstract class JNovel :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val domain get() = baseUrl.toHttpUrl().host

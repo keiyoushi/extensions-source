@@ -30,8 +30,6 @@ import java.io.IOException
 @Source
 abstract class NexusMangas : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://$API_HOST/rest/v1"
 
     private val functionsUrl = "https://$API_HOST/functions/v1"

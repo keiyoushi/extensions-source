@@ -33,7 +33,6 @@ import java.util.Locale
 @Source
 abstract class Mangahub : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addCookie { listOf("confirm_age" to "1") }
         rateLimit(2)

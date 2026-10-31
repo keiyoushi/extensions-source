@@ -44,8 +44,6 @@ import org.jsoup.parser.Parser
 abstract class XCOMIC :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     // ========================= Popular & Latest ==========================

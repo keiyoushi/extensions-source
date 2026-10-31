@@ -45,8 +45,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class BookWalkerJp :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val memberApiUrl get() = "https://member.$DOMAIN/api"
     private val viewerUrl get() = "https://viewer.$DOMAIN"
     private val trialUrl get() = "https://viewer-trial.$DOMAIN"

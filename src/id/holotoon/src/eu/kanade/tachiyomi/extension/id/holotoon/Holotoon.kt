@@ -25,8 +25,6 @@ import java.util.Calendar
 
 @Source
 abstract class Holotoon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Client hint Chrome sends with its User-Agent, required on /read/
     override fun Headers.Builder.configureHeaders() = apply {
         CHROME_VERSION_REGEX.find(get("User-Agent").orEmpty())?.let {

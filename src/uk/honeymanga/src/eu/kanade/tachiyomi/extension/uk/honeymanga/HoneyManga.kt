@@ -34,7 +34,6 @@ import okhttp3.OkHttpClient
 abstract class HoneyManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrlHost get() = "data.api.$domain"
     private val apiUrl get() = "https://data.api.$domain"

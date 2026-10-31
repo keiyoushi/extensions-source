@@ -27,8 +27,6 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class Roumanwu : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ScrambledImageInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage {

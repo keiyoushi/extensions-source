@@ -15,8 +15,6 @@ import keiyoushi.utils.asJsoup
 @Source
 abstract class ThePropertyOfHate : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     // the one and only manga entry

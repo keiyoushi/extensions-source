@@ -31,8 +31,6 @@ import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class StellarSaber : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::imageInterceptor)
 
     private fun Int.pageNumber() = if (this > 1) "page/$this/" else ""

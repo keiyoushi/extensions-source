@@ -38,7 +38,6 @@ abstract class Kemono :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = true
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->

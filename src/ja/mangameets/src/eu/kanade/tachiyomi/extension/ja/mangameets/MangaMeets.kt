@@ -22,7 +22,6 @@ import okhttp3.Response
 
 @Source
 abstract class MangaMeets : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl get() = "$baseUrl/api"
     private val pageSize = "20"
 

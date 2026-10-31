@@ -25,8 +25,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class PlumaComics : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds)
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(

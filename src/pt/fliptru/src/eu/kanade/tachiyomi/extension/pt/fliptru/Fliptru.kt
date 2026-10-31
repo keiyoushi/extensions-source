@@ -23,7 +23,6 @@ import java.io.IOException
 @Source
 abstract class Fliptru : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
         val document = client.get("$baseUrl/most_popular_list/", Fetch.DOCUMENT).asJsoup()

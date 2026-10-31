@@ -21,8 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class Toongrab : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Popular = views descending ("Most Popular"); Latest = the default browse order
     override suspend fun getPopularManga(page: Int): MangasPage = browseMangas(page, "Most Popular")
 

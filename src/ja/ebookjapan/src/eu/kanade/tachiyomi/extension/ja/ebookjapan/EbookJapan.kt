@@ -29,8 +29,6 @@ import java.io.IOException
 abstract class EbookJapan :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/proxy/apis"
     private val cdnUrl get() = "https://prod-contents-br-page.akamaized.net/pages"
     private val viewerUrl get() = "$baseUrl/br_api"

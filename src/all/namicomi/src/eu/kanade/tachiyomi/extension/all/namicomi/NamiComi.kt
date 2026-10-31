@@ -76,7 +76,6 @@ abstract class NamiComi :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain"
     private val cdnUrl get() = "https://uploads.$domain"

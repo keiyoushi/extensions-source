@@ -28,8 +28,6 @@ import java.util.Locale
 @Source
 abstract class MangaDraft : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage = catalogParse(
         client.get(

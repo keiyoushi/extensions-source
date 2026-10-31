@@ -22,7 +22,6 @@ import kotlin.time.Instant
 @Source
 abstract class Nekopost : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val projectDataEndpoint get() = "$baseUrl/api/project/detail2"
 
     /**

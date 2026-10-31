@@ -16,8 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class Oglaf : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val manga = SManga.create().apply {
             title = "Oglaf"

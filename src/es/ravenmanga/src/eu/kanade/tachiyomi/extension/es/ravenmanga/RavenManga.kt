@@ -25,8 +25,6 @@ import java.util.Calendar
 
 @Source
 abstract class RavenManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
     }

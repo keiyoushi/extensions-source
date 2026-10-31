@@ -40,8 +40,6 @@ abstract class Comick :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences = getPreferences()
 
     override fun OkHttpClient.Builder.configureClient() = apply {

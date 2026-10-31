@@ -24,7 +24,6 @@ private val dateFormat = DateTimeFormatter.ofPattern("d/M/yyyy", Locale.ENGLISH)
 @Source
 abstract class Manhwa18 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/tim-kiem?sort=top&page=$page".toHttpUrl())

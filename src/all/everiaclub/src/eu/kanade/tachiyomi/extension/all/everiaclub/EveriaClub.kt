@@ -35,7 +35,6 @@ import java.util.Locale
 @Source
 abstract class EveriaClub : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val Element.imgSrc: String
         get() = attr("data-lazy-src")
             .ifEmpty { attr("data-src") }

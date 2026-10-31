@@ -40,8 +40,6 @@ abstract class MangaPlus :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val internalLangName: String
         get() = when (lang) {
             "en" -> "eng"

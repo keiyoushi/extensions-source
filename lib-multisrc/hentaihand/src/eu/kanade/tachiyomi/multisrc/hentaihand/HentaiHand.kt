@@ -33,8 +33,6 @@ abstract class HentaiHand :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     abstract val chapters: Boolean
 
     protected open val hhLangId: List<Int> = emptyList()

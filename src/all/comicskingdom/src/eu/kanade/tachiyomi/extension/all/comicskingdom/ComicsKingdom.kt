@@ -31,7 +31,6 @@ abstract class ComicsKingdom :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
     private val compactChapterCountRegex = Regex("\"totalItems\":(\\d+)")
     private val thumbnailUrlRegex = Regex("thumbnailUrl\":\"(\\S+)\",\"dateP")

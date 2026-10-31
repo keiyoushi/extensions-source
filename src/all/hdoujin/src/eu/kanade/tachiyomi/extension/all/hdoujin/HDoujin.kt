@@ -39,7 +39,6 @@ abstract class HDoujin :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val siteLang: String
         get() = when (lang) {
             "en" -> "english"

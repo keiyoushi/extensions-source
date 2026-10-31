@@ -25,8 +25,6 @@ abstract class VisionHaze : KeiSource() {
     }
 
     override val supportsLatest: Boolean = false
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(
         mangas = listOf(manga()),
         hasNextPage = false,

@@ -35,7 +35,6 @@ import java.util.Locale
 @Source
 abstract class TeamLanhLung : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     override fun Headers.Builder.configureHeaders() = set("Referer", "$baseUrl/")

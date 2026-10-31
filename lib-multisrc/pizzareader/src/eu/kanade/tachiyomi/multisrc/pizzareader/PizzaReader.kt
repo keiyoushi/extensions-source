@@ -15,8 +15,6 @@ import kotlin.time.Instant
 
 abstract class PizzaReader : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val apiPath: String = "/api"
 
     open val apiUrl get() = "$baseUrl$apiPath"

@@ -25,8 +25,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class ShadowManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val isNsfw by lazy { name.contains("+18") }
 
     private val cdnHosts = listOf(

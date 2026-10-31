@@ -24,8 +24,6 @@ import java.util.Locale
 @Source
 abstract class RawBaka : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // The site ranks popularity only in a five-title homepage slider, so Popular lists the whole catalogue
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {

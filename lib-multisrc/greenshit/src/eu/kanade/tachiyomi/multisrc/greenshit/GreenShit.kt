@@ -34,8 +34,6 @@ abstract class GreenShit :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = true
 
     abstract val apiUrl: String

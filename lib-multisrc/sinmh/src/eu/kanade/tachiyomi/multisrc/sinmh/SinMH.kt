@@ -35,8 +35,6 @@ import java.util.Locale
  */
 abstract class SinMH : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val mobileUrl: String
         get() = baseUrl.replaceFirst("www.", "m.")
 

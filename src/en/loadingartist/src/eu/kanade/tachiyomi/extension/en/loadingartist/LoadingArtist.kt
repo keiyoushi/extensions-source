@@ -21,8 +21,6 @@ import java.util.Locale
 abstract class LoadingArtist : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
 
     @Serializable

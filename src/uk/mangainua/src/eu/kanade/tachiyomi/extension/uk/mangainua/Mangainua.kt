@@ -38,7 +38,6 @@ abstract class Mangainua :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences by getPreferencesLazy()
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 

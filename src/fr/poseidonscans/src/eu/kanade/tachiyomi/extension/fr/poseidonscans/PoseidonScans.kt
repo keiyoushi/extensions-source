@@ -36,7 +36,6 @@ abstract class PoseidonScans :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     val rscHeaders: Headers get() = headers.newBuilder().add("RSC", "1").build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()

@@ -29,8 +29,6 @@ abstract class GrrlPower :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val comicAuthor = "David Barrack"

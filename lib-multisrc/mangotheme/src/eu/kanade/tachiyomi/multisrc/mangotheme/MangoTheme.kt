@@ -43,8 +43,6 @@ abstract class MangoTheme :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected abstract val encryptionKey: String
 
     protected open val apiUrl: String

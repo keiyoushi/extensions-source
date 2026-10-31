@@ -48,8 +48,6 @@ import java.util.TimeZone
 abstract class CuuTruyenMoe :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {

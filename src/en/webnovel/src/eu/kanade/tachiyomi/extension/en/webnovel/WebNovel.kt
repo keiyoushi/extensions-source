@@ -28,8 +28,6 @@ import java.util.Date
 
 @Source
 abstract class WebNovel : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseApiUrl = "$baseUrl$BASE_API_ENDPOINT"
 
     private val baseCoverURl = baseUrl.replace("www", "book-pic")

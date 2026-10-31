@@ -25,8 +25,6 @@ import java.io.IOException
 @Source
 abstract class Comicaso : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set("X-Comicaso-Platform", "web")
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::authInterceptor)

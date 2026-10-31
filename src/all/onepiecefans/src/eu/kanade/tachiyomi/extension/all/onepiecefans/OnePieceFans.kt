@@ -25,8 +25,6 @@ abstract class OnePieceFans :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val internalLang: String get() = lang

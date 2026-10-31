@@ -22,8 +22,6 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class CutieComics : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override val supportsLatest = false

@@ -22,8 +22,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class BanchanScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsFilterFetching = true
 
     override suspend fun getPopularManga(page: Int): MangasPage {

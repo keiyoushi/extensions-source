@@ -49,8 +49,6 @@ import kotlin.time.Instant
 abstract class Taiyo : KeiSource() {
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val preferences: SharedPreferences = getPreferences()

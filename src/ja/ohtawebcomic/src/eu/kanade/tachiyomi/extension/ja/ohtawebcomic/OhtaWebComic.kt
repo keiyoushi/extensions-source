@@ -18,8 +18,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class OhtaWebComic : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())

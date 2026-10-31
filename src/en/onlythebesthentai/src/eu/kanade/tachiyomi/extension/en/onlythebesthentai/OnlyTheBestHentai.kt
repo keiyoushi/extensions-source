@@ -27,7 +27,6 @@ import kotlin.time.Instant
 @Source
 abstract class OnlyTheBestHentai : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val challengeInterceptor = Interceptor { chain ->
         val response = chain.proceed(chain.request())
         val peek = response.peekBody(512).string()

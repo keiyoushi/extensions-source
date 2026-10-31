@@ -56,8 +56,6 @@ abstract class MangaBox :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(::mergeImagesInterceptor)
         addInterceptor(::useAltCdnInterceptor)

@@ -29,7 +29,6 @@ abstract class KillSixBillionDemons :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val supportsLatest = false

@@ -35,8 +35,6 @@ abstract class Danbooru :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Make image requests mimic a standard browser <img> fetch to bypass CF 403s on the CDN
     private val cdnInterceptor = Interceptor { chain ->
         val request = chain.request()

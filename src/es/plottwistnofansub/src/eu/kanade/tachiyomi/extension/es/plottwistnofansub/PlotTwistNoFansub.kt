@@ -30,7 +30,6 @@ import java.util.Locale
 @Source
 abstract class PlotTwistNoFansub : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int) = getMangaList(page, "", "trending")

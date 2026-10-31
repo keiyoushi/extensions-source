@@ -19,8 +19,6 @@ import java.util.Locale
 
 @Source
 abstract class MangaMoins : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/v1"
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->

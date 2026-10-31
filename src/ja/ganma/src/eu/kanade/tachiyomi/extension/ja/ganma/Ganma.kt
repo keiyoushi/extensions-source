@@ -32,8 +32,6 @@ import java.time.ZoneId
 abstract class Ganma :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/graphql"
     private val preferences by getPreferencesLazy()
     private val jst = ZoneId.of("Asia/Tokyo")

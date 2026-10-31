@@ -25,8 +25,6 @@ import org.jsoup.nodes.Document
 /** 漫漫看 */
 abstract class MMLook : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val desktopUrl get() = baseUrl.replace("https://m.", "https://www.")
 
     protected open val useLegacyMangaUrl: Boolean = false

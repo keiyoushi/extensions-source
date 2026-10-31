@@ -18,8 +18,6 @@ import okhttp3.Request
 @Source
 abstract class EnchiladaScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val domainUrl: String

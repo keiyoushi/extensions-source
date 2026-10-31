@@ -36,8 +36,6 @@ import java.io.IOException
 abstract class CoronaEx :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain"
     private val authDomain get() = "googleapis.com"

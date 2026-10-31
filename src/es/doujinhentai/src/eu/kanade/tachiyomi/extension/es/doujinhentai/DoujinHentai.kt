@@ -24,8 +24,6 @@ import java.util.Locale
 
 @Source
 abstract class DoujinHentai : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val chapterDateFormat = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.ENGLISH)
 
     // ── Helpers ───────────────────────────────────────────────────────────────

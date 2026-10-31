@@ -41,8 +41,6 @@ abstract class MangaRawClub :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(10.seconds)
         .readTimeout(30.seconds)
 

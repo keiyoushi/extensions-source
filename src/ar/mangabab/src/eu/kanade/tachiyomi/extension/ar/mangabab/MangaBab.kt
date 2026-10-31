@@ -20,8 +20,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class MangaBab : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage = parseListing(client.get(listingUrl("11", page).toHttpUrl(), Fetch.DOCUMENT).asJsoup())
 

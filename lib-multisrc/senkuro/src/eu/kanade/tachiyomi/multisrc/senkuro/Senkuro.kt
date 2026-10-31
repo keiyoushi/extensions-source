@@ -29,8 +29,6 @@ import java.util.Locale
 
 abstract class Senkuro : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")

@@ -27,7 +27,6 @@ import org.jsoup.Jsoup
 @Source
 abstract class Astratoons : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage {

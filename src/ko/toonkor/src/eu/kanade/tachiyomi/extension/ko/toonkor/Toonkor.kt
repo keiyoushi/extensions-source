@@ -29,8 +29,6 @@ import java.util.Locale
 
 @Source
 abstract class Toonkor : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // The site serves a reduced 30-item listing to Android user agents.
     override fun Headers.Builder.configureHeaders(): Headers.Builder = setRandomUserAgent(UserAgentType.DESKTOP)
 

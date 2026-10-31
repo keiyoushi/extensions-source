@@ -29,8 +29,6 @@ import java.util.Locale
 
 @Source
 abstract class ThienThaiTruyen : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(5)
 
     // ============================== Popular ===============================

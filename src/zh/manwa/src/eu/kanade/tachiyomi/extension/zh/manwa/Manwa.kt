@@ -36,8 +36,6 @@ import java.util.Locale
 abstract class Manwa :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences = getPreferences()
 
     // mirror list is fetched at runtime (see UpdateMirror), so the DSL mirrors mode can't be used

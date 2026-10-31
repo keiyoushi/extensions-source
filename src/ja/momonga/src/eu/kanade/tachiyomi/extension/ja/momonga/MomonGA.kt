@@ -22,8 +22,6 @@ import java.util.Locale
 
 @Source
 abstract class MomonGA : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     // Chapters

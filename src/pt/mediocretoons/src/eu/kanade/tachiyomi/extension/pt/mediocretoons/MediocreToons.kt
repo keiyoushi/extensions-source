@@ -37,8 +37,6 @@ abstract class MediocreToons :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiHost = API_URL.toHttpUrl().host
 
     private val preferences by getPreferencesLazy()

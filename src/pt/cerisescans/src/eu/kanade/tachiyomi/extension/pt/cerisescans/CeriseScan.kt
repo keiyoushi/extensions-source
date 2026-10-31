@@ -20,8 +20,6 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class CeriseScan : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage = getComicList(page, sort = "views")

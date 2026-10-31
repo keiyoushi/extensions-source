@@ -25,8 +25,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class ReizuComics : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://zrydzcqveheuwviyerto.supabase.co/rest/v1"
     private val cdnUrl = "https://cdn.reizucomics.com"
 

@@ -45,8 +45,6 @@ abstract class Dynasty :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsRelatedMangas = true
 
     private val preferences by getPreferencesLazy()

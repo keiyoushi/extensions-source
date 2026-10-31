@@ -18,8 +18,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class HentaiComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/top-hentais/", Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.select("article.w_item_b").map(::listingParse), false)

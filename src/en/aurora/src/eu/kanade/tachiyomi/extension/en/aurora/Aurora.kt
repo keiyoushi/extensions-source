@@ -21,8 +21,6 @@ import java.util.Locale
 @Source
 abstract class Aurora : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
     private val dateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.US)
 

@@ -21,7 +21,6 @@ import org.jsoup.nodes.Element
 
 abstract class MoonlightTL : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     protected val intl = Intl(
         lang,
         setOf("en", "es"),

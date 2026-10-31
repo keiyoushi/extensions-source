@@ -25,8 +25,6 @@ import java.util.Locale
 @Source
 abstract class HentaiKun : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor { chain ->
         val request = chain.request()
         val pathSegments = request.url.pathSegments

@@ -17,7 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class KoronaxScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override suspend fun getPopularManga(page: Int): MangasPage = fetchMangas().sortedByDescending { it.ratingValue }.toMangasPage()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = fetchMangas().sortedByDescending { it.latestChapterAt }.toMangasPage()

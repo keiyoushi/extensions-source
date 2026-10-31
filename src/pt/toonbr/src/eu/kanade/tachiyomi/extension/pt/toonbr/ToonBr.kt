@@ -29,8 +29,6 @@ abstract class ToonBr :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {

@@ -24,8 +24,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class WarForRayuba : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = apply {

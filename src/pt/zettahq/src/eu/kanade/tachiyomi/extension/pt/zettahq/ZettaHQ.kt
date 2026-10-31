@@ -23,8 +23,6 @@ import java.text.Normalizer
 
 @Source
 abstract class ZettaHQ : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     // ============================== Popular ==============================

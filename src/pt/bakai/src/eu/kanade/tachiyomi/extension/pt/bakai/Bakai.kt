@@ -20,8 +20,6 @@ import kotlin.time.Instant
 @Source
 abstract class Bakai : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {

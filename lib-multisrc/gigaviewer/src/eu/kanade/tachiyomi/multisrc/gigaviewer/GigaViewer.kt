@@ -37,7 +37,6 @@ abstract class GigaViewer :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     protected open val apiUrl get() = "$baseUrl/graphql"
     protected open val preferences by getPreferencesLazy()
 

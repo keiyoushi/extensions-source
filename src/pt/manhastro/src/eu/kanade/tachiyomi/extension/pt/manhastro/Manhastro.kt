@@ -33,8 +33,6 @@ abstract class Manhastro :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api2.manhastro.net"
 
     private val preferences by getPreferencesLazy()

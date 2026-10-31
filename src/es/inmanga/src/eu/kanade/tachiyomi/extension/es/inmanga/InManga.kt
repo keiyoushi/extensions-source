@@ -28,7 +28,6 @@ import java.time.temporal.ChronoField
 @Source
 abstract class InManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val dateFormat = DateTimeFormatterBuilder()
         .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
         .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)

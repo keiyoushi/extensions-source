@@ -27,8 +27,6 @@ import java.util.Locale
 @Source
 abstract class ExHentaiNetBR : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)

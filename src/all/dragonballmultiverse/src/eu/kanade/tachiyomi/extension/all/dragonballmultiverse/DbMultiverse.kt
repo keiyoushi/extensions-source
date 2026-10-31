@@ -33,8 +33,6 @@ import okio.Buffer
 @Source
 abstract class DbMultiverse : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val internalLang: String
         get() = when (lang) {
             "en" -> "en"

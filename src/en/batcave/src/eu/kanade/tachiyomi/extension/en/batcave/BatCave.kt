@@ -33,8 +33,6 @@ import java.util.Calendar
 @Source
 abstract class BatCave : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Use client to sync cookies with WebView and intercept the DLE Guard redirect.
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(DleGuardResolver.interceptor(baseUrl))

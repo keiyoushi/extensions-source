@@ -38,7 +38,6 @@ abstract class Reimanga :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = apply {
         addCookie("showAdultContent" to "true")
         protocols(listOf(Protocol.HTTP_1_1))

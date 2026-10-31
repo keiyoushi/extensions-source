@@ -38,8 +38,6 @@ abstract class YaoiMe :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsRelatedMangas = true
 
     override val supportsFilterFetching = true

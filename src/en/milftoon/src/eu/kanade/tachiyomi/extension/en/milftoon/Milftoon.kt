@@ -18,8 +18,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class Milftoon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val cdnUrl = "https://fdc1.azhentai.com/"
 
     private inline fun <reified T> String.parseRouteData(): T {

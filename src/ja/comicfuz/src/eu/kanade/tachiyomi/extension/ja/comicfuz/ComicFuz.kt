@@ -20,8 +20,6 @@ import okio.IOException
 
 @Source
 abstract class ComicFuz : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/v1"
     private val cdnUrl get() = "https://img.$domain"

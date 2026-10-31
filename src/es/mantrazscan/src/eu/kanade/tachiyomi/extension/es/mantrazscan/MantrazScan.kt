@@ -23,8 +23,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class MantrazScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun Headers.Builder.configureHeaders() = apply {
         add(
             "Accept",

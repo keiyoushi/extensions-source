@@ -22,8 +22,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class DBNewHope : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private data class LangEntry(
         val title: String,
         val listPath: String,

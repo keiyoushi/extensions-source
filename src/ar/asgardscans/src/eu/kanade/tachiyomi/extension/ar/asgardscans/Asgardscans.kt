@@ -23,8 +23,6 @@ import java.util.Locale
 @Source
 abstract class Asgardscans : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private suspend fun getMangaList(page: Int, params: HttpUrl.Builder.() -> Unit): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("manga")
             .addQueryParameter("page", page.toString())

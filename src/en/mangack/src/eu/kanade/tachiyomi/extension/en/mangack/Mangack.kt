@@ -31,7 +31,6 @@ import java.util.Locale
 @Source
 abstract class Mangack : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     // ============================== Popular ===============================

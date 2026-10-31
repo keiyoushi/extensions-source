@@ -20,8 +20,6 @@ import java.util.Locale
 
 abstract class MultiChan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage {

@@ -51,8 +51,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class CatharsisWorld : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::pageInterceptor)

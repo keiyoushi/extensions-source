@@ -29,8 +29,6 @@ import okhttp3.Response
 abstract class KadoComi :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
     private val apiUrl get() = "$baseUrl/api"
     private val pageLimit = 30

@@ -20,7 +20,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class MangoToons : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://api.mangotoons.com/api/v1"
 
     // the page manifest answers 429 (Retry-After: 10) from about 12 requests a minute

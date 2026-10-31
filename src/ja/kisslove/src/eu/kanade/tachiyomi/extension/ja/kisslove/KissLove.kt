@@ -22,8 +22,6 @@ import java.util.Locale
 
 @Source
 abstract class KissLove : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsFilterFetching = true
 
     private val intl = Intl(

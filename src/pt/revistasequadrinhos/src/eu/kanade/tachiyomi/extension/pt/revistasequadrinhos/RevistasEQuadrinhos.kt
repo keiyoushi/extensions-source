@@ -23,8 +23,6 @@ import kotlin.time.Instant
 @Source
 abstract class RevistasEQuadrinhos : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {

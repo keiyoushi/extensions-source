@@ -23,8 +23,6 @@ import kotlin.experimental.xor
 
 @Source
 abstract class NicovideoSeiga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest: Boolean = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::imageIntercept)

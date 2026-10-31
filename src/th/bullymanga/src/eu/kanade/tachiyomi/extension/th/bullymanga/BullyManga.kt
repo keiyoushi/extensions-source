@@ -24,8 +24,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class BullyManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     // ========================= Popular =========================

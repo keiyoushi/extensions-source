@@ -18,8 +18,6 @@ import org.jsoup.Jsoup
 @Source
 abstract class HentaiZoneBeta : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ===============================
 
     private var popularCursor: String? = null

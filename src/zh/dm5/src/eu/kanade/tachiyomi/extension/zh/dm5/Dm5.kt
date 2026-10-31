@@ -36,8 +36,6 @@ import java.util.TimeZone
 abstract class Dm5 :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(CommentsInterceptor)
         addCookie("isAdult" to "1")

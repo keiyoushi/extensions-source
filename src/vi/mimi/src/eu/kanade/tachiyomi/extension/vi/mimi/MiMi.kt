@@ -23,7 +23,6 @@ import okhttp3.Response
 
 @Source
 abstract class MiMi : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl: String = "$baseUrl/api"
 
     override fun OkHttpClient.Builder.configureClient() = apply {

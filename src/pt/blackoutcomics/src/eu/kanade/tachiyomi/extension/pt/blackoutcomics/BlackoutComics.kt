@@ -29,8 +29,6 @@ import java.util.Locale
 
 @Source
 abstract class BlackoutComics : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = addCookie(
         listOf(
             "age_gate_consent" to """{"consentAt":1790812800000,"expiresAt":2145916800000}""",

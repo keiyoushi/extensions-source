@@ -17,8 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 abstract class Supermega : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     private fun createManga(): SManga = SManga.create().apply {
         setUrlWithoutDomain("/")
         title = "SUPER MEGA"

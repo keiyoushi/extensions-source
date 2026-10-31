@@ -16,8 +16,6 @@ import okhttp3.Request
 @Source
 abstract class OnePunchManOnline : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int) = MangasPage(listOf(createManga()), false)
 

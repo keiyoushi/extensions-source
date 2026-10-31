@@ -33,8 +33,6 @@ import java.time.LocalDate
 abstract class MangaOne :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "$baseUrl/api/client"
     private val preferences by getPreferencesLazy()
 

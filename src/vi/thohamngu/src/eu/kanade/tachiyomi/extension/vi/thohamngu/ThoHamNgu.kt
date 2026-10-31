@@ -31,8 +31,6 @@ import java.util.Locale
 
 @Source
 abstract class ThoHamNgu : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(3)
     }

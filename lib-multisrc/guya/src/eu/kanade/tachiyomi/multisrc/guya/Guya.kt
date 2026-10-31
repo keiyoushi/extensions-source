@@ -31,8 +31,6 @@ abstract class Guya :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set(
         "User-Agent",
         "(Android ${Build.VERSION.RELEASE}; " +

@@ -26,8 +26,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class LeerCapitulo : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 3.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     override suspend fun getPopularManga(page: Int): MangasPage {

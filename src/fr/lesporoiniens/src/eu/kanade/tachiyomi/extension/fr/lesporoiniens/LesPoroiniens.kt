@@ -23,8 +23,6 @@ import kotlin.coroutines.cancellation.CancellationException
 @Source
 abstract class LesPoroiniens : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     companion object {
         private const val SERIES_DATA_SELECTOR = "#series-data-placeholder"
         private const val READER_DATA_SELECTOR = "#reader-data-placeholder"

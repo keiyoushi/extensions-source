@@ -27,7 +27,6 @@ import kotlin.time.Instant
 @Source
 abstract class Mitaku : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     // ========================= Popular =========================

@@ -29,8 +29,6 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class MangaToshokanZ : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(::r18Interceptor)
         .addInterceptor(DescrambleInterceptor())
 

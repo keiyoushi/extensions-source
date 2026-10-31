@@ -34,8 +34,6 @@ abstract class Luscious :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     val lusLang: String get() = toLusLang(lang)
 
     private val preferences: SharedPreferences by getPreferencesLazy()

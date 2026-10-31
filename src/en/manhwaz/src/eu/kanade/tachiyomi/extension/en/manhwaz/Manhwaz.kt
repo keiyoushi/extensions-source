@@ -26,7 +26,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Manhwaz : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this.rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage {

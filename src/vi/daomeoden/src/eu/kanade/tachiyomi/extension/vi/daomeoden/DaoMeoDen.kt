@@ -35,7 +35,6 @@ import java.util.Locale
 
 @Source
 abstract class DaoMeoDen : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     // ============================== Popular ===============================

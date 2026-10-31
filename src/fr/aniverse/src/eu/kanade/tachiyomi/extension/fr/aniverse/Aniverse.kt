@@ -21,8 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Aniverse : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // The site only exposes one listing, ordered by latest chapter release.
     override val supportsLatest get() = false
 

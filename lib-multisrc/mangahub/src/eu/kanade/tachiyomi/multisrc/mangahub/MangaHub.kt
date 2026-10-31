@@ -50,8 +50,6 @@ import kotlin.time.Instant
 
 abstract class MangaHub : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     abstract val mangaSource: String
 
     private val baseApiUrl get() = "https://api.mghcdn.com"

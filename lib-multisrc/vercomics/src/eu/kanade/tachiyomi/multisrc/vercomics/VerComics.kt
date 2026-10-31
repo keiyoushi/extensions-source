@@ -19,8 +19,6 @@ import org.jsoup.nodes.Element
 
 abstract class VerComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest: Boolean = false
 
     protected open val urlSuffix = ""

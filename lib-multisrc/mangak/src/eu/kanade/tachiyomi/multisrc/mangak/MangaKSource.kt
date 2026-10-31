@@ -32,8 +32,6 @@ abstract class MangaKSource :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsFilterFetching = true
     protected open val apiUrl: String
         get() = "https://api." + baseUrl.toHttpUrl().host

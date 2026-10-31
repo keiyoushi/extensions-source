@@ -29,8 +29,6 @@ abstract class Hentai3 :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val searchLang: String
         get() = when (lang) {
             "all" -> ""

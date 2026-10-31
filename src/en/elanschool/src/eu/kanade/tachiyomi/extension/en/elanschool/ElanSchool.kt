@@ -17,8 +17,6 @@ import org.jsoup.nodes.Element
 abstract class ElanSchool : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     private fun mangaInfo(page: Int) = SManga.create().apply {
         url = "/chapters/?dps_paged=$page"
         title = "Elan School"

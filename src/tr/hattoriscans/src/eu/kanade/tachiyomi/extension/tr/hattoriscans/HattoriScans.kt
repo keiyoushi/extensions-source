@@ -29,7 +29,6 @@ import java.util.Locale
 @Source
 abstract class HattoriScans : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2)
     }

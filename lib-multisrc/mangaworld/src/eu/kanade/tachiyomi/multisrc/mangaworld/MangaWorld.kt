@@ -29,8 +29,6 @@ private val dateFormat = DateTimeFormatterBuilder()
 
 abstract class MangaWorld : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = true
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(CookieRedirectInterceptor(network.client))

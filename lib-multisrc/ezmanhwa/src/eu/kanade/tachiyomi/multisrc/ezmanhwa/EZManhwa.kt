@@ -26,8 +26,6 @@ abstract class EZManhwa :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     abstract val apiUrl: String
 
     private val preferences by getPreferencesLazy()

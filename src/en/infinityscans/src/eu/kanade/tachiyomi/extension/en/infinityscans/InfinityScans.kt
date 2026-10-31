@@ -32,8 +32,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class InfinityScans : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val cdnHost = "cv.infinityscans.org"
 
     private val pageCdnHost = "ch.infinityscans.org"

@@ -21,7 +21,6 @@ import kotlin.math.floor
 @Source
 abstract class SandraAndWoo : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     private val writer = "Oliver Knörzer"

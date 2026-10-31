@@ -19,8 +19,6 @@ import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Honkaiimpact : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(1.minutes)

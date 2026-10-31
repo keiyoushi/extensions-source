@@ -23,8 +23,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class RawkumaMe : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(TextOverlayInterceptor { baseUrl })
 
     override suspend fun getPopularManga(page: Int): MangasPage = browse(page, "popular")

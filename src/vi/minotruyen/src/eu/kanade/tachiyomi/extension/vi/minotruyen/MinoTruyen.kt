@@ -29,8 +29,6 @@ import java.nio.charset.StandardCharsets
 
 @Source
 abstract class MinoTruyen : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val category: String
         get() = when {
             name.contains("Comics") -> "comics"

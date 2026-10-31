@@ -31,8 +31,6 @@ import java.util.TimeZone
 @Source
 abstract class NetTruyenViet : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(5)
 
     // ============================== Popular ===============================

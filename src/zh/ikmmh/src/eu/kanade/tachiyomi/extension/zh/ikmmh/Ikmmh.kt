@@ -51,8 +51,6 @@ import kotlin.time.Duration.Companion.milliseconds
 @Source
 abstract class Ikmmh : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // 站点对无 Cookie 的请求会在每次响应中轮换下发新 PHPSESSID（实测），
     // 固定回传同一会话可避免"WAF 会话不连贯"特征；缺失或异常时静默跳过，不影响可用性
     @Volatile

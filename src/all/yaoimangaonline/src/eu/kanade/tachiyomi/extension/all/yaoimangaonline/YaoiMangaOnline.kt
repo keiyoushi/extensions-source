@@ -18,7 +18,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class YaoiMangaOnline : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     // =================== Popular ===================

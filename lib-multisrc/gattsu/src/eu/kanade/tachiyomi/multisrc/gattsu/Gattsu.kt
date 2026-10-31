@@ -24,8 +24,6 @@ import java.util.Locale
 
 abstract class Gattsu : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept", ACCEPT)
         .set("Accept-Language", ACCEPT_LANGUAGE)
 

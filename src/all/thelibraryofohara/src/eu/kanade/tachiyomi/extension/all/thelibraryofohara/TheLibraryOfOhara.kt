@@ -20,8 +20,6 @@ import kotlin.time.Instant
 @Source
 abstract class TheLibraryOfOhara : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val siteLang: String
         get() = when (lang) {
             "id" -> "Indonesia"

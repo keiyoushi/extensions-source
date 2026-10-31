@@ -26,8 +26,6 @@ import java.util.Locale
 
 @Source
 abstract class JeazScans : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     private val dateFormat = DateTimeFormatterBuilder()

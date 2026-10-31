@@ -21,7 +21,6 @@ import java.lang.IllegalArgumentException
 @Source
 abstract class Twicomi : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://api.twicomi.com/api/v2"
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("$apiUrl/manga/featured/list?page_no=$page&page_limit=24".toHttpUrl())

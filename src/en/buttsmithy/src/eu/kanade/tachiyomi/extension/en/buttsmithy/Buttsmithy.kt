@@ -28,8 +28,6 @@ import java.util.Locale
 @Source
 abstract class Buttsmithy : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // the full version of alfie for some reason has a separate url and isn't accessed like the other comics
     private val baseUrlAlfie = "https://buttsmithy.com"
     private val chapterOverviewBaseUrl = "$baseUrlAlfie/archives/chapter"

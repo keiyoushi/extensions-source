@@ -27,8 +27,6 @@ import java.util.concurrent.ConcurrentHashMap
 @Source
 abstract class HentaiCosplay : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val dateCache = ConcurrentHashMap<String, String>()
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseListing(client.get("$baseUrl/ranking/page/$page/", Fetch.DOCUMENT))

@@ -41,8 +41,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class AllManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiDomain get() = "api.mkissa.net"
 
     private val apiUrl get() = "https://$apiDomain/api"

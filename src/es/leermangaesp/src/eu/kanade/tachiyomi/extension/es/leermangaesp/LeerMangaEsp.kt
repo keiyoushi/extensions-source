@@ -25,8 +25,6 @@ import java.util.Locale
 @Source
 abstract class LeerMangaEsp : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
     private val imageBaseUrl: HttpUrl

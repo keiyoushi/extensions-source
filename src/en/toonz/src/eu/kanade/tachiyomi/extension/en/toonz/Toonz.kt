@@ -35,8 +35,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Toonz : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
         .addNetworkInterceptor { chain ->
             val request = chain.request()

@@ -19,8 +19,6 @@ private const val SORT_POPULARITY = 3
 @Source
 abstract class MLBBLore : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.mobilelegends.com"
     private val pageSize = 5
 

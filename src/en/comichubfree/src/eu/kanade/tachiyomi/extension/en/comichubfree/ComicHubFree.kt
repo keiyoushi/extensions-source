@@ -21,8 +21,6 @@ import java.util.Locale
 
 @Source
 abstract class ComicHubFree : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("d-MMM-yyyy", Locale.ENGLISH)
 
     override suspend fun getPopularManga(page: Int) = parsePopular(

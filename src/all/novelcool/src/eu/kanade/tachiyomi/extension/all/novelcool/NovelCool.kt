@@ -40,8 +40,6 @@ abstract class NovelCool :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val siteLang: String get() = if (lang == "pt-BR") "br" else lang
 
     private val apiUrl = "https://api.novelcool.com"

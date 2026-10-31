@@ -23,7 +23,6 @@ import java.util.Locale
 @Source
 abstract class Junmeitu : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList("$baseUrl/beauty/index-$page.html")

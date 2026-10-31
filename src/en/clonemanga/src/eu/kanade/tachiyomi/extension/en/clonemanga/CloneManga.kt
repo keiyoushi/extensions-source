@@ -16,8 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class CloneManga : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/viewer_landing.php", Fetch.DOCUMENT).asJsoup()
         val mangas = document.getElementsByClass("comicPreviewContainer").map { element ->

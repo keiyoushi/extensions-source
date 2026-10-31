@@ -25,8 +25,6 @@ import java.util.Locale
 
 @Source
 abstract class MangaPoisk : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage = makeCatalogRequest(page, "popular")
 

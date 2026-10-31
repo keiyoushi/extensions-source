@@ -51,8 +51,6 @@ abstract class OniSaga :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Returns the uppercase language code required by the Livewire updates payload
     private val langCode: String? get() = when (lang) {
         "en" -> "EN"

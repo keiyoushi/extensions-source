@@ -24,7 +24,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class MH1234 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     // Popular Page
 
     override suspend fun getPopularManga(page: Int): MangasPage {

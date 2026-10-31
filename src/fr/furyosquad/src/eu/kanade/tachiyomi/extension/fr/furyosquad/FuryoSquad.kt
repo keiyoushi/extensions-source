@@ -25,8 +25,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class FuryoSquad : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(10.seconds)
         .readTimeout(30.seconds)
         .rateLimit(1)

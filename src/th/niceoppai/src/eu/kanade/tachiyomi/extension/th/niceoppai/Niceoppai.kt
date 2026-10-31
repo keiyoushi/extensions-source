@@ -27,8 +27,6 @@ import java.util.Locale
 
 @Source
 abstract class Niceoppai : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga_list/all/any/most-popular-monthly/$page", Fetch.DOCUMENT).asJsoup())
 

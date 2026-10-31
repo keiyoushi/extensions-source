@@ -34,8 +34,6 @@ abstract class E621 :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     @Volatile private var cachedAccountBlacklist: String? = null

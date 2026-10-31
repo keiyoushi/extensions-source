@@ -47,8 +47,6 @@ abstract class InitManga :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     protected open val mangaUrlDirectory = "seri"

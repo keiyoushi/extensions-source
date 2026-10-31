@@ -37,8 +37,6 @@ import kotlin.time.Duration.Companion.hours
 abstract class MangaNo :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/query"
     private val authDomain get() = "googleapis.com"
     private val loginUrl get() = "https://identitytoolkit.$authDomain/v1"

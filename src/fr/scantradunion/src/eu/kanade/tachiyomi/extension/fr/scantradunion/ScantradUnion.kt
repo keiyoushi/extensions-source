@@ -21,8 +21,6 @@ import java.util.Locale
 @Source
 abstract class ScantradUnion : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ========================= Popular =========================
 
     override suspend fun getPopularManga(page: Int): MangasPage {

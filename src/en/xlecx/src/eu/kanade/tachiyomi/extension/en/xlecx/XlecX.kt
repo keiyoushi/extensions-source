@@ -23,8 +23,6 @@ import kotlin.time.Instant
 @Source
 abstract class XlecX : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // TODO: filters
     // TODO: description - text, other `subInfoLinks`s, JSON-LD,
 

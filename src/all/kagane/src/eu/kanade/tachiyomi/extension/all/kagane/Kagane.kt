@@ -47,8 +47,6 @@ import okio.IOException
 abstract class Kagane :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val kaganeLangs: List<String>
         get() = listOf(lang)
 

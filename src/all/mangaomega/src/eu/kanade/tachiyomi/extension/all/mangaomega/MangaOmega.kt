@@ -42,7 +42,6 @@ import kotlin.time.Instant
 @Source
 abstract class MangaOmega : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 4, period = 1.seconds)
 
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(

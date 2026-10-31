@@ -30,8 +30,6 @@ import java.io.IOException
 abstract class Vomic :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseHost get() = baseUrl.toHttpUrl().host
 
     private val apiUrl get() = "https://api.$baseHost/pics_new/pics"

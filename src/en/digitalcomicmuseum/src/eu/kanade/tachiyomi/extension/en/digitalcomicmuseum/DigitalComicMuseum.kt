@@ -18,8 +18,6 @@ import okhttp3.MultipartBody
 @Source
 abstract class DigitalComicMuseum : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {

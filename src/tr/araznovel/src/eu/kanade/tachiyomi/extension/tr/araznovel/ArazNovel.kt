@@ -26,8 +26,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class ArazNovel : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/wp-json/aotori/v1/serie"
 
     override suspend fun getPopularManga(page: Int) = browse(page, "views")

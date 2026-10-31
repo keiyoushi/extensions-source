@@ -54,8 +54,6 @@ import kotlin.time.Instant
 abstract class Webnex :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     // The site rejects the app's default Cache-Control (max-age=600)

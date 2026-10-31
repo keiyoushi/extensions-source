@@ -22,8 +22,6 @@ import java.util.Locale
 abstract class SwordsComic : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(TextInterceptor())
     }

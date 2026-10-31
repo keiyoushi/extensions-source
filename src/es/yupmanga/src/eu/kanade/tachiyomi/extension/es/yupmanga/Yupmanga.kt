@@ -30,8 +30,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Yupmanga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
 // Cached CSRF token populated by the token interceptor during normal browsing flow.
     private var csrfToken: String = ""
 

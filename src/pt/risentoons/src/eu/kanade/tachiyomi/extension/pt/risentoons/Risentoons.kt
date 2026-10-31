@@ -26,8 +26,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class Risentoons : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     // The API rejects requests without this client signature

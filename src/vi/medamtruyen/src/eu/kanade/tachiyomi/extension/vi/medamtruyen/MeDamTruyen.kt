@@ -37,8 +37,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class MeDamTruyen : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(thumbnailFallbackInterceptor)
         rateLimit(3)

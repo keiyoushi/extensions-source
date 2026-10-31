@@ -27,8 +27,6 @@ import okio.ByteString.Companion.toByteString
 @Source
 abstract class Mangamelon : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private companion object {
         const val API_BASE = "https://api.mangamelon.com"
         const val PAGE_SIZE = 36

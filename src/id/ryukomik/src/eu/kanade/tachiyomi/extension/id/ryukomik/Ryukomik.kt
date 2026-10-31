@@ -30,7 +30,6 @@ import java.util.Locale
 @Source
 abstract class Ryukomik : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://api.ryukomik.web.id"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)

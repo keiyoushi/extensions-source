@@ -28,8 +28,6 @@ import java.util.Locale
 @Source
 abstract class MangaBlackCat : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("manga")

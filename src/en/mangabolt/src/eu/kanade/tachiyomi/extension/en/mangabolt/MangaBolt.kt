@@ -19,8 +19,6 @@ import java.net.URLEncoder
 @Source
 abstract class MangaBolt : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, "")
 

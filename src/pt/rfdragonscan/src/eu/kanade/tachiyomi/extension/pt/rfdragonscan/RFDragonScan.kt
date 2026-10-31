@@ -30,8 +30,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class RFDragonScan : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::loginInterceptor)
 
     // ============================== Popular ==============================

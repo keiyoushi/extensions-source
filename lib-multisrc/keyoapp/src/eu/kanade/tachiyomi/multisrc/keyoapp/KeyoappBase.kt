@@ -5,7 +5,6 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
-import keiyoushi.network.Fetch
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParseDate
@@ -17,8 +16,6 @@ import java.util.Locale
 abstract class KeyoappBase :
     KeiSource(),
     ConfigurableSource {
-
-    override val imageFetch = Fetch.IMAGE
 
     protected val preferences = getPreferences()
 

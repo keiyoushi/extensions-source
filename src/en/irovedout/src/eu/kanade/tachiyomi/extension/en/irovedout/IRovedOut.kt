@@ -19,7 +19,6 @@ import java.util.Locale
 abstract class IRovedOut : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
     private val archiveUrl get() = "$baseUrl/archive"
     private val thumbnailUrl = "https://i.ibb.co/2g7Htwq/irovedout.png"
     private val seriesTitle = "I Roved Out in Search of Truth and Love"

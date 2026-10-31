@@ -19,8 +19,6 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class Guazimanhua : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // The site serves a "download our app" page (no images) for the latest chapter when
     // it detects an Android mobile browser UA; a desktop UA returns the actual pages.
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set(

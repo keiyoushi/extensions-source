@@ -44,8 +44,6 @@ abstract class Picacomic :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences = getPreferences()
 
     private val apiUrl = "https://picaapi.picacomic.com"

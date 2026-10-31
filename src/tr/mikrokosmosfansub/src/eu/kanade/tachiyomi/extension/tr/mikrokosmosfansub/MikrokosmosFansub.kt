@@ -21,8 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class MikrokosmosFansub : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = fetchSeries()
         .sortedByDescending { it.rating }
         .toMangasPage()

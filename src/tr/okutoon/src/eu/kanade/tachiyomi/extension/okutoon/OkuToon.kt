@@ -23,7 +23,6 @@ import java.util.Locale
 @Source
 abstract class OkuToon : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("tr"))
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/tur?sira=popular&sayfa=$page".toHttpUrl())

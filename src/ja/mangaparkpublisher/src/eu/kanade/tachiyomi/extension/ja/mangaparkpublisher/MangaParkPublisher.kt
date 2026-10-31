@@ -30,8 +30,6 @@ import java.util.Locale
 
 @Source
 abstract class MangaParkPublisher : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/chapter"
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.ROOT).withZone(ZoneId.of("Asia/Tokyo"))
 

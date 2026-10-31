@@ -21,8 +21,6 @@ import java.util.Calendar
 
 @Source
 abstract class MangaKuro : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val chapterIdRegex = Regex("""CHAPTER_ID\s*=\s*(\d+);""")
     private val dateRegex = Regex("""(\d+)""")
 

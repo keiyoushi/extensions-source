@@ -25,8 +25,6 @@ import java.util.Locale
 
 @Source
 abstract class HeyToon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page != 1) {
             return getSearchMangaList(page - 1, "", SortFilter.popular)

@@ -44,8 +44,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class TruyenTVN : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(5)
 
     private val ajaxHeaders: Headers

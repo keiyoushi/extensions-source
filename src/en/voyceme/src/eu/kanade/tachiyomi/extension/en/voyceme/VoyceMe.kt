@@ -24,8 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class VoyceMe : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val graphqlurlHost by lazy { GRAPHQL_URL.toHttpUrl().host }
     private val staticurlHost by lazy { STATIC_URL.toHttpUrl().host }
 

@@ -28,8 +28,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class WeebCentral : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override fun OkHttpClient.Builder.configureClient() = apply {

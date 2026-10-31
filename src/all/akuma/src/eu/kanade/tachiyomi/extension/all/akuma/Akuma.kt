@@ -39,8 +39,6 @@ abstract class Akuma :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val akumaLang: String
         get() = when (lang) {
             "all" -> "all"

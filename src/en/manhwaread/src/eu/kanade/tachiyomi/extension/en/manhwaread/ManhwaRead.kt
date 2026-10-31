@@ -24,7 +24,6 @@ import java.util.Locale
 @Source
 abstract class ManhwaRead : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val dateFormat = DateTimeFormatter.ofPattern("d/M/yyyy", Locale.ROOT)
 
     // Popular

@@ -26,7 +26,6 @@ import java.util.Calendar
 @Source
 abstract class VinaHentai : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(3)
     }

@@ -26,8 +26,6 @@ import java.util.Locale
 @Source
 abstract class HotComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = addCookie("hc_vfs" to "Y")
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/en", Fetch.DOCUMENT).asJsoup())

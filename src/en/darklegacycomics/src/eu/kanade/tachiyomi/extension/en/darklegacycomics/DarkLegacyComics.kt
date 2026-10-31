@@ -18,8 +18,6 @@ import java.util.Locale
 @Source
 abstract class DarkLegacyComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int) = MangasPage(

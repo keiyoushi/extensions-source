@@ -42,8 +42,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class BuonDua :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(10, 1.seconds) { it.host == baseUrlHost }

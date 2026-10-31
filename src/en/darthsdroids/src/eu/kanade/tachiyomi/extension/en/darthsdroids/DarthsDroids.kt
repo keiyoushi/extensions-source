@@ -30,7 +30,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class DarthsDroids : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override val supportsLatest = false

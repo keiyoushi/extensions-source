@@ -38,8 +38,6 @@ import kotlin.time.Instant
 
 abstract class NatsuId : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val dateFormat: DateTimeFormatter? = null
 
     // Popular + Latest

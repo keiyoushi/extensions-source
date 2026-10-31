@@ -17,8 +17,6 @@ import keiyoushi.utils.getPreferencesLazy
 abstract class OOTS : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     override suspend fun getPopularManga(page: Int): MangasPage {

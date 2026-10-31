@@ -35,8 +35,6 @@ abstract class HeanCms :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val apiUrl: String
         get() = baseUrl.replace("://", "://api.")
 

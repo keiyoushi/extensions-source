@@ -17,8 +17,6 @@ import kotlinx.serialization.json.JsonElement
 @Source
 abstract class PlatinumLilyScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private suspend fun fetchSeries(): List<SeriesDto> = client.get("$baseUrl/api/series", Fetch.XHR).parseAs()
 
     // ============================== Popular ===============================

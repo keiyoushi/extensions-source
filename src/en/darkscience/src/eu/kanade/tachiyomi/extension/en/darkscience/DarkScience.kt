@@ -19,7 +19,6 @@ import java.util.Locale
 @Source
 abstract class DarkScience : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     private fun initTheManga(manga: SManga): SManga = manga.apply {

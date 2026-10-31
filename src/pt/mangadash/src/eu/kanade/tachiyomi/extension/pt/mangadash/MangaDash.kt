@@ -53,8 +53,6 @@ abstract class MangaDash :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     // Retrieve the app's dedicated cache directory safely

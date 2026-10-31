@@ -36,8 +36,6 @@ import kotlin.text.isNotBlank
 abstract class GocTruyenTranhVui :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/v2"
 
     private val preferences = getPreferences()

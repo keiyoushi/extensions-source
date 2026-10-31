@@ -24,7 +24,6 @@ import okhttp3.Response
 @Source
 abstract class KomikuCom : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://01.komiku.asia/api/v2"
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {

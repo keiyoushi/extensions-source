@@ -24,8 +24,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class HentaiHere : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/browse/newest/page-$page", Fetch.DOCUMENT).asJsoup())

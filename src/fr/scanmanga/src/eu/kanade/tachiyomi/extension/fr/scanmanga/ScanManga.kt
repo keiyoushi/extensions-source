@@ -43,8 +43,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class ScanManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().topPrivateDomain()!!
     private val baseImageUrl get() = "https://static.$domain/img/manga"
     private val baseSearchUrl get() = "https://bqj.$domain/search/quick.json"

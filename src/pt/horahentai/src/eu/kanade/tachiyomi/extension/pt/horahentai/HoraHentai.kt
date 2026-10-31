@@ -27,8 +27,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class HoraHentai : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(2) { !it.encodedPath.startsWith("/wp-content/uploads/") }
     }

@@ -25,8 +25,6 @@ import java.util.Locale
 
 @Source
 abstract class GirlsTop : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 
     // Enforce a desktop User-Agent to prevent redirects to the mobile site (me.girlstop.info)

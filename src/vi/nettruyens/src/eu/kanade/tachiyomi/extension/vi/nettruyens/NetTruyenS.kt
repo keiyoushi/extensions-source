@@ -30,7 +30,6 @@ import java.util.Calendar
 @Source
 abstract class NetTruyenS : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     // ============================== Popular ===============================

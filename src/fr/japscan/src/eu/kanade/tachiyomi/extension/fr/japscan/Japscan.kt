@@ -53,8 +53,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Japscan :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     // Pages are captured from the reader's canvases and spooled to the cache dir; their imageUrl

@@ -24,8 +24,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class KodokuStudio :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = getPopularManga(page)
 
     private val preferences by getPreferencesLazy()

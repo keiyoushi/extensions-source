@@ -26,7 +26,6 @@ import kotlin.math.ceil
 @Source
 abstract class AstraManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/api/v1"
     private val mediaUrl get() = "https://$domain/media"

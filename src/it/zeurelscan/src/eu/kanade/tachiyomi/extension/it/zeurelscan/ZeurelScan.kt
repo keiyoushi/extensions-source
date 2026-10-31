@@ -21,8 +21,6 @@ private val dateFormat = DateTimeFormatter.ofPattern("d/M/yyyy")
 @Source
 abstract class ZeurelScan : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // Popular (not actually sorted as site has no such functionality)
 
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchSeries(), false)

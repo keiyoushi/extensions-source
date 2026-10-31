@@ -24,8 +24,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class Mangitto : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api/manga"
 
     override fun OkHttpClient.Builder.configureClient() = apply {

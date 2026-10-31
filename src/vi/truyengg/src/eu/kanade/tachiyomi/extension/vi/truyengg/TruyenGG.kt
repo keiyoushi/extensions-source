@@ -27,8 +27,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TruyenGG : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
     }

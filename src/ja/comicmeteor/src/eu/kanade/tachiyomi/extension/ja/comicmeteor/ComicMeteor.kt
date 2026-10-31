@@ -31,8 +31,6 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class ComicMeteor : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api"
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy年M月d日").withZone(ZoneId.of("Asia/Tokyo"))
 

@@ -34,8 +34,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Pawchive :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences = getPreferences()
 
     private val apiPath = "api/v1"

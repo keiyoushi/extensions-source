@@ -38,7 +38,6 @@ import java.util.Locale
 abstract class HentaiNexus :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
     private val baseUrlHost = baseUrl.toHttpUrl().host
 
     private val preferences: SharedPreferences by getPreferencesLazy()

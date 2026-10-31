@@ -30,7 +30,6 @@ abstract class Photos18 :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val baseUrlWithLang get() = if (useTrad) baseUrl else "$baseUrl/zh-hans"
     private fun String.stripLang() = removePrefix("/zh-hans")
 

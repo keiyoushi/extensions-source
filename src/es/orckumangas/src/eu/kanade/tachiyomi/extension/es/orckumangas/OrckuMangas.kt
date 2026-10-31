@@ -32,8 +32,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class OrckuMangas : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 
     override fun OkHttpClient.Builder.configureClient() = apply {

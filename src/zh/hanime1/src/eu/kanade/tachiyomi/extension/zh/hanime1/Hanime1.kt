@@ -18,8 +18,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class Hanime1 : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val comicHomepage get() = "$baseUrl/comics"
 
     override suspend fun getPopularManga(page: Int): MangasPage {

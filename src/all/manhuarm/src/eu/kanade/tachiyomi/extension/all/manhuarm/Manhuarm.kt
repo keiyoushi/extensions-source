@@ -53,8 +53,6 @@ abstract class Manhuarm :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val language: Language
         get() = when (lang) {
             "ar" -> Language(lang, disableFontSettings = true)

@@ -35,8 +35,6 @@ abstract class Tapastic :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://story-api.${baseUrl.substringAfterLast("/")}"
 
     private val preferences: SharedPreferences by getPreferencesLazy()

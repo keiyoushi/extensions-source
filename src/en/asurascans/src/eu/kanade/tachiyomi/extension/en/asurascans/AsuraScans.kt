@@ -54,8 +54,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class AsuraScans :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.asurascans.com/api"
 
     private val preferences: SharedPreferences = getPreferences {

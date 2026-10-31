@@ -45,8 +45,6 @@ abstract class GlobalComix :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     // the site's own lang codes for these differ from Tachiyomi's lang codes
     private val extLang: String
         get() = when (lang) {

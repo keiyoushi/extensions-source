@@ -36,8 +36,6 @@ import kotlin.time.Instant
 @Source
 abstract class YuriNeko : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}"
     private val cdnUrl get() = "https://cdn.${baseUrl.toHttpUrl().host}"
     private val webApiUrl get() = "$baseUrl/api/v1"

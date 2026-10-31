@@ -24,8 +24,6 @@ abstract class BakkinReaderX :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private val userAgent = "Mozilla/5.0 (" +

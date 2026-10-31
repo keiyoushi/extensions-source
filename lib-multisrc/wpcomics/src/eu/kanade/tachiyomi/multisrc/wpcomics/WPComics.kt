@@ -31,8 +31,6 @@ import java.util.Locale
 
 abstract class WPComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy Z", Locale.US)
 
     protected open val gmtOffset: String? = "+0500"

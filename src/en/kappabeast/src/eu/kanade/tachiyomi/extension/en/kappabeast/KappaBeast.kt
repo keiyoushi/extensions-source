@@ -23,8 +23,6 @@ import org.jsoup.Jsoup
 
 @Source
 abstract class KappaBeast : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val cdnUrl get() = "https://strapi.$domain"
     private val apiUrl get() = "$cdnUrl/api"

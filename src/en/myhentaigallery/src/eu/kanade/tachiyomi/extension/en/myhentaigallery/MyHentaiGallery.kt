@@ -21,8 +21,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class MyHentaiGallery : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // =============================== Popular ================================
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseComicListing("$baseUrl/views/$page".toHttpUrl())

@@ -32,8 +32,6 @@ import java.util.Locale
 
 @Source
 abstract class RagnaScans : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Limit to 1 request per second to prevent HTTP 429 on parallel manga update fetches
     override fun OkHttpClient.Builder.configureClient() = rateLimit(1) {
         it.host == baseUrl.toHttpUrl().host &&

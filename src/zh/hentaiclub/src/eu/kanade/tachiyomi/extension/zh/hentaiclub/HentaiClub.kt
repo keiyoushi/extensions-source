@@ -20,8 +20,6 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class HentaiClub : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.host == baseUrl.toHttpUrl().host }

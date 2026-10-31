@@ -31,8 +31,6 @@ import java.util.Calendar
 @Source
 abstract class Komiku : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.komiku.org"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::headersInterceptor)

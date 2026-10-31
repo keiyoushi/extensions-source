@@ -21,8 +21,6 @@ import okhttp3.Response
 
 @Source
 abstract class ZerosumOnline : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/api/v1"
 

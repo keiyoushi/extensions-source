@@ -26,8 +26,6 @@ import java.io.IOException
 
 @Source
 abstract class MangaTime : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val limit: Int = 24
 
     fun toImage(url: String): String {

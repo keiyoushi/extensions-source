@@ -35,8 +35,6 @@ import okhttp3.OkHttpClient
 abstract class Hakusensha :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://product.api.hakusensha-e.net/v1"
     private val preferences by getPreferencesLazy()
     private val authMutex = Mutex()

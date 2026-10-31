@@ -17,8 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class LeslieAndVictims : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     // ============================== Popular ===============================

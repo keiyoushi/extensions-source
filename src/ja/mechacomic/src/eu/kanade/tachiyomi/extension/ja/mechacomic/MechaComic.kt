@@ -36,8 +36,6 @@ import org.jsoup.nodes.Document
 abstract class MechaComic :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "$baseUrl/api/v1"
     private val recommendApiUrl get() = "https://api.one.$domain/v1/recommendation"

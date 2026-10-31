@@ -32,7 +32,6 @@ import java.util.Locale
 @Source
 abstract class Mangalix : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         val host = baseUrl.toHttpUrl().host
         rateLimit(2) { it.host == host }

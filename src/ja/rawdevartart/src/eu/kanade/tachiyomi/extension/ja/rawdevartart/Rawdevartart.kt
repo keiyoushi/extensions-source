@@ -25,8 +25,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class Rawdevartart : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(

@@ -33,8 +33,6 @@ import java.util.Locale
 @Source
 abstract class JComic : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun Headers.Builder.configureHeaders() = apply {
         set("Cookie", "jcomic_access=verified_user")
     }

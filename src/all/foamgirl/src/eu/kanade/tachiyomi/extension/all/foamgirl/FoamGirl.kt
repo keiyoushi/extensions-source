@@ -21,8 +21,6 @@ import java.util.Locale
 
 @Source
 abstract class FoamGirl : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)

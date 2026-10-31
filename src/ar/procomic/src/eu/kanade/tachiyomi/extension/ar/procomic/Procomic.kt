@@ -56,8 +56,6 @@ import kotlin.reflect.KMutableProperty0
 abstract class Procomic :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val apiUrl = "https://$API_HOST"

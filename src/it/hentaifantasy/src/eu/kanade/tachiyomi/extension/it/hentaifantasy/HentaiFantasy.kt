@@ -23,8 +23,6 @@ import java.util.Locale
 
 @Source
 abstract class HentaiFantasy : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     companion object {
         private val pagesUrlPattern = Regex(""""url":"(.*?)"""")
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy.M.d", Locale.ROOT)

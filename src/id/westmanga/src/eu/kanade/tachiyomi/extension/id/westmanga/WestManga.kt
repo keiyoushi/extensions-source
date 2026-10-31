@@ -26,8 +26,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class WestManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortFilter.popular)
 
     override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", SortFilter.latest)

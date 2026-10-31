@@ -34,8 +34,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Newtoki : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = getWorkList(page, ListingFilter.listings[0], "views", FilterList())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getWorkList(page, ListingFilter.listings[0], "new", FilterList())

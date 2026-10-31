@@ -26,8 +26,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class FlameComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportRelatedMangasBySearch = true
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::buildIdOutdatedInterceptor)

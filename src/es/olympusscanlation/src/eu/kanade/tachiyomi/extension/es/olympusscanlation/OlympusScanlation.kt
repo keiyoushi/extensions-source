@@ -34,8 +34,6 @@ abstract class OlympusScanlation :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private fun fetchedDomainUrl() {
         if (!preferences.fetchDomainPref()) return
         try {

@@ -26,8 +26,6 @@ import java.net.URLDecoder
 
 @Source
 abstract class Yabai : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::tokenInterceptor)

@@ -28,8 +28,6 @@ import java.util.Locale
 
 @Source
 abstract class Mangadusleri : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.US)
 
     private val loginCheckInterceptor = Interceptor { chain ->

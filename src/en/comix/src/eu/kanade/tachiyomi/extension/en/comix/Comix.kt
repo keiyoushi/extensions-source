@@ -78,8 +78,6 @@ abstract class Comix :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     // A full chapter walk pages through the whole list at a paced rate, so warn once per session

@@ -38,8 +38,6 @@ private fun coverUrl(apiBase: String, cover: String): String = apiBase.toHttpUrl
 abstract class Mokuro :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val titleLang: String

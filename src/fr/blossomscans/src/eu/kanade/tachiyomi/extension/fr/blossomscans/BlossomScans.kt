@@ -28,8 +28,6 @@ abstract class BlossomScans :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val hidePremium: Boolean

@@ -36,8 +36,6 @@ abstract class RinkoComics :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     override suspend fun getPopularManga(page: Int): MangasPage {

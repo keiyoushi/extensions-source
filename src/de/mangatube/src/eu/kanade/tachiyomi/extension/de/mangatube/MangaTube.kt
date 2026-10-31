@@ -22,8 +22,6 @@ import kotlin.time.Duration.Companion.minutes
 @Source
 abstract class MangaTube : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         connectTimeout(1.minutes)
         readTimeout(1.minutes)

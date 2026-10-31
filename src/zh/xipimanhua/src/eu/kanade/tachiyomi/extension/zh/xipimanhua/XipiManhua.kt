@@ -28,7 +28,6 @@ import java.math.BigInteger
 @Source
 abstract class XipiManhua : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 4) { it.host == API_HOST }
 
     override suspend fun getPopularManga(page: Int): MangasPage = mangaList(page, sort = "popular")

@@ -25,8 +25,6 @@ import java.time.temporal.ChronoUnit
 
 abstract class Hwalumi : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/all-series?sort=popular&lang=id&page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document, page)

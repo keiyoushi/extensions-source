@@ -22,8 +22,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class LuminareTranslations : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/wp-json/yarnovel/v1"
     private val pageSize = 24
 

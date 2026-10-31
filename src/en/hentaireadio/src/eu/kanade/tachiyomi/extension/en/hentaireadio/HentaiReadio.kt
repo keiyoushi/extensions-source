@@ -22,8 +22,6 @@ import java.util.Locale
 
 @Source
 abstract class HentaiReadio : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Site is behind Cloudflare
 
     private val dateFormatter by lazy {

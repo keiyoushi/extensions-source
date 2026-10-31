@@ -23,8 +23,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class KawiiManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://manga-api.kawaii-anime.com/api/manga"
 
     private var token: String? = null

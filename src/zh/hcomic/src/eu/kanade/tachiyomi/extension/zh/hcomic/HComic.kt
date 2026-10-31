@@ -20,7 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class HComic : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val imgUrl = "https://h-comic.link/api"
 
     // Popular (Random)

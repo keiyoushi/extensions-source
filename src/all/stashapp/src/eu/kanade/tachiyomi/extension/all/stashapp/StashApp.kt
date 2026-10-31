@@ -31,7 +31,6 @@ abstract class StashApp :
     ConfigurableSource,
     UnmeteredSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {

@@ -42,8 +42,6 @@ import java.util.Locale
 // Formerly WPMangaStream & WPMangaReader -> MangaThemesia
 abstract class MangaThemesia : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     open val mangaUrlDirectory: String = "/manga"
 
     open val datePattern = "MMMM d, yyyy"

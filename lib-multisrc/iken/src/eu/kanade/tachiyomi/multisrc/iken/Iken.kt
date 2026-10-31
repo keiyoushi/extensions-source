@@ -42,8 +42,6 @@ abstract class Iken :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val apiUrl: String
         get() = baseUrl.replace("https://", "https://api.")
 

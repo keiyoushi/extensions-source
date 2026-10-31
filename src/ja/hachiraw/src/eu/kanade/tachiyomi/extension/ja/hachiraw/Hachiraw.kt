@@ -24,7 +24,6 @@ import java.util.Locale
 @Source
 abstract class Hachiraw : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(
         page,
         "",

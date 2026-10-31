@@ -49,7 +49,6 @@ import java.util.Locale
 abstract class Madokami :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT)

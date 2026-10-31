@@ -37,8 +37,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class LikeManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1, 2.seconds) { it.queryParameter("code") == "ajax" && it.queryParameter("code") == "load_list_chapter" }
         rateLimit(1) { it.host == baseUrl.toHttpUrl().host && it.fragment != THUMBNAIL }

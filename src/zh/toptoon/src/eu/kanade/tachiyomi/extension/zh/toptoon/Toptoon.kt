@@ -17,8 +17,6 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class Toptoon : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {

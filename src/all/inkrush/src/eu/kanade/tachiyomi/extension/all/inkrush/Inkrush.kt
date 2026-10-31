@@ -19,8 +19,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Inkrush : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = getCatalog(page, "popular")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getCatalog(page, "latest")

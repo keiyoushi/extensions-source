@@ -37,7 +37,6 @@ import java.util.Locale
 @Source
 abstract class LectorTmoUnoriginal : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
     override val supportsFilterFetching = true

@@ -20,8 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class ComicLand : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.comicland.org/api"
 
     // ============================== Popular ==============================

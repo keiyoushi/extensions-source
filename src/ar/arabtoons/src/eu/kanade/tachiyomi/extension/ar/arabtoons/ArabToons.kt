@@ -22,8 +22,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class ArabToons : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "$baseUrl/api".toHttpUrl()
 
     override suspend fun getPopularManga(page: Int): MangasPage = browse(page) { addQueryParameter("sort", "views_count") }

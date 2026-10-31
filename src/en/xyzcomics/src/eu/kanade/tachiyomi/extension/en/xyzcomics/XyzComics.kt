@@ -19,8 +19,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class XyzComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private class ArtistTagFilter : Filter.Text(ARTIST_TAG_FILTER_NAME)

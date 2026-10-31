@@ -15,8 +15,6 @@ import keiyoushi.utils.asJsoup
 @Source
 abstract class Collectedcurios : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     // ============================== Popular ===============================

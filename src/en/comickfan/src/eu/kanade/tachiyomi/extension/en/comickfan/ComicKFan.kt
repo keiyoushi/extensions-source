@@ -25,8 +25,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class ComicKFan : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     // Popular
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortFilter.POPULAR)
 

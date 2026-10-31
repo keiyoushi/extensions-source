@@ -17,8 +17,6 @@ import java.util.Calendar
 
 @Source
 abstract class MiuRaw : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/manga/page/$page/?orderby=views", Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)

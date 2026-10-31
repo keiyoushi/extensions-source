@@ -34,8 +34,6 @@ import java.io.IOException
 abstract class MusicBookJp :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     override fun getHomeUrl(): String = "$baseUrl/comic"

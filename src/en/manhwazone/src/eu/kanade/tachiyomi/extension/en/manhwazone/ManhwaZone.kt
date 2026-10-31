@@ -27,7 +27,6 @@ import java.util.Locale
 @Source
 abstract class ManhwaZone : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/series?sortBy=popularity&page=$page", Fetch.DOCUMENT).asJsoup())

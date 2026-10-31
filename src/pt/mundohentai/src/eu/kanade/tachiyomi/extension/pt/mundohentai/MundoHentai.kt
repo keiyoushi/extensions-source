@@ -24,8 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MundoHentai : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds)

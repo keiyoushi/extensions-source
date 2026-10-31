@@ -21,8 +21,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Kuaikanmanhua : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://api.kkmh.com"
 
     // Popular

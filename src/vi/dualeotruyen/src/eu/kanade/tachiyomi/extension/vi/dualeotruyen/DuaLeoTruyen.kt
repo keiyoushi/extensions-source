@@ -28,8 +28,6 @@ import java.util.Locale
 
 @Source
 abstract class DuaLeoTruyen : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(5)
 
     // ============================== Popular ===============================

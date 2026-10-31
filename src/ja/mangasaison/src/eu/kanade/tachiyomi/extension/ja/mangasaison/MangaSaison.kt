@@ -39,8 +39,6 @@ import java.security.MessageDigest
 abstract class MangaSaison :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val pageLimit = 30
     private val apiUrl get() = "$baseUrl/api/query"
     private val viewerUrl get() = "$baseUrl/api/v1/mdviewer"

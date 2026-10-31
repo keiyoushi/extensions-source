@@ -24,7 +24,6 @@ import java.util.Locale
 @Source
 abstract class ScansGG : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = true
 
     private val apiUrl = "https://api.scans.gg"

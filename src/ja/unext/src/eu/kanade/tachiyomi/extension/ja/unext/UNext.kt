@@ -50,8 +50,6 @@ import kotlin.random.Random
 abstract class UNext :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl get() = "https://cc.unext.jp"
     private val preferences by getPreferencesLazy()
     private val apiHeaders get() = headersBuilder()

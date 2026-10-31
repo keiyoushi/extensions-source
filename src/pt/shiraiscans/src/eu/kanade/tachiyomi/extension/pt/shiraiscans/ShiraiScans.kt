@@ -23,8 +23,6 @@ import java.util.Locale
 @Source
 abstract class ShiraiScans : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())

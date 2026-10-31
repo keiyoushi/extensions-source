@@ -37,8 +37,6 @@ import java.util.Locale
 abstract class ComicFury :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     // override lang string used in MangaSearch; "notext" is the No Text variant of "other"
     private val siteLang: String
         get() = when {

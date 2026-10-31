@@ -35,7 +35,6 @@ abstract class PornPics :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val preferences = getPreferences()
 
     override fun OkHttpClient.Builder.configureClient() = addCookie("pp_lang" to "")

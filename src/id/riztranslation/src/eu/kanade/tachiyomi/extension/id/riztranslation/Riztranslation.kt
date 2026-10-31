@@ -21,8 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Riztranslation : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://uefnaojxivvxeamljskn.supabase.co/rest/v1"
 
     private val apiHeaders: Headers

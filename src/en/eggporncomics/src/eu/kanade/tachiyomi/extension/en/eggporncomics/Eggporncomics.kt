@@ -22,7 +22,6 @@ import java.time.ZonedDateTime
 @Source
 abstract class Eggporncomics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     // Popular
 
     // couldn't find a page with popular comics, defaulting to the popular "anime-comics" category

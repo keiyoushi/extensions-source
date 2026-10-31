@@ -33,7 +33,6 @@ abstract class Mangabz :
     MangabzTheme(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     private val mirror: Mirror
         get() = when (baseUrl.toHttpUrl().host) {
             "mangabz.com" -> Mirror("mangabz.com", "bz/", "mangabz_lang")

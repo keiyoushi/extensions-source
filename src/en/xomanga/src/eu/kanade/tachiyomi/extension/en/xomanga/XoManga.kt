@@ -22,8 +22,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class XoManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     // ============================== Popular ===============================

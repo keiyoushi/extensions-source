@@ -31,7 +31,6 @@ private val dateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US)
 @Source
 abstract class MyReadingManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val siteLang: String
         get() = when (lang) {
             "ar" -> "Arabic"

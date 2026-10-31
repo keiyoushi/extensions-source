@@ -30,7 +30,6 @@ import kotlin.time.Duration.Companion.minutes
 @Source
 abstract class ToomicsGlobal : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val siteLang: String
         get() = when (lang) {
             "zh-Hans" -> "sc"

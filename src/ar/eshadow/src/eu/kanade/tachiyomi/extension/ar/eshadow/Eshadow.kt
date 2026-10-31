@@ -16,8 +16,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Eshadow : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportsLatest = false
 
     private suspend fun getMangas(page: Int, query: String? = null) = "$baseUrl/api/manga".toHttpUrl().newBuilder().apply {

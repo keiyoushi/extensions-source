@@ -24,7 +24,6 @@ import kotlin.time.Instant
 @Source
 abstract class Manhwa18Net : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     private fun extractPageDto(response: Response): PageDto {

@@ -21,8 +21,6 @@ import java.time.format.DateTimeFormatter
 abstract class Mahouirexnohentaikarte : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     private fun singleManga() = SManga.create().apply {
         url = MANGA_URL
         title = TITLE

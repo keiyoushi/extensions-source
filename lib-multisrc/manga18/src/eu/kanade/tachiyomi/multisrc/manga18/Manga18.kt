@@ -26,8 +26,6 @@ import java.util.Locale
 
 abstract class Manga18 : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/list-manga/$page?order_by=views", Fetch.DOCUMENT).asJsoup())
 
     protected open fun popularMangaParse(document: Document): MangasPage {

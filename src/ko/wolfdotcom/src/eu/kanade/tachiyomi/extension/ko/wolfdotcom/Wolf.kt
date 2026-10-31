@@ -28,8 +28,6 @@ import java.util.Locale
 @Source
 abstract class Wolf : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val isWebtoon get() = name.endsWith("웹툰")
     private val isComic get() = name.endsWith("만화책")
     private val isPhoto get() = name.endsWith("포토툰")

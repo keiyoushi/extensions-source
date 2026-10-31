@@ -36,8 +36,6 @@ import java.util.Locale
 
 @Source
 abstract class SoaiCaComic : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val thumbnailFallbackInterceptor = Interceptor { chain ->
         val request = chain.request()
         val response = chain.proceed(request)

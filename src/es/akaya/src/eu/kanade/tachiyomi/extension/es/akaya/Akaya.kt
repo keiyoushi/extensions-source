@@ -33,8 +33,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Akaya : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val request = chain.request()
 

@@ -25,8 +25,6 @@ private const val ARCHIVE_URL = "https://sas.ewanb.me"
 abstract class SolarAndSundry : KeiSource() {
 
     override val supportsLatest = false
-    override val imageFetch = Fetch.IMAGE
-
     @Serializable
     private class SasPage(
         @SerialName("page_number") val pageNumber: Int,

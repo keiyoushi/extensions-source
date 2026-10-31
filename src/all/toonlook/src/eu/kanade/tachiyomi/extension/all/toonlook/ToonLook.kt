@@ -31,8 +31,6 @@ import java.util.Locale
 
 @Source
 abstract class ToonLook : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
     private val chapterDataRegex = """chapterData\s*=\s*(\{.*?\})\s*;""".toRegex()
 

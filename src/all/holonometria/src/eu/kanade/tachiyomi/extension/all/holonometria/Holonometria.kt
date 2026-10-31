@@ -18,8 +18,6 @@ import java.util.Locale
 @Source
 abstract class Holonometria : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val langPath: String get() = if (lang == "ja") "" else "$lang/"
 
     override val supportsLatest = false

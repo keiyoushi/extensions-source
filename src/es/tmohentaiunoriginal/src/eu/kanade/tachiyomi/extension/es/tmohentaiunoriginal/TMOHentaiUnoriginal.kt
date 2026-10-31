@@ -24,8 +24,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class TMOHentaiUnoriginal : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
     }

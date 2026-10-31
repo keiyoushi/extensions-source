@@ -25,7 +25,6 @@ import java.time.format.DateTimeFormatter
 @Source
 abstract class HentaiPill : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("popular", page)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList("language/english", page)

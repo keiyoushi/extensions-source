@@ -42,8 +42,6 @@ abstract class Honeytoon :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val siteLangPath: String get() = if (lang == "pt-BR") "pt" else lang
 
     private val langPath: String get() = if (lang == "en") "" else "/$siteLangPath"

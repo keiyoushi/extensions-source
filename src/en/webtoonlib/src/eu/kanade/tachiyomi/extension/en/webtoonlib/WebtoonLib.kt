@@ -32,8 +32,6 @@ import okhttp3.OkHttpClient
 abstract class WebtoonLib :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     private val hideAdult get() = preferences.getBoolean(PREF_HIDE_ADULT, false)

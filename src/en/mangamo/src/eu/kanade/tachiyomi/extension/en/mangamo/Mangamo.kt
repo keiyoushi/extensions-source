@@ -39,8 +39,6 @@ abstract class Mangamo :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val helper = MangamoHelper(headers)

@@ -19,8 +19,6 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class MangaDenizi : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(UnscramblerInterceptor())
 
     private val apiHeaders: Headers

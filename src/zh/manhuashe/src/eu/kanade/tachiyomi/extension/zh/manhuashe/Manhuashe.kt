@@ -18,8 +18,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Manhuashe : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     fun parseManga(document: Document): MangasPage {
         val mangas = document.select("div.comic-list > div.comic-item").map { element: Element ->
             SManga.create().apply {

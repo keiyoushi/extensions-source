@@ -25,7 +25,6 @@ import java.util.Locale
 @Source
 abstract class JJCOS : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     // ============================== Popular ==============================

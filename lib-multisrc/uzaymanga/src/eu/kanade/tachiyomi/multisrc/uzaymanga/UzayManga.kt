@@ -24,8 +24,6 @@ private const val PAGE_SIZE = 20
 
 abstract class UzayManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val cdnUrl: String? = null
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)

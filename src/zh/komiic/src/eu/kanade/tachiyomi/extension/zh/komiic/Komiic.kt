@@ -29,8 +29,6 @@ import java.io.IOException
 abstract class Komiic :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor { chain ->
             val origin = chain.request()

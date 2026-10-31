@@ -27,8 +27,6 @@ import java.time.ZoneId
 abstract class FlowerComics :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
     private val jst = ZoneId.of("Asia/Tokyo")
     private val rscHeaders get() = headersBuilder()

@@ -44,8 +44,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TuiTruyen : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(imgxInterceptor())
         rateLimit(3)

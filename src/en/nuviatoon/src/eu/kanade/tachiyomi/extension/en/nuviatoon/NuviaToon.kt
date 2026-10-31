@@ -28,8 +28,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class NuviaToon :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val preferences by getPreferencesLazy()
 
     override fun Headers.Builder.configureHeaders() = add("Accept", "application/json")

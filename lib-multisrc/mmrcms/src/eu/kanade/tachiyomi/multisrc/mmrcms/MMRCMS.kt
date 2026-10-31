@@ -40,8 +40,6 @@ import kotlin.math.min
  */
 abstract class MMRCMS : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.US)
 
     protected open val itemPath: String = "manga"

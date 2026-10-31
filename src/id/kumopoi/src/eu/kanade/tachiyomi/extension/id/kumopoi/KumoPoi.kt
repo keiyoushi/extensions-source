@@ -24,8 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class KumoPoi : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(4, 1.seconds)
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchComics(page = page, sort = "popular")

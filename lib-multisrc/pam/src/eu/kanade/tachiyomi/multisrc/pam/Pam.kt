@@ -15,7 +15,6 @@ import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.secretstream.SecretStream
 import keiyoushi.lib.secretstream.State
 import keiyoushi.lib.secretstream.X25519
-import keiyoushi.network.Fetch
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -50,8 +49,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Pam :
     KeiSource(),
     ConfigurableSource {
-
-    override val imageFetch = Fetch.IMAGE
 
     protected val baseHttpUrl get() = baseUrl.toHttpUrl()
 

@@ -41,8 +41,6 @@ abstract class GalleryAdults :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     protected open val mangaLang: String = LANGUAGE_MULTI
 
     protected open val dateFormat: DateTimeFormatter? = null

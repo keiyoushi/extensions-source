@@ -30,7 +30,6 @@ import kotlin.time.Instant
 @Source
 abstract class FsiComics : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     private val apiLimit = 20
 
     private val scaledSuffix = """-scaled(\.\w+)$""".toRegex()

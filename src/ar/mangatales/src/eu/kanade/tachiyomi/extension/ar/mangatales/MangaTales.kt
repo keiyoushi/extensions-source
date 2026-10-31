@@ -27,7 +27,6 @@ import kotlin.getValue
 
 @Source
 abstract class MangaTales : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     private val cdnUrl = "https://media.mangatales.com"
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList())

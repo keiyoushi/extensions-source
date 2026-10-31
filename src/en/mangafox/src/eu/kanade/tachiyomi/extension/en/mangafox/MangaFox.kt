@@ -27,8 +27,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MangaFox : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val mobileUrl get() = baseUrl.replace("://", "://m.")
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 1.seconds)

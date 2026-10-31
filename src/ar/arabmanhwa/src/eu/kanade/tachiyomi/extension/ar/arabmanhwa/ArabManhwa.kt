@@ -19,8 +19,6 @@ import java.time.Instant
 
 @Source
 abstract class ArabManhwa : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override suspend fun getPopularManga(page: Int): MangasPage = browse(page, "popular")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = browse(page, null)

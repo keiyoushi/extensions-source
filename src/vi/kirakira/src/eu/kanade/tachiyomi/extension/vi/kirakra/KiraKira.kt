@@ -37,7 +37,6 @@ import java.time.Instant as JavaInstant
 abstract class KiraKira :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
     private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}"
     private val imageUrl get() = "https://images.${baseUrl.toHttpUrl().host}"
 

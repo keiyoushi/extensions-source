@@ -33,7 +33,6 @@ abstract class ComiciViewer :
     KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
     protected open val apiUrl get() = "$baseUrl/api"
     protected open val preferences by getPreferencesLazy()
     protected open val rscHeaders get() = headersBuilder()

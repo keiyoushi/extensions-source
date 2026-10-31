@@ -25,7 +25,6 @@ import org.jsoup.select.Elements
 @Source
 abstract class SleptManga : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("$baseUrl/browse?sort=popular&page=$page")

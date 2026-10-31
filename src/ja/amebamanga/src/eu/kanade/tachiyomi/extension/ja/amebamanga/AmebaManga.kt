@@ -33,8 +33,6 @@ import java.io.IOException
 abstract class AmebaManga :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/dokusho-server"
     private val pageSize = 50

@@ -29,7 +29,6 @@ import java.util.Locale
 
 @Source
 abstract class SunsetManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
     private val ajaxUrl get() = "$baseUrl/wp-admin/admin-ajax.php"
     private val dateFormat = DateTimeFormatter.ofPattern("d MMM yyyy", Locale("tr"))
     private val nonceRegex = Regex("""sunsetGlobalData\s*=\s*\{[^}]*nonce:\s*"([a-z0-9]+)"""")

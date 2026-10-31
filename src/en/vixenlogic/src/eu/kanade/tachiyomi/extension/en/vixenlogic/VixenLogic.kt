@@ -28,8 +28,6 @@ abstract class VixenLogic : KeiSource() {
     }
 
     override val supportsLatest: Boolean = false
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.ENGLISH)
 
     private fun parseDate(dateStr: String): Long = when (dateStr.lowercase()) {

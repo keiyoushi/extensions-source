@@ -20,8 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Source
 abstract class YSKComics : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiBaseUrl = "https://api.ysk-comics.com"
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set("x-localization", lang)

@@ -22,8 +22,6 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class LectorMangaLat : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val apiUrl = "https://$API_HOST/api"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2) { it.host == API_HOST }

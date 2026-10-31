@@ -26,8 +26,6 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Luvaholic : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
     }

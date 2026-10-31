@@ -28,8 +28,6 @@ import okhttp3.OkHttpClient
 abstract class MangaMee :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val domain = "manga-mee.jp"
     private val apiUrl = "https://prod2-android.$domain/web/v1"
     private val preferences by getPreferencesLazy()

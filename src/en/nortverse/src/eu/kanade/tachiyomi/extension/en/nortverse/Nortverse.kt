@@ -23,7 +23,6 @@ import org.jsoup.Jsoup
 @Source
 abstract class Nortverse : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)

@@ -30,8 +30,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class MiMiHentai : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addNetworkInterceptor { chain ->
             val response = chain.proceed(chain.request())

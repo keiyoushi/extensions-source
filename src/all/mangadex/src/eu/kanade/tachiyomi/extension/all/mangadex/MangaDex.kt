@@ -59,8 +59,6 @@ class MangaDex(
 ) : KeiSource(),
     ConfigurableSource {
 
-    override val imageFetch = Fetch.IMAGE
-
     private val dexLang: String
         get() = when (lang) {
             "zh-Hans" -> "zh"

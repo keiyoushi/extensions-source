@@ -33,8 +33,6 @@ import okhttp3.Response
 abstract class MangaFire :
     KeiSource(),
     ConfigurableSource {
-    override val imageFetch = Fetch.IMAGE
-
     private val langCode: String
         get() = when (lang) {
             "es-419" -> "es-la"

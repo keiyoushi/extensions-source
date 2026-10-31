@@ -23,7 +23,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class OriYami : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsFilterFetching = true
 
     override val supportsRelatedMangas = true

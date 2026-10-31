@@ -46,7 +46,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class MoeTruyen : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         set("Sec-Fetch-Dest", "document")
         set("Sec-Fetch-Mode", "navigate")

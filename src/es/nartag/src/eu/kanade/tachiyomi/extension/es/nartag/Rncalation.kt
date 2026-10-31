@@ -22,8 +22,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Rncalation : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2, 1.seconds).addInterceptor { chain ->
         val response = chain.proceed(chain.request())
         // Without the mv_ck cookie the site serves a JS page that sets it and reloads; the cookie is saved by now, so retry once

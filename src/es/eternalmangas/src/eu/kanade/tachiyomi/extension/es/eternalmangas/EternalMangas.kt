@@ -27,8 +27,6 @@ import kotlin.time.Instant
 @Source
 abstract class EternalMangas : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
-
     override val supportRelatedMangasBySearch = true
 
     // Images sent with Origin miss the Cloudflare cache the site reader fills

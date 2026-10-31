@@ -33,8 +33,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class VyvyManga : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyy", Locale.US)
     private val relativeDateRegex = Regex("""(\d+)""")
 

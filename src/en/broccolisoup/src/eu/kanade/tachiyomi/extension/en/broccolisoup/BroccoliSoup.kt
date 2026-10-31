@@ -19,7 +19,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class BroccoliSoup : KeiSource() {
 
-    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(TextInterceptor())

@@ -33,8 +33,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class GocTruyenTranh : KeiSource() {
-    override val imageFetch = Fetch.IMAGE
-
     private val searchUrl get() = "$baseUrl/baseapi/comics/filterComic"
 
     private val dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss", Locale.US)
