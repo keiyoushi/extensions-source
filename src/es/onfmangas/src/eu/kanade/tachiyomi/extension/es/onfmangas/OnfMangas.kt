@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.es.onfmangas
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,6 +19,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.selectLast
 import keiyoushi.utils.textOrNull
@@ -31,7 +36,11 @@ import org.jsoup.nodes.Document
 import java.io.IOException
 
 @Source
-abstract class OnfMangas : KeiSource() {
+abstract class OnfMangas :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::onfTokenInterceptor)
 
@@ -71,6 +80,8 @@ abstract class OnfMangas : KeiSource() {
 
     override val imageFetch = Fetch.IMAGE
 
+    override val supportsFilterFetching = true
+
     private val authorPlaceholders = setOf("Autor Desconocido", "Desconocido", "Sin dato")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -109,25 +120,6 @@ abstract class OnfMangas : KeiSource() {
         }
         val hasNextPage = document.selectFirst(".pagination a.page-btn:contains(Siguiente)") != null
         return MangasPage(mangas, hasNextPage)
-    }
-
-    override val supportsFilterFetching = true
-
-    override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/mangas.php", Fetch.DOCUMENT).asJsoup()
-        return document.select("label.cat-checkbox").map { label ->
-            GenreDto(label.selectFirst("input")!!.attr("value"), label.selectFirst(".cat-label")!!.text())
-        }.toJsonElement()
-    }
-
-    override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.parseAs<List<GenreDto>>().orEmpty()
-        return FilterList(
-            buildList {
-                add(TabFilter())
-                if (genres.isNotEmpty()) add(GenreFilter(genres))
-            },
-        )
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -172,12 +164,11 @@ abstract class OnfMangas : KeiSource() {
 
     private fun parseChapterList(document: Document): List<SChapter> {
         val json = document.decodeHexVariable("_hex") ?: return emptyList()
+        val onePerGroup = preferences.getBoolean(PREF_ONE_PER_GROUP, false)
 
         return json.parseAs<List<ChapterDto>>()
             .sortedWith(compareByDescending<ChapterDto> { it.numberFloat }.thenByDescending { it.date })
-            .flatMap { dto ->
-                (listOf(dto) + dto.otherVersions.orEmpty()).map { it.toSChapter(dto) }
-            }
+            .flatMap { it.toSChapters(onePerGroup) }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -194,10 +185,37 @@ abstract class OnfMangas : KeiSource() {
         .removeHeader("Origin")
         .build()
 
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/mangas.php", Fetch.DOCUMENT).asJsoup()
+        return document.select("label.cat-checkbox").map { label ->
+            GenreDto(label.selectFirst("input")!!.attr("value"), label.selectFirst(".cat-label")!!.text())
+        }.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        buildList {
+            add(TabFilter())
+            data?.parseAs<List<GenreDto>>()?.let { add(GenreFilter(it)) }
+        },
+    )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_ONE_PER_GROUP
+            title = "Una versión por grupo"
+            summary = "Oculta las copias extra de un capítulo subidas por el mismo grupo"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     private fun Document.decodeHexVariable(name: String): String? = selectFirst("script:containsData(const $name =)")
         ?.data()
         ?.substringAfter("const $name = \"")
         ?.substringBefore("\";")
         ?.decodeHex()
         ?.decodeToString()
+
+    companion object {
+        private const val PREF_ONE_PER_GROUP = "one_version_per_group"
+    }
 }

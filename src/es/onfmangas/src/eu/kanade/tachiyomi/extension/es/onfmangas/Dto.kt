@@ -20,11 +20,16 @@ class ChapterDto(
     private val numero: String,
     @SerialName("fecha_subida") val date: String? = null,
     @SerialName("grupos_list") private val groups: List<GroupDto>? = null,
-    @SerialName("otras_versiones") val otherVersions: List<ChapterDto>? = null,
+    @SerialName("otras_versiones") private val otherVersions: List<ChapterDto>? = null,
 ) {
     val numberFloat: Float get() = numero.toFloat()
 
-    fun toSChapter(parent: ChapterDto) = SChapter.create().apply {
+    fun toSChapters(onePerGroup: Boolean): List<SChapter> {
+        val versions = (listOf(this) + otherVersions.orEmpty()).map { it.toSChapter(this) }
+        return if (onePerGroup) versions.distinctBy { it.scanlator } else versions
+    }
+
+    private fun toSChapter(parent: ChapterDto) = SChapter.create().apply {
         url = this@ChapterDto.url
         name = chapterName(parent)
         chapter_number = numberFloat
@@ -32,7 +37,7 @@ class ChapterDto(
         scanlator = groups?.joinToString(" & ") { it.nombre }?.ifEmpty { null }
     }
 
-    // The site's reader leaves out the number when the title has one
+    // The site's reader leaves out the number when the title contains "cap" or "ch."
     private fun chapterName(parent: ChapterDto): String {
         val number = "Capítulo ${numberFloat.toString().removeSuffix(".0")}"
         val title = listOf(displayTitle, titulo, parent.displayTitle)
