@@ -36,12 +36,16 @@ abstract class XXXYaoi : MadaraNoAjax() {
         .set("Pragma", "no-cache")
 
     override val mangaSubString = "bl"
+    override val genreDirectory = "genero"
 
     override val mangaDetailsSelectorTitle = ".xyaoi-main-title, h1"
     override val mangaDetailsSelectorAuthor = "a[href*=author]"
     override val mangaDetailsSelectorArtist = "a[href*=artist]"
     override val mangaDetailsSelectorStatus = "span:contains(status) + span"
     override val mangaDetailsSelectorDescription = "[class*=synopsis]"
+    override val mangaDetailsSelectorGenre = ".xyaoi-genres-list a"
+    override val mangaDetailsSelectorTag = ".wp-manga-tags-list a"
+    override val seriesTypeSelector = "span:contains(tipo) + span:not(:contains(Não informado))"
 
     override fun searchCardSelector() = ".xyaoi-search-card"
 
@@ -57,8 +61,9 @@ abstract class XXXYaoi : MadaraNoAjax() {
         val rendered = try {
             runWebView<String> {
                 userAgent = headers["User-Agent"].orEmpty()
+                // A script load error makes the site's ad check delete the decoded pages
                 interceptRequest { request ->
-                    if (request.isForMainFrame) null else WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0)))
+                    if (request.isForMainFrame) null else WebResourceResponse("text/javascript", null, 200, "OK", null, ByteArrayInputStream(ByteArray(0)))
                 }
                 onPageFinished {
                     evaluateJs("document.documentElement.outerHTML") { resolve(it.parseAs<String>()) }
