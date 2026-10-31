@@ -14,6 +14,10 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://nadeshiko-shoten.jp"
     }
+
+    deeplink {
+        path("/products/detail.php")
+    }
 }
 
 dependencies {
