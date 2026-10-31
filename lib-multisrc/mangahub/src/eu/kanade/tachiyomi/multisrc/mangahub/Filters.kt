@@ -2,17 +2,24 @@ package eu.kanade.tachiyomi.multisrc.mangahub
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class Genre(title: String, val key: String) : Filter.CheckBox(title) {
-    override fun toString(): String = name
+open class SelectFilter(name: String, private val options: List<Pair<String, String>>) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
+    val selected get() = options[state].second
 }
 
-class Order(title: String, val key: String) : Filter.TriState(title) {
-    override fun toString(): String = name
-}
+class GenreFilter(val genres: List<ApiGenre>) : SelectFilter("Genre", listOf("All" to "all") + genres.map { it.title to it.slug })
 
-class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Order", orders, 0)
+class HideNsfwFilter : Filter.CheckBox("Hide NSFW")
 
-class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
-    val included: List<String>
-        get() = state.filter { it.state }.map { it.key }
-}
+class HideYaoiFilter : Filter.CheckBox("Hide Yaoi")
+
+class OrderFilter :
+    SelectFilter(
+        "Order",
+        listOf(
+            "Popular" to "POPULAR",
+            "Updates" to "LATEST",
+            "A-Z" to "ALPHABET",
+            "New" to "NEW",
+            "Completed" to "COMPLETED",
+        ),
+    )

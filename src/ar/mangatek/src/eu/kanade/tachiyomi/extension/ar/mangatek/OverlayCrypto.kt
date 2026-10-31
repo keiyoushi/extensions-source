@@ -15,12 +15,9 @@ object OverlayCrypto {
 
     private const val KEY = "ff453871399fe268588a0936b45376022d85ed0fd1292001d5102f6a30291dc1"
 
-    private const val PROOF_SALT = "cc9544a33ccbc953b9e7546c9b134524f3c3a06e81d392f0"
-    private const val READER_SEED = "2435eb747e78f582e781909ebbfc14826e4f3954b4268850"
+    fun proof(proofSalt: String, token: String, chapterId: Long): String = "$proofSalt|$token|$chapterId".sha256().toHexString()
 
-    fun proof(token: String, chapterId: Long): String = "$PROOF_SALT|$token|$chapterId".sha256().toHexString()
-
-    val esid: String = "esid|$READER_SEED".sha256().toHexString().take(8)
+    fun esid(readerSeed: String): String = "esid|$readerSeed".sha256().toHexString().take(8)
 
     // Smallest base-36 counter whose SHA-256("<nonce>:<counter>") starts with `bits` zero bits; the
     // reader gives up after 5M tries
@@ -34,8 +31,8 @@ object OverlayCrypto {
         return null
     }
 
-    fun decryptOverlay(overlay: String, ks: String?, key: String?, token: String, chapterId: Long): String? = when {
-        ks != null -> decryptEnvelope(overlay, ks, token, chapterId)
+    fun decryptOverlay(readerSeed: String, overlay: String, ks: String?, key: String?, token: String, chapterId: Long): String? = when {
+        ks != null -> decryptEnvelope(readerSeed, overlay, ks, token, chapterId)
         key != null -> decryptHexBlob(overlay, key)
         else -> null
     }
@@ -49,14 +46,14 @@ object OverlayCrypto {
     }
 
     // Version byte, then [tagLen u16][ivLen u16][tag][ct][iv] XORed with a SHA-256 keystream
-    private fun decryptEnvelope(overlay: String, ks: String, token: String, chapterId: Long): String {
+    private fun decryptEnvelope(readerSeed: String, overlay: String, ks: String, token: String, chapterId: Long): String {
         val bytes = Base64.decode(overlay, Base64.URL_SAFE)
         val version = bytes[0].toInt() and 0xFF
         require(version == 3) { "Unsupported overlay version $version" }
 
         val data = bytes.copyOfRange(1, bytes.size)
         for (start in data.indices step 32) {
-            val block = "$READER_SEED|v$version|$ks|${start / 32}".sha256()
+            val block = "$readerSeed|v$version|$ks|${start / 32}".sha256()
             for (i in start until minOf(start + 32, data.size)) {
                 data[i] = (data[i].toInt() xor block[i - start].toInt()).toByte()
             }
@@ -67,7 +64,7 @@ object OverlayCrypto {
         val ciphertext = data.copyOfRange(4 + tagLength, data.size - ivLength)
         val iv = data.copyOfRange(data.size - ivLength, data.size)
 
-        val key = "$READER_SEED|v$version|$ks|$token|$chapterId".sha256()
+        val key = "$readerSeed|v$version|$ks|$token|$chapterId".sha256()
         return (ciphertext + tag).aesDecrypt(aesGcm(key, iv, tagLength = tagLength * 8)).decodeToString()
     }
 

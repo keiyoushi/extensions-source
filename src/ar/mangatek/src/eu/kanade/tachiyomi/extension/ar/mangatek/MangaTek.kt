@@ -106,14 +106,12 @@ abstract class MangaTek : KeiSource() {
     // ========================= Details & Chapters  =========================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        check(url.pathSegments.size >= 2) { "Unsupported URL" }
-        val slug = url.pathSegments[1]
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.first() !in setOf("manga", "reader")) return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
         val manga = SManga.create().apply {
             this.url = "/manga/$slug"
         }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga.apply {
-            initialized = true
-        }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -122,7 +120,7 @@ abstract class MangaTek : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val url = "$baseUrl${manga.url}".toHttpUrl()
+        val url = getMangaUrl(manga).toHttpUrl()
         val data: MangaDto = client.get(url).asJsoup().extractAstroProp("manga")
         val slug = url.pathSegments[1]
 
@@ -156,7 +154,7 @@ abstract class MangaTek : KeiSource() {
         val props: ChapterProps = document.extractAstroProp("imageUrls")
 
         val overlayData = props.overlayBlob?.let { OverlayCrypto.decryptHexBlob(it).parseAs<OverlayData>() }
-            ?: unlockOverlay(props)
+            ?: unlockOverlay(document, props)
 
         // page_number counts from 1 after the overlayPageOffset images
         val firstOverlayImage = props.overlayPageOffset ?: 0
@@ -178,24 +176,42 @@ abstract class MangaTek : KeiSource() {
         }
     }
 
-    private suspend fun unlockOverlay(props: ChapterProps): OverlayData? {
+    private suspend fun unlockOverlay(document: Document, props: ChapterProps): OverlayData? {
         if (props.textMode != "overlay") return null
         val chapterId = props.chapterId ?: return null
         val token = props.unlockToken ?: return null
-        val proof = OverlayCrypto.proof(token, chapterId)
-        val request = UnlockRequest(chapterId, token, proof, OverlayCrypto.esid)
+        val seeds = readerSeeds(document)
+        val proof = OverlayCrypto.proof(seeds.proofSalt, token, chapterId)
+        val esid = OverlayCrypto.esid(seeds.readerSeed)
+        val request = UnlockRequest(chapterId, token, proof, esid)
 
         var response = client.post(UNLOCK_API_URL, body = request.toJsonRequestBody()).parseAs<UnlockResponse>()
         val nonce = response.nonce
         if (response.needsChallenge && nonce != null) {
             val pow = response.powBits?.let { OverlayCrypto.pow(nonce, it) }
-            val retry = UnlockRequest(chapterId, token, proof, OverlayCrypto.esid, nonce, pow)
+            val retry = UnlockRequest(chapterId, token, proof, esid, nonce, pow)
             response = client.post(UNLOCK_API_URL, body = retry.toJsonRequestBody()).parseAs<UnlockResponse>()
         }
 
         val overlay = response.overlay ?: return null
-        return OverlayCrypto.decryptOverlay(overlay, response.ks, response.key, token, chapterId)
+        return OverlayCrypto.decryptOverlay(seeds.readerSeed, overlay, response.ks, response.key, token, chapterId)
             ?.parseAs<OverlayData>()
+    }
+
+    @Volatile
+    private var cachedSeeds: Pair<String, BundleSeeds.Seeds>? = null
+
+    // The reader's seeds rotate with each build of its bundle
+    private suspend fun readerSeeds(document: Document): BundleSeeds.Seeds {
+        val bundleUrl = document.selectFirst("astro-island[component-url*=ChapterImageViewer]")
+            ?.attr("abs:component-url")
+            ?: throw Exception("Unable to find the reader script")
+        cachedSeeds?.takeIf { it.first == bundleUrl }?.let { return it.second }
+
+        val script = client.get(bundleUrl).body.string()
+        val seeds = BundleSeeds.extract(script)
+        cachedSeeds = bundleUrl to seeds
+        return seeds
     }
 
     private fun Element.imgAttr(): String = when {

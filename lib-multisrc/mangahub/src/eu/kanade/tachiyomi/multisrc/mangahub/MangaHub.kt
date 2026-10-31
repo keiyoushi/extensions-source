@@ -12,8 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLException
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.get
 import keiyoushi.utils.getArray
@@ -155,22 +153,23 @@ abstract class MangaHub : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, order = "LATEST")
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        var order = "POPULAR"
-        var genres = "all"
+        val order = filters.firstInstanceOrNull<OrderFilter>()?.selected ?: "POPULAR"
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected ?: "all"
+        val hideNsfw = filters.firstInstanceOrNull<HideNsfwFilter>()?.state ?: false
+        val hideYaoi = filters.firstInstanceOrNull<HideYaoiFilter>()?.state ?: false
 
-        filters.forEach { filter ->
-            when (filter) {
-                is OrderBy -> order = filter.values[filter.state].key
-                is GenreList -> genres = filter.included.joinToString(",").takeIf { it.isNotBlank() } ?: "all"
-                else -> {}
-            }
-        }
-
-        return getMangaList(page, order, query, genres)
+        return getMangaList(page, order, query, genre, hideNsfw, hideYaoi)
     }
 
-    private suspend fun getMangaList(page: Int, order: String, query: String = "", genres: String = "all"): MangasPage {
-        val rows = fetchGraphQL<ApiSearchObject>(searchQuery(mangaSource, query, genres, order, page))
+    private suspend fun getMangaList(
+        page: Int,
+        order: String,
+        query: String = "",
+        genre: String = "all",
+        hideNsfw: Boolean = false,
+        hideYaoi: Boolean = false,
+    ): MangasPage {
+        val rows = fetchGraphQL<ApiSearchObject>(searchQuery(mangaSource, query, genre, order, hideNsfw, hideYaoi, page))
             .search!!.rows
 
         val mangas = rows.map {
@@ -204,23 +203,24 @@ abstract class MangaHub : KeiSource() {
 
     override val supportsRelatedMangas get() = true
 
+    // Story genres, not the API's tag groups
+    private val relatedGenreGroups = setOf("Genre", "Theme", null)
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val mangaGenres = manga.genre
             ?.split(",")
             ?.map { it.trim().lowercase() }
             ?.toSet()
-            ?.takeIf { it.isNotEmpty() }
             ?: return emptyList()
 
-        val filters = getFilterList()
-        filters.firstInstanceOrNull<GenreList>()?.apply {
-            state
-                .filter { it.name.lowercase() in mangaGenres }
-                .forEach { it.state = true }
-        } ?: return emptyList()
-        filters.firstInstance<OrderBy>().apply { state = Random.nextInt(orderBy.size) }
+        val genre = getFilterList().firstInstanceOrNull<GenreFilter>()
+            ?.genres
+            ?.filter { it.group in relatedGenreGroups && it.title.lowercase() in mangaGenres }
+            ?.randomOrNull()
+            ?: return emptyList()
 
-        return getSearchMangaList(page = 1, query = "", filters = filters).mangas
+        return getMangaList(page = 1, order = "POPULAR", genre = genre.slug).mangas
+            .filterNot { it.url == manga.url }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -377,37 +377,23 @@ abstract class MangaHub : KeiSource() {
     }
 
     // Filters
-    private val orderBy = arrayOf(
-        Order("Popular", "POPULAR"),
-        Order("Updates", "LATEST"),
-        Order("A-Z", "ALPHABET"),
-        Order("New", "NEW"),
-        Order("Completed", "COMPLETED"),
-    )
-
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/search").asJsoup()
-
-        return document.select("a.genre-label")
-            .map { GenreDto(it.text(), it.attr("href").substringAfterLast("/")) }
-            .distinctBy { it.key }
-            .sortedBy { it.name }
-            .toJsonElement()
-    }
+    override suspend fun fetchFilterData(): JsonElement = fetchGraphQL<ApiGenresObject>(genresQuery).genres
+        .sortedBy { it.title }
+        .toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.parseAs<List<GenreDto>>()
-            ?.map { Genre(it.name, it.key) }
-            .orEmpty()
+        val genres = data?.parseAs<List<ApiGenre>>().orEmpty()
 
         return FilterList(
             buildList {
                 if (genres.isNotEmpty()) {
-                    add(GenreList(genres))
+                    add(GenreFilter(genres))
                 }
-                add(OrderBy(orderBy))
+                add(OrderFilter())
+                add(HideNsfwFilter())
+                add(HideYaoiFilter())
             },
         )
     }

@@ -4,34 +4,54 @@ import eu.kanade.tachiyomi.source.model.Filter
 
 class TagFilter : Filter.Text(name = "标签")
 
+class SortFilter :
+    UriPartFilter(
+        "排序",
+        arrayOf(
+            "最新" to "create_time_DESC",
+            "今日热门" to "heat_day_DESC",
+            "本周热门" to "heat_week_DESC",
+            "本月热门" to "heat_month_DESC",
+            "今年热门" to "heat_year_DESC",
+        ),
+    )
+
+class RankingFilter :
+    UriPartFilter(
+        "排行",
+        arrayOf(
+            "本周" to "week",
+            "今日" to "day",
+            "本月" to "month",
+            "今年" to "year",
+        ),
+    )
+
 class CategoryFilter :
     UriPartFilter(
         "分类",
         arrayOf(
-            Pair("", ""),
-            Pair("更新", "albums-index-page-%d.html"),
-            Pair("同人志", "albums-index-page-%d-cate-5.html"),
-            Pair("同人志-汉化", "albums-index-page-%d-cate-1.html"),
-            Pair("同人志-日语", "albums-index-page-%d-cate-12.html"),
-            Pair("同人志-English（英语）", "albums-index-page-%d-cate-16.html"),
-            Pair("同人志-CG书籍", "albums-index-page-%d-cate-2.html"),
-            Pair("写真&Cosplay", "albums-index-page-%d-cate-3.html"),
-            Pair("单行本", "albums-index-page-%d-cate-6.html"),
-            Pair("单行本-汉化", "albums-index-page-%d-cate-9.html"),
-            Pair("单行本-English（英语）", "albums-index-page-%d-cate-17.html"),
-            Pair("单行本-日语", "albums-index-page-%d-cate-13.html"),
-            Pair("杂志&短篇-汉语", "albums-index-page-%d-cate-7.html"),
-            Pair("杂志&短篇-汉语", "albums-index-page-%d-cate-10.html"),
-            Pair("杂志&短篇-日语", "albums-index-page-%d-cate-14.html"),
-            Pair("杂志&短篇-English（英语）", "albums-index-page-%d-cate-18.html"),
-            Pair("韩漫", "albums-index-page-%d-cate-19.html"),
-            Pair("韩漫-汉化", "albums-index-page-%d-cate-20.html"),
-            Pair("韩漫-生肉", "albums-index-page-%d-cate-21.html"),
-            Pair("3D&漫画", "albums-index-page-%d-cate-22.html"),
-            Pair("3D&漫画-汉语", "albums-index-page-%d-cate-23.html"),
-            Pair("3D&漫画-其他", "albums-index-page-%d-cate-24.html"),
-            Pair("AI图集", "albums-index-page-%d-cate-37.html"),
-            Pair("未分類相冊", "albums-index-page-%d-cate-0.html"),
+            "" to "",
+            "更新" to "albums-index-page-%d.html",
+            "同人志" to "albums-index-page-%d-cate-5.html",
+            "同人志-汉化" to "albums-index-page-%d-cate-1.html",
+            "同人志-日语" to "albums-index-page-%d-cate-12.html",
+            "同人志-English（英语）" to "albums-index-page-%d-cate-16.html",
+            "同人志-CG书籍" to "albums-index-page-%d-cate-2.html",
+            "写真&Cosplay" to "albums-index-page-%d-cate-3.html",
+            "单行本" to "albums-index-page-%d-cate-6.html",
+            "单行本-汉化" to "albums-index-page-%d-cate-9.html",
+            "单行本-English（英语）" to "albums-index-page-%d-cate-17.html",
+            "单行本-日语" to "albums-index-page-%d-cate-13.html",
+            "杂志&短篇" to "albums-index-page-%d-cate-7.html",
+            "杂志&短篇-汉语" to "albums-index-page-%d-cate-10.html",
+            "杂志&短篇-日语" to "albums-index-page-%d-cate-14.html",
+            "杂志&短篇-English（英语）" to "albums-index-page-%d-cate-18.html",
+            "3D&漫画" to "albums-index-page-%d-cate-22.html",
+            "3D&漫画-汉语" to "albums-index-page-%d-cate-23.html",
+            "3D&漫画-其他" to "albums-index-page-%d-cate-24.html",
+            "AI图集" to "albums-index-page-%d-cate-37.html",
+            "未分類相冊" to "albums-index-page-%d-cate-0.html",
         ),
     )
 

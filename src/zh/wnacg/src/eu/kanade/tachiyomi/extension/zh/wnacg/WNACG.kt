@@ -9,13 +9,18 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -42,10 +47,9 @@ abstract class WNACG :
         addInterceptor(updateUrlInterceptor)
     }
 
+    // Mobile user agents get a mobile layout
     override fun Headers.Builder.configureHeaders() = apply {
         set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
-        set("Sec-Fetch-Mode", "no-cors")
-        set("Sec-Fetch-Site", "cross-site")
     }
 
     private val popularPagingState = FilterPagingState()
@@ -68,6 +72,8 @@ abstract class WNACG :
         )
     }
 
+    private fun popularMangaUrl(page: Int, period: String = "week") = "$baseUrl/albums-favorite_ranking-page-$page-type-$period.html"
+
     private val latestPagingState = FilterPagingState()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -87,6 +93,8 @@ abstract class WNACG :
             maxScanPages = maxScanPages,
         )
     }
+
+    private fun latestUpdatesUrl(page: Int) = "$baseUrl/albums-index-page-$page.html"
 
     private val searchPagingState = FilterPagingState()
 
@@ -113,16 +121,19 @@ abstract class WNACG :
         if (query.isBlank()) {
             val tagFilter = filters.firstInstanceOrNull<TagFilter>()
             if (tagFilter != null && tagFilter.state.isNotEmpty()) {
-                return "$baseUrl/albums-index-page-$page-tag-${tagFilter.state}.html"
+                return baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegment("albums-index-page-$page-tag-${tagFilter.state}.html")
+                    .build()
+                    .toString()
             }
             val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
             if (categoryFilter != null && categoryFilter.toUriPart().isNotEmpty()) {
                 return "$baseUrl/${categoryFilter.toUriPart().format(page)}"
             }
-            return popularMangaUrl(page)
+            return popularMangaUrl(page, filters.firstInstanceOrNull<RankingFilter>()?.toUriPart() ?: "week")
         }
         return "$baseUrl/search/index.php".toHttpUrl().newBuilder()
-            .addQueryParameter("s", "create_time_DESC")
+            .addQueryParameter("s", filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: "create_time_DESC")
             .addQueryParameter("q", query)
             .addQueryParameter("p", page.toString())
             .build()
@@ -130,10 +141,12 @@ abstract class WNACG :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || !mangaUrlRegex.matches(url.encodedPath)) return null
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val (aid, sid) = mangaUrlRegex.matchEntire(url.encodedPath)?.destructured ?: return null
+        val path = "/photos-index-aid-${sid.ifEmpty { aid }}.html"
 
-        return mangaDetailsParse(client.get(url).asJsoup()).apply {
-            this.url = url.encodedPath
+        return mangaDetailsParse(client.get(baseUrl + path).asJsoup()).apply {
+            this.url = path
             initialized = true
         }
     }
@@ -151,17 +164,91 @@ abstract class WNACG :
         )
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(
-        baseUrl + chapter.url.replace("-index-", "-gallery-"),
-    ).use { response ->
-        pageImageRegex.findAll(response.body.string()).mapIndexedTo(ArrayList()) { index, match ->
-            Page(index, imageUrl = "http:" + match.value)
+    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h2")!!.text()
+        artist = document.selectFirst("div.uwuinfo p")?.text()
+        author = artist
+        val category = document.selectFirst("div.uwconn label:contains(分類：)")?.text()
+            ?.removePrefix("分類：")?.split('／').orEmpty()
+        genre = (category + document.select("div.addtags a.tagshow").eachText()).distinct().joinToString().ifEmpty { null }
+        thumbnail_url = document.selectFirst("div.uwthumb img")?.attrOrNull("src")?.toImageUrl()
+        description = document.selectFirst("div.uwconn p:contains(簡介：)")?.wholeText()
+            ?.removePrefix("簡介：")?.trim()?.ifEmpty { null }
+        // Collections (合集) carry a chapter count; single galleries don't change
+        if (document.selectFirst("div.uwconn label:contains(章節：)") == null) {
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        } else {
+            val statusText = document.selectFirst("div.uwconn label:contains(狀態)")?.text().orEmpty()
+            status = if ("連載中" in statusText) SManga.ONGOING else SManga.COMPLETED
+        }
+    }
+
+    private suspend fun chaptersParse(document: Document, manga: SManga): List<SChapter> {
+        val lastPage = document.select("div.f_left.paginator a[href]")
+            .mapNotNull { chapterListPageRegex.find(it.attr("href"))?.groupValues?.get(1)?.toIntOrNull() }
+            .maxOrNull()
+            ?: 1
+        val aid = mangaAidRegex.find(manga.url)!!.groupValues[1]
+        val otherPages = coroutineScope {
+            (2..lastPage).map { page ->
+                async { client.get("$baseUrl/photos-index-aid-$aid-page-$page.html").asJsoup().select(CHAPTER_SELECTOR) }
+            }.awaitAll()
+        }
+        val chapterElements = (document.select(CHAPTER_SELECTOR) + otherPages.flatten())
+            .distinctBy { it.attr("data-chid") }
+
+        if (chapterElements.isEmpty()) {
+            return listOf(
+                SChapter.create().apply {
+                    url = manga.url
+                    name = "Ch. 1"
+                    date_upload = chapterDateFormat.tryParseDate(
+                        document.selectFirst("li.gallary_item .info_col")?.text()?.let { chapterDateRegex.find(it)?.value },
+                        chapterZone,
+                    )
+                },
+            )
+        }
+        return chapterElements.map { element ->
+            SChapter.create().apply {
+                url = "/photos-index-aid-${element.attr("data-chid")}.html"
+                name = element.text()
+                date_upload = chapterDateFormat.tryParseDate(
+                    chapterDateRegex.find(element.attr("title"))?.value,
+                    chapterZone,
+                )
+            }
+        }.reversed()
+    }
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+        .select("a.ar_item")
+        .mapNotNull { element ->
+            SManga.create().apply {
+                url = element.attrOrNull("href") ?: return@mapNotNull null
+                title = element.attrOrNull("title") ?: return@mapNotNull null
+                thumbnail_url = element.selectFirst("img")?.attrOrNull("src")?.toImageUrl()
+            }
+        }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val html = client.get(getChapterUrl(chapter).replace("-index-", "-gallery-")).body.string()
+        return pageImageRegex.findAll(html).mapIndexedTo(ArrayList()) { index, match ->
+            Page(index, imageUrl = match.value.toImageUrl())
         }
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
+        Filter.Header("注意：排序仅用于关键词搜索"),
+        SortFilter(),
+        Filter.Separator(),
         Filter.Header("注意：分类和标签均不支持搜索"),
         CategoryFilter(),
+        Filter.Header("注意：排行仅在未选分类和标签时生效"),
+        RankingFilter(),
         Filter.Separator(),
         Filter.Header("注意：仅支持 1 个标签，不支持分类"),
         TagFilter(),
@@ -214,71 +301,25 @@ abstract class WNACG :
         throw Exception("连续 $maxScanPages 页均无可显示结果，请调整黑名单或扫描页数后刷新。")
     }
 
-    private fun popularMangaUrl(page: Int) = "$baseUrl/albums-favorite_ranking-page-$page-type-week.html"
-
-    private fun latestUpdatesUrl(page: Int) = "$baseUrl/albums-index-page-$page.html"
-
-    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h2")!!.text()
-        artist = document.selectFirst("div.uwuinfo p")?.text()
-        author = document.selectFirst("div.uwuinfo p")?.text()
-        genre = document.select("div.addtags a.tagshow").eachText().joinToString().ifEmpty { null }
-        thumbnail_url = "http:" + document.selectFirst("div.uwthumb img")!!.attr("src")
-        description = document.selectFirst("div.asTBcell p")?.html()?.replace("<br>", "\n")
-        val statusText = document.selectFirst("div.uwconn label:contains(狀態)")?.text().orEmpty()
-        status = if ("連載中" in statusText) SManga.ONGOING else SManga.COMPLETED
-    }
-
-    private suspend fun chaptersParse(document: Document, manga: SManga): List<SChapter> {
-        val chapterElements = buildList {
-            addAll(document.select("div.sr_compact a.tagshow[data-chid]"))
-
-            val lastPage = document.select("div.f_left.paginator a[href]")
-                .mapNotNull { chapterListPageRegex.find(it.attr("href"))?.groupValues?.get(1)?.toIntOrNull() }
-                .maxOrNull()
-                ?: 1
-            val aid = mangaAidRegex.find(manga.url)?.groupValues?.get(1)
-            if (aid != null) {
-                (2..lastPage).forEach { page ->
-                    val pageUrl = "$baseUrl/photos-index-aid-$aid-page-$page.html"
-                    addAll(client.get(pageUrl).asJsoup().select("div.sr_compact a.tagshow[data-chid]"))
-                }
-            }
-        }.distinctBy { it.attr("data-chid") }
-
-        if (chapterElements.isEmpty()) {
-            return listOf(
-                SChapter.create().apply {
-                    url = manga.url
-                    name = "Ch. 1"
-                },
-            )
-        }
-        return chapterElements.map { element ->
-            SChapter.create().apply {
-                url = "/photos-index-aid-${element.attr("data-chid")}.html"
-                name = element.text()
-                date_upload = chapterDateFormat.tryParseDate(
-                    chapterDateRegex.find(element.attr("title"))?.value,
-                    chapterZone,
-                )
-            }
-        }.reversed()
-    }
-
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst(".title > a")!!
         url = link.attr("href")
         title = link.text()
-        thumbnail_url = element.selectFirst("img")!!.absUrl("src").replaceBefore(':', "http")
+        thumbnail_url = element.selectFirst("img")?.attrOrNull("src")?.toImageUrl()
     }
 
+    // Protocol-relative image urls, some with extra leading slashes
+    private fun String.toImageUrl() = "https://" + trimStart('/')
+
     companion object {
+        private const val CHAPTER_SELECTOR = "div.sr_compact a.tagshow[data-chid]"
         private val pageImageRegex = Regex(
             """//[^\s"'\\]+\.(?:jpeg|jpg|png|webp|gif)(?:\?[^\s"'\\]*)?""",
             RegexOption.IGNORE_CASE,
         )
-        private val mangaUrlRegex = Regex("""/photos-index-aid-\d+\.html""")
+
+        // Gallery page, reader and chapter links; a chapter's sid is its collection
+        private val mangaUrlRegex = Regex("""/photos-(?:index|slide|list|gallery)-aid-(\d+)(?:-sid-(\d+))?(?:-page-\d+)?\.html""")
         private val mangaAidRegex = Regex("""photos-index-aid-(\d+)""")
         private val chapterListPageRegex = Regex("""photos-index-aid-\d+-page-(\d+)\.html""")
         private val chapterDateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
