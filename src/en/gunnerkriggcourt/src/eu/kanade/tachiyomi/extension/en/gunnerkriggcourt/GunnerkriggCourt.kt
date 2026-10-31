@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -14,6 +15,7 @@ import keiyoushi.utils.asJsoup
 @Source
 abstract class GunnerkriggCourt : KeiSource() {
     override val supportsLatest = false
+    override val imageFetch = Fetch.IMAGE
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val manga = SManga.create().apply {
@@ -47,7 +49,7 @@ abstract class GunnerkriggCourt : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val chapterList = document.select("div.chapters option[value~=\\d*]").map { element ->
             SChapter.create().apply {
@@ -64,7 +66,7 @@ abstract class GunnerkriggCourt : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select(".comic_image").mapIndexed { i, element ->
             Page(i, imageUrl = element.absUrl("src"))

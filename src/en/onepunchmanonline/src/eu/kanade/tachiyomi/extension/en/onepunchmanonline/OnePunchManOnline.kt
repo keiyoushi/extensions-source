@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -14,6 +15,8 @@ import okhttp3.Request
 
 @Source
 abstract class OnePunchManOnline : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int) = MangasPage(listOf(createManga()), false)
@@ -56,7 +59,7 @@ abstract class OnePunchManOnline : KeiSource() {
     }
 
     // ============================== Chapters ===============================
-    private suspend fun getChapters(): List<SChapter> = client.get(baseUrl).asJsoup().select("ul li a[href*='/manga/']").map { element ->
+    private suspend fun getChapters(): List<SChapter> = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().select("ul li a[href*='/manga/']").map { element ->
         SChapter.create().apply {
             setUrlWithoutDomain(element.attr("abs:href"))
             name = element.text()
@@ -65,7 +68,7 @@ abstract class OnePunchManOnline : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         return document.select("div.entry-content img, .separator img, p img")
             .map { img ->
                 img.attr("abs:data-src")

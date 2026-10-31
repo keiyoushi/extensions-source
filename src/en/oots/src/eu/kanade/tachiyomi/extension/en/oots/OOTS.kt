@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -16,6 +17,7 @@ import keiyoushi.utils.getPreferencesLazy
 abstract class OOTS : KeiSource() {
 
     override val supportsLatest = false
+    override val imageFetch = Fetch.IMAGE
 
     private val preferences by getPreferencesLazy()
 
@@ -46,7 +48,7 @@ abstract class OOTS : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val elements = document.select("p.ComicList a")
 
         val currentTimeMillis = System.currentTimeMillis()
@@ -79,7 +81,7 @@ abstract class OOTS : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val imageUrl = document.select("td[align='center'] > img").attr("abs:src")
         return listOf(Page(0, imageUrl = imageUrl))
     }

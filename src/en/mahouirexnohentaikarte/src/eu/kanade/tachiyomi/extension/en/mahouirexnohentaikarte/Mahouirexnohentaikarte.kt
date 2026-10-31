@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -20,6 +21,7 @@ import java.time.format.DateTimeFormatter
 abstract class Mahouirexnohentaikarte : KeiSource() {
 
     override val supportsLatest = false
+    override val imageFetch = Fetch.IMAGE
 
     private fun singleManga() = SManga.create().apply {
         url = MANGA_URL
@@ -49,7 +51,7 @@ abstract class Mahouirexnohentaikarte : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document),
             chapters = parseChapterList(document),
@@ -84,7 +86,7 @@ abstract class Mahouirexnohentaikarte : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("img[src*=/storage/manga/chapter-]").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }
