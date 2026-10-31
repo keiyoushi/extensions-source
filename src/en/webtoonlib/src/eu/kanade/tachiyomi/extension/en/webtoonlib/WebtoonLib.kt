@@ -15,6 +15,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
@@ -118,15 +119,27 @@ abstract class WebtoonLib :
         }
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/webtoons/genres").parseAs<List<String>>().toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/series").asJsoup()
+        fun options(section: String, param: String) = document.select("section[aria-labelledby$=-$section] a[href*='?$param=']").map {
+            FilterOption(it.text(), it.absUrl("href").toHttpUrl().queryParameter(param)!!)
+        }
+        return FilterData(
+            options("type", "type"),
+            options("status", "status"),
+            options("genres", "genre"),
+        ).toJsonElement()
+    }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         buildList {
             add(SortFilter())
             add(ContentTypeFilter())
-            add(TypeFilter())
-            add(StatusFilter())
-            data?.parseAs<List<String>>()?.takeIf { it.isNotEmpty() }?.let { add(GenreFilter(it)) }
+            data?.parseAs<FilterData>()?.let {
+                if (it.types.isNotEmpty()) add(FetchedFilter("Type", "type", it.types))
+                if (it.statuses.isNotEmpty()) add(FetchedFilter("Status", "status", it.statuses))
+                if (it.genres.isNotEmpty()) add(FetchedFilter("Category", "genre", it.genres))
+            }
             add(ExcludeAdultFilter(hideAdult))
         },
     )

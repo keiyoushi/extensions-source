@@ -39,21 +39,7 @@ class ContentTypeFilter :
         listOf("All" to "", "HardSub" to "HARDSUB", "SoftSub" to "SOFTSUB"),
     )
 
-class TypeFilter :
-    SelectFilter(
-        "Type",
-        "type",
-        listOf("All" to "", "Manhwa" to "MANHWA", "Manga" to "MANGA", "Manhua" to "MANHUA"),
-    )
-
-class StatusFilter :
-    SelectFilter(
-        "Status",
-        "status",
-        listOf("All" to "", "Ongoing" to "ONGOING", "Completed" to "COMPLETED", "Hiatus" to "HIATUS"),
-    )
-
-class GenreFilter(genres: List<String>) : SelectFilter("Category", "genre", listOf("All" to "") + genres.map { it to it })
+class FetchedFilter(name: String, param: String, options: List<FilterOption>) : SelectFilter(name, param, listOf("All" to "") + options.map { it.name to it.value })
 
 class ExcludeAdultFilter(state: Boolean) :
     Filter.CheckBox("Hide adult series", state),

@@ -105,7 +105,7 @@ class Chapter(
             else -> "$number: $episodeTitleEn"
         }
         // chapterNo is a running count that drifts from the labels
-        chapter_number = number.let(CHAPTER_NUMBER::find)?.groupValues?.get(1)?.toFloat() ?: chapterNo
+        chapter_number = CHAPTER_NUMBER.find(number)?.groupValues?.get(1)?.toFloat() ?: chapterNo
         date_upload = Instant.tryParse(releaseDate)
         scanlator = if (translation?.isOfficial == false) "WebtoonLib AI" else group
     }
@@ -163,3 +163,16 @@ class SearchAccess(
 
 @Serializable
 class SearchVerification(private val token: String)
+
+@Serializable
+class FilterData(
+    val types: List<FilterOption>,
+    val statuses: List<FilterOption>,
+    val genres: List<FilterOption>,
+)
+
+@Serializable
+class FilterOption(
+    val name: String,
+    val value: String,
+)
