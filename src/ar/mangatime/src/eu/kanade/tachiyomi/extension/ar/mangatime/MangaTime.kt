@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -24,6 +25,8 @@ import java.io.IOException
 
 @Source
 abstract class MangaTime : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private val limit: Int = 24
 
     fun toImage(url: String): String {
@@ -42,7 +45,7 @@ abstract class MangaTime : KeiSource() {
             addQueryParameter("input", TrpcEnvelope(input).toJsonString())
         }.build()
 
-        return client.get(url).parseAs<List<TrpcResponse<O>>>().first().result.data.json
+        return client.get(url, Fetch.XHR).parseAs<List<TrpcResponse<O>>>().first().result.data.json
     }
 
     private suspend fun searchSeries(page: Int, sortBy: String, query: String? = null): MangasPage {

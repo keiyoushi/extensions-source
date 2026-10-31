@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -24,6 +25,7 @@ import java.net.URLDecoder
 
 @Source
 abstract class Yabai : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -153,7 +155,7 @@ abstract class Yabai : KeiSource() {
             cursor = if (page == 1) null else cursors[page],
         )
 
-        val data = client.post("$baseUrl/g", inertiaHeaders, queryBody.toJsonRequestBody())
+        val data = client.post("$baseUrl/g", inertiaHeaders, Fetch.XHR, queryBody.toJsonRequestBody())
             .parseAs<DataResponse<IndexProps>>()
 
         val galleries = data.props.postList.data.map { it.toSManga() }
@@ -174,11 +176,11 @@ abstract class Yabai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val gallery = client.get("$baseUrl${manga.url}", inertiaHeaders)
+        val gallery = client.get("$baseUrl${manga.url}", inertiaHeaders, Fetch.XHR)
             .parseAs<DataResponse<DetailProps>>().props.post.data
         return SMangaUpdate(gallery.toSManga(), listOf(gallery.toSChapter()))
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl${chapter.url}/read", inertiaHeaders)
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl${chapter.url}/read", inertiaHeaders, Fetch.XHR)
         .parseAs<DataResponse<ReaderProps>>().props.pages.data.list.toPages()
 }

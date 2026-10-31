@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -39,6 +40,8 @@ import okio.IOException
 abstract class MangaBall :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val siteLang: List<String>
         get() = when (lang) {
@@ -140,7 +143,7 @@ abstract class MangaBall :
             }
         }.build()
 
-        return client.get(url, headers).parseAs<SearchResponse>().toMangasPage()
+        return client.get(url, headers, Fetch.XHR).parseAs<SearchResponse>().toMangasPage()
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -162,7 +165,7 @@ abstract class MangaBall :
             "title-detail" -> url.pathSegments.getOrNull(1)
             "chapter-detail" -> url.pathSegments.getOrNull(1)
                 ?.let { chapterId ->
-                    client.get("$baseUrl/api/v1/chapter-detail?chapter_id=$chapterId")
+                    client.get("$baseUrl/api/v1/chapter-detail?chapter_id=$chapterId", Fetch.XHR)
                         .parseAs<ChapterDetailResponse>()
                         .data.chapter.titleId
                 }
@@ -178,7 +181,7 @@ abstract class MangaBall :
         return "$baseUrl/title-detail/$id"
     }
 
-    private suspend fun getMangaDetails(idOrSlug: String): SManga = client.get("$baseUrl/api/v1/title/detail/$idOrSlug")
+    private suspend fun getMangaDetails(idOrSlug: String): SManga = client.get("$baseUrl/api/v1/title/detail/$idOrSlug", Fetch.XHR)
         .parseAs<TitleResponse>()
         .data
         .toSManga()
@@ -216,7 +219,7 @@ abstract class MangaBall :
     private suspend fun getChapterList(titleId: String): List<SChapter> {
         val body = TitleIdRequest(titleId).toJsonBody()
 
-        val chapters = client.post("$baseUrl/api/v1/chapter/chapter-listing-by-title-id", headers, body)
+        val chapters = client.post("$baseUrl/api/v1/chapter/chapter-listing-by-title-id", headers, Fetch.XHR, body)
             .parseAs<ChapterListResponse>()
             .data
             .mapNotNull { it.toSChapter(siteLang) }
@@ -229,7 +232,7 @@ abstract class MangaBall :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter-detail/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pages = client.get("$baseUrl/api/v1/chapter-detail?chapter_id=${chapter.url}")
+        val pages = client.get("$baseUrl/api/v1/chapter-detail?chapter_id=${chapter.url}", Fetch.XHR)
             .parseAs<ChapterDetailResponse>()
             .data.chapter.pages
 

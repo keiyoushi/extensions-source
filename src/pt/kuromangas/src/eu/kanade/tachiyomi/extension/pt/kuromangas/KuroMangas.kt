@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
@@ -33,6 +34,8 @@ import java.io.IOException
 abstract class KuroMangas :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl get() = "$baseUrl/api"
 
@@ -75,7 +78,7 @@ abstract class KuroMangas :
             .addQueryParameter("days", "30")
             .build()
 
-        val result = client.get(url).parseAs<LatestResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<LatestResponse>()
         val mangas = result.data.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, result.pagination.hasNextPage())
     }
@@ -109,7 +112,7 @@ abstract class KuroMangas :
             url.addQueryParameter("order", "DESC")
         }
 
-        val result = client.get(url.build()).parseAs<MangaListResponse>()
+        val result = client.get(url.build(), Fetch.XHR).parseAs<MangaListResponse>()
         val mangas = result.data.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, result.pagination.hasNextPage())
     }
@@ -127,7 +130,7 @@ abstract class KuroMangas :
 
         val updatedManga = async {
             if (fetchDetails) {
-                client.get(mangaUrl)
+                client.get(mangaUrl, Fetch.XHR)
                     .parseAs<MangaDetailsResponse>()
                     .manga.toSManga(cdnUrl)
             } else {
@@ -154,6 +157,7 @@ abstract class KuroMangas :
 
     private suspend fun fetchChapterPage(mangaUrl: String, page: Int) = client.get(
         "$mangaUrl/chapters?limit=$CHAPTERS_LIMIT&page=$page",
+        Fetch.XHR,
     ).parseAs<ChaptersResponse>()
 
     // ============================ Related =================================
@@ -161,7 +165,7 @@ abstract class KuroMangas :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga) = manga.url.substringAfterLast("/").let { mangaId ->
-        client.get("$apiUrl/mangas/$mangaId/similar")
+        client.get("$apiUrl/mangas/$mangaId/similar", Fetch.XHR)
             .parseAs<SimilarResponse>().data.map { it.toSManga(cdnUrl) }
     }
 
@@ -171,6 +175,7 @@ abstract class KuroMangas :
         val chapterId = chapter.url.substringAfterLast("/")
         val chapterResponse = client.get(
             "$apiUrl/chapters/$chapterId",
+            Fetch.XHR,
         ).parseAs<ChapterPagesResponse>()
         return chapterResponse.pages.mapIndexed { index, pageUrl ->
             val fixedUrl = pageUrl.replaceFirst("^/uploads/".toRegex(), "/")

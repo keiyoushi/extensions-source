@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -27,6 +28,8 @@ import java.io.IOException
 
 @Source
 abstract class NexusMangas : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl = "https://$API_HOST/rest/v1"
 
@@ -132,7 +135,7 @@ abstract class NexusMangas : KeiSource() {
             }
             .build()
 
-        val works = client.get(url).parseAs<List<WorkDto>>()
+        val works = client.get(url, Fetch.XHR).parseAs<List<WorkDto>>()
 
         return MangasPage(works.map { it.toSManga(mediaUrl) }, works.size == PAGE_SIZE)
     }
@@ -162,7 +165,7 @@ abstract class NexusMangas : KeiSource() {
             .addQueryParameter("limit", "1")
             .build()
 
-        val work = client.get(url).parseAs<List<WorkDto>>().firstOrNull()
+        val work = client.get(url, Fetch.XHR).parseAs<List<WorkDto>>().firstOrNull()
             ?: throw IOException("Obra não encontrada")
 
         return SMangaUpdate(manga = work.toSManga(mediaUrl), chapters = work.chapterList)
@@ -180,10 +183,10 @@ abstract class NexusMangas : KeiSource() {
             .addQueryParameter("limit", "1")
             .build()
 
-        val chapterId = client.get(url).parseAs<List<ChapterIdDto>>().firstOrNull()?.id
+        val chapterId = client.get(url, Fetch.XHR).parseAs<List<ChapterIdDto>>().firstOrNull()?.id
             ?: throw IOException("Capítulo não encontrado")
 
-        return client.post("$functionsUrl/read-chapter", readerHeaders, ReadChapterRequestDto(chapterId).toJsonRequestBody())
+        return client.post("$functionsUrl/read-chapter", readerHeaders, Fetch.XHR, ReadChapterRequestDto(chapterId).toJsonRequestBody())
             .parseAs<ReadChapterDto>()
             .toPageList(chapterId)
     }
@@ -197,7 +200,7 @@ abstract class NexusMangas : KeiSource() {
             .addQueryParameter("limit", "200")
             .build()
 
-        val genres = client.get(url).parseAs<List<GenreDto>>().map(GenreDto::name)
+        val genres = client.get(url, Fetch.XHR).parseAs<List<GenreDto>>().map(GenreDto::name)
 
         return FilterData(genres).toJsonElement()
     }

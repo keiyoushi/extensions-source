@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
@@ -50,6 +51,8 @@ import kotlin.time.Duration.Companion.minutes
 abstract class MangaDash :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val preferences by getPreferencesLazy()
 
@@ -247,7 +250,7 @@ abstract class MangaDash :
             addQueryParameter("plus18", plus18)
         }.build()
 
-        return client.get(url).parseAs<MangaListDto>().let {
+        return client.get(url, Fetch.XHR).parseAs<MangaListDto>().let {
             MangasPage(
                 it.items.map {
                     it.toSManga(baseUrl)
@@ -267,7 +270,7 @@ abstract class MangaDash :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(doc),
             chapterListParse(doc),
@@ -310,7 +313,7 @@ abstract class MangaDash :
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val dataElement = document.selectFirst("script#chapterViewerData")
             ?: throw Exception("Dados do capítulo não encontrados")
 

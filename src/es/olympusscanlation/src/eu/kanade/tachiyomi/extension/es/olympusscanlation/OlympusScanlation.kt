@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,6 +32,8 @@ import okhttp3.OkHttpClient
 abstract class OlympusScanlation :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     private fun fetchedDomainUrl() {
         if (!preferences.fetchDomainPref()) return
@@ -67,7 +70,7 @@ abstract class OlympusScanlation :
             return@withLock
         }
 
-        val series = client.get("$baseUrl/api/series/list").parseAs<PayloadMangaDto>()
+        val series = client.get("$baseUrl/api/series/list", Fetch.XHR).parseAs<PayloadMangaDto>()
 
         val comics = series.data.asSequence()
             .filter { it.type == "comic" }
@@ -83,7 +86,7 @@ abstract class OlympusScanlation :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         fetchSeriesList()
-        val result = client.get("$baseUrl/api/rankings?page=$page&period=total_ranking").parseAs<RankingDto>()
+        val result = client.get("$baseUrl/api/rankings?page=$page&period=total_ranking", Fetch.XHR).parseAs<RankingDto>()
         val slugMap = preferences.slugMap.toMutableMap()
         val mangaList = result.data
             .filter { it.type == "comic" }
@@ -97,7 +100,7 @@ abstract class OlympusScanlation :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         fetchSeriesList()
-        val result = client.get("$baseUrl/api/new-chapters?page=$page").parseAs<NewChaptersDto>()
+        val result = client.get("$baseUrl/api/new-chapters?page=$page", Fetch.XHR).parseAs<NewChaptersDto>()
         val slugMap = preferences.slugMap.toMutableMap()
         val mangaList = result.data.filter { it.type == "comic" }
             .map {
@@ -125,7 +128,7 @@ abstract class OlympusScanlation :
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
         val series = url.pathSegments.getOrNull(1)?.takeIf { it.startsWith("comic-") } ?: return null
         val slug = series.removePrefix("comic-").takeIf(String::isNotBlank) ?: return null
-        val manga = client.get("$baseUrl/api/series/$slug?type=comic").parseAs<MangaDetailDto>().data
+        val manga = client.get("$baseUrl/api/series/$slug?type=comic", Fetch.XHR).parseAs<MangaDetailDto>().data
         preferences.slugMap += manga.id to manga.slug
         return manga.toSMangaDetails()
     }
@@ -143,7 +146,7 @@ abstract class OlympusScanlation :
         return coroutineScope {
             val details = async {
                 if (fetchDetails) {
-                    client.get("$baseUrl/api/series/$slug?type=comic")
+                    client.get("$baseUrl/api/series/$slug?type=comic", Fetch.XHR)
                         .parseAs<MangaDetailDto>().data.toSMangaDetails()
                 } else {
                     manga
@@ -168,7 +171,7 @@ abstract class OlympusScanlation :
         return result.map { it.toSChapter(mangaId) }
     }
 
-    private suspend fun fetchChapterPage(mangaSlug: String, page: Int): PayloadChapterDto = client.get("$baseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic")
+    private suspend fun fetchChapterPage(mangaSlug: String, page: Int): PayloadChapterDto = client.get("$baseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic", Fetch.XHR)
         .parseAs<PayloadChapterDto>()
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -178,7 +181,7 @@ abstract class OlympusScanlation :
         return "$baseUrl/capitulo/$chapterId/comic-$mangaSlug"
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("main.strip div.panel > img")
         .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
 

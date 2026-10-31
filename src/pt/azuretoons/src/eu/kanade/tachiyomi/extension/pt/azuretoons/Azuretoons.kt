@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,6 +29,8 @@ import okhttp3.Response
 abstract class Azuretoons :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl get() = "$baseUrl/api"
 
@@ -110,7 +113,7 @@ abstract class Azuretoons :
 
     // ============================== Popular (Browse) =======================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val dto = client.get("$apiUrl/obras").parseAs<List<AzuretoonsMangaDto>>()
+        val dto = client.get("$apiUrl/obras", Fetch.XHR).parseAs<List<AzuretoonsMangaDto>>()
         val mangas = dto.sortedByDescending { it.viewCount }.map { it.toSManga() }
         return MangasPage(mangas, hasNextPage = false)
     }
@@ -118,14 +121,14 @@ abstract class Azuretoons :
     // ============================= Latest ===================================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val dto = client.get("$apiUrl/obras").parseAs<List<AzuretoonsMangaDto>>()
+        val dto = client.get("$apiUrl/obras", Fetch.XHR).parseAs<List<AzuretoonsMangaDto>>()
         val mangas = dto.map { it.toSManga() }
         return MangasPage(mangas, hasNextPage = false)
     }
 
     // =============================== Search (na mão: filtra por título) =====
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val dto = client.get("$apiUrl/obras").parseAs<List<AzuretoonsMangaDto>>()
+        val dto = client.get("$apiUrl/obras", Fetch.XHR).parseAs<List<AzuretoonsMangaDto>>()
         val mangas = dto
             .map { it.toSManga() }
             .let { list ->
@@ -146,7 +149,7 @@ abstract class Azuretoons :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringAfter("/obra/").substringBefore("/")
-        val dto = client.get("$apiUrl/obras/slug/$slug").parseAs<AzuretoonsMangaDto>()
+        val dto = client.get("$apiUrl/obras/slug/$slug", Fetch.XHR).parseAs<AzuretoonsMangaDto>()
         val chapterList = dto.chapters
             .map { it.toSChapter(dto.slug) }
             .distinctBy { it.url }
@@ -158,7 +161,7 @@ abstract class Azuretoons :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfter("/capitulo/")
         val slug = chapter.url.substringAfter("/obra/").substringBefore("/")
-        return client.get("$apiUrl/chapters/read/$slug/$chapterId")
+        return client.get("$apiUrl/chapters/read/$slug/$chapterId", Fetch.XHR)
             .parseAs<AzuretoonsChapterDetailDto>()
             .toPageList()
     }

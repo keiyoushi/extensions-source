@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -47,6 +48,8 @@ import kotlin.time.Instant
 abstract class Taiyo : KeiSource() {
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
+    override val imageFetch = Fetch.IMAGE
+
     override val supportsLatest = false
 
     private val preferences: SharedPreferences = getPreferences()
@@ -72,7 +75,7 @@ abstract class Taiyo : KeiSource() {
         }
         val id = url.pathSegments.getOrNull(1) ?: return null
 
-        return parseMangaDetails(client.get("$baseUrl/media/$id").asJsoup())
+        return parseMangaDetails(client.get("$baseUrl/media/$id", Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -93,6 +96,7 @@ abstract class Taiyo : KeiSource() {
         val obj = client.post(
             "https://meilisearch.${baseUrl.substringAfterLast("/")}/multi-search",
             getApiHeaders(),
+            Fetch.XHR,
             requestBody,
         ).parseAs<SearchResultDto>()
 
@@ -123,7 +127,7 @@ abstract class Taiyo : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val details = if (fetchDetails) {
-            async { parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup()) }
+            async { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) }
         } else {
             null
         }
@@ -182,7 +186,7 @@ abstract class Taiyo : KeiSource() {
                     .addQueryParameter("input", input.toJsonString())
                     .build()
 
-                val parsed = client.get(pageUrl).parseAs<ChapterListDto> {
+                val parsed = client.get(pageUrl, Fetch.XHR).parseAs<ChapterListDto> {
                     CHAPTER_REGEX.find(it)!!.groupValues[1]
                 }
 
@@ -206,7 +210,7 @@ abstract class Taiyo : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val chapterObj = document.parseJsonFromDocument<MediaChapterDto>("mediaChapter") {
             substringBefore(",\\\"chapters\\\"") + "}}"
         }!!

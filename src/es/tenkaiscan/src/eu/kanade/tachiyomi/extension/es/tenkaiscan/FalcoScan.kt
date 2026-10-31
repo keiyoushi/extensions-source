@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -40,16 +41,18 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class FalcoScan : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { it.host == baseUrlHost }
         .addInterceptor(::readerInterceptor)
 
     // The ranking page is permanently in maintenance, the full catalogue is used instead
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/comics").asJsoup(), "a.falco-card")
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/comics", Fetch.DOCUMENT).asJsoup(), "a.falco-card")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(
-        client.get(baseUrl).asJsoup(),
+        client.get(baseUrl, Fetch.DOCUMENT).asJsoup(),
         "section:has(h2:containsOwn(Recientemente actualizado)) a.falco-card",
     )
 
@@ -70,7 +73,7 @@ abstract class FalcoScan : KeiSource() {
             }
         }
 
-        return parseMangaList(client.get(urlBuilder.build()).asJsoup(), "a.falco-card")
+        return parseMangaList(client.get(urlBuilder.build(), Fetch.DOCUMENT).asJsoup(), "a.falco-card")
     }
 
     private fun parseMangaList(document: Document, selector: String): MangasPage {
@@ -98,7 +101,7 @@ abstract class FalcoScan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             title = document.selectFirst(".series-main h1")!!.text()
@@ -128,7 +131,7 @@ abstract class FalcoScan : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
         document.selectFirst("#canvas-reader")?.attr("data-token")?.let { tokens[chapterUrl] = it }
 
         return document.select("#canvas-reader .cap-canvas").mapIndexed { i, element ->
