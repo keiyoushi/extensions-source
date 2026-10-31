@@ -1102,7 +1102,7 @@ abstract class Comix :
         private val RECENT_QUERIES_TTL_NANOS = 120.seconds.inWholeNanoseconds
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val MAX_CHAPTER_PAGES = 1000
-        private val chapterListPacer = RequestPacer(minGapMs = 300, maxGapMs = 600)
+        private val chapterListPacer = RequestPacer(minGapMs = 2500, maxGapMs = 5000)
         private const val OFFICIAL_GROUP_ID = 10702
         private const val CHAPTER_DATA_VERSION = 1
         private const val TAG_ID_CACHE_SIZE = 50
