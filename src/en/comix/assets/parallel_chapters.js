@@ -183,6 +183,7 @@
                 stopped = true;
                 break;
             }
+            if (failed) break;
         }
 
         const chapters = [];
