@@ -57,8 +57,9 @@ abstract class XXXYaoi : MadaraNoAjax() {
         val rendered = try {
             runWebView<String> {
                 userAgent = headers["User-Agent"].orEmpty()
+                // A script load error makes the site's ad check delete the decoded pages
                 interceptRequest { request ->
-                    if (request.isForMainFrame) null else WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0)))
+                    if (request.isForMainFrame) null else WebResourceResponse("text/javascript", null, 200, "OK", null, ByteArrayInputStream(ByteArray(0)))
                 }
                 onPageFinished {
                     evaluateJs("document.documentElement.outerHTML") { resolve(it.parseAs<String>()) }
