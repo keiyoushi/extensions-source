@@ -26,14 +26,7 @@ abstract class XXXYaoi : MadaraNoAjax() {
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds)
 
-    override fun Headers.Builder.configureHeaders() = set("Upgrade-Insecure-Requests", "1")
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        .set("Sec-GPC", "1")
-        .set("Sec-Fetch-User", "?1")
-        .set("Sec-Fetch-Site", "none")
-        .set("Sec-Fetch-Mode", "navigate")
-        .set("Sec-Fetch-Dest", "document")
-        .set("Priority", "u=0, i")
+    override fun Headers.Builder.configureHeaders() = set("Sec-GPC", "1")
         .set("Pragma", "no-cache")
 
     override val mangaSubString = "bl"

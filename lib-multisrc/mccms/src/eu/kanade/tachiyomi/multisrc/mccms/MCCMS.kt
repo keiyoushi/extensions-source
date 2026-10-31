@@ -46,7 +46,6 @@ abstract class MCCMS : KeiSource() {
         .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", System.getProperty("http.agent")!!)
-        .removeAll("Origin")
 
     protected open fun SManga.cleanup(): SManga = this
 

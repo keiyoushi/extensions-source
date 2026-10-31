@@ -68,19 +68,11 @@ abstract class MangaHub : KeiSource() {
     private val apiErrorRegex = Regex("""rate\s*limit|api\s*key\s*(?:invalid)?|encryption(?:\s*error)?""", RegexOption.IGNORE_CASE)
 
     override fun Headers.Builder.configureHeaders() = this
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
         .set("Accept-Language", "en-US,en;q=0.5")
         .set("DNT", "1")
-        .set("Sec-Fetch-Dest", "document")
-        .set("Sec-Fetch-Mode", "navigate")
-        .set("Sec-Fetch-Site", "same-origin")
-        .set("Upgrade-Insecure-Requests", "1")
 
     private val apiHeaders get() = headersBuilder()
         .set("Accept", "application/json")
-        .set("Sec-Fetch-Dest", "empty")
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "cross-site")
         .removeAll("Upgrade-Insecure-Requests")
 
     private suspend inline fun <reified T> fetchGraphQL(

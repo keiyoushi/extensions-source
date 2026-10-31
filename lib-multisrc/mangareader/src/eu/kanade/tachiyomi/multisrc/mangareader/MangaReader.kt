@@ -256,7 +256,6 @@ abstract class MangaReader : KeiSource() {
         .url(page.imageUrl!!)
         .headers(
             headers.newBuilder()
-                .removeAll("Origin")
                 .set("Referer", page.imageUrl!!)
                 .build(),
         )

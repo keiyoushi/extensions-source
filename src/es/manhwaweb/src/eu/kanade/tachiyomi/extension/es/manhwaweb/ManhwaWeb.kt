@@ -13,7 +13,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -21,8 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class ManhwaWeb : KeiSource() {
 
     private val apiUrl = "https://api.manhwaweb.com"
-
-    override fun Headers.Builder.configureHeaders() = add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val result = client.get("$apiUrl/manhwa/nuevos", Fetch.XHR).parseAs<PayloadPopularDto>()

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangalix
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,11 +20,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.IOException
 import java.util.Locale
 
@@ -36,11 +33,6 @@ abstract class Mangalix : KeiSource() {
         val host = baseUrl.toHttpUrl().host
         rateLimit(2) { it.host == host }
     }
-
-    private val imageHeaders: Headers
-        get() = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(
         loadCatalog().map { it.toSManga(baseUrl) },
@@ -157,8 +149,6 @@ abstract class Mangalix : KeiSource() {
                 Page(index, imageUrl = imageUrl.resolveImageUrl())
             }
     }
-
-    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeaders)
 
     private suspend fun loadCatalog(): List<MangaDto> {
         val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()

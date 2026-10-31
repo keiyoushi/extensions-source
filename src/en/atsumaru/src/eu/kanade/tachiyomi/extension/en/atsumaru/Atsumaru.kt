@@ -4,7 +4,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -29,7 +28,6 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 
 @Source
 abstract class Atsumaru :
@@ -41,7 +39,6 @@ abstract class Atsumaru :
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
-        add("Accept", "*/*")
         add("Content-Type", "application/json")
     }
 
@@ -367,14 +364,6 @@ abstract class Atsumaru :
             }
             Page(index, imageUrl = imageUrl.replaceFirst(PROTOCOL_REGEX, "https://cdn."))
         }
-    }
-
-    override fun getImageRequest(page: Page): Request {
-        val imgHeaders = headersBuilder().apply {
-            set("Accept", "image/avif,image/webp,*/*")
-        }.build()
-
-        return GET(page.imageUrl!!, imgHeaders)
     }
 
     private fun get18Mode(): String {

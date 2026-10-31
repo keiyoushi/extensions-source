@@ -14,7 +14,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseGraphQLAs
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -30,10 +29,6 @@ abstract class VoyceMe : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1, 1.seconds) { it.host == graphqlurlHost }
         rateLimit(2, 1.seconds) { it.host == staticurlHost }
-    }
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        add("Accept", ACCEPT_ALL)
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -154,7 +149,6 @@ abstract class VoyceMe : KeiSource() {
 
     override fun getImageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
-            .add("Accept", ACCEPT_IMAGE)
             .set("Referer", page.url)
             .build()
 
@@ -162,9 +156,6 @@ abstract class VoyceMe : KeiSource() {
     }
 
     companion object {
-        private const val ACCEPT_ALL = "*/*"
-        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
-
         const val STATIC_URL = "https://dlkfxmdtxtzpb.cloudfront.net/"
         private const val GRAPHQL_URL = "https://hasura.voyce.me/v1/graphql"
 

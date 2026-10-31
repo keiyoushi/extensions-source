@@ -114,7 +114,6 @@ abstract class MangaOmega : KeiSource() {
 
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .removeHeader("Referer")
-        .removeHeader("Origin")
         .build()
 
     private class Series(val key: String, val posts: List<CachedPost>, val chapters: List<CachedPost>) {

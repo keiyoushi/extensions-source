@@ -15,7 +15,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -25,8 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class JuraTempest : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 3, period = 1.seconds)
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Sec-Fetch-Site", "same-origin")
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/explore/${manga.url.removePrefix("/explore/").trim('/')}"
 

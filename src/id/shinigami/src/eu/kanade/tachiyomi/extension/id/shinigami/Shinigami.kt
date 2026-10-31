@@ -212,9 +212,7 @@ abstract class Shinigami : KeiSource() {
 
     override fun getImageRequest(page: Page): Request {
         val imageHeaders = headersBuilder()
-            .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .add("DNT", "1")
-            .add("sec-fetch-dest", "empty")
             .add("Sec-GPC", "1")
             .build()
 

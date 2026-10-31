@@ -28,7 +28,6 @@ import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 
 abstract class HeanCms :
@@ -327,14 +326,6 @@ abstract class HeanCms :
 
     protected open fun String.toAbsoluteUrl(): String = if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
 
-    override fun getImageRequest(page: Page): Request {
-        val imageHeaders = headers.newBuilder()
-            .add("Accept", ACCEPT_IMAGE)
-            .build()
-
-        return Request.Builder().url(page.imageUrl!!).headers(imageHeaders).build()
-    }
-
     // ============================== Preferences ==============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -392,7 +383,6 @@ abstract class HeanCms :
         }
 
     companion object {
-        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
 
         private const val PER_PAGE_CHAPTERS = 1000

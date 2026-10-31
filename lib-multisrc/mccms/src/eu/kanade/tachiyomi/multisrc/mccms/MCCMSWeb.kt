@@ -42,7 +42,6 @@ abstract class MCCMSWeb : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", System.getProperty("http.agent")!!)
         .removeAll("Referer")
-        .removeAll("Origin")
 
     open fun parseListing(document: Document): MangasPage {
         val mangas = document.select(simpleMangaSelector()).map(::simpleMangaFromElement)

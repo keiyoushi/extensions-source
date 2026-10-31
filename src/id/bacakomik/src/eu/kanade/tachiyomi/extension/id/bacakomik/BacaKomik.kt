@@ -205,7 +205,6 @@ abstract class BacaKomik : KeiSource() {
 
     override fun getImageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
             .set("Referer", page.url.ifEmpty { "$baseUrl/" })
             .build()
 

@@ -30,11 +30,7 @@ abstract class Aurora : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3, 1.seconds)
         .addCookie("mnx_adulto" to "1")
 
-    override fun Headers.Builder.configureHeaders() = set("Sec-Fetch-Dest", "document")
-        .set("Sec-Fetch-Mode", "navigate")
-        .set("Sec-Fetch-Site", "none")
-        .set("Sec-Fetch-User", "?1")
-        .set("Alt-Used", baseUrl.substringAfterLast("/"))
+    override fun Headers.Builder.configureHeaders() = set("Alt-Used", baseUrl.substringAfterLast("/"))
 
     override suspend fun getPopularManga(page: Int) = getMangasPage(client.get("$baseUrl/catalogo", Fetch.DOCUMENT))
 
@@ -97,11 +93,7 @@ abstract class Aurora : KeiSource() {
         val pageHeaders = headersBuilder()
             .set("rsc", "1")
             .set("Referer", entryURL(chapter.memo))
-            .set("Sec-Fetch-Mode", "cors")
-            .set("Sec-Fetch-Dest", "empty")
-            .set("Sec-Fetch-Site", "same-origin")
             .set("next-url", entryURL(chapter.memo).toHttpUrl().encodedPath)
-            .set("Accept", "*/*")
             .build()
         val response = client
             .newBuilder()

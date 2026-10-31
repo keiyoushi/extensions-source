@@ -231,7 +231,6 @@ abstract class TodayManga : KeiSource() {
 
     override fun getImageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)
         }.build()
         return GET(page.imageUrl!!, imgHeaders)

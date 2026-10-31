@@ -20,7 +20,6 @@ import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.ui.askPassword
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -36,8 +35,6 @@ import java.util.Locale
 abstract class TeamLanhLung : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
-
-    override fun Headers.Builder.configureHeaders() = set("Referer", "$baseUrl/")
 
     private fun Element.lazyImgUrl(): String? {
         val url = absUrl("data-lazy-src")

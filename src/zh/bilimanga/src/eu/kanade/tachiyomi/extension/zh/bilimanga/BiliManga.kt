@@ -54,7 +54,6 @@ abstract class BiliManga :
 
     override fun Headers.Builder.configureHeaders() = apply {
         add("Accept-Language", "zh")
-        add("Accept", "*/*")
     }
 
     // Customize

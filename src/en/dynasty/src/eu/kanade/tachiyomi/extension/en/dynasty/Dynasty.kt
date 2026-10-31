@@ -54,10 +54,7 @@ abstract class Dynasty :
         .rateLimit(1) { it.fragment != COVER_URL_FRAGMENT }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val homeHeaders = headersBuilder()
-            .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-            .build()
-        val document = client.get(baseUrl, homeHeaders, Fetch.DOCUMENT).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         val entries = document
             .select("h4:contains(Most Popular of Past 7 Days) ~ ul.cover-list a.thumbnail")

@@ -26,7 +26,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -37,10 +36,6 @@ abstract class Webcomics : KeiSource() {
 
     private val apiSubDomain = "official-website-api"
     private val apiUrl = "https://$apiSubDomain.${baseUrl.substringAfterLast("/")}/api/web/v4/book"
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-    }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor { chain ->

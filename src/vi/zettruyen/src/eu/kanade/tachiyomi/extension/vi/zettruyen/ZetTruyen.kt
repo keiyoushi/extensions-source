@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.zettruyen
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,7 +20,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -227,12 +225,5 @@ abstract class ZetTruyen : KeiSource() {
                 Page(index, imageUrl = element.absUrl("src"))
             }
         }
-    }
-
-    override fun getImageRequest(page: Page): Request {
-        val imageHeaders = headers.newBuilder()
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .build()
-        return GET(page.imageUrl!!, imageHeaders)
     }
 }

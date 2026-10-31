@@ -223,9 +223,6 @@ abstract class Mangarama :
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page)
         .newBuilder()
         .header("Referer", page.url)
-        .header("Sec-Fetch-Dest", "image")
-        .header("Sec-Fetch-Mode", "no-cors")
-        .header("Sec-Fetch-Site", "same-site")
         .header("Sec-GPC", "1")
         .build()
 

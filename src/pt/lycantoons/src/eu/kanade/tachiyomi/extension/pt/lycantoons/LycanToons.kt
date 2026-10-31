@@ -30,9 +30,8 @@ abstract class LycanToons : KeiSource() {
         rateLimit(2)
     }
 
-    // The site refuses requests without Sec-Fetch-Site; its image CDN refuses any with Origin
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
-        .set("Sec-Fetch-Site", "same-origin")
+    // The site refuses requests without Sec-Fetch-Site
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Sec-Fetch-Site", "same-origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage = metricsRequest("popular", page).parseAs<PopularResponse>().toMangasPage()
 

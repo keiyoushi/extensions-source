@@ -190,7 +190,6 @@ abstract class HolyScans :
     }
 
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .header("Accept", "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
         .header("Referer", baseUrl + page.url)
         .build()
 

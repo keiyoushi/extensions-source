@@ -51,11 +51,7 @@ abstract class MangaLivre :
     private val preferences by getPreferencesLazy()
     private val verificationMutex = Mutex()
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept", "*/*")
-        .set("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
-        .set("Sec-Fetch-Dest", "empty")
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "same-origin")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
 
     // ============================== Popular =======================================
 

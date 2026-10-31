@@ -35,7 +35,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.nodes.Element
 import java.text.Normalizer
@@ -53,12 +52,6 @@ abstract class IkigaiMangas :
     private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
 
     private val preferences = getPreferences()
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Sec-Fetch-Dest", "document")
-        set("Sec-Fetch-Mode", "navigate")
-        set("Sec-Fetch-Site", "cross-site")
-    }
 
     private val dateFormat = DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH)
 
@@ -268,12 +261,6 @@ abstract class IkigaiMangas :
             Page(i, imageUrl = element.attr("abs:src"))
         }
     }
-
-    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .header("Sec-Fetch-Dest", "image")
-        .header("Sec-Fetch-Mode", "no-cors")
-        .header("Sec-Fetch-Site", "cross-site")
-        .build()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         ContentFilter(),

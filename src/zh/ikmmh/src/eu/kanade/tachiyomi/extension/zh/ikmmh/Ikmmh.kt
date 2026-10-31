@@ -67,8 +67,6 @@ abstract class Ikmmh : KeiSource() {
             }
         }
         .set("Accept-Language", "zh-CN,zh;q=0.9")
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-        .removeAll("Origin")
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
         .protocols(listOf(Protocol.HTTP_1_1))

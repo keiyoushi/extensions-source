@@ -1,5 +1,4 @@
 package eu.kanade.tachiyomi.extension.pt.saikaiscan
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -17,7 +16,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
@@ -137,14 +135,6 @@ abstract class SaikaiScan : KeiSource() {
         }
     }
 
-    override fun getImageRequest(page: Page): Request {
-        val imageHeaders = headersBuilder()
-            .add("Accept", ACCEPT_IMAGE)
-            .build()
-
-        return GET(page.imageUrl!!, imageHeaders)
-    }
-
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData() = client.get(
@@ -164,7 +154,6 @@ abstract class SaikaiScan : KeiSource() {
     )
 
     companion object {
-        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
         private const val COMIC_FORMAT_ID = "2"
         private const val PER_PAGE = "12"

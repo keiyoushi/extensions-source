@@ -14,10 +14,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.Request
 import kotlin.time.Instant
-
-private const val ACCEPT_IMAGE = "image/avif,image/webp,image/*,*/*"
 
 private const val ARCHIVE_URL = "https://sas.ewanb.me"
 
@@ -25,6 +22,7 @@ private const val ARCHIVE_URL = "https://sas.ewanb.me"
 abstract class SolarAndSundry : KeiSource() {
 
     override val supportsLatest = false
+
     @Serializable
     private class SasPage(
         @SerialName("page_number") val pageNumber: Int,
@@ -90,8 +88,4 @@ abstract class SolarAndSundry : KeiSource() {
 
         return listOf(Page(0, "", page.imageUrl))
     }
-
-    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .header("Accept", ACCEPT_IMAGE)
-        .build()
 }

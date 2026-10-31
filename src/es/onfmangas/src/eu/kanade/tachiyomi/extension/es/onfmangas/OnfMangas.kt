@@ -70,7 +70,6 @@ abstract class OnfMangas : KeiSource() {
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         .set("Accept-Language", "en-US,en;q=0.9")
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)

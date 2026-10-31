@@ -32,7 +32,6 @@ abstract class Nekopost : KeiSource() {
     private fun fileHost(projectId: Int) = if (projectId > FILE_HOST_THRESHOLD) FS_FILE_HOST else WWW_FILE_HOST
 
     private val apiHeaders get() = headersBuilder()
-        .set("Accept", "*/*")
         .set("Content-Type", "application/json")
         .build()
 

@@ -66,7 +66,6 @@ abstract class Procomic :
 
     override fun Headers.Builder.configureHeaders() = this
         .set("User-Agent", ProChanSigner.READ_UA)
-        .removeAll("Origin")
         .removeAll("Referer")
 
     private var popularPage = 1

@@ -40,7 +40,6 @@ abstract class Doujinio : KeiSource() {
     private val cleanHeaders
         get() = headersBuilder().apply {
             removeAll("Referer")
-            removeAll("Origin")
         }.build()
 
     // Latest

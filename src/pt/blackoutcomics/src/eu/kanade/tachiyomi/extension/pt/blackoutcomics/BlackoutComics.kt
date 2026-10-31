@@ -198,10 +198,6 @@ abstract class BlackoutComics : KeiSource() {
         .removeHeader("Sec-Fetch-Dest")
         .removeHeader("Sec-Fetch-Mode")
         .removeHeader("Sec-Fetch-Site")
-        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        .header("Sec-Fetch-Dest", "image")
-        .header("Sec-Fetch-Mode", "no-cors")
-        .header("Sec-Fetch-Site", "same-origin")
         .build()
 
     // ============================== Filters ===============================

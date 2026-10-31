@@ -327,10 +327,6 @@ abstract class MangaWork : KeiSource() {
 
         return client.post(
             url = buildAdminAjaxUrl(),
-            headers = headersBuilder()
-                .set("Referer", referer)
-                .add("Accept", "*/*")
-                .build(),
             fetch = Fetch.XHR.from(referer),
             body = body,
         ).asJsoup()

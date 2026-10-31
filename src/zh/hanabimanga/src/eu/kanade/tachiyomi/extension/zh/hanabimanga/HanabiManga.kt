@@ -57,7 +57,6 @@ abstract class HanabiManga :
     override fun Headers.Builder.configureHeaders() = apply {
         add("apikey", ANONYMOUS_TOKEN)
         removeAll("Referer")
-        removeAll("Origin")
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {

@@ -60,7 +60,6 @@ abstract class MangaMillion : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = apply {
         if (token.isNotEmpty()) set("Access-Token", token)
-        set("Accept", "*/*")
         set("Accept-Language", "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7")
     }
 

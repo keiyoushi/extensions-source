@@ -266,7 +266,6 @@ abstract class Manhuarm :
 
         val ocrHeaders = headers.newBuilder()
             .set("Referer", chapterUrl)
-            .set("Accept", "*/*")
             .set("X-Requested-With", "XMLHttpRequest")
             .set("Cache-Control", "no-cache")
             .set("X-Gate-Token", vault[1])

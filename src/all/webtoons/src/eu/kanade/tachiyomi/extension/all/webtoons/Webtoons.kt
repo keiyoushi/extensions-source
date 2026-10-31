@@ -48,7 +48,6 @@ abstract class Webtoons :
     private val mobileHeaders: Headers
         get() = headersBuilder()
             .set("Referer", "$mobileUrl/")
-            .removeAll("Origin")
             .build()
 
     override val supportRelatedMangasBySearch = true

@@ -32,7 +32,7 @@ abstract class QuestionableContent :
         addInterceptor(TextInterceptor())
         // The site's zstd responses get cut off after the first frame, which truncates the archive page
         addNetworkInterceptor { chain ->
-            chain.proceed(chain.request().newBuilder().header("Accept-Encoding", "br, gzip").removeHeader("Origin").build())
+            chain.proceed(chain.request().newBuilder().header("Accept-Encoding", "br, gzip").build())
         }
     }
 

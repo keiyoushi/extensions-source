@@ -16,7 +16,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -28,10 +27,6 @@ abstract class Tranh18 : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
-    }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        removeAll("Origin")
     }
 
     // ============================== Popular ===============================

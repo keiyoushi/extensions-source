@@ -18,7 +18,6 @@ import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.tryParseDateTime
 import keiyoushi.utils.tryParseZonedDateTime
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -36,9 +35,6 @@ abstract class WPComics : KeiSource() {
     protected open val gmtOffset: String? = "+0500"
 
     protected open val dateZone: ZoneId = ZoneId.systemDefault()
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = this
-        .removeAll("Origin")
 
     open val intl = Intl(
         language = lang,

@@ -239,13 +239,6 @@ abstract class Softkomik : KeiSource() {
         }
     }
 
-    override fun getImageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .build()
-        return GET(page.imageUrl!!, newHeaders)
-    }
-
     // ============================= Utilities ==============================
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {

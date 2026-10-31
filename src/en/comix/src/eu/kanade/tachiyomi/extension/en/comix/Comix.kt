@@ -51,7 +51,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -183,8 +182,6 @@ abstract class Comix :
 
         return response
     }
-
-    override fun Headers.Builder.configureHeaders() = add("Accept", "*/*")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -621,7 +618,6 @@ abstract class Comix :
             ?: page.imageUrl
             ?: return super.getImageRequest(page)
         val requestHeaders = headersBuilder()
-            .removeAll("Origin")
             .removeAll("Referer")
             .build()
         return GET(imageUrl, requestHeaders)

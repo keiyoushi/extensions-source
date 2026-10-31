@@ -37,7 +37,6 @@ abstract class TempleScan :
 
     // the image cdn answers 403 to any request carrying Sec-Fetch-Dest, so no browser fetch metadata here
     override fun Headers.Builder.configureHeaders() = apply {
-        removeAll("Origin")
         set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         set("Accept-Encoding", "gzip, deflate, br, zstd")
         set("Accept-Language", "en-US, en;q=0.9")

@@ -207,7 +207,6 @@ abstract class MangaBlackCat : KeiSource() {
     }
 
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .header("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
         .header("Referer", page.url)
         .build()
 

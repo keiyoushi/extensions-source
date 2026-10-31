@@ -298,7 +298,6 @@ abstract class LunarAnime : KeiSource() {
     override fun getImageRequest(page: Page): Request {
         val imageHeaders = headersBuilder()
             .set("Referer", baseUrl + page.url)
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .build()
         return GET(page.imageUrl!!, imageHeaders)
     }

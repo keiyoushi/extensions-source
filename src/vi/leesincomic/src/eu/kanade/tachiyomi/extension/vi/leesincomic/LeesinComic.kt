@@ -52,7 +52,6 @@ abstract class LeesinComic : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("X-API-KEY", "Leesin_Secret_MySQL_Key_2026")
         .set("x-api-key", "Leesin_Secret_MySQL_Key_2026")
-        .removeAll("Origin")
 
     // CDN. tachserver.online drops connections; identical paths live on tachserver.site.
     private fun String.fixImageHost(): String = replace("://tachserver.online/", "://tachserver.site/")

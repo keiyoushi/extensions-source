@@ -56,7 +56,6 @@ abstract class VoraToon : KeiSource() {
     override fun Headers.Builder.configureHeaders() = apply {
         set("Accept", "application/json")
         set("Accept-language", "en-US,en;q=0.9,id;q=0.8")
-        set("sec-fetch-site", "same-origin")
     }
 
     override suspend fun getPopularManga(page: Int) = parseSeriesListResponse(

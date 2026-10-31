@@ -119,9 +119,6 @@ internal class ImgxAccessClient(
         .set("Content-Type", "application/json")
         .set("Origin", baseUrl)
         .set("Referer", chapterUrl)
-        .set("Sec-Fetch-Dest", "empty")
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "same-origin")
         .build()
 
     companion object {

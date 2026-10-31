@@ -24,7 +24,6 @@ import kotlinx.coroutines.coroutineScope
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import java.net.URLDecoder
 import java.time.Instant
 import java.time.ZoneId
@@ -216,10 +215,6 @@ abstract class PoseidonScans :
             )
         }.sortedBy { it.index }
     }
-
-    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        .build()
 
     // =============================== Search ===============================
 

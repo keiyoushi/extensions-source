@@ -273,13 +273,9 @@ abstract class SchaleNetwork :
         )
 
         val authHeaders = headersBuilder()
-            .set("Accept", "*/*")
             .set("Accept-Language", "en-US,en;q=0.9")
             .set("Authorization", "Bearer $challenge")
             .set("host", "auth.$apiDomain")
-            .set("Sec-Fetch-Dest", "empty")
-            .set("Sec-Fetch-Mode", "cors")
-            .set("Sec-Fetch-Site", "cross-site")
             .build()
 
         return client.post("$authUrl/clearance", authHeaders, Fetch.XHR, RequestBody.EMPTY).body.string()

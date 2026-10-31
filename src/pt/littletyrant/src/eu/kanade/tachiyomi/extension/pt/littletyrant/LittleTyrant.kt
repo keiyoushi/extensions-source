@@ -13,7 +13,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.Cookie
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -34,12 +33,6 @@ abstract class LittleTyrant : Madara() {
     override fun OkHttpClient.Builder.configureClient() = apply {
         addNetworkInterceptor(ImageDecoderInterceptor())
         rateLimit(3, 1.seconds)
-    }
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Sec-Fetch-Mode", "cors")
-        set("Sec-Fetch-Dest", "empty")
-        set("Sec-Fetch-Site", "same-origin")
     }
 
     // =============================== Popular =================================
@@ -129,8 +122,6 @@ abstract class LittleTyrant : Madara() {
 
     override fun getImageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
-            .set("Accept", "image/webp,image/*,*/*")
-            .set("Referer", "$baseUrl/")
             .set("X-Reader-Sec", "tiraninha-web")
             .build()
         return GET(page.imageUrl!!, imageHeaders)

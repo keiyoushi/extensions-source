@@ -22,7 +22,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -40,9 +39,6 @@ abstract class LectorXd : KeiSource() {
     ) { request ->
         request.host == baseUrl.toHttpUrl().host
     }
-
-    // Origin gets a stale Cloudflare cache of series pages
-    override fun Headers.Builder.configureHeaders() = removeAll("Origin")
 
     // ========================================================================
     // FILTROS

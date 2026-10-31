@@ -705,8 +705,6 @@ abstract class OniSaga :
 
     private fun apiHeaders(token: String, referer: String) = headersBuilder()
         .set("X-Reader-Token", token)
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "same-origin")
         .set("Referer", referer)
         .build()
 

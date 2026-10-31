@@ -34,7 +34,6 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -208,10 +207,6 @@ abstract class MangaBox :
         // If all CDNs fail, throw an error
         throw IOException("All CDN attempts failed.")
     }
-
-    // The origin header causes cache misses on Cloudflare,
-    // which significantly increases response time
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
 
     open val popularUrlPath = "manga-list/hot-manga?page="
 

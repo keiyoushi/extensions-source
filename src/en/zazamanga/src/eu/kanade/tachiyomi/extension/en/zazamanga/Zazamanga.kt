@@ -14,7 +14,6 @@ import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -34,9 +33,6 @@ abstract class Zazamanga : MadaraNoAjax() {
         intl["status_filter_completed"] to "completed",
         intl["status_filter_canceled"] to "drop",
     )
-
-    // Image hosts answer 503 to requests carrying Origin
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
 
     override fun nextPageSelector() = "ul.pagination > li:last-child:not(.disabled) > a[href]"
 

@@ -75,7 +75,6 @@ abstract class YuriGarden :
 
     private val apiHeaders: Headers
         get() = headersBuilder()
-            .set("Referer", "$baseUrl/")
             .add("x-app-origin", "https://yurigarden.com")
             .add("x-custom-lang", "vi")
             .add("Accept", "application/json")
@@ -437,7 +436,6 @@ abstract class YuriGarden :
         if (!forceRefresh) cachedMangaToken?.let { return@withLock it }
 
         val headers = headersBuilder()
-            .set("Referer", "$baseUrl/")
             .set("Accept", "application/json")
             .set("x-tsr-serverFn", "true")
             .build()

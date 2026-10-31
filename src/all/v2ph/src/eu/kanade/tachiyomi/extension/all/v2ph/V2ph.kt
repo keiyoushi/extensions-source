@@ -31,7 +31,6 @@ import java.time.format.DateTimeFormatter
 abstract class V2ph : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = apply {
-        add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
         add("Accept-Language", "en-US,en;q=0.9")
     }
 

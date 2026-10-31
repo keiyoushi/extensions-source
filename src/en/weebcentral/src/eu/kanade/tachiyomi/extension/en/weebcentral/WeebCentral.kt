@@ -16,7 +16,6 @@ import keiyoushi.utils.asJsoup
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -33,9 +32,6 @@ abstract class WeebCentral : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1, 2.seconds) { it.host == baseUrlHost }
     }
-
-    // Origin causes some thumbnails to mismatch
-    override fun Headers.Builder.configureHeaders() = removeAll("Origin")
 
     // ============================== Popular ===============================
 
@@ -242,7 +238,6 @@ abstract class WeebCentral : KeiSource() {
 
     override fun getImageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)
         }.build()
 

@@ -279,7 +279,6 @@ abstract class TaoSect : KeiSource() {
     }
 
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .header("Accept", ACCEPT_IMAGE)
         .header("Referer", page.url)
         .build()
 
@@ -367,7 +366,6 @@ abstract class TaoSect : KeiSource() {
     }
 
     companion object {
-        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json"
         private val USER_AGENT = "Tachiyomi " + System.getProperty("http.agent")
 

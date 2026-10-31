@@ -12,15 +12,12 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 
 @Source
 abstract class WaManga : KeiSource() {
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept", "*/*")
 
     // ─────────────────────────────────────────────────────────────────────────
     // Catalog

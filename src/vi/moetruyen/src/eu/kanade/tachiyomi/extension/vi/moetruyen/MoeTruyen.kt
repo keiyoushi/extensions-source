@@ -20,7 +20,6 @@ import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.ui.askInput
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -45,11 +44,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MoeTruyen : KeiSource() {
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        set("Sec-Fetch-Dest", "document")
-        set("Sec-Fetch-Mode", "navigate")
-    }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(imgxInterceptor())

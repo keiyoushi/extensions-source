@@ -44,8 +44,6 @@ abstract class SchaleScans :
 
     private val showNsfw get() = preferences.getBoolean(PREF_SHOW_NSFW, true)
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val request = chain.request()
         val host = request.url.host

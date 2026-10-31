@@ -51,9 +51,6 @@ abstract class GroupLe :
 
     private val apiHeaders get() = headersBuilder()
         .set("Accept", "application/json, text/plain, */*")
-        .set("Sec-Fetch-Dest", "empty")
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "cross-site")
         .build()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {

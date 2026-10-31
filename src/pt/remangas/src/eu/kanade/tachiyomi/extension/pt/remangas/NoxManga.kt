@@ -17,7 +17,6 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -32,8 +31,6 @@ abstract class NoxManga : KeiSource() {
         addInterceptor(SignatureInterceptor { baseUrl })
         rateLimit(3, 1.seconds) { it.encodedPath.startsWith("/api/") }
     }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Sec-Fetch-Site", "same-origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page)
 

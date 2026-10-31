@@ -36,9 +36,6 @@ abstract class Nexusscanlation : KeiSource() {
     private val apiHeaders: Headers
         get() = headers.newBuilder()
             .add("Accept", "application/json, text/plain, */*")
-            .add("sec-fetch-dest", "empty")
-            .add("sec-fetch-mode", "cors")
-            .add("sec-fetch-site", "same-site")
             .build()
 
     // ======================= Manga URLs ===================================

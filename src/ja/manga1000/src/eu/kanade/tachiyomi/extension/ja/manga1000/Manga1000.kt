@@ -14,7 +14,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -23,8 +22,6 @@ import org.jsoup.nodes.Document
 abstract class Manga1000 : KeiSource() {
 
     override val supportsLatest = false
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Upgrade-Insecure-Requests", "1")
 
     // ============================== Popular / Homepage ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {

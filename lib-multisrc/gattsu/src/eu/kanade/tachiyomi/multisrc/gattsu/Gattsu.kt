@@ -24,8 +24,7 @@ import java.util.Locale
 
 abstract class Gattsu : KeiSource() {
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept", ACCEPT)
-        .set("Accept-Language", ACCEPT_LANGUAGE)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept-Language", ACCEPT_LANGUAGE)
 
     // Website does not have a popular, so the latest listing is used instead.
     override val supportsLatest = false
@@ -145,7 +144,6 @@ abstract class Gattsu : KeiSource() {
     }
 
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .header("Accept", ACCEPT_IMAGE)
         .header("Referer", page.url)
         .build()
 
@@ -160,9 +158,6 @@ abstract class Gattsu : KeiSource() {
     protected fun String.withoutSize(): String = this.replace(THUMB_SIZE_REGEX, ".")
 
     companion object {
-        private const val ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9," +
-            "image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"
-        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_LANGUAGE = "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,es;q=0.6,gl;q=0.5"
 
         private val THUMB_SIZE_REGEX = "-\\d+x\\d+\\.".toRegex()

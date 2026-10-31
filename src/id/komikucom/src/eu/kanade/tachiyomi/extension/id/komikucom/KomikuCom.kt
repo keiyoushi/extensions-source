@@ -29,9 +29,6 @@ abstract class KomikuCom : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         add("Accept", "application/json, text/plain, */*")
         add("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8")
-        add("Sec-Fetch-Dest", "empty")
-        add("Sec-Fetch-Mode", "cors")
-        add("Sec-Fetch-Site", "same-origin")
     }
 
     // ------------------------- Browse (Popular) -------------------------

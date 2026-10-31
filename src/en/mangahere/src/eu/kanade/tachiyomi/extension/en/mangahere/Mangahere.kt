@@ -303,7 +303,6 @@ abstract class Mangahere : KeiSource() {
         val requestUrl = pageUrl.newBuilder().fragment(null).build()
         val pageHeaders = headers.newBuilder()
             .set("Referer", referer)
-            .set("Accept", "*/*")
             .set("Accept-Language", "en-US,en;q=0.9")
             .set("X-Requested-With", "XMLHttpRequest")
             .build()

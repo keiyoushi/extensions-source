@@ -20,7 +20,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -30,9 +29,6 @@ import org.jsoup.nodes.Document
 abstract class ManhuaTop : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2) { it.encodedPath.startsWith("/api/") }
-
-    // The image hosts answer 404 for some files when an Origin is sent
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter("trending-week")))
 

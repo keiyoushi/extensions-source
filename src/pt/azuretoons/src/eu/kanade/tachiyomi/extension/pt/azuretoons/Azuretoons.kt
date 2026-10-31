@@ -106,8 +106,7 @@ abstract class Azuretoons :
         }
     }
 
-    override fun Headers.Builder.configureHeaders() = set("Accept", ACCEPT)
-        .set("Accept-Language", ACCEPT_LANGUAGE)
+    override fun Headers.Builder.configureHeaders() = set("Accept-Language", ACCEPT_LANGUAGE)
         .set("Pragma", PRAGMA)
 
     // ============================== Popular (Browse) =======================
@@ -182,7 +181,6 @@ abstract class Azuretoons :
     }
 
     companion object {
-        private const val ACCEPT = "*/*"
         private const val ACCEPT_LANGUAGE = "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
         private const val PRAGMA = "no-cache"
         private const val EMAIL_PREF = "email"

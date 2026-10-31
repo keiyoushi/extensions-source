@@ -45,10 +45,6 @@ abstract class GocTruyenTranhVui :
         rateLimit(3)
     }
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        removeAll("Origin")
-    }
-
     private val xhrHeaders: Headers
         get() = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")

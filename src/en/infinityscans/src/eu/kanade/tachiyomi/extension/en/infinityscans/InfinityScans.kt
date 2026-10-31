@@ -51,9 +51,6 @@ abstract class InfinityScans : KeiSource() {
     private val apiHeaders
         get() = headersBuilder().apply {
             add("Accept", "application/json, text/javascript, */*; q=0.01")
-            add("Sec-Fetch-Dest", "empty")
-            add("Sec-Fetch-Mode", "cors")
-            add("Sec-Fetch-Site", "same-origin")
             add("X-requested-with", "XMLHttpRequest")
         }.build()
 
@@ -213,7 +210,6 @@ abstract class InfinityScans : KeiSource() {
 
     override fun getImageRequest(page: Page): Request {
         val pageHeaders = headers.newBuilder().apply {
-            add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)
         }.build()
         return GET(page.imageUrl!!, pageHeaders)

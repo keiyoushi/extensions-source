@@ -59,9 +59,6 @@ abstract class KuroMangas :
         set("Accept", "application/json, text/plain, */*")
         set("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
         set("Referer", "$baseUrl/catalogo")
-        set("Sec-Fetch-Dest", "empty")
-        set("Sec-Fetch-Mode", "cors")
-        set("Sec-Fetch-Site", "same-origin")
     }
 
     // ============================= Popular ================================

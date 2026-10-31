@@ -266,7 +266,6 @@ abstract class Liliana : KeiSource() {
         .header("Accept", "image/avif,image/webp,*/*")
         .header("Host", page.imageUrl!!.toHttpUrl().host)
         .removeHeader("Referer")
-        .removeHeader("Origin")
         .build()
 
     // ============================= Utilities ==============================

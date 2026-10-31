@@ -13,7 +13,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 
 @Source
 abstract class EnchiladaScan : KeiSource() {
@@ -98,11 +97,6 @@ abstract class EnchiladaScan : KeiSource() {
                 Page(index, imageUrl = imageUrl)
             }
     }
-
-    // Google Drive answers 403 when an Origin header is present
-    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .removeHeader("Origin")
-        .build()
 
     // ============================= Utilities =============================
 

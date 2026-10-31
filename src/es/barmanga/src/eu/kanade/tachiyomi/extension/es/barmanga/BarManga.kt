@@ -46,11 +46,7 @@ abstract class BarManga : Madara() {
             .build()
 
         val imageHeaders = headers.newBuilder()
-            .set("Accept", "*/*")
             .set("Origin", baseUrl)
-            .set("Sec-Fetch-Dest", "empty")
-            .set("Sec-Fetch-Mode", "cors")
-            .set("Sec-Fetch-Site", "same-origin")
             .set("X-Requested-With", "XMLHttpRequest")
             .set("Referer", page.url)
             .build()

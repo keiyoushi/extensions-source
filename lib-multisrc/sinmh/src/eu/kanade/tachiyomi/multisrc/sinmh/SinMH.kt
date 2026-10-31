@@ -41,7 +41,6 @@ abstract class SinMH : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", System.getProperty("http.agent")!!)
-        .removeAll("Origin")
 
     protected open val nextPageSelector = "ul.pagination > li.next:not(.disabled)"
     protected open val comicItemSelector = "#contList > li, li.list-comic"
