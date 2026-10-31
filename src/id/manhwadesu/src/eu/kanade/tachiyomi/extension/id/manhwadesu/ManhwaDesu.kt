@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.manhwadesu
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.ClientHintsInterceptor
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
@@ -11,10 +10,7 @@ import org.jsoup.nodes.Element
 abstract class ManhwaDesu : MangaThemesia() {
     override val mangaUrlDirectory = "/komik"
 
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(ClientHintsInterceptor())
-        rateLimit(4)
-    }
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 
     override fun Element.imgAttr(): String {
         attributes()
