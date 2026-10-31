@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -19,6 +20,8 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class SnafuComic : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -70,14 +73,14 @@ abstract class SnafuComic : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = try {
-        client.get("$baseUrl${chapter.url}").asJsoup()
+        client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
             .select("img[src*=\"/comics/\"]")
             .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:src")) }
     } catch (_: Exception) {
         emptyList()
     }
 
-    private suspend fun catalogEntries(): Map<String, SManga> = parseCatalog(client.get("$baseUrl/all-comics").asJsoup()).associateBy { it.url }
+    private suspend fun catalogEntries(): Map<String, SManga> = parseCatalog(client.get("$baseUrl/all-comics", Fetch.DOCUMENT).asJsoup()).associateBy { it.url }
 
     private fun parseCatalog(document: Document): List<SManga> = document.select("a[href]").mapNotNull { link ->
         val path = toPath(link.attr("href")) ?: return@mapNotNull null
@@ -97,7 +100,7 @@ abstract class SnafuComic : KeiSource() {
     }.distinctBy { it.url }
 
     private suspend fun parseChapters(slug: String): List<SChapter> {
-        val document = client.get("$baseUrl/$slug/archive").asJsoup()
+        val document = client.get("$baseUrl/$slug/archive", Fetch.DOCUMENT).asJsoup()
         val heading = document.select("h1, h2, h3, h4")
             .firstOrNull { it.text().equals("Archive", ignoreCase = true) }
         val links = if (heading != null) {

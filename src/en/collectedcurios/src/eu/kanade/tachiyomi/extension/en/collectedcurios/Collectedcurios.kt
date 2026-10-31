@@ -7,12 +7,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 
 @Source
 abstract class Collectedcurios : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -67,7 +70,7 @@ abstract class Collectedcurios : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val responseJs = client.get(getMangaUrl(manga)).asJsoup()
+        val responseJs = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val lastChapter = responseJs.selectFirst("img[title=Last]")?.parent()
             ?.attr("href")?.substringAfter("=")?.toIntOrNull()
@@ -94,7 +97,7 @@ abstract class Collectedcurios : KeiSource() {
 
     override suspend fun getImageUrl(page: Page): String {
         val url = page.url
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         return when {
             url.contains("sequentialart") ->

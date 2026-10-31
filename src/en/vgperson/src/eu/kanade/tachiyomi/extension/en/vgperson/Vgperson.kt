@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -20,6 +21,8 @@ import org.jsoup.nodes.TextNode
 
 @Source
 abstract class Vgperson : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -35,7 +38,7 @@ abstract class Vgperson : KeiSource() {
     override fun getHomeUrl(): String = homeUrl
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(homeUrl).asJsoup()
+        val document = client.get(homeUrl, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(".content a[href^=?m]").map { element ->
             SManga.create().apply {
@@ -53,7 +56,7 @@ abstract class Vgperson : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(homeUrl + manga.url).asJsoup()
+        val document = client.get(homeUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val manga = SManga.create().apply {
             title = document.selectFirst(".title")!!.text()
@@ -109,7 +112,7 @@ abstract class Vgperson : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = homeUrl + chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(homeUrl + chapter.url).asJsoup()
+        val document = client.get(homeUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         return document.select("img").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src"))

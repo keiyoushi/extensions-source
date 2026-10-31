@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,6 +23,8 @@ import java.util.Locale
 
 @Source
 abstract class RawBaka : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     // The site ranks popularity only in a five-title homepage slider, so Popular lists the whole catalogue
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -50,7 +53,7 @@ abstract class RawBaka : KeiSource() {
     }
 
     private suspend fun getMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.manga-grid article.manga-card, article.search-result-card").map { card ->
             val link = card.selectFirst("h2 a, h3 a")!!
             SManga.create().apply {
@@ -76,7 +79,7 @@ abstract class RawBaka : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document, manga), parseChapterList(document))
     }
 
@@ -104,7 +107,7 @@ abstract class RawBaka : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.reader-images img").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("src"))
         }

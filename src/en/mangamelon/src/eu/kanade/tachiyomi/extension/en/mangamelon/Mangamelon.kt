@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -25,6 +26,8 @@ import okio.ByteString.Companion.toByteString
 
 @Source
 abstract class Mangamelon : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     private companion object {
         const val API_BASE = "https://api.mangamelon.com"
@@ -148,6 +151,6 @@ abstract class Mangamelon : KeiSource() {
             .add("data", data)
             .add("sessionid", "")
             .build()
-        return client.post("$API_BASE/$path", formBody)
+        return client.post("$API_BASE/$path", Fetch.XHR, formBody)
     }
 }

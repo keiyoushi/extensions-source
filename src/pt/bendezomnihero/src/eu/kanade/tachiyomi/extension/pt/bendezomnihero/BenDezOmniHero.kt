@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -20,6 +21,8 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class BenDezOmniHero : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
 
@@ -80,7 +83,7 @@ abstract class BenDezOmniHero : KeiSource() {
         val entries = mutableListOf<BloggerEntry>()
         var startIndex = 1
         while (true) {
-            val feed = client.get("$baseUrl/feeds/posts/default?alt=json&max-results=$MAX_RESULTS&start-index=$startIndex")
+            val feed = client.get("$baseUrl/feeds/posts/default?alt=json&max-results=$MAX_RESULTS&start-index=$startIndex", Fetch.XHR)
                 .parseAs<BloggerFeedResponse>()
                 .feed
             if (feed.entry.isEmpty()) break
@@ -92,7 +95,7 @@ abstract class BenDezOmniHero : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         return document.select(".post-body img[src^=http]")
             .mapNotNull { img ->
                 img.attr("data-src")

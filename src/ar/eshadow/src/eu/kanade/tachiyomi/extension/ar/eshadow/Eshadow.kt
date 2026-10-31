@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -15,13 +16,15 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Eshadow : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override val supportsLatest = false
 
     private suspend fun getMangas(page: Int, query: String? = null) = "$baseUrl/api/manga".toHttpUrl().newBuilder().apply {
         addQueryParameter("page", page.toString())
         if (query != null) addQueryParameter("query", query)
     }.build()
-        .let { client.get(it).parseAs<MangaList>().toMangasPage() }
+        .let { client.get(it, Fetch.XHR).parseAs<MangaList>().toMangasPage() }
 
     override suspend fun getPopularManga(page: Int) = getMangas(page)
 
@@ -42,7 +45,7 @@ abstract class Eshadow : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl/api/manga/${manga.url}")
+        val response = client.get("$baseUrl/api/manga/${manga.url}", Fetch.XHR)
         val mangaDto = response.parseAs<Manga>()
 
         val updatedChapters = mangaDto.chapters.map {

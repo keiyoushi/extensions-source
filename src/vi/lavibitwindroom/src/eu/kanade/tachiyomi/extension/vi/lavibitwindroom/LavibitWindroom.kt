@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -24,6 +25,8 @@ import okhttp3.Response
 @Source
 abstract class LavibitWindroom : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     private val apiUrl = "https://103-77-242-114.sslip.io/rest/v1"
     private val apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE"
 
@@ -34,7 +37,7 @@ abstract class LavibitWindroom : KeiSource() {
             .set("Accept-Profile", "public")
             .build()
 
-    private suspend fun apiGet(url: HttpUrl): Response = client.get(url, apiHeaders)
+    private suspend fun apiGet(url: HttpUrl): Response = client.get(url, apiHeaders, Fetch.XHR)
 
     private fun apiUrlBuilder() = "$apiUrl/series".toHttpUrl().newBuilder()
         .addQueryParameter("select", seriesSelect)
