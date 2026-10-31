@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -32,6 +33,7 @@ import java.util.Locale
 @Source
 abstract class Mangahub : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addCookie { listOf("confirm_age" to "1") }
         rateLimit(2)
@@ -82,7 +84,7 @@ abstract class Mangahub : KeiSource() {
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.DOCUMENT).use { response ->
             val document = response.asJsoup()
             val mangas = document.select("div.item-grid").map { element ->
                 val aTag = element.selectFirst("a.fw-medium")!!
@@ -119,7 +121,7 @@ abstract class Mangahub : KeiSource() {
         val mangaAsync = async {
             if (fetchDetails) {
                 val url = "$baseUrl$mangaUrl"
-                val document = client.get(url).asJsoup()
+                val document = client.get(url, Fetch.DOCUMENT).asJsoup()
                 mangaDetailsParse(document, mangaUrl)
             } else {
                 manga
@@ -128,7 +130,7 @@ abstract class Mangahub : KeiSource() {
         val chaptersAsync = async {
             if (fetchChapters) {
                 val url = "$baseUrl$mangaUrl/chapters"
-                val document = client.get(url).asJsoup()
+                val document = client.get(url, Fetch.DOCUMENT).asJsoup()
                 val translators = manga.memo["translators"]?.string
                 chapterListParse(document, translators)
             } else {
@@ -196,7 +198,7 @@ abstract class Mangahub : KeiSource() {
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
 
         val images = document.select("img.reader-viewer-img")
         return images.mapIndexed { i, img ->
@@ -209,7 +211,7 @@ abstract class Mangahub : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val data = client.get("$baseUrl/explore").asJsoup()
+        val data = client.get("$baseUrl/explore", Fetch.DOCUMENT).asJsoup()
 
         return SearchData(
             genres = data.getFilter("genres"),

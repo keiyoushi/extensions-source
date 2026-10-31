@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -29,6 +30,7 @@ import java.util.Locale
 @Source
 abstract class PlotTwistNoFansub : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int) = getMangaList(page, "", "trending")
@@ -68,6 +70,7 @@ abstract class PlotTwistNoFansub : KeiSource() {
                     addQueryParameter("m_orderby", sort)
                 }
             }.build(),
+            Fetch.DOCUMENT,
         ),
     )
 
@@ -98,7 +101,7 @@ abstract class PlotTwistNoFansub : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             parseDetails(doc),
             if (fetchChapters) parseChapters(doc) else chapters,
@@ -196,7 +199,7 @@ abstract class PlotTwistNoFansub : KeiSource() {
                         .build()
 
                     runCatching {
-                        client.post("$baseUrl/wp-admin/admin-ajax.php", form)
+                        client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.DOCUMENT, form)
                             .parseAs<ChapterAjaxResponse>()
                             .let { Jsoup.parseBodyFragment(it.data.html, baseUrl) }
                             .select("a.mn-detail-chapter-item")
@@ -210,7 +213,7 @@ abstract class PlotTwistNoFansub : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return (
             document.select("div.reading-content img").ifEmpty {
                 document.select("img.wp-manga-chapter-img")

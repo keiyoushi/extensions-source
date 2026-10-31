@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -34,6 +35,7 @@ abstract class PornPics :
     KeiSource(),
     ConfigurableSource {
 
+    override val imageFetch = Fetch.IMAGE
     private val preferences = getPreferences()
 
     override fun OkHttpClient.Builder.configureClient() = addCookie("pp_lang" to "")
@@ -112,7 +114,7 @@ abstract class PornPics :
                 .addQueryParameter("lang", language)
                 .build()
         }
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.XHR))
     }
 
     // Search
@@ -151,7 +153,7 @@ abstract class PornPics :
             }.build()
         }
 
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.XHR))
     }
 
     override val supportRelatedMangasBySearch = true
@@ -163,7 +165,7 @@ abstract class PornPics :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val thumbEl = document.selectFirst(mangaSelector)!!
         val imgEl = thumbEl.selectFirst("img")!!
         val infoEl = document.selectFirst("div.gallery-info.to-gall-info")
@@ -195,6 +197,7 @@ abstract class PornPics :
     // Pages
     override suspend fun getPageList(chapter: SChapter) = client.get(
         getChapterUrl(chapter),
+        Fetch.DOCUMENT,
     ).asJsoup().select(mangaSelector).mapIndexed { index, element ->
         Page(index, imageUrl = element.absUrl("href"))
     }
@@ -208,7 +211,7 @@ abstract class PornPics :
             listOf("tags/", "pornstars/list/", "channels/list/").map {
                 async {
                     runCatching {
-                        parseFilters(client.get("$url$it"))
+                        parseFilters(client.get("$url$it", Fetch.DOCUMENT))
                     }.getOrElse { emptyList() }
                 }
             }.awaitAll()

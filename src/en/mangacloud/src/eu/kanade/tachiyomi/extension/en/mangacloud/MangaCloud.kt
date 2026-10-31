@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -32,6 +33,7 @@ const val CDN_URL = "https://pika.$DOMAIN"
 @Source
 abstract class MangaCloud : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(1)
 
     private val handshakeMutex = Mutex()
@@ -49,7 +51,7 @@ abstract class MangaCloud : KeiSource() {
             siteKey = TURNSTILE_SITE_KEY,
             action = "guard",
         )
-        client.post("$API_URL/auth/handshake", body = HandshakePayload(token).toJsonRequestBody())
+        client.post("$API_URL/auth/handshake", fetch = Fetch.XHR, body = HandshakePayload(token).toJsonRequestBody())
         lastHandshake = System.currentTimeMillis()
     }
 
@@ -77,7 +79,7 @@ abstract class MangaCloud : KeiSource() {
         }
 
         val data = withHandshake {
-            client.get("$API_URL/comic-popular-view/$time").parseAs<Data<DataList<BrowseManga>>>()
+            client.get("$API_URL/comic-popular-view/$time", Fetch.XHR).parseAs<Data<DataList<BrowseManga>>>()
         }
 
         val mangas = data.data.list.map(BrowseManga::toSManga)
@@ -89,7 +91,7 @@ abstract class MangaCloud : KeiSource() {
         val payload = PagePayload(page).toJsonRequestBody()
 
         val data = withHandshake {
-            client.post("$API_URL/comic-updates", body = payload).parseAs<Data<DataList<BrowseManga>>>()
+            client.post("$API_URL/comic-updates", fetch = Fetch.XHR, body = payload).parseAs<Data<DataList<BrowseManga>>>()
         }
 
         val mangas = data.data.list.map(BrowseManga::toSManga)
@@ -101,7 +103,7 @@ abstract class MangaCloud : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement = withHandshake {
-        client.get("$API_URL/tag/list").parseAs<Data<List<Tag>>>().data.toJsonElement()
+        client.get("$API_URL/tag/list", Fetch.XHR).parseAs<Data<List<Tag>>>().data.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
@@ -152,7 +154,7 @@ abstract class MangaCloud : KeiSource() {
         ).toJsonRequestBody()
 
         val data = withHandshake {
-            client.post("$API_URL/comic/library", body = payload).parseAs<Data<List<BrowseManga>>>()
+            client.post("$API_URL/comic/library", fetch = Fetch.XHR, body = payload).parseAs<Data<List<BrowseManga>>>()
         }
 
         val mangas = data.data.map(BrowseManga::toSManga)
@@ -169,7 +171,7 @@ abstract class MangaCloud : KeiSource() {
         }
 
         return withHandshake {
-            client.get("$API_URL/comic/${path[1]}").parseAs<Data<Manga>>().data.toSManga()
+            client.get("$API_URL/comic/${path[1]}", Fetch.XHR).parseAs<Data<Manga>>().data.toSManga()
         }
     }
 
@@ -182,7 +184,7 @@ abstract class MangaCloud : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val data = withHandshake {
-            client.get("$API_URL/comic/${manga.url}").parseAs<Data<Manga>>().data
+            client.get("$API_URL/comic/${manga.url}", Fetch.XHR).parseAs<Data<Manga>>().data
         }
 
         val updatedChapters = data.chapters.map { chapter ->
@@ -214,7 +216,7 @@ abstract class MangaCloud : KeiSource() {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
         val data = withHandshake {
-            client.get("$API_URL/chapters/$chapterId").parseAs<Data<ChapterContent>>().data
+            client.get("$API_URL/chapters/$chapterId", Fetch.XHR).parseAs<Data<ChapterContent>>().data
         }
 
         return data.images.mapIndexed { idx, img ->

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -25,6 +26,7 @@ import kotlin.math.ceil
 @Source
 abstract class AstraManga : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/api/v1"
     private val mediaUrl get() = "https://$domain/media"
@@ -79,7 +81,7 @@ abstract class AstraManga : KeiSource() {
             addQueryParameter("page_size", PAGE_SIZE.toString())
         }.build()
 
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.XHR).use { response ->
             val data = response.parseAs<SearchResponse>().data
             val mangas = data.titles.map { it.toSManga(mediaUrl) }
             MangasPage(mangas, data.currentPage < data.totalPages)
@@ -110,14 +112,14 @@ abstract class AstraManga : KeiSource() {
         val slug = manga.url
 
         val mangaNew = if (fetchDetails || manga.memo["id"]?.string.isNullOrBlank()) {
-            client.get("$apiUrl/titles/$slug").parseAs<TitleDetailResponse>().data.toSMangaDetails(mediaUrl)
+            client.get("$apiUrl/titles/$slug", Fetch.XHR).parseAs<TitleDetailResponse>().data.toSMangaDetails(mediaUrl)
         } else {
             manga
         }
 
         val chaptersNew = if (fetchChapters) {
             val titleId = mangaNew.memo["id"]!!.string
-            val branches = client.get("$apiUrl/titles/$titleId/branches")
+            val branches = client.get("$apiUrl/titles/$titleId/branches", Fetch.XHR)
                 .parseAs<BranchesResponse>().data.branches
 
             coroutineScope {
@@ -129,7 +131,7 @@ abstract class AstraManga : KeiSource() {
                         (1..totalPages).map { page ->
                             async {
                                 val url = "$apiUrl/branches/${branch.id}/chapters?page=$page&page_size=$CHAPTERS_PAGE_SIZE"
-                                client.get(url).parseAs<ChaptersResponse>().data.items
+                                client.get(url, Fetch.XHR).parseAs<ChaptersResponse>().data.items
                             }
                         }.awaitAll().flatten().map { it.toSChapter(slug, branch.name) }
                     }
@@ -156,7 +158,7 @@ abstract class AstraManga : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pages = client.get("$apiUrl/chapters/${chapter.url.substringAfterLast('/')}/pages")
+        val pages = client.get("$apiUrl/chapters/${chapter.url.substringAfterLast('/')}/pages", Fetch.XHR)
             .parseAs<PagesResponse>().data.pages
         // page_number is non-sequential (sliced webtoon images); rely on array order.
         return pages.mapIndexed { index, p -> Page(index, imageUrl = p.imageUrl) }

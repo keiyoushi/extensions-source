@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -19,17 +20,18 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class HComic : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     private val imgUrl = "https://h-comic.link/api"
 
     // Popular (Random)
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$baseUrl/random/__data.json").parseAsMangaList(0)
+        val result = client.get("$baseUrl/random/__data.json", Fetch.XHR).parseAsMangaList(0)
         return MangasPage(result.first.map { it.toSManga(imgUrl) }, true)
     }
 
     // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val result = client.get("$baseUrl/__data.json?page=$page").parseAsMangaList(page)
+        val result = client.get("$baseUrl/__data.json?page=$page", Fetch.XHR).parseAsMangaList(page)
         return MangasPage(result.first.map { it.toSManga(imgUrl) }, result.second)
     }
 
@@ -42,7 +44,7 @@ abstract class HComic : KeiSource() {
             .addQueryParameter("tag", tags)
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
-        val result = client.get(url.build()).parseAsMangaList(page)
+        val result = client.get(url.build(), Fetch.XHR).parseAsMangaList(page)
         return MangasPage(result.first.map { it.toSManga(imgUrl) }, result.second)
     }
 
@@ -58,7 +60,7 @@ abstract class HComic : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val sManga = if (fetchDetails) {
-            client.get("${getMangaUrl(manga)}/__data.json").parseAsManga().toSManga(imgUrl)
+            client.get("${getMangaUrl(manga)}/__data.json", Fetch.XHR).parseAsManga().toSManga(imgUrl)
         } else {
             manga
         }

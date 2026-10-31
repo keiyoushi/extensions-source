@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -20,6 +21,8 @@ import java.net.URLEncoder
 
 @Source
 abstract class Ikiru : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     // support sugesttion komikku
     override val supportRelatedMangasBySearch = true
 
@@ -29,7 +32,7 @@ abstract class Ikiru : KeiSource() {
             .addQueryParameter("sort", "desc")
             .addQueryParameter("page", page.toString())
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return parseSearchResponse(response, page)
     }
 
@@ -39,7 +42,7 @@ abstract class Ikiru : KeiSource() {
             .addQueryParameter("sort", "desc")
             .addQueryParameter("page", page.toString())
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return parseSearchResponse(response, page)
     }
 
@@ -51,7 +54,7 @@ abstract class Ikiru : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("limit", PROJECT_PAGE_SIZE.toString())
                 .build()
-            val data = client.get(url).parseData<IkiruProjectDataDto>()
+            val data = client.get(url, Fetch.XHR).parseData<IkiruProjectDataDto>()
             val projects = data.project.map { it.toSManga() }
             val hasNextPage = projects.isNotEmpty() && page * PROJECT_PAGE_SIZE < data.total
             return MangasPage(projects, hasNextPage)
@@ -68,7 +71,7 @@ abstract class Ikiru : KeiSource() {
             it.addToUri(url)
         }
 
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.XHR)
         return parseSearchResponse(response, page)
     }
 
@@ -115,7 +118,7 @@ abstract class Ikiru : KeiSource() {
 
         // the dedicated chapter endpoint returns an empty list for some manga, while this one
         // embeds the complete chapter list
-        val detail = client.get(url).parseData<IkiruMangaDetailDto>()
+        val detail = client.get(url, Fetch.XHR).parseData<IkiruMangaDetailDto>()
 
         return SMangaUpdate(
             manga = detail.toSManga(),
@@ -131,7 +134,7 @@ abstract class Ikiru : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val document = response.asJsoup()
         val images = document.select("img[src*='cdn.ikiru.id']")
 

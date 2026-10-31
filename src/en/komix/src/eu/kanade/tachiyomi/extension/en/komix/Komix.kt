@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
@@ -20,6 +21,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Komix : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override val supportsFilterFetching = true
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter()))
@@ -33,7 +35,7 @@ abstract class Komix : KeiSource() {
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        val browse = client.get(url).parseAs<BrowseDto>()
+        val browse = client.get(url, Fetch.XHR).parseAs<BrowseDto>()
         val baseHttpUrl = baseUrl.toHttpUrl()
 
         return MangasPage(
@@ -62,7 +64,7 @@ abstract class Komix : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaPage = client.get("$baseUrl/api/page-data/title/${manga.url}").parseAs<MangaPageDto>()
+        val mangaPage = client.get("$baseUrl/api/page-data/title/${manga.url}", Fetch.XHR).parseAs<MangaPageDto>()
         val synopsis = mangaPage.jsonLd
             ?.parseAs<LdJsonDto>()
             ?.graph
@@ -77,7 +79,7 @@ abstract class Komix : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val reader = client.get(getChapterUrl(chapter)).extractNextJs<ReaderPropsDto> {
+        val reader = client.get(getChapterUrl(chapter), Fetch.XHR).extractNextJs<ReaderPropsDto> {
             it is JsonObject && it["chapter"] is JsonObject && "manga" in it
         }!!
 
@@ -89,7 +91,7 @@ abstract class Komix : KeiSource() {
         }
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/page-data/browse").parseAs<GenresDto>().allGenres.toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/page-data/browse", Fetch.XHR).parseAs<GenresDto>().allGenres.toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         listOfNotNull(

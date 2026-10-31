@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -37,6 +38,7 @@ abstract class Reimanga :
     KeiSource(),
     ConfigurableSource {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = apply {
         addCookie("showAdultContent" to "true")
         protocols(listOf(Protocol.HTTP_1_1))
@@ -59,7 +61,7 @@ abstract class Reimanga :
             return getSearchMangaList(page - 1, "", filters)
         }
 
-        val data = client.get("$baseUrl/api/manga/trending?limit=100").parseAs<List<Manga>>()
+        val data = client.get("$baseUrl/api/manga/trending?limit=100", Fetch.XHR).parseAs<List<Manga>>()
         return MangasPage(data.map { it.toSManga(baseUrl) }, true)
     }
 
@@ -106,7 +108,7 @@ abstract class Reimanga :
             }
         }.build()
 
-        val data = client.get(url).parseAs<MangaList>()
+        val data = client.get(url, Fetch.XHR).parseAs<MangaList>()
         return MangasPage(data.data.map { it.toSManga(baseUrl) }, data.pagination.hasNextPage())
     }
 
@@ -136,13 +138,13 @@ abstract class Reimanga :
         val requestId = manga.memo.getLongOrNull(MANGA_ID_MEMO)
             ?: manga.url.substringAfterLast("-").toLong()
 
-        var apiManga = client.get("$baseUrl/api/manga/$requestId")
+        var apiManga = client.get("$baseUrl/api/manga/$requestId", Fetch.XHR)
             .parseAs<MangaPage>()
             .manga
 
         // DMCA / duplicate entries point at a main series with real metadata & chapters
         if (apiManga.resolvedId != requestId) {
-            apiManga = client.get("$baseUrl/api/manga/${apiManga.resolvedId}")
+            apiManga = client.get("$baseUrl/api/manga/${apiManga.resolvedId}", Fetch.XHR)
                 .parseAs<MangaPage>()
                 .manga
         }
@@ -156,7 +158,7 @@ abstract class Reimanga :
         }
 
         val updatedChapters = if (fetchChapters) {
-            parseChapterList(client.get(apiManga.chapterPageUrl(baseUrl), rscHeaders).extractNextJs())
+            parseChapterList(client.get(apiManga.chapterPageUrl(baseUrl), rscHeaders, Fetch.XHR).extractNextJs())
         } else {
             chapters
         }
@@ -182,13 +184,13 @@ abstract class Reimanga :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val mangaId = manga.url.substringAfterLast("-")
-        return client.get("$baseUrl/api/manga/$mangaId/similar")
+        return client.get("$baseUrl/api/manga/$mangaId/similar", Fetch.XHR)
             .parseAs<List<Manga>>()
             .map { it.toSManga(baseUrl) }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<Images>()
+        val data = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).extractNextJs<Images>()
             ?: return emptyList()
 
         return data.images.mapIndexed { index, image ->
@@ -199,7 +201,7 @@ abstract class Reimanga :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val tagList = client.get("$baseUrl/advanced-search", rscHeaders)
+        val tagList = client.get("$baseUrl/advanced-search", rscHeaders, Fetch.XHR)
             .extractNextJs<TagList>()
             ?: throw IOException("Failed to extract tags")
         return tagList.toJsonElement()

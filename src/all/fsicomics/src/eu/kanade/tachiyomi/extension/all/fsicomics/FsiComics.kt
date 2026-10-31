@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -29,6 +30,7 @@ import kotlin.time.Instant
 @Source
 abstract class FsiComics : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     private val apiLimit = 20
 
     private val scaledSuffix = """-scaled(\.\w+)$""".toRegex()
@@ -72,7 +74,7 @@ abstract class FsiComics : KeiSource() {
             .addQueryParameter("_fields", "title,link,categories,_embedded,_links.wp:featuredmedia")
             .build()
 
-        val result = client.get(url).parseAs<List<WPPostDto>>()
+        val result = client.get(url, Fetch.XHR).parseAs<List<WPPostDto>>()
         val mangas = result
             .filter { it.categories.none(excludedCategories::contains) }
             .map { it.toSManga() }
@@ -92,7 +94,7 @@ abstract class FsiComics : KeiSource() {
     }
 
     private suspend fun fetchPosts(url: HttpUrl): MangasPage {
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 0
         val currentPage = url.queryParameter("page")?.toIntOrNull() ?: 0
         val mangas = response.parseAs<List<WPPostDto>>()
@@ -108,7 +110,7 @@ abstract class FsiComics : KeiSource() {
         val segments = url.pathSegments.filter { it.isNotEmpty() }
         if (segments.size != 1) return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             this.url = url.encodedPath
             title = document.selectFirst("h1.s-title")?.text() ?: throw Exception("Title is mandatory")
@@ -169,6 +171,7 @@ abstract class FsiComics : KeiSource() {
                 .addQueryParameter("per_page", "100")
                 .addQueryParameter("_fields", "id,name,slug")
                 .build(),
+            Fetch.XHR,
         ).parseAs<List<WPTagDto>>()
         return tags.firstOrNull { it.name.equals(norm, ignoreCase = true) || it.slug.equals(norm, ignoreCase = true) }
             ?.id?.toString()
@@ -182,7 +185,7 @@ abstract class FsiComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val mangaTitle = document.selectFirst("h1.s-title")?.text() ?: throw Exception("Title is mandatory")
 
         val updatedManga = SManga.create().apply {
@@ -208,7 +211,7 @@ abstract class FsiComics : KeiSource() {
 
     // ============================== Pages ==============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select(".entry-content .wp-block-gallery img")
         .map { it.attr("abs:src") }
         .filter { it.isNotEmpty() && !it.startsWith("data:image") }
@@ -221,12 +224,12 @@ abstract class FsiComics : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
-        val first = client.get("$baseUrl/wp-json/wp/v2/categories?per_page=100&page=1&_fields=id,parent,name,slug")
+        val first = client.get("$baseUrl/wp-json/wp/v2/categories?per_page=100&page=1&_fields=id,parent,name,slug", Fetch.XHR)
         val totalPages = first.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
         val categories = first.parseAs<List<WPCategoryDto>>() +
             (2..totalPages).map { page ->
                 async {
-                    client.get("$baseUrl/wp-json/wp/v2/categories?per_page=100&page=$page&_fields=id,parent,name,slug")
+                    client.get("$baseUrl/wp-json/wp/v2/categories?per_page=100&page=$page&_fields=id,parent,name,slug", Fetch.XHR)
                         .parseAs<List<WPCategoryDto>>()
                 }
             }.awaitAll().flatten()

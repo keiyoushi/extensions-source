@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,6 +28,8 @@ import java.util.Locale
 @Source
 abstract class MangaDraft : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage = catalogParse(
         client.get(
@@ -39,6 +42,7 @@ abstract class MangaDraft : KeiSource() {
                 addQueryParameter("page", page.toString())
                 addQueryParameter("number", "20")
             }.build(),
+            Fetch.XHR,
         ),
     )
 
@@ -73,6 +77,7 @@ abstract class MangaDraft : KeiSource() {
                 addQueryParameter("page", page.toString())
                 addQueryParameter("number", "20")
             }.build(),
+            Fetch.XHR,
         ),
     )
 
@@ -104,6 +109,7 @@ abstract class MangaDraft : KeiSource() {
                     addQueryParameter("page", page.toString())
                     addQueryParameter("number", "20")
                 }.build(),
+                Fetch.XHR,
             ),
         )
     }
@@ -128,7 +134,7 @@ abstract class MangaDraft : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
@@ -202,14 +208,14 @@ abstract class MangaDraft : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val firstPage = if (chapter.url.contains("c.")) {
             // the reader redirects to the id of the first page of the chapter
-            client.get(chapter.url).use { response ->
+            client.get(chapter.url, Fetch.DOCUMENT).use { response ->
                 response.request.url.toString().substringAfterLast('/').filter { it.isDigit() }
             }
         } else {
             chapter.url.substringAfterLast('/').filter { it.isDigit() }
         }
 
-        val result = client.get("$baseUrl/api/reader/listPages?first_page=$firstPage&grouped_by_category=true")
+        val result = client.get("$baseUrl/api/reader/listPages?first_page=$firstPage&grouped_by_category=true", Fetch.XHR)
             .parseAs<PagesByCategory>()
 
         val pageList = findCategoryByPageId(result, firstPage.toLong())

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,6 +25,7 @@ import org.jsoup.select.Elements
 @Source
 abstract class SleptManga : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("$baseUrl/browse?sort=popular&page=$page")
@@ -84,7 +86,7 @@ abstract class SleptManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val series = client.get(getMangaUrl(manga), rscHeaders)
+        val series = client.get(getMangaUrl(manga), rscHeaders, Fetch.XHR)
             .extractNextJs<SeriesDto>()
             ?: throw Exception("Manga detayları bulunamadı")
 
@@ -111,7 +113,7 @@ abstract class SleptManga : KeiSource() {
         val chapterNumber = segments.last()
         val url = "$baseUrl/api/chapters/$slug/$chapterNumber/images"
 
-        val response = client.get(url, apiHeaders)
+        val response = client.get(url, apiHeaders, Fetch.XHR)
         val data = response.parseAs<ChapterDataDto>()
         return data.toPageList(baseUrl)
     }
@@ -129,7 +131,7 @@ abstract class SleptManga : KeiSource() {
     // ============================== Helpers ==============================
 
     private suspend fun getMangaList(url: String): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val elements = document.select("div.group:has(h3 a)")
         val mangas = parseMangaElements(elements)
 

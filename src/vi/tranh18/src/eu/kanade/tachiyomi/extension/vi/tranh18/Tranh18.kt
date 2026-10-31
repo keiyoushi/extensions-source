@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -25,6 +26,7 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Tranh18 : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
     }
@@ -37,9 +39,9 @@ abstract class Tranh18 : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val request = if (page > 1) {
-            client.get("$baseUrl/comics?page=$page")
+            client.get("$baseUrl/comics?page=$page", Fetch.DOCUMENT)
         } else {
-            client.get(baseUrl)
+            client.get(baseUrl, Fetch.DOCUMENT)
         }
 
         return request.use { parseMangaPage(it) }
@@ -49,7 +51,7 @@ abstract class Tranh18 : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = if (page > 1) "$baseUrl/update?page=$page" else "$baseUrl/update"
-        return client.get(url).use { parseMangaPage(it) }
+        return client.get(url, Fetch.DOCUMENT).use { parseMangaPage(it) }
     }
 
     // =============================== Search ===============================
@@ -73,7 +75,7 @@ abstract class Tranh18 : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(url).use { parseMangaPage(it) }
+        return client.get(url, Fetch.DOCUMENT).use { parseMangaPage(it) }
     }
 
     private fun parseMangaPage(response: Response): MangasPage {
@@ -112,7 +114,7 @@ abstract class Tranh18 : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = client.get(getMangaUrl(manga)).use { response ->
+    ): SMangaUpdate = client.get(getMangaUrl(manga), Fetch.DOCUMENT).use { response ->
         val document = response.asJsoup()
         val details = parseMangaDetails(document)
         val chaptersList = parseChapterList(document)
@@ -163,7 +165,7 @@ abstract class Tranh18 : KeiSource() {
 
     // =============================== Pages ================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).use { response ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).use { response ->
         val document = response.asJsoup()
         document.select(".comicpage img").mapIndexed { index, it ->
             val url = it.absUrl("data-original")
@@ -181,7 +183,7 @@ abstract class Tranh18 : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/comics").asJsoup()
+        val document = client.get("$baseUrl/comics", Fetch.DOCUMENT).asJsoup()
 
         val tags = document.select("#tags dd").map {
             FilterOption(it.text(), it.attr("data-val"))

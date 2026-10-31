@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
@@ -21,6 +22,8 @@ import kotlin.time.Instant
 @Source
 abstract class TeamShadowi : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     // Reusable headers for fetching raw JSON React Server Component payloads
     private val rscHeaders get() = headers.newBuilder().add("Rsc", "1").build()
 
@@ -28,7 +31,7 @@ abstract class TeamShadowi : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val offset = (page - 1) * 20
-        val res = client.get("$baseUrl/api/series/popular?timePeriod=all&genre=all&sortBy=rating&offset=$offset&limit=20")
+        val res = client.get("$baseUrl/api/series/popular?timePeriod=all&genre=all&sortBy=rating&offset=$offset&limit=20", Fetch.XHR)
         return parseMangasPage(res)
     }
 
@@ -42,7 +45,7 @@ abstract class TeamShadowi : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val offset = (page - 1) * 20
-        val res = client.get("$baseUrl/api/series/popular?timePeriod=all&genre=all&sortBy=created&offset=$offset&limit=20")
+        val res = client.get("$baseUrl/api/series/popular?timePeriod=all&genre=all&sortBy=created&offset=$offset&limit=20", Fetch.XHR)
         return parseMangasPage(res)
     }
 
@@ -53,7 +56,7 @@ abstract class TeamShadowi : KeiSource() {
             .addQueryParameter("q", query)
             .build()
 
-        val res = client.get(url).parseAs<SearchResponse>()
+        val res = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
         val mangas = res.series.map { it.toSManga() }
         MangasPage(mangas, false)
     } else {
@@ -79,7 +82,7 @@ abstract class TeamShadowi : KeiSource() {
             addQueryParameter("sortBy", sort)
         }.build()
 
-        parseMangasPage(client.get(url))
+        parseMangasPage(client.get(url, Fetch.XHR))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -108,7 +111,7 @@ abstract class TeamShadowi : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val data = client.get(baseUrl + manga.url, rscHeaders).extractNextJs<PublicDataSeries>()
+        val data = client.get(baseUrl + manga.url, rscHeaders, Fetch.XHR).extractNextJs<PublicDataSeries>()
             ?: throw Exception("Failed to extract data")
 
         val seriesData = data.series
@@ -143,7 +146,7 @@ abstract class TeamShadowi : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(baseUrl + chapter.url, rscHeaders)
+        val data = client.get(baseUrl + chapter.url, rscHeaders, Fetch.XHR)
             .extractNextJs<PublicDataChapter>()
             ?.pages
             ?: return emptyList()

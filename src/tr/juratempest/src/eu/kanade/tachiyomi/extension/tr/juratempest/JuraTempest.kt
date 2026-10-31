@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -23,6 +24,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class JuraTempest : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 3, period = 1.seconds)
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Sec-Fetch-Site", "same-origin")
@@ -50,6 +52,7 @@ abstract class JuraTempest : KeiSource() {
         val offset = (page - 1) * SEARCH_PAGE_SIZE
         val response = client.post(
             "$baseUrl/api/rpc/search/manga",
+            fetch = Fetch.XHR,
             body = RpcRequest(SearchRequestPayload(q = WILDCARD_QUERY, limit = SEARCH_PAGE_SIZE, offset = offset)).toJsonRequestBody(),
         ).parseAs<RpcResponse<SearchResultDto>>()
 
@@ -67,6 +70,7 @@ abstract class JuraTempest : KeiSource() {
 
         val response = client.post(
             "$baseUrl/api/rpc/release/latest",
+            fetch = Fetch.XHR,
             body = RpcRequest(EmptyPayload()).toJsonRequestBody(),
         ).parseAs<RpcResponse<List<LatestReleaseDto>>>()
 
@@ -90,6 +94,7 @@ abstract class JuraTempest : KeiSource() {
         val offset = (page - 1) * SEARCH_PAGE_SIZE
         val response = client.post(
             "$baseUrl/api/rpc/search/manga",
+            fetch = Fetch.XHR,
             body = RpcRequest(SearchRequestPayload(q = trimmed, limit = SEARCH_PAGE_SIZE, offset = offset)).toJsonRequestBody(),
         ).parseAs<RpcResponse<SearchResultDto>>()
 
@@ -125,6 +130,7 @@ abstract class JuraTempest : KeiSource() {
     private suspend fun fetchCatalogueBatch(offset: Int): List<MangaDto> = try {
         val response = client.post(
             "$baseUrl/api/rpc/search/manga",
+            fetch = Fetch.XHR,
             body = RpcRequest(SearchRequestPayload(q = WILDCARD_QUERY, limit = 50, offset = offset)).toJsonRequestBody(),
         ).parseAs<RpcResponse<SearchResultDto>>()
         response.json.hits
@@ -144,6 +150,7 @@ abstract class JuraTempest : KeiSource() {
             async {
                 client.post(
                     "$baseUrl/api/rpc/manga/bySlug",
+                    fetch = Fetch.XHR,
                     body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
                 ).parseAs<RpcResponse<MangaDto>>().json.toSMangaDetails()
             }
@@ -155,6 +162,7 @@ abstract class JuraTempest : KeiSource() {
             async {
                 client.post(
                     "$baseUrl/api/rpc/chapter/byMangaSlug",
+                    fetch = Fetch.XHR,
                     body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
                 ).parseAs<RpcResponse<List<ChapterDto>>>().json.map { it.toSChapter(slug) }
             }
@@ -176,6 +184,7 @@ abstract class JuraTempest : KeiSource() {
 
         val response = client.post(
             "$baseUrl/api/rpc/release/byChapterSlug",
+            fetch = Fetch.XHR,
             body = RpcRequest(ChapterReleasePayload(mangaSlug, chapterSlug)).toJsonRequestBody(),
         ).parseAs<RpcResponse<List<ReleaseDto>>>()
 

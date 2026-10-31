@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,6 +23,7 @@ import java.util.Locale
 @Source
 abstract class Junmeitu : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList("$baseUrl/beauty/index-$page.html")
@@ -29,7 +31,7 @@ abstract class Junmeitu : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/beauty/hot-$page.html")
 
     private suspend fun parseMangaList(url: String): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".pic-list > ul > li").map { element ->
             SManga.create().apply {
                 title = element.select("p").text()
@@ -67,7 +69,7 @@ abstract class Junmeitu : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val requestUrl = response.request.url.toString()
         val document = response.asJsoup()
 
@@ -96,7 +98,7 @@ abstract class Junmeitu : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val urlObj = response.request.url
         val document = response.asJsoup()
         val pages = mutableListOf<Page>()
@@ -179,7 +181,7 @@ abstract class Junmeitu : KeiSource() {
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val response = client.get(page.url)
+        val response = client.get(page.url, Fetch.DOCUMENT)
         val contentType = response.header("Content-Type") ?: ""
         if (contentType.contains("application/json", ignoreCase = true) || response.request.url.queryParameter("ajax") == "1") {
             val pageDto = response.parseAs<Dto>()

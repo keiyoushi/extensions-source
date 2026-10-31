@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -19,6 +20,7 @@ import okhttp3.Response
 
 @Source
 abstract class MangaSwat : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(1)
     }
@@ -36,7 +38,7 @@ abstract class MangaSwat : KeiSource() {
     // ========================= Popular =========================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$apiUrl/series/?order_by=-followers_count&page=$page")
+        val response = client.get("$apiUrl/series/?order_by=-followers_count&page=$page", Fetch.XHR)
 
         return response.parseMangaList()
     }
@@ -44,7 +46,7 @@ abstract class MangaSwat : KeiSource() {
     // ========================= Latest =========================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$apiUrl/series/releases/?page=$page")
+        val response = client.get("$apiUrl/series/releases/?page=$page", Fetch.XHR)
 
         return response.parseMangaList()
     }
@@ -57,7 +59,7 @@ abstract class MangaSwat : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(url).parseMangaList()
+        return client.get(url, Fetch.XHR).parseMangaList()
     }
 
     // ==================== Details & Chapters ====================
@@ -73,7 +75,7 @@ abstract class MangaSwat : KeiSource() {
         val mangaDeferred = async {
             if (!fetchDetails) return@async manga
 
-            client.get("$apiUrl/series/${manga.url}/")
+            client.get("$apiUrl/series/${manga.url}/", Fetch.XHR)
                 .parseAs<MangaDetailsDto>().toSManga()
         }
 
@@ -98,7 +100,7 @@ abstract class MangaSwat : KeiSource() {
             var nextPage: String? = url.toString()
 
             while (nextPage != null) {
-                val data = client.get(nextPage).parseAs<ChapterListDto>()
+                val data = client.get(nextPage, Fetch.XHR).parseAs<ChapterListDto>()
                 addAll(data.results.map { it.toSChapter() })
                 nextPage = data.next
             }
@@ -110,7 +112,7 @@ abstract class MangaSwat : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url.getMangaId()}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$apiUrl/chapters/${chapter.url.getMangaId()}/")
+        val response = client.get("$apiUrl/chapters/${chapter.url.getMangaId()}/", Fetch.XHR)
 
         val chapter = response.parseAs<PageListDto>()
         return chapter.images.mapIndexed { i, page ->

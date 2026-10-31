@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -33,17 +34,18 @@ import kotlin.time.Instant
 @Source
 abstract class LxHentai : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(3)
     }
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(browseMangaUrl(page, "-views")))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(browseMangaUrl(page, "-views"), Fetch.DOCUMENT))
 
     // ============================== Latest ================================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(browseMangaUrl(page, "-updated_at")))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(browseMangaUrl(page, "-updated_at"), Fetch.DOCUMENT))
 
     // ============================== Search ================================
 
@@ -72,7 +74,7 @@ abstract class LxHentai : KeiSource() {
                 }
             }
             .build()
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -127,7 +129,7 @@ abstract class LxHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -203,7 +205,7 @@ abstract class LxHentai : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
-        val chapterHtml = client.get(chapterUrl).asJsoup().html()
+        val chapterHtml = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup().html()
 
         val imageUrls = extractImageUrls(chapterHtml)
         if (imageUrls.isEmpty()) return emptyList()
@@ -232,7 +234,7 @@ abstract class LxHentai : KeiSource() {
             .set("Origin", baseUrl)
             .build()
 
-        val getResponse = client.get("$baseUrl/get_token", tokenHeaders, ensureSuccess = false)
+        val getResponse = client.get("$baseUrl/get_token", tokenHeaders, Fetch.XHR, ensureSuccess = false)
         if (getResponse.isSuccessful) {
             val data = getResponse.parseAs<TokenResponse>()
             if (!data.is_bot && !data.action_token.isNullOrEmpty()) {
@@ -249,7 +251,7 @@ abstract class LxHentai : KeiSource() {
             )
 
             val payload = TurnstilePayload(turnstileResponse = turnstileToken).toJsonRequestBody()
-            val postResponse = client.post("$baseUrl/get_token", tokenHeaders, payload, ensureSuccess = false)
+            val postResponse = client.post("$baseUrl/get_token", tokenHeaders, Fetch.XHR, payload, ensureSuccess = false)
             if (postResponse.isSuccessful) {
                 val data = postResponse.parseAs<TokenResponse>()
                 if (!data.is_bot && !data.action_token.isNullOrEmpty()) {
@@ -366,7 +368,7 @@ abstract class LxHentai : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem", Fetch.DOCUMENT).asJsoup()
         .select("label")
         .mapNotNull { element ->
             val slug = genreSlugRegex.matchEntire(element.attr("@click"))

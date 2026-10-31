@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -21,6 +22,7 @@ import okhttp3.Response
 
 @Source
 abstract class MangaMeets : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
     private val apiUrl get() = "$baseUrl/api"
     private val pageSize = "20"
 
@@ -31,7 +33,7 @@ abstract class MangaMeets : KeiSource() {
             .addQueryParameter("size", pageSize)
             .build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -40,7 +42,7 @@ abstract class MangaMeets : KeiSource() {
             .addQueryParameter("size", pageSize)
             .build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -51,7 +53,7 @@ abstract class MangaMeets : KeiSource() {
             addFilter("sort", filters.firstInstance<SortFilter>())
             addTagGenreFilter(filters)
         }.build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -68,12 +70,12 @@ abstract class MangaMeets : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/comics/${manga.url}.json").parseAs<DetailsResponse>().toSManga()
+            client.get("$apiUrl/comics/${manga.url}.json", Fetch.XHR).parseAs<DetailsResponse>().toSManga()
         }
 
         val chapterList = async {
             if (!fetchChapters) return@async chapters
-            client.get("$apiUrl/comics/${manga.url}/episodes.json").parseAs<ChapterResponse>().data
+            client.get("$apiUrl/comics/${manga.url}/episodes.json", Fetch.XHR).parseAs<ChapterResponse>().data
                 .map { it.attributes.toSChapter(manga.url) }
                 .reversed()
         }
@@ -89,7 +91,7 @@ abstract class MangaMeets : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/comics/${chapter.memo["uuid"]!!.string}/${chapter.memo["chapter"]!!.string}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get("$apiUrl/comics/${chapter.memo["uuid"]!!.string}/episodes/${chapter.memo["chapter"]!!.string}/viewer.json").parseAs<ViewerResponse>()
+        val result = client.get("$apiUrl/comics/${chapter.memo["uuid"]!!.string}/episodes/${chapter.memo["chapter"]!!.string}/viewer.json", Fetch.XHR).parseAs<ViewerResponse>()
         return result.episodePages.map {
             Page(it.orderIndex, imageUrl = it.image.originalUrl)
         }
@@ -99,12 +101,12 @@ abstract class MangaMeets : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val tags = async {
-            client.get("$apiUrl/official_tags.json").parseAs<GenreResponse>().data
+            client.get("$apiUrl/official_tags.json", Fetch.XHR).parseAs<GenreResponse>().data
                 .map { it.attributes.name to "tag:${it.attributes.name}" }
         }
 
         val genres = async {
-            client.get("$apiUrl/comic_genres.json").parseAs<GenreResponse>().data
+            client.get("$apiUrl/comic_genres.json", Fetch.XHR).parseAs<GenreResponse>().data
                 .map { it.attributes.name to "genre:${it.attributes.name}" }
         }
 

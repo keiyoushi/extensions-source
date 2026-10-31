@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -21,6 +22,7 @@ import kotlin.time.Instant
 @Source
 abstract class Nekopost : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     private val projectDataEndpoint get() = "$baseUrl/api/project/detail2"
 
     /**
@@ -79,6 +81,7 @@ abstract class Nekopost : KeiSource() {
     private suspend fun getProject(endpoint: String, body: UpdatesRequest) = client.post(
         "$baseUrl/api/project/$endpoint",
         apiHeaders,
+        Fetch.XHR,
         body.toJsonRequestBody(),
     )
 
@@ -94,7 +97,7 @@ abstract class Nekopost : KeiSource() {
             "manga" -> {
                 val body = ProjectRequestBody(id).toJsonRequestBody()
 
-                val response = client.post(projectDataEndpoint, apiHeaders, body)
+                val response = client.post(projectDataEndpoint, apiHeaders, Fetch.XHR, body)
                 val projectInfo = response.parseAs<RawProjectInfo>()
                 if (projectInfo.info == null) return emptyMangas
 
@@ -105,7 +108,7 @@ abstract class Nekopost : KeiSource() {
             }
 
             "editor" -> {
-                val response = client.get("$baseUrl/api/editor/project/$id", apiHeaders)
+                val response = client.get("$baseUrl/api/editor/project/$id", apiHeaders, Fetch.XHR)
                 parseEditorProjectList(response)
             }
 
@@ -128,6 +131,7 @@ abstract class Nekopost : KeiSource() {
         val response = client.post(
             "$baseUrl/api/project/search",
             apiHeaders,
+            Fetch.XHR,
             body.toJsonRequestBody(),
         )
         return parseProjectList(response, setOf("m"), true)
@@ -218,7 +222,7 @@ abstract class Nekopost : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val body = ProjectRequestBody(manga.url.toInt()).toJsonRequestBody()
-        val projectInfo = client.post(projectDataEndpoint, apiHeaders, body).parseAs<RawProjectInfo>()
+        val projectInfo = client.post(projectDataEndpoint, apiHeaders, Fetch.XHR, body).parseAs<RawProjectInfo>()
         return SMangaUpdate(
             manga = mangaFromProjectInfo(projectInfo),
             chapters = chapterListParse(projectInfo),
@@ -253,7 +257,7 @@ abstract class Nekopost : KeiSource() {
         val segments = chapter.url.split('/')
         val request = ChapterInfoRequest(segments[0].toInt(), segments[1].toInt())
 
-        val response = client.post("$baseUrl/handler/cinfo", apiHeaders, request.toJsonRequestBody())
+        val response = client.post("$baseUrl/handler/cinfo", apiHeaders, Fetch.XHR, request.toJsonRequestBody())
 
         // Not JSON: the body is base64 of a CryptoJS payload, so it has to be read as text and
         // decrypted before it can be parsed.

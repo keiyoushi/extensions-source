@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,18 +25,19 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Wurmz : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     private val rscHeaders: Headers
         get() = headersBuilder().add("Rsc", "1").build()
 
     // ======================== Popular ========================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/semua-komik?sort=popular_all&page=$page").asJsoup()
+        val document = client.get("$baseUrl/semua-komik?sort=popular_all&page=$page", Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
     // ======================== Latest =========================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/semua-komik?sort=update&page=$page").asJsoup()
+        val document = client.get("$baseUrl/semua-komik?sort=update&page=$page", Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -59,7 +61,7 @@ abstract class Wurmz : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -89,7 +91,7 @@ abstract class Wurmz : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val bodyString = client.get(getMangaUrl(manga), rscHeaders).body.string()
+        val bodyString = client.get(getMangaUrl(manga), rscHeaders, Fetch.XHR).body.string()
         val details = mangaDetailsParse(bodyString).apply { url = manga.url }
         val chapterList = chapterListParse(bodyString, manga.url)
 
@@ -153,7 +155,7 @@ abstract class Wurmz : KeiSource() {
 
     // ======================== Pages ==========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val bodyString = client.get(getChapterUrl(chapter), rscHeaders).body.string()
+        val bodyString = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).body.string()
         val pageList = bodyString.extractNextJsRsc<PageListDto> {
             it is JsonObject && it.containsKey("images")
         } ?: throw Exception("Gagal memproses daftar gambar")

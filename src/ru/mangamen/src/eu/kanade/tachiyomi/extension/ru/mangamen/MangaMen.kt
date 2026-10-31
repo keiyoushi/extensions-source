@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -27,6 +28,7 @@ import java.util.Locale
 @Source
 abstract class MangaMen : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(2)
     }
@@ -85,7 +87,7 @@ abstract class MangaMen : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.DOCUMENT).use { response ->
             val document = response.asJsoup()
             val mangas = document.select("a.media-card[href]").map { element ->
                 SManga.create().apply {
@@ -104,7 +106,7 @@ abstract class MangaMen : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val response = client.get("$baseUrl/manga-list").asJsoup()
+        val response = client.get("$baseUrl/manga-list", Fetch.DOCUMENT).asJsoup()
         val script = response.selectFirst("script:containsData(window.__DATA__)")?.data()
             ?: throw Exception("Информация о фильтрах отсутствует")
 
@@ -149,7 +151,7 @@ abstract class MangaMen : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val data = client.get(getMangaUrl(manga)).asJsoup()
+        val data = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val newManga = mangaDetailsParse(data, manga.url)
         val newChapters = chapterListParse(data)
 
@@ -273,7 +275,7 @@ abstract class MangaMen : KeiSource() {
     // =============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter)).asJsoup()
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val script = response.selectFirst("script:containsData(window.__pg)")?.data()
             ?: throw Exception("Информация о изображениях отсутствует")
 

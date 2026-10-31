@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -27,6 +28,7 @@ import kotlin.collections.List
 @Source
 abstract class AComics : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addCookie { listOf("ageRestrict" to "18") }
     }
@@ -78,7 +80,7 @@ abstract class AComics : KeiSource() {
             if (page > 1) addQueryParameter("skip", ((page - 1) * 10).toString())
         }.build()
 
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.DOCUMENT).use { response ->
             val document = response.asJsoup()
             val mangas = document.select("section.serial-card").map { element ->
                 SManga.create().apply {
@@ -104,7 +106,7 @@ abstract class AComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val data = client.get(getMangaUrl(manga)).asJsoup()
+        val data = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val newManga = mangaDetailsParse(data)
         val newChapters = chapterListParse(data, manga.url)
 
@@ -143,7 +145,7 @@ abstract class AComics : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val imageElement = document.selectFirst("img.issue")!!
         return listOf(Page(0, imageUrl = imageElement.absUrl("src")))
     }
@@ -152,7 +154,7 @@ abstract class AComics : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val data = client.get("$baseUrl/comics").asJsoup()
+        val data = client.get("$baseUrl/comics", Fetch.DOCUMENT).asJsoup()
         return Dto(
             categories = data.getFilter("categories"),
             ageRatings = data.getFilter("age-ratings"),

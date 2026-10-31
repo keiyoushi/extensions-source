@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -26,10 +27,11 @@ import org.jsoup.Jsoup
 @Source
 abstract class Astratoons : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("#comicsSlider a").map { element ->
             SManga.create().apply {
@@ -47,7 +49,7 @@ abstract class Astratoons : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
 
         return getMangasPage(response)
     }
@@ -82,11 +84,11 @@ abstract class Astratoons : KeiSource() {
             ?.filter { it.state }
             ?.forEach { url.addEncodedQueryParameter("tags[]", it.value) }
 
-        return getMangasPage(client.get(url.build()))
+        return getMangasPage(client.get(url.build(), Fetch.DOCUMENT))
     }
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         manga.apply {
             title = document.selectFirst("h1")!!.text()
             thumbnail_url = document.selectFirst("img[class*=object-cover]")?.absUrl("src")
@@ -130,7 +132,7 @@ abstract class Astratoons : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .build()
 
-            val response = client.get(url)
+            val response = client.get(url, Fetch.DOCUMENT)
             val dto = response.parseAs<ChapterListDto>()
 
             val fragment = Jsoup.parseBodyFragment(dto.html, baseUrl)
@@ -149,7 +151,7 @@ abstract class Astratoons : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#reader-container img[src], #reader-container canvas[data-src]")
             .mapIndexed { index, element ->
                 val imageUrl = element.absUrl("src").ifEmpty { element.absUrl("data-src") }

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -35,10 +36,11 @@ abstract class HentaiTnT :
     KeiSource(),
     ConfigurableSource {
 
+    override val imageFetch = Fetch.IMAGE
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/recommended" + (if (page > 1) "/page/$page" else "")).asJsoup()
+        val document = client.get("$baseUrl/recommended" + (if (page > 1) "/page/$page" else ""), Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -55,7 +57,7 @@ abstract class HentaiTnT :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/latest-updates" + (if (page > 1) "/page/$page" else "")).asJsoup()
+        val document = client.get("$baseUrl/latest-updates" + (if (page > 1) "/page/$page" else ""), Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -79,7 +81,7 @@ abstract class HentaiTnT :
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -117,7 +119,7 @@ abstract class HentaiTnT :
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val detailsDocument = client.get(getMangaUrl(manga)).asJsoup()
+        val detailsDocument = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             author = detailsDocument.selectFirst("i[title=Artists] + span a")?.text()
             description = detailsDocument.selectFirst("#synopsisText")?.text()
@@ -144,7 +146,7 @@ abstract class HentaiTnT :
             .add("order", "newest_first")
             .build()
 
-        val dto = client.post("$baseUrl/wp-admin/admin-ajax.php", body = form).parseAs<Dto>()
+        val dto = client.post("$baseUrl/wp-admin/admin-ajax.php", fetch = Fetch.DOCUMENT, body = form).parseAs<Dto>()
         val chapterDoc = Jsoup.parseBodyFragment(dto.data.html, baseUrl)
 
         return chapterDoc.select(".comic-card").mapNotNull { element ->
@@ -163,7 +165,7 @@ abstract class HentaiTnT :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".page-image").mapIndexed { i, it ->
             Page(i, imageUrl = it.absUrl("src"))
         }

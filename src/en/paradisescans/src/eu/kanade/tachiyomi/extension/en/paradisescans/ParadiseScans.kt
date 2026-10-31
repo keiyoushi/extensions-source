@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
@@ -28,6 +29,7 @@ abstract class ParadiseScans :
     KeiSource(),
     ConfigurableSource {
 
+    override val imageFetch = Fetch.IMAGE
     private val preferences = getPreferences()
 
     private val showLockedChapters: Boolean
@@ -52,6 +54,7 @@ abstract class ParadiseScans :
                 .addQueryParameter("per_page", "12")
                 .addQueryParameter("page", page.toString())
                 .build(),
+            Fetch.XHR,
         ),
     )
 
@@ -63,6 +66,7 @@ abstract class ParadiseScans :
                 .addQueryParameter("per_page", "12")
                 .addQueryParameter("page", page.toString())
                 .build(),
+            Fetch.XHR,
         ),
     )
 
@@ -77,6 +81,7 @@ abstract class ParadiseScans :
                     filters.applyToUrl(this)
                 }
                 .build(),
+            Fetch.XHR,
         ),
     )
 
@@ -112,7 +117,7 @@ abstract class ParadiseScans :
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
         val slug = manga.url.removePrefix("/series/").trimEnd('/')
-        val response = client.get("$baseUrl/api/series/$slug")
+        val response = client.get("$baseUrl/api/series/$slug", Fetch.XHR)
         val series = response.parseAs<SeriesDto>()
 
         return manga.apply {
@@ -134,7 +139,7 @@ abstract class ParadiseScans :
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val slug = manga.url.removePrefix("/series/").trimEnd('/')
-        val response = client.get("$baseUrl/api/series/$slug/chapters")
+        val response = client.get("$baseUrl/api/series/$slug/chapters", Fetch.XHR)
         val chapters = response.parseAs<List<ChapterDto>>()
 
         return chapters
@@ -167,7 +172,7 @@ abstract class ParadiseScans :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.memo["id"]?.string ?: throw Exception("Refresh Chapter List")
-        val response = client.get("$baseUrl/api/chapters/$chapterId/pages")
+        val response = client.get("$baseUrl/api/chapters/$chapterId/pages", Fetch.XHR)
         val pages = response.parseAs<List<PageDto>>()
 
         return pages
