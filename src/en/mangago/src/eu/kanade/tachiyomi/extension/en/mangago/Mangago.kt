@@ -313,7 +313,7 @@ abstract class Mangago :
 
     private fun SChapter.readerUrl(): String = memo["chapterUrl"]?.string ?: error("Refresh chapter list")
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val url = page.imageUrl!!.toHttpUrl()
         val imageUrl = if (url.host.contains("_")) {
             url.newBuilder().scheme("http").build()

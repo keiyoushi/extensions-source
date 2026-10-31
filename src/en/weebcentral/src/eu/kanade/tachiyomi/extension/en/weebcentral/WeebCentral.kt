@@ -239,7 +239,7 @@ abstract class WeebCentral : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
             add("Accept", "image/avif,image/webp,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)

@@ -366,7 +366,7 @@ abstract class Atsumaru :
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
             set("Accept", "image/avif,image/webp,*/*")
         }.build()

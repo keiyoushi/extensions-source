@@ -359,7 +359,7 @@ abstract class MeDamTruyen : KeiSource() {
         return raw.replaceFirst(hintColonRegex, "$1\n").trim()
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
             .set("Referer", page.url)
             .build()

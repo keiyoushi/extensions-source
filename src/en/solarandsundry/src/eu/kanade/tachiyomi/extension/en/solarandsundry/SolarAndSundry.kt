@@ -91,7 +91,7 @@ abstract class SolarAndSundry : KeiSource() {
         return listOf(Page(0, "", page.imageUrl))
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Accept", ACCEPT_IMAGE)
         .build()
 }

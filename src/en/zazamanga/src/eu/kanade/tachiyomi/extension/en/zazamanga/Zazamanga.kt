@@ -86,7 +86,7 @@ abstract class Zazamanga : MadaraNoAjax() {
 
     override fun chapterListSelector() = "div.wp-manga-chapter"
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
+    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
 
     override fun imageFromElement(element: Element): String? = when {
         element.hasAttr("data-src") -> element.attr("data-src")

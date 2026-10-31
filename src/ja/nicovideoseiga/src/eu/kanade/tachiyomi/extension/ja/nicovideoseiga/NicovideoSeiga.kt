@@ -135,9 +135,9 @@ abstract class NicovideoSeiga : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         // Headers are required to avoid cache miss from server side
-        return super.imageRequest(page).newBuilder()
+        return super.getImageRequest(page).newBuilder()
             .header("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .header("pragma", "no-cache")
             .header("cache-control", "no-cache")

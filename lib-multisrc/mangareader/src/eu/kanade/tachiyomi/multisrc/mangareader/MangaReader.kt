@@ -251,7 +251,7 @@ abstract class MangaReader : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request = Request.Builder()
+    override fun getImageRequest(page: Page): Request = Request.Builder()
         .url(page.imageUrl!!)
         .headers(
             headers.newBuilder()

@@ -232,7 +232,7 @@ abstract class Baozi :
     }
 
     // baozicdn.com geo-redirects to regional nodes that are sometimes unreachable, baozimh.com serves directly
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val url = page.imageUrl!!.toHttpUrl()
         val host = url.host.replace(".baozicdn.com", ".baozimh.com")
         return GET(url.newBuilder().host(host).build(), headers).newBuilder()

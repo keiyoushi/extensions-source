@@ -153,7 +153,7 @@ abstract class SunsetManga : KeiSource() {
         return pages
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val body = FormBody.Builder()
             .add("action", "get_protected_image")
             .add("token", page.imageUrl!!)

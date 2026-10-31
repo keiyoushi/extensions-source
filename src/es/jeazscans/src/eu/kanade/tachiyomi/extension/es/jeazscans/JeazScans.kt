@@ -197,7 +197,7 @@ abstract class JeazScans : KeiSource() {
     }
 
     // The image endpoint returns 403 unless the request accepts images
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
         .build()
 

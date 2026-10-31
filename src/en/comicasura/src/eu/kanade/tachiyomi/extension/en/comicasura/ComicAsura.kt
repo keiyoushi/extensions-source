@@ -75,7 +75,7 @@ abstract class ComicAsura : MangaThemesia() {
 
     override val pageSelector = "div > img.object-cover.mx-auto"
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page)
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page)
         .newBuilder()
         .removeHeader("Origin")
         .build()

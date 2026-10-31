@@ -346,7 +346,7 @@ abstract class LxHentai : KeiSource() {
         return emptyList()
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val (chapterUrl, actionToken) = decodePageMetadata(page.url)
         val imageUrl = page.imageUrl ?: throw Exception("Không tìm thấy URL ảnh")
         return GET(imageUrl, imageHeaders(chapterUrl, actionToken))

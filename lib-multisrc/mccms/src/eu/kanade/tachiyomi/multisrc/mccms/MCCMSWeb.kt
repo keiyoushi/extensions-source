@@ -153,7 +153,7 @@ abstract class MCCMSWeb : KeiSource() {
     protected open fun pageListParse(response: Response): List<Page> = config.pageListParse(response)
 
     // Don't send referer
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder().headers(pcHeaders).build()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().headers(pcHeaders).build()
 
     override val supportsFilterFetching get() = config.hasCategoryPage
 

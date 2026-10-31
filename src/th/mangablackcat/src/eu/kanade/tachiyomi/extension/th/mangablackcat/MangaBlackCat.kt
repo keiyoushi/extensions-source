@@ -205,7 +205,7 @@ abstract class MangaBlackCat : KeiSource() {
             .mapIndexed { index, imageUrl -> Page(index, chapterUrl, imageUrl) }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
         .header("Referer", page.url)
         .build()

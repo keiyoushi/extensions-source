@@ -235,7 +235,7 @@ abstract class Niadd : KeiSource() {
         .selectFirst(PAGE_IMAGE_SELECTOR)!!
         .attr("abs:src")
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", page.url)
         .build()
 

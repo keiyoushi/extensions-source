@@ -168,6 +168,6 @@ abstract class Komiic :
     }
 
     // Image
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder()
         .addHeader("Accept", "*/*").header("Referer", page.url).build()
 }

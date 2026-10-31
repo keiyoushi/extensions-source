@@ -134,7 +134,7 @@ abstract class SaikaiScan : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headersBuilder()
             .add("Accept", ACCEPT_IMAGE)
             .build()

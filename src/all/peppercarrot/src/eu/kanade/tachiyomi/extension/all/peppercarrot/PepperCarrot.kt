@@ -170,10 +170,10 @@ abstract class PepperCarrot :
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val url = page.imageUrl!!
         val newUrl = if (preferences.isHiRes) url.replace("/low-res/", "/hi-res/") else url
-        return super.imageRequest(page).newBuilder().url(newUrl).build()
+        return super.getImageRequest(page).newBuilder().url(newUrl).build()
     }
 
     // ============================== Filters ==============================

@@ -373,8 +373,8 @@ abstract class BookWalkerJp :
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        val request = super.imageRequest(page)
+    override fun getImageRequest(page: Page): Request {
+        val request = super.getImageRequest(page)
         val session = request.url.fragment?.parseFragmentOrNull()?.extra ?: return request
         val auth = runBlocking { publusAuth.currentAuth(session["cid"]!!, session) } ?: return request
         val url = auth.applyTo(request.url.newBuilder().query(null)).build()

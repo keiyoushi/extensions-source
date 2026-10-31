@@ -15,5 +15,5 @@ abstract class TopManhuaFan : MadaraNoAjax() {
 
     override fun chapterListSelector() = "div.wp-manga-chapter"
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
+    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
 }

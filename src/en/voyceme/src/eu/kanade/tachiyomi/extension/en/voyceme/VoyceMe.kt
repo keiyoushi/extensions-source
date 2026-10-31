@@ -146,7 +146,7 @@ abstract class VoyceMe : KeiSource() {
             .mapIndexed { i, page -> Page(i, baseUrl, STATIC_URL + page.image) }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
             .add("Accept", ACCEPT_IMAGE)
             .set("Referer", page.url)

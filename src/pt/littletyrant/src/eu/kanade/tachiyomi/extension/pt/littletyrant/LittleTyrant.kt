@@ -126,7 +126,7 @@ abstract class LittleTyrant : Madara() {
 
     // =============================== Images =================================
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
             .set("Accept", "image/webp,image/*,*/*")
             .set("Referer", "$baseUrl/")

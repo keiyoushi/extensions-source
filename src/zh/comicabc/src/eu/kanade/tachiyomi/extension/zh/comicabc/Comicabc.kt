@@ -179,7 +179,7 @@ abstract class Comicabc : KeiSource() {
         return emptyList()
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", "$chaptersBaseUrl/")
         .build()
 

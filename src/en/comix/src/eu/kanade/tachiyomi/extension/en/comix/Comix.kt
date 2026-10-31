@@ -614,11 +614,11 @@ abstract class Comix :
     private fun SChapter.groupId(): Int? = memo[CHAPTER_GROUP_ID_MEMO]?.int
 
     // Comix image domains block any image requests with Referer/Origin
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         // The reader may have moved the page to another host
         val imageUrl = synchronized(captures) { captures[page.url]?.pages?.get(page.index) }
             ?: page.imageUrl
-            ?: return super.imageRequest(page)
+            ?: return super.getImageRequest(page)
         val requestHeaders = headersBuilder()
             .removeAll("Origin")
             .removeAll("Referer")
